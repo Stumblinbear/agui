@@ -1,0 +1,18 @@
+[package]
+name = "agui_agpu"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+description = "An agpu renderer for agui widgets"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui", "widgets", "agpu"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+agui = { path = "../" }
+agpu = { git = "https://github.com/lyricwulf/agpu" }
+
+[[example]]
+name = "widgets"
+path = "examples/widgets.rs"

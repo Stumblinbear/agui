@@ -1,0 +1,13 @@
+[package]
+name = "agui_widgets"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+description = "Provides basic widgets for agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui", "widgets"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+agui_core = { path = "../agui_core" }

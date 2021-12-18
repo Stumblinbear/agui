@@ -2,11 +2,23 @@
 name = "agui"
 version = "0.1.0"
 edition = "2021"
-resolver = "2"
 description = "A reactive GUI project"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
 license = "MIT OR Apache-2.0"
 
+[workspace]
+members = [
+    "agui_core",
+    "agui_widgets",
+    "agui_agpu"
+]
+
+[features]
+default = ["widgets"]
+widgets = ["agui_widgets"]
+
 [dependencies]
+agui_core = { path = "agui_core" }
+agui_widgets = { path = "agui_widgets", optional = true }
