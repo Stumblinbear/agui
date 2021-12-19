@@ -9,22 +9,23 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::new(agui_agpu::WidgetRenderer::new(&program));
 
-    ui.add(
-        None,
-        Button {
-            layout: Layout {
-                size: Size::Set {
-                    width: Units::Pixels(100.0),
-                    height: Units::Pixels(100.0),
-                },
-                ..Default::default()
+    ui.set_root(Button {
+        layout: Layout {
+            size: Size::Set {
+                width: Units::Pixels(100.0),
+                height: Units::Pixels(100.0),
             },
+            ..Default::default()
         },
-    );
+    });
+
+    let mut first_frame = true;
 
     program.run_draw(move |frame| {
-        ui.update();
-
-        ui.get_renderer().render(frame);
+        if ui.update() || first_frame {
+            first_frame = false;
+            
+            ui.get_renderer().render(frame);
+        }
     })
 }

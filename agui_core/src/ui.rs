@@ -47,6 +47,13 @@ where
         &self.renderer
     }
 
+    pub fn set_root<T>(&mut self, widget: T)
+    where
+        T: Widget + 'static,
+    {
+        self.manager.add(None, Box::new(widget));
+    }
+
     pub fn add<T>(&mut self, parent_id: Option<WidgetID>, widget: T)
     where
         T: Widget + 'static,
@@ -58,7 +65,8 @@ where
         self.manager.remove(widget_id);
     }
 
-    pub fn update(&mut self) {
+    /// Returns true of any element in the tree was changed
+    pub fn update(&mut self) -> bool {
         self.manager.update(&mut self.added, &mut self.removed);
 
         for widget_id in self.removed.drain() {
@@ -72,6 +80,9 @@ where
         // TODO: is it possible to limit the scope of layout refreshing?
         if self.added.len() > 0 || self.removed.len() > 0 {
             self.renderer.refresh(&self.manager);
+            return true;
+        }else{
+            return false;
         }
     }
 }
