@@ -19,12 +19,8 @@ fn main() -> Result<(), agpu::BoxError> {
         },
     });
 
-    let mut first_frame = true;
-
     program.run_draw(move |frame| {
-        if ui.update() || first_frame {
-            first_frame = false;
-            
+        if ui.update() {
             ui.get_renderer().render(frame);
         }
     })
