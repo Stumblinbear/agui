@@ -79,11 +79,14 @@ impl WidgetManager {
     }
 
     pub fn try_get(&self, widget_id: WidgetID) -> Option<&Box<dyn Widget>> {
-        self.widgets.get(*widget_id)
+        self.widgets.get(widget_id.id())
     }
 
     pub fn get(&self, widget_id: WidgetID) -> &Box<dyn Widget> {
-        let widget = self.widgets.get(*widget_id).expect("widget does not exist");
+        let widget = self
+            .widgets
+            .get(widget_id.id())
+            .expect("widget does not exist");
 
         widget
     }
@@ -150,7 +153,7 @@ impl WidgetManager {
                     }
 
                     ListenerID::Computed(widget_id, computed_id) => {
-                        let changed = self.context.did_computed_change(widget_id, computed_id);
+                        let changed = self.context.did_computed_change(&widget_id, computed_id);
 
                         if changed {
                             dirty_widgets.insert(widget_id);
@@ -228,7 +231,10 @@ impl WidgetManager {
                         }
                     }
 
-                    let widget_id = WidgetID(self.widgets.insert(widget));
+                    let widget_id = WidgetID::from(
+                        self.widgets.insert(widget),
+                        parent_id.map_or(0, |node| node.z()),
+                    );
 
                     self.tree.add(parent_id, widget_id);
 
@@ -257,7 +263,7 @@ impl WidgetManager {
                         self.modifications.push(Modify::Destroy(*child_id));
                     }
 
-                    let widget = self.widgets.get(*widget_id).unwrap();
+                    let widget = self.widgets.get(widget_id.id()).unwrap();
 
                     match self.context.build(widget_id, widget) {
                         BuildResult::Empty => {}
@@ -281,7 +287,7 @@ impl WidgetManager {
                         }
                     }
 
-                    self.widgets.remove(*widget_id);
+                    self.widgets.remove(widget_id.id());
 
                     // Add the child widgets to the removal queue
                     if let Some(tree_node) = self.tree.remove(&widget_id) {
@@ -311,7 +317,7 @@ enum Modify {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, any::TypeId};
+    use std::{any::TypeId, sync::Arc};
 
     use parking_lot::Mutex;
 
@@ -339,7 +345,7 @@ mod tests {
         fn get_type_id(&self) -> TypeId {
             TypeId::of::<Self>()
         }
-    
+
         fn layout(&self) -> Option<&Layout> {
             self.layout.as_ref()
         }
@@ -400,10 +406,7 @@ mod tests {
         );
 
         assert_eq!(
-            *manager
-                .get_as::<TestWidget>(widget_id)
-                .computes
-                .lock(),
+            *manager.get_as::<TestWidget>(widget_id).computes.lock(),
             1,
             "widget `computes` should have been been 1"
         );
@@ -422,10 +425,7 @@ mod tests {
         );
 
         assert_eq!(
-            *manager
-                .get_as::<TestWidget>(widget_id)
-                .computes
-                .lock(),
+            *manager.get_as::<TestWidget>(widget_id).computes.lock(),
             1,
             "widget computed should not have been called"
         );
@@ -451,10 +451,7 @@ mod tests {
         // Compute function gets called twice, once for the default value and once to check if it needs
         // to be updated, after it detects a change in TestGlobal
         assert_eq!(
-            *manager
-                .get_as::<TestWidget>(widget_id)
-                .computes
-                .lock(),
+            *manager.get_as::<TestWidget>(widget_id).computes.lock(),
             1,
             "widget `computes` should be 1"
         );
@@ -475,10 +472,7 @@ mod tests {
         }
 
         assert_eq!(
-            *manager
-                .get_as::<TestWidget>(widget_id)
-                .computes
-                .lock(),
+            *manager.get_as::<TestWidget>(widget_id).computes.lock(),
             1,
             "widget `computes` should be 1"
         );
@@ -500,10 +494,7 @@ mod tests {
         );
 
         assert_eq!(
-            *manager
-                .get_as::<TestWidget>(widget_id)
-                .computes
-                .lock(),
+            *manager.get_as::<TestWidget>(widget_id).computes.lock(),
             3,
             "widget computed should have been called 3 times total"
         );

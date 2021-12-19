@@ -42,24 +42,32 @@ pub trait Widget: Downcast {
 
 impl_downcast!(Widget);
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Deref)]
-pub struct WidgetID(pub GenerationalIndex);
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct WidgetID(GenerationalIndex, usize);
 
-impl Default for WidgetID {
-    fn default() -> Self {
-        WidgetID(GenerationalIndex::from_raw_parts(0, 0))
+impl WidgetID {
+    pub fn from(index: GenerationalIndex, depth: usize) -> WidgetID {
+        WidgetID(index, depth)
+    }
+
+    pub fn id(&self) -> GenerationalIndex {
+        self.0
+    }
+    
+    pub fn z(&self) -> usize {
+        self.1
     }
 }
 
-impl From<GenerationalIndex> for WidgetID {
-    fn from(val: GenerationalIndex) -> Self {
-        WidgetID(val)
+impl Default for WidgetID {
+    fn default() -> Self {
+        WidgetID(GenerationalIndex::from_raw_parts(0, 0), 0)
     }
 }
 
 impl From<usize> for WidgetID {
     fn from(val: usize) -> Self {
-        WidgetID(GenerationalIndex::from_raw_parts(val, 0))
+        WidgetID(GenerationalIndex::from_raw_parts(val, 0), 0)
     }
 }
 

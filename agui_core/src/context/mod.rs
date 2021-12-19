@@ -184,14 +184,14 @@ impl WidgetContext {
         value
     }
 
-    pub(crate) fn did_computed_change(&mut self, widget_id: WidgetID, computed_id: TypeId) -> bool {
+    pub(crate) fn did_computed_change(&mut self, widget_id: &WidgetID, computed_id: TypeId) -> bool {
         let mut widgets = self.computed_funcs.lock();
 
-        if !widgets.contains_key(&widget_id) {
+        if !widgets.contains_key(widget_id) {
             return false;
         }
 
-        let computed_funcs = widgets.get_mut(&widget_id).unwrap();
+        let computed_funcs = widgets.get_mut(widget_id).unwrap();
 
         if !computed_funcs.contains_key(&computed_id) {
             return false;

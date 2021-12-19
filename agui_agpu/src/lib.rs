@@ -26,7 +26,7 @@ impl agui::render::WidgetRenderer for WidgetRenderer {
             self.render_passes
                 .get_mut(pass_type_id)
                 .expect("impossible render pass access")
-                .add(&self.ctx, manager, &widget_id);
+                .add(&self.ctx, manager, widget_id);
         }
     }
 
@@ -45,7 +45,7 @@ impl agui::render::WidgetRenderer for WidgetRenderer {
             self.render_passes
                 .get_mut(&pass_type_id)
                 .expect("impossible render pass access")
-                .remove(&self.ctx, manager, &widget_id);
+                .remove(&self.ctx, manager, widget_id);
         }
     }
 }
