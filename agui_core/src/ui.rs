@@ -69,6 +69,8 @@ where
     pub fn update(&mut self) -> bool {
         self.manager.update(&mut self.added, &mut self.removed);
 
+        let did_change = (self.removed.len() + self.added.len()) != 0;
+
         for widget_id in self.removed.drain() {
             self.renderer.remove(&self.manager, widget_id);
         }
@@ -76,9 +78,9 @@ where
         for widget_id in self.added.drain() {
             self.renderer.create(&self.manager, widget_id);
         }
-        
+
         // TODO: is it possible to limit the scope of layout refreshing?
-        if self.added.len() > 0 || self.removed.len() > 0 {
+        if did_change {
             self.renderer.refresh(&self.manager);
             return true;
         }else{
