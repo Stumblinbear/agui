@@ -2,11 +2,14 @@
 name = "agui"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 description = "A reactive GUI project"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
+categories = [ "gui", "graphics", "game-development" ]
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [workspace]
 members = [

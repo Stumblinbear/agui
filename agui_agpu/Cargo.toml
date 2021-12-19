@@ -7,7 +7,9 @@ description = "An agpu renderer for agui widgets"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui", "widgets", "agpu"]
+categories = [ "gui", "graphics", "rendering", "game-development" ]
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 agui = { path = "../" }

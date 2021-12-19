@@ -7,7 +7,9 @@ description = "Provides basic widgets for agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui", "widgets"]
+categories = [ "gui", "game-development" ]
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 agui_core = { path = "../agui_core" }
