@@ -1,0 +1,17 @@
+[package]
+name = "agui_macros"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+[lib]
+proc-macro = true
+
+[features]
+default = []
+internal = []
+
+[dependencies]
+syn = { version = "1.0", features = ["full"] }
+quote = "1.0"
+darling = "0.13"

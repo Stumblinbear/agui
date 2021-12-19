@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 
 use crate::{
     context::state::{Ref, StateMap, Value, WidgetStates},
-    widget::{BuildResult, Widget, WidgetID},
+    widget::{BuildResult, WidgetID, WidgetRef},
 };
 
 mod state;
@@ -207,10 +207,10 @@ impl WidgetContext {
     }
 
     #[allow(clippy::borrowed_box)]
-    pub(crate) fn build(&mut self, widget_id: WidgetID, widget: &Box<dyn Widget>) -> BuildResult {
+    pub(crate) fn build(&mut self, widget_id: WidgetID, widget: &WidgetRef) -> BuildResult {
         *self.current_id.lock() = Some(widget_id.into());
 
-        widget.build(self)
+        widget.get().build(self)
     }
 
     pub(crate) fn remove(&mut self, widget_id: &WidgetID) {

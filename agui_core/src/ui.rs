@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     render::WidgetRenderer,
-    widget::{Widget, WidgetID},
+    widget::{Widget, WidgetID, WidgetRef},
 };
 
 mod layout;
@@ -52,14 +52,14 @@ where
     where
         T: Widget + 'static,
     {
-        self.manager.add(None, Box::new(widget));
+        self.manager.add(None, WidgetRef::new(widget));
     }
 
     pub fn add<T>(&mut self, parent_id: Option<WidgetID>, widget: T)
     where
         T: Widget + 'static,
     {
-        self.manager.add(parent_id, Box::new(widget));
+        self.manager.add(parent_id, WidgetRef::new(widget));
     }
 
     pub fn remove(&mut self, widget_id: WidgetID) {

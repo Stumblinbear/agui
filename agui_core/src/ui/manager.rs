@@ -1,10 +1,10 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 use generational_arena::Arena;
 use parking_lot::Mutex;
 
 use crate::{
-    widget::{BuildResult, Widget, WidgetID},
+    widget::{BuildResult, Widget, WidgetID, WidgetRef},
     ListenerID, WidgetContext,
 };
 
@@ -20,7 +20,7 @@ impl Extend<WidgetID> for VoidMap {
 }
 
 pub struct WidgetManager {
-    widgets: Arena<Box<dyn Widget>>,
+    widgets: Arena<WidgetRef>,
     tree: Tree<WidgetID>,
     cache: LayoutCache<WidgetID>,
 
@@ -86,34 +86,34 @@ impl WidgetManager {
     }
 
     #[allow(clippy::borrowed_box)]
-    pub fn try_get(&self, widget_id: WidgetID) -> Option<&Box<dyn Widget>> {
-        self.widgets.get(widget_id.id())
+    pub fn try_get(&self, widget_id: WidgetID) -> Option<WidgetRef> {
+        self.widgets.get(widget_id.id()).map(WidgetRef::clone)
     }
 
     #[allow(clippy::borrowed_box)]
-    pub fn get(&self, widget_id: WidgetID) -> &Box<dyn Widget> {
+    pub fn get(&self, widget_id: WidgetID) -> WidgetRef {
         let widget = self
             .widgets
             .get(widget_id.id())
             .expect("widget does not exist");
 
-        widget
+        widget.clone()
     }
 
-    pub fn try_get_as<W>(&self, widget_id: WidgetID) -> Option<&W>
+    pub fn try_get_as<W>(&self, widget_id: WidgetID) -> Option<Rc<W>>
     where
         W: Widget,
     {
-        self.try_get(widget_id)?.downcast_ref::<W>()
+        let v = self.try_get(widget_id)?;
+
+        v.try_downcast_ref()
     }
 
-    pub fn get_as<W>(&self, widget_id: WidgetID) -> &W
+    pub fn get_as<W>(&self, widget_id: WidgetID) -> Rc<W>
     where
         W: Widget,
     {
-        self.get(widget_id)
-            .downcast_ref::<W>()
-            .expect("failed to downcast widget ref")
+        self.get(widget_id).downcast_ref()
     }
 
     pub fn get_rect(&self, widget_id: &WidgetID) -> Option<&Rect> {
@@ -121,7 +121,7 @@ impl WidgetManager {
     }
 
     /// Queues the widget for addition into the tree
-    pub fn add(&mut self, parent_id: Option<WidgetID>, widget: Box<dyn Widget>) {
+    pub fn add(&mut self, parent_id: Option<WidgetID>, widget: WidgetRef) {
         self.modifications.push(Modify::Spawn(parent_id, widget));
     }
 
@@ -312,20 +312,23 @@ impl WidgetManager {
 }
 
 enum Modify {
-    Spawn(Option<WidgetID>, Box<dyn Widget>),
+    Spawn(Option<WidgetID>, WidgetRef),
     Rebuild(WidgetID),
     Destroy(WidgetID),
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{any::TypeId, sync::Arc};
+    use std::sync::Arc;
 
     use parking_lot::Mutex;
 
     use crate::{
         ui::manager::VoidMap,
-        widget::{BuildResult, Layout, Widget},
+        widget::{
+            BuildResult, Layout, LayoutType, Widget, WidgetImpl, WidgetLayout, WidgetRef,
+            WidgetType,
+        },
         WidgetContext,
     };
 
@@ -343,11 +346,21 @@ mod tests {
         computed_value: Mutex<i32>,
     }
 
-    impl Widget for TestWidget {
-        fn get_type_id(&self) -> TypeId {
-            TypeId::of::<Self>()
-        }
+    impl Widget for TestWidget {}
 
+    impl WidgetType for TestWidget {
+        fn get_type_id(&self) -> std::any::TypeId {
+            std::any::TypeId::of::<Self>()
+        }
+    }
+
+    impl WidgetLayout for TestWidget {
+        fn layout_type(&self) -> LayoutType {
+            LayoutType::Column
+        }
+    }
+
+    impl WidgetImpl for TestWidget {
         fn layout(&self) -> Option<&Layout> {
             self.layout.as_ref()
         }
@@ -360,11 +373,14 @@ mod tests {
 
                 let test_global = ctx.get_global::<TestGlobal>();
 
-                test_global.map_or_else(|| -1, |test_global| {
-                    let test_global = test_global.read();
+                test_global.map_or_else(
+                    || -1,
+                    |test_global| {
+                        let test_global = test_global.read();
 
-                    test_global.0
-                })
+                        test_global.0
+                    },
+                )
             });
 
             *self.builds.lock() += 1;
@@ -378,7 +394,7 @@ mod tests {
     pub fn test_builds() {
         let mut manager = WidgetManager::new();
 
-        manager.add(None, Box::new(TestWidget::default()));
+        manager.add(None, WidgetRef::new(TestWidget::default()));
 
         assert_eq!(manager.additions, 0, "should not have added the widget");
 
@@ -437,7 +453,7 @@ mod tests {
 
         let test_global = manager.context.init_global::<TestGlobal>();
 
-        manager.add(None, Box::new(TestWidget::default()));
+        manager.add(None, WidgetRef::new(TestWidget::default()));
 
         manager.update(&mut VoidMap, &mut VoidMap);
 

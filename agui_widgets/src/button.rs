@@ -1,20 +1,18 @@
-use std::any::TypeId;
-
 use agui_core::{
-    widget::{BuildResult, Layout, Quad, Text, Widget, Size},
-    WidgetContext, state::mouse::MousePosition,
+    state::mouse::MousePosition,
+    widget::{BuildResult, Layout, Size, WidgetImpl},
+    WidgetContext,
 };
+use agui_macros::Widget;
+use agui_primitives::{Quad, Text};
 
-#[derive(Default)]
+#[derive(Default, Widget)]
+#[widget(layout = "row")]
 pub struct Button {
     pub layout: Layout,
 }
 
-impl Widget for Button {
-    fn get_type_id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
+impl WidgetImpl for Button {
     fn layout(&self) -> Option<&Layout> {
         Some(&self.layout)
     }

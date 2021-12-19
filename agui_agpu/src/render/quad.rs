@@ -1,11 +1,7 @@
 use std::collections::HashMap;
 
 use agpu::{Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{
-    render::color::Color,
-    widget::{Quad, WidgetID},
-    WidgetManager,
-};
+use agui::{render::color::Color, widget::WidgetID, widgets::primitives::Quad, WidgetManager};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
@@ -71,7 +67,7 @@ impl WidgetRenderPass for QuadRenderPass {
 
         let quad = manager.try_get_as::<Quad>(widget_id);
 
-        let rgba = quad.map_or(&Color::White, |q| &q.color).as_rgba();
+        let rgba = quad.map_or(Color::White.as_rgba(), |q| q.color.as_rgba());
 
         let rect = bytemuck::cast_slice(&rect);
         let rgba = bytemuck::cast_slice(&rgba);
@@ -87,15 +83,15 @@ impl WidgetRenderPass for QuadRenderPass {
             .write_buffer(&self.buffer, index + RECT_BUFFER_SIZE, rgba);
     }
 
-    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager) {}
+    fn refresh(&mut self, _ctx: &RenderContext, _manager: &WidgetManager) {}
 
-    fn remove(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: WidgetID) {
+    fn remove(&mut self, _ctx: &RenderContext, _manager: &WidgetManager, widget_id: WidgetID) {
         if let Some(index) = self.widgets.remove(&widget_id) {
             self.locations.remove(index);
         }
     }
 
-    fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
+    fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
             .render_pass("basic render pass")
             .with_pipeline(&self.pipeline)

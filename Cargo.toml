@@ -14,14 +14,20 @@ readme = "README.md"
 [workspace]
 members = [
     "agui_core",
+    "agui_macros",
+    "agui_primitives",
     "agui_widgets",
     "agui_agpu"
 ]
 
 [features]
-default = ["widgets"]
-widgets = ["agui_widgets"]
+default = [ "primitives", "widgets", "macros" ]
+primitives = [ "agui_primitives" ]
+widgets = [ "primitives", "agui_widgets" ]
+macros = [ "agui_macros" ]
 
 [dependencies]
 agui_core = { path = "agui_core" }
+agui_macros = { path = "agui_macros", optional = true }
+agui_primitives = { path = "agui_primitives", optional = true }
 agui_widgets = { path = "agui_widgets", optional = true }

@@ -79,36 +79,12 @@ impl LayoutType {
 
 #[derive(Debug, Clone, Default)]
 pub struct Layout {
-    pub r#type: LayoutType,
-
     pub position: Position,
     pub min_size: Size,
     pub max_size: Size,
     pub size: Size,
 
     pub padding: Padding,
-}
-
-impl Layout {
-    #[must_use]
-    pub fn get_rows(&self) -> Option<Vec<Units>> {
-        self.r#type.get_rows()
-    }
-
-    #[must_use]
-    pub const fn get_row_spacing(&self) -> Option<Units> {
-        self.r#type.get_row_spacing()
-    }
-
-    #[must_use]
-    pub fn get_columns(&self) -> Option<Vec<Units>> {
-        self.r#type.get_columns()
-    }
-
-    #[must_use]
-    pub const fn get_column_spacing(&self) -> Option<Units> {
-        self.r#type.get_column_spacing()
-    }
 }
 
 #[derive(Debug, Copy, Clone)]

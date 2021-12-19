@@ -2,7 +2,8 @@ use std::{any::TypeId, collections::HashMap};
 
 use agpu::{Frame, GpuProgram};
 use agui::{
-    widget::{Quad, Widget, WidgetID},
+    widget::{Widget, WidgetID},
+    widgets::primitives::Quad,
     WidgetManager,
 };
 use render::{quad::QuadRenderPass, RenderContext, WidgetRenderPass};
@@ -20,7 +21,7 @@ pub struct WidgetRenderer {
 
 impl agui::render::WidgetRenderer for WidgetRenderer {
     fn create(&mut self, manager: &WidgetManager, widget_id: WidgetID) {
-        let widget_type_id = (*manager.get(widget_id)).get_type_id();
+        let widget_type_id = manager.get(widget_id).get_type_id();
 
         if let Some(pass_type_id) = self.bound_render_pass.get(&widget_type_id) {
             self.render_passes
