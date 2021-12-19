@@ -40,6 +40,8 @@ impl BasicRenderPass {
 
 impl WidgetRenderPass for BasicRenderPass {
     fn add(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: &WidgetID) {
+        let rect = manager.get_rect(widget_id).expect("widget added to render pass does not have a rect");
+
         self.widgets.insert(*widget_id);
     }
 
@@ -50,7 +52,7 @@ impl WidgetRenderPass for BasicRenderPass {
     }
 
     fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
-        frame
+        let pass = frame
             .render_pass("basic render pass")
             .with_pipeline(&ctx.pipeline)
             .begin();
