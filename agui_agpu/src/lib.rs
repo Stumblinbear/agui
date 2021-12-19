@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap};
 
 use agpu::{Frame, GpuProgram};
 use agui::{
-    widget::{Widget, WidgetID, Quad},
+    widget::{Quad, Widget, WidgetID},
     WidgetManager,
 };
 use render::{BasicRenderPass, RenderContext, WidgetRenderPass};
@@ -55,7 +55,13 @@ impl WidgetRenderer {
         let pipeline = program
             .gpu
             .new_pipeline("agui_pipeline")
-            .with_vertex_fragment(include_bytes!("shader/ui.wgsl"))
+            .with_vertex(include_bytes!("shader/ui.vert.spv"))
+            .with_fragment(include_bytes!("shader/ui.frag.spv"))
+            .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<[f32; 4]>() as u64,
+                step_mode: agpu::wgpu::VertexStepMode::Instance,
+                attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4],
+            }])
             .create();
 
         WidgetRenderer {
@@ -117,12 +123,6 @@ impl WidgetRenderer {
     }
 
     pub fn render(&self, mut frame: Frame) {
-        frame
-            .render_pass_cleared("agui render pass", 0x000000)
-            .with_pipeline(&self.ctx.pipeline)
-            .begin()
-            .draw_triangle();
-
         for renderer in self.render_passes.values() {
             renderer.render(&self.ctx, &mut frame);
         }
