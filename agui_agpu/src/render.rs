@@ -33,14 +33,22 @@ impl BasicRenderPass {
                 .gpu
                 .new_buffer("BasicRenderPass")
                 .as_vertex_buffer()
-                .create(&[0]),
+                .allow_copy_to()
+                .create_uninit(std::mem::size_of::<[f32; 4]>() as u64),
         }
     }
 }
 
 impl WidgetRenderPass for BasicRenderPass {
     fn add(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: WidgetID) {
-        let rect = manager.get_rect(&widget_id).expect("widget added to render pass does not have a rect");
+        let rect = manager
+            .get_rect(&widget_id)
+            .expect("widget added to render pass does not have a rect");
+
+        dbg!(&rect);
+
+        self.buffer
+            .write_unchecked(&[rect.x, rect.y, rect.width, rect.height]);
 
         self.widgets.insert(widget_id);
     }
@@ -52,9 +60,12 @@ impl WidgetRenderPass for BasicRenderPass {
     }
 
     fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
-        let pass = frame
+        let mut r = frame
             .render_pass("basic render pass")
             .with_pipeline(&ctx.pipeline)
             .begin();
+
+        r.set_vertex_buffer(0, self.buffer.slice(..))
+            .draw(0..6, 0..1);
     }
 }
