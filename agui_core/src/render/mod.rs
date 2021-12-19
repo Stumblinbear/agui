@@ -1,3 +1,5 @@
+pub mod color;
+
 use crate::{widget::WidgetID, WidgetManager};
 
 pub trait WidgetRenderer {

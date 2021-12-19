@@ -1,9 +1,9 @@
-
-
 #version 460
 
 layout(location = 0) in vec4 rect;
 layout(location = 1) in vec4 color;
+
+layout(location = 0) out vec4 outColor;
 
 // Workaround Naga validation
 out gl_PerVertex {
@@ -30,7 +30,11 @@ void main() {
     vec2 pos = verts[index] / vec2(800.0, 600.0);
      
     gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
+    
     // Adjust to texture coord style
     gl_Position.y = 1 - gl_Position.y;
     gl_Position.x -= 1;
+
+    // Pass the output color to the fragment shader
+    outColor = color;
 }

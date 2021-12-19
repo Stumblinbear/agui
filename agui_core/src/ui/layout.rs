@@ -16,6 +16,10 @@ impl Rect {
         (point.0 >= self.x && point.0 <= self.x + self.width)
             && (point.1 >= self.y && point.1 <= self.y + self.height)
     }
+
+    pub const fn to_slice(self) -> [f32; 4] {
+        [ self.x, self.y, self.width, self.height ]
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]

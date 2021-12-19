@@ -5,7 +5,7 @@ use agui::{
     widget::{Quad, Widget, WidgetID},
     WidgetManager,
 };
-use render::{BasicRenderPass, RenderContext, WidgetRenderPass};
+use render::{quad::QuadRenderPass, RenderContext, WidgetRenderPass};
 
 pub mod render;
 
@@ -52,22 +52,9 @@ impl agui::render::WidgetRenderer for WidgetRenderer {
 
 impl WidgetRenderer {
     pub fn without_primitives(program: &GpuProgram) -> WidgetRenderer {
-        let pipeline = program
-            .gpu
-            .new_pipeline("agui_pipeline")
-            .with_vertex(include_bytes!("shader/ui.vert.spv"))
-            .with_fragment(include_bytes!("shader/ui.frag.spv"))
-            .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<[f32; 4]>() as u64,
-                step_mode: agpu::wgpu::VertexStepMode::Instance,
-                attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4],
-            }])
-            .create();
-
         WidgetRenderer {
             ctx: RenderContext {
                 gpu: program.gpu.clone(),
-                pipeline,
             },
 
             render_passes: Default::default(),
@@ -78,11 +65,11 @@ impl WidgetRenderer {
     }
 
     pub fn new(program: &GpuProgram) -> WidgetRenderer {
-        let basic_pass = BasicRenderPass::new(program);
+        let basic_pass = QuadRenderPass::new(program);
 
         WidgetRenderer::without_primitives(program)
             .add_render_pass(basic_pass)
-            .bind_widget_pass::<BasicRenderPass, Quad>()
+            .bind_widget_pass::<QuadRenderPass, Quad>()
     }
 
     pub fn init_render_pass<P>(self) -> Self
