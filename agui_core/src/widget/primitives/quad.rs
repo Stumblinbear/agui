@@ -27,14 +27,14 @@ impl Widget for Quad {
     }
 }
 
-impl Into<Box<dyn Widget>> for Quad {
-    fn into(self) -> Box<dyn Widget> {
-        Box::new(self)
+impl From<Quad> for Box<dyn Widget> {
+    fn from(quad: Quad) -> Box<dyn Widget> {
+        Box::new(quad)
     }
 }
 
-impl Into<Option<Box<dyn Widget>>> for Quad {
-    fn into(self) -> Option<Box<dyn Widget>> {
-        Some(Box::new(self))
+impl From<Quad> for Option<Box<dyn Widget>> {
+    fn from(quad: Quad) -> Option<Box<dyn Widget>> {
+        Some(Box::new(quad))
     }
 }

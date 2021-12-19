@@ -82,9 +82,9 @@ where
         // TODO: is it possible to limit the scope of layout refreshing?
         if did_change {
             self.renderer.refresh(&self.manager);
-            return true;
-        }else{
-            return false;
+            true
+        } else {
+            false
         }
     }
 }

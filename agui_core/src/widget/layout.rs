@@ -20,9 +20,9 @@ impl Default for LayoutType {
     }
 }
 
-impl Into<morphorm::LayoutType> for LayoutType {
-    fn into(self) -> morphorm::LayoutType {
-        match self {
+impl From<LayoutType> for morphorm::LayoutType {
+    fn from(ty: LayoutType) -> morphorm::LayoutType {
+        match ty {
             LayoutType::Row => morphorm::LayoutType::Row,
             LayoutType::Column => morphorm::LayoutType::Column,
             LayoutType::Grid {
@@ -239,9 +239,9 @@ impl Default for Position {
     }
 }
 
-impl Into<PositionType> for Position {
-    fn into(self) -> PositionType {
-        match self {
+impl From<Position> for PositionType {
+    fn from(pos: Position) -> PositionType {
+        match pos {
             Position::Unset => PositionType::ParentDirected,
             Position::Relative { top: _, left: _ } => PositionType::SelfDirected,
             Position::Absolute {

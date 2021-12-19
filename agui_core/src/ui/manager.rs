@@ -43,8 +43,8 @@ pub struct WidgetManager {
     changes: usize,
 }
 
-impl WidgetManager {
-    pub fn new() -> WidgetManager {
+impl Default for WidgetManager {
+    fn default() -> Self {
         let changed = Arc::new(Mutex::new(HashSet::new()));
 
         WidgetManager {
@@ -77,11 +77,19 @@ impl WidgetManager {
             changes: Default::default(),
         }
     }
+}
 
+impl WidgetManager {
+    pub fn new() -> WidgetManager {
+        WidgetManager::default()
+    }
+
+    #[allow(clippy::borrowed_box)]
     pub fn try_get(&self, widget_id: WidgetID) -> Option<&Box<dyn Widget>> {
         self.widgets.get(widget_id.id())
     }
 
+    #[allow(clippy::borrowed_box)]
     pub fn get(&self, widget_id: WidgetID) -> &Box<dyn Widget> {
         let widget = self
             .widgets
@@ -134,7 +142,7 @@ impl WidgetManager {
 
             let changed = self.changed.lock().drain().collect::<Vec<_>>();
 
-            if changed.len() == 0 {
+            if changed.is_empty() {
                 break;
             }
 
@@ -165,7 +173,7 @@ impl WidgetManager {
             let mut to_rebuild = Vec::new();
 
             'main: for widget_id in dirty_widgets {
-                let widget = self.tree.get(widget_id);
+                let widget = self.tree.get(&widget_id);
 
                 if widget.is_none() {
                     continue;
@@ -186,24 +194,20 @@ impl WidgetManager {
                     if widget_depth > *dirty_depth {
                         // If the widget is a child of one of the already queued widgets, bail. It's
                         // already going to be updated.
-                        if self.tree.has_child(*dirty_id, widget_id) {
+                        if self.tree.has_child(dirty_id, &widget_id) {
                             continue 'main;
                         }
                     } else {
                         // If the widget is a parent of the widget already queued for render, remove it
-                        if self.tree.has_child(widget_id, *dirty_id) {
+                        if self.tree.has_child(&widget_id, dirty_id) {
                             to_remove.push(i);
                         }
                     }
                 }
 
                 // Remove the queued widgets that will be updated as a consequence of updating `widget`
-                let mut offset = 0;
-
-                for index in to_remove {
+                for (offset, index) in to_remove.into_iter().enumerate() {
                     to_rebuild.remove(index - offset);
-
-                    offset += 1;
                 }
 
                 to_rebuild.push((widget_id, widget_depth));
@@ -214,7 +218,7 @@ impl WidgetManager {
             }
         }
 
-        morphorm::layout(&mut self.cache, &mut self.tree, &mut self.widgets);
+        morphorm::layout(&mut self.cache, &self.tree, &self.widgets);
     }
 
     fn apply_modifications<A, R>(&mut self, added: &mut A, removed: &mut R)
@@ -256,7 +260,7 @@ impl WidgetManager {
                     // Queue the children for removal
                     for child_id in &self
                         .tree
-                        .get(widget_id)
+                        .get(&widget_id)
                         .expect("cannot destroy a widget that doesn't exist")
                         .children
                     {

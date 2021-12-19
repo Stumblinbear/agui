@@ -34,12 +34,14 @@ impl From<WidgetID> for ListenerID {
     }
 }
 
+type ComputedFn = Box<dyn Fn(&WidgetContext) -> bool>;
+type WidgetComputedFuncs = HashMap<WidgetID, HashMap<TypeId, ComputedFn>>;
+
 pub struct WidgetContext {
     global: StateMap,
     states: WidgetStates,
 
-    computed_funcs:
-        Arc<Mutex<HashMap<WidgetID, HashMap<TypeId, Box<dyn Fn(&WidgetContext) -> bool>>>>>,
+    computed_funcs: Arc<Mutex<WidgetComputedFuncs>>,
 
     current_id: Arc<Mutex<Option<ListenerID>>>,
 }
@@ -103,7 +105,7 @@ impl WidgetContext {
     where
         V: Value,
     {
-        self.get_state_or(|| V::default())
+        self.get_state_or(V::default)
     }
 
     pub fn get_state_or<V, F>(&self, func: F) -> Ref<V>
@@ -145,25 +147,22 @@ impl WidgetContext {
 
         let computed_funcs = widgets.get_mut(widget_id).unwrap();
 
-        if !computed_funcs.contains_key(&computed_id) {
+        computed_funcs.entry(computed_id).or_insert_with(|| {
             let last_value = Arc::new(Mutex::new(value.clone()));
 
-            computed_funcs.insert(
-                computed_id,
-                Box::new(move |ctx| {
-                    let new_value = ctx.call_computed(listener_id, &func);
+            Box::new(move |ctx| {
+                let new_value = ctx.call_computed(listener_id, &func);
 
-                    let mut last_value = last_value.lock();
+                let mut last_value = last_value.lock();
 
-                    if *last_value == new_value {
-                        return false;
-                    } else {
-                        *last_value = new_value;
-                        return true;
-                    }
-                }),
-            );
-        }
+                if *last_value == new_value {
+                    false
+                } else {
+                    *last_value = new_value;
+                    true
+                }
+            })
+        });
 
         value
     }
@@ -173,7 +172,7 @@ impl WidgetContext {
         V: Eq + PartialEq + Clone + Value,
         F: Fn(&WidgetContext) -> V + 'static,
     {
-        let previous_id = self.current_id.lock().clone();
+        let previous_id = *self.current_id.lock();
 
         *self.current_id.lock() = Some(listener_id);
 
@@ -184,7 +183,11 @@ impl WidgetContext {
         value
     }
 
-    pub(crate) fn did_computed_change(&mut self, widget_id: &WidgetID, computed_id: TypeId) -> bool {
+    pub(crate) fn did_computed_change(
+        &mut self,
+        widget_id: &WidgetID,
+        computed_id: TypeId,
+    ) -> bool {
         let mut widgets = self.computed_funcs.lock();
 
         if !widgets.contains_key(widget_id) {
@@ -200,6 +203,7 @@ impl WidgetContext {
         (computed_funcs.get(&computed_id).unwrap())(self)
     }
 
+    #[allow(clippy::borrowed_box)]
     pub(crate) fn build(&mut self, widget_id: WidgetID, widget: &Box<dyn Widget>) -> BuildResult {
         *self.current_id.lock() = Some(widget_id.into());
 
@@ -213,6 +217,6 @@ impl WidgetContext {
 
         self.states.remove(widget_id);
 
-        self.computed_funcs.lock().remove(&widget_id);
+        self.computed_funcs.lock().remove(widget_id);
     }
 }

@@ -19,11 +19,11 @@ pub struct StateMap {
 
     notify: Arc<Mutex<HashSet<ListenerID>>>,
 
-    listener: Arc<Box<dyn Fn() + Send + Sync>>,
+    listener: Arc<dyn Fn() + Send + Sync>,
 }
 
 impl StateMap {
-    pub fn new(on_changed: Arc<Box<dyn Fn(&HashSet<ListenerID>) + Send + Sync>>) -> StateMap {
+    pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> StateMap {
         let notify = Arc::new(Mutex::new(HashSet::new()));
 
         StateMap {
@@ -75,18 +75,18 @@ impl StateMap {
             });
         }
 
-        return None;
+        None
     }
 }
 
 pub struct WidgetStates {
     widgets: Mutex<HashMap<WidgetID, StateMap>>,
 
-    listener: Arc<Box<dyn Fn(&HashSet<ListenerID>) + Send + Sync>>,
+    listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>,
 }
 
 impl WidgetStates {
-    pub fn new(listener: Arc<Box<dyn Fn(&HashSet<ListenerID>) + Send + Sync>>) -> WidgetStates {
+    pub fn new(listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> WidgetStates {
         WidgetStates {
             widgets: Default::default(),
             listener,
@@ -165,7 +165,7 @@ where
 {
     pub(crate) phantom: PhantomData<V>,
 
-    pub(crate) on_changed: Arc<Box<dyn Fn() + Send + Sync>>,
+    pub(crate) on_changed: Arc<dyn Fn() + Send + Sync>,
 
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }

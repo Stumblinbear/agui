@@ -38,20 +38,20 @@ where
     }
 }
 
-impl<F> Into<Box<dyn Widget>> for Builder<F>
+impl<F> From<Builder<F>> for Box<dyn Widget>
 where
     F: Fn(&WidgetContext) -> BuildResult + 'static,
 {
-    fn into(self) -> Box<dyn Widget> {
-        Box::new(self)
+    fn from(builder: Builder<F>) -> Box<dyn Widget> {
+        Box::new(builder)
     }
 }
 
-impl<F> Into<Option<Box<dyn Widget>>> for Builder<F>
+impl<F> From<Builder<F>> for Option<Box<dyn Widget>>
 where
     F: Fn(&WidgetContext) -> BuildResult + 'static,
 {
-    fn into(self) -> Option<Box<dyn Widget>> {
-        Some(Box::new(self))
+    fn from(builder: Builder<F>) -> Option<Box<dyn Widget>> {
+        Some(Box::new(builder))
     }
 }

@@ -67,21 +67,23 @@ where
 
     pub fn remove(&mut self, node_id: &K) -> Option<TreeNode<K>> {
         if let Some(node) = self.nodes.remove(node_id) {
-            for child in node.children {
-                return self.nodes.remove(&child);
+            for child in &node.children {
+                self.nodes.remove(child);
             }
-        }
 
-        return None;
+            Some(node)
+        }else{
+            None
+        }
     }
 
-    pub fn get(&self, node_id: K) -> Option<&TreeNode<K>> {
-        self.nodes.get(&node_id)
+    pub fn get(&self, node_id: &K) -> Option<&TreeNode<K>> {
+        self.nodes.get(node_id)
     }
 
     pub fn iter(&self) -> DownwardIterator<K> {
         DownwardIterator {
-            tree: &self,
+            tree: self,
             node_id: self.root,
             first: true,
         }
@@ -89,7 +91,7 @@ where
 
     pub fn iter_from(&self, node_id: K) -> DownwardIterator<K> {
         DownwardIterator {
-            tree: &self,
+            tree: self,
             node_id: Some(node_id),
             first: true,
         }
@@ -97,7 +99,7 @@ where
 
     pub fn iter_up(&self) -> UpwardIterator<K> {
         UpwardIterator {
-            tree: &self,
+            tree: self,
             node_id: self.get_deepest_child(self.root),
             first: true,
         }
@@ -106,13 +108,13 @@ where
     #[allow(dead_code)]
     pub fn iter_up_from(&self, node_id: K) -> UpwardIterator<K> {
         UpwardIterator {
-            tree: &self,
+            tree: self,
             node_id: Some(node_id),
             first: true,
         }
     }
 
-    pub fn has_child(&self, node_id: K, child_id: K) -> bool {
+    pub fn has_child(&self, node_id: &K, child_id: &K) -> bool {
         let node = self.get(node_id);
         let child = self.get(child_id);
 
@@ -128,8 +130,10 @@ where
             return false;
         }
 
-        for node_id in self.iter_from(node_id) {
-            let node = self.get(node_id).expect("tree broken");
+        let child_id = *child_id;
+
+        for node_id in self.iter_from(*node_id) {
+            let node = self.get(&node_id).expect("tree broken");
 
             // If we reach a depth lower than the child, bail, because the child won't be found. We do
             // not do an equality check, here, because we may find the child as a sibling
@@ -143,7 +147,7 @@ where
             }
         }
         
-        return false;
+        false
     }
 
     fn get_deepest_child(&self, mut current_node_id: Option<K>) -> Option<K> {
@@ -176,15 +180,13 @@ where
             }
         }
 
-        return None;
+        None
     }
 
     fn get_prev_sibling(&self, parent: &TreeNode<K>, sibling_id: K) -> Option<K> {
-        let mut children = parent.children.iter();
-
         let mut last_child_id = None;
 
-        while let Some(child_id) = children.next() {
+        for child_id in parent.children.iter() {
             if *child_id == sibling_id {
                 return last_child_id;
             }
@@ -192,7 +194,7 @@ where
             last_child_id = Some(*child_id);
         }
 
-        return last_child_id;
+        last_child_id
     }
 }
 
@@ -216,7 +218,7 @@ where
 
         if let Some(node_id) = self.node_id {
             // Grab the node from the tree
-            if let Some(node) = self.tree.get(node_id) {
+            if let Some(node) = self.tree.get(&node_id) {
                 // Grab the first child node
                 if let Some(child_id) = node.children.first() {
                     self.node_id = Some(*child_id);
@@ -227,7 +229,7 @@ where
                     loop {
                         // If we have no children, return the sibling after the node_id
                         if let Some(parent_node_id) = current_parent {
-                            if let Some(parent_node) = self.tree.get(parent_node_id) {
+                            if let Some(parent_node) = self.tree.get(&parent_node_id) {
                                 if let Some(sibling_id) =
                                     self.tree.get_next_sibling(parent_node, after_child_id)
                                 {
@@ -258,7 +260,7 @@ where
             }
         }
 
-        return self.node_id;
+        self.node_id
     }
 }
 
@@ -282,9 +284,9 @@ where
 
         if let Some(node_id) = self.node_id {
             // Grab the node from the tree
-            if let Some(node) = self.tree.get(node_id) {
+            if let Some(node) = self.tree.get(&node_id) {
                 if let Some(parent_node_id) = node.parent {
-                    if let Some(parent_node) = self.tree.get(parent_node_id) {
+                    if let Some(parent_node) = self.tree.get(&parent_node_id) {
                         let first_child_id = parent_node.children.first().unwrap();
 
                         // If we're the first child, then return the parent
@@ -307,7 +309,7 @@ where
             }
         }
 
-        return self.node_id;
+        self.node_id
     }
 }
 
@@ -325,7 +327,7 @@ where
     type Item = K;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(node) = self.tree.get(self.node_id) {
+        if let Some(node) = self.tree.get(&self.node_id) {
             let mut children = node.children.iter();
 
             if let Some(current_child_id) = self.current_child_id {
@@ -383,14 +385,14 @@ where
     fn child_iter(&'a self, node_id: Self::Item) -> Self::ChildIter {
         ChildIterator {
             tree: self,
-            node_id: node_id,
+            node_id,
             current_child_id: None,
             first: true,
         }
     }
 
     fn parent(&self, node_id: Self::Item) -> Option<Self::Item> {
-        if let Some(parent) = self.get(node_id) {
+        if let Some(parent) = self.get(&node_id) {
             return parent.parent;
         }
 
@@ -399,7 +401,7 @@ where
 
     fn is_first_child(&self, node_id: Self::Item) -> bool {
         if let Some(parent_id) = self.parent(node_id) {
-            if let Some(parent) = self.get(parent_id) {
+            if let Some(parent) = self.get(&parent_id) {
                 return parent
                     .children
                     .first()
@@ -412,7 +414,7 @@ where
 
     fn is_last_child(&self, node_id: Self::Item) -> bool {
         if let Some(parent_id) = self.parent(node_id) {
-            if let Some(parent) = self.get(parent_id) {
+            if let Some(parent) = self.get(&parent_id) {
                 return parent
                     .children
                     .last()

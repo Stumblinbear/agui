@@ -25,14 +25,14 @@ impl Widget for Text {
     }
 }
 
-impl Into<Box<dyn Widget>> for Text {
-    fn into(self) -> Box<dyn Widget> {
-        Box::new(self)
+impl From<Text> for Box<dyn Widget> {
+    fn from(text: Text) -> Box<dyn Widget> {
+        Box::new(text)
     }
 }
 
-impl Into<Option<Box<dyn Widget>>> for Text {
-    fn into(self) -> Option<Box<dyn Widget>> {
-        Some(Box::new(self))
+impl From<Text> for Option<Box<dyn Widget>> {
+    fn from(text: Text) -> Option<Box<dyn Widget>> {
+        Some(Box::new(text))
     }
 }
