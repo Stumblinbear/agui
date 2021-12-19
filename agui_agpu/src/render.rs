@@ -11,7 +11,7 @@ pub struct RenderContext {
 pub trait WidgetRenderPass {
     fn add(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: &WidgetID);
 
-    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: &WidgetID);
+    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager);
 
     fn remove(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: &WidgetID);
 
@@ -43,7 +43,7 @@ impl WidgetRenderPass for BasicRenderPass {
         self.widgets.insert(*widget_id);
     }
 
-    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: &WidgetID) {}
+    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager) {}
 
     fn remove(&mut self, ctx: &RenderContext, manager: &WidgetManager, widget_id: &WidgetID) {
         self.widgets.remove(widget_id);

@@ -32,13 +32,11 @@ impl agui::render::WidgetRenderer for WidgetRenderer {
 
     fn refresh(&mut self, manager: &WidgetManager) {
         // TODO: is it possible to limit the scope of layout refreshes?
-        for (widget_id, _) in &self.widget_renderer {
-            for (_, pass_type_id) in &self.bound_render_pass {
-                self.render_passes
-                    .get_mut(pass_type_id)
-                    .expect("impossible render pass access")
-                    .refresh(&self.ctx, manager, widget_id);
-            }
+        for (_, pass_type_id) in &self.bound_render_pass {
+            self.render_passes
+                .get_mut(pass_type_id)
+                .expect("impossible render pass access")
+                .refresh(&self.ctx, manager);
         }
     }
 
