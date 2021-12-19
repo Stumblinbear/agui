@@ -2,47 +2,7 @@ use std::{collections::HashMap, hash::Hash};
 
 use morphorm::{Cache, GeometryChanged};
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct Rect {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-impl Rect {
-    #[allow(dead_code)]
-    pub fn contains(&self, point: (f32, f32)) -> bool {
-        (point.0 >= self.x && point.0 <= self.x + self.width)
-            && (point.1 >= self.y && point.1 <= self.y + self.height)
-    }
-
-    pub const fn to_slice(self) -> [f32; 4] {
-        [ self.x, self.y, self.width, self.height ]
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct Bounds {
-    pub top: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub left: f32,
-}
-
-impl Bounds {
-    #[allow(dead_code)]
-    pub fn contains(&self, point: (f32, f32)) -> bool {
-        (point.0 >= self.left && point.0 <= self.right)
-            && (point.1 >= self.top && point.1 <= self.bottom)
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Size {
-    pub width: f32,
-    pub height: f32,
-}
+use crate::unit::{Bounds, Rect, Size};
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {

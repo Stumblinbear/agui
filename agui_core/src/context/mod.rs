@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 
 use crate::{
     context::state::{Ref, StateMap, Value, WidgetStates},
-    widget::{BuildResult, WidgetID, WidgetRef},
+    BuildResult, WidgetID, WidgetRef,
 };
 
 mod state;

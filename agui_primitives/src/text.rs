@@ -1,12 +1,9 @@
-use agui_core::{
-    widget::{BuildResult, Layout, Size, WidgetImpl, WidgetRef},
-    WidgetContext,
-};
+use agui_core::{WidgetContext, unit::{Layout, Sizing}, WidgetImpl, BuildResult, WidgetRef};
 use agui_macros::Widget;
 
 #[derive(Default, Widget)]
 pub struct Text {
-    pub size: Size,
+    pub size: Sizing,
     pub text: String,
 }
 

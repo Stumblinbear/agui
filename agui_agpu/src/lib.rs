@@ -1,11 +1,7 @@
 use std::{any::TypeId, collections::HashMap};
 
 use agpu::{Frame, GpuProgram};
-use agui::{
-    widget::{Widget, WidgetID},
-    widgets::primitives::Quad,
-    WidgetManager,
-};
+use agui::{widgets::primitives::Quad, Widget, WidgetID, WidgetManager};
 use render::{quad::QuadRenderPass, RenderContext, WidgetRenderPass};
 
 pub mod render;

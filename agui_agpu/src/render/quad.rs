@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use agpu::{Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{render::color::Color, widget::WidgetID, widgets::primitives::Quad, WidgetManager};
+use agui::{render::color::Color, widgets::primitives::Quad, WidgetID, WidgetManager};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};

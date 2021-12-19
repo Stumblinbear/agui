@@ -1,15 +1,14 @@
 use std::collections::HashSet;
 
-use crate::{
-    render::WidgetRenderer,
-    widget::{Widget, WidgetID, WidgetRef},
-};
+use crate::render::WidgetRenderer;
 
-mod layout;
+mod cache;
 mod manager;
 mod tree;
+mod widget;
 
 pub use manager::WidgetManager;
+pub use widget::*;
 
 pub struct UI<R>
 where

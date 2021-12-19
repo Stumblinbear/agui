@@ -6,9 +6,11 @@ use std::{
 };
 
 use downcast_rs::{impl_downcast, Downcast};
-use parking_lot::{Mutex, RwLock, MappedRwLockReadGuard, RwLockReadGuard, RwLockWriteGuard, MappedRwLockWriteGuard};
+use parking_lot::{
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 
-use crate::widget::WidgetID;
+use crate::WidgetID;
 
 use super::ListenerID;
 

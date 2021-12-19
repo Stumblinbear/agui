@@ -6,11 +6,10 @@ use std::{
 use downcast_rs::{impl_downcast, Downcast};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
-use crate::WidgetContext;
-
-mod layout;
-
-pub use layout::*;
+use crate::{
+    unit::{Layout, LayoutType, Padding, Position, Sizing},
+    WidgetContext,
+};
 
 #[non_exhaustive]
 pub enum BuildResult {
@@ -178,10 +177,10 @@ impl<'a> morphorm::Node<'a> for WidgetID {
         Some(
             store
                 .get(self.0)
-                .map_or(Size::default(), |node| {
+                .map_or(Sizing::default(), |node| {
                     node.get()
                         .layout()
-                        .map_or(Size::default(), |layout| layout.size)
+                        .map_or(Sizing::default(), |layout| layout.sizing)
                 })
                 .get_width(),
         )
@@ -191,10 +190,10 @@ impl<'a> morphorm::Node<'a> for WidgetID {
         Some(
             store
                 .get(self.0)
-                .map_or(Size::default(), |node| {
+                .map_or(Sizing::default(), |node| {
                     node.get()
                         .layout()
-                        .map_or(Size::default(), |layout| layout.size)
+                        .map_or(Sizing::default(), |layout| layout.sizing)
                 })
                 .get_height(),
         )
@@ -204,10 +203,10 @@ impl<'a> morphorm::Node<'a> for WidgetID {
         Some(
             store
                 .get(self.0)
-                .map_or(Size::default(), |node| {
+                .map_or(Sizing::default(), |node| {
                     node.get()
                         .layout()
-                        .map_or(Size::default(), |layout| layout.min_size)
+                        .map_or(Sizing::default(), |layout| layout.min_size)
                 })
                 .get_width(),
         )
@@ -217,10 +216,10 @@ impl<'a> morphorm::Node<'a> for WidgetID {
         Some(
             store
                 .get(self.0)
-                .map_or(Size::default(), |node| {
+                .map_or(Sizing::default(), |node| {
                     node.get()
                         .layout()
-                        .map_or(Size::default(), |layout| layout.min_size)
+                        .map_or(Sizing::default(), |layout| layout.min_size)
                 })
                 .get_height(),
         )
@@ -230,10 +229,10 @@ impl<'a> morphorm::Node<'a> for WidgetID {
         Some(
             store
                 .get(self.0)
-                .map_or(Size::default(), |node| {
+                .map_or(Sizing::default(), |node| {
                     node.get()
                         .layout()
-                        .map_or(Size::default(), |layout| layout.max_size)
+                        .map_or(Sizing::default(), |layout| layout.max_size)
                 })
                 .get_width(),
         )
@@ -243,10 +242,10 @@ impl<'a> morphorm::Node<'a> for WidgetID {
         Some(
             store
                 .get(self.0)
-                .map_or(Size::default(), |node| {
+                .map_or(Sizing::default(), |node| {
                     node.get()
                         .layout()
-                        .map_or(Size::default(), |layout| layout.max_size)
+                        .map_or(Sizing::default(), |layout| layout.max_size)
                 })
                 .get_height(),
         )

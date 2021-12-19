@@ -3,15 +3,9 @@ use std::{collections::HashSet, rc::Rc, sync::Arc};
 use generational_arena::Arena;
 use parking_lot::Mutex;
 
-use crate::{
-    widget::{BuildResult, Widget, WidgetID, WidgetRef},
-    ListenerID, WidgetContext,
-};
+use crate::{unit::Rect, BuildResult, ListenerID, Widget, WidgetContext, WidgetID, WidgetRef};
 
-use super::{
-    layout::{LayoutCache, Rect},
-    tree::Tree,
-};
+use super::{cache::LayoutCache, tree::Tree};
 
 struct VoidMap;
 
@@ -325,11 +319,8 @@ mod tests {
 
     use crate::{
         ui::manager::VoidMap,
-        widget::{
-            BuildResult, Layout, LayoutType, Widget, WidgetImpl, WidgetLayout, WidgetRef,
-            WidgetType,
-        },
-        WidgetContext,
+        unit::{Layout, LayoutType},
+        BuildResult, Widget, WidgetContext, WidgetImpl, WidgetLayout, WidgetRef, WidgetType,
     };
 
     use super::WidgetManager;

@@ -1,5 +1,5 @@
 use agui::{
-    widget::{Layout, Size, Units},
+    unit::{Layout, Size, Units},
     widgets::Button,
     UI,
 };
@@ -10,15 +10,14 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::new(agui_agpu::WidgetRenderer::new(&program));
 
-    ui.set_root(Button {
-        layout: Layout {
-            size: Size::Set {
-                width: Units::Pixels(100.0),
-                height: Units::Pixels(100.0),
-            },
-            ..Default::default()
-        },
-    });
+    // ui.set_root(widget!(Button {
+    //     layout: Layout {
+    //         size: Size::Set {
+    //             width: Units::Pixels(100.0),
+    //             height: Units::Pixels(100.0),
+    //         }
+    //     }
+    // }));
 
     let pipeline = gpu.new_pipeline("example render pipeline").create();
 

@@ -80,9 +80,9 @@ impl LayoutType {
 #[derive(Debug, Clone, Default)]
 pub struct Layout {
     pub position: Position,
-    pub min_size: Size,
-    pub max_size: Size,
-    pub size: Size,
+    pub min_size: Sizing,
+    pub max_size: Sizing,
+    pub sizing: Sizing,
 
     pub padding: Padding,
 }
@@ -214,34 +214,76 @@ impl Position {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
-pub enum Size {
+pub enum Sizing {
     Auto,
     Fill,
     Set { width: Units, height: Units },
 }
 
-impl Default for Size {
+impl Default for Sizing {
     fn default() -> Self {
         Self::Auto
     }
 }
 
-impl Size {
+impl Sizing {
     #[must_use]
     pub const fn get_width(&self) -> Units {
         match self {
-            Size::Auto => Units::Auto,
-            Size::Fill => Units::Stretch(1.0),
-            Size::Set { width, .. } => *width,
+            Sizing::Auto => Units::Auto,
+            Sizing::Fill => Units::Stretch(1.0),
+            Sizing::Set { width, .. } => *width,
         }
     }
 
     #[must_use]
     pub const fn get_height(&self) -> Units {
         match self {
-            Size::Auto => Units::Auto,
-            Size::Fill => Units::Stretch(1.0),
-            Size::Set { height, .. } => *height,
+            Sizing::Auto => Units::Auto,
+            Sizing::Fill => Units::Stretch(1.0),
+            Sizing::Set { height, .. } => *height,
         }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Size {
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Rect {
+    #[allow(dead_code)]
+    pub fn contains(&self, point: (f32, f32)) -> bool {
+        (point.0 >= self.x && point.0 <= self.x + self.width)
+            && (point.1 >= self.y && point.1 <= self.y + self.height)
+    }
+
+    pub const fn to_slice(self) -> [f32; 4] {
+        [self.x, self.y, self.width, self.height]
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Bounds {
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub left: f32,
+}
+
+impl Bounds {
+    #[allow(dead_code)]
+    pub fn contains(&self, point: (f32, f32)) -> bool {
+        (point.0 >= self.left && point.0 <= self.right)
+            && (point.1 >= self.top && point.1 <= self.bottom)
     }
 }

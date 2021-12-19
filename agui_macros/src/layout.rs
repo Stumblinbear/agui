@@ -21,8 +21,8 @@ impl ToTokens for LayoutType {
         let agui_core = quote! { agui };
     
         tokens.extend(match self {
-            LayoutType::Row => quote!{ #agui_core::widget::LayoutType::Row },
-            LayoutType::Column => quote!{ #agui_core::widget::LayoutType::Column },
+            LayoutType::Row => quote!{ #agui_core::unit::LayoutType::Row },
+            LayoutType::Column => quote!{ #agui_core::unit::LayoutType::Column },
             LayoutType::None => unreachable!(),
         });
     }

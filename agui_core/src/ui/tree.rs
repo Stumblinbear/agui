@@ -430,7 +430,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::widget::WidgetID;
+    use crate::WidgetID;
 
     use super::Tree;
 

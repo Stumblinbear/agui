@@ -1,5 +1,5 @@
 use agpu::{Frame, GpuHandle};
-use agui::{widget::WidgetID, WidgetManager};
+use agui::{WidgetID, WidgetManager};
 
 pub mod quad;
 

@@ -1,7 +1,7 @@
 use agui_core::{
     state::mouse::MousePosition,
-    widget::{BuildResult, Layout, Size, WidgetImpl},
-    WidgetContext,
+    unit::{Layout, Sizing},
+    BuildResult, WidgetContext, WidgetImpl,
 };
 use agui_macros::Widget;
 use agui_primitives::{Quad, Text};
@@ -29,7 +29,7 @@ impl WidgetImpl for Button {
         BuildResult::One(
             Quad {
                 layout: Layout {
-                    size: Size::Fill,
+                    sizing: Sizing::Fill,
                     ..Layout::default()
                 },
                 child: Text {
