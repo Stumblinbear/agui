@@ -10,9 +10,8 @@ keywords = ["gui"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-de-ref = "1.0"
 cfg-if = "1.0"
-morphorm = "0.2"
-generational-arena = "0.2"
 downcast-rs = "1.2"
+generational-arena = "0.2"
+morphorm = "0.2"
 parking_lot = "0.11"

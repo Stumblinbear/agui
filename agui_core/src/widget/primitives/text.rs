@@ -26,13 +26,13 @@ impl Widget for Text {
 }
 
 impl From<Text> for Box<dyn Widget> {
-    fn from(text: Text) -> Box<dyn Widget> {
+    fn from(text: Text) -> Self {
         Box::new(text)
     }
 }
 
 impl From<Text> for Option<Box<dyn Widget>> {
-    fn from(text: Text) -> Option<Box<dyn Widget>> {
+    fn from(text: Text) -> Self {
         Some(Box::new(text))
     }
 }

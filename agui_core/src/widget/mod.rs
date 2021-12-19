@@ -1,7 +1,6 @@
 use std::any::TypeId;
 
-use de_ref::Deref;
-use downcast_rs::{Downcast, impl_downcast};
+use downcast_rs::{impl_downcast, Downcast};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use crate::WidgetContext;
@@ -12,20 +11,24 @@ mod primitives;
 pub use layout::*;
 pub use primitives::*;
 
+#[non_exhaustive]
 pub enum BuildResult {
     Empty,
-    
+
     One(Box<dyn Widget>),
     Many(Vec<Box<dyn Widget>>),
-    
+
     Error(Box<dyn std::error::Error>),
 }
 
 impl BuildResult {
+    /// # Errors
+    /// 
+    /// Will return `Err` if the widget failed to build itself. 
     pub fn take(self) -> Result<Vec<Box<dyn Widget>>, Box<dyn std::error::Error>> {
         match self {
             BuildResult::Empty => Ok(Vec::new()),
-            BuildResult::One(child) => Ok(vec![ child ]),
+            BuildResult::One(child) => Ok(vec![child]),
             BuildResult::Many(children) => Ok(children),
             BuildResult::Error(err) => Err(err),
         }
@@ -34,7 +37,7 @@ impl BuildResult {
 
 pub trait Widget: Downcast {
     fn get_type_id(&self) -> TypeId;
-    
+
     fn layout(&self) -> Option<&Layout>;
 
     fn build(&self, ctx: &WidgetContext) -> BuildResult;
@@ -46,33 +49,33 @@ impl_downcast!(Widget);
 pub struct WidgetID(GenerationalIndex, usize);
 
 impl WidgetID {
-    pub fn from(index: GenerationalIndex, depth: usize) -> WidgetID {
-        WidgetID(index, depth)
+    #[must_use]
+    pub const fn from(index: GenerationalIndex, depth: usize) -> Self {
+        Self(index, depth)
     }
 
-    pub fn id(&self) -> GenerationalIndex {
+    #[must_use]
+    pub const fn id(&self) -> GenerationalIndex {
         self.0
     }
-    
-    pub fn z(&self) -> usize {
+
+    #[must_use]
+    pub const fn z(&self) -> usize {
         self.1
     }
 }
 
 impl Default for WidgetID {
     fn default() -> Self {
-        WidgetID(GenerationalIndex::from_raw_parts(0, 0), 0)
+        Self(GenerationalIndex::from_raw_parts(0, 0), 0)
     }
 }
 
 impl From<usize> for WidgetID {
     fn from(val: usize) -> Self {
-        WidgetID(GenerationalIndex::from_raw_parts(val, 0), 0)
+        Self(GenerationalIndex::from_raw_parts(val, 0), 0)
     }
 }
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Deref)]
-pub struct NodeID(pub GenerationalIndex);
 
 impl<'a> morphorm::Node<'a> for WidgetID {
     type Data = Arena<Box<dyn Widget>>;

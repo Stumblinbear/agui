@@ -20,7 +20,7 @@ impl Widget for Button {
     }
 
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        let hovering = ctx.computed(|ctx| {
+        let _hovering = ctx.computed(|ctx| {
             let mouse = ctx.get_state::<MousePosition>();
 
             let mouse_pos = mouse.read();
@@ -32,14 +32,14 @@ impl Widget for Button {
             Quad {
                 layout: Layout {
                     size: Size::Fill,
-                    ..Default::default()
+                    ..Layout::default()
                 },
                 child: Text {
                     text: "".into(),
-                    ..Default::default()
+                    ..Text::default()
                 }
                 .into(),
-                ..Default::default()
+                ..Quad::default()
             }
             .into(),
         )

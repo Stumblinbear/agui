@@ -26,20 +26,21 @@ impl<R> UI<R>
 where
     R: WidgetRenderer,
 {
-    pub fn init() -> UI<R>
+    #[must_use]
+    pub fn init() -> Self
     where
         R: Default,
     {
-        UI::new(R::default())
+        Self::new(R::default())
     }
 
-    pub fn new(renderer: R) -> UI<R> {
-        UI {
+    pub fn new(renderer: R) -> Self {
+        Self {
             manager: WidgetManager::new(),
             renderer,
 
-            added: Default::default(),
-            removed: Default::default(),
+            added: HashSet::default(),
+            removed: HashSet::default(),
         }
     }
 

@@ -12,7 +12,7 @@ pub struct Rect {
 
 impl Rect {
     #[allow(dead_code)]
-    pub fn contains(&self, point: &(f32, f32)) -> bool {
+    pub fn contains(&self, point: (f32, f32)) -> bool {
         (point.0 >= self.x && point.0 <= self.x + self.width)
             && (point.1 >= self.y && point.1 <= self.y + self.height)
     }
@@ -28,7 +28,7 @@ pub struct Bounds {
 
 impl Bounds {
     #[allow(dead_code)]
-    pub fn contains(&self, point: &(f32, f32)) -> bool {
+    pub fn contains(&self, point: (f32, f32)) -> bool {
         (point.0 >= self.left && point.0 <= self.right)
             && (point.1 >= self.top && point.1 <= self.bottom)
     }
@@ -255,7 +255,7 @@ where
                 node,
                 Rect {
                     width: value,
-                    ..Default::default()
+                    ..Rect::default()
                 },
             );
         }
@@ -269,7 +269,7 @@ where
                 node,
                 Rect {
                     height: value,
-                    ..Default::default()
+                    ..Rect::default()
                 },
             );
         }
@@ -283,7 +283,7 @@ where
                 node,
                 Rect {
                     x: value,
-                    ..Default::default()
+                    ..Rect::default()
                 },
             );
         }
@@ -297,7 +297,7 @@ where
                 node,
                 Rect {
                     y: value,
-                    ..Default::default()
+                    ..Rect::default()
                 },
             );
         }
@@ -311,7 +311,7 @@ where
                 node,
                 Bounds {
                     top: value,
-                    ..Default::default()
+                    ..Bounds::default()
                 },
             );
         }
@@ -325,7 +325,7 @@ where
                 node,
                 Bounds {
                     right: value,
-                    ..Default::default()
+                    ..Bounds::default()
                 },
             );
         }
@@ -339,7 +339,7 @@ where
                 node,
                 Bounds {
                     bottom: value,
-                    ..Default::default()
+                    ..Bounds::default()
                 },
             );
         }
@@ -353,7 +353,7 @@ where
                 node,
                 Bounds {
                     left: value,
-                    ..Default::default()
+                    ..Bounds::default()
                 },
             );
         }
@@ -367,7 +367,7 @@ where
                 node,
                 Size {
                     width: value,
-                    ..Default::default()
+                    ..Size::default()
                 },
             );
         }
@@ -381,7 +381,7 @@ where
                 node,
                 Size {
                     height: value,
-                    ..Default::default()
+                    ..Size::default()
                 },
             );
         }

@@ -72,7 +72,7 @@ where
             }
 
             Some(node)
-        }else{
+        } else {
             None
         }
     }
@@ -146,7 +146,7 @@ where
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -165,6 +165,7 @@ where
         current_node_id
     }
 
+    #[allow(clippy::unused_self)]
     fn get_next_sibling(&self, parent: &TreeNode<K>, sibling_id: K) -> Option<K> {
         let mut children = parent.children.iter();
 
@@ -174,19 +175,20 @@ where
 
                 if let Some(child_id) = child_id {
                     return Some(*child_id);
-                } else {
-                    return None;
                 }
+
+                return None;
             }
         }
 
         None
     }
 
+    #[allow(clippy::unused_self)]
     fn get_prev_sibling(&self, parent: &TreeNode<K>, sibling_id: K) -> Option<K> {
         let mut last_child_id = None;
 
-        for child_id in parent.children.iter() {
+        for child_id in &parent.children {
             if *child_id == sibling_id {
                 return last_child_id;
             }
@@ -235,13 +237,13 @@ where
                                 {
                                     self.node_id = Some(sibling_id);
                                     break;
-                                } else {
-                                    // Move up to to the parent to check its next child
-                                    current_parent = parent_node.parent;
-
-                                    // Set after_child_id to parent_node_id so it's skipped
-                                    after_child_id = parent_node_id;
                                 }
+
+                                // Move up to to the parent to check its next child
+                                current_parent = parent_node.parent;
+
+                                // Set after_child_id to parent_node_id so it's skipped
+                                after_child_id = parent_node_id;
                             } else {
                                 // Parent doesn't exist in the tree. Bail.
                                 self.node_id = None;
@@ -300,7 +302,7 @@ where
                         }
                     }
                 } else {
-                    // Node doesn't have a parent, so we're at the root.
+                    // TreeNode doesn't have a parent, so we're at the root.
                     self.node_id = None;
                 }
             } else {

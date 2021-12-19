@@ -18,6 +18,6 @@ pub enum MouseButtonState {
 
 impl Default for MouseButtonState {
     fn default() -> Self {
-        MouseButtonState::Up
+        Self::Up
     }
 }

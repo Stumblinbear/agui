@@ -20,17 +20,17 @@ pub enum ListenerID {
 }
 
 impl ListenerID {
-    pub fn widget_id(&self) -> &WidgetID {
+    #[must_use]
+    pub const fn widget_id(&self) -> &WidgetID {
         match self {
-            ListenerID::Widget(widget_id) => widget_id,
-            ListenerID::Computed(widget_id, _) => widget_id,
+            Self::Widget(widget_id) | Self::Computed(widget_id, _) => widget_id,
         }
     }
 }
 
 impl From<WidgetID> for ListenerID {
     fn from(widget_id: WidgetID) -> Self {
-        ListenerID::Widget(widget_id)
+        Self::Widget(widget_id)
     }
 }
 
@@ -47,17 +47,17 @@ pub struct WidgetContext {
 }
 
 impl WidgetContext {
-    pub fn new(on_changed: Box<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
-        let on_changed = Arc::new(on_changed);
-
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
         Self {
-            global: StateMap::new(on_changed.clone()),
+            global: StateMap::new(Arc::clone(&on_changed)),
 
-            states: WidgetStates::new(on_changed.clone()),
+            states: WidgetStates::new(Arc::clone(&on_changed)),
 
             computed_funcs: Arc::new(Mutex::new(HashMap::new())),
 
-            current_id: Default::default(),
+            current_id: Arc::default(),
         }
     }
 
@@ -121,10 +121,13 @@ impl WidgetContext {
         self.states.get(&current_id, func)
     }
 
+    /// # Panics
+    ///
+    /// Will panic if called outside of a build context.
     pub fn computed<V, F>(&self, func: F) -> V
     where
         V: Eq + PartialEq + Clone + Value,
-        F: Fn(&WidgetContext) -> V + 'static,
+        F: Fn(&Self) -> V + 'static,
     {
         let current_id = self
             .current_id
@@ -170,7 +173,7 @@ impl WidgetContext {
     fn call_computed<V, F>(&self, listener_id: ListenerID, func: &F) -> V
     where
         V: Eq + PartialEq + Clone + Value,
-        F: Fn(&WidgetContext) -> V + 'static,
+        F: Fn(&Self) -> V + 'static,
     {
         let previous_id = *self.current_id.lock();
 

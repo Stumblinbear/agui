@@ -23,13 +23,13 @@ pub struct StateMap {
 }
 
 impl StateMap {
-    pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> StateMap {
+    pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
         let notify = Arc::new(Mutex::new(HashSet::new()));
 
-        StateMap {
-            states: Default::default(),
+        Self {
+            states: Mutex::default(),
 
-            notify: notify.clone(),
+            notify: Arc::clone(&notify),
 
             listener: {
                 Arc::new(Box::new(move || {
@@ -70,8 +70,8 @@ impl StateMap {
         if let Some(value) = self.states.lock().get(&TypeId::of::<V>()) {
             return Some(Ref {
                 phantom: PhantomData,
-                on_changed: self.listener.clone(),
-                value: value.clone(),
+                on_changed: Arc::clone(&self.listener),
+                value: Arc::clone(value),
             });
         }
 
@@ -86,9 +86,9 @@ pub struct WidgetStates {
 }
 
 impl WidgetStates {
-    pub fn new(listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> WidgetStates {
-        WidgetStates {
-            widgets: Default::default(),
+    pub fn new(listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
+        Self {
+            widgets: Mutex::default(),
             listener,
         }
     }
@@ -97,7 +97,7 @@ impl WidgetStates {
         let mut widgets = self.widgets.lock();
 
         if !widgets.contains_key(widget_id) {
-            widgets.insert(*widget_id, StateMap::new(self.listener.clone()));
+            widgets.insert(*widget_id, StateMap::new(Arc::clone(&self.listener)));
         }
     }
 

@@ -47,22 +47,22 @@ impl Default for WidgetManager {
     fn default() -> Self {
         let changed = Arc::new(Mutex::new(HashSet::new()));
 
-        WidgetManager {
-            widgets: Default::default(),
-            tree: Default::default(),
-            cache: Default::default(),
+        Self {
+            widgets: Arena::default(),
+            tree: Tree::default(),
+            cache: LayoutCache::default(),
 
             context: {
-                let changed = changed.clone();
+                let changed = Arc::clone(&changed);
 
-                WidgetContext::new(Box::new(move |listener_ids| {
+                WidgetContext::new(Arc::new(move |listener_ids| {
                     changed.lock().extend(listener_ids);
                 }))
             },
 
             changed,
 
-            modifications: Default::default(),
+            modifications: Vec::default(),
 
             #[cfg(test)]
             rebuilds: Default::default(),
@@ -80,8 +80,9 @@ impl Default for WidgetManager {
 }
 
 impl WidgetManager {
-    pub fn new() -> WidgetManager {
-        WidgetManager::default()
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
 
     #[allow(clippy::borrowed_box)]
@@ -119,12 +120,12 @@ impl WidgetManager {
         self.cache.get_rect(widget_id)
     }
 
-    // Queues the widget for addition into the tree
+    /// Queues the widget for addition into the tree
     pub fn add(&mut self, parent_id: Option<WidgetID>, widget: Box<dyn Widget>) {
         self.modifications.push(Modify::Spawn(parent_id, widget));
     }
 
-    /// Queues the widget_id for removal on the next update()
+    /// Queues the `widget_id` for removal on the next update()
     pub fn remove(&mut self, widget_id: WidgetID) {
         self.modifications.push(Modify::Destroy(widget_id));
     }
@@ -173,33 +174,30 @@ impl WidgetManager {
             let mut to_rebuild = Vec::new();
 
             'main: for widget_id in dirty_widgets {
-                let widget = self.tree.get(&widget_id);
-
-                if widget.is_none() {
-                    continue;
-                }
-
-                let node = widget.unwrap();
+                let node = match self.tree.get(&widget_id) {
+                    Some(widget) => widget,
+                    None => continue,
+                };
 
                 let widget_depth = node.depth;
 
                 let mut to_remove = Vec::new();
 
-                for (i, (dirty_id, dirty_depth)) in to_rebuild.iter().enumerate() {
+                for (i, &(dirty_id, dirty_depth)) in to_rebuild.iter().enumerate() {
                     // If they're at the same depth, bail. No reason to check if they're children.
-                    if widget_depth == *dirty_depth {
+                    if widget_depth == dirty_depth {
                         continue;
                     }
 
-                    if widget_depth > *dirty_depth {
+                    if widget_depth > dirty_depth {
                         // If the widget is a child of one of the already queued widgets, bail. It's
                         // already going to be updated.
-                        if self.tree.has_child(dirty_id, &widget_id) {
+                        if self.tree.has_child(&dirty_id, &widget_id) {
                             continue 'main;
                         }
                     } else {
                         // If the widget is a parent of the widget already queued for render, remove it
-                        if self.tree.has_child(&widget_id, dirty_id) {
+                        if self.tree.has_child(&widget_id, &dirty_id) {
                             to_remove.push(i);
                         }
                     }
@@ -355,20 +353,18 @@ mod tests {
         }
 
         fn build(&self, ctx: &WidgetContext) -> BuildResult {
-            let computes = self.computes.clone();
+            let computes = Arc::clone(&self.computes);
 
             let computed_value = ctx.computed(move |ctx| {
                 *computes.lock() += 1;
 
                 let test_global = ctx.get_global::<TestGlobal>();
 
-                if let Some(test_global) = test_global {
+                test_global.map_or_else(|| -1, |test_global| {
                     let test_global = test_global.read();
 
                     test_global.0
-                } else {
-                    -1
-                }
+                })
             });
 
             *self.builds.lock() += 1;

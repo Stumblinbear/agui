@@ -28,13 +28,13 @@ impl Widget for Quad {
 }
 
 impl From<Quad> for Box<dyn Widget> {
-    fn from(quad: Quad) -> Box<dyn Widget> {
+    fn from(quad: Quad) -> Self {
         Box::new(quad)
     }
 }
 
 impl From<Quad> for Option<Box<dyn Widget>> {
-    fn from(quad: Quad) -> Option<Box<dyn Widget>> {
+    fn from(quad: Quad) -> Self {
         Some(Box::new(quad))
     }
 }

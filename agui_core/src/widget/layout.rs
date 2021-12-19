@@ -3,6 +3,7 @@ use morphorm::PositionType;
 pub use morphorm::Units;
 
 #[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
 pub enum LayoutType {
     Row,
     Column,
@@ -21,31 +22,21 @@ impl Default for LayoutType {
 }
 
 impl From<LayoutType> for morphorm::LayoutType {
-    fn from(ty: LayoutType) -> morphorm::LayoutType {
+    fn from(ty: LayoutType) -> Self {
         match ty {
-            LayoutType::Row => morphorm::LayoutType::Row,
-            LayoutType::Column => morphorm::LayoutType::Column,
-            LayoutType::Grid {
-                rows: _,
-                row_spacing: _,
-                columns: _,
-                column_spacing: _,
-            } => morphorm::LayoutType::Grid,
+            LayoutType::Row => Self::Row,
+            LayoutType::Column => Self::Column,
+            LayoutType::Grid { .. } => Self::Grid,
         }
     }
 }
 
 impl LayoutType {
+    #[must_use]
     pub fn get_rows(&self) -> Option<Vec<Units>> {
         match self {
-            LayoutType::Row => None,
-            LayoutType::Column => None,
-            LayoutType::Grid {
-                rows,
-                row_spacing: _,
-                columns: _,
-                column_spacing: _,
-            } => {
+            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Grid { rows, .. } => {
                 let mut vec = Vec::with_capacity(*rows);
 
                 vec.fill_with(|| Units::Auto);
@@ -55,29 +46,19 @@ impl LayoutType {
         }
     }
 
-    pub fn get_row_spacing(&self) -> Option<Units> {
+    #[must_use]
+    pub const fn get_row_spacing(&self) -> Option<Units> {
         match self {
-            LayoutType::Row => None,
-            LayoutType::Column => None,
-            LayoutType::Grid {
-                rows: _,
-                row_spacing,
-                columns: _,
-                column_spacing: _,
-            } => Some(*row_spacing),
+            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Grid { row_spacing, .. } => Some(*row_spacing),
         }
     }
 
+    #[must_use]
     pub fn get_columns(&self) -> Option<Vec<Units>> {
         match self {
-            LayoutType::Row => None,
-            LayoutType::Column => None,
-            LayoutType::Grid {
-                rows: _,
-                row_spacing: _,
-                columns,
-                column_spacing: _,
-            } => {
+            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Grid { columns, .. } => {
                 let mut vec = Vec::with_capacity(*columns);
 
                 vec.fill_with(|| Units::Auto);
@@ -87,16 +68,11 @@ impl LayoutType {
         }
     }
 
-    pub fn get_column_spacing(&self) -> Option<Units> {
+    #[must_use]
+    pub const fn get_column_spacing(&self) -> Option<Units> {
         match self {
-            LayoutType::Row => None,
-            LayoutType::Column => None,
-            LayoutType::Grid {
-                rows: _,
-                row_spacing: _,
-                columns: _,
-                column_spacing,
-            } => Some(*column_spacing),
+            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Grid { column_spacing, .. } => Some(*column_spacing),
         }
     }
 }
@@ -114,24 +90,29 @@ pub struct Layout {
 }
 
 impl Layout {
+    #[must_use]
     pub fn get_rows(&self) -> Option<Vec<Units>> {
         self.r#type.get_rows()
     }
 
-    pub fn get_row_spacing(&self) -> Option<Units> {
+    #[must_use]
+    pub const fn get_row_spacing(&self) -> Option<Units> {
         self.r#type.get_row_spacing()
     }
 
+    #[must_use]
     pub fn get_columns(&self) -> Option<Vec<Units>> {
         self.r#type.get_columns()
     }
 
-    pub fn get_column_spacing(&self) -> Option<Units> {
+    #[must_use]
+    pub const fn get_column_spacing(&self) -> Option<Units> {
         self.r#type.get_column_spacing()
     }
 }
 
 #[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
 pub enum Padding {
     Unset,
     Axis {
@@ -153,72 +134,45 @@ impl Default for Padding {
 }
 
 impl Padding {
-    pub fn get_top(&self) -> Units {
+    #[must_use]
+    pub const fn get_top(&self) -> Units {
         match self {
             Padding::Unset => Units::Auto,
-            Padding::Axis {
-                vertical,
-                horizontal: _,
-            } => *vertical,
-            Padding::Set {
-                top,
-                right: _,
-                bottom: _,
-                left: _,
-            } => *top,
+            Padding::Axis { vertical, .. } => *vertical,
+            Padding::Set { top, .. } => *top,
         }
     }
 
-    pub fn get_right(&self) -> Units {
+    #[must_use]
+    pub const fn get_right(&self) -> Units {
         match self {
             Padding::Unset => Units::Auto,
-            Padding::Axis {
-                vertical: _,
-                horizontal,
-            } => *horizontal,
-            Padding::Set {
-                top: _,
-                right,
-                bottom: _,
-                left: _,
-            } => *right,
+            Padding::Axis { horizontal, .. } => *horizontal,
+            Padding::Set { right, .. } => *right,
         }
     }
 
-    pub fn get_bottom(&self) -> Units {
+    #[must_use]
+    pub const fn get_bottom(&self) -> Units {
         match self {
             Padding::Unset => Units::Auto,
-            Padding::Axis {
-                vertical,
-                horizontal: _,
-            } => *vertical,
-            Padding::Set {
-                top: _,
-                right: _,
-                bottom,
-                left: _,
-            } => *bottom,
+            Padding::Axis { vertical, .. } => *vertical,
+            Padding::Set { bottom, .. } => *bottom,
         }
     }
 
-    pub fn get_left(&self) -> Units {
+    #[must_use]
+    pub const fn get_left(&self) -> Units {
         match self {
             Padding::Unset => Units::Auto,
-            Padding::Axis {
-                vertical: _,
-                horizontal,
-            } => *horizontal,
-            Padding::Set {
-                top: _,
-                right: _,
-                bottom: _,
-                left,
-            } => *left,
+            Padding::Axis { horizontal, .. } => *horizontal,
+            Padding::Set { left, .. } => *left,
         }
     }
 }
 
 #[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
 pub enum Position {
     Unset,
     Absolute {
@@ -240,75 +194,50 @@ impl Default for Position {
 }
 
 impl From<Position> for PositionType {
-    fn from(pos: Position) -> PositionType {
+    fn from(pos: Position) -> Self {
         match pos {
-            Position::Unset => PositionType::ParentDirected,
-            Position::Relative { top: _, left: _ } => PositionType::SelfDirected,
-            Position::Absolute {
-                top: _,
-                right: _,
-                bottom: _,
-                left: _,
-            } => PositionType::SelfDirected,
+            Position::Unset => Self::ParentDirected,
+            Position::Relative { .. } | Position::Absolute { .. } => Self::SelfDirected,
         }
     }
 }
 
 impl Position {
-    pub fn get_top(&self) -> Units {
+    #[must_use]
+    pub const fn get_top(&self) -> Units {
         match self {
             Position::Unset => Units::Auto,
-            Position::Absolute {
-                top,
-                right: _,
-                bottom: _,
-                left: _,
-            } => *top,
-            Position::Relative { top, left: _ } => *top,
+            Position::Absolute { top, .. } | Position::Relative { top, .. } => *top,
         }
     }
 
-    pub fn get_right(&self) -> Units {
+    #[must_use]
+    pub const fn get_right(&self) -> Units {
         match self {
-            Position::Unset => Units::Auto,
-            Position::Absolute {
-                top: _,
-                right,
-                bottom: _,
-                left: _,
-            } => *right,
-            Position::Relative { top: _, left: _ } => Units::Auto,
+            Position::Unset | Position::Relative { .. } => Units::Auto,
+            Position::Absolute { right, .. } => *right,
         }
     }
 
-    pub fn get_bottom(&self) -> Units {
+    #[must_use]
+    pub const fn get_bottom(&self) -> Units {
         match self {
-            Position::Unset => Units::Auto,
-            Position::Absolute {
-                top: _,
-                right: _,
-                bottom,
-                left: _,
-            } => *bottom,
-            Position::Relative { top: _, left: _ } => Units::Auto,
+            Position::Unset | Position::Relative { .. } => Units::Auto,
+            Position::Absolute { bottom, .. } => *bottom,
         }
     }
 
-    pub fn get_left(&self) -> Units {
+    #[must_use]
+    pub const fn get_left(&self) -> Units {
         match self {
             Position::Unset => Units::Auto,
-            Position::Absolute {
-                top: _,
-                right: _,
-                bottom: _,
-                left,
-            } => *left,
-            Position::Relative { top: _, left } => *left,
+            Position::Absolute { left, .. } | Position::Relative { left, .. } => *left,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub enum Size {
     Auto,
     Fill,
@@ -322,19 +251,21 @@ impl Default for Size {
 }
 
 impl Size {
-    pub fn get_width(&self) -> Units {
+    #[must_use]
+    pub const fn get_width(&self) -> Units {
         match self {
             Size::Auto => Units::Auto,
             Size::Fill => Units::Stretch(1.0),
-            Size::Set { width, height: _ } => *width,
+            Size::Set { width, .. } => *width,
         }
     }
 
-    pub fn get_height(&self) -> Units {
+    #[must_use]
+    pub const fn get_height(&self) -> Units {
         match self {
             Size::Auto => Units::Auto,
             Size::Fill => Units::Stretch(1.0),
-            Size::Set { width: _, height } => *height,
+            Size::Set { height, .. } => *height,
         }
     }
 }
