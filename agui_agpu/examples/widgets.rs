@@ -1,4 +1,9 @@
-use agui::{macros::build, unit::{Sizing, Units, Layout}, widgets::Button, UI};
+use agui::{
+    macros::build,
+    unit::{Layout, Sizing, Units},
+    widgets::{primitives::Column, Button},
+    UI,
+};
 
 fn main() -> Result<(), agpu::BoxError> {
     let program = agpu::GpuProgram::builder("agui widgets").build()?;
@@ -7,11 +12,15 @@ fn main() -> Result<(), agpu::BoxError> {
     let mut ui = UI::new(agui_agpu::WidgetRenderer::new(&program));
 
     ui.set_root(build! {
-        Button {
-            layout: Layout {
-                sizing: Sizing::Set {
-                    width: Units::Pixels(100.0),
-                    height: Units::Pixels(100.0),
+        Column {
+            children: vec! {
+                Button {
+                    layout: Layout {
+                        sizing: Sizing::Set {
+                            width: Units::Pixels(100.0),
+                            height: Units::Pixels(100.0),
+                        }
+                    }
                 }
             }
         }
