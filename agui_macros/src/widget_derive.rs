@@ -9,6 +9,9 @@ use crate::layout::LayoutType;
 struct WidgetDeriveInput {
     #[darling(default)]
     layout: LayoutType,
+    
+    #[darling(default)]
+    into: Option<bool>,
 
     ident: syn::Ident,
     generics: syn::Generics,
@@ -49,11 +52,31 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
         },
     };
 
+    let widget_ref_impl = if args.into.unwrap_or(true) {
+        quote! {
+            impl #impl_generics From<#ident #ty_generics> for #agui_core::WidgetRef #where_clause {
+                fn from(widget: #ident #ty_generics) -> Self {
+                    Self::new(widget)
+                }
+            }
+
+            impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::WidgetRef> #where_clause {
+                fn from(widget: #ident #ty_generics) -> Self {
+                    Some(#agui_core::WidgetRef::new(widget))
+                }
+            }
+        }
+    }else{
+        quote! { }
+    };
+
     TokenStream::from(quote! {
         #widget_type_impl
 
         #widget_layout_impl
 
         impl #impl_generics #agui_core::Widget for #ident #ty_generics #where_clause { }
+
+        #widget_ref_impl
     })
 }

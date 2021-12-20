@@ -23,15 +23,3 @@ impl WidgetImpl for Quad {
             .map_or(BuildResult::Empty, |child| BuildResult::One(child.clone()))
     }
 }
-
-impl From<Quad> for WidgetRef {
-    fn from(quad: Quad) -> Self {
-        Self::new(quad)
-    }
-}
-
-impl From<Quad> for Option<WidgetRef> {
-    fn from(quad: Quad) -> Self {
-        Some(WidgetRef::new(quad))
-    }
-}

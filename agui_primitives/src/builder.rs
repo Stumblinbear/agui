@@ -2,6 +2,7 @@ use agui_core::{unit::Layout, BuildResult, WidgetContext, WidgetImpl, WidgetRef}
 use agui_macros::Widget;
 
 #[derive(Widget)]
+#[widget(into = false)]
 pub struct Builder<F>
 where
     F: Fn(&WidgetContext) -> BuildResult + 'static,

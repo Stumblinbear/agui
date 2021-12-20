@@ -47,18 +47,12 @@ where
         &self.renderer
     }
 
-    pub fn set_root<T>(&mut self, widget: T)
-    where
-        T: Widget + 'static,
-    {
-        self.manager.add(None, WidgetRef::new(widget));
+    pub fn set_root(&mut self, widget: WidgetRef) {
+        self.manager.add(None, widget);
     }
 
-    pub fn add<T>(&mut self, parent_id: Option<WidgetID>, widget: T)
-    where
-        T: Widget + 'static,
-    {
-        self.manager.add(parent_id, WidgetRef::new(widget));
+    pub fn add(&mut self, parent_id: Option<WidgetID>, widget: WidgetRef) {
+        self.manager.add(parent_id, widget);
     }
 
     pub fn remove(&mut self, widget_id: WidgetID) {

@@ -210,7 +210,7 @@ impl WidgetContext {
     pub(crate) fn build(&mut self, widget_id: WidgetID, widget: &WidgetRef) -> BuildResult {
         *self.current_id.lock() = Some(widget_id.into());
 
-        widget.get().build(self)
+        widget.try_get().map_or(BuildResult::Empty, |widget| widget.build(self))
     }
 
     pub(crate) fn remove(&mut self, widget_id: &WidgetID) {

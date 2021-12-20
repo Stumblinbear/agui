@@ -40,13 +40,21 @@ pub trait Widget: WidgetType + WidgetLayout + WidgetImpl {}
 impl_downcast!(Widget);
 
 pub enum WidgetRef {
+    None,
     Owned(Rc<dyn Widget>),
     Borrowed(Weak<dyn Widget>),
+}
+
+impl Default for WidgetRef {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 impl Clone for WidgetRef {
     fn clone(&self) -> Self {
         match self {
+            Self::None => Self::None,
             Self::Owned(widget) => Self::Borrowed(Rc::downgrade(widget)),
             Self::Borrowed(widget) => Self::Borrowed(Weak::clone(widget)),
         }
@@ -65,6 +73,7 @@ impl WidgetRef {
     #[must_use]
     pub fn is_valid(&self) -> bool {
         match self {
+            Self::None => false,
             WidgetRef::Owned(_) => true,
             WidgetRef::Borrowed(weak) => weak.strong_count() != 0,
         }
@@ -73,14 +82,19 @@ impl WidgetRef {
     #[must_use]
     pub fn try_get(&self) -> Option<Rc<dyn Widget>> {
         match self {
+            Self::None => None,
             WidgetRef::Owned(widget) => Some(Rc::clone(widget)),
             WidgetRef::Borrowed(weak) => weak.upgrade(),
         }
     }
 
+    /// # Panics
+    /// 
+    /// Will panic if the widget no longer exists, or the reference is empty.
     #[must_use]
     pub fn get(&self) -> Rc<dyn Widget> {
         match self {
+            Self::None => panic!("widget points to nothing"),
             WidgetRef::Owned(widget) => Rc::clone(widget),
             WidgetRef::Borrowed(weak) => {
                 Rc::clone(&weak.upgrade().expect("cannot dereference a dropped widget"))
@@ -89,6 +103,9 @@ impl WidgetRef {
     }
 
     #[must_use]
+    /// # Panics
+    /// 
+    /// Will panic if the widget no longer exists, or the reference is empty.
     pub fn get_type_id(&self) -> TypeId {
         self.get().get_type_id()
     }

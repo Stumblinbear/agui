@@ -1,15 +1,17 @@
 use agui_core::{
     state::mouse::MousePosition,
     unit::{Layout, Sizing},
-    BuildResult, WidgetContext, WidgetImpl,
+    BuildResult, WidgetContext, WidgetImpl, WidgetRef,
 };
-use agui_macros::Widget;
+use agui_macros::{Widget, build};
 use agui_primitives::{Quad, Text};
 
 #[derive(Default, Widget)]
 #[widget(layout = "row")]
 pub struct Button {
     pub layout: Layout,
+
+    pub child: WidgetRef,
 }
 
 impl WidgetImpl for Button {
@@ -26,20 +28,31 @@ impl WidgetImpl for Button {
             mouse_pos.x > 50.0
         });
 
-        BuildResult::One(
+        BuildResult::One(build! {
             Quad {
                 layout: Layout {
-                    sizing: Sizing::Fill,
-                    ..Layout::default()
+                    sizing: Sizing::Fill
                 },
                 child: Text {
-                    text: "".into(),
-                    ..Text::default()
+                    text: String::from("")
                 }
-                .into(),
-                ..Quad::default()
             }
-            .into(),
-        )
+        })
+
+        // BuildResult::One(
+        //     Quad {
+        //         layout: Layout {
+        //             sizing: Sizing::Fill,
+        //             ..Layout::default()
+        //         },
+        //         child: Text {
+        //             text: "".into(),
+        //             ..Text::default()
+        //         }
+        //         .into(),
+        //         ..Quad::default()
+        //     }
+        //     .into(),
+        // )
     }
 }

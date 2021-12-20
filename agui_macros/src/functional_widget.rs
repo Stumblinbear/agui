@@ -1,6 +1,6 @@
 use darling::FromMeta;
-use proc_macro::TokenStream;
-use syn::{parse_macro_input, AttributeArgs, Ident, ItemFn};
+use proc_macro::{TokenStream};
+use syn::{parse_macro_input, AttributeArgs, ItemFn, Ident};
 
 #[derive(Debug, FromMeta)]
 struct MacroArgs {
