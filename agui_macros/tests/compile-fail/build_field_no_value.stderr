@@ -1,0 +1,13 @@
+error: expected expression, found `,`
+  --> tests/compile-fail/build_field_no_value.rs:6:30
+   |
+6  |       let _widget: WidgetRef = build! {
+   |  ______________________________^
+7  | |         Quad {
+   | |         ---- while parsing this struct
+8  | |             color:
+9  | |         }
+10 | |     };
+   | |_____^ expected expression
+   |
+   = note: this error originates in the macro `build` (in Nightly builds, run with -Z macro-backtrace for more info)

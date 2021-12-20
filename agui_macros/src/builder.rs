@@ -98,9 +98,9 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bo
                 if group.delimiter() == Delimiter::Bracket {
                     todo!();
 
-                    consume_arr(tokens, out);
+                    // consume_arr(tokens, out);
 
-                    continue;
+                    // continue;
                 } else if group.delimiter() == Delimiter::Brace {
                     // If it's a brace, we need to consume its token tree
                     let mut subtree = Vec::new();
@@ -133,9 +133,9 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bo
     false
 }
 
-fn consume_arr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
+// fn consume_arr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
     
-}
+// }
 
 fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: Ident) {
     // If there was no token following, pretend like it ended with a comma (for consistency in logic)

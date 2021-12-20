@@ -30,7 +30,7 @@ pub fn build(input: TokenStream) -> TokenStream {
     builder::consume_tree(&mut tokens, &mut out);
 
     if out.is_empty() {
-        abort_call_site! { "cannot build nothing" };
+        abort_call_site! { "must have something to build" };
     }
 
     // panic!("{:#?}", out);
