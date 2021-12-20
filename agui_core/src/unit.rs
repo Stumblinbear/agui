@@ -262,11 +262,13 @@ pub struct Rect {
 
 impl Rect {
     #[allow(dead_code)]
+    #[must_use]
     pub fn contains(&self, point: (f32, f32)) -> bool {
         (point.0 >= self.x && point.0 <= self.x + self.width)
             && (point.1 >= self.y && point.1 <= self.y + self.height)
     }
 
+    #[must_use]
     pub const fn to_slice(self) -> [f32; 4] {
         [self.x, self.y, self.width, self.height]
     }
@@ -282,6 +284,7 @@ pub struct Bounds {
 
 impl Bounds {
     #[allow(dead_code)]
+    #[must_use]
     pub fn contains(&self, point: (f32, f32)) -> bool {
         (point.0 >= self.left && point.0 <= self.right)
             && (point.1 >= self.top && point.1 <= self.bottom)
