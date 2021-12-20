@@ -11,7 +11,9 @@ use agui_primitives::{Quad, Text};
 #[widget(layout = "row")]
 pub struct Button {
     pub layout: Layout,
+
     pub color: Color,
+    
     pub child: WidgetRef,
 }
 
@@ -38,21 +40,5 @@ impl WidgetImpl for Button {
                 }
             }
         })
-
-        // BuildResult::One(
-        //     Quad {
-        //         layout: Layout {
-        //             sizing: Sizing::Fill,
-        //             ..Layout::default()
-        //         },
-        //         child: Text {
-        //             text: "".into(),
-        //             ..Text::default()
-        //         }
-        //         .into(),
-        //         ..Quad::default()
-        //     }
-        //     .into(),
-        // )
     }
 }
