@@ -18,7 +18,7 @@ pub mod macros {
 
 #[cfg(test)]
 mod tests {
-    use agui_core::WidgetRef;
+    use agui_core::{WidgetRef, render::color::Color};
     use agui_macros::build;
 
     use crate::{
@@ -53,7 +53,7 @@ mod tests {
         let enum_usage: WidgetRef = build! {
             Quad {
                 layout: Layout {
-                    sizing: Sizing::Fill
+                    sizing: Sizing::Fill,
                 }
             }
         };
@@ -63,7 +63,7 @@ mod tests {
                 layout: Layout {
                     sizing: Sizing::Set {
                         width: Units::Pixels(100.0),
-                        height: Units::Pixels(100.0),
+                        height: Units::Pixels(100.0)
                     }
                 }
             }
@@ -85,18 +85,30 @@ mod tests {
         let widget: WidgetRef = build! {
             Quad {
                 layout: Layout {
-                    sizing: Sizing::Fill
+                    sizing: Sizing::Fill,
                 },
                 child: Text {
-                    text: String::from("")
+                    text: String::from(""),
                 }
             }
         };
-        
+
+        let widget: WidgetRef = build! {
+            Quad {
+                layout: Layout {
+                    sizing: Sizing::Fill,
+                },
+                child: Text {
+                    text: String::from(""),
+                }
+            }
+        };
+
         let complex: WidgetRef = build! {
             if i > 10 {
                 Button {
                     layout: Layout,
+                    color: Color::White,
                     child: if i < 20 {
                         Button
                     }else{
@@ -109,21 +121,20 @@ mod tests {
         };
     }
 
-    // #[test]
-    // #[should_panic]
-    // fn test_failures() {
-    //     let fail: WidgetRef = build! { };
+    #[should_panic]
+    fn test_failures() {
+        let fail: WidgetRef = build! { };
 
-    //     let no_field: WidgetRef = build! {
-    //         Quad {
-    //             layout: 
-    //         }
-    //     };
+        let no_field: WidgetRef = build! {
+            Quad {
+                layout: 
+            }
+        };
 
-    //     let bad_into: WidgetRef = build! {
-    //         Layout {
-    //             sizing: Sizing::Fill
-    //         }
-    //     };
-    // }
+        let bad_into: WidgetRef = build! {
+            Layout {
+                sizing: Sizing::Fill
+            }
+        };
+    }
 }

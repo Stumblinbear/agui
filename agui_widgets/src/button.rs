@@ -1,16 +1,17 @@
 use agui_core::{
+    render::color::Color,
     state::mouse::MousePosition,
     unit::{Layout, Sizing},
     BuildResult, WidgetContext, WidgetImpl, WidgetRef,
 };
-use agui_macros::{Widget, build};
+use agui_macros::{build, Widget};
 use agui_primitives::{Quad, Text};
 
 #[derive(Default, Widget)]
 #[widget(layout = "row")]
 pub struct Button {
     pub layout: Layout,
-
+    pub color: Color,
     pub child: WidgetRef,
 }
 
@@ -30,9 +31,8 @@ impl WidgetImpl for Button {
 
         BuildResult::One(build! {
             Quad {
-                layout: Layout {
-                    sizing: Sizing::Fill
-                },
+                layout: Layout { sizing: Sizing::Fill },
+                color: Color::White,
                 child: Text {
                     text: String::from("")
                 }

@@ -39,7 +39,7 @@ pub fn consume_tree(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
     }
 }
 
-pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
+pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bool {
     while let Some(token) = tokens.pop() {
         match &token {
             TokenTree::Ident(ident) => {
@@ -69,12 +69,7 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
                                     if let Some(TokenTree::Group(_)) = tokens.last() {
                                         // Push the group as-is
                                         out.push(tokens.pop().unwrap());
-
-                                        // Add any trailing commas
-                                        if let Some(TokenTree::Punct(_)) = tokens.last() {
-                                            out.push(tokens.pop().unwrap());
-                                        }
-
+                                        
                                         continue;
                                     }
 
@@ -101,7 +96,11 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
             // If the token is a bracket, they're probably constructing an array
             TokenTree::Group(group) => {
                 if group.delimiter() == Delimiter::Bracket {
-                    return consume_arr(tokens, out);
+                    todo!();
+
+                    consume_arr(tokens, out);
+
+                    continue;
                 } else if group.delimiter() == Delimiter::Brace {
                     // If it's a brace, we need to consume its token tree
                     let mut subtree = Vec::new();
@@ -121,7 +120,7 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
 
             // A comma indicates the end of what we should be consuming
             TokenTree::Punct(punct) if punct.as_char() == ',' => {
-                return;
+                return true;
             }
 
             _ => {}
@@ -130,32 +129,42 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
         // Any token not caught can be dumped directly
         out.push(token);
     }
+
+    false
 }
 
-fn consume_arr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {}
+fn consume_arr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
+    
+}
 
 fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: Ident) {
-    let token = tokens.pop();
-
-    out.extend(Some(TokenTree::Ident(ident.clone())));
+    // If there was no token following, pretend like it ended with a comma (for consistency in logic)
+    let token = if let Some(token) = tokens.pop() {
+        token
+    }else{
+        TokenTree::Punct(Punct::new(',', Spacing::Joint))
+    };
 
     // If we have no token coming up, or we do and it's a comma, then generate the default struct
-    let span = if token.is_none()
-        || matches!(token.as_ref().unwrap(), TokenTree::Punct(punct) if punct.as_char() == ',')
+    if matches!(&token, TokenTree::Punct(punct) if punct.as_char() == ',')
     {
-        // `IDENT { ..IDENT::default() }`
-
         let span = ident.span();
 
-        out.extend(Some(TokenTree::Group(Group::new(
-            Delimiter::Brace,
-            create_default(span, ident),
-        ))));
+        // `IDENT::default()`
 
-        span
+        out.extend(vec![
+            TokenTree::Ident(ident),
+            TokenTree::Punct(Punct::new(':', Spacing::Joint)),
+            TokenTree::Punct(Punct::new(':', Spacing::Alone)),
+            TokenTree::Ident(Ident::new("default", span)),
+            TokenTree::Group(Group::new(Delimiter::Parenthesis, TokenStream::new())),
+        ]);
+
+        // Add the .into() statement
+        out.extend(create_into(span));
+
+        out.push(TokenTree::Punct(Punct::new(',', Spacing::Alone)));
     } else {
-        let token = token.unwrap();
-
         // Start parsing the `{ .. }` group
         let group = if let TokenTree::Group(group) = token {
             if group.delimiter() == Delimiter::Brace {
@@ -187,8 +196,10 @@ fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: 
                             TokenTree::Punct(Punct::new(':', Spacing::Alone)),
                         ]);
 
-                        // Consume the value
-                        consume_expr(&mut tokens, &mut field_block);
+                        // Consume the value, and append a comma if it ended with one
+                        if consume_expr(&mut tokens, &mut field_block) {
+                            field_block.push(TokenTree::Punct(Punct::new(',', Spacing::Alone)));
+                        }
 
                         continue;
                     }
@@ -199,35 +210,36 @@ fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: 
             }
         }
 
-        // If the last token isn't a comma, we need to add one
-        if let Some(last_token) = field_block.last() {
-            let needs_comma = if let TokenTree::Punct(punct) = last_token {
-                punct.as_char() != ','
-            } else {
-                true
-            };
 
-            if needs_comma {
-                field_block.extend(Some(TokenTree::Punct(Punct::new(',', Spacing::Alone))));
+        if !field_block.is_empty() {
+            // If the last token was a comma, destroy it
+            if let Some(TokenTree::Punct(punct)) = field_block.last() {
+                if punct.as_char() == ',' {
+                    field_block.pop();
+                }
             }
+
+            field_block.push(TokenTree::Punct(Punct::new(',', Spacing::Alone)));
         }
 
         // Append `.. IDENT::default()` to the struct initializer
-        field_block.extend(create_default(ident.span(), ident));
+        field_block.extend(create_default(ident.span(), ident.clone()));
 
-        let group = Group::new(Delimiter::Brace, TokenStream::from_iter(field_block));
+        let group = Group::new(
+            Delimiter::Brace,
+            TokenStream::from_iter(field_block),
+        );
 
         let span = group.span();
 
-        out.extend(Some(TokenTree::Group(group)));
+        out.extend(vec![
+            TokenTree::Ident(ident),
+            TokenTree::Group(group)
+        ]);
 
-        span
-    };
-
-    // Add the .into() statement
-    out.extend(create_into(span));
-
-    out.push(TokenTree::Punct(Punct::new(',', Spacing::Alone)));
+        // Add the .into() statement
+        out.extend(create_into(span));
+    }
 }
 
 fn create_default(span: Span, ident: Ident) -> TokenStream {
