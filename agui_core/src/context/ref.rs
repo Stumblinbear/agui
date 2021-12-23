@@ -1,11 +1,13 @@
-use std::{sync::Arc, marker::PhantomData};
+use std::{marker::PhantomData, sync::Arc};
 
 use downcast_rs::{impl_downcast, Downcast};
 
 mod mouse;
 
 pub use mouse::*;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard, MappedRwLockWriteGuard, MappedRwLockReadGuard};
+use parking_lot::{
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 
 pub trait Value: Downcast + Send + Sync + 'static {}
 
@@ -18,7 +20,7 @@ where
     V: Value,
 {
     pub(crate) phantom: PhantomData<V>,
-    
+
     pub(crate) on_changed: Option<Arc<Box<dyn Fn() + Send + Sync>>>,
 
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
@@ -35,7 +37,7 @@ where
                 .unwrap_or_else(|| panic!("downcasting state failed"))
         })
     }
-    
+
     pub fn write(&self) -> MappedRwLockWriteGuard<V> {
         if let Some(func) = &self.on_changed {
             func();
@@ -54,7 +56,7 @@ where
     V: Value,
 {
     pub(crate) phantom: PhantomData<V>,
-    
+
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }
 

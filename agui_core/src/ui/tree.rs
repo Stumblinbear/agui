@@ -46,8 +46,8 @@ where
                 panic!("cannot add a node to a parent that doesn't exist");
             }
         } else {
-            if parent_id.is_some() {
-                panic!("root node cannot have a parent")
+            if self.root.is_some() {
+                panic!("root node must be removed before a new root can be added`")
             }
 
             self.root = Some(node_id);
@@ -67,8 +67,29 @@ where
 
     pub fn remove(&mut self, node_id: &K) -> Option<TreeNode<K>> {
         if let Some(node) = self.nodes.remove(node_id) {
+            if let Some(parent_id) = &node.parent {
+                let parent = self
+                    .nodes
+                    .get_mut(parent_id)
+                    .expect("broken tree: unable to get removed node's parent");
+
+                // Remove the child from its parent
+                parent.children.remove(
+                    parent
+                        .children
+                        .iter()
+                        .position(|child_id| node_id == child_id)
+                        .expect("broken tree: unable to find child in removed node's parent"),
+                );
+            }
+
+            // We can't remove the children here, since the manager needs to have access to them, so just unset their parent
             for child in &node.children {
-                self.nodes.remove(child);
+                self.nodes.get_mut(child)
+                    .expect("broken tree: unable to get node's child")
+                    .parent = None;
+
+                // self.nodes.remove(child);
             }
 
             Some(node)
@@ -291,7 +312,7 @@ where
                     if let Some(parent_node) = self.tree.get(&parent_node_id) {
                         let first_child_id = parent_node.children.first().unwrap();
 
-                        // If we're the first child, then return the parent
+                        // If we're the parent's first child, then return the parent
                         if node_id == *first_child_id {
                             self.node_id = node.parent;
                         } else {
@@ -430,9 +451,101 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::WidgetID;
+    use morphorm::Hierarchy;
+
+    use crate::widget::WidgetID;
 
     use super::Tree;
+
+    #[test]
+    fn test_heirarchy() {
+        let mut tree: Tree<WidgetID> = Tree::default();
+
+        let root_id = tree.add(None, 0.into());
+
+        let child_1 = tree.add(Some(root_id), 1.into());
+        let child_1_1 = tree.add(Some(child_1), 2.into());
+        let child_1_1_1 = tree.add(Some(child_1_1), 3.into());
+        let child_1_2 = tree.add(Some(child_1), 4.into());
+        let child_1_3 = tree.add(Some(child_1), 5.into());
+
+        let child_2 = tree.add(Some(root_id), 6.into());
+
+        let child_3 = tree.add(Some(root_id), 7.into());
+        let child_3_1 = tree.add(Some(child_3), 8.into());
+
+        assert!(
+            tree.is_first_child(child_1),
+            "child_1 is the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_1),
+            "child_1 is not the last child of the parent"
+        );
+
+        assert!(
+            tree.is_first_child(child_1_1),
+            "child_1_1 is the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_1_1),
+            "child_1_1 is not the last child of the parent"
+        );
+
+        assert!(
+            tree.is_first_child(child_1_1_1),
+            "child_1_1_1 is the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_1_1_1),
+            "child_1_1_1 is the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_1_2),
+            "child_1_2 is not the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_1_2),
+            "child_1_2 is not the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_1_3),
+            "child_1_3 is not the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_1_3),
+            "child_1_3 is the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_2),
+            "child_2 is not the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_2),
+            "child_2 is not the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_3),
+            "child_3 is not the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_3),
+            "child_3 is the last child of the parent"
+        );
+
+        assert!(
+            tree.is_first_child(child_3_1),
+            "child_3_1 is the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_3_1),
+            "child_3_1 is the last child of the parent"
+        );
+    }
 
     #[test]
     fn test_downward_iter() {
@@ -441,14 +554,15 @@ mod tests {
         let root_id = tree.add(None, 0.into());
 
         let child_1 = tree.add(Some(root_id), 1.into());
-        let child_1_1 = tree.add(Some(root_id), 2.into());
-        let child_1_2 = tree.add(Some(root_id), 3.into());
-        let child_1_3 = tree.add(Some(root_id), 4.into());
+        let child_1_1 = tree.add(Some(child_1), 2.into());
+        let child_1_1_1 = tree.add(Some(child_1_1), 3.into());
+        let child_1_2 = tree.add(Some(child_1), 4.into());
+        let child_1_3 = tree.add(Some(child_1), 5.into());
 
-        let child_2 = tree.add(Some(root_id), 5.into());
+        let child_2 = tree.add(Some(root_id), 6.into());
 
-        let child_3 = tree.add(Some(root_id), 6.into());
-        let child_3_1 = tree.add(Some(root_id), 7.into());
+        let child_3 = tree.add(Some(root_id), 7.into());
+        let child_3_1 = tree.add(Some(child_3), 8.into());
 
         let mut iter = tree.iter();
 
@@ -466,6 +580,11 @@ mod tests {
             iter.next(),
             Some(child_1_1),
             "downward iterator should have returned child_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "downward iterator should have returned child_1_1_1"
         );
         assert_eq!(
             iter.next(),
@@ -529,14 +648,15 @@ mod tests {
         let root_id = tree.add(None, 0.into());
 
         let child_1 = tree.add(Some(root_id), 1.into());
-        let child_1_1 = tree.add(Some(root_id), 2.into());
-        let child_1_2 = tree.add(Some(root_id), 3.into());
-        let child_1_3 = tree.add(Some(root_id), 4.into());
+        let child_1_1 = tree.add(Some(child_1), 2.into());
+        let child_1_1_1 = tree.add(Some(child_1_1), 3.into());
+        let child_1_2 = tree.add(Some(child_1), 4.into());
+        let child_1_3 = tree.add(Some(child_1), 5.into());
 
-        let child_2 = tree.add(Some(root_id), 5.into());
+        let child_2 = tree.add(Some(root_id), 6.into());
 
-        let child_3 = tree.add(Some(root_id), 6.into());
-        let child_3_1 = tree.add(Some(root_id), 7.into());
+        let child_3 = tree.add(Some(root_id), 7.into());
+        let child_3_1 = tree.add(Some(child_3), 8.into());
 
         let mut iter = tree.iter_up();
 
@@ -564,6 +684,11 @@ mod tests {
             iter.next(),
             Some(child_1_2),
             "upward iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "upward iterator should have returned child_1_1_1"
         );
         assert_eq!(
             iter.next(),
@@ -597,6 +722,11 @@ mod tests {
             iter.next(),
             Some(child_1_2),
             "upward iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "upward iterator should have returned child_1_1_1"
         );
         assert_eq!(
             iter.next(),

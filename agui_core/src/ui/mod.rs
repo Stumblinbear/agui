@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 
-use crate::render::WidgetRenderer;
+use crate::{
+    context::WidgetContext,
+    render::{WidgetChanged, WidgetRenderer},
+    widget::{WidgetID, WidgetRef},
+};
 
 mod cache;
 mod manager;
 mod tree;
-mod widget;
 
-pub use manager::WidgetManager;
-pub use widget::*;
+pub use manager::{WidgetManager, WidgetNode};
 
 pub struct UI<R>
 where
@@ -17,8 +19,8 @@ where
     manager: WidgetManager,
     renderer: R,
 
-    added: HashSet<WidgetID>,
-    removed: HashSet<WidgetID>,
+    added: HashSet<WidgetChanged>,
+    removed: HashSet<WidgetChanged>,
 }
 
 impl<R> UI<R>
@@ -43,6 +45,14 @@ where
         }
     }
 
+    pub fn get_manager(&self) -> &WidgetManager {
+        &self.manager
+    }
+
+    pub fn get_context(&self) -> &WidgetContext {
+        self.manager.get_context()
+    }
+
     pub fn get_renderer(&self) -> &R {
         &self.renderer
     }
@@ -61,21 +71,23 @@ where
 
     /// Returns true of any element in the tree was changed
     pub fn update(&mut self) -> bool {
-        self.manager.update(&mut self.added, &mut self.removed);
+        let changed = self.manager.update(&mut self.added, &mut self.removed);
 
         let did_change = (self.removed.len() + self.added.len()) != 0;
 
-        for widget_id in self.removed.drain() {
-            self.renderer.remove(&self.manager, widget_id);
-        }
+        self.removed
+            .drain()
+            .for_each(|widget| self.renderer.removed(&self.manager, widget));
 
-        for widget_id in self.added.drain() {
-            self.renderer.create(&self.manager, widget_id);
-        }
+        self.added
+            .drain()
+            .for_each(|widget| self.renderer.added(&self.manager, widget));
 
-        // TODO: is it possible to limit the scope of layout refreshing?
         if did_change {
-            self.renderer.refresh(&self.manager);
+            for widget in changed {
+                self.renderer.refresh(&self.manager, widget);
+            }
+
             true
         } else {
             false

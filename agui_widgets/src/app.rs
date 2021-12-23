@@ -1,0 +1,54 @@
+use agui_core::{
+    context::WidgetContext,
+    layout::Layout,
+    unit::{Sizing, Units},
+    widget::{BuildResult, WidgetImpl, WidgetRef},
+};
+use agui_macros::{build, Widget};
+
+pub struct AppSettings {
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            width: 256.0,
+            height: 256.0,
+        }
+    }
+}
+
+#[derive(Debug, Default, Widget)]
+#[widget(layout = "row")]
+pub struct App {
+    pub child: WidgetRef,
+}
+
+impl WidgetImpl for App {
+    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        let settings = {
+            if let Some(settings) = ctx.get_global::<AppSettings>() {
+                settings
+            } else {
+                log::warn!("No AppSettings have been added to the global state, using defaults.");
+
+                ctx.init_global::<AppSettings>()
+            }
+        };
+
+        let settings = settings.read();
+
+        ctx.set_layout(build! {
+            Layout {
+                sizing: Sizing::Set {
+                    width: Units::Pixels(settings.width),
+                    height: Units::Pixels(settings.height),
+                }
+            }
+        });
+
+        (&self.child).into()
+    }
+}

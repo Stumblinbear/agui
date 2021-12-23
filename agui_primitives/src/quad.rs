@@ -1,25 +1,24 @@
 use agui_core::{
-    render::color::Color, unit::Layout, BuildResult, WidgetContext, WidgetImpl, WidgetRef,
+    context::WidgetContext,
+    layout::LayoutRef,
+    unit::Color,
+    widget::{BuildResult, WidgetImpl, WidgetRef},
 };
 use agui_macros::Widget;
 
-#[derive(Default, Widget)]
+#[derive(Debug, Default, Widget)]
 pub struct Quad {
-    pub layout: Layout,
+    pub layout: LayoutRef,
     pub color: Color,
 
     pub clip: bool,
-    pub child: Option<WidgetRef>,
+    pub child: WidgetRef,
 }
 
 impl WidgetImpl for Quad {
-    fn layout(&self) -> Option<&Layout> {
-        Some(&self.layout)
-    }
+    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        ctx.set_layout(LayoutRef::clone(&self.layout));
 
-    fn build(&self, _ctx: &WidgetContext) -> BuildResult {
-        self.child
-            .as_ref()
-            .map_or(BuildResult::Empty, |child| BuildResult::One(child.clone()))
+        (&self.child).into()
     }
 }

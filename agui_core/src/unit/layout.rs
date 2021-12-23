@@ -77,16 +77,6 @@ impl LayoutType {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct Layout {
-    pub position: Position,
-    pub min_size: Sizing,
-    pub max_size: Sizing,
-    pub sizing: Sizing,
-
-    pub padding: Padding,
-}
-
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
 pub enum Padding {

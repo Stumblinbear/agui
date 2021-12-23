@@ -6,12 +6,14 @@ use std::{
 
 use parking_lot::Mutex;
 
-use crate::{
-    context::state::{Ref, StateMap, Value, WidgetStates},
-    BuildResult, WidgetID, WidgetRef,
-};
-
 mod state;
+
+use state::{Ref, StateMap, Value, WidgetStates};
+
+use crate::{
+    layout::LayoutRef,
+    widget::{BuildResult, WidgetID, WidgetRef},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ListenerID {
@@ -40,6 +42,7 @@ type WidgetComputedFuncs = HashMap<WidgetID, HashMap<TypeId, ComputedFn>>;
 pub struct WidgetContext {
     global: StateMap,
     states: WidgetStates,
+    layouts: Mutex<HashMap<WidgetID, LayoutRef>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs>>,
 
@@ -52,8 +55,8 @@ impl WidgetContext {
     pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
         Self {
             global: StateMap::new(Arc::clone(&on_changed)),
-
             states: WidgetStates::new(Arc::clone(&on_changed)),
+            layouts: Mutex::default(),
 
             computed_funcs: Arc::new(Mutex::new(HashMap::new())),
 
@@ -123,6 +126,23 @@ impl WidgetContext {
 
     /// # Panics
     ///
+    /// Will panic if called outside of a widget build context.
+    pub fn set_layout(&self, layout: LayoutRef) {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get state from context while not iterating");
+        
+        match &current_id {
+            ListenerID::Widget(widget_id) => self.layouts.lock().insert(*widget_id, layout),
+            ListenerID::Computed(_, _) => {
+                panic!("not permitted to set layouts in a computed function")
+            }
+        };
+    }
+
+    /// # Panics
+    ///
     /// Will panic if called outside of a build context.
     pub fn computed<V, F>(&self, func: F) -> V
     where
@@ -185,6 +205,10 @@ impl WidgetContext {
 
         value
     }
+    
+    pub fn get_layout(&self, widget_id: &WidgetID) -> LayoutRef {
+        self.layouts.lock().get(widget_id).map_or(LayoutRef::None, LayoutRef::clone)
+    }
 
     pub(crate) fn did_computed_change(
         &mut self,
@@ -206,11 +230,16 @@ impl WidgetContext {
         (computed_funcs.get(&computed_id).unwrap())(self)
     }
 
-    #[allow(clippy::borrowed_box)]
     pub(crate) fn build(&mut self, widget_id: WidgetID, widget: &WidgetRef) -> BuildResult {
         *self.current_id.lock() = Some(widget_id.into());
 
-        widget.try_get().map_or(BuildResult::Empty, |widget| widget.build(self))
+        let result = widget
+            .try_get()
+            .map_or(BuildResult::Empty, |widget| widget.build(self));
+
+        *self.current_id.lock() = None;
+        
+        result
     }
 
     pub(crate) fn remove(&mut self, widget_id: &WidgetID) {
@@ -219,6 +248,8 @@ impl WidgetContext {
         self.global.remove_listener(&listener_id);
 
         self.states.remove(widget_id);
+
+        self.layouts.lock().remove(widget_id);
 
         self.computed_funcs.lock().remove(widget_id);
     }

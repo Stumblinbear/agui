@@ -1,4 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use morphorm::{Cache, GeometryChanged};
 
@@ -39,6 +42,14 @@ where
 {
     pub fn get_rect(&self, node: &K) -> Option<&Rect> {
         self.rect.get(node)
+    }
+
+    pub fn get_changed(&self) -> HashSet<K> {
+        self.geometry_changed
+            .iter()
+            .filter(|(_, changed)| changed.is_empty())
+            .map(|(k, _)| *k)
+            .collect::<HashSet<_>>()
     }
 
     #[allow(dead_code)]

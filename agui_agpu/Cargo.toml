@@ -13,9 +13,12 @@ readme = "README.md"
 
 [dependencies]
 agui = { path = "../" }
+
 agpu = { git = "https://github.com/lyricwulf/agpu" }
-generational-arena = "0.2"
 bytemuck = "1.7"
+
+downcast-rs = "1.2"
+generational-arena = "0.2"
 
 [[example]]
 name = "widgets"

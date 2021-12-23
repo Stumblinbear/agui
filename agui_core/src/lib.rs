@@ -11,10 +11,11 @@
 #![warn(clippy::clone_on_ref_ptr)]
 
 mod ui;
-mod context;
+pub mod layout;
+pub mod widget;
+pub mod context;
 pub mod unit;
 pub mod state;
 pub mod render;
 
 pub use ui::*;
-pub use context::*;

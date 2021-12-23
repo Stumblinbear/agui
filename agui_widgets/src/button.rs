@@ -1,27 +1,24 @@
 use agui_core::{
-    render::color::Color,
+    context::WidgetContext,
+    layout::{LayoutRef, Layout},
     state::mouse::MousePosition,
-    unit::{Layout, Sizing},
-    BuildResult, WidgetContext, WidgetImpl, WidgetRef,
+    unit::{Color, Sizing},
+    widget::{BuildResult, WidgetImpl, WidgetRef},
 };
 use agui_macros::{build, Widget};
-use agui_primitives::{Quad, Text};
+use agui_primitives::Quad;
 
-#[derive(Default, Widget)]
+#[derive(Debug, Default, Widget)]
 #[widget(layout = "row")]
 pub struct Button {
-    pub layout: Layout,
+    pub layout: LayoutRef,
 
     pub color: Color,
-    
+
     pub child: WidgetRef,
 }
 
 impl WidgetImpl for Button {
-    fn layout(&self) -> Option<&Layout> {
-        Some(&self.layout)
-    }
-
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         let _hovering = ctx.computed(|ctx| {
             let mouse = ctx.get_state::<MousePosition>();
@@ -31,13 +28,15 @@ impl WidgetImpl for Button {
             mouse_pos.x > 50.0
         });
 
+        ctx.set_layout(LayoutRef::clone(&self.layout));
+
         BuildResult::One(build! {
             Quad {
-                layout: Layout { sizing: Sizing::Fill },
+                layout: Layout {
+                    sizing: Sizing::Fill
+                },
                 color: Color::White,
-                child: Text {
-                    text: String::from("")
-                }
+                child: (&self.child).into()
             }
         })
     }

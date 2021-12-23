@@ -10,7 +10,7 @@ use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
-use crate::WidgetID;
+use crate::widget::WidgetID;
 
 use super::ListenerID;
 

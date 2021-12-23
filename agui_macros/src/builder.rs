@@ -40,6 +40,8 @@ pub fn consume_tree(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
 }
 
 pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bool {
+    let mut depth = 0;
+
     while let Some(token) = tokens.pop() {
         match &token {
             TokenTree::Ident(ident) => {
@@ -69,7 +71,7 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bo
                                     if let Some(TokenTree::Group(_)) = tokens.last() {
                                         // Push the group as-is
                                         out.push(tokens.pop().unwrap());
-                                        
+
                                         continue;
                                     }
 
@@ -96,11 +98,24 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bo
             // If the token is a bracket, they're probably constructing an array
             TokenTree::Group(group) => {
                 if group.delimiter() == Delimiter::Bracket {
-                    todo!();
+                    let mut subtree = Vec::new();
 
-                    // consume_arr(tokens, out);
+                    let mut subtokens = prep_stream(group.stream());
 
-                    // continue;
+                    // `consume_expr` only eats until a comma, which is the delimiter for arrays, so we
+                    // need to loop until we consume all of the array elements
+                    while !subtokens.is_empty() {
+                        consume_expr(&mut subtokens, &mut subtree);
+
+                        subtree.push(TokenTree::Punct(Punct::new(',', Spacing::Alone)));
+                    }
+
+                    out.push(TokenTree::Group(Group::new(
+                        Delimiter::Bracket,
+                        TokenStream::from_iter(subtree),
+                    )));
+
+                    continue;
                 } else if group.delimiter() == Delimiter::Brace {
                     // If it's a brace, we need to consume its token tree
                     let mut subtree = Vec::new();
@@ -133,21 +148,16 @@ pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bo
     false
 }
 
-// fn consume_arr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
-    
-// }
-
 fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: Ident) {
     // If there was no token following, pretend like it ended with a comma (for consistency in logic)
     let token = if let Some(token) = tokens.pop() {
         token
-    }else{
+    } else {
         TokenTree::Punct(Punct::new(',', Spacing::Joint))
     };
 
     // If we have no token coming up, or we do and it's a comma, then generate the default struct
-    if matches!(&token, TokenTree::Punct(punct) if punct.as_char() == ',')
-    {
+    if matches!(&token, TokenTree::Punct(punct) if punct.as_char() == ',') {
         let span = ident.span();
 
         // `IDENT::default()`
@@ -210,7 +220,6 @@ fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: 
             }
         }
 
-
         if !field_block.is_empty() {
             // If the last token was a comma, destroy it
             if let Some(TokenTree::Punct(punct)) = field_block.last() {
@@ -225,17 +234,11 @@ fn consume_struct(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>, ident: 
         // Append `.. IDENT::default()` to the struct initializer
         field_block.extend(create_default(ident.span(), ident.clone()));
 
-        let group = Group::new(
-            Delimiter::Brace,
-            TokenStream::from_iter(field_block),
-        );
+        let group = Group::new(Delimiter::Brace, TokenStream::from_iter(field_block));
 
         let span = group.span();
 
-        out.extend(vec![
-            TokenTree::Ident(ident),
-            TokenTree::Group(group)
-        ]);
+        out.extend(vec![TokenTree::Ident(ident), TokenTree::Group(group)]);
 
         // Add the .into() statement
         out.extend(create_into(span));

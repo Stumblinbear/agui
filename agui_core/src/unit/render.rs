@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum Color {
     Black,
     White,
@@ -10,7 +11,7 @@ pub enum Color {
 
 impl Default for Color {
     fn default() -> Self {
-        Self::Black
+        Self::White
     }
 }
 

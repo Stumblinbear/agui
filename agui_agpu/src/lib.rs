@@ -1,8 +1,7 @@
-use std::{any::TypeId, collections::HashMap};
-
 use agpu::{Frame, GpuProgram};
-use agui::{widgets::primitives::Quad, Widget, WidgetID, WidgetManager};
-use render::{quad::QuadRenderPass, RenderContext, WidgetRenderPass};
+use agui::{render::WidgetChanged, widgets::primitives::Quad, WidgetManager};
+use render::{bounding::BoundingRenderPass, quad::QuadRenderPass, RenderContext, WidgetRenderPass};
+use std::{any::TypeId, collections::HashMap};
 
 pub mod render;
 
@@ -10,73 +9,49 @@ pub struct WidgetRenderer {
     ctx: RenderContext,
 
     render_passes: HashMap<TypeId, Box<dyn WidgetRenderPass>>,
-    bound_render_pass: HashMap<TypeId, TypeId>,
-
-    widget_renderer: HashMap<WidgetID, TypeId>,
 }
 
 impl agui::render::WidgetRenderer for WidgetRenderer {
-    fn create(&mut self, manager: &WidgetManager, widget_id: WidgetID) {
-        let widget_type_id = manager.get(widget_id).get_type_id();
-
-        if let Some(pass_type_id) = self.bound_render_pass.get(&widget_type_id) {
-            self.render_passes
-                .get_mut(pass_type_id)
-                .expect("impossible render pass access")
-                .add(&self.ctx, manager, widget_id);
+    fn added(&mut self, manager: &WidgetManager, changed: WidgetChanged) {
+        for pass in self.render_passes.values_mut() {
+            pass.added(&self.ctx, manager, &changed);
         }
     }
 
-    fn refresh(&mut self, manager: &WidgetManager) {
-        // TODO: is it possible to limit the scope of layout refreshes?
-        for pass_type_id in self.bound_render_pass.values() {
-            self.render_passes
-                .get_mut(pass_type_id)
-                .expect("impossible render pass access")
-                .refresh(&self.ctx, manager);
+    fn refresh(&mut self, manager: &WidgetManager, changed: WidgetChanged) {
+        for pass in self.render_passes.values_mut() {
+            pass.refresh(&self.ctx, manager, &changed);
         }
     }
 
-    fn remove(&mut self, manager: &WidgetManager, widget_id: WidgetID) {
-        if let Some(pass_type_id) = self.widget_renderer.remove(&widget_id) {
-            self.render_passes
-                .get_mut(&pass_type_id)
-                .expect("impossible render pass access")
-                .remove(&self.ctx, manager, widget_id);
+    fn removed(&mut self, manager: &WidgetManager, changed: WidgetChanged) {
+        for pass in self.render_passes.values_mut() {
+            pass.removed(&self.ctx, manager, &changed);
         }
     }
 }
 
 impl WidgetRenderer {
-    pub fn without_primitives(program: &GpuProgram) -> WidgetRenderer {
+    pub fn default(program: &GpuProgram) -> WidgetRenderer {
         WidgetRenderer {
             ctx: RenderContext {
                 gpu: program.gpu.clone(),
             },
 
             render_passes: Default::default(),
-            bound_render_pass: Default::default(),
-
-            widget_renderer: Default::default(),
         }
     }
 
     pub fn new(program: &GpuProgram) -> WidgetRenderer {
-        let basic_pass = QuadRenderPass::new(program);
+        let mut basic_pass = QuadRenderPass::new(program);
 
-        WidgetRenderer::without_primitives(program)
-            .add_render_pass(basic_pass)
-            .bind_widget_pass::<QuadRenderPass, Quad>()
+        basic_pass.bind::<Quad>();
+
+        WidgetRenderer::default(program).add_pass(basic_pass)
+        // .add_pass(BoundingRenderPass::new(program))
     }
 
-    pub fn init_render_pass<P>(self) -> Self
-    where
-        P: WidgetRenderPass + Default + 'static,
-    {
-        self.add_render_pass(P::default())
-    }
-
-    pub fn add_render_pass<P>(mut self, pass: P) -> Self
+    pub fn add_pass<P>(mut self, pass: P) -> Self
     where
         P: WidgetRenderPass + 'static,
     {
@@ -93,17 +68,17 @@ impl WidgetRenderer {
         self
     }
 
-    pub fn bind_widget_pass<P, W>(mut self) -> Self
+    pub fn get_pass<P>(&self) -> &P
     where
         P: WidgetRenderPass + 'static,
-        W: Widget + 'static,
     {
-        let pass_type_id = TypeId::of::<P>();
-        let widget_type_id = TypeId::of::<W>();
+        let pass = self
+            .render_passes
+            .get(&TypeId::of::<P>())
+            .expect("cannot return a pass that has not been created");
 
-        self.bound_render_pass.insert(widget_type_id, pass_type_id);
-
-        self
+        pass.downcast_ref::<P>()
+            .expect("failed to downcast render pass")
     }
 
     pub fn render(&self, mut frame: Frame) {

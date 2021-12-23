@@ -1,25 +1,16 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, HashSet},
-};
+use std::collections::HashMap;
 
 use agpu::{Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{
-    render::WidgetChanged,
-    unit::Color,
-    widget::{Widget, WidgetID},
-    widgets::primitives::Quad,
-    WidgetManager,
+    render::WidgetChanged, unit::Color, widget::WidgetID, widgets::primitives::Quad, WidgetManager,
 };
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
 
-pub struct QuadRenderPass {
+pub struct BoundingRenderPass {
     pipeline: RenderPipeline,
     buffer: Buffer,
-
-    bound_widgets: HashSet<TypeId>,
 
     locations: Arena<WidgetID>,
     widgets: HashMap<WidgetID, GenerationalIndex>,
@@ -34,12 +25,12 @@ const PREALLOCATE: u64 = QUAD_BUFFER_SIZE * 16;
 // Make room for extra quads when we reach the buffer size, so we have to resize less often
 const EXPAND_ALLOCATE: u64 = QUAD_BUFFER_SIZE * 8;
 
-impl QuadRenderPass {
-    pub fn new(program: &GpuProgram) -> QuadRenderPass {
+impl BoundingRenderPass {
+    pub fn new(program: &GpuProgram) -> Self {
         let pipeline = program
             .gpu
-            .new_pipeline("agui_quad_pipeline")
-            .with_vertex(include_bytes!("shader/rect.vert.spv"))
+            .new_pipeline("agui_bounding_pipeline")
+            .with_vertex(include_bytes!("shader/bounding.vert.spv"))
             .with_fragment(include_bytes!("shader/rect.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<[f32; 8]>() as u64,
@@ -48,14 +39,12 @@ impl QuadRenderPass {
             }])
             .create();
 
-        QuadRenderPass {
-            bound_widgets: HashSet::new(),
-
+        Self {
             pipeline,
 
             buffer: program
                 .gpu
-                .new_buffer("QuadRenderPass")
+                .new_buffer("BoundingRenderPass")
                 .as_vertex_buffer()
                 .allow_copy_to()
                 .create_uninit(PREALLOCATE),
@@ -64,28 +53,11 @@ impl QuadRenderPass {
             widgets: HashMap::default(),
         }
     }
-
-    pub fn bind<W>(&mut self) -> &Self
-    where
-        W: Widget + 'static,
-    {
-        self.bound_widgets.insert(TypeId::of::<W>());
-
-        self
-    }
 }
 
-impl WidgetRenderPass for QuadRenderPass {
+impl WidgetRenderPass for BoundingRenderPass {
     fn added(&mut self, ctx: &RenderContext, manager: &WidgetManager, changed: &WidgetChanged) {
-        // Ignore any widget we aren't bound to
-        if !self.bound_widgets.contains(&changed.type_id) {
-            return;
-        }
-
         let index = self.locations.insert(changed.widget_id);
-
-        println!("Added {}", index.into_raw_parts().0);
-
         self.widgets.insert(changed.widget_id, index);
 
         self.refresh(ctx, manager, changed);
@@ -101,14 +73,16 @@ impl WidgetRenderPass for QuadRenderPass {
 
         let index = index * QUAD_BUFFER_SIZE;
 
-        let rect = manager
-            .get_rect(&changed.widget_id)
-            .expect("widget added to render pass does not have a rect")
-            .to_slice();
+        let rect = match manager.get_rect(&changed.widget_id) {
+            Some(rect) => rect.to_slice(),
+            None => return,
+        };
 
         let quad = manager.try_get_as::<Quad>(&changed.widget_id);
 
-        let rgba = quad.map_or(Color::White.as_rgba(), |q| q.color.as_rgba());
+        let rgba = quad.map_or(Color::Rgba(0.0, 0.0, 0.0, 0.5).as_rgba(), |q| {
+            q.color.as_rgba()
+        });
 
         let rect = bytemuck::cast_slice(&rect);
         let rgba = bytemuck::cast_slice(&rgba);
@@ -125,20 +99,14 @@ impl WidgetRenderPass for QuadRenderPass {
     }
 
     fn removed(&mut self, _ctx: &RenderContext, _manager: &WidgetManager, changed: &WidgetChanged) {
-        if !self.bound_widgets.contains(&changed.type_id) {
-            return;
+        if let Some(index) = self.widgets.remove(&changed.widget_id) {
+            self.locations.remove(index);
         }
-        
-        let index = self.widgets.remove(&changed.widget_id).expect("removed nonexistent widget");
-
-        println!("Removed {}", index.into_raw_parts().0);
-        
-        self.locations.remove(index);
     }
 
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
-            .render_pass("basic render pass")
+            .render_pass("bounding render pass")
             .with_pipeline(&self.pipeline)
             .begin();
 

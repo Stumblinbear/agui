@@ -1,11 +1,17 @@
-pub mod color;
+use std::any::TypeId;
 
-use crate::{WidgetID, WidgetManager};
+use crate::{widget::WidgetID, WidgetManager};
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct WidgetChanged {
+    pub type_id: TypeId,
+    pub widget_id: WidgetID,
+}
 
 pub trait WidgetRenderer {
-    fn create(&mut self, manager: &WidgetManager, widget_id: WidgetID);
+    fn added(&mut self, manager: &WidgetManager, changed: WidgetChanged);
 
-    fn refresh(&mut self, manager: &WidgetManager);
+    fn refresh(&mut self, manager: &WidgetManager, changed: WidgetChanged);
 
-    fn remove(&mut self, manager: &WidgetManager, widget_id: WidgetID);
+    fn removed(&mut self, manager: &WidgetManager, changed: WidgetChanged);
 }

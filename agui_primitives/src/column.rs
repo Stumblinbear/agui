@@ -1,20 +1,22 @@
-use agui_core::{unit::Layout, BuildResult, WidgetContext, WidgetImpl, WidgetRef};
+use agui_core::{
+    context::WidgetContext,
+    layout::LayoutRef,
+    widget::{BuildResult, WidgetImpl, WidgetRef},
+};
 use agui_macros::Widget;
 
-#[derive(Default, Widget)]
+#[derive(Debug, Default, Widget)]
 #[widget(layout = "column")]
 pub struct Column {
-    pub layout: Layout,
+    pub layout: LayoutRef,
 
     pub children: Vec<WidgetRef>,
 }
 
 impl WidgetImpl for Column {
-    fn layout(&self) -> Option<&Layout> {
-        Some(&self.layout)
-    }
+    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        ctx.set_layout(LayoutRef::clone(&self.layout));
 
-    fn build(&self, _ctx: &WidgetContext) -> BuildResult {
-        BuildResult::Many(self.children.clone())
+        (&self.children).into()
     }
 }

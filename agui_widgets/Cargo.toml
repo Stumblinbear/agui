@@ -12,6 +12,8 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
+log = "0.4"
+
 agui_core = { path = "../agui_core" }
 agui_macros = { path = "../agui_macros", features = [ "internal" ]}
 agui_primitives = { path = "../agui_primitives" }
