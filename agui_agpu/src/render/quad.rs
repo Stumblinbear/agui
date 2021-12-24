@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use agpu::{Buffer, Frame, GpuProgram, RenderPipeline};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{
     render::WidgetChanged,
     unit::Color,
@@ -16,6 +16,8 @@ use generational_arena::{Arena, Index as GenerationalIndex};
 use super::{RenderContext, WidgetRenderPass};
 
 pub struct QuadRenderPass {
+    bind_group: BindGroup,
+
     pipeline: RenderPipeline,
     buffer: Buffer,
 
@@ -35,7 +37,11 @@ const PREALLOCATE: u64 = QUAD_BUFFER_SIZE * 16;
 const EXPAND_ALLOCATE: u64 = QUAD_BUFFER_SIZE * 8;
 
 impl QuadRenderPass {
-    pub fn new(program: &GpuProgram) -> QuadRenderPass {
+    pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
+        let bindings = &[ctx.bind_app_settings()];
+
+        let bind_group = program.gpu.create_bind_group(bindings);
+
         let pipeline = program
             .gpu
             .new_pipeline("agui_quad_pipeline")
@@ -46,9 +52,11 @@ impl QuadRenderPass {
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4],
             }])
+            .with_bind_groups(&[&bind_group.layout])
             .create();
 
-        QuadRenderPass {
+        Self {
+            bind_group,
             bound_widgets: HashSet::new(),
 
             pipeline,
@@ -57,7 +65,7 @@ impl QuadRenderPass {
                 .gpu
                 .new_buffer("QuadRenderPass")
                 .as_vertex_buffer()
-                .allow_copy_to()
+                .allow_copy()
                 .create_uninit(PREALLOCATE),
 
             locations: Arena::default(),
@@ -83,8 +91,6 @@ impl WidgetRenderPass for QuadRenderPass {
         }
 
         let index = self.locations.insert(changed.widget_id);
-
-        println!("Added {}", index.into_raw_parts().0);
 
         self.widgets.insert(changed.widget_id, index);
 
@@ -128,11 +134,12 @@ impl WidgetRenderPass for QuadRenderPass {
         if !self.bound_widgets.contains(&changed.type_id) {
             return;
         }
-        
-        let index = self.widgets.remove(&changed.widget_id).expect("removed nonexistent widget");
 
-        println!("Removed {}", index.into_raw_parts().0);
-        
+        let index = self
+            .widgets
+            .remove(&changed.widget_id)
+            .expect("removed nonexistent widget");
+
         self.locations.remove(index);
     }
 
@@ -141,6 +148,8 @@ impl WidgetRenderPass for QuadRenderPass {
             .render_pass("basic render pass")
             .with_pipeline(&self.pipeline)
             .begin();
+
+        r.set_bind_group(0, &self.bind_group, &[]);
 
         for (index, _) in self.locations.iter() {
             let index = (index.into_raw_parts().0 as u64) * QUAD_BUFFER_SIZE;

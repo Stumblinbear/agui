@@ -16,12 +16,14 @@ const GRAY: &str = "\u{001b}[30;1m";
 const RED: &str = "\u{001b}[31;1m";
 const GREEN: &str = "\u{001b}[32;1m";
 const YELLOW: &str = "\u{001b}[33;1m";
-const BLUE: &str = "\u{001b}[34;1m";
-const MAGENTA: &str = "\u{001b}[35;1m";
+// const BLUE: &str = "\u{001b}[34;1m";
+// const MAGENTA: &str = "\u{001b}[35;1m";
 const CYAN: &str = "\u{001b}[36;1m";
 const WHITE: &str = "\u{001b}[37;1m";
 
 pub fn print_tree(manager: &WidgetManager) {
+    println!("Tree:");
+    
     for widget_id in manager.tree.iter() {
         let depth = widget_id.depth();
 
@@ -51,6 +53,8 @@ pub fn print_tree(manager: &WidgetManager) {
 }
 
 pub fn print_tree_modifications(manager: &WidgetManager) {
+    println!("Tree:");
+    
     let mods = &manager.modifications;
     
     let mut new_root = None;

@@ -1,14 +1,20 @@
 use agpu::{Frame, GpuProgram};
-use agui::{render::WidgetChanged, widgets::primitives::Quad, WidgetManager};
+use agui::{
+    context::Ref,
+    render::WidgetChanged,
+    widgets::{primitives::Quad, AppSettings},
+    WidgetManager,
+};
 use render::{bounding::BoundingRenderPass, quad::QuadRenderPass, RenderContext, WidgetRenderPass};
-use std::{any::TypeId, collections::HashMap};
+use std::{any::TypeId, collections::BTreeMap};
 
 pub mod render;
 
 pub struct WidgetRenderer {
     ctx: RenderContext,
 
-    render_passes: HashMap<TypeId, Box<dyn WidgetRenderPass>>,
+    render_passes: BTreeMap<TypeId, Box<dyn WidgetRenderPass>>,
+    render_pass_order: Vec<TypeId>,
 }
 
 impl agui::render::WidgetRenderer for WidgetRenderer {
@@ -34,21 +40,27 @@ impl agui::render::WidgetRenderer for WidgetRenderer {
 impl WidgetRenderer {
     pub fn default(program: &GpuProgram) -> WidgetRenderer {
         WidgetRenderer {
-            ctx: RenderContext {
-                gpu: program.gpu.clone(),
-            },
+            ctx: RenderContext::new(program),
 
-            render_passes: Default::default(),
+            render_passes: BTreeMap::default(),
+            render_pass_order: Vec::default(),
         }
     }
 
     pub fn new(program: &GpuProgram) -> WidgetRenderer {
-        let mut basic_pass = QuadRenderPass::new(program);
+        let renderer = WidgetRenderer::default(program);
 
-        basic_pass.bind::<Quad>();
+        let basic_pass = {
+            let mut basic_pass = QuadRenderPass::new(program, &renderer.ctx);
 
-        WidgetRenderer::default(program).add_pass(basic_pass)
-        // .add_pass(BoundingRenderPass::new(program))
+            basic_pass.bind::<Quad>();
+
+            basic_pass
+        };
+
+        let bounding_pass = BoundingRenderPass::new(program, &renderer.ctx);
+
+        renderer.add_pass(basic_pass).add_pass(bounding_pass)
     }
 
     pub fn add_pass<P>(mut self, pass: P) -> Self
@@ -64,6 +76,8 @@ impl WidgetRenderer {
         {
             panic!("attempted to insert a duplicate render pass");
         }
+
+        self.render_pass_order.push(pass_type_id);
 
         self
     }
@@ -81,9 +95,18 @@ impl WidgetRenderer {
             .expect("failed to downcast render pass")
     }
 
-    pub fn render(&self, mut frame: Frame) {
-        for renderer in self.render_passes.values() {
-            renderer.render(&self.ctx, &mut frame);
+    pub fn set_app_settings(&mut self, app_settings: Ref<AppSettings>) {
+        self.ctx.set_app_settings(app_settings);
+    }
+
+    pub fn render(&mut self, mut frame: Frame) {
+        self.ctx.update();
+
+        for pass_type_id in &self.render_pass_order {
+            self.render_passes
+                .get(pass_type_id)
+                .expect("render pass does not exist")
+                .render(&self.ctx, &mut frame);
         }
     }
 }

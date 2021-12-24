@@ -7,7 +7,10 @@ use std::{
 use downcast_rs::{impl_downcast, Downcast};
 use generational_arena::Index as GenerationalIndex;
 
-use crate::{context::WidgetContext, unit::LayoutType};
+use crate::{
+    context::WidgetContext,
+    unit::{Key, LayoutType},
+};
 
 #[non_exhaustive]
 pub enum BuildResult {
@@ -17,6 +20,20 @@ pub enum BuildResult {
     Many(Vec<WidgetRef>),
 
     Error(Box<dyn std::error::Error>),
+}
+
+impl BuildResult {
+    /// # Errors
+    /// 
+    /// Returns a boxed error if the widget failed to build correctly.
+    pub fn take(self) -> Result<Vec<WidgetRef>, Box<dyn std::error::Error>> {
+        match self {
+            BuildResult::Empty => Ok(vec![]),
+            BuildResult::One(widget) => Ok(vec![widget]),
+            BuildResult::Many(widgets) => Ok(widgets),
+            BuildResult::Error(err) => Err(err),
+        }
+    }
 }
 
 impl From<WidgetRef> for BuildResult {
@@ -35,7 +52,7 @@ impl From<&Vec<WidgetRef>> for BuildResult {
     fn from(widgets: &Vec<WidgetRef>) -> Self {
         if widgets.is_empty() {
             Self::Empty
-        }else{
+        } else {
             Self::Many(widgets.clone())
         }
     }
@@ -62,6 +79,11 @@ pub enum WidgetRef {
     None,
     Owned(Rc<dyn Widget>),
     Borrowed(Weak<dyn Widget>),
+    Keyed {
+        owner_id: Option<WidgetID>,
+        key: Key,
+        widget: Box<WidgetRef>,
+    },
 }
 
 impl Debug for WidgetRef {
@@ -69,12 +91,13 @@ impl Debug for WidgetRef {
         match self {
             Self::None => write!(f, "None"),
             Self::Owned(widget) => Debug::fmt(widget, f),
-            Self::Borrowed(layout) => {
-                match layout.upgrade() {
-                    Some(widget) => Debug::fmt(&widget, f),
-                    None => write!(f, "Gone"),
-                }
+            Self::Borrowed(layout) => match layout.upgrade() {
+                Some(widget) => Debug::fmt(&widget, f),
+                None => write!(f, "Gone"),
             },
+            Self::Keyed { key, widget, .. } => {
+                write!(f, "Keyed {{ key: {:?}, widget: {:?} }}", key, widget)
+            }
         }
     }
 }
@@ -91,6 +114,7 @@ impl Clone for WidgetRef {
             Self::None => Self::None,
             Self::Owned(widget) => Self::Borrowed(Rc::downgrade(widget)),
             Self::Borrowed(widget) => Self::Borrowed(Weak::clone(widget)),
+            Self::Keyed { widget, .. } => Self::clone(widget),
         }
     }
 }
@@ -110,6 +134,7 @@ impl WidgetRef {
             Self::None => false,
             Self::Owned(_) => true,
             Self::Borrowed(weak) => weak.strong_count() != 0,
+            Self::Keyed { widget, .. } => widget.is_valid(),
         }
     }
 
@@ -119,6 +144,7 @@ impl WidgetRef {
             Self::None => None,
             Self::Owned(widget) => Some(Rc::clone(widget)),
             Self::Borrowed(weak) => weak.upgrade(),
+            Self::Keyed { widget, .. } => widget.try_get(),
         }
     }
 
@@ -133,6 +159,7 @@ impl WidgetRef {
             Self::Borrowed(weak) => {
                 Rc::clone(&weak.upgrade().expect("cannot dereference a dropped widget"))
             }
+            Self::Keyed { widget, .. } => widget.get(),
         }
     }
 
@@ -184,11 +211,11 @@ impl From<&Self> for WidgetRef {
 #[allow(clippy::from_over_into)]
 impl Into<Vec<Self>> for WidgetRef {
     fn into(self) -> Vec<Self> {
-        vec![ Self::clone(&self) ]
+        vec![Self::clone(&self)]
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WidgetID(GenerationalIndex, usize);
 
 impl std::fmt::Display for WidgetID {

@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use agpu::{Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{
-    render::WidgetChanged, unit::Color, widget::WidgetID, widgets::primitives::Quad, WidgetManager,
-};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
+use agui::{render::WidgetChanged, unit::Color, widget::WidgetID, WidgetManager};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
 
 pub struct BoundingRenderPass {
+    bind_group: BindGroup,
+
     pipeline: RenderPipeline,
     buffer: Buffer,
 
@@ -25,8 +25,15 @@ const PREALLOCATE: u64 = QUAD_BUFFER_SIZE * 16;
 // Make room for extra quads when we reach the buffer size, so we have to resize less often
 const EXPAND_ALLOCATE: u64 = QUAD_BUFFER_SIZE * 8;
 
+const UNCHANGED_COLOR: [f32; 4] = Color::Green.as_rgba();
+// const CHANGED_COLOR: [f32; 4] = Color::Red.as_rgba();
+
 impl BoundingRenderPass {
-    pub fn new(program: &GpuProgram) -> Self {
+    pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
+        let bindings = &[ctx.bind_app_settings()];
+
+        let bind_group = program.gpu.create_bind_group(bindings);
+
         let pipeline = program
             .gpu
             .new_pipeline("agui_bounding_pipeline")
@@ -37,16 +44,19 @@ impl BoundingRenderPass {
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4],
             }])
+            .wireframe()
+            .with_bind_groups(&[&bind_group.layout])
             .create();
 
         Self {
+            bind_group,
             pipeline,
 
             buffer: program
                 .gpu
                 .new_buffer("BoundingRenderPass")
                 .as_vertex_buffer()
-                .allow_copy_to()
+                .allow_copy()
                 .create_uninit(PREALLOCATE),
 
             locations: Arena::default(),
@@ -78,14 +88,8 @@ impl WidgetRenderPass for BoundingRenderPass {
             None => return,
         };
 
-        let quad = manager.try_get_as::<Quad>(&changed.widget_id);
-
-        let rgba = quad.map_or(Color::Rgba(0.0, 0.0, 0.0, 0.5).as_rgba(), |q| {
-            q.color.as_rgba()
-        });
-
         let rect = bytemuck::cast_slice(&rect);
-        let rgba = bytemuck::cast_slice(&rgba);
+        let rgba = bytemuck::cast_slice(&UNCHANGED_COLOR);
 
         if (self.buffer.size() as u64) < index + QUAD_BUFFER_SIZE {
             self.buffer
@@ -109,6 +113,8 @@ impl WidgetRenderPass for BoundingRenderPass {
             .render_pass("bounding render pass")
             .with_pipeline(&self.pipeline)
             .begin();
+
+        r.set_bind_group(0, &self.bind_group, &[]);
 
         for (index, _) in self.locations.iter() {
             let index = (index.into_raw_parts().0 as u64) * QUAD_BUFFER_SIZE;

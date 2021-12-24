@@ -8,10 +8,13 @@ use parking_lot::Mutex;
 
 mod state;
 
-use state::{Ref, StateMap, Value, WidgetStates};
+pub use state::Ref;
+
+use state::{StateMap, Value, WidgetStates};
 
 use crate::{
     layout::LayoutRef,
+    unit::Key,
     widget::{BuildResult, WidgetID, WidgetRef},
 };
 
@@ -42,6 +45,7 @@ type WidgetComputedFuncs = HashMap<WidgetID, HashMap<TypeId, ComputedFn>>;
 pub struct WidgetContext {
     global: StateMap,
     states: WidgetStates,
+
     layouts: Mutex<HashMap<WidgetID, LayoutRef>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs>>,
@@ -132,7 +136,7 @@ impl WidgetContext {
             .current_id
             .lock()
             .expect("cannot get state from context while not iterating");
-        
+
         match &current_id {
             ListenerID::Widget(widget_id) => self.layouts.lock().insert(*widget_id, layout),
             ListenerID::Computed(_, _) => {
@@ -190,6 +194,34 @@ impl WidgetContext {
         value
     }
 
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context.
+    pub fn key(&self, key: Key, widget: WidgetRef) -> WidgetRef {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot key from context while not iterating");
+
+        let widget_id = current_id.widget_id();
+
+        WidgetRef::Keyed {
+            owner_id: match key {
+                Key::Unique(_) | Key::Local(_) => Some(*widget_id),
+                Key::Global(_) => None,
+            },
+            key,
+            widget: Box::new(widget),
+        }
+    }
+
+    pub fn get_layout(&self, widget_id: &WidgetID) -> LayoutRef {
+        self.layouts
+            .lock()
+            .get(widget_id)
+            .map_or(LayoutRef::None, LayoutRef::clone)
+    }
+
     fn call_computed<V, F>(&self, listener_id: ListenerID, func: &F) -> V
     where
         V: Eq + PartialEq + Clone + Value,
@@ -204,10 +236,6 @@ impl WidgetContext {
         *self.current_id.lock() = previous_id;
 
         value
-    }
-    
-    pub fn get_layout(&self, widget_id: &WidgetID) -> LayoutRef {
-        self.layouts.lock().get(widget_id).map_or(LayoutRef::None, LayoutRef::clone)
     }
 
     pub(crate) fn did_computed_change(
@@ -238,7 +266,7 @@ impl WidgetContext {
             .map_or(BuildResult::Empty, |widget| widget.build(self));
 
         *self.current_id.lock() = None;
-        
+
         result
     }
 

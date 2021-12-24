@@ -40,8 +40,6 @@ pub fn consume_tree(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) {
 }
 
 pub fn consume_expr(tokens: &mut Vec<TokenTree>, out: &mut Vec<TokenTree>) -> bool {
-    let mut depth = 0;
-
     while let Some(token) = tokens.pop() {
         match &token {
             TokenTree::Ident(ident) => {

@@ -35,11 +35,25 @@ where
     }
 
     pub fn add(&mut self, parent_id: Option<K>, node_id: K) -> K {
-        let mut depth = 0;
+        self.set_node(
+            parent_id,
+            node_id,
+            TreeNode {
+                depth: 0,
+                parent: parent_id,
+                children: Vec::new(),
+            },
+        );
+
+        node_id
+    }
+
+    pub fn set_node(&mut self, parent_id: Option<K>, node_id: K, mut node: TreeNode<K>) {
+        let mut new_depth = 0;
 
         if let Some(parent_id) = parent_id {
             if let Some(parent) = self.nodes.get_mut(&parent_id) {
-                depth = parent.depth + 1;
+                new_depth = parent.depth + 1;
 
                 parent.children.push(node_id);
             } else {
@@ -53,20 +67,42 @@ where
             self.root = Some(node_id);
         }
 
-        self.nodes.insert(
-            node_id,
-            TreeNode {
-                depth,
-                parent: parent_id,
-                children: Vec::new(),
-            },
-        );
+        if node.depth != new_depth {
+            let diff = new_depth - node.depth;
 
-        node_id
+            node.depth = new_depth;
+
+            // If the node had children, propagate the depth difference
+            if node.children.is_empty() {
+                let mut queue = node.children.clone();
+
+                while !queue.is_empty() {
+                    let children = self
+                        .nodes
+                        .get(&queue.remove(0))
+                        .expect("broken tree: unable to update child's depth")
+                        .children
+                        .clone();
+
+                    for child_id in children {
+                        let child = self
+                            .nodes
+                            .get_mut(&child_id)
+                            .expect("broken tree: unable to update child's depth");
+
+                        child.depth += diff;
+
+                        queue.extend(child.children.iter());
+                    }
+                }
+            }
+        }
+
+        self.nodes.insert(node_id, node);
     }
 
     pub fn remove(&mut self, node_id: &K) -> Option<TreeNode<K>> {
-        if let Some(node) = self.nodes.remove(node_id) {
+        self.nodes.remove(node_id).map(|node| {
             if let Some(parent_id) = &node.parent {
                 let parent = self
                     .nodes
@@ -83,19 +119,18 @@ where
                 );
             }
 
-            // We can't remove the children here, since the manager needs to have access to them, so just unset their parent
-            for child in &node.children {
-                self.nodes.get_mut(child)
-                    .expect("broken tree: unable to get node's child")
-                    .parent = None;
+            // We can't remove the children here, since the manager needs to have access to them.
 
-                // self.nodes.remove(child);
-            }
+            node
+        })
+    }
 
-            Some(node)
-        } else {
-            None
-        }
+    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
+        let node = self
+            .remove(&node_id)
+            .expect("broken tree: cannot reparent a node that doesn't exist");
+
+        self.set_node(new_parent_id, node_id, node);
     }
 
     pub fn get(&self, node_id: &K) -> Option<&TreeNode<K>> {

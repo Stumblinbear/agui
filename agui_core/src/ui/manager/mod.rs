@@ -1,4 +1,8 @@
-use std::{collections::HashSet, rc::Rc, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::Arc,
+};
 
 use generational_arena::Arena;
 use morphorm::{Cache, Units};
@@ -8,8 +12,8 @@ use crate::{
     context::{ListenerID, WidgetContext},
     layout::LayoutRef,
     render::WidgetChanged,
-    unit::Rect,
-    widget::{BuildResult, Widget, WidgetID, WidgetRef},
+    unit::{Key, Rect},
+    widget::{Widget, WidgetID, WidgetRef},
 };
 
 use super::{cache::LayoutCache, tree::Tree};
@@ -247,6 +251,35 @@ impl WidgetManager {
         }
 
         // Workaround for morphorm ignoring root sizing
+        let root_changed = self.morphorm_root_workaround();
+
+        morphorm::layout(&mut self.cache, &self.tree, &self.widgets);
+
+        let mut changed = self
+            .cache
+            .get_changed()
+            .into_iter()
+            .map(|widget_id| WidgetChanged {
+                type_id: self.get(&widget_id).get_type_id(),
+                widget_id,
+            })
+            .collect::<HashSet<_>>();
+
+        if root_changed {
+            if let Some(widget_id) = self.tree.get_root() {
+                changed.insert(WidgetChanged {
+                    type_id: self.get(&widget_id).get_type_id(),
+                    widget_id,
+                });
+            }
+        }
+
+        changed
+    }
+
+    fn morphorm_root_workaround(&mut self) -> bool {
+        let mut root_changed = false;
+
         if let Some(widget_id) = self.tree.get_root() {
             let layout = match self.context.get_layout(&widget_id) {
                 LayoutRef::None => None,
@@ -259,19 +292,35 @@ impl WidgetManager {
 
             if let Some(layout) = layout {
                 if let Units::Pixels(px) = layout.position.get_left() {
-                    self.cache.set_posx(widget_id, px);
+                    if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
+
+                        self.cache.set_posx(widget_id, px);
+                    }
                 }
 
                 if let Units::Pixels(px) = layout.position.get_top() {
-                    self.cache.set_posy(widget_id, px);
+                    if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
+
+                        self.cache.set_posy(widget_id, px);
+                    }
                 }
 
                 if let Units::Pixels(px) = layout.sizing.get_width() {
-                    self.cache.set_width(widget_id, px);
+                    if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
+
+                        self.cache.set_width(widget_id, px);
+                    }
                 }
 
                 if let Units::Pixels(px) = layout.sizing.get_height() {
-                    self.cache.set_height(widget_id, px);
+                    if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
+
+                        self.cache.set_height(widget_id, px);
+                    }
                 }
             } else {
                 self.cache.set_posx(widget_id, 0.0);
@@ -281,16 +330,7 @@ impl WidgetManager {
             }
         }
 
-        morphorm::layout(&mut self.cache, &self.tree, &self.widgets);
-
-        self.cache
-            .get_changed()
-            .into_iter()
-            .map(|widget_id| WidgetChanged {
-                type_id: self.get(&widget_id).get_type_id(),
-                widget_id,
-            })
-            .collect::<HashSet<_>>()
+        root_changed
     }
 
     fn apply_modifications<A, R>(&mut self, added: &mut A, removed: &mut R)
@@ -298,6 +338,8 @@ impl WidgetManager {
         A: Extend<WidgetChanged>,
         R: Extend<WidgetChanged>,
     {
+        let mut removed_keyed = HashMap::new();
+
         while !self.modifications.is_empty() {
             match self.modifications.remove(0) {
                 Modify::Spawn(parent_id, widget) => {
@@ -307,31 +349,7 @@ impl WidgetManager {
                         }
                     }
 
-                    if parent_id.is_some() && !self.contains(parent_id.as_ref().unwrap()) {
-                        panic!("cannot add a widget to a nonexistent parent")
-                    }
-
-                    let type_id = widget.get_type_id();
-
-                    let layout_type = widget.get().layout_type();
-
-                    let widget_id = WidgetID::from(
-                        self.widgets.insert(WidgetNode {
-                            widget,
-                            layout_type,
-                            layout: LayoutRef::None,
-                        }),
-                        parent_id.map_or(0, |node| node.depth() + 1),
-                    );
-
-                    self.tree.add(parent_id, widget_id);
-
-                    // Sometimes widgets get changes queued before they're spawned
-                    self.changed.lock().remove(&widget_id.into());
-
-                    self.modifications.push(Modify::Rebuild(widget_id));
-
-                    added.extend(Some(WidgetChanged { type_id, widget_id }));
+                    self.process_spawn(added, &mut removed_keyed, parent_id, widget);
                 }
 
                 Modify::Rebuild(widget_id) => {
@@ -341,45 +359,7 @@ impl WidgetManager {
                         }
                     }
 
-                    // Queue the children for removal
-                    for child_id in &self
-                        .tree
-                        .get(&widget_id)
-                        .expect("cannot destroy a widget that doesn't exist")
-                        .children
-                    {
-                        self.modifications.push(Modify::Destroy(*child_id));
-                    }
-
-                    let node = self.widgets.get_mut(widget_id.id()).unwrap();
-
-                    println!("Rebuilt {}", node.widget.get_type_name());
-
-                    match self.context.build(widget_id, &node.widget) {
-                        BuildResult::Empty => {}
-                        BuildResult::One(child) => {
-                            if !child.is_valid() {
-                                continue;
-                            }
-
-                            self.modifications
-                                .push(Modify::Spawn(Some(widget_id), child));
-                        }
-                        BuildResult::Many(children) => {
-                            for child in children {
-                                if !child.is_valid() {
-                                    continue;
-                                }
-
-                                self.modifications
-                                    .push(Modify::Spawn(Some(widget_id), child));
-                            }
-                        }
-                        BuildResult::Error(err) => panic!("build failed: {}", err),
-                    };
-
-                    // Store the node's layout so morphorm can access it
-                    node.layout = self.context.get_layout(&widget_id);
+                    self.process_rebuild(widget_id);
                 }
 
                 Modify::Destroy(widget_id) => {
@@ -389,31 +369,130 @@ impl WidgetManager {
                         }
                     }
 
-                    let widget = self
+                    // If we're about to remove a keyed widget, store it instead
+                    if let WidgetRef::Keyed { owner_id, key, .. } = self
                         .widgets
-                        .remove(widget_id.id())
-                        .expect("cannot remove a widget that does not exist");
-
-                    // Add the child widgets to the removal queue
-                    if let Some(tree_node) = self.tree.remove(&widget_id) {
-                        for child_id in tree_node.children {
-                            self.modifications.push(Modify::Destroy(child_id));
-                        }
+                        .get(widget_id.id())
+                        .expect("cannot remove a widget that does not exist")
+                        .widget
+                    {
+                        removed_keyed.insert((owner_id, key), widget_id);
+                    } else {
+                        self.process_destroy(removed, widget_id);
                     }
-
-                    self.cache.remove(&widget_id);
-
-                    self.context.remove(&widget_id);
-
-                    self.changed.lock().remove(&widget_id.into());
-
-                    removed.extend(Some(WidgetChanged {
-                        type_id: widget.widget.get_type_id(),
-                        widget_id,
-                    }));
                 }
             }
         }
+
+        // Remove any keyed widgets that didn't get re-parented
+        for (_, widget_id) in removed_keyed.drain() {
+            self.process_destroy(removed, widget_id);
+        }
+    }
+
+    fn process_spawn<A>(
+        &mut self,
+        added: &mut A,
+        removed_keyed: &mut HashMap<(Option<WidgetID>, Key), WidgetID>,
+        parent_id: Option<WidgetID>,
+        widget: WidgetRef,
+    ) where
+        A: Extend<WidgetChanged>,
+    {
+        if parent_id.is_some() && !self.contains(parent_id.as_ref().unwrap()) {
+            panic!("cannot add a widget to a nonexistent parent")
+        }
+
+        // Check if it's a keyed widget
+        if let WidgetRef::Keyed { owner_id, key, .. } = &widget {
+            if let Some(keyed_id) = removed_keyed.remove(&(*owner_id, *key)) {
+                // Reparent the (removed) keyed widget to the new widget
+                self.tree.reparent(parent_id, keyed_id);
+
+                return;
+            }
+        }
+
+        let type_id = widget.get_type_id();
+
+        let layout_type = widget.get().layout_type();
+
+        let widget_id = WidgetID::from(
+            self.widgets.insert(WidgetNode {
+                widget,
+                layout_type,
+                layout: LayoutRef::None,
+            }),
+            parent_id.map_or(0, |node| node.depth() + 1),
+        );
+
+        self.tree.add(parent_id, widget_id);
+
+        // Sometimes widgets get changes queued before they're spawned
+        self.changed.lock().remove(&widget_id.into());
+
+        self.modifications.push(Modify::Rebuild(widget_id));
+
+        added.extend(Some(WidgetChanged { type_id, widget_id }));
+    }
+
+    fn process_rebuild(&mut self, widget_id: WidgetID) {
+        let node = self.widgets.get_mut(widget_id.id()).unwrap();
+
+        // Queue the children for removal
+        for child_id in &self
+            .tree
+            .get(&widget_id)
+            .expect("cannot destroy a widget that doesn't exist")
+            .children
+        {
+            self.modifications.push(Modify::Destroy(*child_id));
+        }
+
+        match self.context.build(widget_id, &node.widget).take() {
+            Ok(children) => {
+                for child in children {
+                    if !child.is_valid() {
+                        continue;
+                    }
+
+                    self.modifications
+                        .push(Modify::Spawn(Some(widget_id), child));
+                }
+            }
+            Err(err) => panic!("build failed: {}", err),
+        };
+
+        // Store the node's layout so morphorm can access it
+        node.layout = self.context.get_layout(&widget_id);
+    }
+
+    fn process_destroy<R>(&mut self, removed: &mut R, widget_id: WidgetID)
+    where
+        R: Extend<WidgetChanged>,
+    {
+        let widget = self
+            .widgets
+            .remove(widget_id.id())
+            .expect("cannot remove a widget that does not exist");
+
+        // Add the child widgets to the removal queue
+        if let Some(tree_node) = self.tree.remove(&widget_id) {
+            for child_id in tree_node.children {
+                self.modifications.push(Modify::Destroy(child_id));
+            }
+        }
+
+        self.cache.remove(&widget_id);
+
+        self.context.remove(&widget_id);
+
+        self.changed.lock().remove(&widget_id.into());
+
+        removed.extend(Some(WidgetChanged {
+            type_id: widget.widget.get_type_id(),
+            widget_id,
+        }));
     }
 
     pub fn print_tree(&self) {

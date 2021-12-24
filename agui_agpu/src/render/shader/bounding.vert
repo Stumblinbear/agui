@@ -1,5 +1,9 @@
 #version 460
 
+layout (set = 0, binding = 0) uniform Viewport {
+    vec2 size;
+} viewport;
+
 layout(location = 0) in vec4 rect;
 layout(location = 1) in vec4 color;
 
@@ -27,9 +31,12 @@ void main() {
     //   1,4 ---  5
     // C(2)          D(3)
     uint index = uint[6](0, 2, 1, 1, 2, 3)[gl_VertexIndex];
-    vec2 pos = verts[index] / vec2(800.0, 600.0);
+    vec2 pos = verts[index] / viewport.size;
      
     gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
+
+    gl_Position.y *= 2;
+    gl_Position.x *= 2;
     
     // Adjust to texture coord style
     gl_Position.y = 1 - gl_Position.y;

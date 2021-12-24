@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Sizing, Units},
+    unit::{Key, Sizing, Units},
     widget::{BuildResult, WidgetImpl, WidgetRef},
 };
 use agui_macros::{build, Widget};
@@ -49,6 +49,6 @@ impl WidgetImpl for App {
             }
         });
 
-        (&self.child).into()
+        ctx.key(Key::single(), (&self.child).into()).into()
     }
 }

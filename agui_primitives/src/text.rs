@@ -1,4 +1,8 @@
-use agui_core::{widget::{BuildResult, WidgetImpl}, context::WidgetContext, unit::Sizing};
+use agui_core::{
+    context::WidgetContext,
+    unit::Sizing,
+    widget::{BuildResult, WidgetImpl},
+};
 use agui_macros::Widget;
 
 #[derive(Debug, Default, Widget)]

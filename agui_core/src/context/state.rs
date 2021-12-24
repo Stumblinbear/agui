@@ -172,6 +172,19 @@ where
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }
 
+impl<V> Clone for Ref<V>
+where
+    V: Value,
+{
+    fn clone(&self) -> Self {
+        Self {
+            phantom: self.phantom,
+            on_changed: Arc::clone(&self.on_changed),
+            value: Arc::clone(&self.value),
+        }
+    }
+}
+
 impl<V> Ref<V>
 where
     V: Value,

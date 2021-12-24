@@ -1,6 +1,8 @@
 #![allow(clippy::needless_update)]
 
+use agpu::Features;
 use agui::{
+    context::Ref,
     layout::Layout,
     macros::build,
     unit::{Sizing, Units},
@@ -12,11 +14,19 @@ use agui::{
 };
 
 fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui widgets").build()?;
+    let program = agpu::GpuProgram::builder("agui widgets")
+        .with_gpu_features(Features::POLYGON_MODE_LINE)
+        .build()?;
 
     let mut ui = UI::new(agui_agpu::WidgetRenderer::new(&program));
 
-    let settings = ui.get_context().init_global::<AppSettings>();
+    let settings = ui.get_context().set_global(AppSettings {
+        width: program.viewport.inner_size().width as f32,
+        height: program.viewport.inner_size().height as f32,
+    });
+
+    ui.get_renderer_mut()
+        .set_app_settings(Ref::clone(&settings));
 
     program.on_resize(move |_, w, h| {
         let mut settings = settings.write();
@@ -67,21 +77,18 @@ fn main() -> Result<(), agpu::BoxError> {
         }
     });
 
-    let gpu = program.gpu.clone();
-
-    let pipeline = gpu.new_pipeline("example render pipeline").create();
+    let pipeline = program.gpu.new_pipeline("render pipeline").create();
 
     program.run_draw(move |mut frame| {
         frame
-            .render_pass_cleared("scene draw pass", 0x101010FF)
+            .render_pass_cleared("ui draw", 0x101010FF)
             .with_pipeline(&pipeline)
-            .begin()
-            .draw_triangle();
+            .begin();
 
         if ui.update() {
-            ui.get_manager().print_tree();
-            
-            ui.get_renderer().render(frame);
+            // ui.get_manager().print_tree();
+
+            ui.get_renderer_mut().render(frame);
         }
     })
 }

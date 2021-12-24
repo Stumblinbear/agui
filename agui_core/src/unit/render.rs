@@ -2,6 +2,9 @@
 pub enum Color {
     Black,
     White,
+    Red,
+    Green,
+    Blue,
 
     Transparent,
 
@@ -21,6 +24,10 @@ impl Color {
         match self {
             Color::Black => [0.0, 0.0, 0.0, 1.0],
             Color::White => [1.0, 1.0, 1.0, 1.0],
+            Color::Red => [1.0, 0.0, 0.0, 1.0],
+            Color::Green => [0.0, 1.0, 0.0, 1.0],
+            Color::Blue => [0.0, 0.0, 1.0, 1.0],
+
             Color::Transparent => [0.0, 0.0, 0.0, 0.0],
             Color::Rgb(r, g, b) => [*r, *g, *b, 1.0],
             Color::Rgba(r, g, b, a) => [*r, *g, *b, *a],

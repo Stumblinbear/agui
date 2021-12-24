@@ -57,6 +57,10 @@ where
         &self.renderer
     }
 
+    pub fn get_renderer_mut(&mut self) -> &mut R {
+        &mut self.renderer
+    }
+
     pub fn set_root(&mut self, widget: WidgetRef) {
         self.manager.add(None, widget);
     }
@@ -73,7 +77,7 @@ where
     pub fn update(&mut self) -> bool {
         let changed = self.manager.update(&mut self.added, &mut self.removed);
 
-        let did_change = (self.removed.len() + self.added.len()) != 0;
+        let did_change = (self.removed.len() + self.added.len() + changed.len()) != 0;
 
         self.removed
             .drain()
@@ -83,14 +87,10 @@ where
             .drain()
             .for_each(|widget| self.renderer.added(&self.manager, widget));
 
-        if did_change {
-            for widget in changed {
-                self.renderer.refresh(&self.manager, widget);
-            }
-
-            true
-        } else {
-            false
+        for widget in changed {
+            self.renderer.refresh(&self.manager, widget);
         }
+        
+        did_change
     }
 }
