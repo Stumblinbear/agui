@@ -1,81 +1,74 @@
+use std::{any::TypeId, collections::BTreeMap};
+
 use agpu::{Frame, GpuProgram};
 use agui::{
     context::Ref,
-    plugin::{event::WidgetEvent, WidgetPlugin},
+    plugin::event::WidgetEvent,
+    widget::{WidgetId, WidgetRef},
     widgets::{primitives::Quad, AppSettings},
     WidgetManager,
 };
 use render::{bounding::BoundingRenderPass, quad::QuadRenderPass, RenderContext, WidgetRenderPass};
-use std::{any::TypeId, collections::BTreeMap};
 
 pub mod render;
 
-pub struct WidgetRenderer {
+pub struct UI {
+    manager: WidgetManager,
+    events: Vec<WidgetEvent>,
+
     ctx: RenderContext,
 
     render_passes: BTreeMap<TypeId, Box<dyn WidgetRenderPass>>,
     render_pass_order: Vec<TypeId>,
 }
 
-impl WidgetPlugin for WidgetRenderer {
-    fn on_event(&mut self, manager: &mut WidgetManager, event: &WidgetEvent) {
-        match event {
-            WidgetEvent::Added { type_id, widget_id } => {
-                for pass in self.render_passes.values_mut() {
-                    pass.added(&self.ctx, manager, type_id, widget_id);
-                }
-            },
+impl UI {
+    pub fn new(program: &GpuProgram) -> Self {
+        let manager = WidgetManager::default();
 
-            WidgetEvent::Layout {
-                type_id,
-                widget_id,
-                rect,
-            } => {
-                println!("{}", widget_id);
-                for pass in self.render_passes.values_mut() {
-                    pass.layout(&self.ctx, manager, type_id, widget_id, rect);
-                }
-            },
+        let app_settings = manager.get_context().set_global(AppSettings {
+            width: program.viewport.inner_size().width as f32,
+            height: program.viewport.inner_size().height as f32,
+        });
 
-            WidgetEvent::Removed { type_id, widget_id } => {
-                for pass in self.render_passes.values_mut() {
-                    pass.removed(&self.ctx, manager, type_id, widget_id);
-                }
-            },
+        let ui = Self {
+            manager,
+            events: Vec::default(),
 
-            WidgetEvent::Updated => {
-                self.ctx.update();
-            },
-
-            _ => { }
-        }
-    }
-}
-
-impl WidgetRenderer {
-    pub fn default(program: &GpuProgram, app_settings: Ref<AppSettings>) -> WidgetRenderer {
-        WidgetRenderer {
-            ctx: RenderContext::new(program, app_settings),
+            ctx: RenderContext::new(program, Ref::clone(&app_settings)),
 
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
-        }
+        };
+
+        program.on_resize(move |_, w, h| {
+            let mut app_settings = app_settings.write();
+
+            app_settings.width = w as f32;
+            app_settings.height = h as f32;
+        });
+
+        ui
     }
 
-    pub fn new(program: &GpuProgram, app_settings: Ref<AppSettings>) -> WidgetRenderer {
-        let renderer = WidgetRenderer::default(program, app_settings);
+    pub fn with_default(program: &GpuProgram) -> Self {
+        let ui = Self::new(program);
 
         let basic_pass = {
-            let mut basic_pass = QuadRenderPass::new(program, &renderer.ctx);
+            let mut basic_pass = QuadRenderPass::new(program, &ui.ctx);
 
             basic_pass.bind::<Quad>();
 
             basic_pass
         };
 
-        let bounding_pass = BoundingRenderPass::new(program, &renderer.ctx);
+        let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
-        renderer.add_pass(basic_pass).add_pass(bounding_pass)
+        ui.add_pass(basic_pass).add_pass(bounding_pass)
+    }
+
+    pub fn get_manager(&self) -> &WidgetManager {
+        &self.manager
     }
 
     pub fn add_pass<P>(mut self, pass: P) -> Self
@@ -109,6 +102,58 @@ impl WidgetRenderer {
         match pass.downcast_ref::<P>() {
             Some(pass) => pass,
             None => unreachable!(),
+        }
+    }
+
+    pub fn set_root(&mut self, widget: WidgetRef) {
+        self.manager.add(None, widget);
+    }
+
+    pub fn add(&mut self, parent_id: Option<WidgetId>, widget: WidgetRef) {
+        self.manager.add(parent_id, widget);
+    }
+
+    pub fn remove(&mut self, widget_id: WidgetId) {
+        self.manager.remove(widget_id);
+    }
+
+    pub fn update(&mut self) -> bool {
+        self.manager.update(&mut self.events);
+
+        if !self.events.is_empty() {
+            for event in self.events.drain(..) {
+                match event {
+                    WidgetEvent::Spawned { type_id, widget_id } => {
+                        for pass in self.render_passes.values_mut() {
+                            pass.added(&self.ctx, &self.manager, &type_id, &widget_id);
+                        }
+                    }
+
+                    WidgetEvent::Layout {
+                        type_id,
+                        widget_id,
+                        rect,
+                    } => {
+                        for pass in self.render_passes.values_mut() {
+                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, &rect);
+                        }
+                    }
+
+                    WidgetEvent::Destroyed { type_id, widget_id } => {
+                        for pass in self.render_passes.values_mut() {
+                            pass.removed(&self.ctx, &self.manager, &type_id, &widget_id);
+                        }
+                    }
+
+                    _ => {}
+                }
+            }
+
+            self.ctx.update();
+
+            true
+        }else{
+            false
         }
     }
 

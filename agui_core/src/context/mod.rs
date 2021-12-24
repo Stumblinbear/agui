@@ -8,9 +8,9 @@ use parking_lot::Mutex;
 
 mod state;
 
-pub use state::Ref;
+pub use self::state::Ref;
 
-use state::{StateMap, Value, WidgetStates};
+use self::state::{StateMap, Value, WidgetStates};
 
 use crate::{
     layout::LayoutRef,

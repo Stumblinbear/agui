@@ -1,39 +1,23 @@
 #![allow(clippy::needless_update)]
 
-use agpu::Features;
+use agpu::{Event, Features};
 use agui::{
-    context::Ref,
     layout::Layout,
     macros::build,
     unit::{Sizing, Units},
     widgets::{
         primitives::{Column, Text},
-        App, AppSettings, Button,
+        App, Button,
     },
-    UI,
 };
-use agui_agpu::WidgetRenderer;
+use agui_agpu::UI;
 
 fn main() -> Result<(), agpu::BoxError> {
     let program = agpu::GpuProgram::builder("agui widgets")
         .with_gpu_features(Features::POLYGON_MODE_LINE)
         .build()?;
 
-    let mut ui = UI::default();
-
-    let settings = ui.get_context().set_global(AppSettings {
-        width: program.viewport.inner_size().width as f32,
-        height: program.viewport.inner_size().height as f32,
-    });
-
-    ui.add_plugin(WidgetRenderer::new(&program, Ref::clone(&settings)));
-
-    program.on_resize(move |_, w, h| {
-        let mut settings = settings.write();
-
-        settings.width = w as f32;
-        settings.height = h as f32;
-    });
+    let mut ui = UI::with_default(&program);
 
     ui.set_root(build! {
         App {
@@ -79,18 +63,19 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let pipeline = program.gpu.new_pipeline("render pipeline").create();
 
-    program.run_draw(move |mut frame| {
-        frame
-            .render_pass_cleared("ui draw", 0x101010FF)
-            .with_pipeline(&pipeline)
-            .begin();
+    program.run(move |event, _, _| {
+        if let Event::RedrawFrame(mut frame) = event {
+            if ui.update() {
+                // ui.get_manager().print_tree();
+    
+                frame
+                    .render_pass_cleared("ui draw", 0x101010FF)
+                    .with_pipeline(&pipeline)
+                    .begin();
 
-        if ui.update() {
-            ui.get_manager().print_tree();
-
-            ui.get_plugin::<WidgetRenderer>()
-                .expect("render plugin missing")
-                .render(frame);
+                ui.render(frame);
+            }
+        } else if let Event::Winit(event) = event {
         }
-    })
+    });
 }

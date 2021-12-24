@@ -1,13 +1,13 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use downcast_rs::{impl_downcast, Downcast};
-
-mod mouse;
-
-pub use mouse::*;
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
+
+mod mouse;
+
+pub use self::mouse::*;
 
 pub trait Value: Downcast + Send + Sync + 'static {}
 

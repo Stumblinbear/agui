@@ -1,3 +1,3 @@
 mod mouse;
 
-pub use mouse::*;
+pub use self::mouse::*;

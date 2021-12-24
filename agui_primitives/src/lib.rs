@@ -3,7 +3,7 @@ mod column;
 mod quad;
 mod text;
 
-pub use builder::*;
-pub use column::*;
-pub use quad::*;
-pub use text::*;
+pub use self::builder::*;
+pub use self::column::*;
+pub use self::quad::*;
+pub use self::text::*;

@@ -5,7 +5,7 @@ use crate::{widget::WidgetId, unit::Rect};
 #[derive(Copy, Clone, Debug)]
 #[non_exhaustive]
 pub enum WidgetEvent {
-    Added {
+    Spawned {
         type_id: TypeId,
         widget_id: WidgetId,
     },
@@ -16,10 +16,8 @@ pub enum WidgetEvent {
         rect: Rect,
     },
 
-    Removed {
+    Destroyed {
         type_id: TypeId,
         widget_id: WidgetId,
-    },
-
-    Updated
+    }
 }
