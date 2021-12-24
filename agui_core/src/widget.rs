@@ -24,7 +24,7 @@ pub enum BuildResult {
 
 impl BuildResult {
     /// # Errors
-    /// 
+    ///
     /// Returns a boxed error if the widget failed to build correctly.
     pub fn take(self) -> Result<Vec<WidgetRef>, Box<dyn std::error::Error>> {
         match self {
@@ -45,6 +45,16 @@ impl From<WidgetRef> for BuildResult {
 impl From<&WidgetRef> for BuildResult {
     fn from(widget: &WidgetRef) -> Self {
         Self::One(WidgetRef::clone(widget))
+    }
+}
+
+impl From<Vec<WidgetRef>> for BuildResult {
+    fn from(widgets: Vec<WidgetRef>) -> Self {
+        if widgets.is_empty() {
+            Self::Empty
+        } else {
+            Self::Many(widgets)
+        }
     }
 }
 
@@ -80,7 +90,7 @@ pub enum WidgetRef {
     Owned(Rc<dyn Widget>),
     Borrowed(Weak<dyn Widget>),
     Keyed {
-        owner_id: Option<WidgetID>,
+        owner_id: Option<WidgetId>,
         key: Key,
         widget: Box<WidgetRef>,
     },
@@ -191,7 +201,9 @@ impl WidgetRef {
         }
     }
 
-    /// Returns none of the widget is not the `W` type, or if it has been deallocated.
+    /// # Panics
+    /// 
+    /// Will panic if the widget cannot be downcasted to the generic type.
     #[must_use]
     pub fn downcast_ref<W>(&self) -> Rc<W>
     where
@@ -216,15 +228,15 @@ impl Into<Vec<Self>> for WidgetRef {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WidgetID(GenerationalIndex, usize);
+pub struct WidgetId(GenerationalIndex, usize);
 
-impl std::fmt::Display for WidgetID {
+impl std::fmt::Display for WidgetId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.into_raw_parts().0)
     }
 }
 
-impl WidgetID {
+impl WidgetId {
     #[must_use]
     pub const fn from(index: GenerationalIndex, depth: usize) -> Self {
         Self(index, depth)
@@ -241,13 +253,13 @@ impl WidgetID {
     }
 }
 
-impl Default for WidgetID {
+impl Default for WidgetId {
     fn default() -> Self {
         Self(GenerationalIndex::from_raw_parts(0, 0), 0)
     }
 }
 
-impl From<usize> for WidgetID {
+impl From<usize> for WidgetId {
     fn from(val: usize) -> Self {
         Self(GenerationalIndex::from_raw_parts(val, 0), 0)
     }

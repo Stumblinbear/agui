@@ -11,9 +11,9 @@ use parking_lot::Mutex;
 use crate::{
     context::{ListenerID, WidgetContext},
     layout::LayoutRef,
-    render::WidgetChanged,
+    plugin::event::WidgetEvent,
     unit::{Key, Rect},
-    widget::{Widget, WidgetID, WidgetRef},
+    widget::{Widget, WidgetId, WidgetRef},
 };
 
 use super::{cache::LayoutCache, tree::Tree};
@@ -23,16 +23,16 @@ mod node;
 
 pub use node::WidgetNode;
 
-struct VoidMap;
+struct VoidEvents;
 
-impl Extend<WidgetChanged> for VoidMap {
-    fn extend<T: IntoIterator<Item = WidgetChanged>>(&mut self, _: T) {}
+impl Extend<WidgetEvent> for VoidEvents {
+    fn extend<T: IntoIterator<Item = WidgetEvent>>(&mut self, _: T) {}
 }
 
 pub struct WidgetManager {
     widgets: Arena<WidgetNode>,
-    tree: Tree<WidgetID>,
-    cache: LayoutCache<WidgetID>,
+    tree: Tree<WidgetId>,
+    cache: LayoutCache<WidgetId>,
 
     context: WidgetContext,
 
@@ -95,31 +95,31 @@ impl WidgetManager {
         Self::default()
     }
 
-    pub fn contains(&self, widget_id: &WidgetID) -> bool {
+    pub fn contains(&self, widget_id: &WidgetId) -> bool {
         self.widgets.contains(widget_id.id())
     }
 
-    pub fn try_get_node(&self, widget_id: WidgetID) -> Option<&WidgetNode> {
+    pub fn try_get_node(&self, widget_id: WidgetId) -> Option<&WidgetNode> {
         self.widgets.get(widget_id.id())
     }
 
-    pub fn get_node(&self, widget_id: &WidgetID) -> &WidgetNode {
+    pub fn get_node(&self, widget_id: &WidgetId) -> &WidgetNode {
         self.widgets
             .get(widget_id.id())
             .expect("widget does not exist")
     }
 
-    pub fn try_get(&self, widget_id: &WidgetID) -> Option<WidgetRef> {
+    pub fn try_get(&self, widget_id: &WidgetId) -> Option<WidgetRef> {
         self.widgets
             .get(widget_id.id())
             .map(|node| WidgetRef::clone(&node.widget))
     }
 
-    pub fn get(&self, widget_id: &WidgetID) -> WidgetRef {
+    pub fn get(&self, widget_id: &WidgetId) -> WidgetRef {
         self.try_get(widget_id).expect("widget does not exist")
     }
 
-    pub fn try_get_as<W>(&self, widget_id: &WidgetID) -> Option<Rc<W>>
+    pub fn try_get_as<W>(&self, widget_id: &WidgetId) -> Option<Rc<W>>
     where
         W: Widget,
     {
@@ -128,14 +128,14 @@ impl WidgetManager {
         v.try_downcast_ref()
     }
 
-    pub fn get_as<W>(&self, widget_id: &WidgetID) -> Rc<W>
+    pub fn get_as<W>(&self, widget_id: &WidgetId) -> Rc<W>
     where
         W: Widget,
     {
         self.get(widget_id).downcast_ref()
     }
 
-    pub fn get_rect(&self, widget_id: &WidgetID) -> Option<&Rect> {
+    pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
         self.cache.get_rect(widget_id)
     }
 
@@ -144,7 +144,7 @@ impl WidgetManager {
     }
 
     /// Queues the widget for addition into the tree
-    pub fn add(&mut self, parent_id: Option<WidgetID>, widget: WidgetRef) {
+    pub fn add(&mut self, parent_id: Option<WidgetId>, widget: WidgetRef) {
         if !widget.is_valid() {
             return;
         }
@@ -160,20 +160,23 @@ impl WidgetManager {
     }
 
     /// Queues the `widget_id` for removal on the next update()
-    pub fn remove(&mut self, widget_id: WidgetID) {
+    pub fn remove(&mut self, widget_id: WidgetId) {
         self.modifications.push(Modify::Destroy(widget_id));
     }
 
-    pub fn update<A, R>(&mut self, added: &mut A, removed: &mut R) -> HashSet<WidgetChanged>
+    pub fn update<E>(&mut self, events: &mut E)
     where
-        A: Extend<WidgetChanged>,
-        R: Extend<WidgetChanged>,
+        E: Extend<WidgetEvent>,
     {
+        if self.modifications.is_empty() && self.changed.lock().is_empty() {
+            return;
+        }
+
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         loop {
             // Apply any queued modifications
-            self.apply_modifications(added, removed);
+            self.apply_modifications(events);
 
             let changed = self.changed.lock().drain().collect::<Vec<_>>();
 
@@ -255,26 +258,31 @@ impl WidgetManager {
 
         morphorm::layout(&mut self.cache, &self.tree, &self.widgets);
 
-        let mut changed = self
-            .cache
-            .get_changed()
-            .into_iter()
-            .map(|widget_id| WidgetChanged {
-                type_id: self.get(&widget_id).get_type_id(),
-                widget_id,
-            })
-            .collect::<HashSet<_>>();
+        events.extend(self.cache.take_changed().iter().map(|widget_id| {
+            WidgetEvent::Layout {
+                type_id: self.get(widget_id).get_type_id(),
+                widget_id: *widget_id,
+                rect: *self
+                    .cache
+                    .get_rect(widget_id)
+                    .expect("root widget does not have a rect"),
+            }
+        }));
 
         if root_changed {
             if let Some(widget_id) = self.tree.get_root() {
-                changed.insert(WidgetChanged {
+                events.extend(Some(WidgetEvent::Layout {
                     type_id: self.get(&widget_id).get_type_id(),
                     widget_id,
-                });
+                    rect: *self
+                        .cache
+                        .get_rect(&widget_id)
+                        .expect("root widget does not have a rect"),
+                }));
             }
         }
 
-        changed
+        events.extend(Some(WidgetEvent::Updated));
     }
 
     fn morphorm_root_workaround(&mut self) -> bool {
@@ -333,10 +341,9 @@ impl WidgetManager {
         root_changed
     }
 
-    fn apply_modifications<A, R>(&mut self, added: &mut A, removed: &mut R)
+    fn apply_modifications<E>(&mut self, events: &mut E)
     where
-        A: Extend<WidgetChanged>,
-        R: Extend<WidgetChanged>,
+        E: Extend<WidgetEvent>,
     {
         let mut removed_keyed = HashMap::new();
 
@@ -349,7 +356,7 @@ impl WidgetManager {
                         }
                     }
 
-                    self.process_spawn(added, &mut removed_keyed, parent_id, widget);
+                    self.process_spawn(events, &mut removed_keyed, parent_id, widget);
                 }
 
                 Modify::Rebuild(widget_id) => {
@@ -378,7 +385,7 @@ impl WidgetManager {
                     {
                         removed_keyed.insert((owner_id, key), widget_id);
                     } else {
-                        self.process_destroy(removed, widget_id);
+                        self.process_destroy(events, widget_id);
                     }
                 }
             }
@@ -386,18 +393,18 @@ impl WidgetManager {
 
         // Remove any keyed widgets that didn't get re-parented
         for (_, widget_id) in removed_keyed.drain() {
-            self.process_destroy(removed, widget_id);
+            self.process_destroy(events, widget_id);
         }
     }
 
-    fn process_spawn<A>(
+    fn process_spawn<E>(
         &mut self,
-        added: &mut A,
-        removed_keyed: &mut HashMap<(Option<WidgetID>, Key), WidgetID>,
-        parent_id: Option<WidgetID>,
+        events: &mut E,
+        removed_keyed: &mut HashMap<(Option<WidgetId>, Key), WidgetId>,
+        parent_id: Option<WidgetId>,
         widget: WidgetRef,
     ) where
-        A: Extend<WidgetChanged>,
+        E: Extend<WidgetEvent>,
     {
         if parent_id.is_some() && !self.contains(parent_id.as_ref().unwrap()) {
             panic!("cannot add a widget to a nonexistent parent")
@@ -417,7 +424,7 @@ impl WidgetManager {
 
         let layout_type = widget.get().layout_type();
 
-        let widget_id = WidgetID::from(
+        let widget_id = WidgetId::from(
             self.widgets.insert(WidgetNode {
                 widget,
                 layout_type,
@@ -433,10 +440,12 @@ impl WidgetManager {
 
         self.modifications.push(Modify::Rebuild(widget_id));
 
-        added.extend(Some(WidgetChanged { type_id, widget_id }));
+        events.extend(Some(WidgetEvent::Added { type_id, widget_id }));
+
+        self.cache.add(widget_id);
     }
 
-    fn process_rebuild(&mut self, widget_id: WidgetID) {
+    fn process_rebuild(&mut self, widget_id: WidgetId) {
         let node = self.widgets.get_mut(widget_id.id()).unwrap();
 
         // Queue the children for removal
@@ -467,9 +476,9 @@ impl WidgetManager {
         node.layout = self.context.get_layout(&widget_id);
     }
 
-    fn process_destroy<R>(&mut self, removed: &mut R, widget_id: WidgetID)
+    fn process_destroy<E>(&mut self, events: &mut E, widget_id: WidgetId)
     where
-        R: Extend<WidgetChanged>,
+        E: Extend<WidgetEvent>,
     {
         let widget = self
             .widgets
@@ -489,7 +498,7 @@ impl WidgetManager {
 
         self.changed.lock().remove(&widget_id.into());
 
-        removed.extend(Some(WidgetChanged {
+        events.extend(Some(WidgetEvent::Removed {
             type_id: widget.widget.get_type_id(),
             widget_id,
         }));
@@ -505,9 +514,9 @@ impl WidgetManager {
 }
 
 enum Modify {
-    Spawn(Option<WidgetID>, WidgetRef),
-    Rebuild(WidgetID),
-    Destroy(WidgetID),
+    Spawn(Option<WidgetId>, WidgetRef),
+    Rebuild(WidgetId),
+    Destroy(WidgetId),
 }
 
 #[cfg(test)]
@@ -518,7 +527,7 @@ mod tests {
 
     use crate::{
         context::WidgetContext,
-        ui::manager::VoidMap,
+        ui::manager::VoidEvents,
         unit::LayoutType,
         widget::{BuildResult, Widget, WidgetImpl, WidgetLayout, WidgetRef, WidgetType},
     };
@@ -587,7 +596,7 @@ mod tests {
 
         assert_eq!(manager.additions, 0, "should not have added the widget");
 
-        manager.update(&mut VoidMap, &mut VoidMap);
+        manager.update(&mut VoidEvents);
 
         let widget_id = &manager.tree.get_root().expect("failed to get root widget");
 
@@ -616,7 +625,7 @@ mod tests {
             "widget `computes` should have been been 1"
         );
 
-        manager.update(&mut VoidMap, &mut VoidMap);
+        manager.update(&mut VoidEvents);
 
         assert_eq!(manager.additions, 1, "should have 1 addition");
         assert_eq!(manager.removals, 0, "should have 0 removals");
@@ -644,7 +653,7 @@ mod tests {
 
         manager.add(None, WidgetRef::new(TestWidget::default()));
 
-        manager.update(&mut VoidMap, &mut VoidMap);
+        manager.update(&mut VoidEvents);
 
         assert_eq!(manager.additions, 1, "should have 1 addition");
         assert_eq!(manager.removals, 0, "should have 0 removals");
@@ -682,7 +691,7 @@ mod tests {
             "widget `computes` should be 1"
         );
 
-        manager.update(&mut VoidMap, &mut VoidMap);
+        manager.update(&mut VoidEvents);
 
         assert_eq!(manager.additions, 1, "should have 1 addition");
         assert_eq!(manager.removals, 0, "should have 0 removals");

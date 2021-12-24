@@ -5,9 +5,8 @@ use std::{
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{
-    render::WidgetChanged,
-    unit::Color,
-    widget::{Widget, WidgetID},
+    unit::{Color, Rect},
+    widget::{Widget, WidgetId},
     widgets::primitives::Quad,
     WidgetManager,
 };
@@ -23,8 +22,8 @@ pub struct QuadRenderPass {
 
     bound_widgets: HashSet<TypeId>,
 
-    locations: Arena<WidgetID>,
-    widgets: HashMap<WidgetID, GenerationalIndex>,
+    locations: Arena<WidgetId>,
+    widgets: HashMap<WidgetId, GenerationalIndex>,
 }
 
 const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
@@ -84,21 +83,36 @@ impl QuadRenderPass {
 }
 
 impl WidgetRenderPass for QuadRenderPass {
-    fn added(&mut self, ctx: &RenderContext, manager: &WidgetManager, changed: &WidgetChanged) {
+    fn added(
+        &mut self,
+        _ctx: &RenderContext,
+        _manager: &WidgetManager,
+        type_id: &TypeId,
+        widget_id: &WidgetId,
+    ) {
         // Ignore any widget we aren't bound to
-        if !self.bound_widgets.contains(&changed.type_id) {
+        if !self.bound_widgets.contains(type_id) {
             return;
         }
 
-        let index = self.locations.insert(changed.widget_id);
+        let index = self.locations.insert(*widget_id);
 
-        self.widgets.insert(changed.widget_id, index);
-
-        self.refresh(ctx, manager, changed);
+        self.widgets.insert(*widget_id, index);
     }
 
-    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager, changed: &WidgetChanged) {
-        let index = match self.widgets.get(&changed.widget_id) {
+    fn layout(
+        &mut self,
+        ctx: &RenderContext,
+        manager: &WidgetManager,
+        type_id: &TypeId,
+        widget_id: &WidgetId,
+        rect: &Rect,
+    ) {
+        if !self.bound_widgets.contains(type_id) {
+            return;
+        }
+
+        let index = match self.widgets.get(widget_id) {
             Some(widget) => widget,
             None => return,
         };
@@ -107,12 +121,9 @@ impl WidgetRenderPass for QuadRenderPass {
 
         let index = index * QUAD_BUFFER_SIZE;
 
-        let rect = manager
-            .get_rect(&changed.widget_id)
-            .expect("widget added to render pass does not have a rect")
-            .to_slice();
+        let rect = rect.to_slice();
 
-        let quad = manager.try_get_as::<Quad>(&changed.widget_id);
+        let quad = manager.try_get_as::<Quad>(widget_id);
 
         let rgba = quad.map_or(Color::White.as_rgba(), |q| q.color.as_rgba());
 
@@ -130,14 +141,20 @@ impl WidgetRenderPass for QuadRenderPass {
             .write_buffer(&self.buffer, index + RECT_BUFFER_SIZE, rgba);
     }
 
-    fn removed(&mut self, _ctx: &RenderContext, _manager: &WidgetManager, changed: &WidgetChanged) {
-        if !self.bound_widgets.contains(&changed.type_id) {
+    fn removed(
+        &mut self,
+        _ctx: &RenderContext,
+        _manager: &WidgetManager,
+        type_id: &TypeId,
+        widget_id: &WidgetId,
+    ) {
+        if !self.bound_widgets.contains(type_id) {
             return;
         }
 
         let index = self
             .widgets
-            .remove(&changed.widget_id)
+            .remove(widget_id)
             .expect("removed nonexistent widget");
 
         self.locations.remove(index);

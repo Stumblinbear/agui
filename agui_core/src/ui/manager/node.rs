@@ -3,7 +3,7 @@ use generational_arena::Arena;
 use crate::{
     layout::LayoutRef,
     unit::{LayoutType, Padding, Position, Sizing},
-    widget::{WidgetID, WidgetRef},
+    widget::{WidgetId, WidgetRef},
 };
 
 pub struct WidgetNode {
@@ -12,7 +12,7 @@ pub struct WidgetNode {
     pub layout: LayoutRef,
 }
 
-impl<'a> morphorm::Node<'a> for WidgetID {
+impl<'a> morphorm::Node<'a> for WidgetId {
     type Data = Arena<WidgetNode>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {

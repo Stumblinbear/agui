@@ -1,12 +1,13 @@
 use agui_core::{
     context::WidgetContext,
     layout::{Layout, LayoutRef},
-    state::mouse::MousePosition,
     unit::{Color, Sizing},
     widget::{BuildResult, WidgetImpl, WidgetRef},
 };
 use agui_macros::{build, Widget};
 use agui_primitives::Quad;
+
+use crate::state::MousePosition;
 
 #[derive(Debug, Default, Widget)]
 #[widget(layout = "row")]
@@ -30,7 +31,7 @@ impl WidgetImpl for Button {
 
         ctx.set_layout(LayoutRef::clone(&self.layout));
 
-        BuildResult::One(build! {
+        build! {
             Quad {
                 layout: Layout {
                     sizing: Sizing::Fill
@@ -38,6 +39,6 @@ impl WidgetImpl for Button {
                 color: Color::White,
                 child: (&self.child).into()
             }
-        })
+        }
     }
 }

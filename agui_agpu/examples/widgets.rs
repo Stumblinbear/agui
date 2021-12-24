@@ -12,21 +12,21 @@ use agui::{
     },
     UI,
 };
+use agui_agpu::WidgetRenderer;
 
 fn main() -> Result<(), agpu::BoxError> {
     let program = agpu::GpuProgram::builder("agui widgets")
         .with_gpu_features(Features::POLYGON_MODE_LINE)
         .build()?;
 
-    let mut ui = UI::new(agui_agpu::WidgetRenderer::new(&program));
+    let mut ui = UI::default();
 
     let settings = ui.get_context().set_global(AppSettings {
         width: program.viewport.inner_size().width as f32,
         height: program.viewport.inner_size().height as f32,
     });
 
-    ui.get_renderer_mut()
-        .set_app_settings(Ref::clone(&settings));
+    ui.add_plugin(WidgetRenderer::new(&program, Ref::clone(&settings)));
 
     program.on_resize(move |_, w, h| {
         let mut settings = settings.write();
@@ -86,9 +86,11 @@ fn main() -> Result<(), agpu::BoxError> {
             .begin();
 
         if ui.update() {
-            // ui.get_manager().print_tree();
+            ui.get_manager().print_tree();
 
-            ui.get_renderer_mut().render(frame);
+            ui.get_plugin::<WidgetRenderer>()
+                .expect("render plugin missing")
+                .render(frame);
         }
     })
 }

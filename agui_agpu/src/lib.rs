@@ -1,7 +1,7 @@
 use agpu::{Frame, GpuProgram};
 use agui::{
     context::Ref,
-    render::WidgetChanged,
+    plugin::{event::WidgetEvent, WidgetPlugin},
     widgets::{primitives::Quad, AppSettings},
     WidgetManager,
 };
@@ -17,38 +17,53 @@ pub struct WidgetRenderer {
     render_pass_order: Vec<TypeId>,
 }
 
-impl agui::render::WidgetRenderer for WidgetRenderer {
-    fn added(&mut self, manager: &WidgetManager, changed: WidgetChanged) {
-        for pass in self.render_passes.values_mut() {
-            pass.added(&self.ctx, manager, &changed);
-        }
-    }
+impl WidgetPlugin for WidgetRenderer {
+    fn on_event(&mut self, manager: &mut WidgetManager, event: &WidgetEvent) {
+        match event {
+            WidgetEvent::Added { type_id, widget_id } => {
+                for pass in self.render_passes.values_mut() {
+                    pass.added(&self.ctx, manager, type_id, widget_id);
+                }
+            },
 
-    fn refresh(&mut self, manager: &WidgetManager, changed: WidgetChanged) {
-        for pass in self.render_passes.values_mut() {
-            pass.refresh(&self.ctx, manager, &changed);
-        }
-    }
+            WidgetEvent::Layout {
+                type_id,
+                widget_id,
+                rect,
+            } => {
+                println!("{}", widget_id);
+                for pass in self.render_passes.values_mut() {
+                    pass.layout(&self.ctx, manager, type_id, widget_id, rect);
+                }
+            },
 
-    fn removed(&mut self, manager: &WidgetManager, changed: WidgetChanged) {
-        for pass in self.render_passes.values_mut() {
-            pass.removed(&self.ctx, manager, &changed);
+            WidgetEvent::Removed { type_id, widget_id } => {
+                for pass in self.render_passes.values_mut() {
+                    pass.removed(&self.ctx, manager, type_id, widget_id);
+                }
+            },
+
+            WidgetEvent::Updated => {
+                self.ctx.update();
+            },
+
+            _ => { }
         }
     }
 }
 
 impl WidgetRenderer {
-    pub fn default(program: &GpuProgram) -> WidgetRenderer {
+    pub fn default(program: &GpuProgram, app_settings: Ref<AppSettings>) -> WidgetRenderer {
         WidgetRenderer {
-            ctx: RenderContext::new(program),
+            ctx: RenderContext::new(program, app_settings),
 
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
         }
     }
 
-    pub fn new(program: &GpuProgram) -> WidgetRenderer {
-        let renderer = WidgetRenderer::default(program);
+    pub fn new(program: &GpuProgram, app_settings: Ref<AppSettings>) -> WidgetRenderer {
+        let renderer = WidgetRenderer::default(program, app_settings);
 
         let basic_pass = {
             let mut basic_pass = QuadRenderPass::new(program, &renderer.ctx);
@@ -74,7 +89,7 @@ impl WidgetRenderer {
             .insert(pass_type_id, Box::new(pass))
             .is_some()
         {
-            panic!("attempted to insert a duplicate render pass");
+            log::warn!("inserted a duplicate render pass, overwriting");
         }
 
         self.render_pass_order.push(pass_type_id);
@@ -91,17 +106,13 @@ impl WidgetRenderer {
             .get(&TypeId::of::<P>())
             .expect("cannot return a pass that has not been created");
 
-        pass.downcast_ref::<P>()
-            .expect("failed to downcast render pass")
+        match pass.downcast_ref::<P>() {
+            Some(pass) => pass,
+            None => unreachable!(),
+        }
     }
 
-    pub fn set_app_settings(&mut self, app_settings: Ref<AppSettings>) {
-        self.ctx.set_app_settings(app_settings);
-    }
-
-    pub fn render(&mut self, mut frame: Frame) {
-        self.ctx.update();
-
+    pub fn render(&self, mut frame: Frame) {
         for pass_type_id in &self.render_pass_order {
             self.render_passes
                 .get(pass_type_id)

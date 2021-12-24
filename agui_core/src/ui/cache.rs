@@ -9,6 +9,8 @@ use crate::unit::{Bounds, Rect, Size};
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
+    newly_added: HashSet<K>,
+
     bounds: HashMap<K, Bounds>,
     new_size: HashMap<K, Size>,
 
@@ -44,15 +46,22 @@ where
         self.rect.get(node)
     }
 
-    pub fn get_changed(&self) -> HashSet<K> {
-        self.geometry_changed
+    pub fn take_changed(&mut self) -> HashSet<K> {
+        let mut changed = self.geometry_changed
             .iter()
             .filter(|(_, changed)| changed.is_empty())
             .map(|(k, _)| *k)
-            .collect::<HashSet<_>>()
+            .collect::<HashSet<_>>();
+
+        changed.extend(self.newly_added.drain());
+
+        changed
     }
 
-    #[allow(dead_code)]
+    pub fn add(&mut self, node: K) {
+        self.newly_added.insert(node);
+    }
+
     pub fn remove(&mut self, node: &K) {
         self.bounds.remove(node);
         self.new_size.remove(node);

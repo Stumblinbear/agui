@@ -1,7 +1,11 @@
-use std::collections::HashMap;
+use std::{any::TypeId, collections::HashMap};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{render::WidgetChanged, unit::Color, widget::WidgetID, WidgetManager};
+use agui::{
+    unit::{Color, Rect},
+    widget::WidgetId,
+    WidgetManager,
+};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
@@ -12,8 +16,8 @@ pub struct BoundingRenderPass {
     pipeline: RenderPipeline,
     buffer: Buffer,
 
-    locations: Arena<WidgetID>,
-    widgets: HashMap<WidgetID, GenerationalIndex>,
+    locations: Arena<WidgetId>,
+    widgets: HashMap<WidgetId, GenerationalIndex>,
 }
 
 const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
@@ -66,15 +70,26 @@ impl BoundingRenderPass {
 }
 
 impl WidgetRenderPass for BoundingRenderPass {
-    fn added(&mut self, ctx: &RenderContext, manager: &WidgetManager, changed: &WidgetChanged) {
-        let index = self.locations.insert(changed.widget_id);
-        self.widgets.insert(changed.widget_id, index);
-
-        self.refresh(ctx, manager, changed);
+    fn added(
+        &mut self,
+        _ctx: &RenderContext,
+        _manager: &WidgetManager,
+        _type_id: &TypeId,
+        widget_id: &WidgetId,
+    ) {
+        let index = self.locations.insert(*widget_id);
+        self.widgets.insert(*widget_id, index);
     }
 
-    fn refresh(&mut self, ctx: &RenderContext, manager: &WidgetManager, changed: &WidgetChanged) {
-        let index = match self.widgets.get(&changed.widget_id) {
+    fn layout(
+        &mut self,
+        ctx: &RenderContext,
+        _manager: &WidgetManager,
+        _type_id: &TypeId,
+        widget_id: &WidgetId,
+        rect: &Rect,
+    ) {
+        let index = match self.widgets.get(widget_id) {
             Some(widget) => widget,
             None => return,
         };
@@ -83,10 +98,7 @@ impl WidgetRenderPass for BoundingRenderPass {
 
         let index = index * QUAD_BUFFER_SIZE;
 
-        let rect = match manager.get_rect(&changed.widget_id) {
-            Some(rect) => rect.to_slice(),
-            None => return,
-        };
+        let rect = rect.to_slice();
 
         let rect = bytemuck::cast_slice(&rect);
         let rgba = bytemuck::cast_slice(&UNCHANGED_COLOR);
@@ -102,8 +114,14 @@ impl WidgetRenderPass for BoundingRenderPass {
             .write_buffer(&self.buffer, index + RECT_BUFFER_SIZE, rgba);
     }
 
-    fn removed(&mut self, _ctx: &RenderContext, _manager: &WidgetManager, changed: &WidgetChanged) {
-        if let Some(index) = self.widgets.remove(&changed.widget_id) {
+    fn removed(
+        &mut self,
+        _ctx: &RenderContext,
+        _manager: &WidgetManager,
+        _type_id: &TypeId,
+        widget_id: &WidgetId,
+    ) {
+        if let Some(index) = self.widgets.remove(widget_id) {
             self.locations.remove(index);
         }
     }

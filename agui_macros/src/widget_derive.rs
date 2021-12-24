@@ -46,24 +46,6 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
         }
     };
 
-    let widget_ref_impl = if args.into.unwrap_or(true) {
-        quote! {
-            impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::WidgetRef #where_clause {
-                fn from(widget: #ident #ty_generics) -> Self {
-                    Self::new(widget)
-                }
-            }
-
-            impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::widget::WidgetRef> #where_clause {
-                fn from(widget: #ident #ty_generics) -> Self {
-                    Some(#agui_core::widget::WidgetRef::new(widget))
-                }
-            }
-        }
-    }else{
-        quote! { }
-    };
-
     let layout_type = args.layout;
 
     // We prevent the generation of the layout implementation if they've specified #[widget(layout = "none")]
@@ -78,13 +60,37 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
         },
     };
 
+    let widget_ref_impl = if args.into.unwrap_or(true) {
+        quote! {
+            impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::WidgetRef #where_clause {
+                fn from(widget: #ident #ty_generics) -> Self {
+                    Self::new(widget)
+                }
+            }
+
+            impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::widget::WidgetRef> #where_clause {
+                fn from(widget: #ident #ty_generics) -> Self {
+                    Some(#agui_core::widget::WidgetRef::new(widget))
+                }
+            }
+
+            impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::BuildResult #where_clause {
+                fn from(widget: #ident #ty_generics) -> Self {
+                    Self::One(widget.into())
+                }
+            }
+        }
+    }else{
+        quote! { }
+    };
+
     TokenStream::from(quote! {
         impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause { }
 
         #widget_type_impl
 
-        #widget_ref_impl
-
         #widget_layout_impl
+
+        #widget_ref_impl
     })
 }

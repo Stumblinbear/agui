@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     layout::{Layout, LayoutRef},
-    widget::{Widget, WidgetID},
+    widget::{Widget, WidgetId},
     WidgetManager,
 };
 
@@ -143,7 +143,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
 
 fn print_node(
     depth: usize,
-    widget_id: Option<&WidgetID>,
+    widget_id: Option<&WidgetId>,
     widget: &Rc<dyn Widget>,
     color: &'static str,
     suffix: &str,

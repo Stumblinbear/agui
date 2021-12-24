@@ -15,38 +15,38 @@ use state::{StateMap, Value, WidgetStates};
 use crate::{
     layout::LayoutRef,
     unit::Key,
-    widget::{BuildResult, WidgetID, WidgetRef},
+    widget::{BuildResult, WidgetId, WidgetRef},
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ListenerID {
-    Widget(WidgetID),
-    Computed(WidgetID, TypeId),
+    Widget(WidgetId),
+    Computed(WidgetId, TypeId),
 }
 
 impl ListenerID {
     #[must_use]
-    pub const fn widget_id(&self) -> &WidgetID {
+    pub fn widget_id(&self) -> &WidgetId {
         match self {
             Self::Widget(widget_id) | Self::Computed(widget_id, _) => widget_id,
         }
     }
 }
 
-impl From<WidgetID> for ListenerID {
-    fn from(widget_id: WidgetID) -> Self {
+impl From<WidgetId> for ListenerID {
+    fn from(widget_id: WidgetId) -> Self {
         Self::Widget(widget_id)
     }
 }
 
 type ComputedFn = Box<dyn Fn(&WidgetContext) -> bool>;
-type WidgetComputedFuncs = HashMap<WidgetID, HashMap<TypeId, ComputedFn>>;
+type WidgetComputedFuncs = HashMap<WidgetId, HashMap<TypeId, ComputedFn>>;
 
 pub struct WidgetContext {
     global: StateMap,
     states: WidgetStates,
 
-    layouts: Mutex<HashMap<WidgetID, LayoutRef>>,
+    layouts: Mutex<HashMap<WidgetId, LayoutRef>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs>>,
 
@@ -128,9 +128,6 @@ impl WidgetContext {
         self.states.get(&current_id, func)
     }
 
-    /// # Panics
-    ///
-    /// Will panic if called outside of a widget build context.
     pub fn set_layout(&self, layout: LayoutRef) {
         let current_id = self
             .current_id
@@ -138,9 +135,11 @@ impl WidgetContext {
             .expect("cannot get state from context while not iterating");
 
         match &current_id {
-            ListenerID::Widget(widget_id) => self.layouts.lock().insert(*widget_id, layout),
+            ListenerID::Widget(widget_id) => {
+                self.layouts.lock().insert(*widget_id, layout);
+            }
             ListenerID::Computed(_, _) => {
-                panic!("not permitted to set layouts in a computed function")
+                log::warn!("layouts set in a computed function are ignored");
             }
         };
     }
@@ -215,7 +214,7 @@ impl WidgetContext {
         }
     }
 
-    pub fn get_layout(&self, widget_id: &WidgetID) -> LayoutRef {
+    pub fn get_layout(&self, widget_id: &WidgetId) -> LayoutRef {
         self.layouts
             .lock()
             .get(widget_id)
@@ -240,7 +239,7 @@ impl WidgetContext {
 
     pub(crate) fn did_computed_change(
         &mut self,
-        widget_id: &WidgetID,
+        widget_id: &WidgetId,
         computed_id: TypeId,
     ) -> bool {
         let mut widgets = self.computed_funcs.lock();
@@ -258,7 +257,7 @@ impl WidgetContext {
         (computed_funcs.get(&computed_id).unwrap())(self)
     }
 
-    pub(crate) fn build(&mut self, widget_id: WidgetID, widget: &WidgetRef) -> BuildResult {
+    pub(crate) fn build(&mut self, widget_id: WidgetId, widget: &WidgetRef) -> BuildResult {
         *self.current_id.lock() = Some(widget_id.into());
 
         let result = widget
@@ -270,7 +269,7 @@ impl WidgetContext {
         result
     }
 
-    pub(crate) fn remove(&mut self, widget_id: &WidgetID) {
+    pub(crate) fn remove(&mut self, widget_id: &WidgetId) {
         let listener_id = ListenerID::Widget(*widget_id);
 
         self.global.remove_listener(&listener_id);

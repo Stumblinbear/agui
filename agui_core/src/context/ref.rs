@@ -31,11 +31,13 @@ where
     V: Value,
 {
     pub fn read(&self) -> MappedRwLockReadGuard<V> {
-        RwLockReadGuard::map(self.value.read(), |value| {
-            value
-                .downcast_ref::<V>()
-                .unwrap_or_else(|| panic!("downcasting state failed"))
-        })
+        RwLockReadGuard::map(
+            self.value.read(),
+            |value| match value.downcast_ref::<V>() {
+                Some(value) => value,
+                None => unreachable!(),
+            },
+        )
     }
 
     pub fn write(&self) -> MappedRwLockWriteGuard<V> {
@@ -44,9 +46,10 @@ where
         }
 
         RwLockWriteGuard::map(self.value.write(), |value| {
-            value
-                .downcast_mut::<V>()
-                .unwrap_or_else(|| panic!("downcasting state failed"))
+            match value.downcast_mut::<V>() {
+                Some(value) => value,
+                None => unreachable!(),
+            }
         })
     }
 }

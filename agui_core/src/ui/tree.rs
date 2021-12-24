@@ -488,13 +488,13 @@ where
 mod tests {
     use morphorm::Hierarchy;
 
-    use crate::widget::WidgetID;
+    use crate::widget::WidgetId;
 
     use super::Tree;
 
     #[test]
     fn test_heirarchy() {
-        let mut tree: Tree<WidgetID> = Tree::default();
+        let mut tree: Tree<WidgetId> = Tree::default();
 
         let root_id = tree.add(None, 0.into());
 
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_downward_iter() {
-        let mut tree: Tree<WidgetID> = Tree::default();
+        let mut tree: Tree<WidgetId> = Tree::default();
 
         let root_id = tree.add(None, 0.into());
 
@@ -678,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_upward_iter() {
-        let mut tree: Tree<WidgetID> = Tree::default();
+        let mut tree: Tree<WidgetId> = Tree::default();
 
         let root_id = tree.add(None, 0.into());
 

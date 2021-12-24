@@ -10,7 +10,7 @@ use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
-use crate::widget::WidgetID;
+use crate::widget::WidgetId;
 
 use super::ListenerID;
 
@@ -82,7 +82,7 @@ impl StateMap {
 }
 
 pub struct WidgetStates {
-    widgets: Mutex<HashMap<WidgetID, StateMap>>,
+    widgets: Mutex<HashMap<WidgetId, StateMap>>,
 
     listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>,
 }
@@ -95,7 +95,7 @@ impl WidgetStates {
         }
     }
 
-    fn ensure_widget(&self, widget_id: &WidgetID) {
+    fn ensure_widget(&self, widget_id: &WidgetId) {
         let mut widgets = self.widgets.lock();
 
         if !widgets.contains_key(widget_id) {
@@ -144,7 +144,7 @@ impl WidgetStates {
         state.get().expect("failed to get state")
     }
 
-    pub fn remove(&self, widget_id: &WidgetID) {
+    pub fn remove(&self, widget_id: &WidgetId) {
         self.widgets.lock().remove(widget_id);
 
         // Remove any listeners attached to any widget state
@@ -185,6 +185,7 @@ where
     }
 }
 
+#[allow(clippy::missing_panics_doc)]
 impl<V> Ref<V>
 where
     V: Value,
