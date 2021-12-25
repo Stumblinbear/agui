@@ -1,12 +1,16 @@
 #![allow(clippy::needless_update)]
 
-use agpu::{Event, Features};
+use agpu::Features;
 use agui::{
     layout::Layout,
     macros::build,
     unit::{Sizing, Units},
     widgets::{
         primitives::{Column, Text},
+        state::{
+            keyboard::{Keyboard, KeyboardInput},
+            mouse::{Mouse, Scroll},
+        },
         App, Button,
     },
 };
@@ -18,6 +22,12 @@ fn main() -> Result<(), agpu::BoxError> {
         .build()?;
 
     let mut ui = UI::with_default(&program);
+
+    ui.get_context().init_global::<Keyboard>();
+    ui.get_context().init_global::<KeyboardInput>();
+
+    ui.get_context().init_global::<Mouse>();
+    ui.get_context().init_global::<Scroll>();
 
     ui.set_root(build! {
         App {
@@ -61,21 +71,5 @@ fn main() -> Result<(), agpu::BoxError> {
         }
     });
 
-    let pipeline = program.gpu.new_pipeline("render pipeline").create();
-
-    program.run(move |event, _, _| {
-        if let Event::RedrawFrame(mut frame) = event {
-            if ui.update() {
-                // ui.get_manager().print_tree();
-    
-                frame
-                    .render_pass_cleared("ui draw", 0x101010FF)
-                    .with_pipeline(&pipeline)
-                    .begin();
-
-                ui.render(frame);
-            }
-        } else if let Event::Winit(event) = event {
-        }
-    });
+    ui.run(program)
 }

@@ -1,16 +1,33 @@
-use std::{any::TypeId, collections::BTreeMap};
+use std::{any::TypeId, collections::BTreeMap, mem};
 
-use agpu::{Frame, GpuProgram};
+use agpu::{
+    winit::winit::event::{
+        ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
+    },
+    Event, Frame, GpuProgram,
+};
+
 use agui::{
-    context::Ref,
+    context::{Ref, WidgetContext},
     plugin::event::WidgetEvent,
     widget::{WidgetId, WidgetRef},
-    widgets::{primitives::Quad, AppSettings},
+    widgets::{
+        primitives::Quad,
+        state::{
+            keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
+            mouse::{Mouse, MouseButtonState, MousePosition, Scroll},
+            window::{WindowFocus, WindowPosition, WindowSize},
+        },
+        AppSettings,
+    },
     WidgetManager,
 };
-use render::{bounding::BoundingRenderPass, quad::QuadRenderPass, RenderContext, WidgetRenderPass};
 
 pub mod render;
+
+use self::render::{
+    bounding::BoundingRenderPass, quad::QuadRenderPass, RenderContext, WidgetRenderPass,
+};
 
 pub struct UI {
     manager: WidgetManager,
@@ -69,6 +86,10 @@ impl UI {
 
     pub fn get_manager(&self) -> &WidgetManager {
         &self.manager
+    }
+
+    pub fn get_context(&self) -> &WidgetContext {
+        self.manager.get_context()
     }
 
     pub fn add_pass<P>(mut self, pass: P) -> Self
@@ -152,7 +173,7 @@ impl UI {
             self.ctx.update();
 
             true
-        }else{
+        } else {
             false
         }
     }
@@ -164,5 +185,151 @@ impl UI {
                 .expect("render pass does not exist")
                 .render(&self.ctx, &mut frame);
         }
+    }
+
+    pub fn run(mut self, program: GpuProgram) -> Result<(), agpu::BoxError> {
+        let pipeline = program.gpu.new_pipeline("render pipeline").create();
+
+        program.run(move |event, _, _| {
+            if let Event::RedrawFrame(mut frame) = event {
+                if self.update() {
+                    // ui.get_manager().print_tree();
+
+                    frame
+                        .render_pass_cleared("ui draw", 0x101010FF)
+                        .with_pipeline(&pipeline)
+                        .begin();
+
+                    self.render(frame);
+                }
+            } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
+                match event {
+                    WindowEvent::Resized(size) => {
+                        if let Some(state) = self.get_context().get_global::<WindowSize>() {
+                            let mut state = state.write();
+
+                            state.width = size.width;
+                            state.height = size.height;
+                        }
+                    }
+
+                    WindowEvent::Moved(pos) => {
+                        if let Some(state) = self.get_context().get_global::<WindowPosition>() {
+                            let mut state = state.write();
+
+                            state.x = pos.x;
+                            state.y = pos.y;
+                        }
+                    }
+
+                    WindowEvent::ReceivedCharacter(c) => {
+                        if let Some(state) = self.get_context().get_global::<KeyboardInput>() {
+                            state.write().0 = c;
+                        }
+                    }
+
+                    WindowEvent::Focused(focused) => {
+                        if let Some(state) = self.get_context().get_global::<WindowFocus>() {
+                            state.write().0 = focused;
+                        }
+                    }
+
+                    WindowEvent::KeyboardInput { input, .. } => {
+                        if let Some(state) = self.get_context().get_global::<Keyboard>() {
+                            let mut state = state.write();
+
+                            if let Some(key) = input.virtual_keycode {
+                                let key: KeyCode = unsafe { mem::transmute(key as u32) };
+
+                                match input.state {
+                                    ElementState::Pressed => {
+                                        state.keys.insert(key, KeyState::Pressed);
+                                    }
+                                    ElementState::Released => {
+                                        state.keys.insert(key, KeyState::Released);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    WindowEvent::ModifiersChanged(modifiers) => {
+                        if let Some(state) = self.get_context().get_global::<Keyboard>() {
+                            let mut state = state.write();
+
+                            state.modifiers = unsafe { mem::transmute(modifiers) };
+                        }
+                    }
+
+                    WindowEvent::CursorMoved { position, .. } => {
+                        if let Some(state) = self.get_context().get_global::<Mouse>() {
+                            let mut state = state.write();
+
+                            match state.pos {
+                                Some(ref mut pos) => {
+                                    pos.x = position.x;
+                                    pos.y = position.y;
+                                }
+                                None => {
+                                    state.pos = Some(MousePosition {
+                                        x: position.x,
+                                        y: position.y,
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    WindowEvent::CursorLeft { .. } => {
+                        if let Some(state) = self.get_context().get_global::<Mouse>() {
+                            let mut state = state.write();
+
+                            state.pos = None;
+                        }
+                    }
+
+                    WindowEvent::MouseWheel { delta, .. } => {
+                        if let Some(state) = self.get_context().get_global::<Scroll>() {
+                            let mut state = state.write();
+
+                            match delta {
+                                MouseScrollDelta::LineDelta(x, y) => {
+                                    state.delta.x = x as f64;
+                                    state.delta.y = y as f64;
+                                }
+                                MouseScrollDelta::PixelDelta(position) => {
+                                    state.delta.x = position.x;
+                                    state.delta.y = position.y;
+                                }
+                            }
+                        }
+                    }
+
+                    WindowEvent::MouseInput {
+                        button,
+                        state: value,
+                        ..
+                    } => {
+                        if let Some(state) = self.get_context().get_global::<Mouse>() {
+                            let mut state = state.write();
+
+                            let value = match value {
+                                ElementState::Pressed => MouseButtonState::Pressed,
+                                ElementState::Released => MouseButtonState::Released,
+                            };
+
+                            match button {
+                                MouseButton::Left => state.button.left = value,
+                                MouseButton::Middle => state.button.middle = value,
+                                MouseButton::Right => state.button.right = value,
+                                MouseButton::Other(_) => {}
+                            }
+                        }
+                    }
+
+                    _ => {}
+                }
+            }
+        });
     }
 }

@@ -7,7 +7,7 @@ use agui_core::{
 use agui_macros::{build, Widget};
 use agui_primitives::Quad;
 
-use crate::state::MousePosition;
+use crate::state::mouse::MousePosition;
 
 #[derive(Debug, Default, Widget)]
 #[widget(layout = "row")]
