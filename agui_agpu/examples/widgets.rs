@@ -9,9 +9,9 @@ use agui::{
         primitives::{Column, Text},
         state::{
             keyboard::{Keyboard, KeyboardInput},
-            mouse::{Mouse, Scroll},
+            mouse::{Mouse, Scroll}, hovering::Hovering,
         },
-        App, Button,
+        App, Button, plugins::hovering::HoveringPlugin,
     },
 };
 use agui_agpu::UI;
@@ -19,15 +19,20 @@ use agui_agpu::UI;
 fn main() -> Result<(), agpu::BoxError> {
     let program = agpu::GpuProgram::builder("agui widgets")
         .with_gpu_features(Features::POLYGON_MODE_LINE)
+        .with_framerate(60.0)
         .build()?;
 
     let mut ui = UI::with_default(&program);
+
+    ui.init_plugin::<HoveringPlugin>();
 
     ui.get_context().init_global::<Keyboard>();
     ui.get_context().init_global::<KeyboardInput>();
 
     ui.get_context().init_global::<Mouse>();
     ui.get_context().init_global::<Scroll>();
+    
+    ui.get_context().init_global::<Hovering>();
 
     ui.set_root(build! {
         App {

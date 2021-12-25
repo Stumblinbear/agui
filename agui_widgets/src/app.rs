@@ -28,15 +28,7 @@ pub struct App {
 
 impl WidgetImpl for App {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        let settings = {
-            if let Some(settings) = ctx.get_global::<AppSettings>() {
-                settings
-            } else {
-                log::warn!("No AppSettings have been added to the global state, using defaults.");
-
-                ctx.init_global::<AppSettings>()
-            }
-        };
+        let settings = ctx.get_or_init_global::<AppSettings>();
 
         let settings = settings.read();
 

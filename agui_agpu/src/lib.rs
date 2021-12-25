@@ -9,13 +9,14 @@ use agpu::{
 
 use agui::{
     context::{Ref, WidgetContext},
-    plugin::event::WidgetEvent,
+    event::WidgetEvent,
+    plugin::WidgetPlugin,
     widget::{WidgetId, WidgetRef},
     widgets::{
         primitives::Quad,
         state::{
             keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
-            mouse::{Mouse, MouseButtonState, MousePosition, Scroll},
+            mouse::{Mouse, MouseButtonState, Scroll, XY},
             window::{WindowFocus, WindowPosition, WindowSize},
         },
         AppSettings,
@@ -84,14 +85,6 @@ impl UI {
         ui.add_pass(basic_pass).add_pass(bounding_pass)
     }
 
-    pub fn get_manager(&self) -> &WidgetManager {
-        &self.manager
-    }
-
-    pub fn get_context(&self) -> &WidgetContext {
-        self.manager.get_context()
-    }
-
     pub fn add_pass<P>(mut self, pass: P) -> Self
     where
         P: WidgetRenderPass + 'static,
@@ -124,6 +117,31 @@ impl UI {
             Some(pass) => pass,
             None => unreachable!(),
         }
+    }
+
+    pub fn get_context(&self) -> &WidgetContext {
+        self.manager.get_context()
+    }
+
+    pub fn init_plugin<P>(&mut self)
+    where
+        P: WidgetPlugin + Default,
+    {
+        self.manager.init_plugin::<P>();
+    }
+
+    pub fn add_plugin<P>(&mut self, plugin: P)
+    where
+        P: WidgetPlugin,
+    {
+        self.manager.add_plugin(plugin);
+    }
+
+    pub fn get_plugin<P>(&self) -> Option<&P>
+    where
+        P: WidgetPlugin,
+    {
+        self.manager.get_plugin::<P>()
     }
 
     pub fn set_root(&mut self, widget: WidgetRef) {
@@ -193,15 +211,15 @@ impl UI {
         program.run(move |event, _, _| {
             if let Event::RedrawFrame(mut frame) = event {
                 if self.update() {
-                    // ui.get_manager().print_tree();
-
-                    frame
-                        .render_pass_cleared("ui draw", 0x101010FF)
-                        .with_pipeline(&pipeline)
-                        .begin();
-
-                    self.render(frame);
+                    self.manager.print_tree();
                 }
+
+                frame
+                    .render_pass_cleared("ui draw", 0x101010FF)
+                    .with_pipeline(&pipeline)
+                    .begin();
+
+                self.render(frame);
             } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
                 match event {
                     WindowEvent::Resized(size) => {
@@ -271,7 +289,7 @@ impl UI {
                                     pos.y = position.y;
                                 }
                                 None => {
-                                    state.pos = Some(MousePosition {
+                                    state.pos = Some(XY {
                                         x: position.x,
                                         y: position.y,
                                     });

@@ -7,7 +7,7 @@ use agui_core::{
 use agui_macros::{build, Widget};
 use agui_primitives::Quad;
 
-use crate::state::mouse::MousePosition;
+use crate::state::hovering::Hovering;
 
 #[derive(Debug, Default, Widget)]
 #[widget(layout = "row")]
@@ -21,12 +21,12 @@ pub struct Button {
 
 impl WidgetImpl for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        let _hovering = ctx.computed(|ctx| {
-            let mouse = ctx.get_state::<MousePosition>();
-
-            let mouse_pos = mouse.read();
-
-            mouse_pos.x > 50.0
+        let hovering = ctx.computed(|ctx| {
+            if let Some(hovering) = ctx.get_global::<Hovering>() {
+                hovering.read().is_hovering(ctx)
+            } else {
+                false
+            }
         });
 
         ctx.set_layout(LayoutRef::clone(&self.layout));
@@ -36,7 +36,11 @@ impl WidgetImpl for Button {
                 layout: Layout {
                     sizing: Sizing::Fill
                 },
-                color: Color::White,
+                color: if hovering {
+                    Color::Green
+                }else{
+                    Color::White
+                },
                 child: (&self.child).into()
             }
         }

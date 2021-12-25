@@ -16,68 +16,110 @@ use super::ListenerID;
 
 type StateValue = Arc<RwLock<Box<dyn Value>>>;
 
-pub struct StateMap {
-    states: Mutex<HashMap<TypeId, StateValue>>,
+pub struct State {
+    value: Option<StateValue>,
 
     notify: Arc<Mutex<HashSet<ListenerID>>>,
 
-    listener: Arc<dyn Fn() + Send + Sync>,
+    on_changed: Arc<dyn Fn() + Send + Sync>,
+}
+
+pub struct StateMap {
+    states: RwLock<HashMap<TypeId, State>>,
+
+    on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>,
 }
 
 impl StateMap {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
-        let notify = Arc::new(Mutex::new(HashSet::new()));
-
         Self {
-            states: Mutex::default(),
+            states: RwLock::default(),
 
-            notify: Arc::clone(&notify),
-
-            listener: {
-                Arc::new(Box::new(move || {
-                    on_changed(&notify.lock());
-                }))
-            },
+            on_changed: Arc::clone(&on_changed),
         }
     }
 
-    pub fn add_listener(&self, listener_id: ListenerID) {
-        self.notify.lock().insert(listener_id);
-    }
+    fn ensure_state<V>(&self)
+    where
+        V: Value,
+    {
+        let mut states = self.states.write();
 
-    pub fn remove_listener(&self, listener_id: &ListenerID) {
-        self.notify.lock().remove(listener_id);
+        states.entry(TypeId::of::<V>()).or_insert_with(|| {
+            let notify = Arc::new(Mutex::new(HashSet::new()));
+
+            let on_changed = Arc::clone(&self.on_changed);
+
+            State {
+                value: None,
+
+                notify: Arc::clone(&notify),
+
+                on_changed: Arc::new(Box::new(move || {
+                    on_changed(&notify.lock());
+                })),
+            }
+        });
     }
 
     pub fn contains<V>(&self) -> bool
     where
         V: Value,
     {
-        self.states.lock().contains_key(&TypeId::of::<V>())
+        self.states
+            .read()
+            .get(&TypeId::of::<V>())
+            .map_or(false, |state| state.value.is_some())
     }
 
     pub fn insert<V>(&self, value: V)
     where
         V: Value,
     {
-        self.states
-            .lock()
-            .insert(TypeId::of::<V>(), Arc::new(RwLock::new(Box::new(value))));
+        self.ensure_state::<V>();
+
+        let mut states = self.states.write();
+
+        let state = states.get_mut(&TypeId::of::<V>()).unwrap();
+
+        state.value = Some(Arc::new(RwLock::new(Box::new(value))));
     }
 
     pub fn get<V>(&self) -> Option<Ref<V>>
     where
         V: Value,
     {
-        if let Some(value) = self.states.lock().get(&TypeId::of::<V>()) {
-            return Some(Ref {
-                phantom: PhantomData,
-                on_changed: Arc::clone(&self.listener),
-                value: Arc::clone(value),
-            });
+        if let Some(state) = self.states.read().get(&TypeId::of::<V>()) {
+            if let Some(value) = &state.value {
+                return Some(Ref {
+                    phantom: PhantomData,
+                    on_changed: Arc::clone(&state.on_changed),
+                    value: Arc::clone(value),
+                });
+            }
         }
 
         None
+    }
+
+    pub fn add_listener<V>(&self, listener_id: ListenerID)
+    where
+        V: Value,
+    {
+        self.ensure_state::<V>();
+
+        let mut states = self.states.write();
+
+        let state = states.get_mut(&TypeId::of::<V>()).unwrap();
+
+        state.notify.lock().insert(listener_id);
+    }
+
+    pub fn remove_listener(&self, listener_id: &ListenerID) {
+        for state in self.states.write().values() {
+            state.notify.lock().remove(listener_id);
+        }
     }
 }
 
@@ -95,29 +137,19 @@ impl WidgetStates {
         }
     }
 
-    fn ensure_widget(&self, widget_id: &WidgetId) {
-        let mut widgets = self.widgets.lock();
-
-        if !widgets.contains_key(widget_id) {
-            widgets.insert(*widget_id, StateMap::new(Arc::clone(&self.listener)));
-        }
-    }
-
     pub fn set<V>(&self, listener_id: &ListenerID, value: V) -> Ref<V>
     where
         V: Value,
     {
         let widget_id = listener_id.widget_id();
 
-        self.ensure_widget(widget_id);
+        let mut widgets = self.widgets.lock();
 
-        let widgets = self.widgets.lock();
-
-        let state = widgets.get(widget_id).unwrap();
+        let state = widgets
+            .entry(*widget_id)
+            .or_insert_with(|| StateMap::new(Arc::clone(&self.listener)));
 
         state.insert(value);
-
-        state.add_listener(*listener_id);
 
         state.get().expect("failed to get state")
     }
@@ -129,17 +161,17 @@ impl WidgetStates {
     {
         let widget_id = listener_id.widget_id();
 
-        self.ensure_widget(widget_id);
+        let mut widgets = self.widgets.lock();
 
-        let widgets = self.widgets.lock();
-
-        let state = widgets.get(widget_id).unwrap();
+        let state = widgets
+            .entry(*widget_id)
+            .or_insert_with(|| StateMap::new(Arc::clone(&self.listener)));
 
         if !state.contains::<V>() {
             state.insert(func());
         }
 
-        state.add_listener(*listener_id);
+        state.add_listener::<V>(*listener_id);
 
         state.get().expect("failed to get state")
     }

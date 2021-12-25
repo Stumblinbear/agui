@@ -16,6 +16,7 @@ pub mod layout;
 pub mod widget;
 pub mod context;
 pub mod unit;
+pub mod event;
 pub mod plugin;
 
 pub use self::ui::*;

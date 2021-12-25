@@ -1,13 +1,7 @@
 #[derive(Default)]
 pub struct Mouse {
-    pub pos: Option<MousePosition>,
+    pub pos: Option<XY>,
     pub button: MouseButtons,
-}
-
-#[derive(Default)]
-pub struct MousePosition {
-    pub x: f64,
-    pub y: f64,
 }
 
 #[derive(Default)]
@@ -30,11 +24,11 @@ impl Default for MouseButtonState {
 
 #[derive(Default)]
 pub struct Scroll {
-    pub delta: ScrollDelta,
+    pub delta: XY,
 }
 
 #[derive(Default)]
-pub struct ScrollDelta {
+pub struct XY {
     pub x: f64,
     pub y: f64,
 }

@@ -1,5 +1,6 @@
 use std::{
-    collections::{HashMap, HashSet},
+    any::TypeId,
+    collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
@@ -10,8 +11,9 @@ use parking_lot::Mutex;
 
 use crate::{
     context::{ListenerID, WidgetContext},
+    event::WidgetEvent,
     layout::LayoutRef,
-    plugin::event::WidgetEvent,
+    plugin::WidgetPlugin,
     unit::{Key, Rect},
     widget::{Widget, WidgetId, WidgetRef},
 };
@@ -32,6 +34,8 @@ impl Extend<WidgetEvent> for VoidEvents {
 }
 
 pub struct WidgetManager {
+    plugins: BTreeMap<TypeId, Box<dyn WidgetPlugin>>,
+
     widgets: Arena<WidgetNode>,
     tree: Tree<WidgetId>,
     cache: LayoutCache<WidgetId>,
@@ -60,6 +64,8 @@ impl Default for WidgetManager {
         let changed = Arc::new(Mutex::new(HashSet::new()));
 
         Self {
+            plugins: BTreeMap::default(),
+
             widgets: Arena::default(),
             tree: Tree::default(),
             cache: LayoutCache::default(),
@@ -95,6 +101,51 @@ impl WidgetManager {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn init_plugin<P>(&mut self)
+    where
+        P: WidgetPlugin + Default,
+    {
+        self.add_plugin(P::default());
+    }
+
+    pub fn add_plugin<P>(&mut self, plugin: P)
+    where
+        P: WidgetPlugin,
+    {
+        let plugin_id = TypeId::of::<P>();
+        let plugin = Box::new(plugin);
+
+        self.plugins.insert(plugin_id, plugin);
+        
+        self.update_plugin(plugin_id);
+    }
+
+    pub fn get_plugin<P>(&self) -> Option<&P>
+    where
+        P: WidgetPlugin,
+    {
+        self.plugins
+            .get(&TypeId::of::<P>())
+            .and_then(|plugin| plugin.downcast_ref())
+    }
+
+    pub fn update_plugin(&mut self, plugin_id: TypeId) {
+        let plugin = self
+            .plugins
+            .get(&plugin_id)
+            .expect("cannot update a plugin that does not exist");
+
+        *self.context.current_id.lock() = Some(ListenerID::Plugin(plugin_id));
+
+        plugin.on_update(self, &self.context);
+
+        *self.context.current_id.lock() = None;
+    }
+
+    pub fn get_tree(&self) -> &Tree<WidgetId> {
+        &self.tree
     }
 
     pub fn contains(&self, widget_id: &WidgetId) -> bool {
@@ -206,6 +257,10 @@ impl WidgetManager {
                         if changed {
                             dirty_widgets.insert(widget_id);
                         }
+                    }
+
+                    ListenerID::Plugin(plugin_id) => {
+                        self.update_plugin(plugin_id);
                     }
                 }
             }
@@ -436,7 +491,7 @@ impl WidgetManager {
         self.tree.add(parent_id, widget_id);
 
         // Sometimes widgets get changes queued before they're spawned
-        self.changed.lock().remove(&widget_id.into());
+        self.changed.lock().remove(&ListenerID::Widget(widget_id));
 
         self.modifications.push(Modify::Rebuild(widget_id));
 
@@ -496,7 +551,7 @@ impl WidgetManager {
 
         self.context.remove(&widget_id);
 
-        self.changed.lock().remove(&widget_id.into());
+        self.changed.lock().remove(&ListenerID::Widget(widget_id));
 
         events.extend(Some(WidgetEvent::Destroyed {
             type_id: widget.widget.get_type_id(),
@@ -527,8 +582,9 @@ mod tests {
 
     use crate::{
         context::WidgetContext,
+        ui::VoidEvents,
         unit::LayoutType,
-        widget::{BuildResult, Widget, WidgetImpl, WidgetLayout, WidgetRef, WidgetType}, ui::VoidEvents,
+        widget::{BuildResult, Widget, WidgetImpl, WidgetLayout, WidgetRef, WidgetType},
     };
 
     use super::WidgetManager;

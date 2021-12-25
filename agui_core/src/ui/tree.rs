@@ -104,19 +104,16 @@ where
     pub fn remove(&mut self, node_id: &K) -> Option<TreeNode<K>> {
         self.nodes.remove(node_id).map(|node| {
             if let Some(parent_id) = &node.parent {
-                let parent = self
-                    .nodes
-                    .get_mut(parent_id)
-                    .expect("broken tree: unable to get removed node's parent");
-
-                // Remove the child from its parent
-                parent.children.remove(
-                    parent
-                        .children
-                        .iter()
-                        .position(|child_id| node_id == child_id)
-                        .expect("broken tree: unable to find child in removed node's parent"),
-                );
+                if let Some(parent) = self.nodes.get_mut(parent_id) {
+                    // Remove the child from its parent
+                    parent.children.remove(
+                        parent
+                            .children
+                            .iter()
+                            .position(|child_id| node_id == child_id)
+                            .expect("broken tree: unable to find child in removed node's parent"),
+                    );
+                }
             }
 
             // We can't remove the children here, since the manager needs to have access to them.
