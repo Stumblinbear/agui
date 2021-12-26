@@ -4,4 +4,4 @@
 
 ## What is Agui Widgets?
 
-Agui Widgets is a crate containing an wide array of widgets for use in [`agui`](https://crates.io/crates/agui). This crate's widgets are somewhat opinionated design-wise, so if you need specific functionality feel free to peruse and yank out what you need until it develops further.
+Agui Widgets is a crate containing a wide array of widgets for use in [`agui`](https://crates.io/crates/agui). This crate's widgets are somewhat opinionated design-wise, so if you need specific functionality feel free to peruse and yank out what you need until it develops further.
