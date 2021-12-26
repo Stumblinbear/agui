@@ -19,7 +19,7 @@
     <br />
     <br />
     <a href="https://github.com/stumblinbear/agui/actions/workflows/rust.yml">
-        <img src="https://img.shields.io/github/workflow/status/stumblinbear/agui/rust?style=flat-square">
+        <img src="https://img.shields.io/github/workflow/status/stumblinbear/agui/CI?style=flat-square">
     </a>
     <a href="https://crates.io/crates/agui">
         <img src="https://img.shields.io/crates/v/agui?style=flat-square&logo=rust">
