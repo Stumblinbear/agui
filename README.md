@@ -112,6 +112,8 @@ fn build(&self, ctx: &WidgetContext) -> BuildResult {
 }
 ```
 
+A more complex widget implementation (featuring global state and computed values) can be seen in [the Button widget](agui_widgets/src/button.rs).
+
 **Functional Widgets are coming soon, which will make creating them even easier.**
 
 # 🤝 Contributing
