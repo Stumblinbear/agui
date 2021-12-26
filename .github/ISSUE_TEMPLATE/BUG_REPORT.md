@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Create a report to help Amazing GitHub Template to improve
+about: Create a report to help agui to improve
 title: "bug: "
 labels: "bug"
 assignees: ""
