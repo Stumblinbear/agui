@@ -52,6 +52,68 @@ agui = "0.1" # ensure this is the latest version
 
 Docs for `agui` are under development, however you can check the `agui_agpu/examples` directory for basic setup, and `agui_widgets` for many examples on widget creation.
 
+## Creating new widgets
+
+Currently, widgets are created using a `Widget` derive macro, and by implementing the `WidgetImpl` trait.
+
+```rust
+#[derive(Debug, Default, Widget)]
+// The default layout type is "column" but we want it to be a "row" instead.
+#[widget(layout = "row")]
+pub struct MyWidget {
+    // We can define parameters, here.
+    pub layout: LayoutRef,
+}
+
+impl WidgetImpl for MyWidget {
+    // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
+    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        // `ctx.set_layout` is what we use to define this widget's layout parameters.
+        ctx.set_layout(LayoutRef::clone(&self.layout));
+
+        build! {
+            Button { }
+        }
+    }
+}
+```
+
+## What's `build!`?
+
+The `build!` macro makes it significantly cleaner and easier to init new widgets. All it does is initialize unset fields in a struct to their `Default::default()`, and add `.into()` to the struct itself.
+
+```rust
+// It allows us to turn this:
+
+fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    BuildResult::One(
+        Button {
+            layout: Layout::default(),
+            color: Color::default(),
+            child: Text {
+                text: String::from("A Button")
+            }
+        }
+    )
+}
+
+// Into this:
+
+use agui::macros::build;
+
+fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    build!{
+        Button {
+            child: Text {
+                text: String::from("A Button")
+            }
+        }
+    }
+}
+```
+
+**Functional Widgets are coming soon, which will make creating them even easier.**
+
 # 🤝 Contributing
 
 Contributions are encouraged, and very welcome. Feel free to check the [issues page](https://github.com/stumblinbear/agui/issues) if you wish to do so!
