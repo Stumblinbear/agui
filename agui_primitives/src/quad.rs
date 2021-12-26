@@ -6,12 +6,18 @@ use agui_core::{
 };
 use agui_macros::Widget;
 
-#[derive(Debug, Default, Widget)]
+#[derive(Clone, Default)]
+pub struct QuadStyle {
+    pub color: Color,
+}
+
+#[derive(Default, Widget)]
 pub struct Quad {
     pub layout: LayoutRef,
-    pub color: Color,
-
     pub clip: bool,
+    
+    pub style: QuadStyle,
+
     pub child: WidgetRef,
 }
 

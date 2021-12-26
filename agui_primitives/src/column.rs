@@ -5,7 +5,7 @@ use agui_core::{
 };
 use agui_macros::Widget;
 
-#[derive(Debug, Default, Widget)]
+#[derive(Default, Widget)]
 #[widget(layout = "column")]
 pub struct Column {
     pub layout: LayoutRef,

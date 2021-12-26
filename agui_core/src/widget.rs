@@ -81,7 +81,7 @@ pub trait WidgetImpl: Downcast {
     fn build(&self, ctx: &WidgetContext) -> BuildResult;
 }
 
-pub trait Widget: Debug + WidgetType + WidgetLayout + WidgetImpl {}
+pub trait Widget: WidgetType + WidgetLayout + WidgetImpl {}
 
 impl_downcast!(Widget);
 
@@ -100,9 +100,9 @@ impl Debug for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, "None"),
-            Self::Owned(widget) => Debug::fmt(widget, f),
+            Self::Owned(widget) => write!(f, "{}", widget.get_type_name()),
             Self::Borrowed(layout) => match layout.upgrade() {
-                Some(widget) => Debug::fmt(&widget, f),
+                Some(widget) => write!(f, "{}", widget.get_type_name()),
                 None => write!(f, "Gone"),
             },
             Self::Keyed { key, widget, .. } => {
@@ -202,7 +202,7 @@ impl WidgetRef {
     }
 
     /// # Panics
-    /// 
+    ///
     /// Will panic if the widget cannot be downcasted to the generic type.
     #[must_use]
     pub fn downcast_ref<W>(&self) -> Rc<W>

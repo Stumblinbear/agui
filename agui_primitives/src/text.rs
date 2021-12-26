@@ -5,7 +5,7 @@ use agui_core::{
 };
 use agui_macros::Widget;
 
-#[derive(Debug, Default, Widget)]
+#[derive(Default, Widget)]
 pub struct Text {
     pub size: Sizing,
     pub text: String,

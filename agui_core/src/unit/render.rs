@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Clone)]
 pub enum Color {
     Black,
     White,

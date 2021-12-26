@@ -57,7 +57,7 @@ Docs for `agui` are under development, however you can check the `agui_agpu/exam
 Currently, widgets are created using a `Widget` derive macro, and by implementing the `WidgetImpl` trait.
 
 ```rust
-#[derive(Debug, Default, Widget)]
+#[derive(Default, Widget)]
 // The default layout type is "column" but we want it to be a "row" instead.
 #[widget(layout = "row")]
 pub struct MyWidget {

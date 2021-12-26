@@ -5,16 +5,23 @@ use agui_core::{
     widget::{BuildResult, WidgetImpl, WidgetRef},
 };
 use agui_macros::{build, Widget};
-use agui_primitives::Quad;
+use agui_primitives::{Quad, QuadStyle};
 
 use crate::state::hovering::Hovering;
 
-#[derive(Debug, Default, Widget)]
+#[derive(Clone, Default)]
+pub struct ButtonStyle {
+    pub normal: QuadStyle,
+    pub hover: QuadStyle,
+    pub pressed: QuadStyle,
+}
+
+#[derive(Default, Widget)]
 #[widget(layout = "row")]
 pub struct Button {
     pub layout: LayoutRef,
 
-    pub color: Color,
+    pub style: ButtonStyle,
 
     pub child: WidgetRef,
 }
@@ -36,10 +43,10 @@ impl WidgetImpl for Button {
                 layout: Layout {
                     sizing: Sizing::Fill
                 },
-                color: if hovering {
-                    Color::Green
+                style: if hovering {
+                    self.style.hover.clone()
                 }else{
-                    Color::White
+                    self.style.normal.clone()
                 },
                 child: (&self.child).into()
             }

@@ -125,7 +125,7 @@ impl WidgetRenderPass for QuadRenderPass {
 
         let quad = manager.try_get_as::<Quad>(widget_id);
 
-        let rgba = quad.map_or(Color::White.as_rgba(), |q| q.color.as_rgba());
+        let rgba = quad.map_or(Color::White.as_rgba(), |q| q.style.color.as_rgba());
 
         let rect = bytemuck::cast_slice(&rect);
         let rgba = bytemuck::cast_slice(&rgba);

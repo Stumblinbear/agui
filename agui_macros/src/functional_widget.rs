@@ -1,6 +1,6 @@
 use darling::FromMeta;
-use proc_macro::{TokenStream};
-use syn::{parse_macro_input, AttributeArgs, ItemFn, Ident};
+use proc_macro::TokenStream;
+use syn::{parse_macro_input, AttributeArgs, Ident, ItemFn};
 
 #[derive(Debug, FromMeta)]
 struct MacroArgs {
@@ -21,3 +21,30 @@ pub fn parse_functional_widget(args: TokenStream, input: TokenStream) -> TokenSt
 
     todo!()
 }
+
+// #[functional_widget]
+// pub fn Button(ctx: &WidgetContext, layout: LayoutRef, color: Color, child: WidgetRef) {
+//     let hovering = ctx.computed(|ctx| {
+//         if let Some(hovering) = ctx.get_global::<Hovering>() {
+//             hovering.read().is_hovering(ctx)
+//         } else {
+//             false
+//         }
+//     });
+
+//     ctx.set_layout(LayoutRef::clone(&layout));
+
+//     build! {
+//         Quad {
+//             layout: Layout {
+//                 sizing: Sizing::Fill
+//             },
+//             color: if hovering {
+//                 Color::Green
+//             }else{
+//                 Color::White
+//             },
+//             child: (&child).into()
+//         }
+//     }
+// }

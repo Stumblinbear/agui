@@ -20,7 +20,7 @@ impl Default for AppSettings {
     }
 }
 
-#[derive(Debug, Default, Widget)]
+#[derive(Default, Widget)]
 #[widget(layout = "row")]
 pub struct App {
     pub child: WidgetRef,
