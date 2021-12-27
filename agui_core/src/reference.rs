@@ -3,9 +3,30 @@ use std::{
     rc::{Rc, Weak},
 };
 
+/// Holds a reference that is either `None`, `Owned`, or `Borrowed`.
+///
+/// It's used to give a single field that can accept `Option` (without additional wrapping),
+/// an owned value, or a reference to an owned value (to prevent unnecessary clones).
+///
+/// # Example
+/// 
+/// ```
+/// pub struct Button {
+///     // Allows the Button to provide its own default, accept an owned value from a parent
+///     // widget, or a reference to a layout.
+///     pub layout: Ref<Layout>,
+/// }
+/// ```
 pub enum Ref<V> {
+    /// No value.
     None,
+
+    /// Owned data.
     Owned(Rc<V>),
+
+    /// Borrowed data. Unlike Owned, this is not guaranteed to exist, as it only
+    /// holds a weak reference to the Owned value. It should never be expected for the value
+    /// to exist.
     Borrowed(Weak<V>),
 }
 
@@ -32,19 +53,26 @@ where
 }
 
 impl<V> Ref<V> {
+    /// Creates an Owned reference to `value`.
     #[must_use]
     pub fn new(value: V) -> Self {
         Self::Owned(Rc::new(value))
     }
 
+    /// Returns true if this reference points to a value in memory.
+    /// 
+    /// Will always be `true` if the Ref is `Owned`, will always be `None` if the Ref is `None`,
+    /// but if it's `Borrowed`, it will only return `true` if the borrowed value is still in memory.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Owned(_) | Self::Borrowed(_) => true,
+            Self::Owned(_) => true,
+            Self::Borrowed(weak) => weak.strong_count() > 0,
         }
     }
 
+    /// Attempst to fetch the value that this reference is wrapping.
     #[must_use]
     pub fn try_get(&self) -> Option<Rc<V>> {
         match self {
@@ -54,6 +82,8 @@ impl<V> Ref<V> {
         }
     }
 
+    /// Fetch the underlying value that this reference is wrapping.
+    /// 
     /// # Panics
     ///
     /// Will panic if the value no longer exists, or the reference is empty.

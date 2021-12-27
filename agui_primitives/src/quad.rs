@@ -2,7 +2,7 @@ use agui_core::{
     context::WidgetContext,
     layout::Layout,
     unit::Color,
-    widget::{BuildResult, WidgetImpl, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::Widget;
@@ -22,7 +22,7 @@ pub struct Quad {
     pub child: WidgetRef,
 }
 
-impl WidgetImpl for Quad {
+impl WidgetBuilder for Quad {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 

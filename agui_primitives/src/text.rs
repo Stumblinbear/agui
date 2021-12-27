@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     unit::Sizing,
-    widget::{BuildResult, WidgetImpl},
+    widget::{BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
 
@@ -11,7 +11,7 @@ pub struct Text {
     pub text: String,
 }
 
-impl WidgetImpl for Text {
+impl WidgetBuilder for Text {
     fn build(&self, _ctx: &WidgetContext) -> BuildResult {
         BuildResult::Empty
     }

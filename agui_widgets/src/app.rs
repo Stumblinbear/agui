@@ -2,7 +2,7 @@ use agui_core::{
     context::WidgetContext,
     layout::Layout,
     unit::{Key, Sizing, Units},
-    widget::{BuildResult, WidgetImpl, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::{build, Widget};
 
@@ -26,7 +26,7 @@ pub struct App {
     pub child: WidgetRef,
 }
 
-impl WidgetImpl for App {
+impl WidgetBuilder for App {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         let settings = ctx.get_or_init_global::<AppSettings>();
 

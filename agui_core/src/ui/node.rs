@@ -7,6 +7,7 @@ use crate::{
     Ref,
 };
 
+/// Holds information about a widget in the UI tree.
 pub struct WidgetNode {
     pub widget: WidgetRef,
     pub layout_type: LayoutType,

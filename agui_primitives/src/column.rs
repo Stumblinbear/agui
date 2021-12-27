@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    widget::{BuildResult, WidgetImpl, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::Widget;
@@ -14,7 +14,7 @@ pub struct Column {
     pub children: Vec<WidgetRef>,
 }
 
-impl WidgetImpl for Column {
+impl WidgetBuilder for Column {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 

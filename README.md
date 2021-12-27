@@ -54,7 +54,7 @@ Docs for `agui` are under development, however you can check the `agui_agpu/exam
 
 ## Creating new widgets
 
-Currently, widgets are created using a `Widget` derive macro, and by implementing the `WidgetImpl` trait.
+Currently, widgets are created using a `Widget` derive macro, and by implementing the `WidgetBuilder` trait.
 
 ```rust
 #[derive(Default, Widget)]
@@ -65,7 +65,7 @@ pub struct MyWidget {
     pub layout: Ref<Layout>,
 }
 
-impl WidgetImpl for MyWidget {
+impl WidgetBuilder for MyWidget {
     // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         // `ctx.set_layout` is what we use to define this widget's layout parameters.

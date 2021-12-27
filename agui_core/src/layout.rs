@@ -3,6 +3,7 @@ use crate::{
     Ref,
 };
 
+/// Holds layout parameters to dictate how the element should be displayed.
 #[derive(Debug, Clone, Default)]
 pub struct Layout {
     pub position: Position,

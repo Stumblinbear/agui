@@ -2,7 +2,7 @@ use agui_core::{
     context::WidgetContext,
     layout::Layout,
     unit::{Color, Sizing},
-    widget::{BuildResult, WidgetImpl, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::{build, Widget};
@@ -43,7 +43,7 @@ pub struct Button {
     pub child: WidgetRef,
 }
 
-impl WidgetImpl for Button {
+impl WidgetBuilder for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         let hovering = ctx.computed(|ctx| {
             if let Some(hovering) = ctx.get_global::<Hovering>() {

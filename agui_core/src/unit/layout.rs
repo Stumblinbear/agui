@@ -2,11 +2,17 @@ use morphorm::PositionType;
 
 pub use morphorm::Units;
 
+/// Indicates to the layout system how the children of a widget should be laid out.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
 pub enum LayoutType {
+    /// Widgets should be laid out side-by-side.
     Row,
+    
+    /// Widgets should be laid out on top of one another.
     Column,
+
+    /// Widgets should be laid out in a grid.
     Grid {
         rows: usize,
         row_spacing: Units,
@@ -77,14 +83,20 @@ impl LayoutType {
     }
 }
 
+/// Sets the padding around the elment.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
 pub enum Padding {
+    /// No padding.
     Unset,
+    
+    /// Padding along the vertical and horizontal axis.
     Axis {
         vertical: Units,
         horizontal: Units,
     },
+    
+    /// Padding on every side.
     Set {
         top: Units,
         right: Units,
@@ -137,16 +149,22 @@ impl Padding {
     }
 }
 
+/// Sets the positioning of an element.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
 pub enum Position {
+    /// Position unchanged.
     Unset,
+    
+    /// Position set absolutely in the window.
     Absolute {
         top: Units,
         right: Units,
         bottom: Units,
         left: Units,
     },
+    
+    /// Position set relative to its parent.
     Relative {
         top: Units,
         left: Units,
@@ -202,11 +220,17 @@ impl Position {
     }
 }
 
+/// The sizing of the element.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub enum Sizing {
+    /// Element size automatically set based onother factors.
     Auto,
+
+    /// Element size attempts to fill its parent container.
     Fill,
+
+    /// Element has a set, specific size.
     Set { width: Units, height: Units },
 }
 
@@ -236,12 +260,14 @@ impl Sizing {
     }
 }
 
+/// Holds width and height values.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
 }
 
+/// Holds exact position and size values.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Rect {
     pub x: f32,
@@ -264,6 +290,7 @@ impl Rect {
     }
 }
 
+/// Holds information about each side.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Bounds {
     pub top: f32,

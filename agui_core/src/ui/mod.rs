@@ -33,6 +33,7 @@ impl Extend<WidgetEvent> for VoidEvents {
     fn extend<T: IntoIterator<Item = WidgetEvent>>(&mut self, _: T) {}
 }
 
+/// Handles the entirety of the widget lifecycle.
 pub struct WidgetManager<'ui> {
     plugins: BTreeMap<TypeId, Box<dyn WidgetPlugin>>,
 
@@ -92,11 +93,13 @@ impl<'ui> Default for WidgetManager<'ui> {
 }
 
 impl<'ui> WidgetManager<'ui> {
+    /// Create a new `WidgetManager`.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Initialize a plugin with its `Default::default()` method.
     pub fn init_plugin<P>(&mut self)
     where
         P: WidgetPlugin + Default,
@@ -104,6 +107,7 @@ impl<'ui> WidgetManager<'ui> {
         self.add_plugin(P::default());
     }
 
+    /// Load a plugin.
     pub fn add_plugin<P>(&mut self, plugin: P)
     where
         P: WidgetPlugin,
@@ -116,6 +120,7 @@ impl<'ui> WidgetManager<'ui> {
         self.update_plugin(plugin_id);
     }
 
+    /// Fetch a loaded plugin. Will be `None` if it does not exist.
     pub fn get_plugin<P>(&self) -> Option<&P>
     where
         P: WidgetPlugin,
@@ -125,56 +130,62 @@ impl<'ui> WidgetManager<'ui> {
             .and_then(|plugin| plugin.downcast_ref())
     }
 
-    pub fn update_plugin(&mut self, plugin_id: TypeId) {
-        let plugin = self
-            .plugins
-            .get(&plugin_id)
-            .expect("cannot update a plugin that does not exist");
-
-        *self.context.current_id.lock() = Some(ListenerID::Plugin(plugin_id));
-
-        plugin.on_update(self, &self.context);
-
-        *self.context.current_id.lock() = None;
-    }
-
+    /// Returns the widget tree.
     pub fn get_tree(&self) -> &Tree<WidgetId> {
         &self.tree
     }
 
+    /// Check if a widget exists in the tree.
     pub fn contains(&self, widget_id: &WidgetId) -> bool {
         self.widgets.contains(widget_id.id())
     }
 
+    /// Fetch the tree representation of a widget. Will be `None` if it doesn't exist.
     pub fn try_get_node(&self, widget_id: WidgetId) -> Option<&WidgetNode> {
         self.widgets.get(widget_id.id())
     }
 
+    /// Fetch the tree representation of a widget.
+    /// 
+    /// # Panics
+    /// 
+    /// Will panic if the widget is not found.
     pub fn get_node(&self, widget_id: &WidgetId) -> &WidgetNode {
         self.widgets
             .get(widget_id.id())
             .expect("widget does not exist")
     }
 
+    /// Fetch a widget from the tree. Will be `None` if it doesn't exist.
     pub fn try_get(&self, widget_id: &WidgetId) -> Option<WidgetRef> {
         self.widgets
             .get(widget_id.id())
             .map(|node| WidgetRef::clone(&node.widget))
     }
 
+    /// Fetch a widget from the tree.
+    /// 
+    /// # Panics
+    /// 
+    /// This will panic if the widget is not found.
     pub fn get(&self, widget_id: &WidgetId) -> WidgetRef {
         self.try_get(widget_id).expect("widget does not exist")
     }
 
+    /// Fetch a widget as the specified type. If it doesn't exist, or it is not the requested type, this
+    /// will return `None`.
     pub fn try_get_as<W>(&self, widget_id: &WidgetId) -> Option<Rc<W>>
     where
         W: Widget,
     {
-        let v = self.try_get(widget_id)?;
-
-        v.try_downcast_ref()
+        self.try_get(widget_id)?.try_downcast_ref()
     }
 
+    /// Fetch a widget as the specified type.
+    /// 
+    /// # Panics
+    /// 
+    /// If the widget is not the requested type, it will panic.
     pub fn get_as<W>(&self, widget_id: &WidgetId) -> Rc<W>
     where
         W: Widget,
@@ -182,10 +193,12 @@ impl<'ui> WidgetManager<'ui> {
         self.get(widget_id).downcast_ref()
     }
 
+    /// Get the visual `Rect` of a widget.
     pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
         self.cache.get_rect(widget_id)
     }
 
+    /// Get the widget build context.
     pub const fn get_context(&self) -> &WidgetContext<'ui> {
         &self.context
     }
@@ -211,6 +224,10 @@ impl<'ui> WidgetManager<'ui> {
         self.modifications.push(Modify::Destroy(widget_id));
     }
 
+    /// Update the UI tree.
+    /// 
+    /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
+    /// changes that occured during the process, in order.
     pub fn update<E>(&mut self, events: &mut E)
     where
         E: Extend<WidgetEvent>,
@@ -435,6 +452,19 @@ impl<'ui> WidgetManager<'ui> {
         }
     }
 
+    fn update_plugin(&mut self, plugin_id: TypeId) {
+        let plugin = self
+            .plugins
+            .get(&plugin_id)
+            .expect("cannot update a plugin that does not exist");
+
+        *self.context.current_id.lock() = Some(ListenerID::Plugin(plugin_id));
+
+        plugin.on_update(self, &self.context);
+
+        *self.context.current_id.lock() = None;
+    }
+
     fn process_spawn<E>(
         &mut self,
         events: &mut E,
@@ -567,7 +597,7 @@ mod tests {
         context::WidgetContext,
         ui::VoidEvents,
         unit::LayoutType,
-        widget::{BuildResult, Widget, WidgetImpl, WidgetLayout, WidgetRef, WidgetType},
+        widget::{BuildResult, Widget, WidgetBuilder, WidgetLayout, WidgetRef, WidgetType},
     };
 
     use super::WidgetManager;
@@ -600,7 +630,7 @@ mod tests {
         }
     }
 
-    impl WidgetImpl for TestWidget {
+    impl WidgetBuilder for TestWidget {
         fn build(&self, ctx: &WidgetContext) -> BuildResult {
             let computes = Arc::clone(&self.computes);
 

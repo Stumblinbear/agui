@@ -1,6 +1,6 @@
 use agui_core::{
     context::WidgetContext,
-    widget::{BuildResult, WidgetImpl, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::Widget;
 
@@ -31,7 +31,7 @@ where
     }
 }
 
-impl<F> WidgetImpl for Builder<F>
+impl<F> WidgetBuilder for Builder<F>
 where
     F: Fn(&WidgetContext) -> BuildResult + 'static,
 {

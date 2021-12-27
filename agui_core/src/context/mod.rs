@@ -24,6 +24,7 @@ use crate::{
     Ref,
 };
 
+/// A combined-type for anything that can listen for events in the system.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ListenerID {
     Widget(WidgetId),

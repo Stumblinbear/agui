@@ -178,6 +178,7 @@ impl WidgetStates {
     }
 }
 
+/// Holds the state of a value, with notify-on-write.
 pub struct State<V>
 where
     V: Value,
