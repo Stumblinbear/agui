@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::{
-    layout::{Layout, LayoutRef},
+    layout::Layout,
     widget::{Widget, WidgetId},
-    WidgetManager,
+    Ref, WidgetManager,
 };
 
 use super::Modify;
@@ -23,7 +23,7 @@ const WHITE: &str = "\u{001b}[37;1m";
 
 pub fn print_tree(manager: &WidgetManager) {
     println!("Tree:");
-    
+
     for widget_id in manager.tree.iter() {
         let depth = widget_id.depth();
 
@@ -36,16 +36,16 @@ pub fn print_tree(manager: &WidgetManager) {
             WHITE,
             &format!(
                 "{} {:?} {:?}",
-                if matches!(node.layout, LayoutRef::None) {
+                if matches!(node.layout, Ref::None) {
                     GRAY
                 } else {
                     CYAN
                 },
                 node.layout_type,
-                if matches!(node.layout, LayoutRef::None) {
-                    LayoutRef::new(Layout::default())
+                if matches!(node.layout, Ref::None) {
+                    Ref::new(Layout::default())
                 } else {
-                    LayoutRef::clone(&node.layout)
+                    Ref::clone(&node.layout)
                 }
             ),
         );
@@ -54,9 +54,9 @@ pub fn print_tree(manager: &WidgetManager) {
 
 pub fn print_tree_modifications(manager: &WidgetManager) {
     println!("Tree:");
-    
+
     let mods = &manager.modifications;
-    
+
     let mut new_root = None;
     let mut spawns = HashMap::new();
     let mut rebuilds = HashSet::new();
@@ -121,16 +121,16 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
             },
             &format!(
                 "{} {:?} {:?}",
-                if matches!(node.layout, LayoutRef::None) {
+                if matches!(node.layout, Ref::None) {
                     GRAY
                 } else {
                     CYAN
                 },
                 node.layout_type,
-                if matches!(node.layout, LayoutRef::None) {
-                    LayoutRef::new(Layout::default())
+                if matches!(node.layout, Ref::None) {
+                    Ref::new(Layout::default())
                 } else {
-                    LayoutRef::clone(&node.layout)
+                    Ref::clone(&node.layout)
                 }
             ),
         );

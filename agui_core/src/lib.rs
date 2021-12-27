@@ -11,6 +11,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![warn(clippy::clone_on_ref_ptr)]
 
+mod reference;
 mod ui;
 pub mod layout;
 pub mod widget;
@@ -19,4 +20,5 @@ pub mod unit;
 pub mod event;
 pub mod plugin;
 
+pub use self::reference::*;
 pub use self::ui::*;

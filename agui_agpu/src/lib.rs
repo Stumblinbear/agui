@@ -8,7 +8,7 @@ use agpu::{
 };
 
 use agui::{
-    context::{Ref, WidgetContext},
+    context::{State, WidgetContext},
     event::WidgetEvent,
     plugin::WidgetPlugin,
     widget::{WidgetId, WidgetRef},
@@ -31,7 +31,7 @@ use self::render::{
 };
 
 pub struct UI {
-    manager: WidgetManager,
+    manager: WidgetManager<'static>,
     events: Vec<WidgetEvent>,
 
     ctx: RenderContext,
@@ -53,7 +53,7 @@ impl UI {
             manager,
             events: Vec::default(),
 
-            ctx: RenderContext::new(program, Ref::clone(&app_settings)),
+            ctx: RenderContext::new(program, State::clone(&app_settings)),
 
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
@@ -119,7 +119,7 @@ impl UI {
         }
     }
 
-    pub fn get_context(&self) -> &WidgetContext {
+    pub fn get_context(&self) -> &WidgetContext<'static> {
         self.manager.get_context()
     }
 
@@ -211,7 +211,7 @@ impl UI {
         program.run(move |event, _, _| {
             if let Event::RedrawFrame(mut frame) = event {
                 if self.update() {
-                    self.manager.print_tree();
+                    // self.manager.print_tree();
                 }
 
                 frame

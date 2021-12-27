@@ -1,15 +1,16 @@
 use generational_arena::Arena;
 
 use crate::{
-    layout::LayoutRef,
+    layout::Layout,
     unit::{LayoutType, Padding, Position, Sizing},
     widget::{WidgetId, WidgetRef},
+    Ref,
 };
 
 pub struct WidgetNode {
     pub widget: WidgetRef,
     pub layout_type: LayoutType,
-    pub layout: LayoutRef,
+    pub layout: Ref<Layout>,
 }
 
 impl<'a> morphorm::Node<'a> for WidgetId {
@@ -28,7 +29,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Position::default(), |node| node.layout.get_position())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Position::default(), |layout| layout.position)
                 .into(),
         )
     }
@@ -37,7 +39,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Sizing::default(), |node| node.layout.get_sizing())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Sizing::default(), |layout| layout.sizing)
                 .get_width(),
         )
     }
@@ -46,7 +49,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Sizing::default(), |node| node.layout.get_sizing())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Sizing::default(), |layout| layout.sizing)
                 .get_height(),
         )
     }
@@ -55,7 +59,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Sizing::default(), |node| node.layout.get_min_sizing())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Sizing::default(), |layout| layout.min_sizing)
                 .get_width(),
         )
     }
@@ -64,7 +69,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Sizing::default(), |node| node.layout.get_min_sizing())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Sizing::default(), |layout| layout.min_sizing)
                 .get_height(),
         )
     }
@@ -73,7 +79,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Sizing::default(), |node| node.layout.get_max_sizing())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Sizing::default(), |layout| layout.max_sizing)
                 .get_width(),
         )
     }
@@ -82,7 +89,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Sizing::default(), |node| node.layout.get_max_sizing())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Sizing::default(), |layout| layout.max_sizing)
                 .get_height(),
         )
     }
@@ -91,7 +99,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Position::default(), |node| node.layout.get_position())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Position::default(), |layout| layout.position)
                 .get_top(),
         )
     }
@@ -100,7 +109,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Position::default(), |node| node.layout.get_position())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Position::default(), |layout| layout.position)
                 .get_right(),
         )
     }
@@ -109,7 +119,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Position::default(), |node| node.layout.get_position())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Position::default(), |layout| layout.position)
                 .get_bottom(),
         )
     }
@@ -118,7 +129,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Position::default(), |node| node.layout.get_position())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Position::default(), |layout| layout.position)
                 .get_left(),
         )
     }
@@ -159,7 +171,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Padding::default(), |node| node.layout.get_padding())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Padding::default(), |layout| layout.padding)
                 .get_top(),
         )
     }
@@ -168,7 +181,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Padding::default(), |node| node.layout.get_padding())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Padding::default(), |layout| layout.padding)
                 .get_right(),
         )
     }
@@ -177,7 +191,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Padding::default(), |node| node.layout.get_padding())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Padding::default(), |layout| layout.padding)
                 .get_bottom(),
         )
     }
@@ -186,7 +201,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(Padding::default(), |node| node.layout.get_padding())
+                .and_then(|node| node.layout.try_get())
+                .map_or(Padding::default(), |layout| layout.padding)
                 .get_left(),
         )
     }

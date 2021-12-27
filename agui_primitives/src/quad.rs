@@ -1,8 +1,9 @@
 use agui_core::{
     context::WidgetContext,
-    layout::LayoutRef,
+    layout::Layout,
     unit::Color,
     widget::{BuildResult, WidgetImpl, WidgetRef},
+    Ref,
 };
 use agui_macros::Widget;
 
@@ -13,9 +14,9 @@ pub struct QuadStyle {
 
 #[derive(Default, Widget)]
 pub struct Quad {
-    pub layout: LayoutRef,
+    pub layout: Ref<Layout>,
     pub clip: bool,
-    
+
     pub style: QuadStyle,
 
     pub child: WidgetRef,
@@ -23,7 +24,7 @@ pub struct Quad {
 
 impl WidgetImpl for Quad {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        ctx.set_layout(LayoutRef::clone(&self.layout));
+        ctx.set_layout(Ref::clone(&self.layout));
 
         (&self.child).into()
     }

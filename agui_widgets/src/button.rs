@@ -1,25 +1,42 @@
 use agui_core::{
     context::WidgetContext,
-    layout::{Layout, LayoutRef},
+    layout::Layout,
     unit::{Color, Sizing},
     widget::{BuildResult, WidgetImpl, WidgetRef},
+    Ref,
 };
 use agui_macros::{build, Widget};
 use agui_primitives::{Quad, QuadStyle};
 
 use crate::state::hovering::Hovering;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ButtonStyle {
     pub normal: QuadStyle,
     pub hover: QuadStyle,
     pub pressed: QuadStyle,
 }
 
+impl Default for ButtonStyle {
+    fn default() -> Self {
+        Self {
+            normal: QuadStyle {
+                color: Color::White,
+            },
+
+            hover: QuadStyle {
+                color: Color::Green,
+            },
+
+            pressed: QuadStyle::default(),
+        }
+    }
+}
+
 #[derive(Default, Widget)]
 #[widget(layout = "row")]
 pub struct Button {
-    pub layout: LayoutRef,
+    pub layout: Ref<Layout>,
 
     pub style: ButtonStyle,
 
@@ -36,7 +53,7 @@ impl WidgetImpl for Button {
             }
         });
 
-        ctx.set_layout(LayoutRef::clone(&self.layout));
+        ctx.set_layout(Ref::clone(&self.layout));
 
         build! {
             Quad {

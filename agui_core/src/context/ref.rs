@@ -15,7 +15,7 @@ impl<T> Value for T where T: Send + Sync + 'static {}
 
 impl_downcast!(Value);
 
-pub struct Ref<V>
+pub struct State<V>
 where
     V: Value,
 {
@@ -26,7 +26,7 @@ where
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }
 
-impl<V> Ref<V>
+impl<V> State<V>
 where
     V: Value,
 {

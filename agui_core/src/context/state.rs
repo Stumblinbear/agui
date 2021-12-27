@@ -5,38 +5,32 @@ use std::{
     sync::Arc,
 };
 
-use downcast_rs::{impl_downcast, Downcast};
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
 use crate::widget::WidgetId;
 
-use super::ListenerID;
+use super::{Value, ListenerID};
 
-type StateValue = Arc<RwLock<Box<dyn Value>>>;
-
-pub struct State {
-    value: Option<StateValue>,
+pub struct StateValue {
+    value: Option<Arc<RwLock<Box<dyn Value>>>>,
 
     notify: Arc<Mutex<HashSet<ListenerID>>>,
-
-    on_changed: Arc<dyn Fn() + Send + Sync>,
 }
 
 pub struct StateMap {
-    states: RwLock<HashMap<TypeId, State>>,
+    states: RwLock<HashMap<TypeId, StateValue>>,
 
-    on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>,
+    changed: Arc<Mutex<HashSet<ListenerID>>>,
 }
 
 impl StateMap {
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
+    pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
         Self {
             states: RwLock::default(),
-
-            on_changed: Arc::clone(&on_changed),
+            changed,
         }
     }
 
@@ -49,16 +43,10 @@ impl StateMap {
         states.entry(TypeId::of::<V>()).or_insert_with(|| {
             let notify = Arc::new(Mutex::new(HashSet::new()));
 
-            let on_changed = Arc::clone(&self.on_changed);
-
-            State {
+            StateValue {
                 value: None,
 
                 notify: Arc::clone(&notify),
-
-                on_changed: Arc::new(Box::new(move || {
-                    on_changed(&notify.lock());
-                })),
             }
         });
     }
@@ -86,15 +74,18 @@ impl StateMap {
         state.value = Some(Arc::new(RwLock::new(Box::new(value))));
     }
 
-    pub fn get<V>(&self) -> Option<Ref<V>>
+    pub fn get<V>(&self) -> Option<State<V>>
     where
         V: Value,
     {
         if let Some(state) = self.states.read().get(&TypeId::of::<V>()) {
             if let Some(value) = &state.value {
-                return Some(Ref {
+                return Some(State {
                     phantom: PhantomData,
-                    on_changed: Arc::clone(&state.on_changed),
+                    
+                    notify: Arc::clone(&state.notify),
+                    changed: Arc::clone(&self.changed),
+                    
                     value: Arc::clone(value),
                 });
             }
@@ -126,18 +117,18 @@ impl StateMap {
 pub struct WidgetStates {
     widgets: Mutex<HashMap<WidgetId, StateMap>>,
 
-    listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>,
+    changed: Arc<Mutex<HashSet<ListenerID>>>,
 }
 
 impl WidgetStates {
-    pub fn new(listener: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
+    pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
         Self {
             widgets: Mutex::default(),
-            listener,
+            changed,
         }
     }
 
-    pub fn set<V>(&self, listener_id: &ListenerID, value: V) -> Ref<V>
+    pub fn set<V>(&self, listener_id: &ListenerID, value: V) -> State<V>
     where
         V: Value,
     {
@@ -147,14 +138,14 @@ impl WidgetStates {
 
         let state = widgets
             .entry(*widget_id)
-            .or_insert_with(|| StateMap::new(Arc::clone(&self.listener)));
+            .or_insert_with(|| StateMap::new(Arc::clone(&self.changed)));
 
         state.insert(value);
 
         state.get().expect("failed to get state")
     }
 
-    pub fn get<V, F>(&self, listener_id: &ListenerID, func: F) -> Ref<V>
+    pub fn get<V, F>(&self, listener_id: &ListenerID, func: F) -> State<V>
     where
         V: Value,
         F: FnOnce() -> V,
@@ -165,7 +156,7 @@ impl WidgetStates {
 
         let state = widgets
             .entry(*widget_id)
-            .or_insert_with(|| StateMap::new(Arc::clone(&self.listener)));
+            .or_insert_with(|| StateMap::new(Arc::clone(&self.changed)));
 
         if !state.contains::<V>() {
             state.insert(func());
@@ -187,38 +178,36 @@ impl WidgetStates {
     }
 }
 
-pub trait Value: Downcast + Send + Sync + 'static {}
-
-impl<T> Value for T where T: Send + Sync + 'static {}
-
-impl_downcast!(Value);
-
-pub struct Ref<V>
+pub struct State<V>
 where
     V: Value,
 {
     pub(crate) phantom: PhantomData<V>,
 
-    pub(crate) on_changed: Arc<dyn Fn() + Send + Sync>,
+    pub(crate) notify: Arc<Mutex<HashSet<ListenerID>>>,
+    pub(crate) changed: Arc<Mutex<HashSet<ListenerID>>>,
 
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }
 
-impl<V> Clone for Ref<V>
+impl<V> Clone for State<V>
 where
     V: Value,
 {
     fn clone(&self) -> Self {
         Self {
             phantom: self.phantom,
-            on_changed: Arc::clone(&self.on_changed),
+            
+            notify: Arc::clone(&self.notify),
+            changed: Arc::clone(&self.changed),
+
             value: Arc::clone(&self.value),
         }
     }
 }
 
 #[allow(clippy::missing_panics_doc)]
-impl<V> Ref<V>
+impl<V> State<V>
 where
     V: Value,
 {
@@ -231,7 +220,7 @@ where
     }
 
     pub fn write(&self) -> MappedRwLockWriteGuard<V> {
-        (self.on_changed)();
+        self.changed.lock().extend(self.notify.lock().iter());
 
         RwLockWriteGuard::map(self.value.write(), |value| {
             value

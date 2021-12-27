@@ -12,10 +12,10 @@ use parking_lot::Mutex;
 use crate::{
     context::{ListenerID, WidgetContext},
     event::WidgetEvent,
-    layout::LayoutRef,
     plugin::WidgetPlugin,
     unit::{Key, Rect},
     widget::{Widget, WidgetId, WidgetRef},
+    Ref,
 };
 
 mod cache;
@@ -33,14 +33,14 @@ impl Extend<WidgetEvent> for VoidEvents {
     fn extend<T: IntoIterator<Item = WidgetEvent>>(&mut self, _: T) {}
 }
 
-pub struct WidgetManager {
+pub struct WidgetManager<'ui> {
     plugins: BTreeMap<TypeId, Box<dyn WidgetPlugin>>,
 
     widgets: Arena<WidgetNode>,
     tree: Tree<WidgetId>,
     cache: LayoutCache<WidgetId>,
 
-    context: WidgetContext,
+    context: WidgetContext<'ui>,
 
     changed: Arc<Mutex<HashSet<ListenerID>>>,
 
@@ -59,7 +59,7 @@ pub struct WidgetManager {
     changes: usize,
 }
 
-impl Default for WidgetManager {
+impl<'ui> Default for WidgetManager<'ui> {
     fn default() -> Self {
         let changed = Arc::new(Mutex::new(HashSet::new()));
 
@@ -70,13 +70,7 @@ impl Default for WidgetManager {
             tree: Tree::default(),
             cache: LayoutCache::default(),
 
-            context: {
-                let changed = Arc::clone(&changed);
-
-                WidgetContext::new(Arc::new(move |listener_ids| {
-                    changed.lock().extend(listener_ids);
-                }))
-            },
+            context: WidgetContext::new(Arc::clone(&changed)),
 
             changed,
 
@@ -97,7 +91,7 @@ impl Default for WidgetManager {
     }
 }
 
-impl WidgetManager {
+impl<'ui> WidgetManager<'ui> {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -118,7 +112,7 @@ impl WidgetManager {
         let plugin = Box::new(plugin);
 
         self.plugins.insert(plugin_id, plugin);
-        
+
         self.update_plugin(plugin_id);
     }
 
@@ -192,7 +186,7 @@ impl WidgetManager {
         self.cache.get_rect(widget_id)
     }
 
-    pub const fn get_context(&self) -> &WidgetContext {
+    pub const fn get_context(&self) -> &WidgetContext<'ui> {
         &self.context
     }
 
@@ -252,9 +246,7 @@ impl WidgetManager {
                     }
 
                     ListenerID::Computed(widget_id, computed_id) => {
-                        let changed = self.context.did_computed_change(&widget_id, computed_id);
-
-                        if changed {
+                        if self.context.call_computed_func(&widget_id, computed_id) {
                             dirty_widgets.insert(widget_id);
                         }
                     }
@@ -344,16 +336,7 @@ impl WidgetManager {
         let mut root_changed = false;
 
         if let Some(widget_id) = self.tree.get_root() {
-            let layout = match self.context.get_layout(&widget_id) {
-                LayoutRef::None => None,
-                LayoutRef::Owned(layout) => Some(Rc::clone(&layout)),
-                LayoutRef::Borrowed(weak) => Some(
-                    weak.upgrade()
-                        .expect("root node should not have been dropped"),
-                ),
-            };
-
-            if let Some(layout) = layout {
+            if let Some(layout) = self.context.get_layout(&widget_id).try_get() {
                 if let Units::Pixels(px) = layout.position.get_left() {
                     if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
@@ -483,7 +466,7 @@ impl WidgetManager {
             self.widgets.insert(WidgetNode {
                 widget,
                 layout_type,
-                layout: LayoutRef::None,
+                layout: Ref::None,
             }),
             parent_id.map_or(0, |node| node.depth() + 1),
         );

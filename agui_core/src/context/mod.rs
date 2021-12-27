@@ -6,16 +6,22 @@ use std::{
 
 use parking_lot::Mutex;
 
+mod computed;
 mod state;
+mod value;
 
-pub use self::state::Ref;
-
-use self::state::{StateMap, Value, WidgetStates};
+pub use self::state::State;
+pub use self::value::Value;
+use self::{
+    computed::{ComputedFn, ComputedFunc},
+    state::{StateMap, WidgetStates},
+};
 
 use crate::{
-    layout::LayoutRef,
+    layout::Layout,
     unit::Key,
     widget::{BuildResult, WidgetId, WidgetRef},
+    Ref,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -38,27 +44,27 @@ impl ListenerID {
     }
 }
 
-type ComputedFn = Box<dyn Fn(&WidgetContext) -> bool>;
-type WidgetComputedFuncs = HashMap<WidgetId, HashMap<TypeId, ComputedFn>>;
+type WidgetComputedFuncs<'ui> =
+    HashMap<WidgetId, HashMap<TypeId, Box<dyn ComputedFunc<'ui> + 'ui>>>;
 
-pub struct WidgetContext {
+pub struct WidgetContext<'ui> {
     global: StateMap,
     states: WidgetStates,
 
-    layouts: Mutex<HashMap<WidgetId, LayoutRef>>,
+    layouts: Mutex<HashMap<WidgetId, Ref<Layout>>>,
 
-    computed_funcs: Arc<Mutex<WidgetComputedFuncs>>,
+    computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
     pub(crate) current_id: Arc<Mutex<Option<ListenerID>>>,
 }
 
-impl WidgetContext {
+impl<'ui> WidgetContext<'ui> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(on_changed: Arc<dyn Fn(&HashSet<ListenerID>) + Send + Sync>) -> Self {
+    pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
         Self {
-            global: StateMap::new(Arc::clone(&on_changed)),
-            states: WidgetStates::new(Arc::clone(&on_changed)),
+            global: StateMap::new(Arc::clone(&changed)),
+            states: WidgetStates::new(Arc::clone(&changed)),
             layouts: Mutex::default(),
 
             computed_funcs: Arc::new(Mutex::new(HashMap::new())),
@@ -70,7 +76,7 @@ impl WidgetContext {
     // Global and local state
 
     /// Initializing a global does not cause the initializer to be updated when its value is changed.
-    pub fn init_global<V>(&self) -> Ref<V>
+    pub fn init_global<V>(&self) -> State<V>
     where
         V: Value + Default,
     {
@@ -81,7 +87,7 @@ impl WidgetContext {
         self.global.get::<V>().expect("failed to init global")
     }
 
-    pub fn set_global<V>(&self, value: V) -> Ref<V>
+    pub fn set_global<V>(&self, value: V) -> State<V>
     where
         V: Value,
     {
@@ -91,7 +97,7 @@ impl WidgetContext {
             .expect("failed to fetch global, this shouldn't be possible")
     }
 
-    pub fn get_or_init_global<V>(&self) -> Ref<V>
+    pub fn get_or_init_global<V>(&self) -> State<V>
     where
         V: Value + Default,
     {
@@ -99,7 +105,7 @@ impl WidgetContext {
             .map_or_else(|| self.set_global(V::default()), |v| v)
     }
 
-    pub fn get_global<V>(&self) -> Option<Ref<V>>
+    pub fn get_global<V>(&self) -> Option<State<V>>
     where
         V: Value,
     {
@@ -110,7 +116,7 @@ impl WidgetContext {
         self.global.get::<V>()
     }
 
-    pub fn set_state<V>(&self, value: V) -> Ref<V>
+    pub fn set_state<V>(&self, value: V) -> State<V>
     where
         V: Value,
     {
@@ -122,14 +128,14 @@ impl WidgetContext {
         self.states.set(&current_id, value)
     }
 
-    pub fn get_state<V: Default>(&self) -> Ref<V>
+    pub fn get_state<V: Default>(&self) -> State<V>
     where
         V: Value,
     {
         self.get_state_or(V::default)
     }
 
-    pub fn get_state_or<V, F>(&self, func: F) -> Ref<V>
+    pub fn get_state_or<V, F>(&self, func: F) -> State<V>
     where
         V: Value,
         F: FnOnce() -> V,
@@ -144,7 +150,7 @@ impl WidgetContext {
 
     // Layout
 
-    pub fn set_layout(&self, layout: LayoutRef) {
+    pub fn set_layout(&self, layout: Ref<Layout>) {
         let current_id = self
             .current_id
             .lock()
@@ -163,11 +169,11 @@ impl WidgetContext {
         };
     }
 
-    pub fn get_layout(&self, widget_id: &WidgetId) -> LayoutRef {
+    pub fn get_layout(&self, widget_id: &WidgetId) -> Ref<Layout> {
         self.layouts
             .lock()
             .get(widget_id)
-            .map_or(LayoutRef::None, LayoutRef::clone)
+            .map_or(Ref::None, Ref::clone)
     }
 
     // Computed
@@ -177,8 +183,8 @@ impl WidgetContext {
     /// Will panic if called outside of a build context.
     pub fn computed<V, F>(&self, func: F) -> V
     where
-        V: Eq + PartialEq + Clone + Value,
-        F: Fn(&Self) -> V + 'static,
+        V: Eq + PartialEq + Copy + Clone + Value,
+        F: Fn(&Self) -> V + 'ui + 'static,
     {
         let current_id = self
             .current_id
@@ -191,68 +197,33 @@ impl WidgetContext {
 
         let listener_id = ListenerID::Computed(*widget_id, computed_id);
 
-        let value = self.call_computed(listener_id, &func);
-
         let mut widgets = self.computed_funcs.lock();
 
-        widgets
+        let computed_func = widgets
             .entry(*widget_id)
             .or_insert_with(HashMap::default)
             .entry(computed_id)
             .or_insert_with(|| {
-                let last_value = Arc::new(Mutex::new(value.clone()));
+                let mut computed_func = Box::new(ComputedFn::new(listener_id, func));
 
-                Box::new(move |ctx| {
-                    let new_value = ctx.call_computed(listener_id, &func);
+                computed_func.call(self);
 
-                    let mut last_value = last_value.lock();
-
-                    if *last_value == new_value {
-                        false
-                    } else {
-                        *last_value = new_value;
-                        true
-                    }
-                })
+                computed_func
             });
 
-        value
+        *computed_func
+            .get()
+            .downcast()
+            .ok()
+            .expect("failed to downcast ref")
     }
 
-    fn call_computed<V, F>(&self, listener_id: ListenerID, func: &F) -> V
-    where
-        V: Eq + PartialEq + Clone + Value,
-        F: Fn(&Self) -> V + 'static,
-    {
-        let previous_id = *self.current_id.lock();
-
-        *self.current_id.lock() = Some(listener_id);
-
-        let value = func(self);
-
-        *self.current_id.lock() = previous_id;
-
-        value
-    }
-
-    pub(crate) fn did_computed_change(
-        &mut self,
-        widget_id: &WidgetId,
-        computed_id: TypeId,
-    ) -> bool {
-        let mut widgets = self.computed_funcs.lock();
-
-        if !widgets.contains_key(widget_id) {
-            return false;
-        }
-
-        let computed_funcs = widgets.get_mut(widget_id).unwrap();
-
-        if !computed_funcs.contains_key(&computed_id) {
-            return false;
-        }
-
-        (computed_funcs.get(&computed_id).unwrap())(self)
+    pub(crate) fn call_computed_func(&mut self, widget_id: &WidgetId, computed_id: TypeId) -> bool {
+        self.computed_funcs
+            .lock()
+            .get_mut(widget_id)
+            .and_then(|widgets| widgets.get_mut(&computed_id))
+            .map_or(false, |computed_func| computed_func.call(self))
     }
 
     // Keys

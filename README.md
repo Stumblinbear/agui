@@ -62,14 +62,14 @@ Currently, widgets are created using a `Widget` derive macro, and by implementin
 #[widget(layout = "row")]
 pub struct MyWidget {
     // We can define parameters, here.
-    pub layout: LayoutRef,
+    pub layout: Ref<Layout>,
 }
 
 impl WidgetImpl for MyWidget {
     // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         // `ctx.set_layout` is what we use to define this widget's layout parameters.
-        ctx.set_layout(LayoutRef::clone(&self.layout));
+        ctx.set_layout(Ref::clone(&self.layout));
 
         build! {
             Button { }

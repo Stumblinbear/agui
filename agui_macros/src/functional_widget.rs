@@ -23,7 +23,7 @@ pub fn parse_functional_widget(args: TokenStream, input: TokenStream) -> TokenSt
 }
 
 // #[functional_widget]
-// pub fn Button(ctx: &WidgetContext, layout: LayoutRef, color: Color, child: WidgetRef) {
+// pub fn Button(ctx: &WidgetContext, layout: Ref<Layout>, color: Color, child: WidgetRef) {
 //     let hovering = ctx.computed(|ctx| {
 //         if let Some(hovering) = ctx.get_global::<Hovering>() {
 //             hovering.read().is_hovering(ctx)
@@ -32,7 +32,7 @@ pub fn parse_functional_widget(args: TokenStream, input: TokenStream) -> TokenSt
 //         }
 //     });
 
-//     ctx.set_layout(LayoutRef::clone(&layout));
+//     ctx.set_layout(Ref::clone(&layout));
 
 //     build! {
 //         Quad {

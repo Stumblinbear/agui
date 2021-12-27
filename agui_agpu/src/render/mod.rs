@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram};
-use agui::{context::Ref, unit::Rect, widget::WidgetId, widgets::AppSettings, WidgetManager};
+use agui::{context::State, unit::Rect, widget::WidgetId, widgets::AppSettings, WidgetManager};
 use downcast_rs::{impl_downcast, Downcast};
 
 pub mod bounding;
@@ -10,12 +10,12 @@ pub mod quad;
 pub struct RenderContext {
     pub gpu: GpuHandle,
 
-    pub app_settings: Ref<AppSettings>,
+    pub app_settings: State<AppSettings>,
     pub app_settings_buffer: Buffer,
 }
 
 impl RenderContext {
-    pub fn new(program: &GpuProgram, app_settings: Ref<AppSettings>) -> Self {
+    pub fn new(program: &GpuProgram, app_settings: State<AppSettings>) -> Self {
         Self {
             gpu: GpuHandle::clone(&program.gpu),
 
