@@ -11,7 +11,7 @@ use parking_lot::{
 
 use crate::widget::WidgetId;
 
-use super::{Value, ListenerID};
+use super::{ListenerID, Value};
 
 pub struct StateValue {
     value: Option<Arc<RwLock<Box<dyn Value>>>>,
@@ -82,10 +82,10 @@ impl StateMap {
             if let Some(value) = &state.value {
                 return Some(State {
                     phantom: PhantomData,
-                    
+
                     notify: Arc::clone(&state.notify),
                     changed: Arc::clone(&self.changed),
-                    
+
                     value: Arc::clone(value),
                 });
             }
@@ -126,6 +126,26 @@ impl WidgetStates {
             widgets: Mutex::default(),
             changed,
         }
+    }
+
+    pub fn init<V, F>(&self, listener_id: &ListenerID, func: F) -> State<V>
+    where
+        V: Value,
+        F: FnOnce() -> V,
+    {
+        let widget_id = listener_id.widget_id();
+
+        let mut widgets = self.widgets.lock();
+
+        let state = widgets
+            .entry(*widget_id)
+            .or_insert_with(|| StateMap::new(Arc::clone(&self.changed)));
+
+        if !state.contains::<V>() {
+            state.insert(func());
+        }
+
+        state.get().expect("failed to get state")
     }
 
     pub fn set<V>(&self, listener_id: &ListenerID, value: V) -> State<V>
@@ -198,7 +218,7 @@ where
     fn clone(&self) -> Self {
         Self {
             phantom: self.phantom,
-            
+
             notify: Arc::clone(&self.notify),
             changed: Arc::clone(&self.changed),
 
@@ -212,6 +232,7 @@ impl<V> State<V>
 where
     V: Value,
 {
+    /// Read the state.
     pub fn read(&self) -> MappedRwLockReadGuard<V> {
         RwLockReadGuard::map(self.value.read(), |value| {
             value
@@ -220,6 +241,9 @@ where
         })
     }
 
+    /// Write to the state.
+    /// 
+    /// This will trigger an update of any components listening to the state. Use only if something legitimately changes.
     pub fn write(&self) -> MappedRwLockWriteGuard<V> {
         self.changed.lock().extend(self.notify.lock().iter());
 

@@ -74,9 +74,9 @@ impl<'ui> WidgetContext<'ui> {
         }
     }
 
-    // Global and local state
+    // Global state
 
-    /// Initializing a global does not cause the initializer to be updated when its value is changed.
+    /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V>(&self) -> State<V>
     where
         V: Value + Default,
@@ -88,24 +88,25 @@ impl<'ui> WidgetContext<'ui> {
         self.global.get::<V>().expect("failed to init global")
     }
 
+    /// Set a global state value. This does not cause the setter to be updateed when its value is changed.
     pub fn set_global<V>(&self, value: V) -> State<V>
     where
         V: Value,
     {
         self.global.insert(value);
 
-        self.get_global()
-            .expect("failed to fetch global, this shouldn't be possible")
+        self.global.get::<V>().expect("failed to set global")
     }
 
+    /// Fetch a global value, or initialize it if it doesn't exist. The caller will be updated when the value is changed.
     pub fn get_or_init_global<V>(&self) -> State<V>
     where
         V: Value + Default,
     {
-        self.get_global::<V>()
-            .map_or_else(|| self.set_global(V::default()), |v| v)
+        self.get_global_or(V::default)
     }
 
+    /// Fetch a global value. The caller will be updated when the value is changed.
     pub fn get_global<V>(&self) -> Option<State<V>>
     where
         V: Value,
@@ -117,6 +118,32 @@ impl<'ui> WidgetContext<'ui> {
         self.global.get::<V>()
     }
 
+    /// Fetch a global value. The caller will be updated when the value is changed.
+    pub fn get_global_or<V, F>(&self, func: F) -> State<V>
+    where
+        V: Value,
+        F: FnOnce() -> V,
+    {
+        self.get_global::<V>()
+            .map_or_else(|| self.set_global(func()), |v| v)
+    }
+
+    // Local state
+
+    /// Initializing a state does not cause the initializer to be updated when its value is changed.
+    pub fn init_state<V>(&self) -> State<V>
+    where
+        V: Value + Default,
+    {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get state from context while not iterating");
+
+        self.states.init(&current_id, V::default)
+    }
+
+    /// Set a local state value. This does not cause the initializer to be updated when its value is changed.
     pub fn set_state<V>(&self, value: V) -> State<V>
     where
         V: Value,
@@ -129,13 +156,15 @@ impl<'ui> WidgetContext<'ui> {
         self.states.set(&current_id, value)
     }
 
-    pub fn get_state<V: Default>(&self) -> State<V>
+    /// Fetch a local state value. The caller will be updated when the value is changed.
+    pub fn get_state<V>(&self) -> State<V>
     where
-        V: Value,
+        V: Value + Default,
     {
         self.get_state_or(V::default)
     }
 
+    /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
     pub fn get_state_or<V, F>(&self, func: F) -> State<V>
     where
         V: Value,
@@ -151,6 +180,9 @@ impl<'ui> WidgetContext<'ui> {
 
     // Layout
 
+    /// Set the layout of the widget.
+    ///
+    /// Used in a `build()` method to set the layout of the widget being built.
     pub fn set_layout(&self, layout: Ref<Layout>) {
         let current_id = self
             .current_id
@@ -170,6 +202,7 @@ impl<'ui> WidgetContext<'ui> {
         };
     }
 
+    /// Fetch the layout of a widget.
     pub fn get_layout(&self, widget_id: &WidgetId) -> Ref<Layout> {
         self.layouts
             .lock()
