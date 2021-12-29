@@ -57,7 +57,7 @@ fn main() -> Result<(), agpu::BoxError> {
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
-                                width: 100,
+                                width: 200,
                                 height: 100
                             }
                         },
@@ -71,8 +71,8 @@ fn main() -> Result<(), agpu::BoxError> {
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
-                                width: 100,
-                                height: 100
+                                width: 50,
+                                height: 200
                             }
                         },
                         child: Text {

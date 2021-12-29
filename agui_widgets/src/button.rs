@@ -8,9 +8,12 @@ use agui_core::{
 use agui_macros::{build, Widget};
 use agui_primitives::{Quad, QuadStyle};
 
-use crate::state::{
-    hovering::Hovering,
-    mouse::{Mouse, MouseButtonState},
+use crate::{
+    plugins::theme::{Style, Theme},
+    state::{
+        hovering::Hovering,
+        mouse::{Mouse, MouseButtonState},
+    },
 };
 
 #[derive(Clone)]
@@ -20,6 +23,8 @@ pub struct ButtonStyle {
     pub pressed: QuadStyle,
 }
 
+impl Style for ButtonStyle {}
+
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
@@ -28,10 +33,12 @@ impl Default for ButtonStyle {
             },
 
             hover: QuadStyle {
-                color: Color::Green,
+                color: Color::LightGray,
             },
 
-            pressed: QuadStyle::default(),
+            pressed: QuadStyle {
+                color: Color::DarkGray,
+            },
         }
     }
 }
@@ -48,7 +55,7 @@ enum ButtonState {
 pub struct Button {
     pub layout: Ref<Layout>,
 
-    pub style: ButtonStyle,
+    pub style: Option<ButtonStyle>,
 
     pub child: WidgetRef,
 
@@ -79,8 +86,7 @@ impl WidgetBuilder for Button {
 
         if *last_state.read() == ButtonState::Pressed {
             if let ButtonState::Pressed = state {
-
-            }else{
+            } else {
                 self.on_pressed.emit(());
             }
         }
@@ -89,15 +95,17 @@ impl WidgetBuilder for Button {
             *last_state.write() = state;
         }
 
+        let style = Theme::resolve(ctx, &self.style);
+
         build! {
             Quad {
                 layout: Layout {
                     sizing: Sizing::Fill
                 },
                 style: match state {
-                    ButtonState::Normal => self.style.normal.clone(),
-                    ButtonState::Hover => self.style.hover.clone(),
-                    ButtonState::Pressed => self.style.pressed.clone(),
+                    ButtonState::Normal => style.normal,
+                    ButtonState::Hover => style.hover,
+                    ButtonState::Pressed => style.pressed,
                 },
                 child: &self.child
             }
