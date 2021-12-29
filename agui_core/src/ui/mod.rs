@@ -1,6 +1,5 @@
 use std::{
-    any::TypeId,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
@@ -10,36 +9,21 @@ use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    context::{ListenerID, WidgetContext},
+    context::{tree::Tree, ListenerID, WidgetContext},
     event::WidgetEvent,
-    plugin::WidgetPlugin,
     unit::{Key, Rect, Units},
     widget::{Widget, WidgetId, WidgetRef},
     Ref,
 };
 
-mod cache;
 mod debug;
 mod node;
-mod tree;
 
 pub use self::node::WidgetNode;
 
-use self::{cache::LayoutCache, tree::Tree};
-
-struct VoidEvents;
-
-impl Extend<WidgetEvent> for VoidEvents {
-    fn extend<T: IntoIterator<Item = WidgetEvent>>(&mut self, _: T) {}
-}
-
 /// Handles the entirety of the widget lifecycle.
 pub struct WidgetManager<'ui> {
-    plugins: BTreeMap<TypeId, Box<dyn WidgetPlugin>>,
-
     widgets: Arena<WidgetNode>,
-    tree: Tree<WidgetId>,
-    cache: LayoutCache<WidgetId>,
 
     context: WidgetContext<'ui>,
 
@@ -65,11 +49,7 @@ impl<'ui> Default for WidgetManager<'ui> {
         let changed = Arc::new(Mutex::new(HashSet::new()));
 
         Self {
-            plugins: BTreeMap::default(),
-
             widgets: Arena::default(),
-            tree: Tree::default(),
-            cache: LayoutCache::default(),
 
             context: WidgetContext::new(Arc::clone(&changed)),
 
@@ -99,40 +79,9 @@ impl<'ui> WidgetManager<'ui> {
         Self::default()
     }
 
-    /// Initialize a plugin with its `Default::default()` method.
-    pub fn init_plugin<P>(&mut self)
-    where
-        P: WidgetPlugin + Default,
-    {
-        self.add_plugin(P::default());
-    }
-
-    /// Load a plugin.
-    pub fn add_plugin<P>(&mut self, plugin: P)
-    where
-        P: WidgetPlugin,
-    {
-        let plugin_id = TypeId::of::<P>();
-        let plugin = Box::new(plugin);
-
-        self.plugins.insert(plugin_id, plugin);
-
-        self.update_plugin(plugin_id);
-    }
-
-    /// Fetch a loaded plugin. Will be `None` if it does not exist.
-    pub fn get_plugin<P>(&self) -> Option<&P>
-    where
-        P: WidgetPlugin,
-    {
-        self.plugins
-            .get(&TypeId::of::<P>())
-            .and_then(|plugin| plugin.downcast_ref())
-    }
-
     /// Returns the widget tree.
     pub fn get_tree(&self) -> &Tree<WidgetId> {
-        &self.tree
+        self.context.get_tree()
     }
 
     /// Check if a widget exists in the tree.
@@ -195,7 +144,7 @@ impl<'ui> WidgetManager<'ui> {
 
     /// Get the visual `Rect` of a widget.
     pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
-        self.cache.get_rect(widget_id)
+        self.context.get_rect(widget_id)
     }
 
     /// Get the widget build context.
@@ -211,7 +160,7 @@ impl<'ui> WidgetManager<'ui> {
 
         if parent_id.is_none() {
             // Check if we already have a root node, and queue it for removal if so
-            if let Some(root_id) = self.tree.get_root() {
+            if let Some(root_id) = self.get_tree().get_root() {
                 self.modifications.push(Modify::Destroy(root_id));
             }
         }
@@ -228,10 +177,7 @@ impl<'ui> WidgetManager<'ui> {
     ///
     /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
     /// changes that occured during the process, in order.
-    pub fn update<E>(&mut self, events: &mut E)
-    where
-        E: Extend<WidgetEvent>,
-    {
+    pub fn update(&mut self, events: &mut Vec<WidgetEvent>) {
         if self.modifications.is_empty() && self.changed.lock().is_empty() {
             return;
         }
@@ -269,7 +215,7 @@ impl<'ui> WidgetManager<'ui> {
                     }
 
                     ListenerID::Plugin(plugin_id) => {
-                        self.update_plugin(plugin_id);
+                        self.context.plugin_on_update(plugin_id);
                     }
                 }
             }
@@ -277,7 +223,7 @@ impl<'ui> WidgetManager<'ui> {
             let mut to_rebuild = Vec::new();
 
             'main: for widget_id in dirty_widgets {
-                let node = match self.tree.get(&widget_id) {
+                let node = match self.get_tree().get(&widget_id) {
                     Some(widget) => widget,
                     None => continue,
                 };
@@ -295,12 +241,12 @@ impl<'ui> WidgetManager<'ui> {
                     if widget_depth > dirty_depth {
                         // If the widget is a child of one of the already queued widgets, bail. It's
                         // already going to be updated.
-                        if self.tree.has_child(&dirty_id, &widget_id) {
+                        if self.get_tree().has_child(&dirty_id, &widget_id) {
                             continue 'main;
                         }
                     } else {
                         // If the widget is a parent of the widget already queued for render, remove it
-                        if self.tree.has_child(&widget_id, &dirty_id) {
+                        if self.get_tree().has_child(&widget_id, &dirty_id) {
                             to_remove.push(i);
                         }
                     }
@@ -322,10 +268,11 @@ impl<'ui> WidgetManager<'ui> {
         // Workaround for morphorm ignoring root sizing
         let root_changed = self.morphorm_root_workaround();
 
-        morphorm::layout(&mut self.cache, &self.tree, &self.widgets);
+        morphorm::layout(&mut self.context.cache, &self.context.tree, &self.widgets);
 
         events.extend(
-            self.cache
+            self.context
+                .cache
                 .take_changed()
                 .iter()
                 .filter(|widget_id| self.contains(widget_id))
@@ -333,6 +280,7 @@ impl<'ui> WidgetManager<'ui> {
                     type_id: self.get(widget_id).get_type_id(),
                     widget_id: *widget_id,
                     rect: *self
+                        .context
                         .cache
                         .get_rect(widget_id)
                         .expect("root widget does not have a rect"),
@@ -340,70 +288,70 @@ impl<'ui> WidgetManager<'ui> {
         );
 
         if root_changed {
-            if let Some(widget_id) = self.tree.get_root() {
-                events.extend(Some(WidgetEvent::Layout {
+            if let Some(widget_id) = self.get_tree().get_root() {
+                events.push(WidgetEvent::Layout {
                     type_id: self.get(&widget_id).get_type_id(),
                     widget_id,
                     rect: *self
+                        .context
                         .cache
                         .get_rect(&widget_id)
                         .expect("root widget does not have a rect"),
-                }));
+                });
             }
         }
+
+        self.context.plugin_on_events(events);
     }
 
     fn morphorm_root_workaround(&mut self) -> bool {
         let mut root_changed = false;
 
-        if let Some(widget_id) = self.tree.get_root() {
+        if let Some(widget_id) = self.get_tree().get_root() {
             if let Some(layout) = self.context.get_layout(&widget_id).try_get() {
                 if let Units::Pixels(px) = layout.position.get_left() {
-                    if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
+                    if (self.context.cache.posx(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.cache.set_posx(widget_id, px);
+                        self.context.cache.set_posx(widget_id, px);
                     }
                 }
 
                 if let Units::Pixels(px) = layout.position.get_top() {
-                    if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
+                    if (self.context.cache.posy(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.cache.set_posy(widget_id, px);
+                        self.context.cache.set_posy(widget_id, px);
                     }
                 }
 
                 if let Units::Pixels(px) = layout.sizing.get_width() {
-                    if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
+                    if (self.context.cache.width(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.cache.set_width(widget_id, px);
+                        self.context.cache.set_width(widget_id, px);
                     }
                 }
 
                 if let Units::Pixels(px) = layout.sizing.get_height() {
-                    if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
+                    if (self.context.cache.height(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.cache.set_height(widget_id, px);
+                        self.context.cache.set_height(widget_id, px);
                     }
                 }
             } else {
-                self.cache.set_posx(widget_id, 0.0);
-                self.cache.set_posy(widget_id, 0.0);
-                self.cache.set_width(widget_id, 0.0);
-                self.cache.set_height(widget_id, 0.0);
+                self.context.cache.set_posx(widget_id, 0.0);
+                self.context.cache.set_posy(widget_id, 0.0);
+                self.context.cache.set_width(widget_id, 0.0);
+                self.context.cache.set_height(widget_id, 0.0);
             }
         }
 
         root_changed
     }
 
-    fn apply_modifications<E>(&mut self, events: &mut E)
-    where
-        E: Extend<WidgetEvent>,
-    {
+    fn apply_modifications(&mut self, events: &mut Vec<WidgetEvent>) {
         let mut removed_keyed = HashMap::new();
 
         while !self.modifications.is_empty() {
@@ -456,28 +404,13 @@ impl<'ui> WidgetManager<'ui> {
         }
     }
 
-    fn update_plugin(&mut self, plugin_id: TypeId) {
-        let plugin = self
-            .plugins
-            .get(&plugin_id)
-            .expect("cannot update a plugin that does not exist");
-
-        *self.context.current_id.lock() = Some(ListenerID::Plugin(plugin_id));
-
-        plugin.on_update(self, &self.context);
-
-        *self.context.current_id.lock() = None;
-    }
-
-    fn process_spawn<E>(
+    fn process_spawn(
         &mut self,
-        events: &mut E,
+        events: &mut Vec<WidgetEvent>,
         removed_keyed: &mut HashMap<(Option<WidgetId>, Key), WidgetId>,
         parent_id: Option<WidgetId>,
         widget: WidgetRef,
-    ) where
-        E: Extend<WidgetEvent>,
-    {
+    ) {
         if parent_id.is_some() && !self.contains(parent_id.as_ref().unwrap()) {
             panic!("cannot add a widget to a nonexistent parent")
         }
@@ -486,7 +419,7 @@ impl<'ui> WidgetManager<'ui> {
         if let WidgetRef::Keyed { owner_id, key, .. } = &widget {
             if let Some(keyed_id) = removed_keyed.remove(&(*owner_id, *key)) {
                 // Reparent the (removed) keyed widget to the new widget
-                self.tree.reparent(parent_id, keyed_id);
+                self.context.tree.reparent(parent_id, keyed_id);
 
                 return;
             }
@@ -505,16 +438,16 @@ impl<'ui> WidgetManager<'ui> {
             parent_id.map_or(0, |node| node.depth() + 1),
         );
 
-        self.tree.add(parent_id, widget_id);
+        self.context.tree.add(parent_id, widget_id);
 
         // Sometimes widgets get changes queued before they're spawned
         self.changed.lock().remove(&ListenerID::Widget(widget_id));
 
         self.modifications.push(Modify::Rebuild(widget_id));
 
-        events.extend(Some(WidgetEvent::Spawned { type_id, widget_id }));
+        events.push(WidgetEvent::Spawned { type_id, widget_id });
 
-        self.cache.add(widget_id);
+        self.context.cache.add(widget_id);
     }
 
     fn process_rebuild(&mut self, widget_id: WidgetId) {
@@ -522,6 +455,7 @@ impl<'ui> WidgetManager<'ui> {
 
         // Queue the children for removal
         for child_id in &self
+            .context
             .tree
             .get(&widget_id)
             .expect("cannot destroy a widget that doesn't exist")
@@ -548,32 +482,29 @@ impl<'ui> WidgetManager<'ui> {
         node.layout = self.context.get_layout(&widget_id);
     }
 
-    fn process_destroy<E>(&mut self, events: &mut E, widget_id: WidgetId)
-    where
-        E: Extend<WidgetEvent>,
-    {
+    fn process_destroy(&mut self, events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
         let widget = self
             .widgets
             .remove(widget_id.id())
             .expect("cannot remove a widget that does not exist");
 
         // Add the child widgets to the removal queue
-        if let Some(tree_node) = self.tree.remove(&widget_id) {
+        if let Some(tree_node) = self.context.tree.remove(&widget_id) {
             for child_id in tree_node.children {
                 self.modifications.push(Modify::Destroy(child_id));
             }
         }
 
-        self.cache.remove(&widget_id);
+        self.context.cache.remove(&widget_id);
 
         self.context.remove(&widget_id);
 
         self.changed.lock().remove(&ListenerID::Widget(widget_id));
 
-        events.extend(Some(WidgetEvent::Destroyed {
+        events.push(WidgetEvent::Destroyed {
             type_id: widget.widget.get_type_id(),
             widget_id,
-        }));
+        });
     }
 
     pub fn print_tree(&self) {
@@ -599,7 +530,6 @@ mod tests {
 
     use crate::{
         context::WidgetContext,
-        ui::VoidEvents,
         unit::LayoutType,
         widget::{BuildResult, Widget, WidgetBuilder, WidgetLayout, WidgetRef, WidgetType},
     };
@@ -668,9 +598,16 @@ mod tests {
 
         assert_eq!(manager.additions, 0, "should not have added the widget");
 
-        manager.update(&mut VoidEvents);
+        let mut events = Vec::new();
 
-        let widget_id = &manager.tree.get_root().expect("failed to get root widget");
+        manager.update(&mut events);
+
+        events.clear();
+
+        let widget_id = &manager
+            .get_tree()
+            .get_root()
+            .expect("failed to get root widget");
 
         assert_eq!(manager.rebuilds, 1, "should have built the new widget");
 
@@ -697,7 +634,9 @@ mod tests {
             "widget `computes` should have been been 1"
         );
 
-        manager.update(&mut VoidEvents);
+        manager.update(&mut events);
+
+        events.clear();
 
         assert_eq!(manager.additions, 1, "should have 1 addition");
         assert_eq!(manager.removals, 0, "should have 0 removals");
@@ -725,14 +664,21 @@ mod tests {
 
         manager.add(None, WidgetRef::new(TestWidget::default()));
 
-        manager.update(&mut VoidEvents);
+        let mut events = Vec::new();
+
+        manager.update(&mut events);
+
+        events.clear();
 
         assert_eq!(manager.additions, 1, "should have 1 addition");
         assert_eq!(manager.removals, 0, "should have 0 removals");
         assert_eq!(manager.rebuilds, 1, "should not have been rebuilt");
         assert_eq!(manager.changes, 0, "should not have changed");
 
-        let widget_id = &manager.tree.get_root().expect("failed to get root widget");
+        let widget_id = &manager
+            .get_tree()
+            .get_root()
+            .expect("failed to get root widget");
 
         // Compute function gets called twice, once for the default value and once to check if it needs
         // to be updated, after it detects a change in TestGlobal
@@ -763,7 +709,9 @@ mod tests {
             "widget `computes` should be 1"
         );
 
-        manager.update(&mut VoidEvents);
+        manager.update(&mut events);
+
+        events.clear();
 
         assert_eq!(manager.additions, 1, "should have 1 addition");
         assert_eq!(manager.removals, 0, "should have 0 removals");

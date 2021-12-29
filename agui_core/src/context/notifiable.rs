@@ -1,6 +1,7 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
+    hash::Hash,
     marker::PhantomData,
     sync::Arc,
 };
@@ -9,41 +10,41 @@ use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
-use crate::widget::WidgetId;
-
 use super::{ListenerID, Value};
 
-pub struct StateValue {
+pub struct NotifiableValue {
     value: Option<Arc<RwLock<Box<dyn Value>>>>,
 
     notify: Arc<Mutex<HashSet<ListenerID>>>,
 }
 
-pub struct StateMap {
-    states: RwLock<HashMap<TypeId, StateValue>>,
+pub struct NotifiableMap {
+    values: RwLock<HashMap<TypeId, NotifiableValue>>,
 
     changed: Arc<Mutex<HashSet<ListenerID>>>,
 }
 
-impl StateMap {
-    #[allow(clippy::needless_pass_by_value)]
+impl NotifiableMap {
+    // #[allow(clippy::needless_pass_by_value)]
+    #[must_use]
     pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
         Self {
-            states: RwLock::default(),
+            values: RwLock::default(),
+
             changed,
         }
     }
 
-    fn ensure_state<V>(&self)
+    fn ensure_value<V>(&self)
     where
         V: Value,
     {
-        let mut states = self.states.write();
+        let mut values = self.values.write();
 
-        states.entry(TypeId::of::<V>()).or_insert_with(|| {
+        values.entry(TypeId::of::<V>()).or_insert_with(|| {
             let notify = Arc::new(Mutex::new(HashSet::new()));
 
-            StateValue {
+            NotifiableValue {
                 value: None,
 
                 notify: Arc::clone(&notify),
@@ -55,7 +56,7 @@ impl StateMap {
     where
         V: Value,
     {
-        self.states
+        self.values
             .read()
             .get(&TypeId::of::<V>())
             .map_or(false, |state| state.value.is_some())
@@ -65,25 +66,25 @@ impl StateMap {
     where
         V: Value,
     {
-        self.ensure_state::<V>();
+        self.ensure_value::<V>();
 
-        let mut states = self.states.write();
+        let mut values = self.values.write();
 
-        let state = states.get_mut(&TypeId::of::<V>()).unwrap();
+        let notifiable = values.get_mut(&TypeId::of::<V>()).unwrap();
 
-        state.value = Some(Arc::new(RwLock::new(Box::new(value))));
+        notifiable.value = Some(Arc::new(RwLock::new(Box::new(value))));
     }
 
-    pub fn get<V>(&self) -> Option<State<V>>
+    pub fn get<V>(&self) -> Option<Notify<V>>
     where
         V: Value,
     {
-        if let Some(state) = self.states.read().get(&TypeId::of::<V>()) {
-            if let Some(value) = &state.value {
-                return Some(State {
+        if let Some(notifiable) = self.values.read().get(&TypeId::of::<V>()) {
+            if let Some(value) = &notifiable.value {
+                return Some(Notify {
                     phantom: PhantomData,
 
-                    notify: Arc::clone(&state.notify),
+                    notify: Arc::clone(&notifiable.notify),
                     changed: Arc::clone(&self.changed),
 
                     value: Arc::clone(value),
@@ -98,108 +99,123 @@ impl StateMap {
     where
         V: Value,
     {
-        self.ensure_state::<V>();
+        self.ensure_value::<V>();
 
-        let mut states = self.states.write();
+        let mut values = self.values.write();
 
-        let state = states.get_mut(&TypeId::of::<V>()).unwrap();
+        let notifiable = values.get_mut(&TypeId::of::<V>()).unwrap();
 
-        state.notify.lock().insert(listener_id);
+        notifiable.notify.lock().insert(listener_id);
     }
 
     pub fn remove_listener(&self, listener_id: &ListenerID) {
-        for state in self.states.write().values() {
-            state.notify.lock().remove(listener_id);
+        for notifiable in self.values.write().values() {
+            notifiable.notify.lock().remove(listener_id);
         }
     }
 }
 
-pub struct WidgetStates {
-    widgets: Mutex<HashMap<WidgetId, StateMap>>,
+pub struct ScopedNotifiableMap<K>
+where
+    K: Eq + Hash,
+{
+    scopes: Mutex<HashMap<K, NotifiableMap>>,
 
     changed: Arc<Mutex<HashSet<ListenerID>>>,
 }
 
-impl WidgetStates {
+impl<K> ScopedNotifiableMap<K>
+where
+    K: Eq + Hash,
+{
+    #[must_use]
     pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
         Self {
-            widgets: Mutex::default(),
+            scopes: Mutex::default(),
             changed,
         }
     }
 
-    pub fn init<V, F>(&self, listener_id: &ListenerID, func: F) -> State<V>
+    pub fn init<V, F>(&self, key: K, func: F) -> Notify<V>
     where
         V: Value,
         F: FnOnce() -> V,
     {
-        let widget_id = listener_id.widget_id();
+        let mut scopes = self.scopes.lock();
 
-        let mut widgets = self.widgets.lock();
+        let scope = scopes
+            .entry(key)
+            .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
 
-        let state = widgets
-            .entry(*widget_id)
-            .or_insert_with(|| StateMap::new(Arc::clone(&self.changed)));
-
-        if !state.contains::<V>() {
-            state.insert(func());
+        if !scope.contains::<V>() {
+            scope.insert(func());
         }
 
-        state.get().expect("failed to get state")
+        scope.get().expect("failed to get scope")
     }
 
-    pub fn set<V>(&self, listener_id: &ListenerID, value: V) -> State<V>
+    pub fn set<V>(&self, key: K, value: V) -> Notify<V>
     where
         V: Value,
     {
-        let widget_id = listener_id.widget_id();
+        let mut scopes = self.scopes.lock();
 
-        let mut widgets = self.widgets.lock();
+        let scope = scopes
+            .entry(key)
+            .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
 
-        let state = widgets
-            .entry(*widget_id)
-            .or_insert_with(|| StateMap::new(Arc::clone(&self.changed)));
+        scope.insert(value);
 
-        state.insert(value);
-
-        state.get().expect("failed to get state")
+        scope.get().expect("failed to get scope")
     }
 
-    pub fn get<V, F>(&self, listener_id: &ListenerID, func: F) -> State<V>
+    pub fn get<V, F>(&self, key: K, func: F) -> Notify<V>
     where
         V: Value,
         F: FnOnce() -> V,
     {
-        let widget_id = listener_id.widget_id();
+        let mut scopes = self.scopes.lock();
 
-        let mut widgets = self.widgets.lock();
+        let scope = scopes
+            .entry(key)
+            .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
 
-        let state = widgets
-            .entry(*widget_id)
-            .or_insert_with(|| StateMap::new(Arc::clone(&self.changed)));
-
-        if !state.contains::<V>() {
-            state.insert(func());
+        if !scope.contains::<V>() {
+            scope.insert(func());
         }
 
-        state.add_listener::<V>(*listener_id);
+        // scope.add_listener::<V>(*listener_id);
 
-        state.get().expect("failed to get state")
+        scope.get().expect("failed to get state")
     }
 
-    pub fn remove(&self, widget_id: &WidgetId) {
-        self.widgets.lock().remove(widget_id);
+    pub fn remove(&self, key: &K) {
+        self.scopes.lock().remove(key);
+    }
 
-        // Remove any listeners attached to any widget state
-        self.widgets
+    pub fn add_listener<V>(&self, key: K, listener_id: ListenerID)
+    where
+        V: Value,
+    {
+        let mut scopes = self.scopes.lock();
+
+        let scope = scopes
+            .entry(key)
+            .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
+
+        scope.add_listener::<V>(listener_id);
+    }
+
+    pub fn remove_listeners(&self, listener_id: &ListenerID) {
+        self.scopes
             .lock()
             .iter()
-            .for_each(|(_, states)| states.remove_listener(&ListenerID::Widget(*widget_id)));
+            .for_each(|(_, states)| states.remove_listener(listener_id));
     }
 }
 
 /// Holds the state of a value, with notify-on-write.
-pub struct State<V>
+pub struct Notify<V>
 where
     V: Value,
 {
@@ -211,7 +227,7 @@ where
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }
 
-impl<V> Clone for State<V>
+impl<V> Clone for Notify<V>
 where
     V: Value,
 {
@@ -228,7 +244,7 @@ where
 }
 
 #[allow(clippy::missing_panics_doc)]
-impl<V> State<V>
+impl<V> Notify<V>
 where
     V: Value,
 {

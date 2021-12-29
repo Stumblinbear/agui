@@ -167,6 +167,13 @@ where
         }
     }
 
+    pub fn iter_parents(&self, node_id: K) -> ParentIterator<K> {
+        ParentIterator {
+            tree: self,
+            node_id: Some(node_id),
+        }
+    }
+
     pub fn has_child(&self, node_id: &K, child_id: &K) -> bool {
         let node = self.get(node_id);
         let child = self.get(child_id);
@@ -354,6 +361,37 @@ where
                             self.node_id = self.tree.get_deepest_child(sibling_id);
                         }
                     }
+                } else {
+                    // TreeNode doesn't have a parent, so we're at the root.
+                    self.node_id = None;
+                }
+            } else {
+                // If the node doesn't exist in the tree, then there's nothing to iterate
+                self.node_id = None;
+            }
+        }
+
+        self.node_id
+    }
+}
+
+pub struct ParentIterator<'a, K> {
+    tree: &'a Tree<K>,
+    node_id: Option<K>,
+}
+
+impl<'a, K> Iterator for ParentIterator<'a, K>
+where
+    K: Copy + PartialEq + Eq + Hash,
+{
+    type Item = K;
+
+    fn next(&mut self) -> Option<K> {
+        if let Some(node_id) = self.node_id {
+            // Grab the node from the tree
+            if let Some(node) = self.tree.get(&node_id) {
+                if let Some(parent_node_id) = node.parent {
+                    self.node_id = Some(parent_node_id);
                 } else {
                     // TreeNode doesn't have a parent, so we're at the root.
                     self.node_id = None;

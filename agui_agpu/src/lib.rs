@@ -8,7 +8,7 @@ use agpu::{
 };
 
 use agui::{
-    context::{State, WidgetContext},
+    context::{Notify, WidgetContext},
     event::WidgetEvent,
     plugin::WidgetPlugin,
     widget::{WidgetId, WidgetRef},
@@ -53,7 +53,7 @@ impl UI {
             manager,
             events: Vec::default(),
 
-            ctx: RenderContext::new(program, State::clone(&app_settings)),
+            ctx: RenderContext::new(program, Notify::clone(&app_settings)),
 
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
@@ -121,27 +121,6 @@ impl UI {
 
     pub fn get_context(&self) -> &WidgetContext<'static> {
         self.manager.get_context()
-    }
-
-    pub fn init_plugin<P>(&mut self)
-    where
-        P: WidgetPlugin + Default,
-    {
-        self.manager.init_plugin::<P>();
-    }
-
-    pub fn add_plugin<P>(&mut self, plugin: P)
-    where
-        P: WidgetPlugin,
-    {
-        self.manager.add_plugin(plugin);
-    }
-
-    pub fn get_plugin<P>(&self) -> Option<&P>
-    where
-        P: WidgetPlugin,
-    {
-        self.manager.get_plugin::<P>()
     }
 
     pub fn set_root(&mut self, widget: WidgetRef) {

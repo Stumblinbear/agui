@@ -4,16 +4,16 @@ use agpu::Features;
 use agui::{
     layout::Layout,
     macros::build,
-    unit::{Callback, Sizing, Units},
+    unit::{Callback, Sizing, Color},
     widgets::{
-        plugins::hovering::HoveringPlugin,
-        primitives::{Column, Text, Quad},
+        plugins::{hovering::HoveringPlugin, provider::Provider},
+        primitives::{Column, Text, Builder, QuadStyle},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
-            mouse::{Mouse, Scroll},
+            mouse::{Mouse, Scroll}, theme::Theme,
         },
-        App, Button,
+        App, Button, ButtonStyle,
     },
 };
 use agui_agpu::UI;
@@ -26,7 +26,7 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::with_default(&program);
 
-    ui.init_plugin::<HoveringPlugin>();
+    ui.get_context().init_plugin::<HoveringPlugin>();
 
     ui.get_context().init_global::<Keyboard>();
     ui.get_context().init_global::<KeyboardInput>();
@@ -68,20 +68,42 @@ fn main() -> Result<(), agpu::BoxError> {
                             println!("Pressed 2");
                         })
                     },
-                    Button {
-                        layout: Layout {
-                            sizing: Sizing::Set {
-                                width: 50,
-                                height: 200
+                    Builder::new(|ctx| {
+                        let mut theme = Theme::new();
+
+                        theme.set(ButtonStyle {
+                            normal: QuadStyle {
+                                color: Color::Red,
+                            },
+                
+                            hover: QuadStyle {
+                                color: Color::Green,
+                            },
+                
+                            pressed: QuadStyle {
+                                color: Color::Blue,
+                            },
+                        });
+
+                        Provider::provide_value(ctx, theme);
+                        
+                        build!{
+                            Button {
+                                layout: Layout {
+                                    sizing: Sizing::Set {
+                                        width: 50,
+                                        height: 200
+                                    }
+                                },
+                                child: Text {
+                                    text: "A Button"
+                                },
+                                on_pressed: Callback::from(|()| {
+                                    println!("Pressed 3");
+                                })
                             }
-                        },
-                        child: Text {
-                            text: "A Button"
-                        },
-                        on_pressed: Callback::from(|()| {
-                            println!("Pressed 3");
-                        })
-                    }
+                        }
+                    })
                 ]
             }
         }

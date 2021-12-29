@@ -24,7 +24,7 @@ const WHITE: &str = "\u{001b}[37;1m";
 pub fn print_tree(manager: &WidgetManager) {
     println!("Tree:");
 
-    for widget_id in manager.tree.iter() {
+    for widget_id in manager.get_tree().iter() {
         let depth = widget_id.depth();
 
         let node = manager.get_node(&widget_id);
@@ -86,7 +86,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
     }
 
     // No widgets are added to the tree
-    if manager.tree.get_root().is_none() {
+    if manager.get_tree().get_root().is_none() {
         // If we have a new root widget queued, print it
         if let Some(widget) = new_root {
             print_node(0, None, &widget.get(), GREEN, "");
@@ -95,7 +95,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
         return;
     }
 
-    for widget_id in manager.tree.iter() {
+    for widget_id in manager.get_tree().iter() {
         let depth = widget_id.depth();
 
         let is_rebuild_queued = rebuilds.contains(&widget_id);
