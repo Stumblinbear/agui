@@ -8,12 +8,10 @@ use agui_core::{
 use agui_macros::{build, Widget};
 use agui_primitives::{Quad, QuadStyle};
 
-use crate::{
-    state::{
-        theme::{Style, Theme},
-        hovering::Hovering,
-        mouse::{Mouse, MouseButtonState},
-    },
+use crate::state::{
+    hovering::Hovering,
+    mouse::{Mouse, MouseButtonState},
+    theme::{Style, Theme},
 };
 
 #[derive(Clone)]
