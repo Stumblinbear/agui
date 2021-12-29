@@ -217,7 +217,7 @@ impl<'ui> WidgetContext<'ui> {
     /// Will panic if called outside of a build context.
     pub fn computed<V, F>(&self, func: F) -> V
     where
-        V: Eq + PartialEq + Copy + Clone + Value,
+        V: Eq + PartialEq + Copy + Value,
         F: Fn(&Self) -> V + 'ui + 'static,
     {
         let current_id = self

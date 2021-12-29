@@ -1,4 +1,4 @@
-error: must have something to build
+error: unexpected end of input, expected expression
  --> tests/compile-fail/build_empty.rs:5:30
   |
 5 |       let _widget: WidgetRef = build! {

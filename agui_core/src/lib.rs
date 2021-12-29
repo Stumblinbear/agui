@@ -10,7 +10,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![warn(clippy::clone_on_ref_ptr)]
 
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 
 mod reference;
 mod ui;

@@ -242,7 +242,7 @@ where
     }
 
     /// Write to the state.
-    /// 
+    ///
     /// This will trigger an update of any components listening to the state. Use only if something legitimately changes.
     pub fn write(&self) -> MappedRwLockWriteGuard<V> {
         self.changed.lock().extend(self.notify.lock().iter());

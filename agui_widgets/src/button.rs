@@ -1,14 +1,17 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Color, Sizing},
+    unit::{Callback, Color, Sizing},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::{build, Widget};
 use agui_primitives::{Quad, QuadStyle};
 
-use crate::state::hovering::Hovering;
+use crate::state::{
+    hovering::Hovering,
+    mouse::{Mouse, MouseButtonState},
+};
 
 #[derive(Clone)]
 pub struct ButtonStyle {
@@ -33,6 +36,13 @@ impl Default for ButtonStyle {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ButtonState {
+    Normal,
+    Hover,
+    Pressed,
+}
+
 #[derive(Default, Widget)]
 #[widget(layout = "row")]
 pub struct Button {
@@ -41,31 +51,41 @@ pub struct Button {
     pub style: ButtonStyle,
 
     pub child: WidgetRef,
+
+    pub on_pressed: Callback,
 }
 
 impl WidgetBuilder for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        let hovering = ctx.computed(|ctx| {
-            if let Some(hovering) = ctx.get_global::<Hovering>() {
-                hovering.read().is_hovering(ctx)
-            } else {
-                false
-            }
-        });
-
         ctx.set_layout(Ref::clone(&self.layout));
+
+        let state = ctx.computed(|ctx| {
+            if let Some(hovering) = ctx.get_global::<Hovering>() {
+                if let Some(mouse) = ctx.get_global::<Mouse>() {
+                    if hovering.read().is_hovering(ctx) {
+                        if mouse.read().button.left == MouseButtonState::Pressed {
+                            return ButtonState::Pressed;
+                        } else {
+                            return ButtonState::Hover;
+                        }
+                    }
+                }
+            }
+
+            ButtonState::Normal
+        });
 
         build! {
             Quad {
                 layout: Layout {
                     sizing: Sizing::Fill
                 },
-                style: if hovering {
-                    self.style.hover.clone()
-                }else{
-                    self.style.normal.clone()
+                style: match state {
+                    ButtonState::Normal => self.style.normal.clone(),
+                    ButtonState::Hover => self.style.normal.clone(),
+                    ButtonState::Pressed => self.style.normal.clone(),
                 },
-                child: (&self.child).into()
+                child: &self.child
             }
         }
     }

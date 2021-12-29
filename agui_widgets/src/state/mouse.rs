@@ -11,6 +11,7 @@ pub struct MouseButtons {
     pub right: MouseButtonState,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum MouseButtonState {
     Pressed,
     Released,

@@ -12,7 +12,7 @@ pub trait ComputedFunc<'ui> {
 
 pub struct ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Copy + Clone + Value,
+    V: Eq + PartialEq + Copy + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     phantom: PhantomData<&'ui V>,
@@ -26,7 +26,7 @@ where
 
 impl<'ui, V, F> ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Copy + Clone + Value,
+    V: Eq + PartialEq + Copy + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     pub fn new(listener_id: ListenerID, func: F) -> Self {
@@ -44,7 +44,7 @@ where
 
 impl<'ui, V, F> ComputedFunc<'ui> for ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Copy + Clone + Value,
+    V: Eq + PartialEq + Copy + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool {

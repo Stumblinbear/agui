@@ -5,7 +5,7 @@ use agui_primitives::Quad;
 fn main() {
     let _widget: WidgetRef = build! {
         Quad {
-            child: Quad,
+            child: Quad { },
         }
     };
 }

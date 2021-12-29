@@ -4,14 +4,16 @@ use agpu::Features;
 use agui::{
     layout::Layout,
     macros::build,
-    unit::{Sizing, Units},
+    unit::{Callback, Sizing, Units},
     widgets::{
-        primitives::{Column, Text},
+        plugins::hovering::HoveringPlugin,
+        primitives::{Column, Text, Quad},
         state::{
+            hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
-            mouse::{Mouse, Scroll}, hovering::Hovering,
+            mouse::{Mouse, Scroll},
         },
-        App, Button, plugins::hovering::HoveringPlugin,
+        App, Button,
     },
 };
 use agui_agpu::UI;
@@ -31,47 +33,50 @@ fn main() -> Result<(), agpu::BoxError> {
 
     ui.get_context().init_global::<Mouse>();
     ui.get_context().init_global::<Scroll>();
-    
+
     ui.get_context().init_global::<Hovering>();
 
     ui.set_root(build! {
         App {
             child: Column {
-                children: vec! [
+                children: [
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
-                                width: Units::Pixels(100.0),
-                                height: Units::Pixels(100.0)
+                                width: 100,
+                                height: 100
                             }
                         },
                         child: Text {
-                            text: "A Button".into()
-                        }
+                            text: "A Button"
+                        },
+                        on_pressed: Callback::from(|| { })
                     },
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
-                                width: Units::Pixels(100.0),
-                                height: Units::Pixels(100.0)
+                                width: 100,
+                                height: 100
                             }
                         },
                         child: Text {
-                            text: "A Button".into()
-                        }
+                            text: "A Button"
+                        },
+                        on_pressed: Callback::from(|| { })
                     },
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
-                                width: Units::Pixels(100.0),
-                                height: Units::Pixels(100.0)
+                                width: 100,
+                                height: 100
                             }
                         },
                         child: Text {
-                            text: "A Button".into()
-                        }
+                            text: "A Button"
+                        },
+                        on_pressed: Callback::from(|| { })
                     }
-                ].into()
+                ]
             }
         }
     });

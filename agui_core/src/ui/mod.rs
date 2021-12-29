@@ -6,14 +6,14 @@ use std::{
 };
 
 use generational_arena::Arena;
-use morphorm::{Cache, Units};
+use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
     context::{ListenerID, WidgetContext},
     event::WidgetEvent,
     plugin::WidgetPlugin,
-    unit::{Key, Rect},
+    unit::{Key, Rect, Units},
     widget::{Widget, WidgetId, WidgetRef},
     Ref,
 };
@@ -146,9 +146,9 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Fetch the tree representation of a widget.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Will panic if the widget is not found.
     pub fn get_node(&self, widget_id: &WidgetId) -> &WidgetNode {
         self.widgets
@@ -164,9 +164,9 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Fetch a widget from the tree.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This will panic if the widget is not found.
     pub fn get(&self, widget_id: &WidgetId) -> WidgetRef {
         self.try_get(widget_id).expect("widget does not exist")
@@ -182,9 +182,9 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Fetch a widget as the specified type.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// If the widget is not the requested type, it will panic.
     pub fn get_as<W>(&self, widget_id: &WidgetId) -> Rc<W>
     where
@@ -225,7 +225,7 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Update the UI tree.
-    /// 
+    ///
     /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
     /// changes that occured during the process, in order.
     pub fn update<E>(&mut self, events: &mut E)

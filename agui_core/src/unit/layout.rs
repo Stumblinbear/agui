@@ -1,6 +1,6 @@
 use morphorm::PositionType;
 
-pub use morphorm::Units;
+use super::Units;
 
 /// Indicates to the layout system how the children of a widget should be laid out.
 #[derive(Debug, Copy, Clone)]

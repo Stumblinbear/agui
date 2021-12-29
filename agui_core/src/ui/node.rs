@@ -42,7 +42,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.sizing)
-                .get_width(),
+                .get_width()
+                .into(),
         )
     }
 
@@ -52,7 +53,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.sizing)
-                .get_height(),
+                .get_height()
+                .into(),
         )
     }
 
@@ -62,7 +64,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.min_sizing)
-                .get_width(),
+                .get_width()
+                .into(),
         )
     }
 
@@ -72,7 +75,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.min_sizing)
-                .get_height(),
+                .get_height()
+                .into(),
         )
     }
 
@@ -82,7 +86,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.max_sizing)
-                .get_width(),
+                .get_width()
+                .into(),
         )
     }
 
@@ -92,7 +97,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.max_sizing)
-                .get_height(),
+                .get_height()
+                .into(),
         )
     }
 
@@ -102,7 +108,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Position::default(), |layout| layout.position)
-                .get_top(),
+                .get_top()
+                .into(),
         )
     }
 
@@ -112,7 +119,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Position::default(), |layout| layout.position)
-                .get_right(),
+                .get_right()
+                .into(),
         )
     }
 
@@ -122,7 +130,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Position::default(), |layout| layout.position)
-                .get_bottom(),
+                .get_bottom()
+                .into(),
         )
     }
 
@@ -132,7 +141,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Position::default(), |layout| layout.position)
-                .get_left(),
+                .get_left()
+                .into(),
         )
     }
 
@@ -174,7 +184,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Padding::default(), |layout| layout.padding)
-                .get_top(),
+                .get_top()
+                .into(),
         )
     }
 
@@ -184,7 +195,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Padding::default(), |layout| layout.padding)
-                .get_right(),
+                .get_right()
+                .into(),
         )
     }
 
@@ -194,7 +206,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Padding::default(), |layout| layout.padding)
-                .get_bottom(),
+                .get_bottom()
+                .into(),
         )
     }
 
@@ -204,7 +217,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
                 .map_or(Padding::default(), |layout| layout.padding)
-                .get_left(),
+                .get_left()
+                .into(),
         )
     }
 
@@ -213,6 +227,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .get(self.id())
             .map_or(LayoutType::default(), |node| node.layout_type)
             .get_row_spacing()
+            .map(|val| val.into())
     }
 
     fn col_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
@@ -220,6 +235,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .get(self.id())
             .map_or(LayoutType::default(), |node| node.layout_type)
             .get_column_spacing()
+            .map(|val| val.into())
     }
 
     fn grid_rows(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
@@ -227,6 +243,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .get(self.id())
             .map_or(LayoutType::default(), |node| node.layout_type)
             .get_rows()
+            .map(|val| val.into_iter().map(|val| val.into()).collect())
     }
 
     fn grid_cols(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
@@ -234,6 +251,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .get(self.id())
             .map_or(LayoutType::default(), |node| node.layout_type)
             .get_columns()
+            .map(|val| val.into_iter().map(|val| val.into()).collect())
     }
 
     fn row_index(&self, _store: &'_ Self::Data) -> Option<usize> {
