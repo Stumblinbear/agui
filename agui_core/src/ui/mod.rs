@@ -324,16 +324,20 @@ impl<'ui> WidgetManager<'ui> {
 
         morphorm::layout(&mut self.cache, &self.tree, &self.widgets);
 
-        events.extend(self.cache.take_changed().iter().map(|widget_id| {
-            WidgetEvent::Layout {
-                type_id: self.get(widget_id).get_type_id(),
-                widget_id: *widget_id,
-                rect: *self
-                    .cache
-                    .get_rect(widget_id)
-                    .expect("root widget does not have a rect"),
-            }
-        }));
+        events.extend(
+            self.cache
+                .take_changed()
+                .iter()
+                .filter(|widget_id| self.contains(widget_id))
+                .map(|widget_id| WidgetEvent::Layout {
+                    type_id: self.get(widget_id).get_type_id(),
+                    widget_id: *widget_id,
+                    rect: *self
+                        .cache
+                        .get_rect(widget_id)
+                        .expect("root widget does not have a rect"),
+                }),
+        );
 
         if root_changed {
             if let Some(widget_id) = self.tree.get_root() {

@@ -36,7 +36,7 @@ impl Default for ButtonStyle {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ButtonState {
     Normal,
     Hover,
@@ -75,8 +75,18 @@ impl WidgetBuilder for Button {
             ButtonState::Normal
         });
 
-        if let ButtonState::Pressed = state {
-            self.on_pressed.emit(());
+        let last_state = ctx.get_state_or(|| state);
+
+        if *last_state.read() == ButtonState::Pressed {
+            if let ButtonState::Pressed = state {
+
+            }else{
+                self.on_pressed.emit(());
+            }
+        }
+
+        if *last_state.read() != state {
+            *last_state.write() = state;
         }
 
         build! {

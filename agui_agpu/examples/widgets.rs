@@ -51,7 +51,7 @@ fn main() -> Result<(), agpu::BoxError> {
                             text: "A Button"
                         },
                         on_pressed: Callback::from(|()| {
-                            println!("Pressed");
+                            println!("Pressed 1");
                         })
                     },
                     Button {
@@ -64,7 +64,9 @@ fn main() -> Result<(), agpu::BoxError> {
                         child: Text {
                             text: "A Button"
                         },
-                        on_pressed: Callback::from(|()| { })
+                        on_pressed: Callback::from(|()| {
+                            println!("Pressed 2");
+                        })
                     },
                     Button {
                         layout: Layout {
@@ -76,7 +78,9 @@ fn main() -> Result<(), agpu::BoxError> {
                         child: Text {
                             text: "A Button"
                         },
-                        on_pressed: Callback::from(|()| { })
+                        on_pressed: Callback::from(|()| {
+                            println!("Pressed 3");
+                        })
                     }
                 ]
             }

@@ -331,17 +331,27 @@ impl UI {
                         if let Some(state) = self.get_context().get_global::<Mouse>() {
                             let mut state = state.write();
 
-                            let value = match value {
-                                ElementState::Pressed => MouseButtonState::Pressed,
-                                ElementState::Released => MouseButtonState::Released,
+                            let button = match button {
+                                MouseButton::Left => &mut state.button.left,
+                                MouseButton::Middle => &mut state.button.middle,
+                                MouseButton::Right => &mut state.button.right,
+                                MouseButton::Other(_) => {
+                                    return;
+                                }
                             };
 
-                            match button {
-                                MouseButton::Left => state.button.left = value,
-                                MouseButton::Middle => state.button.middle = value,
-                                MouseButton::Right => state.button.right = value,
-                                MouseButton::Other(_) => {}
-                            }
+                            match value {
+                                ElementState::Pressed => {
+                                    if *button == MouseButtonState::Released {
+                                        *button = MouseButtonState::Pressed;
+                                    } else {
+                                        *button = MouseButtonState::Held;
+                                    }
+                                }
+                                ElementState::Released => {
+                                    *button = MouseButtonState::Released;
+                                }
+                            };
                         }
                     }
 
