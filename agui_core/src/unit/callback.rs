@@ -1,21 +1,27 @@
 use crate::Ref;
 
-type CallbackFn = dyn Fn();
-
 #[derive(Clone)]
-pub struct Callback(pub Ref<Box<CallbackFn>>);
+pub struct Callback<A>(pub Ref<Box<dyn Fn(A)>>);
 
-impl Default for Callback {
+impl<A> Default for Callback<A> {
     fn default() -> Self {
         Self(Ref::None)
     }
 }
 
-impl<F> From<F> for Callback
+impl<F, A> From<F> for Callback<A>
 where
-    F: Fn() + 'static,
+    F: Fn(A) + 'static,
 {
     fn from(func: F) -> Self {
         Self(Ref::new(Box::new(func)))
+    }
+}
+
+impl<A> Callback<A> {
+    pub fn emit(&self, arg: A) {
+        if let Some(func) = self.0.try_get() {
+            func(arg);
+        }
     }
 }

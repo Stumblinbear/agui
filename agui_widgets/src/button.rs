@@ -52,7 +52,7 @@ pub struct Button {
 
     pub child: WidgetRef,
 
-    pub on_pressed: Callback,
+    pub on_pressed: Callback<()>,
 }
 
 impl WidgetBuilder for Button {
@@ -75,6 +75,10 @@ impl WidgetBuilder for Button {
             ButtonState::Normal
         });
 
+        if let ButtonState::Pressed = state {
+            self.on_pressed.emit(());
+        }
+
         build! {
             Quad {
                 layout: Layout {
@@ -82,8 +86,8 @@ impl WidgetBuilder for Button {
                 },
                 style: match state {
                     ButtonState::Normal => self.style.normal.clone(),
-                    ButtonState::Hover => self.style.normal.clone(),
-                    ButtonState::Pressed => self.style.normal.clone(),
+                    ButtonState::Hover => self.style.hover.clone(),
+                    ButtonState::Pressed => self.style.pressed.clone(),
                 },
                 child: &self.child
             }
