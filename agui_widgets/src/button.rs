@@ -9,8 +9,8 @@ use agui_macros::{build, Widget};
 use agui_primitives::{Quad, QuadStyle};
 
 use crate::{
-    plugins::theme::{Style, Theme},
     state::{
+        theme::{Style, Theme},
         hovering::Hovering,
         mouse::{Mouse, MouseButtonState},
     },
