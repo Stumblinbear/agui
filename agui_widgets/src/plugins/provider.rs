@@ -19,9 +19,7 @@ pub struct Provider {
 }
 
 impl WidgetPlugin for Provider {
-    fn on_update(&self, _ctx: &WidgetContext) {
-        
-    }
+    fn on_update(&self, _ctx: &WidgetContext) {}
 
     fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
         for event in events {
@@ -40,23 +38,16 @@ impl WidgetPlugin for Provider {
     }
 }
 
-impl Provider {
-    /// Creates a local state and makes it available to any child widget.
-    pub fn provide_value<V>(ctx: &WidgetContext, value: V) -> Notify<V>
-    where
-        V: Value,
-    {
-        // Make the state available before setting
-        Self::provide_state::<V>(ctx);
+pub trait ProviderExt<'ui> {
+    fn provide(&self, ctx: &WidgetContext);
+}
 
-        ctx.set_state(value)
-    }
-
+impl<'ui, V> ProviderExt<'ui> for Notify<V>
+where
+    V: Value,
+{
     /// Makes some local widget state available to any child widget.
-    pub fn provide_state<V>(ctx: &WidgetContext)
-    where
-        V: Value,
-    {
+    fn provide(&self, ctx: &WidgetContext) {
         let plugin = ctx.get_or_init_plugin::<Provider>();
 
         let mut providers = plugin.providers.lock();
@@ -77,20 +68,28 @@ impl Provider {
             .or_insert_with(HashSet::new)
             .insert(type_id);
     }
+}
 
-    /// Consume the state of the first parent that is providing it.
-    pub fn of<S>(ctx: &WidgetContext) -> Option<Notify<S>>
+pub trait ConsumerExt<'ui> {
+    fn consume<V>(&self) -> Option<Notify<V>>
     where
-        S: Value,
+        V: Value;
+}
+
+impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
+    /// Makes some local widget state available to any child widget.
+    fn consume<V>(&self) -> Option<Notify<V>>
+    where
+        V: Value,
     {
-        if let Some(plugin) = ctx.get_plugin::<Provider>() {
+        if let Some(plugin) = self.get_plugin::<Provider>() {
             let providers = plugin.providers.lock();
 
-            if let Some(providers) = providers.get(&TypeId::of::<S>()) {
-                for parent_id in ctx.get_tree().iter_parents(ctx.get_self()) {
+            if let Some(providers) = providers.get(&TypeId::of::<V>()) {
+                for parent_id in self.get_tree().iter_parents(self.get_self()) {
                     if providers.contains(&parent_id) {
                         return Some(
-                            ctx.get_state_for(parent_id, || panic!("provider state broken")),
+                            self.get_state_for(parent_id, || panic!("provider state broken")),
                         );
                     }
                 }
@@ -98,7 +97,7 @@ impl Provider {
         }
 
         // Fall back to global state
-        if let Some(state) = ctx.get_global::<S>() {
+        if let Some(state) = self.get_global::<V>() {
             return Some(state);
         }
 

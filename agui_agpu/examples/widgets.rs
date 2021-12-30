@@ -4,14 +4,15 @@ use agpu::Features;
 use agui::{
     layout::Layout,
     macros::build,
-    unit::{Callback, Sizing, Color},
+    unit::{Callback, Color, Sizing},
     widgets::{
-        plugins::{hovering::HoveringPlugin, provider::Provider},
-        primitives::{Column, Text, Builder, QuadStyle},
+        plugins::{hovering::HoveringPlugin, provider::ProviderExt},
+        primitives::{Builder, Column, QuadStyle, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
-            mouse::{Mouse, Scroll}, theme::Theme,
+            mouse::{Mouse, Scroll},
+            theme::Theme,
         },
         App, Button, ButtonStyle,
     },
@@ -75,18 +76,20 @@ fn main() -> Result<(), agpu::BoxError> {
                             normal: QuadStyle {
                                 color: Color::Red,
                             },
-                
+
                             hover: QuadStyle {
                                 color: Color::Green,
                             },
-                
+
                             pressed: QuadStyle {
                                 color: Color::Blue,
                             },
                         });
 
-                        Provider::provide_value(ctx, theme);
-                        
+                        let theme = ctx.set_state(theme);
+
+                        theme.provide(ctx);
+
                         build!{
                             Button {
                                 layout: Layout {

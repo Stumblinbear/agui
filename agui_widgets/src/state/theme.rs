@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::BTreeMap};
 use agui_core::context::WidgetContext;
 use downcast_rs::{impl_downcast, Downcast};
 
-use crate::plugins::provider::Provider;
+use crate::plugins::provider::ConsumerExt;
 
 pub trait Style: Downcast + Send + Sync {}
 
@@ -62,7 +62,7 @@ impl Theme {
         if let Some(style) = style {
             style.clone()
         // This either grabs a provided theme or uses global state
-        } else if let Some(theme) = Provider::of::<Theme>(ctx) {
+        } else if let Some(theme) = ctx.consume::<Theme>() {
             theme.read().get_or_init::<S>()
         } else {
             S::default()
