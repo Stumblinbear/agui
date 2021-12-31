@@ -126,6 +126,8 @@ impl WidgetRenderPass for BoundingRenderPass {
         }
     }
 
+    fn update(&mut self, ctx: &RenderContext) {}
+
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
             .render_pass("bounding render pass")

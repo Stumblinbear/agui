@@ -6,6 +6,7 @@ use downcast_rs::{impl_downcast, Downcast};
 
 pub mod bounding;
 pub mod quad;
+pub mod text;
 
 pub struct RenderContext {
     pub gpu: GpuHandle,
@@ -66,6 +67,8 @@ pub trait WidgetRenderPass: Downcast {
         type_id: &TypeId,
         widget_id: &WidgetId,
     );
+
+    fn update(&mut self, ctx: &RenderContext);
 
     fn render(&self, ctx: &RenderContext, frame: &mut Frame);
 }

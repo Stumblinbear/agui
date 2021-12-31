@@ -37,6 +37,8 @@ fn main() -> Result<(), agpu::BoxError> {
 
     ui.get_context().init_global::<Hovering>();
 
+    let dejavu_font = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
+
     ui.set_root(build! {
         App {
             child: Column {
@@ -48,9 +50,7 @@ fn main() -> Result<(), agpu::BoxError> {
                                 height: 100
                             }
                         },
-                        child: Text {
-                            text: "A Button"
-                        },
+                        child: Text::is(dejavu_font, 16.0, "A Button".into()),
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
                         })
@@ -62,14 +62,12 @@ fn main() -> Result<(), agpu::BoxError> {
                                 height: 100
                             }
                         },
-                        child: Text {
-                            text: "A Button"
-                        },
+                        child: Text::is(dejavu_font, 32.0, "A Button".into()),
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 2");
                         })
                     },
-                    Builder::new(|ctx| {
+                    Builder::new(move |ctx| {
                         let mut theme = Theme::new();
 
                         theme.set(ButtonStyle {
@@ -98,9 +96,7 @@ fn main() -> Result<(), agpu::BoxError> {
                                         height: 200
                                     }
                                 },
-                                child: Text {
-                                    text: "A Button"
-                                },
+                                child: Text::is(dejavu_font, 16.0, "A Button".into()),
                                 on_pressed: Callback::from(|()| {
                                     println!("Pressed 3");
                                 })

@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::BTreeMap, mem};
+use std::{any::TypeId, collections::BTreeMap, io, mem};
 
 use agpu::{
     winit::winit::event::{
@@ -10,10 +10,9 @@ use agpu::{
 use agui::{
     context::{Notify, WidgetContext},
     event::WidgetEvent,
-    plugin::WidgetPlugin,
     widget::{WidgetId, WidgetRef},
     widgets::{
-        primitives::Quad,
+        primitives::{FontId, Fonts, Quad},
         state::{
             keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
             mouse::{Mouse, MouseButtonState, Scroll, XY},
@@ -23,6 +22,7 @@ use agui::{
     },
     WidgetManager,
 };
+use render::text::TextRenderPass;
 
 pub mod render;
 
@@ -34,10 +34,11 @@ pub struct UI {
     manager: WidgetManager<'static>,
     events: Vec<WidgetEvent>,
 
-    ctx: RenderContext,
-
+    text_pass: TextRenderPass,
     render_passes: BTreeMap<TypeId, Box<dyn WidgetRenderPass>>,
     render_pass_order: Vec<TypeId>,
+
+    ctx: RenderContext,
 }
 
 impl UI {
@@ -49,14 +50,17 @@ impl UI {
             height: program.viewport.inner_size().height as f32,
         });
 
+        let ctx = RenderContext::new(program, Notify::clone(&app_settings));
+
         let ui = Self {
             manager,
             events: Vec::default(),
 
-            ctx: RenderContext::new(program, Notify::clone(&app_settings)),
-
+            text_pass: TextRenderPass::new(program, &ctx),
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
+
+            ctx,
         };
 
         program.on_resize(move |_, w, h| {
@@ -83,6 +87,34 @@ impl UI {
         let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
         ui.add_pass(basic_pass).add_pass(bounding_pass)
+    }
+
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
+        let (font_id, font) = self
+            .get_context()
+            .get_or_init_global::<Fonts>()
+            .write()
+            .load_bytes(bytes);
+
+        self.text_pass.add_font(font);
+
+        font_id
+    }
+
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
+        match self
+            .get_context()
+            .get_or_init_global::<Fonts>()
+            .write()
+            .load_file(filename)
+        {
+            Ok((font_id, font)) => {
+                self.text_pass.add_font(font);
+
+                Ok(font_id)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     pub fn add_pass<P>(mut self, pass: P) -> Self
@@ -169,6 +201,15 @@ impl UI {
 
             self.ctx.update();
 
+            for pass_type_id in &self.render_pass_order {
+                self.render_passes
+                    .get_mut(pass_type_id)
+                    .expect("render pass does not exist")
+                    .update(&self.ctx);
+            }
+
+            self.text_pass.update(&self.ctx);
+
             true
         } else {
             false
@@ -182,6 +223,8 @@ impl UI {
                 .expect("render pass does not exist")
                 .render(&self.ctx, &mut frame);
         }
+
+        self.text_pass.render(&self.ctx, &mut frame);
     }
 
     pub fn run(mut self, program: GpuProgram) -> Result<(), agpu::BoxError> {

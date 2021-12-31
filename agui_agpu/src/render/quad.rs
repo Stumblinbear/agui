@@ -14,6 +14,15 @@ use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
 
+const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
+const COLOR_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
+const QUAD_BUFFER_SIZE: u64 = RECT_BUFFER_SIZE + COLOR_BUFFER_SIZE;
+
+const PREALLOCATE: u64 = QUAD_BUFFER_SIZE * 16;
+
+// Make room for extra quads when we reach the buffer size, so we have to resize less often
+const EXPAND_ALLOCATE: u64 = QUAD_BUFFER_SIZE * 8;
+
 pub struct QuadRenderPass {
     bind_group: BindGroup,
 
@@ -25,15 +34,6 @@ pub struct QuadRenderPass {
     locations: Arena<WidgetId>,
     widgets: HashMap<WidgetId, GenerationalIndex>,
 }
-
-const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const COLOR_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const QUAD_BUFFER_SIZE: u64 = RECT_BUFFER_SIZE + COLOR_BUFFER_SIZE;
-
-const PREALLOCATE: u64 = QUAD_BUFFER_SIZE * 16;
-
-// Make room for extra quads when we reach the buffer size, so we have to resize less often
-const EXPAND_ALLOCATE: u64 = QUAD_BUFFER_SIZE * 8;
 
 impl QuadRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
@@ -80,6 +80,17 @@ impl QuadRenderPass {
 
         self
     }
+
+    pub fn get_buffer_index(&self, widget_id: &WidgetId) -> Option<u64> {
+        let index = match self.widgets.get(widget_id) {
+            Some(widget) => widget,
+            None => return None,
+        };
+
+        let index = index.into_raw_parts().0 as u64;
+
+        Some(index * QUAD_BUFFER_SIZE)
+    }
 }
 
 impl WidgetRenderPass for QuadRenderPass {
@@ -112,20 +123,24 @@ impl WidgetRenderPass for QuadRenderPass {
             return;
         }
 
-        let index = match self.widgets.get(widget_id) {
-            Some(widget) => widget,
+        let index = match self.get_buffer_index(widget_id) {
+            Some(index) => index,
             None => return,
         };
 
-        let index = index.into_raw_parts().0 as u64;
-
-        let index = index * QUAD_BUFFER_SIZE;
-
         let rect = rect.to_slice();
 
-        let quad = manager.try_get_as::<Quad>(widget_id);
+        let rgba = manager
+            .try_get_as::<Quad>(widget_id)
+            .and_then(|quad| quad.style.as_ref().map(|style| style.color))
+            .unwrap_or(Color::White)
+            .as_rgba();
 
-        let rgba = quad.map_or(Color::White.as_rgba(), |q| q.style.color.as_rgba());
+        /*.map_or(Color::White.as_rgba(), |q| {
+            q.style
+                .as_ref()
+                .map_or(Color::White.as_rgba(), |q| q.color.as_rgba())
+        })*/
 
         let rect = bytemuck::cast_slice(&rect);
         let rgba = bytemuck::cast_slice(&rgba);
@@ -158,7 +173,11 @@ impl WidgetRenderPass for QuadRenderPass {
             .expect("removed nonexistent widget");
 
         self.locations.remove(index);
+
+        // TODO: clear garbage from the buffer
     }
+
+    fn update(&mut self, ctx: &RenderContext) {}
 
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
@@ -168,11 +187,13 @@ impl WidgetRenderPass for QuadRenderPass {
 
         r.set_bind_group(0, &self.bind_group, &[]);
 
-        for (index, _) in self.locations.iter() {
-            let index = (index.into_raw_parts().0 as u64) * QUAD_BUFFER_SIZE;
+        // for (index, _) in self.locations.iter() {
+        //     let index = (index.into_raw_parts().0 as u64) * QUAD_BUFFER_SIZE;
 
-            r.set_vertex_buffer(0, self.buffer.slice(index..(index + QUAD_BUFFER_SIZE)))
-                .draw(0..6, 0..1);
-        }
+        //     r.set_vertex_buffer(0, self.buffer.slice(index..(index + QUAD_BUFFER_SIZE)))
+        //         .draw(0..6, 0..1);
+        // }
+
+        r.set_vertex_buffer(0, self.buffer.slice(..)).draw(0..6, 0..(self.locations.capacity() as u32));
     }
 }

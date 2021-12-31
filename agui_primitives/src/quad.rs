@@ -17,7 +17,7 @@ pub struct Quad {
     pub layout: Ref<Layout>,
     pub clip: bool,
 
-    pub style: QuadStyle,
+    pub style: Option<QuadStyle>,
 
     pub child: WidgetRef,
 }

@@ -22,6 +22,8 @@ agpu = { git = "https://github.com/lyricwulf/agpu", commit = "6e0288b13dcaeb60bd
 bytemuck = "1.7"
 generational-arena = "0.2"
 
+glyph_brush_draw_cache = "0.1"
+
 [[example]]
 name = "widgets"
 path = "examples/widgets.rs"

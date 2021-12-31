@@ -101,9 +101,9 @@ impl WidgetBuilder for Button {
                     sizing: Sizing::Fill
                 },
                 style: match state {
-                    ButtonState::Normal => style.normal,
-                    ButtonState::Hover => style.hover,
-                    ButtonState::Pressed => style.pressed,
+                    ButtonState::Normal => style.normal.into(),
+                    ButtonState::Hover => style.hover.into(),
+                    ButtonState::Pressed => style.pressed.into(),
                 },
                 child: &self.child
             }
