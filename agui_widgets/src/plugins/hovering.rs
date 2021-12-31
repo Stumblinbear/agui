@@ -9,7 +9,7 @@ pub struct HoveringPlugin {}
 
 impl WidgetPlugin for HoveringPlugin {
     fn on_update(&self, ctx: &WidgetContext) {
-        let hovering = ctx.init_global::<Hovering>();
+        let hovering = ctx.init_global(Hovering::default);
 
         if let Some(mouse) = ctx.get_global::<Mouse>() {
             match &mouse.read().pos {
@@ -43,5 +43,5 @@ impl WidgetPlugin for HoveringPlugin {
         }
     }
 
-    fn on_events(&self, ctx: &WidgetContext, events: &[WidgetEvent]) {}
+    fn on_events(&self, _ctx: &WidgetContext, _events: &[WidgetEvent]) {}
 }

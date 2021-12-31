@@ -27,15 +27,15 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::with_default(&program);
 
-    ui.get_context().init_plugin::<HoveringPlugin>();
+    ui.get_context().init_plugin(HoveringPlugin::default);
 
-    ui.get_context().init_global::<Keyboard>();
-    ui.get_context().init_global::<KeyboardInput>();
+    ui.get_context().init_global(Keyboard::default);
+    ui.get_context().init_global(KeyboardInput::default);
 
-    ui.get_context().init_global::<Mouse>();
-    ui.get_context().init_global::<Scroll>();
+    ui.get_context().init_global(Mouse::default);
+    ui.get_context().init_global(Scroll::default);
 
-    ui.get_context().init_global::<Hovering>();
+    ui.get_context().init_global(Hovering::default);
 
     let dejavu_font = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 
@@ -68,23 +68,25 @@ fn main() -> Result<(), agpu::BoxError> {
                         })
                     },
                     Builder::new(move |ctx| {
-                        let mut theme = Theme::new();
+                        let theme = ctx.init_state(|| {
+                            let mut theme = Theme::new();
 
-                        theme.set(ButtonStyle {
-                            normal: QuadStyle {
-                                color: Color::Red,
-                            },
+                            theme.set(ButtonStyle {
+                                normal: QuadStyle {
+                                    color: Color::Red,
+                                },
 
-                            hover: QuadStyle {
-                                color: Color::Green,
-                            },
+                                hover: QuadStyle {
+                                    color: Color::Green,
+                                },
 
-                            pressed: QuadStyle {
-                                color: Color::Blue,
-                            },
+                                pressed: QuadStyle {
+                                    color: Color::Blue,
+                                },
+                            });
+
+                            theme
                         });
-
-                        let theme = ctx.set_state(theme);
 
                         theme.provide(ctx);
 

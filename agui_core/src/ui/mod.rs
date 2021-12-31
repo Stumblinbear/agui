@@ -660,7 +660,7 @@ mod tests {
     pub fn test_globals() {
         let mut manager = WidgetManager::new();
 
-        let test_global = manager.context.init_global::<TestGlobal>();
+        let test_global = manager.context.init_global(TestGlobal::default);
 
         manager.add(None, WidgetRef::new(TestWidget::default()));
 

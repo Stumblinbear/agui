@@ -62,7 +62,7 @@ impl NotifiableMap {
             .map_or(false, |state| state.value.is_some())
     }
 
-    pub fn insert<V>(&self, value: V)
+    pub fn set<V>(&self, value: V)
     where
         V: Value,
     {
@@ -136,38 +136,18 @@ where
         }
     }
 
-    pub fn init<V, F>(&self, key: K, func: F) -> Notify<V>
-    where
-        V: Value,
-        F: FnOnce() -> V,
-    {
-        let mut scopes = self.scopes.lock();
+    // pub fn contains<V>(&self, key: K) -> bool
+    // where
+    //     V: Value,
+    // {
+    //     let mut scopes = self.scopes.lock();
 
-        let scope = scopes
-            .entry(key)
-            .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
+    //     let scope = scopes
+    //         .entry(key)
+    //         .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
 
-        if !scope.contains::<V>() {
-            scope.insert(func());
-        }
-
-        scope.get().expect("failed to get scope")
-    }
-
-    pub fn set<V>(&self, key: K, value: V) -> Notify<V>
-    where
-        V: Value,
-    {
-        let mut scopes = self.scopes.lock();
-
-        let scope = scopes
-            .entry(key)
-            .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
-
-        scope.insert(value);
-
-        scope.get().expect("failed to get scope")
-    }
+    //     scope.contains::<V>()
+    // }
 
     pub fn get<V, F>(&self, key: K, func: F) -> Notify<V>
     where
@@ -181,7 +161,7 @@ where
             .or_insert_with(|| NotifiableMap::new(Arc::clone(&self.changed)));
 
         if !scope.contains::<V>() {
-            scope.insert(func());
+            scope.set(func());
         }
 
         // scope.add_listener::<V>(*listener_id);

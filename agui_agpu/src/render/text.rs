@@ -111,12 +111,15 @@ impl WidgetRenderPass for TextRenderPass {
         }
 
         let cached_by = loop {
-            match self
-                .draw_cache
-                .cache_queued(&self.fonts, |rect, tex_data| {})
-            {
+            match self.draw_cache.cache_queued(&self.fonts, |rect, tex_data| {
+                for (i, chunk) in tex_data.chunks(rect.width() as usize).enumerate() {}
+            }) {
                 Ok(cached_by) => break cached_by,
-                Err(_) => self.texture.resize(&[0, 0]),
+                Err(_) => {
+                    let size = self.texture.size;
+
+                    self.texture.resize(&[size.width + 32, size.height + 32]);
+                }
             }
         };
 

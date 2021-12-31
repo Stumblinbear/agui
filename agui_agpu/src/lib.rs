@@ -45,7 +45,7 @@ impl UI {
     pub fn new(program: &GpuProgram) -> Self {
         let manager = WidgetManager::default();
 
-        let app_settings = manager.get_context().set_global(AppSettings {
+        let app_settings = manager.get_context().init_global(|| AppSettings {
             width: program.viewport.inner_size().width as f32,
             height: program.viewport.inner_size().height as f32,
         });
@@ -92,7 +92,7 @@ impl UI {
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
         let (font_id, font) = self
             .get_context()
-            .get_or_init_global::<Fonts>()
+            .get_global_or::<Fonts, _>(Fonts::default)
             .write()
             .load_bytes(bytes);
 
@@ -104,7 +104,7 @@ impl UI {
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
         match self
             .get_context()
-            .get_or_init_global::<Fonts>()
+            .get_global_or::<Fonts, _>(Fonts::default)
             .write()
             .load_file(filename)
         {

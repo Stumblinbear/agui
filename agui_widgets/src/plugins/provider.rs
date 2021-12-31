@@ -48,7 +48,7 @@ where
 {
     /// Makes some local widget state available to any child widget.
     fn provide(&self, ctx: &WidgetContext) {
-        let plugin = ctx.get_or_init_plugin::<Provider>();
+        let plugin = ctx.get_plugin_or::<Provider, _>(Provider::default);
 
         let mut providers = plugin.providers.lock();
 

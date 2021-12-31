@@ -102,53 +102,38 @@ impl<'ui> WidgetContext<'ui> {
 
     // Plugins
 
-    /// Initialize a plugin if it's not set already. This does not cause the initializer to be updated when it is changed.
-    pub fn init_plugin<P>(&self) -> Rc<P>
+    /// Initialize a plugin if it's not set already.
+    pub fn init_plugin<P, F>(&self, func: F) -> Rc<P>
     where
-        P: WidgetPlugin + Default,
+        P: WidgetPlugin,
+        F: FnOnce() -> P,
     {
         if self.plugins.lock().contains_key(&TypeId::of::<P>()) {
             self.get_plugin::<P>()
                 .expect("failed to get initialized plugin")
         } else {
-            self.set_plugin(P::default())
+            let plugin_id = TypeId::of::<P>();
+
+            self.plugins.lock().insert(plugin_id, Rc::new(func()));
+
+            // Force a first-update of the plugin
+            self.plugin_on_update(plugin_id);
+
+            self.get_plugin::<P>().expect("failed to set plugin")
         }
     }
 
-    /// Load a plugin, or overwrite one if it already exists.
-    pub fn set_plugin<P>(&self, plugin: P) -> Rc<P>
-    where
-        P: WidgetPlugin,
-    {
-        let plugin_id = TypeId::of::<P>();
-
-        self.plugins.lock().insert(plugin_id, Rc::new(plugin));
-
-        // Force a first-update of the plugin
-        self.plugin_on_update(plugin_id);
-
-        self.get_plugin::<P>().expect("failed to set plugin")
-    }
-
-    /// Fetch a plugin, or initialize it if it doesn't exist. The caller will be updated when the plugin is changed.
-    pub fn get_or_init_plugin<P>(&self) -> Rc<P>
-    where
-        P: WidgetPlugin + Default,
-    {
-        self.get_plugin_or(P::default)
-    }
-
-    /// Fetch a plugin. The caller will be updated when the plugin is changed.
+    /// Fetch a plugin, or initialize it with `func`.
     pub fn get_plugin_or<P, F>(&self, func: F) -> Rc<P>
     where
         P: WidgetPlugin,
         F: FnOnce() -> P,
     {
         self.get_plugin::<P>()
-            .map_or_else(|| self.set_plugin(func()), |plugin| plugin)
+            .map_or_else(|| self.init_plugin(func), |plugin| plugin)
     }
 
-    /// Fetch a plugin. The caller will be updated when the plugin is changed.
+    /// Fetch a plugin if it exists.
     pub fn get_plugin<P>(&self) -> Option<Rc<P>>
     where
         P: WidgetPlugin,
@@ -162,46 +147,29 @@ impl<'ui> WidgetContext<'ui> {
     // Global state
 
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
-    pub fn init_global<V>(&self) -> Notify<V>
+    pub fn init_global<V, F>(&self, func: F) -> Notify<V>
     where
-        V: Value + Default,
+        V: Value,
+        F: FnOnce() -> V,
     {
         if !self.global.contains::<V>() {
-            self.global.insert(V::default());
+            self.global.set(func());
         }
 
         self.global.get::<V>().expect("failed to init global")
     }
 
-    /// Set a global state value. This does not cause the setter to be updateed when its value is changed.
-    pub fn set_global<V>(&self, value: V) -> Notify<V>
-    where
-        V: Value,
-    {
-        self.global.insert(value);
-
-        self.global.get::<V>().expect("failed to init global")
-    }
-
-    /// Fetch a global value, or initialize it if it doesn't exist. The caller will be updated when the value is changed.
-    pub fn get_or_init_global<V>(&self) -> Notify<V>
-    where
-        V: Value + Default,
-    {
-        self.get_global_or(V::default)
-    }
-
-    /// Fetch a global value. The caller will be updated when the value is changed.
+    /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
     pub fn get_global_or<V, F>(&self, func: F) -> Notify<V>
     where
         V: Value,
         F: FnOnce() -> V,
     {
         self.get_global::<V>()
-            .map_or_else(|| self.set_global(func()), |v| v)
+            .map_or_else(|| self.init_global(func), |v| v)
     }
 
-    /// Fetch a global value. The caller will be updated when the value is changed.
+    /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn get_global<V>(&self) -> Option<Notify<V>>
     where
         V: Value,
@@ -216,29 +184,19 @@ impl<'ui> WidgetContext<'ui> {
     // Local state
 
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
-    pub fn init_state<V>(&self) -> Notify<V>
-    where
-        V: Value + Default,
-    {
-        let current_id = self
-            .current_id
-            .lock()
-            .expect("cannot get state from context while not iterating");
-
-        self.states.init(*current_id.widget_id(), V::default)
-    }
-
-    /// Set a local state value. This does not cause the initializer to be updated when its value is changed.
-    pub fn set_state<V>(&self, value: V) -> Notify<V>
+    pub fn init_state<V, F>(&self, func: F) -> Notify<V>
     where
         V: Value,
+        F: FnOnce() -> V,
     {
         let current_id = self
             .current_id
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        self.states.set(*current_id.widget_id(), value)
+        let widget_id = *current_id.widget_id();
+
+        self.states.get(widget_id, func)
     }
 
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
@@ -254,14 +212,12 @@ impl<'ui> WidgetContext<'ui> {
 
         let widget_id = *current_id.widget_id();
 
-        let state = self.states.get(widget_id, func);
-
         self.states.add_listener::<V>(widget_id, current_id);
 
-        state
+        self.states.get(widget_id, func)
     }
 
-    /// Fetch a local state value. The caller will be updated when the value is changed.
+    /// Fetch a local state value if it exists. The caller will be updated when the value is changed.
     pub fn get_state<V>(&self) -> Notify<V>
     where
         V: Value + Default,
@@ -279,11 +235,9 @@ impl<'ui> WidgetContext<'ui> {
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        let state = self.states.get(widget_id, func);
-
         self.states.add_listener::<V>(widget_id, current_id);
 
-        state
+        self.states.get(widget_id, func)
     }
 
     // Layout
@@ -437,7 +391,7 @@ impl<'ui> WidgetContext<'ui> {
         let plugins = self.plugins.lock();
 
         let last_id = *self.current_id.lock();
-    
+
         for (plugin_id, plugin) in plugins.iter() {
             *self.current_id.lock() = Some(ListenerID::Plugin(*plugin_id));
 

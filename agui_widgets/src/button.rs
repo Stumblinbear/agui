@@ -80,7 +80,9 @@ impl WidgetBuilder for Button {
             ButtonState::Normal
         });
 
-        let last_state = ctx.get_state_or(|| state);
+        // We init the state, instead of using `get_state`, because we don't want to react to
+        // these changes, only keep track of them.
+        let last_state = ctx.init_state(|| state);
 
         if *last_state.read() == ButtonState::Pressed {
             if let ButtonState::Pressed = state {

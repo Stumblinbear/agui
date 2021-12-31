@@ -76,7 +76,7 @@ impl WidgetBuilder for Text {
             _ => 0.0,
         };
 
-        let fonts = ctx.get_or_init_global::<Fonts>();
+        let fonts = ctx.get_global_or::<Fonts, _>(Fonts::default);
         let fonts = fonts.read();
 
         let glyphs = self.get_glyphs(fonts.get_fonts(), (width, height));
