@@ -12,7 +12,7 @@ use agui::{
     event::WidgetEvent,
     widget::{WidgetId, WidgetRef},
     widgets::{
-        primitives::{FontId, Fonts, Quad},
+        primitives::{FontId, Fonts},
         state::{
             keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
             mouse::{Mouse, MouseButtonState, Scroll, XY},
@@ -22,12 +22,12 @@ use agui::{
     },
     WidgetManager,
 };
-use render::text::TextRenderPass;
+use render::bounding::BoundingRenderPass;
 
 pub mod render;
 
 use self::render::{
-    bounding::BoundingRenderPass, quad::QuadRenderPass, RenderContext, WidgetRenderPass,
+    drawable::DrawableRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass,
 };
 
 pub struct UI {
@@ -76,17 +76,10 @@ impl UI {
     pub fn with_default(program: &GpuProgram) -> Self {
         let ui = Self::new(program);
 
-        let basic_pass = {
-            let mut basic_pass = QuadRenderPass::new(program, &ui.ctx);
+        let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
+        let drawable_pass = DrawableRenderPass::new(program, &ui.ctx);
 
-            basic_pass.bind::<Quad>();
-
-            basic_pass
-        };
-
-        // let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
-
-        ui.add_pass(basic_pass)//.add_pass(bounding_pass)
+        ui.add_pass(bounding_pass).add_pass(drawable_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {

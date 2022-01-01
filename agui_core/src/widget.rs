@@ -7,10 +7,7 @@ use std::{
 use downcast_rs::{impl_downcast, Downcast};
 use generational_arena::Index as GenerationalIndex;
 
-use crate::{
-    context::WidgetContext,
-    unit::{Key, LayoutType},
-};
+use crate::{context::WidgetContext, unit::Key};
 
 /// Encapsulates the result of a widget `build()` method.
 #[non_exhaustive]
@@ -20,14 +17,14 @@ pub enum BuildResult {
 
     /// The widget contains a single child.
     One(WidgetRef),
-    
+
     /// The widget contains a many children.
     Many(Vec<WidgetRef>),
 
     /// The widget has failed to build properly, and should construction should halt.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Currently this results in a `panic!()`, however that may change in the future.
     Error(Box<dyn std::error::Error>),
 }
@@ -82,7 +79,7 @@ impl From<&Vec<WidgetRef>> for BuildResult {
 pub trait WidgetType {
     /// Return the `TypeId::of()` of the widget.
     fn get_type_id(&self) -> TypeId;
-    
+
     /// Return the name of the widget as a string. Generally this is the name of the struct.
     fn get_type_name(&self) -> &'static str;
 }
@@ -90,7 +87,7 @@ pub trait WidgetType {
 /// Implements the widget's `build()` method.
 pub trait WidgetBuilder: Downcast {
     /// Called whenever this widget is rebuilt.
-    /// 
+    ///
     /// This method may be called when any parent is rebuilt, when its internal state changes, when
     /// global state changes, when a computed function changes, or just because it feels like it. Hence,
     /// it should not be relied on for any reason other than to return child widgets.
@@ -103,7 +100,7 @@ pub trait Widget: WidgetType + WidgetBuilder {}
 impl_downcast!(Widget);
 
 /// Holds a reference to a widget, or not.
-/// 
+///
 /// This is generally used when a widget can accept children as a parameter. It can either be `Owned`,
 /// `Borrowed`, `None`, or `Keyed`. A `Keyed` widget is one that may retain its state across parental rebuilds.
 pub enum WidgetRef {
@@ -112,7 +109,7 @@ pub enum WidgetRef {
 
     /// An owned widget.
     Owned(Rc<dyn Widget>),
-    
+
     /// A borrowed widget.
     Borrowed(Weak<dyn Widget>),
 

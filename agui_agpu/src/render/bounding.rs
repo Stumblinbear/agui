@@ -61,7 +61,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        widget_id: &WidgetId,
+        _widget_id: &WidgetId,
     ) {
     }
 
@@ -96,7 +96,6 @@ impl WidgetRenderPass for BoundingRenderPass {
                     } else {
                         rect[1]
                     },
-
                     if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
                         rect[2] - 1.0
                     } else {

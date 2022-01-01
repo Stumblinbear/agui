@@ -8,7 +8,7 @@ use crate::state::{hovering::Hovering, mouse::Mouse};
 pub struct HoveringPlugin {}
 
 impl WidgetPlugin for HoveringPlugin {
-    fn on_update(&self, ctx: &WidgetContext) { }
+    fn on_update(&self, _ctx: &WidgetContext) { }
     
     fn on_layout(&self, ctx: &WidgetContext) {
         let hovering = ctx.init_global(Hovering::default);

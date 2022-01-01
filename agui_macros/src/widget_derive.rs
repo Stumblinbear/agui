@@ -2,8 +2,6 @@ use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use quote::quote;
 
-use crate::layout::LayoutType;
-
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(widget))]
 struct WidgetDeriveInput {

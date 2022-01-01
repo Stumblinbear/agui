@@ -2,12 +2,11 @@
 
 use agpu::Features;
 use agui::{
-    layout::Layout,
     macros::build,
-    unit::{Callback, Color, Margin, Position, Sizing, Units},
+    unit::{Callback, Color, Margin},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, Padding, QuadStyle, Text},
+        primitives::{Builder, Column, DrawableStyle, Padding, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -73,15 +72,15 @@ fn main() -> Result<(), agpu::BoxError> {
                             let mut theme = Theme::new();
 
                             theme.set(ButtonStyle {
-                                normal: QuadStyle {
+                                normal: DrawableStyle {
                                     color: Color::Red,
                                 },
 
-                                hover: QuadStyle {
+                                hover: DrawableStyle {
                                     color: Color::Green,
                                 },
 
-                                pressed: QuadStyle {
+                                pressed: DrawableStyle {
                                     color: Color::Blue,
                                 },
                             });

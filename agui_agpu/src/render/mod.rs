@@ -5,7 +5,7 @@ use agui::{context::Notify, unit::Rect, widget::WidgetId, widgets::AppSettings, 
 use downcast_rs::{impl_downcast, Downcast};
 
 pub mod bounding;
-pub mod quad;
+pub mod drawable;
 pub mod text;
 
 pub struct RenderContext {

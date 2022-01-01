@@ -4,10 +4,10 @@ error: unexpected end of input, expected expression
 9 |         }
   |         ^
 
-warning: unused import: `agui_primitives::Quad`
+warning: unused import: `agui_primitives::Drawable`
  --> tests/compile-fail/build_field_no_value.rs:3:5
   |
-3 | use agui_primitives::Quad;
+3 | use agui_primitives::Drawable;
   |     ^^^^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` on by default

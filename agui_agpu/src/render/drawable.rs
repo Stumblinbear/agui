@@ -1,14 +1,10 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, HashSet},
-    mem,
-};
+use std::{any::TypeId, collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{
     unit::{Color, Rect},
-    widget::{Widget, WidgetId},
-    widgets::primitives::Quad,
+    widget::WidgetId,
+    widgets::primitives::Drawable,
     WidgetManager,
 };
 
@@ -22,17 +18,20 @@ struct ShapeData {
     color: [f32; 4],
 }
 
-pub struct QuadRenderPass {
+struct WidgetBuffer {
+    rect: [f32; 4],
+    buffer: Buffer,
+}
+
+pub struct DrawableRenderPass {
     bind_group: BindGroup,
 
     pipeline: RenderPipeline,
 
-    bound_widgets: HashSet<TypeId>,
-
-    widgets: HashMap<WidgetId, Buffer>,
+    widgets: HashMap<WidgetId, WidgetBuffer>,
 }
 
-impl QuadRenderPass {
+impl DrawableRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
         let bindings = &[ctx.bind_app_settings()];
 
@@ -40,7 +39,7 @@ impl QuadRenderPass {
 
         let pipeline = program
             .gpu
-            .new_pipeline("agui_quad_pipeline")
+            .new_pipeline("agui_drawable_pipeline")
             .with_vertex(include_bytes!("shader/rect.vert.spv"))
             .with_fragment(include_bytes!("shader/rect.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
@@ -55,23 +54,12 @@ impl QuadRenderPass {
             bind_group,
             pipeline,
 
-            bound_widgets: HashSet::new(),
-
             widgets: HashMap::default(),
         }
     }
-
-    pub fn bind<W>(&mut self) -> &Self
-    where
-        W: Widget + 'static,
-    {
-        self.bound_widgets.insert(TypeId::of::<W>());
-
-        self
-    }
 }
 
-impl WidgetRenderPass for QuadRenderPass {
+impl WidgetRenderPass for DrawableRenderPass {
     fn added(
         &mut self,
         _ctx: &RenderContext,
@@ -89,25 +77,29 @@ impl WidgetRenderPass for QuadRenderPass {
         widget_id: &WidgetId,
         rect: &Rect,
     ) {
-        if !self.bound_widgets.contains(type_id) {
+        if type_id != &TypeId::of::<Drawable>() {
             return;
         }
+
+        let rect = rect.to_slice();
 
         let buffer = ctx
             .gpu
             .new_buffer("agui_shape_buffer")
             .as_vertex_buffer()
             .create(bytemuck::bytes_of(&ShapeData {
-                rect: rect.to_slice(),
+                rect,
                 z: 0.0,
                 color: manager
-                    .try_get_as::<Quad>(widget_id)
-                    .and_then(|quad| quad.style.as_ref().map(|style| style.color))
-                    .unwrap_or(Color::White)
+                    .get_as::<Drawable>(widget_id)
+                    .style
+                    .as_ref()
+                    .map_or(Color::default(), |style| style.color)
                     .as_rgba(),
             }));
 
-        self.widgets.insert(*widget_id, buffer);
+        self.widgets
+            .insert(*widget_id, WidgetBuffer { rect, buffer });
     }
 
     fn removed(
@@ -117,7 +109,7 @@ impl WidgetRenderPass for QuadRenderPass {
         type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
-        if !self.bound_widgets.contains(type_id) {
+        if type_id != &TypeId::of::<Drawable>() {
             return;
         }
 
@@ -134,8 +126,16 @@ impl WidgetRenderPass for QuadRenderPass {
 
         r.set_bind_group(0, &self.bind_group, &[]);
 
-        for buffer in self.widgets.values() {
-            r.set_vertex_buffer(0, buffer.slice(..)).draw(0..6, 0..1);
+        for widget_buffer in self.widgets.values() {
+            r.set_scissor_rect(
+                widget_buffer.rect[0] as u32,
+                widget_buffer.rect[1] as u32,
+                widget_buffer.rect[2] as u32,
+                widget_buffer.rect[3] as u32,
+            );
+
+            r.set_vertex_buffer(0, widget_buffer.buffer.slice(..))
+                .draw(0..6, 0..1);
         }
     }
 }

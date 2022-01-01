@@ -35,7 +35,7 @@ pub fn parse_functional_widget(args: TokenStream, input: TokenStream) -> TokenSt
 //     ctx.set_layout(Ref::clone(&layout));
 
 //     build! {
-//         Quad {
+//         Drawable {
 //             layout: Layout {
 //                 sizing: Sizing::Fill
 //             },
