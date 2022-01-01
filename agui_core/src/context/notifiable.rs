@@ -10,24 +10,24 @@ use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
-use super::{ListenerID, Value};
+use super::{ListenerId, Value};
 
 pub struct NotifiableValue {
     value: Option<Arc<RwLock<Box<dyn Value>>>>,
 
-    notify: Arc<Mutex<HashSet<ListenerID>>>,
+    notify: Arc<Mutex<HashSet<ListenerId>>>,
 }
 
 pub struct NotifiableMap {
     values: RwLock<HashMap<TypeId, NotifiableValue>>,
 
-    changed: Arc<Mutex<HashSet<ListenerID>>>,
+    changed: Arc<Mutex<HashSet<ListenerId>>>,
 }
 
 impl NotifiableMap {
     // #[allow(clippy::needless_pass_by_value)]
     #[must_use]
-    pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
+    pub fn new(changed: Arc<Mutex<HashSet<ListenerId>>>) -> Self {
         Self {
             values: RwLock::default(),
 
@@ -95,7 +95,7 @@ impl NotifiableMap {
         None
     }
 
-    pub fn add_listener<V>(&self, listener_id: ListenerID)
+    pub fn add_listener<V>(&self, listener_id: ListenerId)
     where
         V: Value,
     {
@@ -108,7 +108,7 @@ impl NotifiableMap {
         notifiable.notify.lock().insert(listener_id);
     }
 
-    pub fn remove_listener(&self, listener_id: &ListenerID) {
+    pub fn remove_listener(&self, listener_id: &ListenerId) {
         for notifiable in self.values.write().values() {
             notifiable.notify.lock().remove(listener_id);
         }
@@ -121,7 +121,7 @@ where
 {
     scopes: Mutex<HashMap<K, NotifiableMap>>,
 
-    changed: Arc<Mutex<HashSet<ListenerID>>>,
+    changed: Arc<Mutex<HashSet<ListenerId>>>,
 }
 
 impl<K> ScopedNotifiableMap<K>
@@ -129,7 +129,7 @@ where
     K: Eq + Hash,
 {
     #[must_use]
-    pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
+    pub fn new(changed: Arc<Mutex<HashSet<ListenerId>>>) -> Self {
         Self {
             scopes: Mutex::default(),
             changed,
@@ -173,7 +173,7 @@ where
         self.scopes.lock().remove(key);
     }
 
-    pub fn add_listener<V>(&self, key: K, listener_id: ListenerID)
+    pub fn add_listener<V>(&self, key: K, listener_id: ListenerId)
     where
         V: Value,
     {
@@ -186,7 +186,7 @@ where
         scope.add_listener::<V>(listener_id);
     }
 
-    pub fn remove_listeners(&self, listener_id: &ListenerID) {
+    pub fn remove_listeners(&self, listener_id: &ListenerId) {
         self.scopes
             .lock()
             .iter()
@@ -201,8 +201,8 @@ where
 {
     pub(crate) phantom: PhantomData<V>,
 
-    pub(crate) notify: Arc<Mutex<HashSet<ListenerID>>>,
-    pub(crate) changed: Arc<Mutex<HashSet<ListenerID>>>,
+    pub(crate) notify: Arc<Mutex<HashSet<ListenerId>>>,
+    pub(crate) changed: Arc<Mutex<HashSet<ListenerId>>>,
 
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }

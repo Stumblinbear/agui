@@ -9,10 +9,10 @@ use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    context::{tree::Tree, ListenerID, WidgetContext},
+    context::{tree::Tree, ListenerId, WidgetContext},
     event::WidgetEvent,
     unit::{Key, Rect, Units},
-    widget::{Widget, WidgetId, WidgetRef},
+    widget::{BuildResult, Widget, WidgetId, WidgetRef},
     Ref,
 };
 
@@ -27,7 +27,7 @@ pub struct WidgetManager<'ui> {
 
     context: WidgetContext<'ui>,
 
-    changed: Arc<Mutex<HashSet<ListenerID>>>,
+    changed: Arc<Mutex<HashSet<ListenerId>>>,
 
     modifications: Vec<Modify>,
 
@@ -177,98 +177,131 @@ impl<'ui> WidgetManager<'ui> {
     ///
     /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
     /// changes that occured during the process, in order.
+    #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, events: &mut Vec<WidgetEvent>) {
         if self.modifications.is_empty() && self.changed.lock().is_empty() {
             return;
         }
 
+        let mut root_changed = false;
+
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
-        loop {
-            // Apply any queued modifications
-            self.apply_modifications(events);
+        //
+        // We have two loops here because plugins may cause additional modifications after layout
+        'layout: loop {
+            'modify: loop {
+                // Apply any queued modifications
+                self.apply_modifications(events);
 
-            let changed = self.changed.lock().drain().collect::<Vec<_>>();
+                let changed = self.changed.lock().drain().collect::<Vec<_>>();
 
-            if changed.is_empty() {
-                break;
-            }
-
-            cfg_if::cfg_if! {
-                if #[cfg(test)] {
-                    self.changes += changed.len();
+                if changed.is_empty() {
+                    break 'modify;
                 }
-            }
 
-            let mut dirty_widgets = HashSet::new();
-
-            for listener_id in changed {
-                match listener_id {
-                    ListenerID::Widget(widget_id) => {
-                        dirty_widgets.insert(widget_id);
+                cfg_if::cfg_if! {
+                    if #[cfg(test)] {
+                        self.changes += changed.len();
                     }
+                }
 
-                    ListenerID::Computed(widget_id, computed_id) => {
-                        if self.context.call_computed_func(&widget_id, computed_id) {
+                let mut dirty_widgets = HashSet::new();
+
+                for listener_id in changed {
+                    match listener_id {
+                        ListenerId::Widget(widget_id) => {
                             dirty_widgets.insert(widget_id);
                         }
-                    }
 
-                    ListenerID::Plugin(plugin_id) => {
-                        self.context.plugin_on_update(plugin_id);
-                    }
-                }
-            }
-
-            let mut to_rebuild = Vec::new();
-
-            'main: for widget_id in dirty_widgets {
-                let node = match self.get_tree().get(&widget_id) {
-                    Some(widget) => widget,
-                    None => continue,
-                };
-
-                let widget_depth = node.depth;
-
-                let mut to_remove = Vec::new();
-
-                for (i, &(dirty_id, dirty_depth)) in to_rebuild.iter().enumerate() {
-                    // If they're at the same depth, bail. No reason to check if they're children.
-                    if widget_depth == dirty_depth {
-                        continue;
-                    }
-
-                    if widget_depth > dirty_depth {
-                        // If the widget is a child of one of the already queued widgets, bail. It's
-                        // already going to be updated.
-                        if self.get_tree().has_child(&dirty_id, &widget_id) {
-                            continue 'main;
+                        ListenerId::Computed(widget_id, computed_id) => {
+                            if self.context.call_computed_func(&widget_id, computed_id) {
+                                dirty_widgets.insert(widget_id);
+                            }
                         }
-                    } else {
-                        // If the widget is a parent of the widget already queued for render, remove it
-                        if self.get_tree().has_child(&widget_id, &dirty_id) {
-                            to_remove.push(i);
+
+                        ListenerId::Plugin(plugin_id) => {
+                            let plugins = self.context.plugins.lock();
+
+                            let plugin = plugins
+                                .get(&plugin_id)
+                                .expect("cannot update a plugin that does not exist");
+
+                            *self.context.current_id.lock() = Some(ListenerId::Plugin(plugin_id));
+
+                            plugin.on_update(&self.context);
+
+                            *self.context.current_id.lock() = None;
                         }
                     }
                 }
 
-                // Remove the queued widgets that will be updated as a consequence of updating `widget`
-                for (offset, index) in to_remove.into_iter().enumerate() {
-                    to_rebuild.remove(index - offset);
+                let mut to_rebuild = Vec::new();
+
+                'main: for widget_id in dirty_widgets {
+                    let node = match self.get_tree().get(&widget_id) {
+                        Some(widget) => widget,
+                        None => continue,
+                    };
+
+                    let widget_depth = node.depth;
+
+                    let mut to_remove = Vec::new();
+
+                    for (i, &(dirty_id, dirty_depth)) in to_rebuild.iter().enumerate() {
+                        // If they're at the same depth, bail. No reason to check if they're children.
+                        if widget_depth == dirty_depth {
+                            continue;
+                        }
+
+                        if widget_depth > dirty_depth {
+                            // If the widget is a child of one of the already queued widgets, bail. It's
+                            // already going to be updated.
+                            if self.get_tree().has_child(&dirty_id, &widget_id) {
+                                continue 'main;
+                            }
+                        } else {
+                            // If the widget is a parent of the widget already queued for render, remove it
+                            if self.get_tree().has_child(&widget_id, &dirty_id) {
+                                to_remove.push(i);
+                            }
+                        }
+                    }
+
+                    // Remove the queued widgets that will be updated as a consequence of updating `widget`
+                    for (offset, index) in to_remove.into_iter().enumerate() {
+                        to_rebuild.remove(index - offset);
+                    }
+
+                    to_rebuild.push((widget_id, widget_depth));
                 }
 
-                to_rebuild.push((widget_id, widget_depth));
+                for (widget_id, _) in to_rebuild {
+                    self.modifications.push(Modify::Rebuild(widget_id));
+                }
             }
 
-            for (widget_id, _) in to_rebuild {
-                self.modifications.push(Modify::Rebuild(widget_id));
+            // Workaround for morphorm ignoring root sizing
+            if self.morphorm_root_workaround() {
+                root_changed = true;
+            }
+
+            morphorm::layout(&mut self.context.cache, &self.context.tree, &self.widgets);
+
+            let plugins = self.context.plugins.lock();
+
+            for (plugin_id, plugin) in plugins.iter() {
+                *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
+
+                plugin.on_layout(&self.context);
+            }
+
+            *self.context.current_id.lock() = None;
+
+            if self.modifications.is_empty() {
+                break 'layout;
             }
         }
-
-        // Workaround for morphorm ignoring root sizing
-        let root_changed = self.morphorm_root_workaround();
-
-        morphorm::layout(&mut self.context.cache, &self.context.tree, &self.widgets);
 
         events.extend(
             self.context
@@ -301,7 +334,15 @@ impl<'ui> WidgetManager<'ui> {
             }
         }
 
-        self.context.plugin_on_events(events);
+        let plugins = self.context.plugins.lock();
+
+        for (plugin_id, plugin) in plugins.iter() {
+            *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
+
+            plugin.on_events(&self.context, events);
+        }
+
+        *self.context.current_id.lock() = None;
     }
 
     fn morphorm_root_workaround(&mut self) -> bool {
@@ -441,7 +482,7 @@ impl<'ui> WidgetManager<'ui> {
         self.context.tree.add(parent_id, widget_id);
 
         // Sometimes widgets get changes queued before they're spawned
-        self.changed.lock().remove(&ListenerID::Widget(widget_id));
+        self.changed.lock().remove(&ListenerId::Widget(widget_id));
 
         self.modifications.push(Modify::Rebuild(widget_id));
 
@@ -464,7 +505,16 @@ impl<'ui> WidgetManager<'ui> {
             self.modifications.push(Modify::Destroy(*child_id));
         }
 
-        match self.context.build(widget_id, &node.widget).take() {
+        *self.context.current_id.lock() = Some(ListenerId::Widget(widget_id));
+
+        let result = node
+            .widget
+            .try_get()
+            .map_or(BuildResult::Empty, |widget| widget.build(&self.context));
+
+        *self.context.current_id.lock() = None;
+
+        match result.take() {
             Ok(children) => {
                 for child in children {
                     if !child.is_valid() {
@@ -499,7 +549,7 @@ impl<'ui> WidgetManager<'ui> {
 
         self.context.remove(&widget_id);
 
-        self.changed.lock().remove(&ListenerID::Widget(widget_id));
+        self.changed.lock().remove(&ListenerId::Widget(widget_id));
 
         events.push(WidgetEvent::Destroyed {
             type_id: widget.widget.get_type_id(),

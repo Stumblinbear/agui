@@ -4,10 +4,10 @@ use agpu::Features;
 use agui::{
     layout::Layout,
     macros::build,
-    unit::{Callback, Color, Sizing},
+    unit::{Callback, Color, Margin, Sizing},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, QuadStyle, Text},
+        primitives::{Builder, Column, QuadStyle, Text, Padding},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -43,6 +43,7 @@ fn main() -> Result<(), agpu::BoxError> {
         App {
             child: Column {
                 children: [
+                    // Text::is(dejavu_font, 48.0, "A Title".into()),
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
@@ -50,7 +51,7 @@ fn main() -> Result<(), agpu::BoxError> {
                                 height: 100
                             }
                         },
-                        child: Text::is(dejavu_font, 16.0, "A Button".into()),
+                        child: Text::is(dejavu_font, 20.0, "A Button is very stupid i want to fucking".into()),
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
                         })
@@ -94,11 +95,14 @@ fn main() -> Result<(), agpu::BoxError> {
                             Button {
                                 layout: Layout {
                                     sizing: Sizing::Set {
-                                        width: 50,
+                                        width: 75,
                                         height: 200
                                     }
                                 },
-                                child: Text::is(dejavu_font, 16.0, "A Button".into()),
+                                child: Padding {
+                                    padding: Margin::All(10.0.into()),
+                                    child: Text::is(dejavu_font, 32.0, "A Button".into())
+                                },
                                 on_pressed: Callback::from(|()| {
                                     println!("Pressed 3");
                                 })

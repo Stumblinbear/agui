@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{ListenerID, Value, WidgetContext};
+use super::{ListenerId, Value, WidgetContext};
 
 pub trait ComputedFunc<'ui> {
     fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool;
@@ -17,7 +17,7 @@ where
 {
     phantom: PhantomData<&'ui V>,
 
-    listener_id: ListenerID,
+    listener_id: ListenerId,
     did_change: bool,
 
     value: Option<V>,
@@ -29,7 +29,7 @@ where
     V: Eq + PartialEq + Copy + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
-    pub fn new(listener_id: ListenerID, func: F) -> Self {
+    pub fn new(listener_id: ListenerId, func: F) -> Self {
         Self {
             phantom: PhantomData,
 

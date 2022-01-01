@@ -13,26 +13,34 @@ layout (set = 0, binding = 0) uniform Viewport {
 
 layout(location = 0) in vec4 rect;
 layout(location = 1) in float z;
-layout(location = 2) in vec4 color;
+layout(location = 2) in vec4 uv;
+layout(location = 3) in vec4 color;
 
 layout(location = 0) out vec4 outColor;
-
-out gl_PerVertex {
-    vec4 gl_Position;
-};
+layout(location = 1) out vec2 glyphPos;
 
 void main() {
+    uint index = uint[6](0, 2, 1, 1, 2, 3)[gl_VertexIndex];
+
     vec2[4] verts = vec2[4](
         rect.xy,
-        rect.xy + vec2(rect.z, 0.0),
-        rect.xy + vec2(0.0, rect.w),
-        rect.xy + rect.zw
+        rect.zy,
+        rect.xw,
+        rect.zw
     );
 
-    uint index = uint[6](0, 2, 1, 1, 2, 3)[gl_VertexIndex];
     vec2 pos = verts[index] / viewport.size;
-     
-    gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(pos.x, pos.y, z, 1.0);
     
+    gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(pos.x, pos.y, z, 1.0);
+
+    vec2[4] uvs = vec2[4](
+        uv.xy,
+        uv.zy,
+        uv.xw,
+        uv.zw
+    );
+
+    glyphPos = uvs[index];
+
     outColor = color;
 }

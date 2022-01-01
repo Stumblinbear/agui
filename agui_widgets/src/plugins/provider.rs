@@ -21,6 +21,8 @@ pub struct Provider {
 impl WidgetPlugin for Provider {
     fn on_update(&self, _ctx: &WidgetContext) {}
 
+    fn on_layout(&self, _ctx: &WidgetContext) {}
+
     fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {

@@ -174,6 +174,9 @@ impl UI {
             for event in self.events.drain(..) {
                 match event {
                     WidgetEvent::Spawned { type_id, widget_id } => {
+                        self.text_pass
+                            .added(&self.ctx, &self.manager, &type_id, &widget_id);
+
                         for pass in self.render_passes.values_mut() {
                             pass.added(&self.ctx, &self.manager, &type_id, &widget_id);
                         }
@@ -184,12 +187,23 @@ impl UI {
                         widget_id,
                         rect,
                     } => {
+                        self.text_pass.layout(
+                            &self.ctx,
+                            &self.manager,
+                            &type_id,
+                            &widget_id,
+                            &rect,
+                        );
+
                         for pass in self.render_passes.values_mut() {
                             pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, &rect);
                         }
                     }
 
                     WidgetEvent::Destroyed { type_id, widget_id } => {
+                        self.text_pass
+                            .removed(&self.ctx, &self.manager, &type_id, &widget_id);
+
                         for pass in self.render_passes.values_mut() {
                             pass.removed(&self.ctx, &self.manager, &type_id, &widget_id);
                         }

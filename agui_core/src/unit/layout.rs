@@ -83,20 +83,23 @@ impl LayoutType {
     }
 }
 
-/// Sets the padding around the elment.
+/// Sets the margin around the elment.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
-pub enum Padding {
-    /// No padding.
+pub enum Margin {
+    /// No margin.
     Unset,
     
-    /// Padding along the vertical and horizontal axis.
+    /// Margin all around.
+    All(Units),
+    
+    /// Margin along the vertical and horizontal axis.
     Axis {
         vertical: Units,
         horizontal: Units,
     },
     
-    /// Padding on every side.
+    /// Margin on every side.
     Set {
         top: Units,
         right: Units,
@@ -105,46 +108,50 @@ pub enum Padding {
     },
 }
 
-impl Default for Padding {
+impl Default for Margin {
     fn default() -> Self {
         Self::Unset
     }
 }
 
-impl Padding {
+impl Margin {
     #[must_use]
     pub const fn get_top(&self) -> Units {
         match self {
-            Padding::Unset => Units::Auto,
-            Padding::Axis { vertical, .. } => *vertical,
-            Padding::Set { top, .. } => *top,
+            Margin::Unset => Units::Auto,
+            Margin::All(units) => *units,
+            Margin::Axis { vertical, .. } => *vertical,
+            Margin::Set { top, .. } => *top,
         }
     }
 
     #[must_use]
     pub const fn get_right(&self) -> Units {
         match self {
-            Padding::Unset => Units::Auto,
-            Padding::Axis { horizontal, .. } => *horizontal,
-            Padding::Set { right, .. } => *right,
+            Margin::Unset => Units::Auto,
+            Margin::All(units) => *units,
+            Margin::Axis { horizontal, .. } => *horizontal,
+            Margin::Set { right, .. } => *right,
         }
     }
 
     #[must_use]
     pub const fn get_bottom(&self) -> Units {
         match self {
-            Padding::Unset => Units::Auto,
-            Padding::Axis { vertical, .. } => *vertical,
-            Padding::Set { bottom, .. } => *bottom,
+            Margin::Unset => Units::Auto,
+            Margin::All(units) => *units,
+            Margin::Axis { vertical, .. } => *vertical,
+            Margin::Set { bottom, .. } => *bottom,
         }
     }
 
     #[must_use]
     pub const fn get_left(&self) -> Units {
         match self {
-            Padding::Unset => Units::Auto,
-            Padding::Axis { horizontal, .. } => *horizontal,
-            Padding::Set { left, .. } => *left,
+            Margin::Unset => Units::Auto,
+            Margin::All(units) => *units,
+            Margin::Axis { horizontal, .. } => *horizontal,
+            Margin::Set { left, .. } => *left,
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    unit::{Padding, Position, Sizing},
+    unit::{Margin, Position, Sizing},
     Ref,
 };
 
@@ -11,7 +11,7 @@ pub struct Layout {
     pub max_sizing: Sizing,
     pub sizing: Sizing,
 
-    pub padding: Padding,
+    pub margin: Margin,
 }
 
 impl From<Layout> for Ref<Layout> {

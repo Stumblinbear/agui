@@ -99,9 +99,7 @@ impl WidgetBuilder for Button {
 
         build! {
             Quad {
-                layout: Layout {
-                    sizing: Sizing::Fill
-                },
+                layout: Ref::clone(&self.layout),
                 style: match state {
                     ButtonState::Normal => style.normal.into(),
                     ButtonState::Hover => style.hover.into(),

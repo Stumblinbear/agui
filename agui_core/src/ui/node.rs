@@ -2,7 +2,7 @@ use generational_arena::Arena;
 
 use crate::{
     layout::Layout,
-    unit::{LayoutType, Padding, Position, Sizing},
+    unit::{LayoutType, Margin, Position, Sizing},
     widget::{WidgetId, WidgetRef},
     Ref,
 };
@@ -183,7 +183,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             store
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
-                .map_or(Padding::default(), |layout| layout.padding)
+                .map_or(Margin::default(), |layout| layout.margin)
                 .get_top()
                 .into(),
         )
@@ -194,7 +194,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             store
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
-                .map_or(Padding::default(), |layout| layout.padding)
+                .map_or(Margin::default(), |layout| layout.margin)
                 .get_right()
                 .into(),
         )
@@ -205,7 +205,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             store
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
-                .map_or(Padding::default(), |layout| layout.padding)
+                .map_or(Margin::default(), |layout| layout.margin)
                 .get_bottom()
                 .into(),
         )
@@ -216,7 +216,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             store
                 .get(self.id())
                 .and_then(|node| node.layout.try_get())
-                .map_or(Padding::default(), |layout| layout.padding)
+                .map_or(Margin::default(), |layout| layout.margin)
                 .get_left()
                 .into(),
         )

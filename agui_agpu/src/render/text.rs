@@ -1,6 +1,6 @@
-use std::{any::TypeId, collections::HashMap, mem};
+use std::{any::TypeId, collections::HashMap};
 
-use agpu::{Buffer, Frame, GpuProgram, Texture};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Sampler, Texture, TextureFormat};
 use agui::{
     unit::Rect,
     widget::WidgetId,
@@ -12,82 +12,106 @@ use glyph_brush_draw_cache::{CachedBy, DrawCache};
 
 use super::{RenderContext, WidgetRenderPass};
 
-const INITIAL_TEXTURE_SIZE: [u32; 2] = [1024, 1024];
+const INITIAL_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 
 const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
+const Z_BUFFER_SIZE: u64 = std::mem::size_of::<f32>() as u64;
+const COLOR_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
 const UV_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const GLYPH_BUFFER_SIZE: u64 = RECT_BUFFER_SIZE + UV_BUFFER_SIZE;
+
+const GLYPH_BUFFER_SIZE: u64 =
+    RECT_BUFFER_SIZE + Z_BUFFER_SIZE + COLOR_BUFFER_SIZE + UV_BUFFER_SIZE;
 
 const PREALLOCATE: u64 = GLYPH_BUFFER_SIZE * 128;
 
 pub struct TextRenderPass {
-    fonts: Vec<FontArc>,
+    bind_group: BindGroup,
+    pipeline: RenderPipeline,
+
+    texture: Texture<agpu::D2>,
+    sampler: Sampler,
+    buffer: Buffer,
 
     draw_cache: DrawCache,
 
-    texture: Texture,
-    buffer: Buffer,
+    fonts: Vec<FontArc>,
 
-    locations: Arena<WidgetId>,
-    widgets: HashMap<WidgetId, GenerationalIndex>,
-    glyphs: HashMap<WidgetId, Vec<SectionGlyph>>,
+    locations: Arena<SectionGlyph>,
+    widgets: HashMap<WidgetId, Vec<GenerationalIndex>>,
 }
 
 impl TextRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
+        let texture = program
+            .gpu
+            .new_texture("agui_text_texture")
+            .with_format(TextureFormat::R8Unorm)
+            .allow_binding()
+            .create_empty(INITIAL_TEXTURE_SIZE);
+
+        let sampler = program.gpu.new_sampler("agui_text_sampler").create();
+
+        let bindings = &[
+            ctx.bind_app_settings(),
+            texture.bind_texture(),
+            sampler.bind(),
+        ];
+
+        let bind_group = program.gpu.create_bind_group(bindings);
+
+        let pipeline = program
+            .gpu
+            .new_pipeline("agui_text_pipeline")
+            .with_vertex(include_bytes!("shader/text.vert.spv"))
+            .with_fragment(include_bytes!("shader/text.frag.spv"))
+            .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
+                array_stride: GLYPH_BUFFER_SIZE,
+                step_mode: agpu::wgpu::VertexStepMode::Instance,
+                attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4, 3 => Float32x4],
+            }])
+            .with_bind_groups(&[&bind_group.layout])
+            .create();
+
         Self {
-            fonts: Vec::new(),
+            bind_group,
+            pipeline,
 
-            draw_cache: DrawCache::builder().build(),
-
-            texture: program
-                .gpu
-                .new_texture("TextRenderPass<Texture>")
-                .create_empty(&INITIAL_TEXTURE_SIZE),
+            texture,
+            sampler,
             buffer: program
                 .gpu
-                .new_buffer("TextRenderPass<Vertex>")
+                .new_buffer("agui_text_buffer")
                 .as_vertex_buffer()
                 .allow_copy()
                 .create_uninit(PREALLOCATE),
 
+            draw_cache: DrawCache::builder()
+                .dimensions(INITIAL_TEXTURE_SIZE.0, INITIAL_TEXTURE_SIZE.1)
+                .build(),
+
+            fonts: Vec::new(),
+
             locations: Arena::default(),
             widgets: HashMap::default(),
-            glyphs: HashMap::default(),
         }
     }
 
     pub fn add_font(&mut self, font: FontArc) {
         self.fonts.push(font);
     }
-
-    pub fn get_buffer_index(&self, widget_id: &WidgetId) -> Option<u64> {
-        let index = match self.widgets.get(widget_id) {
-            Some(widget) => widget,
-            None => return None,
-        };
-
-        let index = index.into_raw_parts().0 as u64;
-
-        Some(index * GLYPH_BUFFER_SIZE)
-    }
 }
 
 impl WidgetRenderPass for TextRenderPass {
     fn added(
         &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
+        _ctx: &RenderContext,
+        _manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
         if type_id != &TypeId::of::<Text>() {
             return;
         }
-
-        let index = self.locations.insert(*widget_id);
-
-        self.widgets.insert(*widget_id, index);
     }
 
     fn layout(
@@ -112,13 +136,17 @@ impl WidgetRenderPass for TextRenderPass {
 
         let cached_by = loop {
             match self.draw_cache.cache_queued(&self.fonts, |rect, tex_data| {
-                for (i, chunk) in tex_data.chunks(rect.width() as usize).enumerate() {}
+                self.texture.write_block(
+                    (rect.min[0], rect.min[1]),
+                    (rect.width(), rect.height()),
+                    tex_data,
+                );
             }) {
                 Ok(cached_by) => break cached_by,
                 Err(_) => {
                     let size = self.texture.size;
 
-                    self.texture.resize(&[size.width + 32, size.height + 32]);
+                    self.texture.resize((size.0 + 32, size.1 + 32));
                 }
             }
         };
@@ -126,33 +154,45 @@ impl WidgetRenderPass for TextRenderPass {
         if let CachedBy::Reordering = cached_by {
             todo!();
         } else {
-            let index = match self.get_buffer_index(widget_id) {
-                Some(index) => index,
-                None => return,
-            };
+            if let Some(widget_glyphs) = self.widgets.remove(widget_id) {
+                for index in widget_glyphs {
+                    self.locations.remove(index);
+                }
+            }
 
-            for (i, sg) in glyphs.iter().enumerate() {
+            let mut widget_glyphs = Vec::with_capacity(glyphs.len());
+
+            for (i, sg) in glyphs.into_iter().enumerate() {
                 if let Some((tex_coords, px_coords)) =
                     self.draw_cache.rect_for(sg.font_id.0, &sg.glyph)
                 {
+                    let index = self.locations.insert(sg);
+
+                    widget_glyphs.push(index);
+
                     ctx.gpu.queue.write_buffer(
                         &self.buffer,
-                        index + i as u64,
+                        (index.into_raw_parts().0 + i) as u64 * GLYPH_BUFFER_SIZE,
                         bytemuck::cast_slice(&[
+                            rect.x + px_coords.min.x,
+                            rect.y + px_coords.min.y,
+                            rect.x + px_coords.max.x,
+                            rect.y + px_coords.max.y,
+                            0.0,
                             tex_coords.min.x,
                             tex_coords.min.y,
                             tex_coords.max.x,
                             tex_coords.max.y,
-                            px_coords.min.x,
-                            px_coords.min.y,
-                            px_coords.max.x,
-                            px_coords.max.y,
+                            1.0,
+                            1.0,
+                            0.0,
+                            0.0,
                         ]),
                     );
                 }
             }
 
-            self.glyphs.insert(*widget_id, glyphs);
+            self.widgets.insert(*widget_id, widget_glyphs);
         }
     }
 
@@ -167,17 +207,24 @@ impl WidgetRenderPass for TextRenderPass {
             return;
         }
 
-        let index = self
-            .widgets
-            .remove(widget_id)
-            .expect("removed nonexistent widget");
-
-        self.locations.remove(index);
-
-        self.glyphs.remove(widget_id);
+        if let Some(widget_glyphs) = self.widgets.remove(widget_id) {
+            for index in widget_glyphs {
+                self.locations.remove(index);
+            }
+        }
     }
 
-    fn update(&mut self, ctx: &RenderContext) {}
+    fn update(&mut self, _ctx: &RenderContext) {}
 
-    fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {}
+    fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
+        let mut r = frame
+            .render_pass("agui_text_pass")
+            .with_pipeline(&self.pipeline)
+            .begin();
+
+        r.set_bind_group(0, &self.bind_group, &[]);
+
+        r.set_vertex_buffer(0, self.buffer.slice(..))
+            .draw(0..6, 0..(self.locations.capacity() as u32));
+    }
 }

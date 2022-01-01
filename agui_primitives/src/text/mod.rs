@@ -5,7 +5,7 @@ use glyph_brush_layout::{
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Padding, Position, Sizing, Units},
+    unit::{Margin, Position, Sizing},
     widget::{BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
@@ -22,7 +22,7 @@ pub struct TextSection {
 }
 
 impl TextSection {
-    pub fn is(font: FontId, scale: f32, text: String) -> Self {
+    pub fn new(font: FontId, scale: f32, text: String) -> Self {
         Self { font, text, scale }
     }
 }
@@ -40,6 +40,8 @@ impl ToSectionText for TextSection {
 #[derive(Widget)]
 pub struct Text {
     pub position: Position,
+
+    pub sizing: Sizing,
     pub max_sizing: Sizing,
 
     pub wrap: bool,
@@ -53,6 +55,8 @@ impl Default for Text {
     fn default() -> Self {
         Self {
             position: Position::default(),
+
+            sizing: Sizing::Fill,
             max_sizing: Sizing::default(),
 
             wrap: true,
@@ -66,47 +70,13 @@ impl Default for Text {
 
 impl WidgetBuilder for Text {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        let width = match self.max_sizing.get_width() {
-            agui_core::unit::Units::Pixels(px) => px,
-            _ => 0.0,
-        };
-
-        let height = match self.max_sizing.get_height() {
-            agui_core::unit::Units::Pixels(px) => px,
-            _ => 0.0,
-        };
-
-        let fonts = ctx.get_global_or::<Fonts, _>(Fonts::default);
-        let fonts = fonts.read();
-
-        let glyphs = self.get_glyphs(fonts.get_fonts(), (width, height));
-
-        let mut max_x = 0.0;
-        let mut max_y = 0.0;
-
-        for g in glyphs {
-            let x = g.glyph.position.x + g.glyph.scale.x;
-            let y = g.glyph.position.y + g.glyph.scale.y;
-
-            if x > max_x {
-                max_x = x;
-            }
-
-            if y > max_y {
-                max_y = y;
-            }
-        }
-
         ctx.set_layout(
             Layout {
                 position: self.position,
-                min_sizing: Sizing::Set {
-                    width: Units::Pixels(max_x),
-                    height: Units::Pixels(max_y),
-                },
+                min_sizing: Sizing::default(),
                 max_sizing: self.max_sizing,
-                sizing: Sizing::default(),
-                padding: Padding::default(),
+                sizing: self.sizing,
+                margin: Margin::default(),
             }
             .into(),
         );
@@ -118,7 +88,14 @@ impl WidgetBuilder for Text {
 impl Text {
     pub fn is(font: FontId, scale: f32, text: String) -> Self {
         Self {
-            sections: vec![TextSection::is(font, scale, text)],
+            sections: vec![TextSection::new(font, scale, text)],
+            ..Text::default()
+        }
+    }
+
+    pub fn new(sections: Vec<TextSection>) -> Self {
+        Self {
+            sections,
             ..Text::default()
         }
     }

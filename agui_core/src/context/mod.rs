@@ -22,23 +22,22 @@ use self::{
 };
 
 use crate::{
-    event::WidgetEvent,
     layout::Layout,
     plugin::WidgetPlugin,
     unit::{Key, Rect},
-    widget::{BuildResult, WidgetId, WidgetRef},
+    widget::{WidgetId, WidgetRef},
     Ref,
 };
 
 /// A combined-type for anything that can listen for events in the system.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum ListenerID {
+pub enum ListenerId {
     Widget(WidgetId),
     Computed(WidgetId, TypeId),
     Plugin(TypeId),
 }
 
-impl ListenerID {
+impl ListenerId {
     /// # Panics
     ///
     /// Will panic if called on a plugin listener.
@@ -46,7 +45,7 @@ impl ListenerID {
     pub fn widget_id(&self) -> &WidgetId {
         match self {
             Self::Widget(widget_id) | Self::Computed(widget_id, _) => widget_id,
-            ListenerID::Plugin(_) => panic!("listener is not a widget"),
+            ListenerId::Plugin(_) => panic!("listener is not a widget"),
         }
     }
 }
@@ -58,7 +57,7 @@ pub struct WidgetContext<'ui> {
     pub(crate) tree: Tree<WidgetId>,
     pub(crate) cache: LayoutCache<WidgetId>,
 
-    plugins: Mutex<BTreeMap<TypeId, Rc<dyn WidgetPlugin>>>,
+    pub(crate) plugins: Mutex<BTreeMap<TypeId, Rc<dyn WidgetPlugin>>>,
 
     global: NotifiableMap,
     states: ScopedNotifiableMap<WidgetId>,
@@ -67,13 +66,13 @@ pub struct WidgetContext<'ui> {
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
-    current_id: Arc<Mutex<Option<ListenerID>>>,
+    pub(crate) current_id: Arc<Mutex<Option<ListenerId>>>,
 }
 
 impl<'ui> WidgetContext<'ui> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(changed: Arc<Mutex<HashSet<ListenerID>>>) -> Self {
+    pub fn new(changed: Arc<Mutex<HashSet<ListenerId>>>) -> Self {
         Self {
             tree: Tree::default(),
             cache: LayoutCache::default(),
@@ -82,6 +81,7 @@ impl<'ui> WidgetContext<'ui> {
 
             global: NotifiableMap::new(Arc::clone(&changed)),
             states: ScopedNotifiableMap::new(Arc::clone(&changed)),
+            
             layouts: Mutex::default(),
 
             computed_funcs: Arc::new(Mutex::new(HashMap::new())),
@@ -114,10 +114,17 @@ impl<'ui> WidgetContext<'ui> {
         } else {
             let plugin_id = TypeId::of::<P>();
 
-            self.plugins.lock().insert(plugin_id, Rc::new(func()));
+            let plugin = func();
 
-            // Force a first-update of the plugin
-            self.plugin_on_update(plugin_id);
+            let last_id = *self.current_id.lock();
+
+            *self.current_id.lock() = Some(ListenerId::Plugin(plugin_id));
+
+            plugin.on_update(self);
+
+            *self.current_id.lock() = last_id;
+
+            self.plugins.lock().insert(plugin_id, Rc::new(plugin));
 
             self.get_plugin::<P>().expect("failed to set plugin")
         }
@@ -252,13 +259,13 @@ impl<'ui> WidgetContext<'ui> {
             .expect("cannot get state from context while not iterating");
 
         match &current_id {
-            ListenerID::Widget(widget_id) => {
+            ListenerId::Widget(widget_id) => {
                 self.layouts.lock().insert(*widget_id, layout);
             }
-            ListenerID::Computed(_, _) => {
+            ListenerId::Computed(_, _) => {
                 log::warn!("layouts set in a computed function are ignored");
             }
-            ListenerID::Plugin(_) => {
+            ListenerId::Plugin(_) => {
                 log::warn!("layouts set in a plugin are ignored");
             }
         };
@@ -291,7 +298,7 @@ impl<'ui> WidgetContext<'ui> {
 
         let computed_id = TypeId::of::<F>();
 
-        let listener_id = ListenerID::Computed(*widget_id, computed_id);
+        let listener_id = ListenerId::Computed(*widget_id, computed_id);
 
         let mut widgets = self.computed_funcs.lock();
 
@@ -357,8 +364,8 @@ impl<'ui> WidgetContext<'ui> {
             .expect("cannot get self while not iterating");
 
         match current_id {
-            ListenerID::Widget(widget_id) | ListenerID::Computed(widget_id, _) => widget_id,
-            ListenerID::Plugin(_) => {
+            ListenerId::Widget(widget_id) | ListenerId::Computed(widget_id, _) => widget_id,
+            ListenerId::Plugin(_) => {
                 panic!("plugins do not exist in the tree, and thus they cannot get themselves")
             }
         }
@@ -371,52 +378,8 @@ impl<'ui> WidgetContext<'ui> {
         self.get_self() == widget_id
     }
 
-    pub(crate) fn plugin_on_update(&self, plugin_id: TypeId) {
-        let plugins = self.plugins.lock();
-
-        let plugin = plugins
-            .get(&plugin_id)
-            .expect("cannot update a plugin that does not exist");
-
-        let last_id = *self.current_id.lock();
-
-        *self.current_id.lock() = Some(ListenerID::Plugin(plugin_id));
-
-        plugin.on_update(self);
-
-        *self.current_id.lock() = last_id;
-    }
-
-    pub(crate) fn plugin_on_events(&self, events: &[WidgetEvent]) {
-        let plugins = self.plugins.lock();
-
-        let last_id = *self.current_id.lock();
-
-        for (plugin_id, plugin) in plugins.iter() {
-            *self.current_id.lock() = Some(ListenerID::Plugin(*plugin_id));
-
-            plugin.on_events(self, events);
-        }
-
-        *self.current_id.lock() = last_id;
-    }
-
-    pub(crate) fn build(&self, widget_id: WidgetId, widget: &WidgetRef) -> BuildResult {
-        let last_id = *self.current_id.lock();
-
-        *self.current_id.lock() = Some(ListenerID::Widget(widget_id));
-
-        let result = widget
-            .try_get()
-            .map_or(BuildResult::Empty, |widget| widget.build(self));
-
-        *self.current_id.lock() = last_id;
-
-        result
-    }
-
     pub(crate) fn remove(&self, widget_id: &WidgetId) {
-        let listener_id = ListenerID::Widget(*widget_id);
+        let listener_id = ListenerId::Widget(*widget_id);
 
         self.global.remove_listener(&listener_id);
 
