@@ -22,22 +22,18 @@ const UV_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
 const GLYPH_BUFFER_SIZE: u64 =
     RECT_BUFFER_SIZE + Z_BUFFER_SIZE + COLOR_BUFFER_SIZE + UV_BUFFER_SIZE;
 
-const PREALLOCATE: u64 = GLYPH_BUFFER_SIZE * 128;
-
 pub struct TextRenderPass {
     bind_group: BindGroup,
     pipeline: RenderPipeline,
 
     texture: Texture<agpu::D2>,
     sampler: Sampler,
-    buffer: Buffer,
 
     draw_cache: DrawCache,
 
     fonts: Vec<FontArc>,
 
-    locations: Arena<SectionGlyph>,
-    widgets: HashMap<WidgetId, Vec<GenerationalIndex>>,
+    widgets: HashMap<WidgetId, Buffer>,
 }
 
 impl TextRenderPass {
@@ -78,12 +74,6 @@ impl TextRenderPass {
 
             texture,
             sampler,
-            buffer: program
-                .gpu
-                .new_buffer("agui_text_buffer")
-                .as_vertex_buffer()
-                .allow_copy()
-                .create_uninit(PREALLOCATE),
 
             draw_cache: DrawCache::builder()
                 .dimensions(INITIAL_TEXTURE_SIZE.0, INITIAL_TEXTURE_SIZE.1)
@@ -91,7 +81,6 @@ impl TextRenderPass {
 
             fonts: Vec::new(),
 
-            locations: Arena::default(),
             widgets: HashMap::default(),
         }
     }
@@ -154,45 +143,39 @@ impl WidgetRenderPass for TextRenderPass {
         if let CachedBy::Reordering = cached_by {
             todo!();
         } else {
-            if let Some(widget_glyphs) = self.widgets.remove(widget_id) {
-                for index in widget_glyphs {
-                    self.locations.remove(index);
-                }
-            }
-
-            let mut widget_glyphs = Vec::with_capacity(glyphs.len());
+            let mut buffer = Vec::with_capacity(glyphs.len());
 
             for (i, sg) in glyphs.into_iter().enumerate() {
                 if let Some((tex_coords, px_coords)) =
                     self.draw_cache.rect_for(sg.font_id.0, &sg.glyph)
                 {
-                    let index = self.locations.insert(sg);
-
-                    widget_glyphs.push(index);
-
-                    ctx.gpu.queue.write_buffer(
-                        &self.buffer,
-                        (index.into_raw_parts().0 + i) as u64 * GLYPH_BUFFER_SIZE,
-                        bytemuck::cast_slice(&[
-                            rect.x + px_coords.min.x,
-                            rect.y + px_coords.min.y,
-                            rect.x + px_coords.max.x,
-                            rect.y + px_coords.max.y,
-                            0.0,
-                            tex_coords.min.x,
-                            tex_coords.min.y,
-                            tex_coords.max.x,
-                            tex_coords.max.y,
-                            1.0,
-                            1.0,
-                            0.0,
-                            0.0,
-                        ]),
-                    );
+                    buffer.extend(vec![
+                        rect.x + px_coords.min.x,
+                        rect.y + px_coords.min.y,
+                        rect.x + px_coords.max.x,
+                        rect.y + px_coords.max.y,
+                        0.0,
+                        tex_coords.min.x,
+                        tex_coords.min.y,
+                        tex_coords.max.x,
+                        tex_coords.max.y,
+                        1.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                    ]);
                 }
             }
 
-            self.widgets.insert(*widget_id, widget_glyphs);
+            if buffer.len() > 0 {
+                let buffer = ctx
+                    .gpu
+                    .new_buffer("agui_text_buffer")
+                    .as_vertex_buffer()
+                    .create(bytemuck::cast_slice::<_, u8>(buffer.as_slice()));
+    
+                self.widgets.insert(*widget_id, buffer);
+            }
         }
     }
 
@@ -207,11 +190,7 @@ impl WidgetRenderPass for TextRenderPass {
             return;
         }
 
-        if let Some(widget_glyphs) = self.widgets.remove(widget_id) {
-            for index in widget_glyphs {
-                self.locations.remove(index);
-            }
-        }
+        self.widgets.remove(widget_id);
     }
 
     fn update(&mut self, _ctx: &RenderContext) {}
@@ -224,7 +203,9 @@ impl WidgetRenderPass for TextRenderPass {
 
         r.set_bind_group(0, &self.bind_group, &[]);
 
-        r.set_vertex_buffer(0, self.buffer.slice(..))
-            .draw(0..6, 0..(self.locations.capacity() as u32));
+        for widget in self.widgets.values() {
+            r.set_vertex_buffer(0, widget.slice(..))
+                .draw(0..6, 0..(widget.size() as u32 / GLYPH_BUFFER_SIZE as u32) as u32);
+        }
     }
 }
