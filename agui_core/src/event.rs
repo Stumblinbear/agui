@@ -17,6 +17,7 @@ pub enum WidgetEvent {
         type_id: TypeId,
         widget_id: WidgetId,
         rect: Rect,
+        z: usize,
     },
 
     /// A widget has been destroyed.

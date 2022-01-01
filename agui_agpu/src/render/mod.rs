@@ -79,6 +79,7 @@ pub trait WidgetRenderPass: Downcast {
         type_id: &TypeId,
         widget_id: &WidgetId,
         rect: &Rect,
+        z: f32,
     );
 
     fn removed(

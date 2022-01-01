@@ -106,6 +106,7 @@ impl WidgetRenderPass for TextRenderPass {
         type_id: &TypeId,
         widget_id: &WidgetId,
         rect: &Rect,
+        z: f32,
     ) {
         if type_id != &TypeId::of::<Text>() {
             return;
@@ -152,7 +153,7 @@ impl WidgetRenderPass for TextRenderPass {
                             rect.x + px_coords.max.x,
                             rect.y + px_coords.max.y,
                         ],
-                        z: 0.1,
+                        z,
                         uv: [
                             tex_coords.min.x,
                             tex_coords.min.y,

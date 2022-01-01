@@ -317,6 +317,7 @@ impl<'ui> WidgetManager<'ui> {
                         .cache
                         .get_rect(widget_id)
                         .expect("root widget does not have a rect"),
+                    z: widget_id.depth(),
                 }),
         );
 
@@ -330,6 +331,7 @@ impl<'ui> WidgetManager<'ui> {
                         .cache
                         .get_rect(&widget_id)
                         .expect("root widget does not have a rect"),
+                    z: widget_id.depth(),
                 });
             }
         }

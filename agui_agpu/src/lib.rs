@@ -28,6 +28,8 @@ pub mod render;
 
 use self::render::{quad::QuadRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass};
 
+const Z_MAX: usize = 10_000_000;
+
 pub struct UI {
     manager: WidgetManager<'static>,
     events: Vec<WidgetEvent>,
@@ -177,17 +179,21 @@ impl UI {
                         type_id,
                         widget_id,
                         rect,
+                        z,
                     } => {
+                        let z = (Z_MAX - z) as f32 / Z_MAX as f32;
+
                         self.text_pass.layout(
                             &self.ctx,
                             &self.manager,
                             &type_id,
                             &widget_id,
                             &rect,
+                            z,
                         );
 
                         for pass in self.render_passes.values_mut() {
-                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, &rect);
+                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, &rect, z);
                         }
                     }
 

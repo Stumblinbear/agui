@@ -78,6 +78,7 @@ impl WidgetRenderPass for QuadRenderPass {
         type_id: &TypeId,
         widget_id: &WidgetId,
         rect: &Rect,
+        z: f32,
     ) {
         if type_id != &TypeId::of::<Quad>() {
             return;
@@ -93,7 +94,7 @@ impl WidgetRenderPass for QuadRenderPass {
             .as_vertex_buffer()
             .create(bytemuck::bytes_of(&ShapeData {
                 rect,
-                z: 0.0,
+                z,
                 color: quad
                     .style
                     .as_ref()
