@@ -4,7 +4,7 @@ use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{
     unit::{Color, Rect},
     widget::WidgetId,
-    widgets::primitives::Drawable,
+    widgets::primitives::Quad,
     WidgetManager,
 };
 
@@ -23,7 +23,7 @@ struct WidgetBuffer {
     buffer: Buffer,
 }
 
-pub struct DrawableRenderPass {
+pub struct QuadRenderPass {
     bind_group: BindGroup,
 
     pipeline: RenderPipeline,
@@ -31,7 +31,7 @@ pub struct DrawableRenderPass {
     widgets: HashMap<WidgetId, WidgetBuffer>,
 }
 
-impl DrawableRenderPass {
+impl QuadRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
         let bindings = &[ctx.bind_app_settings()];
 
@@ -40,8 +40,8 @@ impl DrawableRenderPass {
         let pipeline = program
             .gpu
             .new_pipeline("agui_drawable_pipeline")
-            .with_vertex(include_bytes!("shader/rect.vert.spv"))
-            .with_fragment(include_bytes!("shader/rect.frag.spv"))
+            .with_vertex(include_bytes!("shader/drawable.vert.spv"))
+            .with_fragment(include_bytes!("shader/drawable.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<ShapeData>() as u64,
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
@@ -59,7 +59,7 @@ impl DrawableRenderPass {
     }
 }
 
-impl WidgetRenderPass for DrawableRenderPass {
+impl WidgetRenderPass for QuadRenderPass {
     fn added(
         &mut self,
         _ctx: &RenderContext,
@@ -77,7 +77,7 @@ impl WidgetRenderPass for DrawableRenderPass {
         widget_id: &WidgetId,
         rect: &Rect,
     ) {
-        if type_id != &TypeId::of::<Drawable>() {
+        if type_id != &TypeId::of::<Quad>() {
             return;
         }
 
@@ -91,7 +91,7 @@ impl WidgetRenderPass for DrawableRenderPass {
                 rect,
                 z: 0.0,
                 color: manager
-                    .get_as::<Drawable>(widget_id)
+                    .get_as::<Quad>(widget_id)
                     .style
                     .as_ref()
                     .map_or(Color::default(), |style| style.color)
@@ -109,7 +109,7 @@ impl WidgetRenderPass for DrawableRenderPass {
         type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
-        if type_id != &TypeId::of::<Drawable>() {
+        if type_id != &TypeId::of::<Quad>() {
             return;
         }
 

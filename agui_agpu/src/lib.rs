@@ -27,7 +27,7 @@ use render::bounding::BoundingRenderPass;
 pub mod render;
 
 use self::render::{
-    drawable::DrawableRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass,
+    drawable::QuadRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass,
 };
 
 pub struct UI {
@@ -77,7 +77,7 @@ impl UI {
         let ui = Self::new(program);
 
         let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
-        let drawable_pass = DrawableRenderPass::new(program, &ui.ctx);
+        let drawable_pass = QuadRenderPass::new(program, &ui.ctx);
 
         ui.add_pass(bounding_pass).add_pass(drawable_pass)
     }

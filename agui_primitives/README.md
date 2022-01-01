@@ -4,4 +4,4 @@
 
 ## What is Agui Primitives?
 
-Agui Primitives hold basic widgets and core renderables for [`agui`](https://crates.io/crates/agui). Any third party renderer intending to add support for most widgets should only need to support the core renderables in this crate, such as `Drawable`.
+Agui Primitives hold basic widgets and core renderables for [`agui`](https://crates.io/crates/agui). Any third party renderer intending to add support for most widgets should only need to support the core renderables in this crate, such as `Quad`.

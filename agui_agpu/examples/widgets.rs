@@ -6,7 +6,7 @@ use agui::{
     unit::{Callback, Color, Margin},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, DrawableStyle, Padding, Text},
+        primitives::{Builder, Column, QuadStyle, Padding, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -72,15 +72,15 @@ fn main() -> Result<(), agpu::BoxError> {
                             let mut theme = Theme::new();
 
                             theme.set(ButtonStyle {
-                                normal: DrawableStyle {
+                                normal: QuadStyle {
                                     color: Color::Red,
                                 },
 
-                                hover: DrawableStyle {
+                                hover: QuadStyle {
                                     color: Color::Green,
                                 },
 
-                                pressed: DrawableStyle {
+                                pressed: QuadStyle {
                                     color: Color::Blue,
                                 },
                             });

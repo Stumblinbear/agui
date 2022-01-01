@@ -7,40 +7,29 @@ use agui_core::{
 };
 use agui_macros::Widget;
 
-pub enum Shape {
-    Rect { radius: f32 },
-    Circle,
-}
-
-impl Default for Shape {
-    fn default() -> Self {
-        Shape::Rect { radius: 0.0 }
-    }
-}
-
 #[derive(Clone, Default)]
-pub struct DrawableStyle {
+pub struct QuadStyle {
     pub color: Color,
 }
 
 #[derive(Widget)]
-pub struct Drawable {
+pub struct Quad {
     pub layout: Ref<Layout>,
-    pub style: Option<DrawableStyle>,
+    pub style: Option<QuadStyle>,
 
-    pub shape: Shape,
+    pub radius: f32,
     pub clip: bool,
 
     pub child: WidgetRef,
 }
 
-impl Default for Drawable {
+impl Default for Quad {
     fn default() -> Self {
         Self {
             layout: Ref::default(),
             style: Option::default(),
 
-            shape: Shape::default(),
+            radius: 0.0,
             clip: true,
 
             child: WidgetRef::default(),
@@ -48,7 +37,7 @@ impl Default for Drawable {
     }
 }
 
-impl WidgetBuilder for Drawable {
+impl WidgetBuilder for Quad {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
