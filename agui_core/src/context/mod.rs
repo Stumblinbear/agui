@@ -126,8 +126,10 @@ impl<'ui> WidgetContext<'ui> {
         self.get_self() == widget_id
     }
 
-    pub(crate) fn remove(&self, widget_id: &WidgetId) {
+    pub(crate) fn remove(&mut self, widget_id: &WidgetId) {
         let listener_id = ListenerId::Widget(*widget_id);
+
+        self.cache.remove(&widget_id);
 
         self.global.remove_listener(&listener_id);
 

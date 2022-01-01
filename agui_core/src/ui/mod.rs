@@ -544,8 +544,6 @@ impl<'ui> WidgetManager<'ui> {
             }
         }
 
-        self.context.cache.remove(&widget_id);
-
         self.context.remove(&widget_id);
 
         self.changed.lock().remove(&ListenerId::Widget(widget_id));
@@ -613,7 +611,7 @@ mod tests {
             let computed_value = ctx.computed(move |ctx| {
                 *computes.lock() += 1;
 
-                let test_global = ctx.use_global::<TestGlobal>();
+                let test_global = ctx.try_use_global::<TestGlobal>();
 
                 test_global.map_or_else(
                     || -1,
