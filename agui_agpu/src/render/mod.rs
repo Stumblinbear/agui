@@ -1,15 +1,17 @@
 use std::any::TypeId;
 
-use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram};
+use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Texture};
 use agui::{context::Notify, unit::Rect, widget::WidgetId, widgets::AppSettings, WidgetManager};
 use downcast_rs::{impl_downcast, Downcast};
 
 pub mod bounding;
-pub mod drawable;
+pub mod quad;
 pub mod text;
 
 pub struct RenderContext {
     pub gpu: GpuHandle,
+
+    pub depth_buffer: Texture<agpu::D2>,
 
     pub app_settings: Notify<AppSettings>,
     pub app_settings_buffer: Buffer,
@@ -19,6 +21,19 @@ impl RenderContext {
     pub fn new(program: &GpuProgram, app_settings: Notify<AppSettings>) -> Self {
         Self {
             gpu: GpuHandle::clone(&program.gpu),
+
+            depth_buffer: program
+                .gpu
+                .new_texture("agui_depth")
+                .as_depth()
+                .allow_binding()
+                .allow_copy_to()
+                .allow_copy_from()
+                .create_empty({
+                    let app_settings = app_settings.read();
+
+                    (app_settings.width as u32, app_settings.height as u32)
+                }),
 
             app_settings,
             app_settings_buffer: program
@@ -39,6 +54,12 @@ impl RenderContext {
 
         self.app_settings_buffer
             .write_unchecked(&[app_settings.width, app_settings.height]);
+
+        let new_size = (app_settings.width as u32, app_settings.height as u32);
+
+        if self.depth_buffer.size != new_size {
+            self.depth_buffer.resize(new_size);
+        }
     }
 }
 

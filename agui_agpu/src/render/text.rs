@@ -19,7 +19,7 @@ struct GlyphData {
     rect: [f32; 4],
     z: f32,
     uv: [f32; 4],
-    color: [f32; 4]
+    color: [f32; 4],
 }
 
 pub struct TextRenderPass {
@@ -64,6 +64,7 @@ impl TextRenderPass {
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4, 3 => Float32x4],
             }])
+            .with_depth()
             .with_bind_groups(&[&bind_group.layout])
             .create();
 
@@ -151,19 +152,14 @@ impl WidgetRenderPass for TextRenderPass {
                             rect.x + px_coords.max.x,
                             rect.y + px_coords.max.y,
                         ],
-                        z: 0.0,
+                        z: 0.1,
                         uv: [
                             tex_coords.min.x,
                             tex_coords.min.y,
                             tex_coords.max.x,
                             tex_coords.max.y,
                         ],
-                        color: [
-                            1.0,
-                            1.0,
-                            0.0,
-                            0.0,
-                        ],
+                        color: [1.0, 1.0, 0.0, 0.0],
                     });
                 }
             }
@@ -196,10 +192,11 @@ impl WidgetRenderPass for TextRenderPass {
 
     fn update(&mut self, _ctx: &RenderContext) {}
 
-    fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
+    fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
             .render_pass("agui_text_pass")
             .with_pipeline(&self.pipeline)
+            .with_depth(ctx.depth_buffer.attach_depth())
             .begin();
 
         r.set_bind_group(0, &self.bind_group, &[]);

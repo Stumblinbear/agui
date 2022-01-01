@@ -14,6 +14,7 @@ layout (set = 0, binding = 0) uniform Viewport {
 layout(location = 0) in vec4 rect;
 layout(location = 1) in float z;
 layout(location = 2) in vec4 color;
+layout(location = 3) in float radius;
 
 layout(location = 0) out vec4 outColor;
 

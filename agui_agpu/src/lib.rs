@@ -4,7 +4,7 @@ use agpu::{
     winit::winit::event::{
         ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
     },
-    Event, Frame, GpuProgram,
+    DepthAttachmentBuild, Event, Frame, GpuProgram,
 };
 
 use agui::{
@@ -26,9 +26,7 @@ use render::bounding::BoundingRenderPass;
 
 pub mod render;
 
-use self::render::{
-    drawable::QuadRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass,
-};
+use self::render::{quad::QuadRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass};
 
 pub struct UI {
     manager: WidgetManager<'static>,
@@ -76,10 +74,10 @@ impl UI {
     pub fn with_default(program: &GpuProgram) -> Self {
         let ui = Self::new(program);
 
+        let quad_pass = QuadRenderPass::new(program, &ui.ctx);
         let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
-        let drawable_pass = QuadRenderPass::new(program, &ui.ctx);
 
-        ui.add_pass(bounding_pass).add_pass(drawable_pass)
+        ui.add_pass(quad_pass).add_pass(bounding_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
@@ -235,7 +233,11 @@ impl UI {
     }
 
     pub fn run(mut self, program: GpuProgram) -> Result<(), agpu::BoxError> {
-        let pipeline = program.gpu.new_pipeline("render pipeline").create();
+        let pipeline = program
+            .gpu
+            .new_pipeline("agui render pipeline")
+            .with_depth()
+            .create();
 
         program.run(move |event, _, _| {
             if let Event::RedrawFrame(mut frame) = event {
@@ -244,8 +246,9 @@ impl UI {
                 }
 
                 frame
-                    .render_pass_cleared("ui draw", 0x101010FF)
+                    .render_pass_cleared("agui clear", 0x101010FF)
                     .with_pipeline(&pipeline)
+                    .with_depth(self.ctx.depth_buffer.attach_depth().clear_depth())
                     .begin();
 
                 self.render(frame);
