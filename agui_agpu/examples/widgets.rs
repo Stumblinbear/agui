@@ -51,7 +51,7 @@ fn main() -> Result<(), agpu::BoxError> {
                                 height: 100
                             }
                         },
-                        child: Text::is(dejavu_font, 20.0, "A Button is very stupid i want to fucking".into()),
+                        child: Text::is(dejavu_font, 20.0, "A Button".into()),
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
                         })
@@ -95,7 +95,7 @@ fn main() -> Result<(), agpu::BoxError> {
                             Button {
                                 layout: Layout {
                                     sizing: Sizing::Set {
-                                        width: 75,
+                                        width: 400,
                                         height: 200
                                     }
                                 },

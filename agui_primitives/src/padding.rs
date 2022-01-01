@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::Margin,
+    unit::{Margin, Sizing},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::Widget;
@@ -18,6 +18,7 @@ impl WidgetBuilder for Padding {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_layout(
             Layout {
+                sizing: Sizing::Fill,
                 margin: self.padding,
                 ..Layout::default()
             }
