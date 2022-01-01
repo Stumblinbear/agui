@@ -5,7 +5,7 @@ use glyph_brush_layout::{
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Margin, Position, Sizing},
+    unit::{Margin, Position, Sizing, Units},
     widget::{BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
@@ -56,7 +56,7 @@ impl Default for Text {
         Self {
             position: Position::default(),
 
-            sizing: Sizing::Fill,
+            sizing: Sizing::default(),
             max_sizing: Sizing::default(),
 
             wrap: true,
@@ -70,12 +70,35 @@ impl Default for Text {
 
 impl WidgetBuilder for Text {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        let sizing = match self.sizing {
+            Sizing::Auto => {
+                let fonts = ctx.get_global_or(Fonts::default);
+                let fonts = fonts.read();
+
+                let glyphs = self.get_glyphs(fonts.get_fonts(), (f32::MAX, f32::MAX));
+
+                let mut max_x: f32 = 0.0;
+                let mut max_y: f32 = 0.0;
+
+                for g in glyphs {
+                    max_x = max_x.max(g.glyph.position.x + g.glyph.scale.x);
+                    max_y = max_y.max(g.glyph.position.y);
+                }
+
+                Sizing::Set {
+                    width: Units::Pixels(max_x),
+                    height: Units::Pixels(max_y),
+                }
+            }
+            sizing => sizing,
+        };
+
         ctx.set_layout(
             Layout {
                 position: self.position,
                 min_sizing: Sizing::default(),
                 max_sizing: self.max_sizing,
-                sizing: self.sizing,
+                sizing,
                 margin: Margin::default(),
             }
             .into(),
