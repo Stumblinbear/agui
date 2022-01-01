@@ -5,12 +5,7 @@ use std::{
 };
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{
-    unit::{Color, Rect},
-    widget::WidgetId,
-    widgets::primitives::Text,
-    WidgetManager,
-};
+use agui::{unit::Rect, widget::WidgetId, WidgetManager};
 use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
@@ -78,13 +73,9 @@ impl WidgetRenderPass for BoundingRenderPass {
         &mut self,
         _ctx: &RenderContext,
         _manager: &WidgetManager,
-        type_id: &TypeId,
+        _type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
-        if type_id != &TypeId::of::<Text>() {
-            return;
-        }
-
         let index = self.locations.insert(*widget_id);
         self.widgets.insert(*widget_id, index);
     }
@@ -128,7 +119,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         }
 
         ctx.gpu.queue.write_buffer(&self.buffer, index, rect);
-        
+
         ctx.gpu.queue.write_buffer(
             &self.buffer,
             index + RECT_BUFFER_SIZE,

@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Callback, Color, Sizing},
+    unit::{Callback, Color},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };

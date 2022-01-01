@@ -1,13 +1,12 @@
 use std::{any::TypeId, collections::HashMap};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Sampler, Texture, TextureFormat};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat};
 use agui::{
     unit::Rect,
     widget::WidgetId,
-    widgets::primitives::{FontArc, SectionGlyph, Text},
+    widgets::primitives::{FontArc, Text},
     WidgetManager,
 };
-use generational_arena::{Arena, Index as GenerationalIndex};
 use glyph_brush_draw_cache::{CachedBy, DrawCache};
 
 use super::{RenderContext, WidgetRenderPass};
@@ -27,7 +26,6 @@ pub struct TextRenderPass {
     pipeline: RenderPipeline,
 
     texture: Texture<agpu::D2>,
-    sampler: Sampler,
 
     draw_cache: DrawCache,
 
@@ -73,7 +71,6 @@ impl TextRenderPass {
             pipeline,
 
             texture,
-            sampler,
 
             draw_cache: DrawCache::builder()
                 .dimensions(INITIAL_TEXTURE_SIZE.0, INITIAL_TEXTURE_SIZE.1)
@@ -95,12 +92,9 @@ impl WidgetRenderPass for TextRenderPass {
         &mut self,
         _ctx: &RenderContext,
         _manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: &WidgetId,
+        _type_id: &TypeId,
+        _widget_id: &WidgetId,
     ) {
-        if type_id != &TypeId::of::<Text>() {
-            return;
-        }
     }
 
     fn layout(
@@ -145,7 +139,7 @@ impl WidgetRenderPass for TextRenderPass {
         } else {
             let mut buffer = Vec::with_capacity(glyphs.len());
 
-            for (i, sg) in glyphs.into_iter().enumerate() {
+            for sg in glyphs.into_iter() {
                 if let Some((tex_coords, px_coords)) =
                     self.draw_cache.rect_for(sg.font_id.0, &sg.glyph)
                 {
@@ -167,13 +161,13 @@ impl WidgetRenderPass for TextRenderPass {
                 }
             }
 
-            if buffer.len() > 0 {
+            if !buffer.is_empty() {
                 let buffer = ctx
                     .gpu
                     .new_buffer("agui_text_buffer")
                     .as_vertex_buffer()
                     .create(bytemuck::cast_slice::<_, u8>(buffer.as_slice()));
-    
+
                 self.widgets.insert(*widget_id, buffer);
             }
         }
@@ -204,8 +198,10 @@ impl WidgetRenderPass for TextRenderPass {
         r.set_bind_group(0, &self.bind_group, &[]);
 
         for widget in self.widgets.values() {
-            r.set_vertex_buffer(0, widget.slice(..))
-                .draw(0..6, 0..(widget.size() as u32 / GLYPH_BUFFER_SIZE as u32) as u32);
+            r.set_vertex_buffer(0, widget.slice(..)).draw(
+                0..6,
+                0..(widget.size() as u32 / GLYPH_BUFFER_SIZE as u32) as u32,
+            );
         }
     }
 }
