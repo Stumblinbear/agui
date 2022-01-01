@@ -47,7 +47,8 @@ where
     }
 
     pub fn take_changed(&mut self) -> HashSet<K> {
-        let mut changed = self.geometry_changed
+        let mut changed = self
+            .geometry_changed
             .iter()
             .filter(|(_, changed)| changed.is_empty())
             .map(|(k, _)| *k)
@@ -232,143 +233,55 @@ where
     }
 
     fn set_width(&mut self, node: Self::Item, value: f32) {
-        if let Some(rect) = self.rect.get_mut(&node) {
-            rect.width = value;
-        } else {
-            self.rect.insert(
-                node,
-                Rect {
-                    width: value,
-                    ..Rect::default()
-                },
-            );
-        }
+        self.rect.entry(node).or_insert_with(Rect::default).width = value;
     }
 
     fn set_height(&mut self, node: Self::Item, value: f32) {
-        if let Some(rect) = self.rect.get_mut(&node) {
-            rect.height = value;
-        } else {
-            self.rect.insert(
-                node,
-                Rect {
-                    height: value,
-                    ..Rect::default()
-                },
-            );
-        }
+        self.rect.entry(node).or_insert_with(Rect::default).height = value;
     }
 
     fn set_posx(&mut self, node: Self::Item, value: f32) {
-        if let Some(rect) = self.rect.get_mut(&node) {
-            rect.x = value;
-        } else {
-            self.rect.insert(
-                node,
-                Rect {
-                    x: value,
-                    ..Rect::default()
-                },
-            );
-        }
+        self.rect.entry(node).or_insert_with(Rect::default).x = value;
     }
 
     fn set_posy(&mut self, node: Self::Item, value: f32) {
-        if let Some(rect) = self.rect.get_mut(&node) {
-            rect.y = value;
-        } else {
-            self.rect.insert(
-                node,
-                Rect {
-                    y: value,
-                    ..Rect::default()
-                },
-            );
-        }
+        self.rect.entry(node).or_insert_with(Rect::default).y = value;
     }
 
     fn set_top(&mut self, node: Self::Item, value: f32) {
-        if let Some(bounds) = self.bounds.get_mut(&node) {
-            bounds.top = value;
-        } else {
-            self.bounds.insert(
-                node,
-                Bounds {
-                    top: value,
-                    ..Bounds::default()
-                },
-            );
-        }
+        self.bounds.entry(node).or_insert_with(Bounds::default).top = value;
     }
 
     fn set_right(&mut self, node: Self::Item, value: f32) {
-        if let Some(bounds) = self.bounds.get_mut(&node) {
-            bounds.right = value;
-        } else {
-            self.bounds.insert(
-                node,
-                Bounds {
-                    right: value,
-                    ..Bounds::default()
-                },
-            );
-        }
+        self.bounds
+            .entry(node)
+            .or_insert_with(Bounds::default)
+            .right = value;
     }
 
     fn set_bottom(&mut self, node: Self::Item, value: f32) {
-        if let Some(bounds) = self.bounds.get_mut(&node) {
-            bounds.bottom = value;
-        } else {
-            self.bounds.insert(
-                node,
-                Bounds {
-                    bottom: value,
-                    ..Bounds::default()
-                },
-            );
-        }
+        self.bounds
+            .entry(node)
+            .or_insert_with(Bounds::default)
+            .bottom = value;
     }
 
     fn set_left(&mut self, node: Self::Item, value: f32) {
-        if let Some(bounds) = self.bounds.get_mut(&node) {
-            bounds.left = value;
-        } else {
-            self.bounds.insert(
-                node,
-                Bounds {
-                    left: value,
-                    ..Bounds::default()
-                },
-            );
-        }
+        self.bounds.entry(node).or_insert_with(Bounds::default).left = value;
     }
 
     fn set_new_width(&mut self, node: Self::Item, value: f32) {
-        if let Some(size) = self.new_size.get_mut(&node) {
-            size.width = value;
-        } else {
-            self.new_size.insert(
-                node,
-                Size {
-                    width: value,
-                    ..Size::default()
-                },
-            );
-        }
+        self.new_size
+            .entry(node)
+            .or_insert_with(Size::default)
+            .width = value;
     }
 
     fn set_new_height(&mut self, node: Self::Item, value: f32) {
-        if let Some(size) = self.new_size.get_mut(&node) {
-            size.height = value;
-        } else {
-            self.new_size.insert(
-                node,
-                Size {
-                    height: value,
-                    ..Size::default()
-                },
-            );
-        }
+        self.new_size
+            .entry(node)
+            .or_insert_with(Size::default)
+            .height = value;
     }
 
     fn stack_first_child(&self, node: Self::Item) -> bool {

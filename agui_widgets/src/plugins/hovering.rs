@@ -13,7 +13,7 @@ impl WidgetPlugin for HoveringPlugin {
     fn on_layout(&self, ctx: &WidgetContext) {
         let hovering = ctx.init_global(Hovering::default);
 
-        if let Some(mouse) = ctx.get_global::<Mouse>() {
+        if let Some(mouse) = ctx.try_use_global::<Mouse>() {
             match &mouse.read().pos {
                 Some(pos) => {
                     let hovering_ids = ctx

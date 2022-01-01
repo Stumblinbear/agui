@@ -99,7 +99,7 @@ impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
         }
 
         // Fall back to global state
-        if let Some(state) = self.get_global::<V>() {
+        if let Some(state) = self.try_use_global::<V>() {
             return Some(state);
         }
 

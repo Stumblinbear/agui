@@ -72,7 +72,7 @@ impl WidgetBuilder for Text {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         let sizing = match self.sizing {
             Sizing::Auto => {
-                let fonts = ctx.get_global_or(Fonts::default);
+                let fonts = ctx.use_global(Fonts::default);
                 let fonts = fonts.read();
 
                 let glyphs = self.get_glyphs(fonts.get_fonts(), (f32::MAX, f32::MAX));

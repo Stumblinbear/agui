@@ -25,7 +25,7 @@ pub fn parse_functional_widget(args: TokenStream, input: TokenStream) -> TokenSt
 // #[functional_widget]
 // pub fn Button(ctx: &WidgetContext, layout: Ref<Layout>, color: Color, child: WidgetRef) {
 //     let hovering = ctx.computed(|ctx| {
-//         if let Some(hovering) = ctx.get_global::<Hovering>() {
+//         if let Some(hovering) = ctx.use_global::<Hovering>() {
 //             hovering.read().is_hovering(ctx)
 //         } else {
 //             false

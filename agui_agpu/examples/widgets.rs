@@ -4,7 +4,7 @@ use agpu::Features;
 use agui::{
     layout::Layout,
     macros::build,
-    unit::{Callback, Color, Margin, Sizing},
+    unit::{Callback, Color, Margin, Position, Sizing, Units},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
         primitives::{Builder, Column, Padding, QuadStyle, Text},
@@ -41,82 +41,70 @@ fn main() -> Result<(), agpu::BoxError> {
 
     ui.set_root(build! {
         App {
-            child: Button {
-                child: Padding {
-                    padding: Margin::All(10.0.into()),
-                    child: Text::is(dejavu_font, 32.0, "A Button".into())
-                },
-                on_pressed: Callback::from(|()| {
-                    println!("Pressed 1");
-                })
+            child: Column {
+                children: [
+                    Text::is(dejavu_font, 32.0, "A Title".into()),
+                    Button {
+                        child: Padding {
+                            padding: Margin::All(10.0.into()),
+                            child: Text::is(dejavu_font, 32.0, "A Button".into())
+                        },
+                        on_pressed: Callback::from(|()| {
+                            println!("Pressed 1");
+                        })
+                    },
+                    Button {
+                        child: Padding {
+                            padding: Margin::All(10.0.into()),
+                            child: Text::is(dejavu_font, 32.0, "A Button".into())
+                        },
+                        on_pressed: Callback::from(|()| {
+                            println!("Pressed 1");
+                        })
+                    },
+                    Button {
+                        child: Text::is(dejavu_font, 32.0, "A Button".into()),
+                        on_pressed: Callback::from(|()| {
+                            println!("Pressed 2");
+                        })
+                    },
+                    Builder::new(move |ctx| {
+                        let theme = ctx.init_state(|| {
+                            let mut theme = Theme::new();
+
+                            theme.set(ButtonStyle {
+                                normal: QuadStyle {
+                                    color: Color::Red,
+                                },
+
+                                hover: QuadStyle {
+                                    color: Color::Green,
+                                },
+
+                                pressed: QuadStyle {
+                                    color: Color::Blue,
+                                },
+                            });
+
+                            theme
+                        });
+
+                        theme.provide(ctx);
+
+                        build!{
+                            Button {
+                                child: Padding {
+                                    padding: Margin::All(10.0.into()),
+                                    child: Text::is(dejavu_font, 32.0, "A Button".into())
+                                },
+                                on_pressed: Callback::from(|()| {
+                                    println!("Pressed 3");
+                                })
+                            }
+                        }
+                    })
+                ]
             }
-            // child: Column {
-            //     layout: Layout {
-            //         sizing: Sizing::Axis { width: 200.0, height: 500.0 }
-            //     },
-            //     children: [
-            //         Text::is(dejavu_font, 32.0, "A Title".into()),
-            //         Button {
-            //             child: Padding {
-            //                 padding: Margin::All(10.0.into()),
-            //                 child: Text::is(dejavu_font, 32.0, "A Button".into())
-            //             },
-            //             on_pressed: Callback::from(|()| {
-            //                 println!("Pressed 1");
-            //             })
-            //         },
-            //         Button {
-            //             child: Padding {
-            //                 padding: Margin::All(10.0.into()),
-            //                 child: Text::is(dejavu_font, 32.0, "A Button".into())
-            //             },
-            //             on_pressed: Callback::from(|()| {
-            //                 println!("Pressed 1");
-            //             })
-            //         },
-            //         // Button {
-            //         //     child: Text::is(dejavu_font, 32.0, "A Button".into()),
-            //         //     on_pressed: Callback::from(|()| {
-            //         //         println!("Pressed 2");
-            //         //     })
-            //         // },
-            //         // Builder::new(move |ctx| {
-            //         //     let theme = ctx.init_state(|| {
-            //         //         let mut theme = Theme::new();
-
-            //         //         theme.set(ButtonStyle {
-            //         //             normal: QuadStyle {
-            //         //                 color: Color::Red,
-            //         //             },
-
-            //         //             hover: QuadStyle {
-            //         //                 color: Color::Green,
-            //         //             },
-
-            //         //             pressed: QuadStyle {
-            //         //                 color: Color::Blue,
-            //         //             },
-            //         //         });
-
-            //         //         theme
-            //         //     });
-
-            //         //     theme.provide(ctx);
-
-            //         //     build!{
-            //         //         Button {
-            //         //             child: Padding {
-            //         //                 padding: Margin::All(10.0.into()),
-            //         //                 child: Text::is(dejavu_font, 32.0, "A Button".into())
-            //         //             },
-            //         //             on_pressed: Callback::from(|()| {
-            //         //                 println!("Pressed 3");
-            //         //             })
-            //         //         }
-            //         //     }
-            //         // })
-            //     ]
-            // }
         }
     });
 

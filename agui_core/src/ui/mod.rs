@@ -613,7 +613,7 @@ mod tests {
             let computed_value = ctx.computed(move |ctx| {
                 *computes.lock() += 1;
 
-                let test_global = ctx.get_global::<TestGlobal>();
+                let test_global = ctx.use_global::<TestGlobal>();
 
                 test_global.map_or_else(
                     || -1,

@@ -169,17 +169,17 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
-    pub fn get_global_or<V, F>(&self, func: F) -> Notify<V>
+    pub fn use_global<V, F>(&self, func: F) -> Notify<V>
     where
         V: Value,
         F: FnOnce() -> V,
     {
-        self.get_global::<V>()
+        self.try_use_global::<V>()
             .map_or_else(|| self.init_global(func), |v| v)
     }
 
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
-    pub fn get_global<V>(&self) -> Option<Notify<V>>
+    pub fn try_use_global<V>(&self) -> Option<Notify<V>>
     where
         V: Value,
     {
@@ -209,7 +209,7 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
-    pub fn get_state_or<V, F>(&self, func: F) -> Notify<V>
+    pub fn use_state<V, F>(&self, func: F) -> Notify<V>
     where
         V: Value,
         F: FnOnce() -> V,
@@ -224,14 +224,6 @@ impl<'ui> WidgetContext<'ui> {
         self.states.add_listener::<V>(widget_id, current_id);
 
         self.states.get(widget_id, func)
-    }
-
-    /// Fetch a local state value if it exists. The caller will be updated when the value is changed.
-    pub fn get_state<V>(&self) -> Notify<V>
-    where
-        V: Value + Default,
-    {
-        self.get_state_or(V::default)
     }
 
     pub fn get_state_for<V, F>(&self, widget_id: WidgetId, func: F) -> Notify<V>

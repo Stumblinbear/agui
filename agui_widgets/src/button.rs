@@ -64,8 +64,8 @@ impl WidgetBuilder for Button {
         ctx.set_layout(Ref::clone(&self.layout));
 
         let state = ctx.computed(|ctx| {
-            if let Some(hovering) = ctx.get_global::<Hovering>() {
-                if let Some(mouse) = ctx.get_global::<Mouse>() {
+            if let Some(hovering) = ctx.try_use_global::<Hovering>() {
+                if let Some(mouse) = ctx.try_use_global::<Mouse>() {
                     if hovering.read().is_hovering(ctx) {
                         if mouse.read().button.left == MouseButtonState::Pressed {
                             return ButtonState::Pressed;
@@ -79,7 +79,7 @@ impl WidgetBuilder for Button {
             ButtonState::Normal
         });
 
-        // We init the state, instead of using `get_state`, because we don't want to react to
+        // We init the state, instead of using `use_state`, because we don't want to react to
         // these changes, only keep track of them.
         let last_state = ctx.init_state(|| state);
 
@@ -98,8 +98,10 @@ impl WidgetBuilder for Button {
 
         build! {
             Quad {
+                // We need to pass through sizing parameters so that the Quad can react to child size if necessary,
+                // but also fill the Button if the button itself is set to a non-Auto size.
                 layout: Layout {
-                    sizing: Sizing::Fill
+                    sizing: self.layout.try_get().map_or(Sizing::default(), |layout| layout.sizing)
                 },
                 style: match state {
                     ButtonState::Normal => style.normal.into(),

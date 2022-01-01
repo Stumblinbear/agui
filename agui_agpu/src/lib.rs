@@ -84,15 +84,15 @@ impl UI {
             basic_pass
         };
 
-        let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
+        // let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
-        ui.add_pass(basic_pass).add_pass(bounding_pass)
+        ui.add_pass(basic_pass)//.add_pass(bounding_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
         let (font_id, font) = self
             .get_context()
-            .get_global_or::<Fonts, _>(Fonts::default)
+            .use_global::<Fonts, _>(Fonts::default)
             .write()
             .load_bytes(bytes);
 
@@ -104,7 +104,7 @@ impl UI {
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
         match self
             .get_context()
-            .get_global_or::<Fonts, _>(Fonts::default)
+            .use_global::<Fonts, _>(Fonts::default)
             .write()
             .load_file(filename)
         {
@@ -259,7 +259,7 @@ impl UI {
             } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
                 match event {
                     WindowEvent::Resized(size) => {
-                        if let Some(state) = self.get_context().get_global::<WindowSize>() {
+                        if let Some(state) = self.get_context().try_use_global::<WindowSize>() {
                             let mut state = state.write();
 
                             state.width = size.width;
@@ -268,7 +268,7 @@ impl UI {
                     }
 
                     WindowEvent::Moved(pos) => {
-                        if let Some(state) = self.get_context().get_global::<WindowPosition>() {
+                        if let Some(state) = self.get_context().try_use_global::<WindowPosition>() {
                             let mut state = state.write();
 
                             state.x = pos.x;
@@ -277,19 +277,19 @@ impl UI {
                     }
 
                     WindowEvent::ReceivedCharacter(c) => {
-                        if let Some(state) = self.get_context().get_global::<KeyboardInput>() {
+                        if let Some(state) = self.get_context().try_use_global::<KeyboardInput>() {
                             state.write().0 = c;
                         }
                     }
 
                     WindowEvent::Focused(focused) => {
-                        if let Some(state) = self.get_context().get_global::<WindowFocus>() {
+                        if let Some(state) = self.get_context().try_use_global::<WindowFocus>() {
                             state.write().0 = focused;
                         }
                     }
 
                     WindowEvent::KeyboardInput { input, .. } => {
-                        if let Some(state) = self.get_context().get_global::<Keyboard>() {
+                        if let Some(state) = self.get_context().try_use_global::<Keyboard>() {
                             let mut state = state.write();
 
                             if let Some(key) = input.virtual_keycode {
@@ -308,7 +308,7 @@ impl UI {
                     }
 
                     WindowEvent::ModifiersChanged(modifiers) => {
-                        if let Some(state) = self.get_context().get_global::<Keyboard>() {
+                        if let Some(state) = self.get_context().try_use_global::<Keyboard>() {
                             let mut state = state.write();
 
                             state.modifiers = unsafe { mem::transmute(modifiers) };
@@ -316,7 +316,7 @@ impl UI {
                     }
 
                     WindowEvent::CursorMoved { position, .. } => {
-                        if let Some(state) = self.get_context().get_global::<Mouse>() {
+                        if let Some(state) = self.get_context().try_use_global::<Mouse>() {
                             let mut state = state.write();
 
                             match state.pos {
@@ -335,7 +335,7 @@ impl UI {
                     }
 
                     WindowEvent::CursorLeft { .. } => {
-                        if let Some(state) = self.get_context().get_global::<Mouse>() {
+                        if let Some(state) = self.get_context().try_use_global::<Mouse>() {
                             let mut state = state.write();
 
                             state.pos = None;
@@ -343,7 +343,7 @@ impl UI {
                     }
 
                     WindowEvent::MouseWheel { delta, .. } => {
-                        if let Some(state) = self.get_context().get_global::<Scroll>() {
+                        if let Some(state) = self.get_context().try_use_global::<Scroll>() {
                             let mut state = state.write();
 
                             match delta {
@@ -364,7 +364,7 @@ impl UI {
                         state: value,
                         ..
                     } => {
-                        if let Some(state) = self.get_context().get_global::<Mouse>() {
+                        if let Some(state) = self.get_context().try_use_global::<Mouse>() {
                             let mut state = state.write();
 
                             let button = match button {
