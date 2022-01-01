@@ -101,9 +101,48 @@ impl<'ui> WidgetContext<'ui> {
     pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
         self.cache.get_rect(widget_id)
     }
+    
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context, or in a plugin.
+    pub fn get_self(&self) -> WidgetId {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get self while not iterating");
 
-    // Plugins
+        match current_id {
+            ListenerId::Widget(widget_id) | ListenerId::Computed(widget_id, _) => widget_id,
+            ListenerId::Plugin(_) => {
+                panic!("plugins do not exist in the tree, and thus they cannot get themselves")
+            }
+        }
+    }
 
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context, or in a plugin.
+    pub fn is_self(&self, widget_id: WidgetId) -> bool {
+        self.get_self() == widget_id
+    }
+
+    pub(crate) fn remove(&self, widget_id: &WidgetId) {
+        let listener_id = ListenerId::Widget(*widget_id);
+
+        self.global.remove_listener(&listener_id);
+
+        self.states.remove(widget_id);
+
+        self.states.remove_listeners(&listener_id);
+
+        self.layouts.lock().remove(widget_id);
+
+        self.computed_funcs.lock().remove(widget_id);
+    }
+}
+
+// Plugins
+impl<'ui> WidgetContext<'ui> {
     /// Initialize a plugin if it's not set already.
     pub fn init_plugin<P, F>(&self, func: F) -> Rc<P>
     where
@@ -152,9 +191,10 @@ impl<'ui> WidgetContext<'ui> {
             Err(..) => None,
         }
     }
+}
 
-    // Global state
-
+// Global state
+impl<'ui> WidgetContext<'ui> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V, F>(&self, func: F) -> Notify<V>
     where
@@ -189,9 +229,10 @@ impl<'ui> WidgetContext<'ui> {
 
         self.global.get::<V>()
     }
+}
 
-    // Local state
-
+// Local state
+impl<'ui> WidgetContext<'ui> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
     pub fn init_state<V, F>(&self, func: F) -> Notify<V>
     where
@@ -240,9 +281,10 @@ impl<'ui> WidgetContext<'ui> {
 
         self.states.get(widget_id, func)
     }
+}
 
-    // Layout
-
+// Layout
+impl<'ui> WidgetContext<'ui> {
     /// Set the layout type of the widget.
     ///
     /// Used in a `build()` method to set the layout type of the widget being built.
@@ -302,9 +344,10 @@ impl<'ui> WidgetContext<'ui> {
             .get(widget_id)
             .map_or(Ref::None, Ref::clone)
     }
+}
 
-    // Computed
-
+// Computed
+impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a build context.
@@ -352,9 +395,10 @@ impl<'ui> WidgetContext<'ui> {
             .and_then(|widgets| widgets.get_mut(&computed_id))
             .map_or(false, |computed_func| computed_func.call(self))
     }
+}
 
-    // Keys
-
+// Keys
+impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a widget build context.
@@ -374,45 +418,5 @@ impl<'ui> WidgetContext<'ui> {
             key,
             widget: Box::new(widget),
         }
-    }
-
-    // Other
-
-    /// # Panics
-    ///
-    /// Will panic if called outside of a widget build context, or in a plugin.
-    pub fn get_self(&self) -> WidgetId {
-        let current_id = self
-            .current_id
-            .lock()
-            .expect("cannot get self while not iterating");
-
-        match current_id {
-            ListenerId::Widget(widget_id) | ListenerId::Computed(widget_id, _) => widget_id,
-            ListenerId::Plugin(_) => {
-                panic!("plugins do not exist in the tree, and thus they cannot get themselves")
-            }
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if called outside of a widget build context, or in a plugin.
-    pub fn is_self(&self, widget_id: WidgetId) -> bool {
-        self.get_self() == widget_id
-    }
-
-    pub(crate) fn remove(&self, widget_id: &WidgetId) {
-        let listener_id = ListenerId::Widget(*widget_id);
-
-        self.global.remove_listener(&listener_id);
-
-        self.states.remove(widget_id);
-
-        self.states.remove_listeners(&listener_id);
-
-        self.layouts.lock().remove(widget_id);
-
-        self.computed_funcs.lock().remove(widget_id);
     }
 }
