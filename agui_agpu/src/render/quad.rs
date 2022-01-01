@@ -1,6 +1,7 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
+    mem,
 };
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
@@ -10,30 +11,25 @@ use agui::{
     widgets::primitives::Quad,
     WidgetManager,
 };
-use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
 
-const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const Z_BUFFER_SIZE: u64 = std::mem::size_of::<f32>() as u64;
-const COLOR_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-
-const QUAD_BUFFER_SIZE: u64 = RECT_BUFFER_SIZE + Z_BUFFER_SIZE + COLOR_BUFFER_SIZE;
-
-const PREALLOCATE: u64 = QUAD_BUFFER_SIZE * 16;
-
-// Make room for extra quads when we reach the buffer size, so we have to resize less often
-const EXPAND_ALLOCATE: u64 = QUAD_BUFFER_SIZE * 8;
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+struct ShapeData {
+    rect: [f32; 4],
+    z: f32,
+    color: [f32; 4],
+}
 
 pub struct QuadRenderPass {
     bind_group: BindGroup,
+
     pipeline: RenderPipeline,
-    buffer: Buffer,
 
     bound_widgets: HashSet<TypeId>,
 
-    locations: Arena<WidgetId>,
-    widgets: HashMap<WidgetId, GenerationalIndex>,
+    widgets: HashMap<WidgetId, Buffer>,
 }
 
 impl QuadRenderPass {
@@ -48,7 +44,7 @@ impl QuadRenderPass {
             .with_vertex(include_bytes!("shader/rect.vert.spv"))
             .with_fragment(include_bytes!("shader/rect.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: QUAD_BUFFER_SIZE,
+                array_stride: mem::size_of::<ShapeData>() as u64,
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4],
             }])
@@ -58,16 +54,9 @@ impl QuadRenderPass {
         Self {
             bind_group,
             pipeline,
-            buffer: program
-                .gpu
-                .new_buffer("agui_quad_buffer")
-                .as_vertex_buffer()
-                .allow_copy()
-                .create_uninit(PREALLOCATE),
 
             bound_widgets: HashSet::new(),
 
-            locations: Arena::default(),
             widgets: HashMap::default(),
         }
     }
@@ -80,17 +69,6 @@ impl QuadRenderPass {
 
         self
     }
-
-    pub fn get_buffer_index(&self, widget_id: &WidgetId) -> Option<u64> {
-        let index = match self.widgets.get(widget_id) {
-            Some(widget) => widget,
-            None => return None,
-        };
-
-        let index = index.into_raw_parts().0 as u64;
-
-        Some(index * QUAD_BUFFER_SIZE)
-    }
 }
 
 impl WidgetRenderPass for QuadRenderPass {
@@ -98,17 +76,9 @@ impl WidgetRenderPass for QuadRenderPass {
         &mut self,
         _ctx: &RenderContext,
         _manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: &WidgetId,
+        _type_id: &TypeId,
+        _widget_id: &WidgetId,
     ) {
-        // Ignore any widget we aren't bound to
-        if !self.bound_widgets.contains(type_id) {
-            return;
-        }
-
-        let index = self.locations.insert(*widget_id);
-
-        self.widgets.insert(*widget_id, index);
     }
 
     fn layout(
@@ -123,38 +93,21 @@ impl WidgetRenderPass for QuadRenderPass {
             return;
         }
 
-        let index = match self.get_buffer_index(widget_id) {
-            Some(index) => index,
-            None => return,
-        };
+        let buffer = ctx
+            .gpu
+            .new_buffer("agui_shape_buffer")
+            .as_vertex_buffer()
+            .create(bytemuck::bytes_of(&ShapeData {
+                rect: rect.to_slice(),
+                z: 0.0,
+                color: manager
+                    .try_get_as::<Quad>(widget_id)
+                    .and_then(|quad| quad.style.as_ref().map(|style| style.color))
+                    .unwrap_or(Color::White)
+                    .as_rgba(),
+            }));
 
-        let rect = rect.to_slice();
-
-        let rgba = manager
-            .try_get_as::<Quad>(widget_id)
-            .and_then(|quad| quad.style.as_ref().map(|style| style.color))
-            .unwrap_or(Color::White)
-            .as_rgba();
-
-        let rect = bytemuck::cast_slice(&rect);
-        let rgba = bytemuck::cast_slice(&rgba);
-
-        if (self.buffer.size() as u64) < index + QUAD_BUFFER_SIZE {
-            self.buffer
-                .resize((self.buffer.size() as u64) + EXPAND_ALLOCATE);
-        }
-
-        ctx.gpu.queue.write_buffer(&self.buffer, index, rect);
-
-        ctx.gpu.queue.write_buffer(
-            &self.buffer,
-            index + RECT_BUFFER_SIZE,
-            bytemuck::cast_slice(&[0.0]),
-        );
-
-        ctx.gpu
-            .queue
-            .write_buffer(&self.buffer, index + RECT_BUFFER_SIZE + Z_BUFFER_SIZE, rgba);
+        self.widgets.insert(*widget_id, buffer);
     }
 
     fn removed(
@@ -168,14 +121,7 @@ impl WidgetRenderPass for QuadRenderPass {
             return;
         }
 
-        let index = self
-            .widgets
-            .remove(widget_id)
-            .expect("removed nonexistent widget");
-
-        self.locations.remove(index);
-
-        // TODO: clear garbage from the buffer
+        self.widgets.remove(widget_id);
     }
 
     fn update(&mut self, _ctx: &RenderContext) {}
@@ -188,7 +134,8 @@ impl WidgetRenderPass for QuadRenderPass {
 
         r.set_bind_group(0, &self.bind_group, &[]);
 
-        r.set_vertex_buffer(0, self.buffer.slice(..))
-            .draw(0..6, 0..(self.locations.capacity() as u32));
+        for buffer in self.widgets.values() {
+            r.set_vertex_buffer(0, buffer.slice(..)).draw(0..6, 0..1);
+        }
     }
 }

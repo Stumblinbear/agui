@@ -20,7 +20,6 @@ parking_lot = "0.11"
 
 agpu = { git = "https://github.com/lyricwulf/agpu", commit = "6e0288b13dcaeb60bdcc951d80ccb35315cb2e35" }
 bytemuck = "1.7"
-generational-arena = "0.2"
 
 glyph_brush_draw_cache = "0.1"
 

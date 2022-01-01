@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::{any::TypeId, collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat};
 use agui::{
@@ -13,13 +13,14 @@ use super::{RenderContext, WidgetRenderPass};
 
 const INITIAL_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 
-const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const Z_BUFFER_SIZE: u64 = std::mem::size_of::<f32>() as u64;
-const COLOR_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const UV_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-
-const GLYPH_BUFFER_SIZE: u64 =
-    RECT_BUFFER_SIZE + Z_BUFFER_SIZE + COLOR_BUFFER_SIZE + UV_BUFFER_SIZE;
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+struct GlyphData {
+    rect: [f32; 4],
+    z: f32,
+    uv: [f32; 4],
+    color: [f32; 4]
+}
 
 pub struct TextRenderPass {
     bind_group: BindGroup,
@@ -59,7 +60,7 @@ impl TextRenderPass {
             .with_vertex(include_bytes!("shader/text.vert.spv"))
             .with_fragment(include_bytes!("shader/text.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: GLYPH_BUFFER_SIZE,
+                array_stride: mem::size_of::<GlyphData>() as u64,
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4, 3 => Float32x4],
             }])
@@ -143,21 +144,27 @@ impl WidgetRenderPass for TextRenderPass {
                 if let Some((tex_coords, px_coords)) =
                     self.draw_cache.rect_for(sg.font_id.0, &sg.glyph)
                 {
-                    buffer.extend(vec![
-                        rect.x + px_coords.min.x,
-                        rect.y + px_coords.min.y,
-                        rect.x + px_coords.max.x,
-                        rect.y + px_coords.max.y,
-                        0.0,
-                        tex_coords.min.x,
-                        tex_coords.min.y,
-                        tex_coords.max.x,
-                        tex_coords.max.y,
-                        1.0,
-                        1.0,
-                        0.0,
-                        0.0,
-                    ]);
+                    buffer.push(GlyphData {
+                        rect: [
+                            rect.x + px_coords.min.x,
+                            rect.y + px_coords.min.y,
+                            rect.x + px_coords.max.x,
+                            rect.y + px_coords.max.y,
+                        ],
+                        z: 0.0,
+                        uv: [
+                            tex_coords.min.x,
+                            tex_coords.min.y,
+                            tex_coords.max.x,
+                            tex_coords.max.y,
+                        ],
+                        color: [
+                            1.0,
+                            1.0,
+                            0.0,
+                            0.0,
+                        ],
+                    });
                 }
             }
 
@@ -200,7 +207,7 @@ impl WidgetRenderPass for TextRenderPass {
         for widget in self.widgets.values() {
             r.set_vertex_buffer(0, widget.slice(..)).draw(
                 0..6,
-                0..(widget.size() as u32 / GLYPH_BUFFER_SIZE as u32) as u32,
+                0..(widget.size() as u32 / mem::size_of::<GlyphData>() as u32) as u32,
             );
         }
     }

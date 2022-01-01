@@ -2,34 +2,29 @@ use std::{
     any::TypeId,
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
+    mem,
 };
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{unit::Rect, widget::WidgetId, WidgetManager};
-use generational_arena::{Arena, Index as GenerationalIndex};
 
 use super::{RenderContext, WidgetRenderPass};
+
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+struct BoundingData {
+    rect: [f32; 4],
+    z: f32,
+    color: [f32; 4],
+}
 
 pub struct BoundingRenderPass {
     bind_group: BindGroup,
 
     pipeline: RenderPipeline,
-    buffer: Buffer,
 
-    locations: Arena<WidgetId>,
-    widgets: HashMap<WidgetId, GenerationalIndex>,
+    widgets: HashMap<WidgetId, Buffer>,
 }
-
-const RECT_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-const Z_BUFFER_SIZE: u64 = std::mem::size_of::<f32>() as u64;
-const COLOR_BUFFER_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
-
-const BOUNDING_BUFFER_SIZE: u64 = RECT_BUFFER_SIZE + Z_BUFFER_SIZE + COLOR_BUFFER_SIZE;
-
-const PREALLOCATE: u64 = BOUNDING_BUFFER_SIZE * 16;
-
-// Make room for extra quads when we reach the buffer size, so we have to resize less often
-const EXPAND_ALLOCATE: u64 = BOUNDING_BUFFER_SIZE * 8;
 
 impl BoundingRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
@@ -43,7 +38,7 @@ impl BoundingRenderPass {
             .with_vertex(include_bytes!("shader/bounding.vert.spv"))
             .with_fragment(include_bytes!("shader/bounding.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: BOUNDING_BUFFER_SIZE,
+                array_stride: mem::size_of::<BoundingData>() as u64,
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4],
             }])
@@ -55,14 +50,6 @@ impl BoundingRenderPass {
             bind_group,
             pipeline,
 
-            buffer: program
-                .gpu
-                .new_buffer("agui_bounding_buffer")
-                .as_vertex_buffer()
-                .allow_copy()
-                .create_uninit(PREALLOCATE),
-
-            locations: Arena::default(),
             widgets: HashMap::default(),
         }
     }
@@ -76,8 +63,6 @@ impl WidgetRenderPass for BoundingRenderPass {
         _type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
-        let index = self.locations.insert(*widget_id);
-        self.widgets.insert(*widget_id, index);
     }
 
     fn layout(
@@ -88,47 +73,51 @@ impl WidgetRenderPass for BoundingRenderPass {
         widget_id: &WidgetId,
         rect: &Rect,
     ) {
-        let index = match self.widgets.get(widget_id) {
-            Some(widget) => widget,
-            None => return,
-        };
-
-        let index = index.into_raw_parts().0 as u64;
-
-        let index = index * BOUNDING_BUFFER_SIZE;
-
-        let rect = rect.to_slice();
-
-        let rect = bytemuck::cast_slice(&rect);
-
         let mut hasher = DefaultHasher::new();
         type_id.hash(&mut hasher);
         let c = hasher.finish().to_ne_bytes();
-        let c = [
-            (c[0] as f32) / 255.0,
-            (c[1] as f32) / 255.0,
-            (c[2] as f32) / 255.0,
-            1.0,
-        ];
 
-        let rgba = bytemuck::cast_slice(&c);
+        let rect = rect.to_slice();
 
-        if (self.buffer.size() as u64) < index + BOUNDING_BUFFER_SIZE {
-            self.buffer
-                .resize((self.buffer.size() as u64) + EXPAND_ALLOCATE);
-        }
+        let buffer = ctx
+            .gpu
+            .new_buffer("agui_bounding_buffer")
+            .as_vertex_buffer()
+            .create(bytemuck::bytes_of(&BoundingData {
+                rect: [
+                    // Ensure the bounding box always shows on screen (not hidden on either 0 axis)
+                    if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
+                        1.0
+                    } else {
+                        rect[0]
+                    },
+                    if rect[1] > -f32::EPSILON && rect[1] < f32::EPSILON {
+                        1.0
+                    } else {
+                        rect[1]
+                    },
 
-        ctx.gpu.queue.write_buffer(&self.buffer, index, rect);
+                    if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
+                        rect[2] - 1.0
+                    } else {
+                        rect[2]
+                    },
+                    if rect[1] > -f32::EPSILON && rect[1] < f32::EPSILON {
+                        rect[3] - 1.0
+                    } else {
+                        rect[3]
+                    },
+                ],
+                z: 0.0,
+                color: [
+                    (c[0] as f32) / 255.0,
+                    (c[1] as f32) / 255.0,
+                    (c[2] as f32) / 255.0,
+                    1.0,
+                ],
+            }));
 
-        ctx.gpu.queue.write_buffer(
-            &self.buffer,
-            index + RECT_BUFFER_SIZE,
-            bytemuck::cast_slice(&[10.0]),
-        );
-
-        ctx.gpu
-            .queue
-            .write_buffer(&self.buffer, index + RECT_BUFFER_SIZE + Z_BUFFER_SIZE, rgba);
+        self.widgets.insert(*widget_id, buffer);
     }
 
     fn removed(
@@ -138,9 +127,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         _type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
-        if let Some(index) = self.widgets.remove(widget_id) {
-            self.locations.remove(index);
-        }
+        self.widgets.remove(widget_id);
     }
 
     fn update(&mut self, _ctx: &RenderContext) {}
@@ -153,7 +140,8 @@ impl WidgetRenderPass for BoundingRenderPass {
 
         r.set_bind_group(0, &self.bind_group, &[]);
 
-        r.set_vertex_buffer(0, self.buffer.slice(..))
-            .draw(0..6, 0..(self.locations.capacity() as u32));
+        for buffer in self.widgets.values() {
+            r.set_vertex_buffer(0, buffer.slice(..)).draw(0..6, 0..1);
+        }
     }
 }

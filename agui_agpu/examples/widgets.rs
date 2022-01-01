@@ -43,7 +43,7 @@ fn main() -> Result<(), agpu::BoxError> {
         App {
             child: Column {
                 children: [
-                    // Text::is(dejavu_font, 48.0, "A Title".into()),
+                    Text::is(dejavu_font, 32.0, "A Title".into()),
                     Button {
                         layout: Layout {
                             sizing: Sizing::Set {
