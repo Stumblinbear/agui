@@ -7,7 +7,6 @@ use agui_core::{
 use agui_macros::Widget;
 
 #[derive(Default, Widget)]
-#[widget(layout = "column")]
 pub struct Padding {
     pub padding: Margin,
 

@@ -21,7 +21,6 @@ impl Default for AppSettings {
 }
 
 #[derive(Default, Widget)]
-#[widget(layout = "row")]
 pub struct App {
     pub child: WidgetRef,
 }
@@ -34,7 +33,7 @@ impl WidgetBuilder for App {
 
         ctx.set_layout(build! {
             Layout {
-                sizing: Sizing::Set {
+                sizing: Sizing::Axis {
                     width: Units::Pixels(settings.width),
                     height: Units::Pixels(settings.height),
                 }

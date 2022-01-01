@@ -10,7 +10,7 @@ use crate::{
 /// Holds information about a widget in the UI tree.
 pub struct WidgetNode {
     pub widget: WidgetRef,
-    pub layout_type: LayoutType,
+    pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
 }
 
@@ -21,7 +21,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
         Some(
             store
                 .get(self.id())
-                .map_or(LayoutType::default(), |node| node.layout_type)
+                .and_then(|node| node.layout_type.try_get())
+                .map_or(LayoutType::default(), |layout| *layout)
                 .into(),
         )
     }
@@ -225,7 +226,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn row_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(self.id())
-            .map_or(LayoutType::default(), |node| node.layout_type)
+            .and_then(|node| node.layout_type.try_get())
+            .map_or(LayoutType::default(), |layout| *layout)
             .get_row_spacing()
             .map(|val| val.into())
     }
@@ -233,7 +235,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn col_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(self.id())
-            .map_or(LayoutType::default(), |node| node.layout_type)
+            .and_then(|node| node.layout_type.try_get())
+            .map_or(LayoutType::default(), |layout| *layout)
             .get_column_spacing()
             .map(|val| val.into())
     }
@@ -241,7 +244,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn grid_rows(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
         store
             .get(self.id())
-            .map_or(LayoutType::default(), |node| node.layout_type)
+            .and_then(|node| node.layout_type.try_get())
+            .map_or(LayoutType::default(), |layout| *layout)
             .get_rows()
             .map(|val| val.into_iter().map(|val| val.into()).collect())
     }
@@ -249,7 +253,8 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn grid_cols(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
         store
             .get(self.id())
-            .map_or(LayoutType::default(), |node| node.layout_type)
+            .and_then(|node| node.layout_type.try_get())
+            .map_or(LayoutType::default(), |layout| *layout)
             .get_columns()
             .map(|val| val.into_iter().map(|val| val.into()).collect())
     }

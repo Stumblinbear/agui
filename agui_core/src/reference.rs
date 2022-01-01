@@ -112,3 +112,9 @@ impl<V> Clone for Ref<V> {
         }
     }
 }
+
+impl<T> From<T> for Ref<T> {
+    fn from(val: T) -> Self {
+        Self::Owned(Arc::new(val))
+    }
+}

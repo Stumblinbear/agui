@@ -8,9 +8,6 @@ use crate::layout::LayoutType;
 #[darling(attributes(widget))]
 struct WidgetDeriveInput {
     #[darling(default)]
-    layout: LayoutType,
-    
-    #[darling(default)]
     into: Option<bool>,
 
     ident: syn::Ident,
@@ -46,20 +43,6 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
         }
     };
 
-    let layout_type = args.layout;
-
-    // We prevent the generation of the layout implementation if they've specified #[widget(layout = "none")]
-    let widget_layout_impl = match layout_type {
-        LayoutType::None => quote! {},
-        _ => quote! {
-            impl #impl_generics #agui_core::widget::WidgetLayout for #ident #ty_generics #where_clause {
-                fn layout_type(&self) -> #agui_core::unit::LayoutType {
-                    #layout_type
-                }
-            }
-        },
-    };
-
     let widget_ref_impl = if args.into.unwrap_or(true) {
         quote! {
             impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::WidgetRef #where_clause {
@@ -88,8 +71,6 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
         impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause { }
 
         #widget_type_impl
-
-        #widget_layout_impl
 
         #widget_ref_impl
     })

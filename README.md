@@ -59,7 +59,6 @@ Currently, widgets are created using a `Widget` derive macro, and by implementin
 ```rust
 #[derive(Default, Widget)]
 // The default layout type is "column" but we want it to be a "row" instead.
-#[widget(layout = "row")]
 pub struct MyWidget {
     // We can define parameters, here.
     pub layout: Ref<Layout>,
@@ -68,6 +67,9 @@ pub struct MyWidget {
 impl WidgetBuilder for MyWidget {
     // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        // `ctx.set_layout` is what we use to define this widget's layout parameters.
+        ctx.set_layout_type(LayoutType::Row.into());
+        
         // `ctx.set_layout` is what we use to define this widget's layout parameters.
         ctx.set_layout(Ref::clone(&self.layout));
 

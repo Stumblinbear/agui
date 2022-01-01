@@ -87,12 +87,6 @@ pub trait WidgetType {
     fn get_type_name(&self) -> &'static str;
 }
 
-/// Implements functions necessary for the layout system. These generally won't change `build()`-to-`build()`.
-pub trait WidgetLayout {
-    /// Dictate how the children widgets should be laid out.
-    fn layout_type(&self) -> LayoutType;
-}
-
 /// Implements the widget's `build()` method.
 pub trait WidgetBuilder: Downcast {
     /// Called whenever this widget is rebuilt.
@@ -104,7 +98,7 @@ pub trait WidgetBuilder: Downcast {
 }
 
 /// The combined Widget implementation, required to be used within the `WidgetBuilder`.
-pub trait Widget: WidgetType + WidgetLayout + WidgetBuilder {}
+pub trait Widget: WidgetType + WidgetBuilder {}
 
 impl_downcast!(Widget);
 

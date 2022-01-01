@@ -85,7 +85,7 @@ impl WidgetBuilder for Text {
                     max_y = max_y.max(g.glyph.position.y);
                 }
 
-                Sizing::Set {
+                Sizing::Axis {
                     width: Units::Pixels(max_x),
                     height: Units::Pixels(max_y),
                 }

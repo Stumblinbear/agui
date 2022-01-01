@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Callback, Color},
+    unit::{Callback, Color, Sizing},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
@@ -49,7 +49,6 @@ enum ButtonState {
 }
 
 #[derive(Default, Widget)]
-#[widget(layout = "row")]
 pub struct Button {
     pub layout: Ref<Layout>,
 
@@ -99,7 +98,9 @@ impl WidgetBuilder for Button {
 
         build! {
             Quad {
-                layout: Ref::clone(&self.layout),
+                layout: Layout {
+                    sizing: Sizing::Fill
+                },
                 style: match state {
                     ButtonState::Normal => style.normal.into(),
                     ButtonState::Hover => style.hover.into(),

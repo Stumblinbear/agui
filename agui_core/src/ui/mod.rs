@@ -468,12 +468,10 @@ impl<'ui> WidgetManager<'ui> {
 
         let type_id = widget.get_type_id();
 
-        let layout_type = widget.get().layout_type();
-
         let widget_id = WidgetId::from(
             self.widgets.insert(WidgetNode {
                 widget,
-                layout_type,
+                layout_type: Ref::None,
                 layout: Ref::None,
             }),
             parent_id.map_or(0, |node| node.depth() + 1),
@@ -529,6 +527,7 @@ impl<'ui> WidgetManager<'ui> {
         };
 
         // Store the node's layout so morphorm can access it
+        node.layout_type = self.context.get_layout_type(&widget_id);
         node.layout = self.context.get_layout(&widget_id);
     }
 
@@ -580,8 +579,7 @@ mod tests {
 
     use crate::{
         context::WidgetContext,
-        unit::LayoutType,
-        widget::{BuildResult, Widget, WidgetBuilder, WidgetLayout, WidgetRef, WidgetType},
+        widget::{BuildResult, Widget, WidgetBuilder, WidgetRef, WidgetType},
     };
 
     use super::WidgetManager;
@@ -605,12 +603,6 @@ mod tests {
 
         fn get_type_name(&self) -> &'static str {
             "TestWidget"
-        }
-    }
-
-    impl WidgetLayout for TestWidget {
-        fn layout_type(&self) -> LayoutType {
-            LayoutType::Column
         }
     }
 

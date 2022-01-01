@@ -24,7 +24,7 @@ use self::{
 use crate::{
     layout::Layout,
     plugin::WidgetPlugin,
-    unit::{Key, Rect},
+    unit::{Key, LayoutType, Rect},
     widget::{WidgetId, WidgetRef},
     Ref,
 };
@@ -63,6 +63,7 @@ pub struct WidgetContext<'ui> {
     states: ScopedNotifiableMap<WidgetId>,
 
     layouts: Mutex<HashMap<WidgetId, Ref<Layout>>>,
+    layout_types: Mutex<HashMap<WidgetId, Ref<LayoutType>>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
@@ -81,8 +82,9 @@ impl<'ui> WidgetContext<'ui> {
 
             global: NotifiableMap::new(Arc::clone(&changed)),
             states: ScopedNotifiableMap::new(Arc::clone(&changed)),
-            
+
             layouts: Mutex::default(),
+            layout_types: Mutex::default(),
 
             computed_funcs: Arc::new(Mutex::new(HashMap::new())),
 
@@ -248,6 +250,36 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     // Layout
+
+    /// Set the layout type of the widget.
+    ///
+    /// Used in a `build()` method to set the layout type of the widget being built.
+    pub fn set_layout_type(&self, layout_type: Ref<LayoutType>) {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get state from context while not iterating");
+
+        match &current_id {
+            ListenerId::Widget(widget_id) => {
+                self.layout_types.lock().insert(*widget_id, layout_type);
+            }
+            ListenerId::Computed(_, _) => {
+                log::warn!("layout types set in a computed function are ignored");
+            }
+            ListenerId::Plugin(_) => {
+                log::warn!("layout types set in a plugin are ignored");
+            }
+        };
+    }
+
+    /// Fetch the layout of a widget.
+    pub fn get_layout_type(&self, widget_id: &WidgetId) -> Ref<LayoutType> {
+        self.layout_types
+            .lock()
+            .get(widget_id)
+            .map_or(Ref::None, Ref::clone)
+    }
 
     /// Set the layout of the widget.
     ///

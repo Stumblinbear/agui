@@ -8,7 +8,7 @@ use super::Units;
 pub enum LayoutType {
     /// Widgets should be laid out side-by-side.
     Row,
-    
+
     /// Widgets should be laid out on top of one another.
     Column,
 
@@ -89,16 +89,13 @@ impl LayoutType {
 pub enum Margin {
     /// No margin.
     Unset,
-    
+
     /// Margin all around.
     All(Units),
-    
+
     /// Margin along the vertical and horizontal axis.
-    Axis {
-        vertical: Units,
-        horizontal: Units,
-    },
-    
+    Axis { vertical: Units, horizontal: Units },
+
     /// Margin on every side.
     Set {
         top: Units,
@@ -162,7 +159,7 @@ impl Margin {
 pub enum Position {
     /// Position unchanged.
     Unset,
-    
+
     /// Position set absolutely in the window.
     Absolute {
         top: Units,
@@ -170,12 +167,9 @@ pub enum Position {
         bottom: Units,
         left: Units,
     },
-    
+
     /// Position set relative to its parent.
-    Relative {
-        top: Units,
-        left: Units,
-    },
+    Relative { top: Units, left: Units },
 }
 
 impl Default for Position {
@@ -228,7 +222,7 @@ impl Position {
 }
 
 /// The sizing of the element.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Sizing {
     /// Element size automatically set based onother factors.
@@ -237,8 +231,8 @@ pub enum Sizing {
     /// Element size attempts to fill its parent container.
     Fill,
 
-    /// Element has a set, specific size.
-    Set { width: Units, height: Units },
+    /// Element has a sizings for each of its axis.
+    Axis { width: Units, height: Units },
 }
 
 impl Default for Sizing {
@@ -253,7 +247,7 @@ impl Sizing {
         match self {
             Sizing::Auto => Units::Auto,
             Sizing::Fill => Units::Stretch(1.0),
-            Sizing::Set { width, .. } => *width,
+            Sizing::Axis { width, .. } => *width,
         }
     }
 
@@ -262,7 +256,7 @@ impl Sizing {
         match self {
             Sizing::Auto => Units::Auto,
             Sizing::Fill => Units::Stretch(1.0),
-            Sizing::Set { height, .. } => *height,
+            Sizing::Axis { height, .. } => *height,
         }
     }
 }
