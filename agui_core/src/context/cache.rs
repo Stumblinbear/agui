@@ -10,6 +10,8 @@ use crate::{
     Ref,
 };
 
+const MARGIN_OF_ERROR: f32 = 0.5;
+
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
     newly_added: HashSet<K>,
@@ -64,10 +66,10 @@ where
                 if let Some(v1) = v1 {
                     if let Some(v2) = v2 {
                         // Make sure there was a significant enough change to warrant redrawing
-                        return (v1.x - v2.x).abs() > 1.0
-                            || (v1.y - v2.y).abs() > 1.0
-                            || (v1.width - v2.width).abs() > 1.0
-                            || (v1.height - v2.height).abs() > 1.0;
+                        return (v1.x - v2.x).abs() > MARGIN_OF_ERROR
+                            || (v1.y - v2.y).abs() > MARGIN_OF_ERROR
+                            || (v1.width - v2.width).abs() > MARGIN_OF_ERROR
+                            || (v1.height - v2.height).abs() > MARGIN_OF_ERROR;
                     }
                 }
 
