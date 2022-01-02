@@ -2,11 +2,12 @@
 
 use agpu::Features;
 use agui::{
+    layout::Layout,
     macros::build,
-    unit::{Callback, Color, Margin},
+    unit::{Callback, Color, Margin, Sizing, Units},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, QuadStyle, Padding, Text},
+        primitives::{Builder, Column, Padding, QuadStyle, Spacing, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -41,12 +42,20 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.set_root(build! {
         App {
             child: Column {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: Units::Auto,
+                        height: Units::Stretch(1.0)
+                    },
+                },
+                spacing: Units::Pixels(16.0),
                 children: [
-                    Text::is(dejavu_font, 32.0, "A Title".into()),
+                    Text::is(dejavu_font, Color::White, 32.0, "A Title".into()),
+                    Spacing::vertical(16.0.into()),
                     Button {
                         child: Padding {
                             padding: Margin::All(10.0.into()),
-                            child: Text::is(dejavu_font, 32.0, "A Button".into())
+                            child: Text::is(dejavu_font, Color::DarkGray, 32.0, "A Button".into())
                         },
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
@@ -55,14 +64,14 @@ fn main() -> Result<(), agpu::BoxError> {
                     Button {
                         child: Padding {
                             padding: Margin::All(10.0.into()),
-                            child: Text::is(dejavu_font, 32.0, "A Button".into())
+                            child: Text::is(dejavu_font, Color::Black, 32.0, "A Button".into())
                         },
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
                         })
                     },
                     Button {
-                        child: Text::is(dejavu_font, 32.0, "A Button".into()),
+                        child: Text::is(dejavu_font, Color::Black, 32.0, "A Button".into()),
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 2");
                         })
@@ -94,7 +103,7 @@ fn main() -> Result<(), agpu::BoxError> {
                             Button {
                                 child: Padding {
                                     padding: Margin::All(10.0.into()),
-                                    child: Text::is(dejavu_font, 32.0, "A Button".into())
+                                    child: Text::is(dejavu_font, Color::White, 32.0, "A Button".into())
                                 },
                                 on_pressed: Callback::from(|()| {
                                     println!("Pressed 3");

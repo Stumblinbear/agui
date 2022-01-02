@@ -72,7 +72,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         type_id: &TypeId,
         widget_id: &WidgetId,
         rect: &Rect,
-        z: f32,
+        _z: f32,
     ) {
         let mut hasher = DefaultHasher::new();
         type_id.hash(&mut hasher);

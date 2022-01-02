@@ -5,7 +5,7 @@ use glyph_brush_layout::{
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Margin, Position, Sizing, Units},
+    unit::{Color, Margin, Position, Sizing, Units},
     widget::{BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
@@ -48,6 +48,7 @@ pub struct Text {
     pub h_align: HorizontalAlign,
     pub v_align: VerticalAlign,
 
+    pub color: Color,
     pub sections: Vec<TextSection>,
 }
 
@@ -63,6 +64,7 @@ impl Default for Text {
             h_align: HorizontalAlign::Left,
             v_align: VerticalAlign::Top,
 
+            color: Color::Black,
             sections: Vec::default(),
         }
     }
@@ -109,8 +111,9 @@ impl WidgetBuilder for Text {
 }
 
 impl Text {
-    pub fn is(font: FontId, scale: f32, text: String) -> Self {
+    pub fn is(font: FontId, color: Color, scale: f32, text: String) -> Self {
         Self {
+            color,
             sections: vec![TextSection::new(font, scale, text)],
             ..Text::default()
         }

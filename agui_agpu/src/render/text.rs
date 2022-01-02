@@ -160,7 +160,7 @@ impl WidgetRenderPass for TextRenderPass {
                             tex_coords.max.x,
                             tex_coords.max.y,
                         ],
-                        color: [1.0, 1.0, 0.0, 0.0],
+                        color: text.color.as_rgba(),
                     });
                 }
             }

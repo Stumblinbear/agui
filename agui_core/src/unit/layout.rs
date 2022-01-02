@@ -7,10 +7,14 @@ use super::Units;
 #[non_exhaustive]
 pub enum LayoutType {
     /// Widgets should be laid out side-by-side.
-    Row,
+    Row {
+        spacing: Units,
+    },
 
     /// Widgets should be laid out on top of one another.
-    Column,
+    Column {
+        spacing: Units,
+    },
 
     /// Widgets should be laid out in a grid.
     Grid {
@@ -23,15 +27,15 @@ pub enum LayoutType {
 
 impl Default for LayoutType {
     fn default() -> Self {
-        Self::Column
+        Self::Column { spacing: Units::Auto }
     }
 }
 
 impl From<LayoutType> for morphorm::LayoutType {
     fn from(ty: LayoutType) -> Self {
         match ty {
-            LayoutType::Row => Self::Row,
-            LayoutType::Column => Self::Column,
+            LayoutType::Row { .. } => Self::Row,
+            LayoutType::Column { .. } => Self::Column,
             LayoutType::Grid { .. } => Self::Grid,
         }
     }
@@ -41,7 +45,7 @@ impl LayoutType {
     #[must_use]
     pub fn get_rows(&self) -> Option<Vec<Units>> {
         match self {
-            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Row { .. } | LayoutType::Column { .. } => None,
             LayoutType::Grid { rows, .. } => {
                 let mut vec = Vec::with_capacity(*rows);
 
@@ -55,7 +59,8 @@ impl LayoutType {
     #[must_use]
     pub const fn get_row_spacing(&self) -> Option<Units> {
         match self {
-            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Row { spacing } => Some(*spacing),
+            LayoutType::Column { .. } => None,
             LayoutType::Grid { row_spacing, .. } => Some(*row_spacing),
         }
     }
@@ -63,7 +68,7 @@ impl LayoutType {
     #[must_use]
     pub fn get_columns(&self) -> Option<Vec<Units>> {
         match self {
-            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Row { .. } | LayoutType::Column { .. } => None,
             LayoutType::Grid { columns, .. } => {
                 let mut vec = Vec::with_capacity(*columns);
 
@@ -77,7 +82,8 @@ impl LayoutType {
     #[must_use]
     pub const fn get_column_spacing(&self) -> Option<Units> {
         match self {
-            LayoutType::Row | LayoutType::Column => None,
+            LayoutType::Row { .. } => None,
+            LayoutType::Column { spacing } => Some(*spacing),
             LayoutType::Grid { column_spacing, .. } => Some(*column_spacing),
         }
     }
