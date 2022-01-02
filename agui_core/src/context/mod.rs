@@ -24,7 +24,7 @@ use self::{
 use crate::{
     layout::Layout,
     plugin::WidgetPlugin,
-    unit::{Key, LayoutType, Rect},
+    unit::{ClippingMask, Key, LayoutType, Rect},
     widget::{WidgetId, WidgetRef},
     Ref,
 };
@@ -64,6 +64,7 @@ pub struct WidgetContext<'ui> {
 
     layouts: Mutex<HashMap<WidgetId, Ref<Layout>>>,
     layout_types: Mutex<HashMap<WidgetId, Ref<LayoutType>>>,
+    clipping: Mutex<HashMap<WidgetId, Ref<ClippingMask>>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
@@ -85,6 +86,7 @@ impl<'ui> WidgetContext<'ui> {
 
             layouts: Mutex::default(),
             layout_types: Mutex::default(),
+            clipping: Mutex::default(),
 
             computed_funcs: Arc::new(Mutex::new(HashMap::new())),
 
@@ -101,7 +103,7 @@ impl<'ui> WidgetContext<'ui> {
     pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
         self.cache.get_rect(widget_id)
     }
-    
+
     /// # Panics
     ///
     /// Will panic if called outside of a widget build context, or in a plugin.
@@ -129,7 +131,7 @@ impl<'ui> WidgetContext<'ui> {
     pub(crate) fn remove(&mut self, widget_id: &WidgetId) {
         let listener_id = ListenerId::Widget(*widget_id);
 
-        self.cache.remove(&widget_id);
+        self.cache.remove(widget_id);
 
         self.global.remove_listener(&listener_id);
 
@@ -342,6 +344,39 @@ impl<'ui> WidgetContext<'ui> {
     /// Fetch the layout of a widget.
     pub fn get_layout(&self, widget_id: &WidgetId) -> Ref<Layout> {
         self.layouts
+            .lock()
+            .get(widget_id)
+            .map_or(Ref::None, Ref::clone)
+    }
+}
+
+// Clipping
+impl<'ui> WidgetContext<'ui> {
+    /// Set the clipping mask of the widget.
+    ///
+    /// Used in a `build()` method to set the clipping mask of the widget being built.
+    pub fn set_clipping(&self, clipping: Ref<ClippingMask>) {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get state from context while not iterating");
+
+        match &current_id {
+            ListenerId::Widget(widget_id) => {
+                self.clipping.lock().insert(*widget_id, clipping);
+            }
+            ListenerId::Computed(_, _) => {
+                log::warn!("layouts set in a computed function are ignored");
+            }
+            ListenerId::Plugin(_) => {
+                log::warn!("layouts set in a plugin are ignored");
+            }
+        };
+    }
+
+    /// Fetch the clipping mask of a widget.
+    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<ClippingMask> {
+        self.clipping
             .lock()
             .get(widget_id)
             .map_or(Ref::None, Ref::clone)

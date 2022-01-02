@@ -27,6 +27,7 @@ syn = {version = "1.0", default-features = false, features = [
   "visit-mut",
   "printing",
 ]}
+heck = "0.4"
 
 [dev-dependencies]
 trybuild = "1.0"

@@ -2,12 +2,14 @@
 
 use agpu::Features;
 use agui::{
+    context::WidgetContext,
     layout::Layout,
-    macros::build,
+    macros::{build, functional_widget},
     unit::{Callback, Color, Margin, Sizing, Units},
+    widget::{BuildResult, WidgetRef},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, Padding, QuadStyle, Spacing, Text},
+        primitives::{Builder, Column, Padding, Quad, QuadStyle, Spacing, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -16,6 +18,7 @@ use agui::{
         },
         App, Button, ButtonStyle,
     },
+    Ref,
 };
 use agui_agpu::UI;
 
@@ -120,5 +123,26 @@ fn main() -> Result<(), agpu::BoxError> {
         }
     });
 
+    let main = ExampleMain::default();
+
     ui.run(program)
+}
+
+#[functional_widget]
+fn example_main(
+    ctx: &WidgetContext,
+    layout: Ref<Layout>,
+    color: Color,
+    child: WidgetRef,
+) -> BuildResult {
+    ctx.set_layout(Ref::clone(&layout));
+
+    build! {
+        Quad {
+            layout: Layout {
+                sizing: Sizing::Fill
+            },
+            child
+        }
+    }
 }
