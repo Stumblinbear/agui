@@ -79,7 +79,7 @@ impl UI {
         let quad_pass = QuadRenderPass::new(program, &ui.ctx);
         let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
-        ui.add_pass(quad_pass).add_pass(bounding_pass)
+        ui.add_pass(quad_pass)//.add_pass(bounding_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
@@ -178,7 +178,6 @@ impl UI {
                     WidgetEvent::Layout {
                         type_id,
                         widget_id,
-                        rect,
                         z,
                     } => {
                         let z = (Z_MAX - z) as f32 / Z_MAX as f32;
@@ -188,12 +187,11 @@ impl UI {
                             &self.manager,
                             &type_id,
                             &widget_id,
-                            &rect,
                             z,
                         );
 
                         for pass in self.render_passes.values_mut() {
-                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, &rect, z);
+                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, z);
                         }
                     }
 
@@ -245,12 +243,14 @@ impl UI {
             .with_depth()
             .create();
 
-        program.run(move |event, _, _| {
-            if let Event::RedrawFrame(mut frame) = event {
-                if self.update() {
-                    // self.manager.print_tree();
-                }
+        program.run(move |event, program, _, _| {
+            if self.update() {
+                // self.manager.print_tree();
 
+                program.viewport.request_redraw();
+            }
+            
+            if let Event::RedrawFrame(mut frame) = event {
                 frame
                     .render_pass_cleared("agui clear", 0x101010FF)
                     .with_pipeline(&pipeline)
