@@ -13,7 +13,6 @@ readme = "README.md"
 
 [dependencies]
 log = "0.4"
-
 cfg-if = "1.0"
 
 downcast-rs = "1.2"
@@ -21,4 +20,7 @@ parking_lot = "0.11"
 
 generational-arena = "0.2"
 morphorm = "0.2"
+
 rand = "0.8"
+geo-types = "0.7"
+geo-clipper = "0.7"

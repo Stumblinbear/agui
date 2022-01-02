@@ -5,7 +5,10 @@ use std::{
 
 use morphorm::{Cache, GeometryChanged};
 
-use crate::unit::{Bounds, Rect, Size};
+use crate::{
+    unit::{Bounds, Polygon, Rect, Size},
+    Ref,
+};
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
@@ -31,11 +34,13 @@ pub struct LayoutCache<K> {
     stack_first_child: HashMap<K, bool>,
     stack_last_child: HashMap<K, bool>,
 
-    rect: HashMap<K, Rect>,
-
+    visible: HashMap<K, bool>,
     geometry_changed: HashMap<K, GeometryChanged>,
 
-    visible: HashMap<K, bool>,
+    last_rect: HashMap<K, Rect>,
+    rect: HashMap<K, Rect>,
+
+    clipping: HashMap<K, Ref<Polygon<f64>>>,
 }
 
 impl<K> LayoutCache<K>
@@ -49,10 +54,28 @@ where
     pub fn take_changed(&mut self) -> HashSet<K> {
         let mut changed = self
             .geometry_changed
-            .iter()
+            .drain()
             .filter(|(_, changed)| changed.bits() != 0)
-            .map(|(k, _)| *k)
+            .map(|(node, _)| node)
+            .filter(|node| {
+                let v1 = self.last_rect.get(node);
+                let v2 = self.rect.get(node);
+
+                if let Some(v1) = v1 {
+                    if let Some(v2) = v2 {
+                        // Make sure there was a significant enough change to warrant redrawing
+                        return (v1.x - v2.x).abs() > 1.0
+                            || (v1.y - v2.y).abs() > 1.0
+                            || (v1.width - v2.width).abs() > 1.0
+                            || (v1.height - v2.height).abs() > 1.0;
+                    }
+                }
+
+                true
+            })
             .collect::<HashSet<_>>();
+
+        self.last_rect = self.rect.clone();
 
         changed.extend(self.newly_added.drain());
 
@@ -84,11 +107,21 @@ where
         self.stack_first_child.remove(node);
         self.stack_last_child.remove(node);
 
-        self.rect.remove(node);
-
+        self.visible.remove(node);
         self.geometry_changed.remove(node);
 
-        self.visible.remove(node);
+        self.rect.remove(node);
+        self.clipping.remove(node);
+    }
+
+    pub fn set_clipping(&mut self, node: K, value: Ref<Polygon<f64>>) {
+        self.clipping.insert(node, value);
+    }
+
+    pub fn get_clipping(&self, node: &K) -> Ref<Polygon<f64>> {
+        self.clipping
+            .get(node)
+            .map_or(Ref::None, |polygon| Ref::clone(polygon))
     }
 }
 

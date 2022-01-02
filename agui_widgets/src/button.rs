@@ -1,7 +1,7 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Callback, Color, Sizing},
+    unit::{Callback, Color, Sizing, ClippingMask},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
@@ -61,6 +61,8 @@ pub struct Button {
 
 impl WidgetBuilder for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        ctx.set_clipping(ClippingMask::Rect.into());
+        
         ctx.set_layout(Ref::clone(&self.layout));
 
         let state = ctx.computed(|ctx| {

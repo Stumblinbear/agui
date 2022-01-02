@@ -5,6 +5,8 @@ use std::{
 };
 
 use generational_arena::Arena;
+use geo_clipper::Clipper;
+use geo_types::MultiPolygon;
 use morphorm::Cache;
 use parking_lot::Mutex;
 
@@ -303,38 +305,85 @@ impl<'ui> WidgetManager<'ui> {
             }
         }
 
-        events.extend(
-            self.context
-                .cache
-                .take_changed()
-                .iter()
-                .filter(|widget_id| self.contains(widget_id))
-                .map(|widget_id| WidgetEvent::Layout {
-                    type_id: self.get(widget_id).get_type_id(),
-                    widget_id: *widget_id,
-                    rect: *self
-                        .context
-                        .cache
-                        .get_rect(widget_id)
-                        .expect("root widget does not have a rect"),
-                    z: widget_id.depth(),
-                }),
-        );
+        let mut changed = self.context.cache.take_changed();
 
         if root_changed {
             if let Some(widget_id) = self.get_tree().get_root() {
-                events.push(WidgetEvent::Layout {
-                    type_id: self.get(&widget_id).get_type_id(),
-                    widget_id,
-                    rect: *self
+                changed.insert(widget_id);
+            }
+        }
+
+        // Recalculate clippings
+        println!("{:?}", changed.len());
+
+        for widget_id in &changed {
+            let child_rect = self
+                .get_rect(widget_id)
+                .expect("widgets without a size cannot have a clipping mask");
+
+            let child_mask = self
+                .context
+                .get_clipping(widget_id)
+                .try_get()
+                .map(|mask| mask.build_polygon(child_rect));
+
+            self.context.cache.set_clipping(
+                *widget_id,
+                match self
+                    .get_tree()
+                    .get(widget_id)
+                    .expect("broken tree")
+                    .parent
+                    .map(|parent_id| self.context.cache.get_clipping(&parent_id))
+                    .filter(Ref::is_valid)
+                {
+                    Some(parent_polygon) => {
+                        match child_mask {
+                            // If the node has a mask, calculate the difference of the polygons
+                            Some(child_mask) => {
+                                let mut polygons = MultiPolygon(vec![child_mask])
+                                    .difference(parent_polygon.get().as_ref(), 1.0)
+                                    .0;
+
+                                if polygons.is_empty() {
+                                    Ref::None
+                                } else {
+                                    Ref::new(polygons.remove(0))
+                                }
+                            }
+
+                            // If the node has a no mask, clone the parent's
+                            None => Ref::clone(&parent_polygon),
+                        }
+                    }
+                    
+                    // Use the mask without changes if a parent clipping doesn't exist
+                    None => child_mask.map_or(Ref::None, Ref::new),
+                }
+            );
+        }
+
+        events.extend(
+            changed
+                .into_iter()
+                .filter(|widget_id| self.contains(widget_id))
+                .map(|widget_id| {
+                    let type_id = self.get(&widget_id).get_type_id();
+                    let rect = *self
                         .context
                         .cache
                         .get_rect(&widget_id)
-                        .expect("root widget does not have a rect"),
-                    z: widget_id.depth(),
-                });
-            }
-        }
+                        .expect("root widget does not have a rect");
+                    let z = widget_id.depth();
+
+                    WidgetEvent::Layout {
+                        type_id,
+                        widget_id,
+                        rect,
+                        z,
+                    }
+                }),
+        );
 
         let plugins = self.context.plugins.lock();
 
