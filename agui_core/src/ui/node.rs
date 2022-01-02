@@ -228,7 +228,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .get(self.id())
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
-            .get_row_spacing()
+            .get_column_spacing()
             .map(|val| val.into())
     }
 
@@ -237,7 +237,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .get(self.id())
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
-            .get_column_spacing()
+            .get_row_spacing()
             .map(|val| val.into())
     }
 

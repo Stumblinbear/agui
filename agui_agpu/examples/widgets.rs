@@ -44,18 +44,19 @@ fn main() -> Result<(), agpu::BoxError> {
             child: Column {
                 layout: Layout {
                     sizing: Sizing::Axis {
-                        width: Units::Auto,
+                        width: Units::Stretch(1.0),
                         height: Units::Stretch(1.0)
                     },
+                    margin: Margin::center()
                 },
                 spacing: Units::Pixels(16.0),
                 children: [
-                    Text::is(dejavu_font, Color::White, 32.0, "A Title".into()),
-                    Spacing::vertical(16.0.into()),
+                    Text::is(dejavu_font, 200.0, "A Title".into()).color(Color::White),
+                    Spacing::none(),
                     Button {
                         child: Padding {
                             padding: Margin::All(10.0.into()),
-                            child: Text::is(dejavu_font, Color::DarkGray, 32.0, "A Button".into())
+                            child: Text::is(dejavu_font, 32.0, "A Button".into())
                         },
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
@@ -64,14 +65,17 @@ fn main() -> Result<(), agpu::BoxError> {
                     Button {
                         child: Padding {
                             padding: Margin::All(10.0.into()),
-                            child: Text::is(dejavu_font, Color::Black, 32.0, "A Button".into())
+                            child: Text::is(dejavu_font, 32.0, "Another Button".into())
                         },
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 1");
                         })
                     },
                     Button {
-                        child: Text::is(dejavu_font, Color::Black, 32.0, "A Button".into()),
+                        child: Padding {
+                            padding: Margin::All(10.0.into()),
+                            child: Text::is(dejavu_font, 32.0, "Also a Button".into())
+                        },
                         on_pressed: Callback::from(|()| {
                             println!("Pressed 2");
                         })
@@ -103,7 +107,7 @@ fn main() -> Result<(), agpu::BoxError> {
                             Button {
                                 child: Padding {
                                     padding: Margin::All(10.0.into()),
-                                    child: Text::is(dejavu_font, Color::White, 32.0, "A Button".into())
+                                    child: Text::is(dejavu_font, 32.0, "Beuton".into()).color(Color::White)
                                 },
                                 on_pressed: Callback::from(|()| {
                                     println!("Pressed 3");

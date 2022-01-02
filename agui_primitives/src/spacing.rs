@@ -10,6 +10,10 @@ use agui_macros::Widget;
 pub struct Spacing(pub Sizing);
 
 impl Spacing {
+    pub fn none() -> Self {
+        Self(Sizing::All(Units::Pixels(0.0)))
+    }
+
     pub fn horizontal(units: Units) -> Self {
         Self(Sizing::Axis {
             width: units,

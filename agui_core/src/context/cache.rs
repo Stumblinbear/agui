@@ -50,7 +50,7 @@ where
         let mut changed = self
             .geometry_changed
             .iter()
-            .filter(|(_, changed)| changed.is_empty())
+            .filter(|(_, changed)| changed.bits() != 0)
             .map(|(k, _)| *k)
             .collect::<HashSet<_>>();
 

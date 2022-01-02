@@ -1,4 +1,5 @@
 use glyph_brush_layout::{
+    ab_glyph::{Font, ScaleFont},
     BuiltInLineBreaker, GlyphPositioner, SectionGeometry, SectionText, ToSectionText,
 };
 
@@ -40,13 +41,10 @@ impl ToSectionText for TextSection {
 #[derive(Widget)]
 pub struct Text {
     pub position: Position,
-
     pub sizing: Sizing,
     pub max_sizing: Sizing,
 
     pub wrap: bool,
-    pub h_align: HorizontalAlign,
-    pub v_align: VerticalAlign,
 
     pub color: Color,
     pub sections: Vec<TextSection>,
@@ -56,13 +54,10 @@ impl Default for Text {
     fn default() -> Self {
         Self {
             position: Position::default(),
-
             sizing: Sizing::default(),
             max_sizing: Sizing::default(),
 
             wrap: true,
-            h_align: HorizontalAlign::Left,
-            v_align: VerticalAlign::Top,
 
             color: Color::Black,
             sections: Vec::default(),
@@ -76,18 +71,22 @@ impl WidgetBuilder for Text {
             Sizing::Auto => {
                 let fonts = ctx.use_global(Fonts::default);
                 let fonts = fonts.read();
+                let fonts = fonts.get_fonts();
 
-                let glyphs = self.get_glyphs(fonts.get_fonts(), (f32::MAX, f32::MAX));
+                let glyphs = self.get_glyphs(fonts, (f32::MAX, f32::MAX));
 
                 let mut max_x: f32 = 0.0;
                 let mut max_y: f32 = 0.0;
 
                 for g in glyphs {
-                    max_x = max_x.max(g.glyph.position.x + g.glyph.scale.x);
-                    max_y = max_y.max(g.glyph.position.y);
+                    if let Some(font) = fonts.get(g.font_id.0) {
+                        max_x += font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
+                        max_y = max_y.max(g.glyph.scale.y);
+                    }
                 }
 
                 Sizing::Axis {
+                    // What even is this magic number
                     width: Units::Pixels(max_x),
                     height: Units::Pixels(max_y),
                 }
@@ -111,9 +110,8 @@ impl WidgetBuilder for Text {
 }
 
 impl Text {
-    pub fn is(font: FontId, color: Color, scale: f32, text: String) -> Self {
+    pub fn is(font: FontId, scale: f32, text: String) -> Self {
         Self {
-            color,
             sections: vec![TextSection::new(font, scale, text)],
             ..Text::default()
         }
@@ -126,11 +124,21 @@ impl Text {
         }
     }
 
+    pub fn color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+
+    pub fn nowrap(mut self) -> Self {
+        self.wrap = false;
+        self
+    }
+
     pub fn get_glyphs(&self, fonts: &[FontArc], bounds: (f32, f32)) -> Vec<SectionGlyph> {
         let glyphs_layout = GlyphLayout::Wrap {
             line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
-            h_align: self.h_align,
-            v_align: self.v_align,
+            h_align: HorizontalAlign::Left,
+            v_align: VerticalAlign::Top,
         };
 
         glyphs_layout.calculate_glyphs(

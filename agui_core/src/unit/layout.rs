@@ -7,14 +7,10 @@ use super::Units;
 #[non_exhaustive]
 pub enum LayoutType {
     /// Widgets should be laid out side-by-side.
-    Row {
-        spacing: Units,
-    },
+    Row { spacing: Units },
 
     /// Widgets should be laid out on top of one another.
-    Column {
-        spacing: Units,
-    },
+    Column { spacing: Units },
 
     /// Widgets should be laid out in a grid.
     Grid {
@@ -27,7 +23,9 @@ pub enum LayoutType {
 
 impl Default for LayoutType {
     fn default() -> Self {
-        Self::Column { spacing: Units::Auto }
+        Self::Column {
+            spacing: Units::Auto,
+        }
     }
 }
 
@@ -118,6 +116,40 @@ impl Default for Margin {
 }
 
 impl Margin {
+    #[must_use]
+    pub fn center() -> Self {
+        Self::Axis {
+            vertical: Units::Stretch(1.0),
+            horizontal: Units::Stretch(1.0),
+        }
+    }
+
+    #[must_use]
+    pub fn h_center() -> Self {
+        Self::horizontal(Units::Stretch(1.0))
+    }
+
+    #[must_use]
+    pub fn v_center() -> Self {
+        Self::vertical(Units::Stretch(1.0))
+    }
+
+    #[must_use]
+    pub fn horizontal(units: Units) -> Self {
+        Self::Axis {
+            vertical: Units::default(),
+            horizontal: units,
+        }
+    }
+
+    #[must_use]
+    pub fn vertical(units: Units) -> Self {
+        Self::Axis {
+            vertical: units,
+            horizontal: Units::default(),
+        }
+    }
+
     #[must_use]
     pub const fn get_top(&self) -> Units {
         match self {
@@ -237,6 +269,9 @@ pub enum Sizing {
     /// Element size attempts to fill its parent container.
     Fill,
 
+    /// Element has the same sizing for width and height.
+    All(Units),
+
     /// Element has a sizings for each of its axis.
     Axis { width: Units, height: Units },
 }
@@ -253,6 +288,7 @@ impl Sizing {
         match self {
             Sizing::Auto => Units::Auto,
             Sizing::Fill => Units::Stretch(1.0),
+            Sizing::All(units) => *units,
             Sizing::Axis { width, .. } => *width,
         }
     }
@@ -262,6 +298,7 @@ impl Sizing {
         match self {
             Sizing::Auto => Units::Auto,
             Sizing::Fill => Units::Stretch(1.0),
+            Sizing::All(units) => *units,
             Sizing::Axis { height, .. } => *height,
         }
     }
