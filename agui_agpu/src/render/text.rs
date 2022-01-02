@@ -2,7 +2,6 @@ use std::{any::TypeId, collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat};
 use agui::{
-    unit::Rect,
     widget::WidgetId,
     widgets::primitives::{FontArc, Text},
     WidgetManager,
@@ -105,12 +104,15 @@ impl WidgetRenderPass for TextRenderPass {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        rect: &Rect,
         z: f32,
     ) {
         if type_id != &TypeId::of::<Text>() {
             return;
         }
+
+        let rect = manager
+            .get_rect(widget_id)
+            .expect("widget does not have a rect");
 
         let text = manager.get_as::<Text>(widget_id);
 

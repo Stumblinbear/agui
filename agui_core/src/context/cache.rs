@@ -75,7 +75,15 @@ where
             })
             .collect::<HashSet<_>>();
 
-        self.last_rect = self.rect.clone();
+        // We store each individual changed node because it's likely quicker than `.clone()`
+        // and ensures we don't lose change detection accuracy if a node has moved subpixel
+        // positions over multiple frames.
+        for node in &changed {
+            match self.rect.get(node) {
+                Some(rect) => self.last_rect.insert(*node, *rect),
+                None => self.last_rect.remove(node),
+            };
+        }
 
         changed.extend(self.newly_added.drain());
 

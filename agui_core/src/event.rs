@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use crate::{widget::WidgetId, unit::Rect};
+use crate::widget::WidgetId;
 
 /// Used to indicate a change to widgets in the tree.
 #[derive(Copy, Clone, Debug)]
@@ -11,12 +11,11 @@ pub enum WidgetEvent {
         type_id: TypeId,
         widget_id: WidgetId,
     },
-    
+
     /// A widget has changed in the layout.
     Layout {
         type_id: TypeId,
         widget_id: WidgetId,
-        rect: Rect,
         z: usize,
     },
 
@@ -24,5 +23,5 @@ pub enum WidgetEvent {
     Destroyed {
         type_id: TypeId,
         widget_id: WidgetId,
-    }
+    },
 }

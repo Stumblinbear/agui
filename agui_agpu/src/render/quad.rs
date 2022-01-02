@@ -1,12 +1,7 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{
-    unit::{Color, Rect},
-    widget::WidgetId,
-    widgets::primitives::Quad,
-    WidgetManager,
-};
+use agui::{unit::Color, widget::WidgetId, widgets::primitives::Quad, WidgetManager};
 
 use super::{RenderContext, WidgetRenderPass};
 
@@ -77,12 +72,17 @@ impl WidgetRenderPass for QuadRenderPass {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        rect: &Rect,
         z: f32,
     ) {
         if type_id != &TypeId::of::<Quad>() {
             return;
         }
+
+        let rect = manager
+            .get_rect(widget_id)
+            .expect("widget does not have a rect");
+        
+        let clipping = manager.get_clipping(widget_id);
 
         let quad = manager.get_as::<Quad>(widget_id);
 
@@ -134,7 +134,7 @@ impl WidgetRenderPass for QuadRenderPass {
 
         for widget_buffer in self.widgets.values() {
             // Causes errors with small windows, also doesn't work with children
-            // 
+            //
             // r.set_scissor_rect(
             //     widget_buffer.rect[0].floor() as u32,
             //     widget_buffer.rect[1].floor() as u32,

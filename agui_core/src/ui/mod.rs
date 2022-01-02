@@ -6,7 +6,7 @@ use std::{
 
 use generational_arena::Arena;
 use geo_clipper::Clipper;
-use geo_types::MultiPolygon;
+use geo_types::{MultiPolygon, Polygon};
 use morphorm::Cache;
 use parking_lot::Mutex;
 
@@ -147,6 +147,11 @@ impl<'ui> WidgetManager<'ui> {
     /// Get the visual `Rect` of a widget.
     pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
         self.context.get_rect(widget_id)
+    }
+
+    /// Get the visual clipping `Polygon<f64>` for a widget.
+    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Polygon<f64>> {
+        self.context.cache.get_clipping(widget_id)
     }
 
     /// Get the widget build context.
@@ -314,8 +319,6 @@ impl<'ui> WidgetManager<'ui> {
         }
 
         // Recalculate clippings
-        println!("{:?}", changed.len());
-
         for widget_id in &changed {
             let child_rect = self
                 .get_rect(widget_id)
@@ -356,10 +359,10 @@ impl<'ui> WidgetManager<'ui> {
                             None => Ref::clone(&parent_polygon),
                         }
                     }
-                    
+
                     // Use the mask without changes if a parent clipping doesn't exist
                     None => child_mask.map_or(Ref::None, Ref::new),
-                }
+                },
             );
         }
 
@@ -369,17 +372,11 @@ impl<'ui> WidgetManager<'ui> {
                 .filter(|widget_id| self.contains(widget_id))
                 .map(|widget_id| {
                     let type_id = self.get(&widget_id).get_type_id();
-                    let rect = *self
-                        .context
-                        .cache
-                        .get_rect(&widget_id)
-                        .expect("root widget does not have a rect");
                     let z = widget_id.depth();
 
                     WidgetEvent::Layout {
                         type_id,
                         widget_id,
-                        rect,
                         z,
                     }
                 }),

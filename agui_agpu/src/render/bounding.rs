@@ -6,7 +6,7 @@ use std::{
 };
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{unit::Rect, widget::WidgetId, WidgetManager};
+use agui::{widget::WidgetId, WidgetManager};
 
 use super::{RenderContext, WidgetRenderPass};
 
@@ -68,12 +68,16 @@ impl WidgetRenderPass for BoundingRenderPass {
     fn layout(
         &mut self,
         ctx: &RenderContext,
-        _manager: &WidgetManager,
+        manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        rect: &Rect,
         _z: f32,
     ) {
+        let rect = match manager.get_rect(widget_id) {
+            Some(rect) => rect,
+            None => return,
+        };
+
         let mut hasher = DefaultHasher::new();
         type_id.hash(&mut hasher);
         let c = hasher.finish().to_ne_bytes();

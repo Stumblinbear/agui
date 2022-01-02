@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Texture};
-use agui::{context::Notify, unit::Rect, widget::WidgetId, widgets::AppSettings, WidgetManager};
+use agui::{context::Notify, widget::WidgetId, widgets::AppSettings, WidgetManager};
 use downcast_rs::{impl_downcast, Downcast};
 
 pub mod bounding;
@@ -78,7 +78,6 @@ pub trait WidgetRenderPass: Downcast {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        rect: &Rect,
         z: f32,
     );
 

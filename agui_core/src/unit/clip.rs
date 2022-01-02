@@ -2,8 +2,7 @@ pub use geo_types::{line_string, polygon, Coordinate, LineString, MultiPolygon, 
 
 use super::Rect;
 
-const PI: f64 = 3.141_592;
-const PI2: f64 = PI * 2.0;
+const PI2: f64 = std::f64::consts::PI * 2.0;
 
 const MARGIN_OF_ERROR: f64 = 2.0;
 
@@ -40,10 +39,10 @@ impl ClippingMask {
         match self {
             Self::Rect => {
                 polygon![
-                    (x: rect.x as f64, y: rect.y as f64),
-                    (x: rect.x as f64 + rect.width as f64, y: rect.y as f64),
-                    (x: rect.x as f64 + rect.width as f64, y: rect.y as f64 + rect.height as f64),
-                    (x: rect.x as f64, y: rect.y as f64 + rect.height as f64)
+                    (x: f64::from(rect.x), y: f64::from(rect.y)),
+                    (x: f64::from(rect.x + rect.width), y: f64::from(rect.y)),
+                    (x: f64::from(rect.x + rect.width), y: f64::from(rect.y + rect.height)),
+                    (x: f64::from(rect.x), y: f64::from(rect.y + rect.height))
                 ]
             }
 
@@ -57,8 +56,10 @@ impl ClippingMask {
             Self::Oval => {
                 let mut line = Vec::new();
 
-                let angle_between_verts =
-                    (2.0 * (1.0 - MARGIN_OF_ERROR / rect.width.max(rect.height) as f64).powi(2) - 1.0).acos();
+                let angle_between_verts = (2.0
+                    * (1.0 - MARGIN_OF_ERROR / f64::from(rect.width.max(rect.height))).powi(2)
+                    - 1.0)
+                    .acos();
 
                 let num_vertices = (PI2 / angle_between_verts).ceil() as usize;
 
@@ -66,8 +67,8 @@ impl ClippingMask {
                     let theta = PI2 * i as f64 / num_vertices as f64;
 
                     line.push(Coordinate {
-                        x: rect.x as f64 + (theta.cos() + 0.5) * rect.width as f64,
-                        y: rect.y as f64 + (theta.sin() + 0.5) * rect.width as f64,
+                        x: (theta.cos() + 0.5).mul_add(f64::from(rect.width), f64::from(rect.x)),
+                        y: (theta.sin() + 0.5).mul_add(f64::from(rect.width), f64::from(rect.y)),
                     });
                 }
 
