@@ -25,7 +25,6 @@ use agui_agpu::UI;
 fn main() -> Result<(), agpu::BoxError> {
     let program = agpu::GpuProgram::builder("agui widgets")
         .with_gpu_features(Features::POLYGON_MODE_LINE)
-        .with_framerate(60.0)
         .build()?;
 
     let mut ui = UI::with_default(&program);
