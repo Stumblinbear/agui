@@ -133,12 +133,14 @@ impl WidgetRenderPass for QuadRenderPass {
         r.set_bind_group(0, &self.bind_group, &[]);
 
         for widget_buffer in self.widgets.values() {
-            r.set_scissor_rect(
-                widget_buffer.rect[0].floor() as u32,
-                widget_buffer.rect[1].floor() as u32,
-                widget_buffer.rect[2].ceil() as u32,
-                widget_buffer.rect[3].ceil() as u32,
-            );
+            // Causes errors with small windows, also doesn't work with children
+            // 
+            // r.set_scissor_rect(
+            //     widget_buffer.rect[0].floor() as u32,
+            //     widget_buffer.rect[1].floor() as u32,
+            //     widget_buffer.rect[2].ceil() as u32,
+            //     widget_buffer.rect[3].ceil() as u32,
+            // );
 
             r.set_vertex_buffer(0, widget_buffer.buffer.slice(..))
                 .draw(0..6, 0..1);

@@ -51,8 +51,8 @@ fn main() -> Result<(), agpu::BoxError> {
                 },
                 spacing: Units::Pixels(16.0),
                 children: [
-                    Text::is(dejavu_font, 200.0, "A Title".into()).color(Color::White),
-                    Spacing::none(),
+                    Text::is(dejavu_font, 64.0, "A Title".into()).color(Color::White),
+                    Spacing::vertical(32.0.into()),
                     Button {
                         child: Padding {
                             padding: Margin::All(10.0.into()),
