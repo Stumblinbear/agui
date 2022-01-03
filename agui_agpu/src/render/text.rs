@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat, wgpu::CompareFunction};
 use agui::{
     widget::WidgetId,
     widgets::primitives::{FontArc, Text},
@@ -64,6 +64,7 @@ impl TextRenderPass {
                 attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4, 3 => Float32x4],
             }])
             .with_depth()
+            .depth_compare(CompareFunction::Equal)
             .with_bind_groups(&[&bind_group.layout])
             .create();
 

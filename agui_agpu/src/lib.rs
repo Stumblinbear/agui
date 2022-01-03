@@ -1,14 +1,10 @@
-use std::{
-    any::TypeId,
-    collections::{BTreeMap, HashMap},
-    io, mem,
-};
+use std::{any::TypeId, collections::BTreeMap, io, mem};
 
 use agpu::{
     winit::winit::event::{
         ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
     },
-    Buffer, DepthAttachmentBuild, Event, Frame, GpuProgram, RenderPipeline,
+    DepthAttachmentBuild, Event, Frame, GpuProgram, RenderPipeline,
 };
 
 use agui::{
@@ -30,15 +26,11 @@ use render::{bounding::BoundingRenderPass, clipping::ClippingRenderPass};
 
 pub mod render;
 
-use self::render::{drawable::DrawableRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass};
+use self::render::{
+    drawable::DrawableRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass,
+};
 
 const Z_MAX: usize = u16::MAX as usize;
-
-struct ClippingBuffer {
-    vertex_data: Buffer,
-    index_data: Buffer,
-    count: u32,
-}
 
 pub struct UI {
     manager: WidgetManager<'static>,
@@ -47,7 +39,7 @@ pub struct UI {
     pipeline: RenderPipeline,
 
     clipping_pass: ClippingRenderPass,
-    text_pass: TextRenderPass,
+
     render_passes: BTreeMap<TypeId, Box<dyn WidgetRenderPass>>,
     render_pass_order: Vec<TypeId>,
 
@@ -76,7 +68,7 @@ impl UI {
                 .create(),
 
             clipping_pass: ClippingRenderPass::new(program, &ctx),
-            text_pass: TextRenderPass::new(program, &ctx),
+
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
 
@@ -97,9 +89,10 @@ impl UI {
         let ui = Self::new(program);
 
         let drawable_pass = DrawableRenderPass::new(program, &ui.ctx);
-        let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
+        let text_pass = TextRenderPass::new(program, &ui.ctx);
+        // let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
-        ui.add_pass(drawable_pass) //.add_pass(bounding_pass)
+        ui.add_pass(drawable_pass).add_pass(text_pass) //.add_pass(bounding_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
@@ -109,7 +102,7 @@ impl UI {
             .write()
             .load_bytes(bytes);
 
-        self.text_pass.add_font(font);
+        self.get_pass_mut::<TextRenderPass>().add_font(font);
 
         font_id
     }
@@ -122,7 +115,7 @@ impl UI {
             .load_file(filename)
         {
             Ok((font_id, font)) => {
-                self.text_pass.add_font(font);
+                self.get_pass_mut::<TextRenderPass>().add_font(font);
 
                 Ok(font_id)
             }
@@ -156,9 +149,24 @@ impl UI {
         let pass = self
             .render_passes
             .get(&TypeId::of::<P>())
-            .expect("cannot return a pass that has not been created");
+            .unwrap_or_else(|| panic!("render pass not added: {}", std::any::type_name::<P>()));
 
         match pass.downcast_ref::<P>() {
+            Some(pass) => pass,
+            None => unreachable!(),
+        }
+    }
+
+    pub fn get_pass_mut<P>(&mut self) -> &mut P
+    where
+        P: WidgetRenderPass + 'static,
+    {
+        let pass = self
+            .render_passes
+            .get_mut(&TypeId::of::<P>())
+            .unwrap_or_else(|| panic!("render pass not added: {}", std::any::type_name::<P>()));
+
+        match pass.downcast_mut::<P>() {
             Some(pass) => pass,
             None => unreachable!(),
         }
@@ -190,9 +198,6 @@ impl UI {
                         self.clipping_pass
                             .added(&self.ctx, &self.manager, &type_id, &widget_id);
 
-                        self.text_pass
-                            .added(&self.ctx, &self.manager, &type_id, &widget_id);
-
                         for pass in self.render_passes.values_mut() {
                             pass.added(&self.ctx, &self.manager, &type_id, &widget_id);
                         }
@@ -213,14 +218,6 @@ impl UI {
                             depth,
                         );
 
-                        self.text_pass.layout(
-                            &self.ctx,
-                            &self.manager,
-                            &type_id,
-                            &widget_id,
-                            depth,
-                        );
-
                         for pass in self.render_passes.values_mut() {
                             pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, depth);
                         }
@@ -228,9 +225,6 @@ impl UI {
 
                     WidgetEvent::Destroyed { type_id, widget_id } => {
                         self.clipping_pass
-                            .removed(&self.ctx, &self.manager, &type_id, &widget_id);
-
-                        self.text_pass
                             .removed(&self.ctx, &self.manager, &type_id, &widget_id);
 
                         for pass in self.render_passes.values_mut() {
@@ -245,8 +239,6 @@ impl UI {
             self.ctx.update();
 
             self.clipping_pass.update(&self.ctx);
-
-            self.text_pass.update(&self.ctx);
 
             for pass_type_id in &self.render_pass_order {
                 self.render_passes
@@ -272,8 +264,6 @@ impl UI {
 
         self.clipping_pass.render(&self.ctx, &mut frame);
 
-        self.text_pass.render(&self.ctx, &mut frame);
-
         for pass_type_id in &self.render_pass_order {
             self.render_passes
                 .get(pass_type_id)
@@ -290,7 +280,7 @@ impl UI {
                 program.viewport.request_redraw();
             }
 
-            if let Event::RedrawFrame(mut frame) = event {
+            if let Event::RedrawFrame(frame) = event {
                 self.render(frame);
             } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
                 match event {

@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, wgpu::CompareFunction};
 use agui::{widget::WidgetId, WidgetManager};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
@@ -55,6 +55,7 @@ impl ClippingRenderPass {
                 },
             ])
             .with_depth()
+            .depth_compare(CompareFunction::LessEqual)
             .with_bind_groups(&[&bind_group.layout])
             .create();
 
@@ -82,7 +83,7 @@ impl WidgetRenderPass for ClippingRenderPass {
         &mut self,
         ctx: &RenderContext,
         manager: &WidgetManager,
-        type_id: &TypeId,
+        _type_id: &TypeId,
         widget_id: &WidgetId,
         depth: f32,
     ) {
@@ -108,9 +109,7 @@ impl WidgetRenderPass for ClippingRenderPass {
                     )
                     .unwrap();
             }
-
-            println!("clip: {}", depth);
-
+            
             let clipping_data = ctx
                 .gpu
                 .new_buffer("agui_instance_buffer")
@@ -148,7 +147,7 @@ impl WidgetRenderPass for ClippingRenderPass {
         &mut self,
         _ctx: &RenderContext,
         _manager: &WidgetManager,
-        type_id: &TypeId,
+        _type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
         if self.widgets.remove(widget_id).is_some() {

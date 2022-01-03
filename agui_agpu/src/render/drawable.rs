@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, wgpu::CompareFunction};
 use agui::{unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
@@ -55,6 +55,7 @@ impl DrawableRenderPass {
                 },
             ])
             .with_depth()
+            .depth_compare(CompareFunction::Equal)
             .with_bind_groups(&[&bind_group.layout])
             .create();
 
@@ -114,8 +115,6 @@ impl WidgetRenderPass for DrawableRenderPass {
 
             geometry
         };
-
-        println!("depth: {}", depth);
 
         let drawable_data = ctx
             .gpu
