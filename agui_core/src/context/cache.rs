@@ -3,10 +3,11 @@ use std::{
     hash::Hash,
 };
 
+use lyon::path::Path;
 use morphorm::{Cache, GeometryChanged};
 
 use crate::{
-    unit::{Bounds, Polygon, Rect, Size},
+    unit::{Bounds, Rect, Size},
     Ref,
 };
 
@@ -42,7 +43,7 @@ pub struct LayoutCache<K> {
     last_rect: HashMap<K, Rect>,
     rect: HashMap<K, Rect>,
 
-    clipping: HashMap<K, Ref<Polygon<f64>>>,
+    clipping: HashMap<K, Ref<Path>>,
 }
 
 impl<K> LayoutCache<K>
@@ -124,11 +125,11 @@ where
         self.clipping.remove(node);
     }
 
-    pub fn set_clipping(&mut self, node: K, value: Ref<Polygon<f64>>) {
+    pub fn set_clipping(&mut self, node: K, value: Ref<Path>) {
         self.clipping.insert(node, value);
     }
 
-    pub fn get_clipping(&self, node: &K) -> Ref<Polygon<f64>> {
+    pub fn get_clipping(&self, node: &K) -> Ref<Path> {
         self.clipping
             .get(node)
             .map_or(Ref::None, |polygon| Ref::clone(polygon))

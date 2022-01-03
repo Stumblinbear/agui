@@ -1,10 +1,8 @@
-pub use geo_types::{line_string, polygon, Coordinate, LineString, MultiPolygon, Polygon};
-
-use super::Rect;
-
-const PI2: f64 = std::f64::consts::PI * 2.0;
-
-const MARGIN_OF_ERROR: f64 = 2.0;
+use lyon::{
+    geom::euclid::{Point2D, Size2D},
+    math::{Angle, Rect, Vector},
+    path::{builder::BorderRadii, traits::PathBuilder, Path, Winding},
+};
 
 #[derive(Debug)]
 pub enum ClippingMask {
@@ -17,9 +15,9 @@ pub enum ClippingMask {
         bottom_left: f32,
     },
 
-    Oval,
+    Circle,
 
-    Polygon(Polygon<f64>),
+    Path(Path),
 }
 
 impl Default for ClippingMask {
@@ -30,20 +28,20 @@ impl Default for ClippingMask {
 
 impl ClippingMask {
     #[must_use]
-    #[allow(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
-    )]
-    pub fn build_polygon(&self, rect: &Rect) -> Polygon<f64> {
+    pub fn build_path(&self, rect: &super::Rect) -> Path {
         match self {
             Self::Rect => {
-                polygon![
-                    (x: f64::from(rect.x), y: f64::from(rect.y)),
-                    (x: f64::from(rect.x + rect.width), y: f64::from(rect.y)),
-                    (x: f64::from(rect.x + rect.width), y: f64::from(rect.y + rect.height)),
-                    (x: f64::from(rect.x), y: f64::from(rect.y + rect.height))
-                ]
+                let mut builder = Path::builder();
+
+                builder.add_rectangle(
+                    &Rect {
+                        origin: Point2D::new(rect.x, rect.y),
+                        size: Size2D::new(rect.width, rect.height),
+                    },
+                    Winding::Positive,
+                );
+
+                builder.build()
             }
 
             Self::RoundedRect {
@@ -51,32 +49,45 @@ impl ClippingMask {
                 top_right,
                 bottom_right,
                 bottom_left,
-            } => Polygon::new(LineString(vec![]), vec![]),
+            } => {
+                let mut builder = Path::builder();
 
-            Self::Oval => {
-                let mut line = Vec::new();
+                builder.add_rounded_rectangle(
+                    &Rect {
+                        origin: Point2D::new(rect.x, rect.y),
+                        size: Size2D::new(rect.width, rect.height),
+                    },
+                    &BorderRadii {
+                        top_left: *top_left,
+                        top_right: *top_right,
+                        bottom_left: *bottom_left,
+                        bottom_right: *bottom_right,
+                    },
+                    Winding::Positive,
+                );
 
-                let angle_between_verts = (2.0
-                    * (1.0 - MARGIN_OF_ERROR / f64::from(rect.width.max(rect.height))).powi(2)
-                    - 1.0)
-                    .acos();
-
-                let num_vertices = (PI2 / angle_between_verts).ceil() as usize;
-
-                for i in 0..num_vertices {
-                    let theta = PI2 * i as f64 / num_vertices as f64;
-
-                    line.push(Coordinate {
-                        x: (theta.cos() + 0.5).mul_add(f64::from(rect.width), f64::from(rect.x)),
-                        y: (theta.sin() + 0.5).mul_add(f64::from(rect.width), f64::from(rect.y)),
-                    });
-                }
-
-                Polygon::new(LineString(line), vec![])
+                builder.build()
             }
 
-            Self::Polygon(polygon) => polygon.clone(),
+            Self::Circle => {
+                let mut builder = Path::builder();
+
+                builder.add_ellipse(
+                    Point2D::new(rect.x + rect.width, rect.y + rect.height),
+                    Vector::new(rect.width, rect.height),
+                    Angle::radians(0.0),
+                    Winding::Positive,
+                );
+
+                builder.build()
+            }
+
+            Self::Path(path) => path.clone(),
         }
+    }
+
+    pub fn intersection(path1: &Path, path2: &Path) -> Option<Path> {
+        None
     }
 
     // #[must_use]

@@ -22,5 +22,4 @@ generational-arena = "0.2"
 morphorm = "0.2"
 
 rand = "0.8"
-geo-types = "0.7"
-geo-clipper = "0.7"
+lyon = "0.17"

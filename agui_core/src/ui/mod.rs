@@ -5,15 +5,14 @@ use std::{
 };
 
 use generational_arena::Arena;
-use geo_clipper::Clipper;
-use geo_types::{MultiPolygon, Polygon};
+use lyon::path::Path;
 use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
     context::{tree::Tree, ListenerId, WidgetContext},
     event::WidgetEvent,
-    unit::{Key, Rect, Units},
+    unit::{ClippingMask, Key, Rect, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetRef},
     Ref,
 };
@@ -149,8 +148,8 @@ impl<'ui> WidgetManager<'ui> {
         self.context.get_rect(widget_id)
     }
 
-    /// Get the visual clipping `Polygon<f64>` for a widget.
-    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Polygon<f64>> {
+    /// Get the visual clipping `Path` for a widget.
+    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Path> {
         self.context.cache.get_clipping(widget_id)
     }
 
@@ -324,11 +323,11 @@ impl<'ui> WidgetManager<'ui> {
                 .get_rect(widget_id)
                 .expect("widgets without a size cannot have a clipping mask");
 
-            let child_mask = self
+            let child_path = self
                 .context
                 .get_clipping(widget_id)
                 .try_get()
-                .map(|mask| mask.build_polygon(child_rect));
+                .map(|path| path.build_path(child_rect));
 
             self.context.cache.set_clipping(
                 *widget_id,
@@ -340,28 +339,26 @@ impl<'ui> WidgetManager<'ui> {
                     .map(|parent_id| self.context.cache.get_clipping(&parent_id))
                     .filter(Ref::is_valid)
                 {
-                    Some(parent_polygon) => {
-                        match child_mask {
-                            // If the node has a mask, calculate the difference of the polygons
-                            Some(child_mask) => {
-                                let mut polygons = MultiPolygon(vec![child_mask])
-                                    .difference(parent_polygon.get().as_ref(), 1.0)
-                                    .0;
-
-                                if polygons.is_empty() {
-                                    Ref::None
-                                } else {
-                                    Ref::new(polygons.remove(0))
+                    Some(parent_path) => {
+                        match child_path {
+                            // If the node has a mask, calculate the difference of the paths
+                            Some(child_path) => {
+                                match ClippingMask::intersection(
+                                    &child_path,
+                                    parent_path.get().as_ref(),
+                                ) {
+                                    Some(path) => Ref::new(path),
+                                    None => Ref::None,
                                 }
                             }
 
-                            // If the node has a no mask, clone the parent's
-                            None => Ref::clone(&parent_polygon),
+                            // If the node has a no path, clone the parent's
+                            None => Ref::clone(&parent_path),
                         }
                     }
 
-                    // Use the mask without changes if a parent clipping doesn't exist
-                    None => child_mask.map_or(Ref::None, Ref::new),
+                    // Use the path without changes if a parent clipping doesn't exist
+                    None => child_path.map_or(Ref::None, Ref::new),
                 },
             );
         }
