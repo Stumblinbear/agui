@@ -1,10 +1,10 @@
 use agui_core::widget::WidgetRef;
 use agui_macros::build;
-use agui_primitives::Quad;
+use agui_primitives::Drawable;
 
 fn main() {
     let _widget: WidgetRef = build! {
-        Quad {
+        Drawable {
             color:
         }
     };

@@ -253,7 +253,7 @@ impl Into<Vec<Self>> for WidgetRef {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WidgetId(GenerationalIndex, usize);
+pub struct WidgetId(GenerationalIndex);
 
 impl std::fmt::Display for WidgetId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -263,29 +263,24 @@ impl std::fmt::Display for WidgetId {
 
 impl WidgetId {
     #[must_use]
-    pub const fn from(index: GenerationalIndex, depth: usize) -> Self {
-        Self(index, depth)
+    pub const fn from(index: GenerationalIndex) -> Self {
+        Self(index)
     }
 
     #[must_use]
     pub const fn id(&self) -> GenerationalIndex {
         self.0
     }
-
-    #[must_use]
-    pub const fn depth(&self) -> usize {
-        self.1
-    }
 }
 
 impl Default for WidgetId {
     fn default() -> Self {
-        Self(GenerationalIndex::from_raw_parts(0, 0), 0)
+        Self(GenerationalIndex::from_raw_parts(0, 0))
     }
 }
 
 impl From<usize> for WidgetId {
     fn from(val: usize) -> Self {
-        Self(GenerationalIndex::from_raw_parts(val, 0), 0)
+        Self(GenerationalIndex::from_raw_parts(val, 0))
     }
 }

@@ -1,10 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
+    sync::Arc,
 };
 
 use crate::{
     layout::Layout,
+    unit::LayoutType,
     widget::{Widget, WidgetId},
     Ref, WidgetManager,
 };
@@ -25,12 +27,19 @@ pub fn print_tree(manager: &WidgetManager) {
     println!("Tree:");
 
     for widget_id in manager.get_tree().iter() {
-        let depth = widget_id.depth();
+        let depth = manager
+            .get_tree()
+            .get(&widget_id)
+            .expect("broken tree")
+            .depth;
+
+        let layer = manager.get_node(&widget_id).layer;
 
         let node = manager.get_node(&widget_id);
 
         print_node(
             depth,
+            layer,
             Some(&widget_id),
             &node.widget.get(),
             WHITE,
@@ -41,7 +50,9 @@ pub fn print_tree(manager: &WidgetManager) {
                 } else {
                     CYAN
                 },
-                node.layout_type,
+                node.layout_type
+                    .try_get()
+                    .unwrap_or_else(|| Arc::new(LayoutType::default())),
                 if matches!(node.layout, Ref::None) {
                     Ref::new(Layout::default())
                 } else {
@@ -89,14 +100,20 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
     if manager.get_tree().get_root().is_none() {
         // If we have a new root widget queued, print it
         if let Some(widget) = new_root {
-            print_node(0, None, &widget.get(), GREEN, "");
+            print_node(0, 0, None, &widget.get(), GREEN, "");
         }
 
         return;
     }
 
     for widget_id in manager.get_tree().iter() {
-        let depth = widget_id.depth();
+        let depth = manager
+            .get_tree()
+            .get(&widget_id)
+            .expect("broken tree")
+            .depth;
+
+        let layer = manager.get_node(&widget_id).layer;
 
         let is_rebuild_queued = rebuilds.contains(&widget_id);
 
@@ -110,6 +127,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
 
         print_node(
             depth,
+            layer,
             Some(&widget_id),
             &node.widget.get(),
             if is_destroy_queued {
@@ -126,7 +144,9 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
                 } else {
                     CYAN
                 },
-                node.layout_type,
+                node.layout_type
+                    .try_get()
+                    .unwrap_or_else(|| Arc::new(LayoutType::default())),
                 if matches!(node.layout, Ref::None) {
                     Ref::new(Layout::default())
                 } else {
@@ -136,13 +156,14 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
         );
 
         for to_spawn in spawns.get(&widget_id).unwrap_or(&Vec::new()) {
-            print_node(depth + 1, None, to_spawn, GREEN, "");
+            print_node(depth + 1, layer, None, to_spawn, GREEN, "");
         }
     }
 }
 
 fn print_node(
     depth: usize,
+    layer: usize,
     widget_id: Option<&WidgetId>,
     widget: &Rc<dyn Widget>,
     color: &'static str,
@@ -171,6 +192,8 @@ fn print_node(
     if let Some(widget_id) = widget_id {
         print!(" (#{})", widget_id);
     }
+
+    print!(" [{}]", layer);
 
     println!(" {}", suffix);
 

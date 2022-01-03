@@ -1,41 +1,29 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{
-    unit::{ClippingMask, Color},
-    widget::WidgetId,
-    widgets::primitives::Quad,
-    WidgetManager,
-};
-use lyon::{
-    geom::euclid::{Point2D, Size2D},
-    lyon_tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers},
-    math::{Point, Rect},
-    path::{builder::BorderRadii, traits::PathBuilder, Path, Winding},
+use agui::{unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager};
+use lyon::lyon_tessellation::{
+    BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
 
 use super::{RenderContext, WidgetRenderPass};
 
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
-struct QuadData {
+struct DrawableData {
     z: f32,
     color: [f32; 4],
 }
 
-#[repr(C)]
-#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
-struct VertexData([f32; 2]);
-
 struct WidgetBuffer {
-    quad_data: Buffer,
+    drawable_data: Buffer,
 
     vertex_data: Buffer,
     index_data: Buffer,
     count: u32,
 }
 
-pub struct QuadRenderPass {
+pub struct DrawableRenderPass {
     bind_group: BindGroup,
 
     pipeline: RenderPipeline,
@@ -43,7 +31,7 @@ pub struct QuadRenderPass {
     widgets: HashMap<WidgetId, WidgetBuffer>,
 }
 
-impl QuadRenderPass {
+impl DrawableRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
         let bindings = &[ctx.bind_app_settings()];
 
@@ -51,17 +39,17 @@ impl QuadRenderPass {
 
         let pipeline = program
             .gpu
-            .new_pipeline("agui_quad_pipeline")
+            .new_pipeline("agui_drawable_pipeline")
             .with_vertex(include_bytes!("shader/quad.vert.spv"))
             .with_fragment(include_bytes!("shader/quad.frag.spv"))
             .with_vertex_layouts(&[
                 agpu::wgpu::VertexBufferLayout {
-                    array_stride: mem::size_of::<QuadData>() as u64,
+                    array_stride: mem::size_of::<DrawableData>() as u64,
                     step_mode: agpu::wgpu::VertexStepMode::Instance,
                     attributes: &agpu::wgpu::vertex_attr_array![0 => Float32, 1 => Float32x4],
                 },
                 agpu::wgpu::VertexBufferLayout {
-                    array_stride: mem::size_of::<VertexData>() as u64,
+                    array_stride: mem::size_of::<[f32; 2]>() as u64,
                     step_mode: agpu::wgpu::VertexStepMode::Vertex,
                     attributes: &agpu::wgpu::vertex_attr_array![2 => Float32x2],
                 },
@@ -79,7 +67,7 @@ impl QuadRenderPass {
     }
 }
 
-impl WidgetRenderPass for QuadRenderPass {
+impl WidgetRenderPass for DrawableRenderPass {
     fn added(
         &mut self,
         _ctx: &RenderContext,
@@ -95,68 +83,18 @@ impl WidgetRenderPass for QuadRenderPass {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        z: f32,
+        depth: f32,
     ) {
-        if type_id != &TypeId::of::<Quad>() {
+        if type_id != &TypeId::of::<Drawable>() {
             return;
         }
 
-        let geometry: VertexBuffers<VertexData, u16> = {
+        let drawable = manager.get_as::<Drawable>(widget_id);
+
+        let geometry: VertexBuffers<[f32; 2], u16> = {
             let rect = manager
                 .get_rect(widget_id)
                 .expect("widget does not have a rect");
-
-            let clipping = manager.get_clipping(widget_id).try_get();
-
-            let path = clipping.map_or_else(
-                || {
-                    let mut builder = Path::builder();
-
-                    builder.add_rounded_rectangle(
-                        &Rect {
-                            origin: Point2D::new(rect.x, rect.y),
-                            size: Size2D::new(rect.width, rect.height),
-                        },
-                        &BorderRadii {
-                            top_left: 4.0,
-                            top_right: 4.0,
-                            bottom_left: 4.0,
-                            bottom_right: 4.0,
-                        },
-                        Winding::Positive,
-                    );
-
-                    builder.build()
-                },
-                |clipping| Path::clone(&clipping),
-            );
-
-            // let path = {
-            //     let mut builder = Path::builder();
-
-            //     builder.add_rounded_rectangle(
-            //         &Rect {
-            //             origin: Point2D::new(rect.x, rect.y),
-            //             size: Size2D::new(rect.width, rect.height),
-            //         },
-            //         &BorderRadii {
-            //             top_left: 4.0,
-            //             top_right: 4.0,
-            //             bottom_left: 4.0,
-            //             bottom_right: 4.0,
-            //         },
-            //         Winding::Positive,
-            //     );
-
-            //     let path = builder.build();
-
-            //     match clipping
-            //         .and_then(|clipping| ClippingMask::intersection(&path, clipping.as_ref()))
-            //     {
-            //         Some(path) => path,
-            //         None => path,
-            //     }
-            // };
 
             let mut geometry = VertexBuffers::new();
 
@@ -165,10 +103,10 @@ impl WidgetRenderPass for QuadRenderPass {
                 // Compute the tessellation.
                 tessellator
                     .tessellate_path(
-                        &path,
+                        &drawable.shape.build_path(rect),
                         &FillOptions::default(),
                         &mut BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
-                            VertexData(vertex.position().to_array())
+                            vertex.position().to_array()
                         }),
                     )
                     .unwrap();
@@ -177,14 +115,15 @@ impl WidgetRenderPass for QuadRenderPass {
             geometry
         };
 
-        let quad_data = ctx
+        println!("depth: {}", depth);
+
+        let drawable_data = ctx
             .gpu
             .new_buffer("agui_instance_buffer")
             .as_vertex_buffer()
-            .create(bytemuck::bytes_of(&QuadData {
-                z,
-                color: manager
-                    .get_as::<Quad>(widget_id)
+            .create(bytemuck::bytes_of(&DrawableData {
+                z: depth,
+                color: drawable
                     .style
                     .as_ref()
                     .map_or(Color::default(), |style| style.color)
@@ -206,7 +145,7 @@ impl WidgetRenderPass for QuadRenderPass {
         self.widgets.insert(
             *widget_id,
             WidgetBuffer {
-                quad_data,
+                drawable_data,
 
                 vertex_data,
                 index_data,
@@ -222,7 +161,7 @@ impl WidgetRenderPass for QuadRenderPass {
         type_id: &TypeId,
         widget_id: &WidgetId,
     ) {
-        if type_id != &TypeId::of::<Quad>() {
+        if type_id != &TypeId::of::<Drawable>() {
             return;
         }
 
@@ -233,7 +172,7 @@ impl WidgetRenderPass for QuadRenderPass {
 
     fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
-            .render_pass("agui_quad_pass")
+            .render_pass("agui_drawable_pass")
             .with_pipeline(&self.pipeline)
             .with_depth(ctx.depth_buffer.attach_depth())
             .begin();
@@ -241,7 +180,7 @@ impl WidgetRenderPass for QuadRenderPass {
         r.set_bind_group(0, &self.bind_group, &[]);
 
         for widget_buffer in self.widgets.values() {
-            r.set_vertex_buffer(0, widget_buffer.quad_data.slice(..))
+            r.set_vertex_buffer(0, widget_buffer.drawable_data.slice(..))
                 .set_vertex_buffer(1, widget_buffer.vertex_data.slice(..))
                 .set_index_buffer(widget_buffer.index_data.slice(..))
                 .draw_indexed(0..widget_buffer.count, 0, 0..1);

@@ -5,7 +5,7 @@ use lyon::{
 };
 
 #[derive(Debug)]
-pub enum ClippingMask {
+pub enum Shape {
     Rect,
 
     RoundedRect {
@@ -20,13 +20,13 @@ pub enum ClippingMask {
     Path(Path),
 }
 
-impl Default for ClippingMask {
+impl Default for Shape {
     fn default() -> Self {
         Self::Rect
     }
 }
 
-impl ClippingMask {
+impl Shape {
     #[must_use]
     pub fn build_path(&self, rect: &super::Rect) -> Path {
         match self {
@@ -85,21 +85,4 @@ impl ClippingMask {
             Self::Path(path) => path.clone(),
         }
     }
-
-    pub fn intersection(path1: &Path, path2: &Path) -> Option<Path> {
-        None
-    }
-
-    // #[must_use]
-    // pub fn difference(&self, mask: &Self) -> Option<Self> {
-    //     if let Some(poly) = MultiPolygon(vec![self.build_polygon()])
-    //         .difference(&mask.build_polygon(), 1.0)
-    //         .0
-    //         .first()
-    //     {
-    //         Some(Self::Polygon(*poly))
-    //     } else {
-    //         None
-    //     }
-    // }
 }

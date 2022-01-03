@@ -1,10 +1,14 @@
-use std::{any::TypeId, collections::BTreeMap, io, mem};
+use std::{
+    any::TypeId,
+    collections::{BTreeMap, HashMap},
+    io, mem,
+};
 
 use agpu::{
     winit::winit::event::{
         ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
     },
-    DepthAttachmentBuild, Event, Frame, GpuProgram,
+    Buffer, DepthAttachmentBuild, Event, Frame, GpuProgram, RenderPipeline,
 };
 
 use agui::{
@@ -22,18 +26,27 @@ use agui::{
     },
     WidgetManager,
 };
-use render::bounding::BoundingRenderPass;
+use render::{bounding::BoundingRenderPass, clipping::ClippingRenderPass};
 
 pub mod render;
 
-use self::render::{quad::QuadRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass};
+use self::render::{drawable::DrawableRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass};
 
-const Z_MAX: usize = 10_000_000;
+const Z_MAX: usize = u16::MAX as usize;
+
+struct ClippingBuffer {
+    vertex_data: Buffer,
+    index_data: Buffer,
+    count: u32,
+}
 
 pub struct UI {
     manager: WidgetManager<'static>,
     events: Vec<WidgetEvent>,
 
+    pipeline: RenderPipeline,
+
+    clipping_pass: ClippingRenderPass,
     text_pass: TextRenderPass,
     render_passes: BTreeMap<TypeId, Box<dyn WidgetRenderPass>>,
     render_pass_order: Vec<TypeId>,
@@ -56,6 +69,13 @@ impl UI {
             manager,
             events: Vec::default(),
 
+            pipeline: program
+                .gpu
+                .new_pipeline("agui clear pipeline")
+                .with_depth()
+                .create(),
+
+            clipping_pass: ClippingRenderPass::new(program, &ctx),
             text_pass: TextRenderPass::new(program, &ctx),
             render_passes: BTreeMap::default(),
             render_pass_order: Vec::default(),
@@ -76,10 +96,10 @@ impl UI {
     pub fn with_default(program: &GpuProgram) -> Self {
         let ui = Self::new(program);
 
-        let quad_pass = QuadRenderPass::new(program, &ui.ctx);
+        let drawable_pass = DrawableRenderPass::new(program, &ui.ctx);
         let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
-        ui.add_pass(quad_pass)//.add_pass(bounding_pass)
+        ui.add_pass(drawable_pass) //.add_pass(bounding_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
@@ -167,6 +187,9 @@ impl UI {
             for event in self.events.drain(..) {
                 match event {
                     WidgetEvent::Spawned { type_id, widget_id } => {
+                        self.clipping_pass
+                            .added(&self.ctx, &self.manager, &type_id, &widget_id);
+
                         self.text_pass
                             .added(&self.ctx, &self.manager, &type_id, &widget_id);
 
@@ -178,24 +201,35 @@ impl UI {
                     WidgetEvent::Layout {
                         type_id,
                         widget_id,
-                        z,
+                        layer,
                     } => {
-                        let z = (Z_MAX - z) as f32 / Z_MAX as f32;
+                        let depth = (Z_MAX - layer) as f32 / Z_MAX as f32;
+
+                        self.clipping_pass.layout(
+                            &self.ctx,
+                            &self.manager,
+                            &type_id,
+                            &widget_id,
+                            depth,
+                        );
 
                         self.text_pass.layout(
                             &self.ctx,
                             &self.manager,
                             &type_id,
                             &widget_id,
-                            z,
+                            depth,
                         );
 
                         for pass in self.render_passes.values_mut() {
-                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, z);
+                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, depth);
                         }
                     }
 
                     WidgetEvent::Destroyed { type_id, widget_id } => {
+                        self.clipping_pass
+                            .removed(&self.ctx, &self.manager, &type_id, &widget_id);
+
                         self.text_pass
                             .removed(&self.ctx, &self.manager, &type_id, &widget_id);
 
@@ -210,14 +244,16 @@ impl UI {
 
             self.ctx.update();
 
+            self.clipping_pass.update(&self.ctx);
+
+            self.text_pass.update(&self.ctx);
+
             for pass_type_id in &self.render_pass_order {
                 self.render_passes
                     .get_mut(pass_type_id)
                     .expect("render pass does not exist")
                     .update(&self.ctx);
             }
-
-            self.text_pass.update(&self.ctx);
 
             true
         } else {
@@ -226,37 +262,35 @@ impl UI {
     }
 
     pub fn render(&self, mut frame: Frame) {
+        // We complete rendering by first clearing the screen, then creating the depth buffer based on
+        // clipping masks, before finally rendering the actual widgets through the added render passes.
+        frame
+            .render_pass_cleared("agui depth pass", 0x101010FF)
+            .with_pipeline(&self.pipeline)
+            .with_depth(self.ctx.depth_buffer.attach_depth().clear_depth())
+            .begin();
+
+        self.clipping_pass.render(&self.ctx, &mut frame);
+
+        self.text_pass.render(&self.ctx, &mut frame);
+
         for pass_type_id in &self.render_pass_order {
             self.render_passes
                 .get(pass_type_id)
                 .expect("render pass does not exist")
                 .render(&self.ctx, &mut frame);
         }
-
-        self.text_pass.render(&self.ctx, &mut frame);
     }
 
     pub fn run(mut self, program: GpuProgram) -> Result<(), agpu::BoxError> {
-        let pipeline = program
-            .gpu
-            .new_pipeline("agui render pipeline")
-            .with_depth()
-            .create();
-
         program.run(move |event, program, _, _| {
             if self.update() {
                 // self.manager.print_tree();
 
                 program.viewport.request_redraw();
             }
-            
-            if let Event::RedrawFrame(mut frame) = event {
-                frame
-                    .render_pass_cleared("agui clear", 0x101010FF)
-                    .with_pipeline(&pipeline)
-                    .with_depth(self.ctx.depth_buffer.attach_depth().clear_depth())
-                    .begin();
 
+            if let Event::RedrawFrame(mut frame) = event {
                 self.render(frame);
             } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
                 match event {

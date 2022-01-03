@@ -3,13 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use lyon::path::Path;
 use morphorm::{Cache, GeometryChanged};
 
-use crate::{
-    unit::{Bounds, Rect, Size},
-    Ref,
-};
+use crate::unit::{Bounds, Rect, Size};
 
 const MARGIN_OF_ERROR: f32 = 0.5;
 
@@ -42,8 +38,6 @@ pub struct LayoutCache<K> {
 
     last_rect: HashMap<K, Rect>,
     rect: HashMap<K, Rect>,
-
-    clipping: HashMap<K, Ref<Path>>,
 }
 
 impl<K> LayoutCache<K>
@@ -122,17 +116,6 @@ where
         self.geometry_changed.remove(node);
 
         self.rect.remove(node);
-        self.clipping.remove(node);
-    }
-
-    pub fn set_clipping(&mut self, node: K, value: Ref<Path>) {
-        self.clipping.insert(node, value);
-    }
-
-    pub fn get_clipping(&self, node: &K) -> Ref<Path> {
-        self.clipping
-            .get(node)
-            .map_or(Ref::None, |polygon| Ref::clone(polygon))
     }
 }
 

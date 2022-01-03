@@ -119,6 +119,8 @@ pub(crate) fn parse_functional_widget(args: TokenStream2, item: TokenStream2) ->
     #[cfg(not(feature = "internal"))]
     let agui_core = quote! { agui };
 
+    let type_name = ident.to_string();
+
     parse_quote! {
         #item
 
@@ -133,7 +135,7 @@ pub(crate) fn parse_functional_widget(args: TokenStream2, item: TokenStream2) ->
             }
 
             fn get_type_name(&self) -> &'static str {
-                std::any::type_name::<Self>()
+                #type_name
             }
         }
 

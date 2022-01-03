@@ -1,12 +1,12 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Callback, ClippingMask, Color, Sizing},
+    unit::{Callback, Color, Shape, Sizing},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::{build, Widget};
-use agui_primitives::{Quad, QuadStyle};
+use agui_primitives::{Drawable, DrawableStyle};
 
 use crate::state::{
     hovering::Hovering,
@@ -16,9 +16,9 @@ use crate::state::{
 
 #[derive(Clone)]
 pub struct ButtonStyle {
-    pub normal: QuadStyle,
-    pub hover: QuadStyle,
-    pub pressed: QuadStyle,
+    pub normal: DrawableStyle,
+    pub hover: DrawableStyle,
+    pub pressed: DrawableStyle,
 }
 
 impl Style for ButtonStyle {}
@@ -26,15 +26,15 @@ impl Style for ButtonStyle {}
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
-            normal: QuadStyle {
+            normal: DrawableStyle {
                 color: Color::White,
             },
 
-            hover: QuadStyle {
+            hover: DrawableStyle {
                 color: Color::LightGray,
             },
 
-            pressed: QuadStyle {
+            pressed: DrawableStyle {
                 color: Color::DarkGray,
             },
         }
@@ -62,7 +62,7 @@ pub struct Button {
 impl WidgetBuilder for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_clipping(
-            ClippingMask::RoundedRect {
+            Shape::RoundedRect {
                 top_left: 4.0,
                 top_right: 4.0,
                 bottom_right: 4.0,
@@ -107,8 +107,8 @@ impl WidgetBuilder for Button {
         let style = Theme::resolve(ctx, &self.style);
 
         build! {
-            Quad {
-                // We need to pass through sizing parameters so that the Quad can react to child size if necessary,
+            Drawable {
+                // We need to pass through sizing parameters so that the Drawable can react to child size if necessary,
                 // but also fill the Button if the button itself is set to a non-Auto size.
                 layout: Layout {
                     sizing: self.layout.try_get().map_or(Sizing::default(), |layout| layout.sizing)

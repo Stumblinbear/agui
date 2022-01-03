@@ -5,14 +5,13 @@ use std::{
 };
 
 use generational_arena::Arena;
-use lyon::path::Path;
 use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
     context::{tree::Tree, ListenerId, WidgetContext},
     event::WidgetEvent,
-    unit::{ClippingMask, Key, Rect, Units},
+    unit::{Key, Rect, Shape, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetRef},
     Ref,
 };
@@ -149,8 +148,8 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Get the visual clipping `Path` for a widget.
-    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Path> {
-        self.context.cache.get_clipping(widget_id)
+    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Shape> {
+        self.context.get_clipping(widget_id)
     }
 
     /// Get the widget build context.
@@ -317,64 +316,18 @@ impl<'ui> WidgetManager<'ui> {
             }
         }
 
-        // Recalculate clippings
-        for widget_id in &changed {
-            let child_rect = self
-                .get_rect(widget_id)
-                .expect("widgets without a size cannot have a clipping mask");
-
-            let child_path = self
-                .context
-                .get_clipping(widget_id)
-                .try_get()
-                .map(|path| path.build_path(child_rect));
-
-            self.context.cache.set_clipping(
-                *widget_id,
-                match self
-                    .get_tree()
-                    .get(widget_id)
-                    .expect("broken tree")
-                    .parent
-                    .map(|parent_id| self.context.cache.get_clipping(&parent_id))
-                    .filter(Ref::is_valid)
-                {
-                    Some(parent_path) => {
-                        match child_path {
-                            // If the node has a mask, calculate the difference of the paths
-                            Some(child_path) => {
-                                match ClippingMask::intersection(
-                                    &child_path,
-                                    parent_path.get().as_ref(),
-                                ) {
-                                    Some(path) => Ref::new(path),
-                                    None => Ref::None,
-                                }
-                            }
-
-                            // If the node has a no path, clone the parent's
-                            None => Ref::clone(&parent_path),
-                        }
-                    }
-
-                    // Use the path without changes if a parent clipping doesn't exist
-                    None => child_path.map_or(Ref::None, Ref::new),
-                },
-            );
-        }
-
         events.extend(
             changed
                 .into_iter()
                 .filter(|widget_id| self.contains(widget_id))
                 .map(|widget_id| {
                     let type_id = self.get(&widget_id).get_type_id();
-                    let z = widget_id.depth();
+                    let layer = self.get_node(&widget_id).layer;
 
                     WidgetEvent::Layout {
                         type_id,
                         widget_id,
-                        z,
+                        layer,
                     }
                 }),
         );
@@ -513,14 +466,12 @@ impl<'ui> WidgetManager<'ui> {
 
         let type_id = widget.get_type_id();
 
-        let widget_id = WidgetId::from(
-            self.widgets.insert(WidgetNode {
-                widget,
-                layout_type: Ref::None,
-                layout: Ref::None,
-            }),
-            parent_id.map_or(0, |node| node.depth() + 1),
-        );
+        let widget_id = WidgetId::from(self.widgets.insert(WidgetNode {
+            widget,
+            layer: 0,
+            layout_type: Ref::None,
+            layout: Ref::None,
+        }));
 
         self.context.tree.add(parent_id, widget_id);
 
@@ -535,6 +486,21 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     fn process_rebuild(&mut self, widget_id: WidgetId) {
+        // Grab the parent's depth
+        let parent_layer = {
+            let parent = self
+                .context
+                .tree
+                .get(&widget_id)
+                .expect("broken tree")
+                .parent;
+
+            match parent {
+                Some(parent_id) => self.get_node(&parent_id).layer,
+                None => 0,
+            }
+        };
+
         let node = self.widgets.get_mut(widget_id.id()).unwrap();
 
         // Queue the children for removal
@@ -570,6 +536,14 @@ impl<'ui> WidgetManager<'ui> {
             }
             Err(err) => panic!("build failed: {}", err),
         };
+
+        node.layer = parent_layer;
+
+        // If this widget has clipping set, increment its depth by one
+        if self.context.get_clipping(&widget_id).is_valid() {
+            // TODO: maybe use an arena to keep track of used layers?
+            node.layer += 1;
+        }
 
         // Store the node's layout so morphorm can access it
         node.layout_type = self.context.get_layout_type(&widget_id);

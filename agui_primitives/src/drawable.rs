@@ -1,43 +1,41 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::Color,
+    unit::{Color, Shape},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::Widget;
 
 #[derive(Clone, Default)]
-pub struct QuadStyle {
+pub struct DrawableStyle {
     pub color: Color,
 }
 
 #[derive(Widget)]
-pub struct Quad {
+pub struct Drawable {
     pub layout: Ref<Layout>,
-    pub style: Option<QuadStyle>,
 
-    pub radius: f32,
-    pub clip: bool,
+    pub shape: Shape,
+    pub style: Option<DrawableStyle>,
 
     pub child: WidgetRef,
 }
 
-impl Default for Quad {
+impl Default for Drawable {
     fn default() -> Self {
         Self {
             layout: Ref::default(),
-            style: Option::default(),
 
-            radius: 0.0,
-            clip: true,
+            shape: Shape::default(),
+            style: Option::default(),
 
             child: WidgetRef::default(),
         }
     }
 }
 
-impl WidgetBuilder for Quad {
+impl WidgetBuilder for Drawable {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 

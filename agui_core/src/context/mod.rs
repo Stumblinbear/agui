@@ -24,7 +24,7 @@ use self::{
 use crate::{
     layout::Layout,
     plugin::WidgetPlugin,
-    unit::{ClippingMask, Key, LayoutType, Rect},
+    unit::{Shape, Key, LayoutType, Rect},
     widget::{WidgetId, WidgetRef},
     Ref,
 };
@@ -64,7 +64,7 @@ pub struct WidgetContext<'ui> {
 
     layouts: Mutex<HashMap<WidgetId, Ref<Layout>>>,
     layout_types: Mutex<HashMap<WidgetId, Ref<LayoutType>>>,
-    clipping: Mutex<HashMap<WidgetId, Ref<ClippingMask>>>,
+    clipping: Mutex<HashMap<WidgetId, Ref<Shape>>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
@@ -355,7 +355,7 @@ impl<'ui> WidgetContext<'ui> {
     /// Set the clipping mask of the widget.
     ///
     /// Used in a `build()` method to set the clipping mask of the widget being built.
-    pub fn set_clipping(&self, clipping: Ref<ClippingMask>) {
+    pub fn set_clipping(&self, clipping: Ref<Shape>) {
         let current_id = self
             .current_id
             .lock()
@@ -375,7 +375,7 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch the clipping mask of a widget.
-    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<ClippingMask> {
+    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Shape> {
         self.clipping
             .lock()
             .get(widget_id)

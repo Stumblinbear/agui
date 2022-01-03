@@ -25,6 +25,8 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
     let ident = args.ident;
     let (impl_generics, ty_generics, where_clause) = args.generics.split_for_impl();
 
+    let type_name = ident.to_string();
+
     let widget_type_impl = {
         quote! {
             impl #impl_generics #agui_core::widget::WidgetType for #ident #ty_generics #where_clause {
@@ -33,7 +35,7 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
                 }
                 
                 fn get_type_name(&self) -> &'static str {
-                    std::any::type_name::<Self>()
+                    #type_name
                 }
             }
         }

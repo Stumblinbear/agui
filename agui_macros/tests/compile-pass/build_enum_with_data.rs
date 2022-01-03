@@ -1,11 +1,11 @@
 use agui_core::{unit::Color, widget::WidgetRef};
 use agui_macros::build;
-use agui_primitives::{Quad, QuadStyle};
+use agui_primitives::{Drawable, DrawableStyle};
 
 fn main() {
     let _widget: WidgetRef = build! {
-        Quad {
-            style: QuadStyle {
+        Drawable {
+            style: DrawableStyle {
                 color: Color::Rgb(1.0, 1.0, 1.0),
             },
         }

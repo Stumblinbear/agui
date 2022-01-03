@@ -9,7 +9,7 @@ use agui::{
     widget::{BuildResult, WidgetRef},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, FontId, Fonts, Padding, Quad, QuadStyle, Spacing, Text},
+        primitives::{Builder, Column, FontId, Fonts, Padding, Drawable, DrawableStyle, Spacing, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -104,15 +104,15 @@ fn example_main(ctx: &WidgetContext, color: Color, child: WidgetRef) -> BuildRes
                         let mut theme = Theme::new();
 
                         theme.set(ButtonStyle {
-                            normal: QuadStyle {
+                            normal: DrawableStyle {
                                 color: Color::Red,
                             },
 
-                            hover: QuadStyle {
+                            hover: DrawableStyle {
                                 color: Color::Green,
                             },
 
-                            pressed: QuadStyle {
+                            pressed: DrawableStyle {
                                 color: Color::Blue,
                             },
                         });

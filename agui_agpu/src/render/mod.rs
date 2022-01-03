@@ -4,8 +4,9 @@ use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Texture};
 use agui::{context::Notify, widget::WidgetId, widgets::AppSettings, WidgetManager};
 use downcast_rs::{impl_downcast, Downcast};
 
+pub mod clipping;
 pub mod bounding;
-pub mod quad;
+pub mod drawable;
 pub mod text;
 
 pub struct RenderContext {
@@ -78,7 +79,7 @@ pub trait WidgetRenderPass: Downcast {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        z: f32,
+        depth: f32,
     );
 
     fn removed(
