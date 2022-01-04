@@ -62,6 +62,9 @@ Currently, widgets are created using a `Widget` derive macro, and by implementin
 pub struct MyWidget {
     // We can define parameters, here.
     pub layout: Ref<Layout>,
+
+    // WidgetRef is the convention for passing children. Vec<WidgetRef> should be used for passing variable amounts.
+    pub child: WidgetRef,
 }
 
 impl WidgetBuilder for MyWidget {
@@ -93,7 +96,7 @@ fn build(&self, ctx: &WidgetContext) -> BuildResult {
             layout: Layout::default(),
             color: Color::default(),
             child: Text {
-                text: String::from("A Button")
+                text: "A Button"
             }
         }
     )
@@ -107,7 +110,7 @@ fn build(&self, ctx: &WidgetContext) -> BuildResult {
     build!{
         Button {
             child: Text {
-                text: String::from("A Button")
+                text: "A Button"
             }
         }
     }
@@ -116,7 +119,32 @@ fn build(&self, ctx: &WidgetContext) -> BuildResult {
 
 A more complex widget implementation (featuring global state and computed values) can be seen in [the Button widget](agui_widgets/src/button.rs).
 
-**Functional Widgets are coming soon, which will make creating them even easier.**
+## Functional widgets
+
+Functional widgets are an additional quality-of-life magic way of creating new widgets. Since widgets are *generally* just fields with a build function, we can usually use a single function which represents the `build` function.
+
+```rust
+#[functional_widget]
+fn example_widget(ctx: &WidgetContext, layout: Ref<Layout>, child: WidgetRef) -> BuildResult {
+    ctx.set_layout(layout);
+    
+    build!{
+        Button {
+            child: Text {
+                text: "A Button"
+            }
+        }
+    }
+}
+```
+
+The `ctx: &WidgetContext` parameter is required, and any following arguments are added as a struct field.
+
+### How does it work?
+
+There is a bit of magic going on, here. Put simply, any field used here must implement `Default + Clone` in some form or another, so that the widget may call the `example_widget` function without issue. Secondly, the generated widget struct will be named by converting `snake_case` to `PascalCase`, in this case: `ExampleWidget`.
+
+Note that the necessity of `.clone()` will make this method of creating widgets slightly less efficient in some cases.
 
 # 🤝 Contributing
 
