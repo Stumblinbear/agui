@@ -45,7 +45,7 @@ Agui is available on [crates.io](https://crates.io/crates/agui), Rust's official
 
 ```toml
 [dependencies]
-agui = "0.1" # ensure this is the latest version
+agui = "0.3" # ensure this is the latest version
 ```
 
 # 🚀 Usage
