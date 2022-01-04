@@ -8,4 +8,4 @@ Agui Primitives hold basic widgets and core renderables for [`agui`](https://cra
 
 ### Why are none of these using `#[functional_widget]`?
 
-It is a design decision to keep `Agui Primitives` lean and clean. While I find this macro useful, I don't believe it belongs in this crate as its usage and generated code may change in the future. This crate should be stable and resistant to change, so that any render integration drawing its primitives will have long-lasting compatibility.
+It is a design decision to keep `agui_primitives` lean and clean. While I find this macro useful, I don't believe it belongs in this crate as its usage and generated code may change in the future. This crate should be stable and resistant to change, so that any render integration drawing its primitives will have long-lasting compatibility.
