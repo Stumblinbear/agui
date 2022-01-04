@@ -9,7 +9,7 @@
         Report a Bug
     </a>
     ·
-    <a href="https://github.com/stumblinbear/agui/issues/new?assignees=&labels=enhancement&template=FEATURE_REQUEST.md&title=feat%3A+">
+    <a href="https://github.com/stumblinbear/agui/discussions">
         Request a Feature
     </a>
     .
