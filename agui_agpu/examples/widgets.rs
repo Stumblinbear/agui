@@ -9,9 +9,7 @@ use agui::{
     widget::{BuildResult, WidgetRef},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{
-            Builder, Column, Drawable, DrawableStyle, FontId, Fonts, Padding, Spacing, Text,
-        },
+        primitives::{Builder, Column, DrawableStyle, FontId, Padding, Spacing, Text},
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -20,7 +18,6 @@ use agui::{
         },
         App, Button, ButtonStyle,
     },
-    Ref,
 };
 use agui_agpu::UI;
 
@@ -31,6 +28,7 @@ fn main() -> Result<(), agpu::BoxError> {
                 | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                 | Features::VERTEX_WRITABLE_STORAGE,
         )
+        // .with_framerate(f32::MAX)
         .build()?;
 
     let mut ui = UI::with_default(&program);

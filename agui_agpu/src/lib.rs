@@ -270,7 +270,10 @@ impl UI {
             if self.update() {
                 // self.manager.print_tree();
 
-                program.viewport.request_redraw();
+                // If the program is not already demanding a specific framerate, request a redraw
+                if program.time.is_none() {
+                    program.viewport.request_redraw();
+                }
             }
 
             if let Event::RedrawFrame(frame) = event {
