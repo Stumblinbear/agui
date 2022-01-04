@@ -163,7 +163,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
 
 fn print_node(
     depth: usize,
-    layer: usize,
+    layer: u32,
     widget_id: Option<&WidgetId>,
     widget: &Rc<dyn Widget>,
     color: &'static str,

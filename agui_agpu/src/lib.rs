@@ -207,17 +207,11 @@ impl UI {
                             &self.manager,
                             &type_id,
                             &widget_id,
-                            layer as u32,
+                            layer,
                         );
 
                         for pass in self.render_passes.values_mut() {
-                            pass.layout(
-                                &self.ctx,
-                                &self.manager,
-                                &type_id,
-                                &widget_id,
-                                layer as u32,
-                            );
+                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, layer);
                         }
                     }
 

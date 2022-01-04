@@ -541,7 +541,6 @@ impl<'ui> WidgetManager<'ui> {
 
         // If this widget has clipping set, increment its depth by one
         if self.context.get_clipping(&widget_id).is_valid() {
-            // TODO: maybe use an arena to keep track of used layers?
             node.layer += 1;
         }
 

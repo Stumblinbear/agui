@@ -16,7 +16,7 @@ pub enum WidgetEvent {
     Layout {
         type_id: TypeId,
         widget_id: WidgetId,
-        layer: usize,
+        layer: u32,
     },
 
     /// A widget has been destroyed.

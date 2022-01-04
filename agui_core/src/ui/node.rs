@@ -10,7 +10,7 @@ use crate::{
 /// Holds information about a widget in the UI tree.
 pub struct WidgetNode {
     pub widget: WidgetRef,
-    pub layer: usize,
+    pub layer: u32,
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
 }
