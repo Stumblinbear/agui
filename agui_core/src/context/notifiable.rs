@@ -62,6 +62,7 @@ impl NotifiableMap {
             .map_or(false, |state| state.value.is_some())
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn set<V>(&self, value: V)
     where
         V: Value,
@@ -95,6 +96,7 @@ impl NotifiableMap {
         None
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn add_listener<V>(&self, listener_id: ListenerId)
     where
         V: Value,

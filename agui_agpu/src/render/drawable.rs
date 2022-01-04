@@ -1,12 +1,7 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{
-    unit::{Color, Rect},
-    widget::WidgetId,
-    widgets::primitives::Drawable,
-    WidgetManager,
-};
+use agui::{unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
@@ -49,7 +44,7 @@ impl DrawableRenderPass {
 
         let pipeline = program
             .gpu
-            .new_pipeline("agui_drawable_pipeline")
+            .new_pipeline("agui drawable pipeline")
             .with_vertex(include_bytes!("shader/quad.vert.spv"))
             .with_fragment(include_bytes!("shader/quad.frag.spv"))
             .with_vertex_layouts(&[
@@ -128,7 +123,7 @@ impl WidgetRenderPass for DrawableRenderPass {
 
         let drawable_data = ctx
             .gpu
-            .new_buffer("agui_instance_buffer")
+            .new_buffer("agui drawable instance buffer")
             .as_vertex_buffer()
             .create(bytemuck::bytes_of(&DrawableData {
                 layer,
@@ -141,13 +136,13 @@ impl WidgetRenderPass for DrawableRenderPass {
 
         let vertex_data = ctx
             .gpu
-            .new_buffer("agui_vertex_buffer")
+            .new_buffer("agui drawable vertex buffer")
             .as_vertex_buffer()
             .create(&geometry.vertices);
 
         let index_data = ctx
             .gpu
-            .new_buffer("agui_index_buffer")
+            .new_buffer("agui drawable index buffer")
             .as_index_buffer()
             .create(&geometry.indices);
 
@@ -192,8 +187,12 @@ impl WidgetRenderPass for DrawableRenderPass {
     }
 
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
+        if self.widgets.is_empty() {
+            return;
+        }
+
         let mut r = frame
-            .render_pass("agui_drawable_pass")
+            .render_pass("agui drawable pass")
             .with_pipeline(&self.pipeline)
             .begin();
 

@@ -80,7 +80,7 @@ impl Visit<'_> for FunctionVisitor {
     }
 }
 
-pub(crate) fn parse_functional_widget(args: TokenStream2, item: TokenStream2) -> TokenStream2 {
+pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -> TokenStream2 {
     let item = match parse2(item) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error(),

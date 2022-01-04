@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat, Sampler};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Sampler, Texture, TextureFormat};
 use agui::{
     widget::WidgetId,
     widgets::primitives::{FontArc, Text},
@@ -32,7 +32,7 @@ pub struct TextRenderPass {
 
     draw_cache: DrawCache,
     fonts: Vec<FontArc>,
-    
+
     widgets: HashMap<WidgetId, Buffer>,
 }
 
@@ -40,12 +40,12 @@ impl TextRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
         let texture = program
             .gpu
-            .new_texture("agui_text_texture")
+            .new_texture("agui font texture")
             .with_format(TextureFormat::R8Unorm)
             .allow_binding()
             .create_empty(INITIAL_TEXTURE_SIZE);
 
-        let sampler = program.gpu.new_sampler("agui_text_sampler").create();
+        let sampler = program.gpu.new_sampler("agui font texture sampler").create();
 
         let bindings = &[
             ctx.bind_app_settings(),
@@ -58,7 +58,7 @@ impl TextRenderPass {
 
         let pipeline = program
             .gpu
-            .new_pipeline("agui_text_pipeline")
+            .new_pipeline("agui text pipeline")
             .with_vertex(include_bytes!("shader/text.vert.spv"))
             .with_fragment(include_bytes!("shader/text.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
@@ -174,7 +174,7 @@ impl WidgetRenderPass for TextRenderPass {
             if !buffer.is_empty() {
                 let buffer = ctx
                     .gpu
-                    .new_buffer("agui_text_buffer")
+                    .new_buffer("agui text buffer")
                     .as_vertex_buffer()
                     .create(bytemuck::cast_slice::<_, u8>(buffer.as_slice()));
 
@@ -213,8 +213,12 @@ impl WidgetRenderPass for TextRenderPass {
     }
 
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
+        if self.widgets.is_empty() {
+            return;
+        }
+
         let mut r = frame
-            .render_pass("agui_text_pass")
+            .render_pass("agui text pass")
             .with_pipeline(&self.pipeline)
             .begin();
 

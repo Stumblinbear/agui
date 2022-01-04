@@ -22,7 +22,7 @@ use agui::{
     },
     WidgetManager,
 };
-use render::{bounding::BoundingRenderPass, clipping::ClippingRenderPass};
+use render::clipping::ClippingRenderPass;
 
 pub mod render;
 
@@ -70,6 +70,10 @@ impl UI {
         };
 
         program.on_resize(move |_, w, h| {
+            if w == 0 && h == 0 {
+                return;
+            }
+
             let mut app_settings = app_settings.write();
 
             app_settings.width = w as f32;
@@ -84,9 +88,8 @@ impl UI {
 
         let drawable_pass = DrawableRenderPass::new(program, &ui.ctx);
         let text_pass = TextRenderPass::new(program, &ui.ctx);
-        // let bounding_pass = BoundingRenderPass::new(program, &ui.ctx);
 
-        ui.add_pass(drawable_pass).add_pass(text_pass) //.add_pass(bounding_pass)
+        ui.add_pass(drawable_pass).add_pass(text_pass)
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
@@ -248,12 +251,10 @@ impl UI {
     pub fn render(&self, mut frame: Frame) {
         // We complete rendering by first clearing the screen, then creating the depth buffer based on
         // clipping masks, before finally rendering the actual widgets through the added render passes.
-        {
-            frame
-                .render_pass_cleared("agui clear pass", 0x101010FF)
-                .with_pipeline(&self.pipeline)
-                .begin();
-        }
+        frame
+            .render_pass_cleared("agui clear pass", 0x101010FF)
+            .with_pipeline(&self.pipeline)
+            .begin();
 
         self.clipping_pass.render(&self.ctx, &mut frame);
 
@@ -266,6 +267,8 @@ impl UI {
     }
 
     pub fn run(mut self, program: GpuProgram) -> Result<(), agpu::BoxError> {
+        let mut i = 0;
+
         program.run(move |event, program, _, _| {
             if self.update() {
                 // self.manager.print_tree();
@@ -277,7 +280,25 @@ impl UI {
             }
 
             if let Event::RedrawFrame(frame) = event {
-                self.render(frame);
+                i += 1;
+
+                if i % 100 == 0 {
+                    let now = std::time::Instant::now();
+
+                    self.render(frame);
+
+                    let then = std::time::Instant::now();
+
+                    let frame_time = (then - now).as_secs_f64();
+
+                    program.viewport.window.set_title(&format!(
+                        "fps: {:.2} frame_time: {:.2}",
+                        1.0 / frame_time,
+                        frame_time * 1000.0
+                    ));
+                } else {
+                    self.render(frame);
+                }
             } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
                 match event {
                     WindowEvent::Resized(size) => {

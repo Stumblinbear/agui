@@ -34,7 +34,7 @@ impl BoundingRenderPass {
 
         let pipeline = program
             .gpu
-            .new_pipeline("agui_bounding_pipeline")
+            .new_pipeline("agui bounding pipeline")
             .with_vertex(include_bytes!("shader/bounding.vert.spv"))
             .with_fragment(include_bytes!("shader/bounding.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
@@ -86,7 +86,7 @@ impl WidgetRenderPass for BoundingRenderPass {
 
         let buffer = ctx
             .gpu
-            .new_buffer("agui_bounding_buffer")
+            .new_buffer("agui bounding buffer")
             .as_vertex_buffer()
             .create(bytemuck::bytes_of(&BoundingData {
                 rect: [
@@ -138,7 +138,7 @@ impl WidgetRenderPass for BoundingRenderPass {
 
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
-            .render_pass("agui_bounding_pass")
+            .render_pass("agui bounding pass")
             .with_pipeline(&self.pipeline)
             .begin();
 

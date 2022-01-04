@@ -137,19 +137,19 @@ impl WidgetRenderPass for ClippingRenderPass {
 
             let clipping_data = ctx
                 .gpu
-                .new_buffer("agui_instance_buffer")
+                .new_buffer("agui clipping instance buffer")
                 .as_vertex_buffer()
                 .create(bytemuck::bytes_of(&ClippingData { layer }));
 
             let vertex_data = ctx
                 .gpu
-                .new_buffer("agui_vertex_buffer")
+                .new_buffer("agui clipping vertex buffer")
                 .as_vertex_buffer()
                 .create(&geometry.vertices);
 
             let index_data = ctx
                 .gpu
-                .new_buffer("agui_index_buffer")
+                .new_buffer("agui clipping index buffer")
                 .as_index_buffer()
                 .create(&geometry.indices);
 
@@ -188,7 +188,7 @@ impl WidgetRenderPass for ClippingRenderPass {
     fn update(&mut self, ctx: &RenderContext) {
         if ctx.size != self.last_size {
             self.last_size = ctx.size;
-            
+
             self.render_texture.resize(ctx.size);
 
             let bindings = &[
@@ -201,6 +201,10 @@ impl WidgetRenderPass for ClippingRenderPass {
     }
 
     fn render(&self, ctx: &RenderContext, _frame: &mut Frame) {
+        if self.widgets.is_empty() {
+            return;
+        }
+
         let mut encoder = ctx
             .gpu
             .create_command_encoder("agui clipping command encoder");

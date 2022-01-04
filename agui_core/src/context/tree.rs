@@ -48,6 +48,9 @@ where
         node_id
     }
 
+    /// # Panics
+    ///
+    /// Will panic if the node you're parenting to does not exist in the tree.
     pub fn set_node(&mut self, parent_id: Option<K>, node_id: K, mut node: TreeNode<K>) {
         let mut new_depth = 0;
 
@@ -174,6 +177,7 @@ where
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn has_child(&self, node_id: &K, child_id: &K) -> bool {
         let node = self.get(node_id);
         let child = self.get(child_id);
