@@ -1,7 +1,12 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, wgpu::CompareFunction};
-use agui::{unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
+use agui::{
+    unit::{Color, Rect},
+    widget::WidgetId,
+    widgets::primitives::Drawable,
+    WidgetManager,
+};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
@@ -11,7 +16,7 @@ use super::{RenderContext, WidgetRenderPass};
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
 struct DrawableData {
-    z: f32,
+    layer: u32,
     color: [f32; 4],
 }
 
@@ -24,8 +29,9 @@ struct WidgetBuffer {
 }
 
 pub struct DrawableRenderPass {
-    bind_group: BindGroup,
+    last_size: (u32, u32),
 
+    bind_group: BindGroup,
     pipeline: RenderPipeline,
 
     widgets: HashMap<WidgetId, WidgetBuffer>,
@@ -33,7 +39,11 @@ pub struct DrawableRenderPass {
 
 impl DrawableRenderPass {
     pub fn new(program: &GpuProgram, ctx: &RenderContext) -> Self {
-        let bindings = &[ctx.bind_app_settings()];
+        let bindings = &[
+            ctx.bind_app_settings(),
+            ctx.layer_mask.bind_storage_texture(),
+            ctx.layer_mask_sampler.bind(),
+        ];
 
         let bind_group = program.gpu.create_bind_group(bindings);
 
@@ -46,7 +56,7 @@ impl DrawableRenderPass {
                 agpu::wgpu::VertexBufferLayout {
                     array_stride: mem::size_of::<DrawableData>() as u64,
                     step_mode: agpu::wgpu::VertexStepMode::Instance,
-                    attributes: &agpu::wgpu::vertex_attr_array![0 => Float32, 1 => Float32x4],
+                    attributes: &agpu::wgpu::vertex_attr_array![0 => Uint32, 1 => Float32x4],
                 },
                 agpu::wgpu::VertexBufferLayout {
                     array_stride: mem::size_of::<[f32; 2]>() as u64,
@@ -54,12 +64,12 @@ impl DrawableRenderPass {
                     attributes: &agpu::wgpu::vertex_attr_array![2 => Float32x2],
                 },
             ])
-            .with_depth()
-            .depth_compare(CompareFunction::Equal)
             .with_bind_groups(&[&bind_group.layout])
             .create();
 
         Self {
+            last_size: ctx.size,
+
             bind_group,
             pipeline,
 
@@ -84,7 +94,7 @@ impl WidgetRenderPass for DrawableRenderPass {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        depth: f32,
+        layer: u32,
     ) {
         if type_id != &TypeId::of::<Drawable>() {
             return;
@@ -121,7 +131,7 @@ impl WidgetRenderPass for DrawableRenderPass {
             .new_buffer("agui_instance_buffer")
             .as_vertex_buffer()
             .create(bytemuck::bytes_of(&DrawableData {
-                z: depth,
+                layer,
                 color: drawable
                     .style
                     .as_ref()
@@ -167,13 +177,24 @@ impl WidgetRenderPass for DrawableRenderPass {
         self.widgets.remove(widget_id);
     }
 
-    fn update(&mut self, _ctx: &RenderContext) {}
+    fn update(&mut self, ctx: &RenderContext) {
+        if ctx.size != self.last_size {
+            self.last_size = ctx.size;
 
-    fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
+            let bindings = &[
+                ctx.bind_app_settings(),
+                ctx.layer_mask.bind_storage_texture(),
+                ctx.layer_mask_sampler.bind(),
+            ];
+
+            self.bind_group = ctx.gpu.create_bind_group(bindings);
+        }
+    }
+
+    fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
             .render_pass("agui_drawable_pass")
             .with_pipeline(&self.pipeline)
-            .with_depth(ctx.depth_buffer.attach_depth())
             .begin();
 
         r.set_bind_group(0, &self.bind_group, &[]);

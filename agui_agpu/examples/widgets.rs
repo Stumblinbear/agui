@@ -9,7 +9,9 @@ use agui::{
     widget::{BuildResult, WidgetRef},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, FontId, Fonts, Padding, Drawable, DrawableStyle, Spacing, Text},
+        primitives::{
+            Builder, Column, Drawable, DrawableStyle, FontId, Fonts, Padding, Spacing, Text,
+        },
         state::{
             hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
@@ -24,7 +26,11 @@ use agui_agpu::UI;
 
 fn main() -> Result<(), agpu::BoxError> {
     let program = agpu::GpuProgram::builder("agui widgets")
-        .with_gpu_features(Features::POLYGON_MODE_LINE)
+        .with_gpu_features(
+            Features::POLYGON_MODE_LINE
+                | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                | Features::VERTEX_WRITABLE_STORAGE,
+        )
         .build()?;
 
     let mut ui = UI::with_default(&program);
@@ -52,10 +58,13 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn example_main(ctx: &WidgetContext, color: Color, child: WidgetRef) -> BuildResult {
-    ctx.set_layout(Layout {
-        sizing: Sizing::Fill,
-        ..Layout::default()
-    }.into());
+    ctx.set_layout(
+        Layout {
+            sizing: Sizing::Fill,
+            ..Layout::default()
+        }
+        .into(),
+    );
 
     let default_font = FontId(0);
 

@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap, mem};
 
-use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat, wgpu::CompareFunction};
+use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Texture, TextureFormat, Sampler};
 use agui::{
     widget::WidgetId,
     widgets::primitives::{FontArc, Text},
@@ -16,21 +16,23 @@ const INITIAL_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
 struct GlyphData {
     rect: [f32; 4],
-    z: f32,
+    layer: u32,
     uv: [f32; 4],
     color: [f32; 4],
 }
 
 pub struct TextRenderPass {
+    last_size: (u32, u32),
+
     bind_group: BindGroup,
     pipeline: RenderPipeline,
 
     texture: Texture<agpu::D2>,
+    sampler: Sampler,
 
     draw_cache: DrawCache,
-
     fonts: Vec<FontArc>,
-
+    
     widgets: HashMap<WidgetId, Buffer>,
 }
 
@@ -47,6 +49,7 @@ impl TextRenderPass {
 
         let bindings = &[
             ctx.bind_app_settings(),
+            ctx.layer_mask.bind_storage_texture(),
             texture.bind_texture(),
             sampler.bind(),
         ];
@@ -61,23 +64,23 @@ impl TextRenderPass {
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<GlyphData>() as u64,
                 step_mode: agpu::wgpu::VertexStepMode::Instance,
-                attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32, 2 => Float32x4, 3 => Float32x4],
+                attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x4, 1 => Uint32, 2 => Float32x4, 3 => Float32x4],
             }])
-            .with_depth()
-            .depth_compare(CompareFunction::Equal)
             .with_bind_groups(&[&bind_group.layout])
             .create();
 
         Self {
+            last_size: ctx.size,
+
             bind_group,
             pipeline,
 
             texture,
+            sampler,
 
             draw_cache: DrawCache::builder()
                 .dimensions(INITIAL_TEXTURE_SIZE.0, INITIAL_TEXTURE_SIZE.1)
                 .build(),
-
             fonts: Vec::new(),
 
             widgets: HashMap::default(),
@@ -105,7 +108,7 @@ impl WidgetRenderPass for TextRenderPass {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        depth: f32,
+        layer: u32,
     ) {
         if type_id != &TypeId::of::<Text>() {
             return;
@@ -156,7 +159,7 @@ impl WidgetRenderPass for TextRenderPass {
                             rect.x + px_coords.max.x,
                             rect.y + px_coords.max.y,
                         ],
-                        z: depth,
+                        layer,
                         uv: [
                             tex_coords.min.x,
                             tex_coords.min.y,
@@ -194,13 +197,25 @@ impl WidgetRenderPass for TextRenderPass {
         self.widgets.remove(widget_id);
     }
 
-    fn update(&mut self, _ctx: &RenderContext) {}
+    fn update(&mut self, ctx: &RenderContext) {
+        if ctx.size != self.last_size {
+            self.last_size = ctx.size;
 
-    fn render(&self, ctx: &RenderContext, frame: &mut Frame) {
+            let bindings = &[
+                ctx.bind_app_settings(),
+                ctx.layer_mask.bind_storage_texture(),
+                self.texture.bind_texture(),
+                self.sampler.bind(),
+            ];
+
+            self.bind_group = ctx.gpu.create_bind_group(bindings);
+        }
+    }
+
+    fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame
             .render_pass("agui_text_pass")
             .with_pipeline(&self.pipeline)
-            .with_depth(ctx.depth_buffer.attach_depth())
             .begin();
 
         r.set_bind_group(0, &self.bind_group, &[]);

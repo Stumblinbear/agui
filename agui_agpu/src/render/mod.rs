@@ -1,18 +1,21 @@
 use std::any::TypeId;
 
-use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Texture};
+use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Sampler, Texture, TextureFormat};
 use agui::{context::Notify, widget::WidgetId, widgets::AppSettings, WidgetManager};
 use downcast_rs::{impl_downcast, Downcast};
 
-pub mod clipping;
 pub mod bounding;
+pub mod clipping;
 pub mod drawable;
 pub mod text;
 
 pub struct RenderContext {
     pub gpu: GpuHandle,
 
-    pub depth_buffer: Texture<agpu::D2>,
+    pub layer_mask: Texture<agpu::D2>,
+    pub layer_mask_sampler: Sampler,
+
+    pub size: (u32, u32),
 
     pub app_settings: Notify<AppSettings>,
     pub app_settings_buffer: Buffer,
@@ -20,21 +23,30 @@ pub struct RenderContext {
 
 impl RenderContext {
     pub fn new(program: &GpuProgram, app_settings: Notify<AppSettings>) -> Self {
+        let size = {
+            let app_settings = app_settings.read();
+
+            (app_settings.width as u32, app_settings.height as u32)
+        };
+
         Self {
             gpu: GpuHandle::clone(&program.gpu),
 
-            depth_buffer: program
+            layer_mask: program
                 .gpu
-                .new_texture("agui_depth")
-                .as_depth()
+                .new_texture("agui layer mask")
+                .with_format(TextureFormat::R32Uint)
+                .allow_storage_binding()
                 .allow_binding()
                 .allow_copy_to()
                 .allow_copy_from()
-                .create_empty({
-                    let app_settings = app_settings.read();
+                .create_empty(size),
+            layer_mask_sampler: program
+                .gpu
+                .new_sampler("agui drawable layer sampler")
+                .create(),
 
-                    (app_settings.width as u32, app_settings.height as u32)
-                }),
+            size,
 
             app_settings,
             app_settings_buffer: program
@@ -53,13 +65,15 @@ impl RenderContext {
     pub fn update(&mut self) {
         let app_settings = self.app_settings.read();
 
-        self.app_settings_buffer
-            .write_unchecked(&[app_settings.width, app_settings.height]);
+        let size = (app_settings.width as u32, app_settings.height as u32);
 
-        let new_size = (app_settings.width as u32, app_settings.height as u32);
+        if self.size != size {
+            self.size = size;
 
-        if self.depth_buffer.size != new_size {
-            self.depth_buffer.resize(new_size);
+            self.app_settings_buffer
+                .write_unchecked(&[app_settings.width, app_settings.height]);
+
+            self.layer_mask.resize(self.size);
         }
     }
 }
@@ -79,7 +93,7 @@ pub trait WidgetRenderPass: Downcast {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        depth: f32,
+        layer: u32,
     );
 
     fn removed(

@@ -71,7 +71,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         manager: &WidgetManager,
         type_id: &TypeId,
         widget_id: &WidgetId,
-        _depth: f32,
+        _depth: u32,
     ) {
         let rect = match manager.get_rect(widget_id) {
             Some(rect) => rect,

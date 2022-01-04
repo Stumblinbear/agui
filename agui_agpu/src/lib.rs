@@ -4,7 +4,7 @@ use agpu::{
     winit::winit::event::{
         ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
     },
-    DepthAttachmentBuild, Event, Frame, GpuProgram, RenderPipeline,
+    Event, Frame, GpuProgram, RenderPipeline,
 };
 
 use agui::{
@@ -29,8 +29,6 @@ pub mod render;
 use self::render::{
     drawable::DrawableRenderPass, text::TextRenderPass, RenderContext, WidgetRenderPass,
 };
-
-const Z_MAX: usize = u16::MAX as usize;
 
 pub struct UI {
     manager: WidgetManager<'static>,
@@ -61,11 +59,7 @@ impl UI {
             manager,
             events: Vec::default(),
 
-            pipeline: program
-                .gpu
-                .new_pipeline("agui clear pipeline")
-                .with_depth()
-                .create(),
+            pipeline: program.gpu.new_pipeline("agui clear pipeline").create(),
 
             clipping_pass: ClippingRenderPass::new(program, &ctx),
 
@@ -208,18 +202,22 @@ impl UI {
                         widget_id,
                         layer,
                     } => {
-                        let depth = (Z_MAX - layer) as f32 / Z_MAX as f32;
-
                         self.clipping_pass.layout(
                             &self.ctx,
                             &self.manager,
                             &type_id,
                             &widget_id,
-                            depth,
+                            layer as u32,
                         );
 
                         for pass in self.render_passes.values_mut() {
-                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, depth);
+                            pass.layout(
+                                &self.ctx,
+                                &self.manager,
+                                &type_id,
+                                &widget_id,
+                                layer as u32,
+                            );
                         }
                     }
 
@@ -256,11 +254,12 @@ impl UI {
     pub fn render(&self, mut frame: Frame) {
         // We complete rendering by first clearing the screen, then creating the depth buffer based on
         // clipping masks, before finally rendering the actual widgets through the added render passes.
-        frame
-            .render_pass_cleared("agui depth pass", 0x101010FF)
-            .with_pipeline(&self.pipeline)
-            .with_depth(self.ctx.depth_buffer.attach_depth().clear_depth())
-            .begin();
+        {
+            frame
+                .render_pass_cleared("agui clear pass", 0x101010FF)
+                .with_pipeline(&self.pipeline)
+                .begin();
+        }
 
         self.clipping_pass.render(&self.ctx, &mut frame);
 

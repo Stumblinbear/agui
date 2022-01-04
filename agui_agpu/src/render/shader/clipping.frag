@@ -1,7 +1,9 @@
 #version 460
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) flat in uint layer;
+
+layout(location = 0) out uint outLayer;
 
 void main() {
-    outColor = vec4(0.0, 0.0, 0.0, 0.0);
+    outLayer = layer;
 }
