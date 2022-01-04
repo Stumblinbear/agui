@@ -25,5 +25,9 @@ lyon = "0.17"
 glyph_brush_draw_cache = "0.1"
 
 [[example]]
+name = "hello_world"
+path = "examples/hello_world.rs"
+
+[[example]]
 name = "widgets"
 path = "examples/widgets.rs"
