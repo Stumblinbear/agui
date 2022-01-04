@@ -1,6 +1,6 @@
 [package]
 name = "agui"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 resolver = "2"
 description = "A reactive GUI project"
@@ -27,7 +27,7 @@ widgets = [ "primitives", "agui_widgets" ]
 macros = [ "agui_macros" ]
 
 [dependencies]
-agui_core = { path = "agui_core", version = "0.2" }
-agui_macros = { path = "agui_macros", version = "0.2", optional = true }
-agui_primitives = { path = "agui_primitives", version = "0.2", optional = true }
-agui_widgets = { path = "agui_widgets", version = "0.2", optional = true }
+agui_core = { path = "agui_core", version = "0.3" }
+agui_macros = { path = "agui_macros", version = "0.3", optional = true }
+agui_primitives = { path = "agui_primitives", version = "0.3", optional = true }
+agui_widgets = { path = "agui_widgets", version = "0.3", optional = true }

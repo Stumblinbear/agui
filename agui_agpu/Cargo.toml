@@ -1,6 +1,6 @@
 [package]
 name = "agui_agpu"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 resolver = "2"
 description = "An agpu renderer for agui widgets"
@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-agui = { path = "../", version = "0.2" }
+agui = { path = "../", version = "0.3" }
 
 log = "0.4"
 downcast-rs = "1.2"
