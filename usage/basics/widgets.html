@@ -139,7 +139,7 @@
 <h2 id="primitives"><a class="header" href="#primitives">Primitives</a></h2>
 <p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="../../widgets/primitives.html">Primitive Widget Reference</a>.</p>
 <h2 id="creating-a-widget"><a class="header" href="#creating-a-widget">Creating a Widget</a></h2>
-<p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetBuilder</code>. We're going to start simple, with a basic box on the screen, then and build onto that widget as we continue through these sections.</p>
+<p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetBuilder</code>. We're going to start simple, with a basic box on the screen:</p>
 <pre><code class="language-rust noplaypen">pub struct Button { }
 
 impl WidgetBuilder for Button {
@@ -162,7 +162,7 @@ impl WidgetBuilder for Button {
 }
 </code></pre>
 <p>This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Drawable</code> is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to <code>Drawable</code>, your widget should render exactly the same no matter where it's running.</p>
-<p>One important thing to note is clipping is not enabled by default. We'll cover that in <a href="../advanced/clipping.html">later sections</a>, but it's important to note.</p>
+<p>One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="../advanced/clipping.html">later section</a>.</p>
 
                     </main>
 
