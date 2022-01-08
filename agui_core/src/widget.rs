@@ -1,8 +1,4 @@
-use std::{
-    any::TypeId,
-    fmt::Debug,
-    rc::{Rc, Weak},
-};
+use std::{any::TypeId, fmt::Debug, rc::Rc};
 
 use downcast_rs::{impl_downcast, Downcast};
 use generational_arena::Index as GenerationalIndex;
@@ -107,11 +103,8 @@ pub enum WidgetRef {
     /// No widget.
     None,
 
-    /// An owned widget.
-    Owned(Rc<dyn Widget>),
-
-    /// A borrowed widget.
-    Borrowed(Weak<dyn Widget>),
+    /// A widget reference.
+    Ref(Rc<dyn Widget>),
 
     /// A keyed reference which may retain its state across parental rebuilds.
     Keyed {
@@ -125,13 +118,9 @@ impl Debug for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, "None"),
-            Self::Owned(widget) => write!(f, "{}", widget.get_type_name()),
-            Self::Borrowed(layout) => match layout.upgrade() {
-                Some(widget) => write!(f, "{}", widget.get_type_name()),
-                None => write!(f, "Gone"),
-            },
+            Self::Ref(widget) => write!(f, "{}", widget.get_type_name()),
             Self::Keyed { key, widget, .. } => {
-                write!(f, "Keyed {{ key: {:?}, widget: {:?} }}", key, widget)
+                write!(f, "Keyed {{ key: {:?}, {:?} }}", key, widget)
             }
         }
     }
@@ -147,8 +136,7 @@ impl Clone for WidgetRef {
     fn clone(&self) -> Self {
         match self {
             Self::None => Self::None,
-            Self::Owned(widget) => Self::Borrowed(Rc::downgrade(widget)),
-            Self::Borrowed(widget) => Self::Borrowed(Weak::clone(widget)),
+            Self::Ref(widget) => Self::Ref(Rc::clone(widget)),
             Self::Keyed { widget, .. } => Self::clone(widget),
         }
     }
@@ -159,7 +147,7 @@ impl WidgetRef {
     where
         W: Widget,
     {
-        Self::Owned(Rc::new(widget))
+        Self::Ref(Rc::new(widget))
     }
 
     /// Returns true if the widget is still allocated in memory.
@@ -167,8 +155,7 @@ impl WidgetRef {
     pub fn is_valid(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Owned(_) => true,
-            Self::Borrowed(weak) => weak.strong_count() != 0,
+            Self::Ref(_) => true,
             Self::Keyed { widget, .. } => widget.is_valid(),
         }
     }
@@ -177,23 +164,19 @@ impl WidgetRef {
     pub fn try_get(&self) -> Option<Rc<dyn Widget>> {
         match self {
             Self::None => None,
-            Self::Owned(widget) => Some(Rc::clone(widget)),
-            Self::Borrowed(weak) => weak.upgrade(),
+            Self::Ref(widget) => Some(Rc::clone(widget)),
             Self::Keyed { widget, .. } => widget.try_get(),
         }
     }
 
     /// # Panics
     ///
-    /// Will panic if the widget no longer exists, or the reference is empty.
+    /// Will panic if the reference is None.
     #[must_use]
     pub fn get(&self) -> Rc<dyn Widget> {
         match self {
             Self::None => panic!("widget ref points to nothing"),
-            Self::Owned(widget) => Rc::clone(widget),
-            Self::Borrowed(weak) => {
-                Rc::clone(&weak.upgrade().expect("cannot dereference a dropped widget"))
-            }
+            Self::Ref(widget) => Rc::clone(widget),
             Self::Keyed { widget, .. } => widget.get(),
         }
     }
@@ -201,7 +184,7 @@ impl WidgetRef {
     #[must_use]
     /// # Panics
     ///
-    /// Will panic if the widget no longer exists, or the reference is empty.
+    /// Will panic if the reference is None.
     pub fn get_type_id(&self) -> TypeId {
         self.get().get_type_id()
     }
@@ -209,12 +192,12 @@ impl WidgetRef {
     #[must_use]
     /// # Panics
     ///
-    /// Will panic if the widget no longer exists, or the reference is empty.
+    /// Will panic if the reference is None.
     pub fn get_type_name(&self) -> &'static str {
         self.get().get_type_name()
     }
 
-    /// Returns none of the widget is not the `W` type, or if it has been deallocated.
+    /// Returns none of the widget is not the `W` type, or if it is None.
     #[must_use]
     pub fn try_downcast_ref<W>(&self) -> Option<Rc<W>>
     where
@@ -228,7 +211,7 @@ impl WidgetRef {
 
     /// # Panics
     ///
-    /// Will panic if the widget cannot be downcasted to the generic type.
+    /// Will panic if the widget cannot be downcasted to the generic type, or if it is None.
     #[must_use]
     pub fn downcast_ref<W>(&self) -> Rc<W>
     where
