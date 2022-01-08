@@ -33,15 +33,13 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::with_default(&program);
 
-    ui.get_context().init_plugin(HoveringPlugin::default);
-
     ui.get_context().init_global(Keyboard::default);
     ui.get_context().init_global(KeyboardInput::default);
 
+    ui.get_context().init_plugin(HoveringPlugin::default);
+
     ui.get_context().init_global(Mouse::default);
     ui.get_context().init_global(Scroll::default);
-
-    ui.get_context().init_global(Hovering::default);
 
     ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 
