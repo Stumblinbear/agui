@@ -10,7 +10,7 @@ use std::{
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// pub struct Button {
 ///     // Allows the Button to provide its own default, accept an owned value from a parent
 ///     // widget, or a reference to a layout.
