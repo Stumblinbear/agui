@@ -523,8 +523,9 @@ impl<'ui> WidgetManager<'ui> {
 
         *self.context.current_id.lock() = None;
 
-        match result.take() {
-            Ok(children) => {
+        match result {
+            BuildResult::Empty => {}
+            BuildResult::Some(children) => {
                 for child in children {
                     if !child.is_valid() {
                         continue;
@@ -534,7 +535,7 @@ impl<'ui> WidgetManager<'ui> {
                         .push(Modify::Spawn(Some(widget_id), child));
                 }
             }
-            Err(err) => panic!("build failed: {}", err),
+            BuildResult::Err(err) => panic!("build failed: {}", err),
         };
 
         node.layer = parent_layer;

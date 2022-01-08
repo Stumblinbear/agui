@@ -90,7 +90,7 @@ The `build!` macro makes it significantly cleaner and easier to init new widgets
 // It allows us to turn this:
 
 fn build(&self, ctx: &WidgetContext) -> BuildResult {
-    BuildResult::One(
+    BuildResult::Some(
         Button {
             layout: Layout::default(),
             color: Color::default(),

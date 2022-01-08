@@ -11,43 +11,26 @@ pub enum BuildResult {
     /// Indicates that the widget has no children.
     Empty,
 
-    /// The widget contains a single child.
-    One(WidgetRef),
-
-    /// The widget contains a many children.
-    Many(Vec<WidgetRef>),
+    /// The widget contains children.
+    Some(Vec<WidgetRef>),
 
     /// The widget has failed to build properly, and should construction should halt.
     ///
     /// # Panics
     ///
     /// Currently this results in a `panic!()`, however that may change in the future.
-    Error(Box<dyn std::error::Error>),
-}
-
-impl BuildResult {
-    /// # Errors
-    ///
-    /// Returns a boxed error if the widget failed to build correctly.
-    pub fn take(self) -> Result<Vec<WidgetRef>, Box<dyn std::error::Error>> {
-        match self {
-            BuildResult::Empty => Ok(vec![]),
-            BuildResult::One(widget) => Ok(vec![widget]),
-            BuildResult::Many(widgets) => Ok(widgets),
-            BuildResult::Error(err) => Err(err),
-        }
-    }
+    Err(Box<dyn std::error::Error>),
 }
 
 impl From<WidgetRef> for BuildResult {
     fn from(widget: WidgetRef) -> Self {
-        Self::One(widget)
+        Self::Some(vec![ widget ])
     }
 }
 
 impl From<&WidgetRef> for BuildResult {
     fn from(widget: &WidgetRef) -> Self {
-        Self::One(WidgetRef::clone(widget))
+        Self::Some(vec![ WidgetRef::clone(widget) ])
     }
 }
 
@@ -56,7 +39,7 @@ impl From<Vec<WidgetRef>> for BuildResult {
         if widgets.is_empty() {
             Self::Empty
         } else {
-            Self::Many(widgets)
+            Self::Some(widgets)
         }
     }
 }
@@ -66,7 +49,7 @@ impl From<&Vec<WidgetRef>> for BuildResult {
         if widgets.is_empty() {
             Self::Empty
         } else {
-            Self::Many(widgets.clone())
+            Self::Some(widgets.clone())
         }
     }
 }

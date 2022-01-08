@@ -161,7 +161,7 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
 
         impl From<#ident> for #agui_core::widget::BuildResult {
             fn from(widget: #ident) -> Self {
-                Self::One(widget.into())
+                Self::Some(vec![ widget.into() ])
             }
         }
     }

@@ -57,7 +57,7 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
 
             impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::BuildResult #where_clause {
                 fn from(widget: #ident #ty_generics) -> Self {
-                    Self::One(widget.into())
+                    Self::Some(vec![ widget.into() ])
                 }
             }
         }
