@@ -162,26 +162,7 @@ fn widget_with_builder(ctx: &amp;WidgetContext) -&gt; BuildResult {
 <span class="boring">}
 </span></code></pre></pre>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
-<p>Another option is utilizing global state. A global exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.</p>
-<p>You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[functional_widget]
-fn widget_with_global(ctx: &amp;WidgetContext) -&gt; BuildResult {
-    let state = ctx.use_global(|| 0);
-
-    build! {
-        Drawable {
-            layout: Layout {
-                sizing: Sizing::Set { width: 64.0, height 32.0 }
-            }
-        }
-    }
-}
-<span class="boring">}
-</span></code></pre></pre>
-<p>In this case, <code>use_global</code> will fetch the global state or initialize it to zero if it does not already exist.</p>
+<p>Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. <a href="state.html">You can read more about it here.</a>.</p>
 <h2 id="providers-and-consumers"><a class="header" href="#providers-and-consumers">Providers and Consumers</a></h2>
 <p>Instead of global state, you can use <a href="../plugins/providers_and_consumers.html">Providers</a>. This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is <em>often</em> negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.</p>
 
