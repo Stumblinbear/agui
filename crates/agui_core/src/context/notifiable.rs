@@ -1,11 +1,6 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{any::TypeId, hash::Hash, marker::PhantomData, sync::Arc};
 
+use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
@@ -15,19 +10,19 @@ use super::{ListenerId, Value};
 pub struct NotifiableValue {
     value: Option<Arc<RwLock<Box<dyn Value>>>>,
 
-    notify: Arc<Mutex<HashSet<ListenerId>>>,
+    notify: Arc<Mutex<FnvHashSet<ListenerId>>>,
 }
 
 pub struct NotifiableMap {
-    values: RwLock<HashMap<TypeId, NotifiableValue>>,
+    values: RwLock<FnvHashMap<TypeId, NotifiableValue>>,
 
-    changed: Arc<Mutex<HashSet<ListenerId>>>,
+    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
 }
 
 impl NotifiableMap {
     // #[allow(clippy::needless_pass_by_value)]
     #[must_use]
-    pub fn new(changed: Arc<Mutex<HashSet<ListenerId>>>) -> Self {
+    pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             values: RwLock::default(),
 
@@ -42,7 +37,7 @@ impl NotifiableMap {
         let mut values = self.values.write();
 
         values.entry(TypeId::of::<V>()).or_insert_with(|| {
-            let notify = Arc::new(Mutex::new(HashSet::new()));
+            let notify = Arc::new(Mutex::new(FnvHashSet::default()));
 
             NotifiableValue {
                 value: None,
@@ -121,9 +116,9 @@ pub struct ScopedNotifiableMap<K>
 where
     K: Eq + Hash,
 {
-    scopes: Mutex<HashMap<K, NotifiableMap>>,
+    scopes: Mutex<FnvHashMap<K, NotifiableMap>>,
 
-    changed: Arc<Mutex<HashSet<ListenerId>>>,
+    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
 }
 
 impl<K> ScopedNotifiableMap<K>
@@ -131,7 +126,7 @@ where
     K: Eq + Hash,
 {
     #[must_use]
-    pub fn new(changed: Arc<Mutex<HashSet<ListenerId>>>) -> Self {
+    pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             scopes: Mutex::default(),
             changed,
@@ -203,8 +198,8 @@ where
 {
     pub(crate) phantom: PhantomData<V>,
 
-    pub(crate) notify: Arc<Mutex<HashSet<ListenerId>>>,
-    pub(crate) changed: Arc<Mutex<HashSet<ListenerId>>>,
+    pub(crate) notify: Arc<Mutex<FnvHashSet<ListenerId>>>,
+    pub(crate) changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
 
     pub(crate) value: Arc<RwLock<Box<dyn Value>>>,
 }

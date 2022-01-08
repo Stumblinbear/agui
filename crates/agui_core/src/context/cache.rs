@@ -1,8 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::hash::Hash;
 
+use fnv::{FnvHashMap, FnvHashSet};
 use morphorm::{Cache, GeometryChanged};
 
 use crate::unit::{Bounds, Rect, Size};
@@ -11,33 +9,33 @@ const MARGIN_OF_ERROR: f32 = 0.5;
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
-    newly_added: HashSet<K>,
+    newly_added: FnvHashSet<K>,
 
-    bounds: HashMap<K, Bounds>,
-    new_size: HashMap<K, Size>,
+    bounds: FnvHashMap<K, Bounds>,
+    new_size: FnvHashMap<K, Size>,
 
-    child_width_max: HashMap<K, f32>,
-    child_height_max: HashMap<K, f32>,
-    child_width_sum: HashMap<K, f32>,
-    child_height_sum: HashMap<K, f32>,
+    child_width_max: FnvHashMap<K, f32>,
+    child_height_max: FnvHashMap<K, f32>,
+    child_width_sum: FnvHashMap<K, f32>,
+    child_height_sum: FnvHashMap<K, f32>,
 
-    grid_row_max: HashMap<K, f32>,
-    grid_col_max: HashMap<K, f32>,
+    grid_row_max: FnvHashMap<K, f32>,
+    grid_col_max: FnvHashMap<K, f32>,
 
-    horizontal_free_space: HashMap<K, f32>,
-    horizontal_stretch_sum: HashMap<K, f32>,
+    horizontal_free_space: FnvHashMap<K, f32>,
+    horizontal_stretch_sum: FnvHashMap<K, f32>,
 
-    vertical_free_space: HashMap<K, f32>,
-    vertical_stretch_sum: HashMap<K, f32>,
+    vertical_free_space: FnvHashMap<K, f32>,
+    vertical_stretch_sum: FnvHashMap<K, f32>,
 
-    stack_first_child: HashMap<K, bool>,
-    stack_last_child: HashMap<K, bool>,
+    stack_first_child: FnvHashMap<K, bool>,
+    stack_last_child: FnvHashMap<K, bool>,
 
-    visible: HashMap<K, bool>,
-    geometry_changed: HashMap<K, GeometryChanged>,
+    visible: FnvHashMap<K, bool>,
+    geometry_changed: FnvHashMap<K, GeometryChanged>,
 
-    last_rect: HashMap<K, Rect>,
-    rect: HashMap<K, Rect>,
+    last_rect: FnvHashMap<K, Rect>,
+    rect: FnvHashMap<K, Rect>,
 }
 
 impl<K> LayoutCache<K>
@@ -48,7 +46,7 @@ where
         self.rect.get(node)
     }
 
-    pub fn take_changed(&mut self) -> HashSet<K> {
+    pub fn take_changed(&mut self) -> FnvHashSet<K> {
         let mut changed = self
             .geometry_changed
             .drain()
@@ -70,7 +68,7 @@ where
 
                 true
             })
-            .collect::<HashSet<_>>();
+            .collect::<FnvHashSet<_>>();
 
         // We store each individual changed node because it's likely quicker than `.clone()`
         // and ensures we don't lose change detection accuracy if a node has moved subpixel

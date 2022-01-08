@@ -5,7 +5,7 @@ use agui::context::tree::Tree;
 fn tree_ops(c: &mut Criterion) {
     c.bench_function("add to tree", |b| {
         b.iter_with_setup(
-            || black_box(Tree::<usize>::default()),
+            Tree::<usize>::default,
             |mut tree| {
                 tree.add(None, 0);
             },
@@ -15,7 +15,7 @@ fn tree_ops(c: &mut Criterion) {
     c.bench_function("remove from tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
 
@@ -28,11 +28,11 @@ fn tree_ops(c: &mut Criterion) {
     });
 }
 
-fn get_deepest_child(c: &mut Criterion) {
-    c.bench_function("get deepest child", |b| {
+fn tree_get_deepest_child(c: &mut Criterion) {
+    c.bench_function("get deepest child in tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
                 tree.add(Some(0), 1);
@@ -48,11 +48,11 @@ fn get_deepest_child(c: &mut Criterion) {
     });
 }
 
-fn iter_down(c: &mut Criterion) {
-    c.bench_function("iterate down from root", |b| {
+fn tree_iter_down(c: &mut Criterion) {
+    c.bench_function("iterate down from tree root", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
                 tree.add(Some(0), 1);
@@ -62,17 +62,17 @@ fn iter_down(c: &mut Criterion) {
                 tree
             },
             |tree| {
-                let mut walker = tree.iter();
+                let mut walker = black_box(tree.iter());
 
                 while walker.next().is_some() { }
             },
         )
     });
 
-    c.bench_function("iterate down from child", |b| {
+    c.bench_function("iterate down from tree child", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
                 tree.add(Some(0), 1);
@@ -83,7 +83,7 @@ fn iter_down(c: &mut Criterion) {
                 tree
             },
             |tree| {
-                let mut walker = tree.iter_from(1);
+                let mut walker = black_box(tree.iter_from(1));
 
                 while walker.next().is_some() { }
             },
@@ -91,11 +91,11 @@ fn iter_down(c: &mut Criterion) {
     });
 }
 
-fn iter_up(c: &mut Criterion) {
-    c.bench_function("iterate up parents", |b| {
+fn tree_iter_up(c: &mut Criterion) {
+    c.bench_function("iterate up tree parents", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
                 tree.add(Some(0), 1);
@@ -105,17 +105,17 @@ fn iter_up(c: &mut Criterion) {
                 tree
             },
             |tree| {
-                let mut walker = tree.iter_parents(3);
+                let mut walker = black_box(tree.iter_parents(3));
 
                 while walker.next().is_some() { }
             },
         )
     });
 
-    c.bench_function("iterate up", |b| {
+    c.bench_function("iterate up tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
                 tree.add(Some(0), 1);
@@ -125,17 +125,17 @@ fn iter_up(c: &mut Criterion) {
                 tree
             },
             |tree| {
-                let mut walker = tree.iter_up();
+                let mut walker = black_box(tree.iter_up());
 
                 while walker.next().is_some() { }
             },
         )
     });
     
-    c.bench_function("iterate up from child", |b| {
+    c.bench_function("iterate up from tree child", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = black_box(Tree::<usize>::default());
+                let mut tree = Tree::<usize>::default();
 
                 tree.add(None, 0);
                 tree.add(Some(0), 1);
@@ -146,7 +146,7 @@ fn iter_up(c: &mut Criterion) {
                 tree
             },
             |tree| {
-                let mut walker = tree.iter_up_from(3);
+                let mut walker = black_box(tree.iter_up_from(3));
 
                 while walker.next().is_some() { }
             },
@@ -154,5 +154,5 @@ fn iter_up(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, tree_ops, get_deepest_child, iter_down, iter_up);
+criterion_group!(benches, tree_ops, tree_get_deepest_child, tree_iter_down, tree_iter_up);
 criterion_main!(benches);

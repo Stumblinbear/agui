@@ -1,9 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{rc::Rc, sync::Arc};
 
+use fnv::{FnvHashMap, FnvHashSet};
 use generational_arena::Arena;
 use morphorm::Cache;
 use parking_lot::Mutex;
@@ -27,7 +24,7 @@ pub struct WidgetManager<'ui> {
 
     context: WidgetContext<'ui>,
 
-    changed: Arc<Mutex<HashSet<ListenerId>>>,
+    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
 
     modifications: Vec<Modify>,
 
@@ -46,7 +43,7 @@ pub struct WidgetManager<'ui> {
 
 impl<'ui> Default for WidgetManager<'ui> {
     fn default() -> Self {
-        let changed = Arc::new(Mutex::new(HashSet::new()));
+        let changed = Arc::new(Mutex::new(FnvHashSet::default()));
 
         Self {
             widgets: Arena::default(),
@@ -211,7 +208,7 @@ impl<'ui> WidgetManager<'ui> {
                     }
                 }
 
-                let mut dirty_widgets = HashSet::new();
+                let mut dirty_widgets = FnvHashSet::default();
 
                 for listener_id in changed {
                     match listener_id {
@@ -391,7 +388,7 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     fn apply_modifications(&mut self, events: &mut Vec<WidgetEvent>) {
-        let mut removed_keyed = HashMap::new();
+        let mut removed_keyed = FnvHashMap::default();
 
         while !self.modifications.is_empty() {
             match self.modifications.remove(0) {
@@ -446,7 +443,7 @@ impl<'ui> WidgetManager<'ui> {
     fn process_spawn(
         &mut self,
         events: &mut Vec<WidgetEvent>,
-        removed_keyed: &mut HashMap<(Option<WidgetId>, Key), WidgetId>,
+        removed_keyed: &mut FnvHashMap<(Option<WidgetId>, Key), WidgetId>,
         parent_id: Option<WidgetId>,
         widget: WidgetRef,
     ) {

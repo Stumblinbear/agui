@@ -1,10 +1,6 @@
-use std::{
-    any::TypeId,
-    collections::{BTreeMap, HashMap, HashSet},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{any::TypeId, rc::Rc, sync::Arc};
 
+use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::Mutex;
 
 mod cache;
@@ -24,7 +20,7 @@ use self::{
 use crate::{
     layout::Layout,
     plugin::WidgetPlugin,
-    unit::{Shape, Key, LayoutType, Rect},
+    unit::{Key, LayoutType, Rect, Shape},
     widget::{WidgetId, WidgetRef},
     Ref,
 };
@@ -51,20 +47,20 @@ impl ListenerId {
 }
 
 type WidgetComputedFuncs<'ui> =
-    HashMap<WidgetId, HashMap<TypeId, Box<dyn ComputedFunc<'ui> + 'ui>>>;
+    FnvHashMap<WidgetId, FnvHashMap<TypeId, Box<dyn ComputedFunc<'ui> + 'ui>>>;
 
 pub struct WidgetContext<'ui> {
     pub(crate) tree: Tree<WidgetId>,
     pub(crate) cache: LayoutCache<WidgetId>,
 
-    pub(crate) plugins: Mutex<BTreeMap<TypeId, Rc<dyn WidgetPlugin>>>,
+    pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
 
     global: NotifiableMap,
     states: ScopedNotifiableMap<WidgetId>,
 
-    layouts: Mutex<HashMap<WidgetId, Ref<Layout>>>,
-    layout_types: Mutex<HashMap<WidgetId, Ref<LayoutType>>>,
-    clipping: Mutex<HashMap<WidgetId, Ref<Shape>>>,
+    layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
+    layout_types: Mutex<FnvHashMap<WidgetId, Ref<LayoutType>>>,
+    clipping: Mutex<FnvHashMap<WidgetId, Ref<Shape>>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
@@ -74,7 +70,7 @@ pub struct WidgetContext<'ui> {
 impl<'ui> WidgetContext<'ui> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(changed: Arc<Mutex<HashSet<ListenerId>>>) -> Self {
+    pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             tree: Tree::default(),
             cache: LayoutCache::default(),
@@ -88,7 +84,7 @@ impl<'ui> WidgetContext<'ui> {
             layout_types: Mutex::default(),
             clipping: Mutex::default(),
 
-            computed_funcs: Arc::new(Mutex::new(HashMap::new())),
+            computed_funcs: Arc::new(Mutex::new(FnvHashMap::default())),
 
             current_id: Arc::default(),
         }
@@ -408,7 +404,7 @@ impl<'ui> WidgetContext<'ui> {
 
         let computed_func = widgets
             .entry(*widget_id)
-            .or_insert_with(HashMap::default)
+            .or_insert_with(FnvHashMap::default)
             .entry(computed_id)
             .or_insert_with(|| {
                 let mut computed_func = Box::new(ComputedFn::new(listener_id, func));
