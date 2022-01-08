@@ -136,11 +136,8 @@
                     <main>
                         <h1 id="conditional-rendering"><a class="header" href="#conditional-rendering">Conditional Rendering</a></h1>
 <p>Often you'll want to render a widget conditionally. Thankfully, this is extremely straightforward to do, as the <code>build!</code> macro supports pretty much all Rust syntax.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[functional_widget]
-fn conditional_widget(ctx: &amp;WidgetContext, toggle_something: bool) -&gt; BuildResult {
+<pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
+</span>fn conditional_widget(ctx: &amp;WidgetContext, toggle_something: bool) -&gt; BuildResult {
     build!{
         if toggle_something {
             Drawable {
@@ -157,15 +154,11 @@ fn conditional_widget(ctx: &amp;WidgetContext, toggle_something: bool) -&gt; Bui
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+</code></pre>
 <p>To render based on state is just as easy, just read the state and check against it:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[functional_widget]
-fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
-    let some_state = ctx.use_state(|| true);
+<pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
+</span><span class="boring">fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+</span>    let some_state = ctx.use_state(|| true);
 
     build! {
         if *some_state.read() {
@@ -182,9 +175,8 @@ fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
             }
         }
     }
-}
 <span class="boring">}
-</span></code></pre></pre>
+</span></code></pre>
 
                     </main>
 
