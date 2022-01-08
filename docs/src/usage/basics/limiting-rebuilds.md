@@ -29,7 +29,7 @@ fn widget_with_builder(ctx: &WidgetContext) -> BuildResult {
 
 ## Globals
 
-Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. [You can read more about it here.](state.md).
+Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. [You can read more about it here.](state.md)
 
 ## Providers and Consumers
 
