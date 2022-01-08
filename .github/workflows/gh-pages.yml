@@ -14,10 +14,6 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
 
-    defaults:
-      run:
-        working-directory: ./docs
-
     steps:
       - uses: actions/checkout@v2
 
@@ -28,9 +24,11 @@ jobs:
 
       - name: Build mdBook
         run: mdbook build
+        working-directory: ./docs
 
       - name: Deploy mdBook
         uses: peaceiris/actions-gh-pages@v3
+        working-directory: ./docs
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./book
