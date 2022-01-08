@@ -135,6 +135,40 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="state"><a class="header" href="#state">State</a></h1>
+<p>Widgets may contain their own, self contained state, which persists across rebuilds (usually—more on that in a minute). Whenever the state changes, the widget's <code>build()</code> function will be re-invoked, and its children will be rebuilt. This is your main tool for implementing a user interface that can react to user events. Lets write up a quick counter example to demonstrate this:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Requires the `HoverPlugin` for the `Button` to function properly, so
+// make sure you call `ui.init_plugin(HoveringPlugin::default);`
+
+#[functional_widget]
+fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
+    let num = ctx.use_state(|| 0);
+
+    build! {
+        Column {
+            children: [
+                Text::is(font, 32.0, format!(&quot;clicked: {} times&quot;, num.read())),
+                Button {
+                    child: Padding {
+                        padding: Margin::All(10.0.into()),
+                        child: Text::is(font, 32.0, &quot;A Button&quot;.into())
+                    },
+                    on_pressed: Callback::from(move |()| {
+                        *num.write() += 1;
+                    })
+                }
+            ]
+        }
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Any time you use <code>num.write()</code>, it will cause any listening widgets to be rebuilt on the next update, so ensure you only call it when you <em>actually</em> change something. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
+<p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state(|| 0)</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that, instead, the state will have changed internally, but you wouldn't see any change to the UI.</p>
+<h2 id="parental-rebuilds"><a class="header" href="#parental-rebuilds">Parental rebuilds</a></h2>
+<p>When a widget is rebuilt, its state is persisted. However, any children it has will be reinitialized, meaning <em>their</em> state will be destroyed. This means you need to be careful in how you structure your interface to reduce rebuilds, and to work around this limitation. For more information on this, you can see <a href="limiting-rebuilds.html">Limiting Rebuilds</a>.</p>
 
                     </main>
 
