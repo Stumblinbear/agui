@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-agui = { path = "../", version = "0.3" }
+agui = { path = "../../", version = "0.3" }
 
 log = "0.4"
 downcast-rs = "1.2"
@@ -27,6 +27,10 @@ glyph_brush_draw_cache = "0.1"
 [[example]]
 name = "hello_world"
 path = "examples/hello_world.rs"
+
+[[example]]
+name = "counter"
+path = "examples/counter.rs"
 
 [[example]]
 name = "widgets"

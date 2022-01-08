@@ -4,6 +4,7 @@ version = "0.3.0"
 edition = "2021"
 resolver = "2"
 description = "A reactive GUI project"
+exclude = [".github/**/*", "crates/**/*"]
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = [ "gui", "graphics", "gamedev" ]
@@ -12,13 +13,8 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [workspace]
-members = [
-    "agui_core",
-    "agui_macros",
-    "agui_primitives",
-    "agui_widgets",
-    "agui_agpu"
-]
+exclude = [ "benches" ]
+members = [ "crates/*", "integrations/*" ]
 
 [features]
 default = [ "primitives", "widgets", "macros" ]
@@ -27,7 +23,7 @@ widgets = [ "primitives", "agui_widgets" ]
 macros = [ "agui_macros" ]
 
 [dependencies]
-agui_core = { path = "agui_core", version = "0.3" }
-agui_macros = { path = "agui_macros", version = "0.3", optional = true }
-agui_primitives = { path = "agui_primitives", version = "0.3", optional = true }
-agui_widgets = { path = "agui_widgets", version = "0.3", optional = true }
+agui_core = { path = "crates/agui_core", version = "0.3" }
+agui_macros = { path = "crates/agui_macros", version = "0.3", optional = true }
+agui_primitives = { path = "crates/agui_primitives", version = "0.3", optional = true }
+agui_widgets = { path = "crates/agui_widgets", version = "0.3", optional = true }
