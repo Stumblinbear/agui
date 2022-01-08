@@ -9,16 +9,9 @@ pub trait Style: Downcast + Send + Sync {}
 
 impl_downcast!(Style);
 
+#[derive(Default)]
 pub struct Theme {
     styles: BTreeMap<TypeId, Box<dyn Style>>,
-}
-
-impl Default for Theme {
-    fn default() -> Self {
-        Self {
-            styles: BTreeMap::default(),
-        }
-    }
 }
 
 impl Theme {

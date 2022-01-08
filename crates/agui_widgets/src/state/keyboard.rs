@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Default)]
 pub struct Keyboard {
     pub keys: HashMap<KeyCode, KeyState>,
     pub modifiers: Modifiers,
@@ -16,15 +17,6 @@ impl Keyboard {
         self.keys
             .get(key)
             .map_or(false, |state| *state == KeyState::Released)
-    }
-}
-
-impl Default for Keyboard {
-    fn default() -> Self {
-        Self {
-            keys: HashMap::default(),
-            modifiers: Modifiers::default(),
-        }
     }
 }
 
