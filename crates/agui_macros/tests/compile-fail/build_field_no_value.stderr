@@ -8,6 +8,6 @@ warning: unused import: `agui_primitives::Drawable`
  --> tests/compile-fail/build_field_no_value.rs:3:5
   |
 3 | use agui_primitives::Drawable;
-  |     ^^^^^^^^^^^^^^^^^^^^^
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` on by default
