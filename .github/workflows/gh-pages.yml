@@ -8,7 +8,7 @@ on:
       - master
 
 defaults:
-  deploy:
+  run:
     working-directory: docs
 
 jobs:
