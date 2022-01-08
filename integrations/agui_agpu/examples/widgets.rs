@@ -11,7 +11,6 @@ use agui::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
         primitives::{Builder, Column, DrawableStyle, FontId, Padding, Spacing, Text},
         state::{
-            hovering::Hovering,
             keyboard::{Keyboard, KeyboardInput},
             mouse::{Mouse, Scroll},
             theme::Theme,
