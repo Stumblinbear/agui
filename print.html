@@ -275,6 +275,20 @@ impl WidgetBuilder for Button {
 <p>This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Drawable</code> is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to <code>Drawable</code>, your widget should render exactly the same no matter where it's running.</p>
 <p>One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="usage/basics/../advanced/clipping.html">later section</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="layout"><a class="header" href="#layout">Layout</a></h1>
+<p><code>agui</code> leverages <a href="https://github.com/geom3trik/morphorm">morphorm</a> for its layout system, which itself is modeled after the <a href="https://subformapp.com/articles/why-not-flexbox/">subform layout system</a>. While we go into some detail here, it's recommended to do some research into those as well until this page is fleshed out a bit more.</p>
+<h2 id="why-subform-why-not-flexbox"><a class="header" href="#why-subform-why-not-flexbox">Why subform? Why not flexbox?</a></h2>
+<p>Because, frankly, flexbox is confusing. We need something simpler, that doesn't interact with itself in invisible ways or bring in new concepts such as <code>align-items</code>, <code>justify-content</code>, or <code>align-self</code>. According to Subform themselves, the tl;dr is:</p>
+<blockquote>
+<ul>
+<li>All elements have a horizontal and vertical axis, each of which consists of space before, size, and space after.</li>
+<li>Elements either control their own position (“self-directed”, akin to CSS absolute positioning) or are positioned by their parent (parent-directed).</li>
+<li>Parents can position their parent-directed children in a vertical stack, horizontal stack, or grid.</li>
+<li>The same units—pixels, percentages (of the parent size), and stretch (akin to flex, proportionally dividing up available space)—are used everywhere, with minimum and maximum constraints as part of the unit.</li>
+</ul>
+</blockquote>
+<p>At its most basic level, your layouts are just rows and columns of widgets, each of which may contain more rows and columns of widgets. Beyond that, sizes of your widgets can be pixels, a percentage of the parent, or stretch to fill. That's it. Stupid simple.</p>
+<h2 id="how-do-i-use-it"><a class="header" href="#how-do-i-use-it">How do I use it?</a></h2>
+<p>There are some primitive widgets that make the layout system easier to grok. <code>Column</code>, <code>Row</code>, <code>Grid</code>, <code>Padding</code>, and <code>Spacing</code>, each of which simply abstract out the layout. While you could use <code>ctx.set_layout</code> for each widget yourself, it's recommended to use these widgets instead, as it makes your widgets simpler and more reusable.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="state"><a class="header" href="#state">State</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="conditional-rendering"><a class="header" href="#conditional-rendering">Conditional Rendering</a></h1>
 <p>Often you'll want to render a widget conditionally. Thankfully, this is extremely straightforward to do, as the <code>build!</code> macro supports pretty much all Rust syntax.</p>
