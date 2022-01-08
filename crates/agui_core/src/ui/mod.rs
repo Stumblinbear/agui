@@ -762,7 +762,7 @@ mod tests {
         assert_eq!(
             *manager.get_as::<TestWidget>(widget_id).computes.lock(),
             1,
-            "widget `computes` should be 1"
+            "widget computed should have been called 1 time"
         );
 
         manager.update(&mut events);
@@ -785,8 +785,8 @@ mod tests {
 
         assert_eq!(
             *manager.get_as::<TestWidget>(widget_id).computes.lock(),
-            3,
-            "widget computed should have been called 3 times total"
+            2,
+            "widget computed should have been called 2 times"
         );
     }
 }
