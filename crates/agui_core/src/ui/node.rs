@@ -230,7 +230,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_column_spacing()
-            .map(|val| val.into())
+            .map(Into::into)
     }
 
     fn col_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
@@ -239,7 +239,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_row_spacing()
-            .map(|val| val.into())
+            .map(Into::into)
     }
 
     fn grid_rows(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
@@ -248,7 +248,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_rows()
-            .map(|val| val.into_iter().map(|val| val.into()).collect())
+            .map(|val| val.into_iter().map(Into::into).collect())
     }
 
     fn grid_cols(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
@@ -257,7 +257,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_columns()
-            .map(|val| val.into_iter().map(|val| val.into()).collect())
+            .map(|val| val.into_iter().map(Into::into).collect())
     }
 
     fn row_index(&self, _store: &'_ Self::Data) -> Option<usize> {
