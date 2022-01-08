@@ -139,8 +139,8 @@
 <h2 id="builders"><a class="header" href="#builders">Builders</a></h2>
 <p>Builders are essentially closure-derived widgets. You can create these ad-hoc to limit the scope of rebuilds to a sub-tree of widgets, because they're essentially parent-widgets themselves with their own <code>WidgetContext</code>.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span><span class="boring">fn widget_with_builder(ctx: &amp;WidgetContext) -&gt; BuildResult {
-</span>    build! {
+</span>fn widget_with_builder(ctx: &amp;WidgetContext) -&gt; BuildResult {
+    build! {
         Builder::new(move |ctx| {
             // `ctx` is a new `WidgetContext` which will not affect the parent widget
 
@@ -155,8 +155,8 @@
             }
         }
     }
-<span class="boring">}
-</span></code></pre>
+}
+</code></pre>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
 <p>Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. <a href="state.html">You can read more about it here.</a>.</p>
 <h2 id="providers-and-consumers"><a class="header" href="#providers-and-consumers">Providers and Consumers</a></h2>
