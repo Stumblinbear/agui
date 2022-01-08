@@ -7,6 +7,10 @@ on:
     branches:
       - master
 
+defaults:
+  deploy:
+    working-directory: docs
+
 jobs:
   deploy:
     runs-on: ubuntu-20.04
@@ -24,11 +28,9 @@ jobs:
 
       - name: Build mdBook
         run: mdbook build
-        working-directory: ./docs
 
       - name: Deploy mdBook
         uses: peaceiris/actions-gh-pages@v3
-        working-directory: ./docs
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./book
