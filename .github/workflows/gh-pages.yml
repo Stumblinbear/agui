@@ -7,10 +7,6 @@ on:
     branches:
       - master
 
-defaults:
-  run:
-    working-directory: docs
-
 jobs:
   deploy:
     runs-on: ubuntu-20.04
@@ -28,6 +24,7 @@ jobs:
 
       - name: Build mdBook
         run: mdbook build
+        working-directory: ./docs
 
       - name: Deploy mdBook
         uses: peaceiris/actions-gh-pages@v3
