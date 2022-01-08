@@ -157,8 +157,8 @@
 </code></pre>
 <p>To render based on state is just as easy, just read the state and check against it:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span><span class="boring">fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
-</span>    let some_state = ctx.use_state(|| true);
+</span>fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+    let some_state = ctx.use_state(|| true);
 
     build! {
         if *some_state.read() {
@@ -175,8 +175,8 @@
             }
         }
     }
-<span class="boring">}
-</span></code></pre>
+}
+</code></pre>
 
                     </main>
 

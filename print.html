@@ -295,8 +295,8 @@ impl WidgetBuilder for Button {
 // make sure you call `ui.init_plugin(HoveringPlugin::default);`
 
 <span class="boring">#[functional_widget]
-</span><span class="boring">fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
-</span>    let num = ctx.use_state(|| 0);
+</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
+    let num = ctx.use_state(|| 0);
 
     build! {
         Column {
@@ -314,15 +314,15 @@ impl WidgetBuilder for Button {
             ]
         }
     }
-<span class="boring">}
-</span></code></pre>
+}
+</code></pre>
 <p>Any time you use <code>num.write()</code>, it will cause any listening widgets to be rebuilt on the next update, so ensure you only call it when you <em>actually</em> change something. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
 <p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state(|| 0)</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that, instead, the state will have changed internally, but you wouldn't see any change to the UI.</p>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
 <p>Global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span><span class="boring">fn widget_with_global(ctx: &amp;WidgetContext) -&gt; BuildResult {
-</span>    let state = ctx.use_global(|| 0);
+</span>fn widget_with_global(ctx: &amp;WidgetContext) -&gt; BuildResult {
+    let state = ctx.use_global(|| 0);
 
     build! {
         Drawable {
@@ -331,8 +331,8 @@ impl WidgetBuilder for Button {
             }
         }
     }
-<span class="boring">}
-</span></code></pre>
+}
+</code></pre>
 <p>In this case, <code>use_global</code> will fetch the global state or initialize it to zero if it does not already exist.</p>
 <h2 id="parental-rebuilds"><a class="header" href="#parental-rebuilds">Parental rebuilds</a></h2>
 <p>When a widget is rebuilt, its state is persisted. However, any children it has will be reinitialized, meaning <em>their</em> state will be destroyed. This means you need to be careful in how you structure your interface to reduce rebuilds, and to work around this limitation. For more information on this, you can see <a href="usage/basics/limiting-rebuilds.html">Limiting Rebuilds</a>.</p>
@@ -359,8 +359,8 @@ impl WidgetBuilder for Button {
 </code></pre>
 <p>To render based on state is just as easy, just read the state and check against it:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span><span class="boring">fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
-</span>    let some_state = ctx.use_state(|| true);
+</span>fn conditional_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+    let some_state = ctx.use_state(|| true);
 
     build! {
         if *some_state.read() {
@@ -377,14 +377,14 @@ impl WidgetBuilder for Button {
             }
         }
     }
-<span class="boring">}
-</span></code></pre>
+}
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="computed-values"><a class="header" href="#computed-values">Computed Values</a></h1>
 <p>Computed functions are an extremely useful construct. They can listen to state and react to it, but will only cause the widget they're defined in to rebuild if their return value changes. Instead of implementing an event listener system, we use computed functions to achieve the same effect.</p>
 <p>To demonstrate computed functions, we'll check if the user is currently hovering over the widget by utilizing the <code>HoverPlugin</code>:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span><span class="boring">fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
-</span>    let is_hovering = ctx.computed(|ctx| {
+</span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+    let is_hovering = ctx.computed(|ctx| {
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
             if hovering.read().is_hovering(ctx) {
                 true
@@ -409,8 +409,8 @@ impl WidgetBuilder for Button {
             }
         }
     }
-<span class="boring">}
-</span></code></pre>
+}
+</code></pre>
 <p>In this case, the computed function will be called whenever the <code>Hovering</code> global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="limiting-rebuilds"><a class="header" href="#limiting-rebuilds">Limiting Rebuilds</a></h1>
 <p>Rebuilds are at the heart of how <code>agui</code> works. Whenever state changes, the widgets in the tree that may change are updated. However, this is a very naïve system and much of the responsibility for limiting these rebuilds is up to the developer (you). We'll go over the problem, and devise a few solutions for it, however ultimately the decision is up to you.</p>
