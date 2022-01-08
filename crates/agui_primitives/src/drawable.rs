@@ -12,7 +12,7 @@ pub struct DrawableStyle {
     pub color: Color,
 }
 
-#[derive(Widget)]
+#[derive(Default, Widget)]
 pub struct Drawable {
     pub layout: Ref<Layout>,
 
@@ -20,19 +20,6 @@ pub struct Drawable {
     pub style: Option<DrawableStyle>,
 
     pub child: WidgetRef,
-}
-
-impl Default for Drawable {
-    fn default() -> Self {
-        Self {
-            layout: Ref::default(),
-
-            shape: Shape::default(),
-            style: Option::default(),
-
-            child: WidgetRef::default(),
-        }
-    }
 }
 
 impl WidgetBuilder for Drawable {
