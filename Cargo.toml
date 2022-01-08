@@ -13,8 +13,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [workspace]
-exclude = [ "benches" ]
-members = [ "crates/*", "integrations/*" ]
+members = [ "benches", "crates/*", "integrations/*" ]
 
 [features]
 default = [ "primitives", "widgets", "macros" ]

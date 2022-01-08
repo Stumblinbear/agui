@@ -1,28 +1,29 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{hash::Hash};
 
+use fnv::FnvHashMap;
 use morphorm::Hierarchy;
 
 #[derive(Debug)]
 pub struct Tree<K> {
     root: Option<K>,
-    nodes: HashMap<K, TreeNode<K>>,
+    nodes: FnvHashMap<K, TreeNode<K>>,
 }
 
 impl<K> Default for Tree<K> {
     fn default() -> Self {
         Self {
             root: None,
-            nodes: HashMap::new(),
+            nodes: FnvHashMap::default(),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct TreeNode<K> {
-    pub(crate) depth: usize,
+    pub depth: usize,
 
-    pub(crate) parent: Option<K>,
-    pub(crate) children: Vec<K>,
+    pub parent: Option<K>,
+    pub children: Vec<K>,
 }
 
 impl<K> Tree<K>
@@ -34,6 +35,9 @@ where
         self.root
     }
 
+    /// # Panics
+    ///
+    /// Will panic if the node you're parenting to does not exist in the tree.
     pub fn add(&mut self, parent_id: Option<K>, node_id: K) -> K {
         self.set_node(
             parent_id,
@@ -117,6 +121,9 @@ where
                             .expect("broken tree: unable to find child in removed node's parent"),
                     );
                 }
+            }else{
+                // If the node has no parent, then we can assume it was the root
+                self.root = None;
             }
 
             // We can't remove the children here, since the manager needs to have access to them.
@@ -214,7 +221,7 @@ where
         false
     }
 
-    fn get_deepest_child(&self, mut current_node_id: Option<K>) -> Option<K> {
+    pub fn get_deepest_child(&self, mut current_node_id: Option<K>) -> Option<K> {
         while let Some(node_id) = current_node_id {
             if let Some(node) = self.nodes.get(&node_id) {
                 if let Some(last_child) = node.children.last() {
@@ -394,12 +401,7 @@ where
         if let Some(node_id) = self.node_id {
             // Grab the node from the tree
             if let Some(node) = self.tree.get(&node_id) {
-                if let Some(parent_node_id) = node.parent {
-                    self.node_id = Some(parent_node_id);
-                } else {
-                    // TreeNode doesn't have a parent, so we're at the root.
-                    self.node_id = None;
-                }
+                self.node_id = node.parent;
             } else {
                 // If the node doesn't exist in the tree, then there's nothing to iterate
                 self.node_id = None;
