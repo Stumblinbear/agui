@@ -158,9 +158,9 @@
 }
 </code></pre>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
-<p>Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. <a href="state.html">You can read more about it here.</a></p>
+<p>Another option is utilizing globals.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. <a href="state.html">You can read more about it here.</a></p>
 <h2 id="providers-and-consumers"><a class="header" href="#providers-and-consumers">Providers and Consumers</a></h2>
-<p>Instead of global state, you can use <a href="../plugins/providers_and_consumers.html">Providers</a>. This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is <em>often</em> negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.</p>
+<p>Instead of globals, you can use <a href="../plugins/providers_and_consumers.html">Providers</a>. This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is <em>often</em> negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.</p>
 
                     </main>
 

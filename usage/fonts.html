@@ -135,7 +135,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
-<p><code>agui</code> comes with a built-in font system, managed by the <code>Fonts</code> struct as a global state. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration has their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
+<p><code>agui</code> comes with a built-in font system, managed by the <code>Fonts</code> struct as a global. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration has their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
 </span><span class="boring">    let program = agpu::GpuProgram::builder(&quot;agui fonts&quot;)
 </span><span class="boring">        // The integration requires a few GPU features to be enabled

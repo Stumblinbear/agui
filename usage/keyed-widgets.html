@@ -187,7 +187,7 @@ Key::local(hashable_value)
 Key::Local(u64)
 </code></pre>
 <h2 id="global-keys"><a class="header" href="#global-keys">Global Keys</a></h2>
-<p>Global keys, just like global state, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.</p>
+<p>Global keys, just like globals, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.</p>
 <pre><code class="language-rust noplaypen">Key::global(hashable_value)
 
 // or

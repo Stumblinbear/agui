@@ -146,7 +146,7 @@
 <li><strong>Layout</strong>: <code>agui</code> leverages <a href="https://github.com/geom3trik/morphorm">morphorm</a> for its layout system, which itself is modeled after the <a href="https://subformapp.com/articles/why-not-flexbox/">subform layout system</a>.</li>
 <li><strong>State</strong>: At its core, <code>agui</code> is a state manager. It takes in your application state, and manages its lifecycle end-to-end, listening for changes and updating your widgets as necessary.</li>
 <li><strong>Global</strong>: A global is state that exists as a singleton within your application. All widgets will read and write the same data.</li>
-<li><strong>Plugin</strong>: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage a global state that other widgets may listen to.</li>
+<li><strong>Plugin</strong>: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage one (or more) Globals that other widgets may listen to.</li>
 <li><strong>Computed Values</strong>: A function that returns a value, only causing updates to the widget if the returned value changes.</li>
 <li><strong>Key</strong>: A key is a way to instruct <code>agui</code> to cache a widget between rebuilds.</li>
 </ul>
@@ -335,7 +335,7 @@ impl WidgetBuilder for Button {
 <h2 id="parental-rebuilds"><a class="header" href="#parental-rebuilds">Parental Rebuilds</a></h2>
 <p>When a widget is rebuilt, its state is persisted. However, any children it has will be reinitialized, meaning <em>their</em> state will be destroyed. This means you need to be careful in how you structure your interface to reduce rebuilds, and to work around this limitation. For more information on this, you can see <a href="usage/limiting-rebuilds.html">Limiting Rebuilds</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
-<p><code>agui</code> comes with a built-in font system, managed by the <code>Fonts</code> struct as a global state. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration has their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
+<p><code>agui</code> comes with a built-in font system, managed by the <code>Fonts</code> struct as a global. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration has their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
 </span><span class="boring">    let program = agpu::GpuProgram::builder(&quot;agui fonts&quot;)
 </span><span class="boring">        // The integration requires a few GPU features to be enabled
@@ -434,7 +434,7 @@ Key::local(hashable_value)
 Key::Local(u64)
 </code></pre>
 <h2 id="global-keys"><a class="header" href="#global-keys">Global Keys</a></h2>
-<p>Global keys, just like global state, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.</p>
+<p>Global keys, just like globals, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.</p>
 <pre><code class="language-rust noplaypen">Key::global(hashable_value)
 
 // or
@@ -477,7 +477,7 @@ Key::Global(u64)
     }
 }
 </code></pre>
-<p>In this case, the computed value's closure will be called whenever the <code>Hovering</code> global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
+<p>In this case, the computed value's closure will be called whenever the <code>Hovering</code> global is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="limiting-rebuilds"><a class="header" href="#limiting-rebuilds">Limiting Rebuilds</a></h1>
 <p>Rebuilds are at the heart of how <code>agui</code> works. Whenever state changes, the widgets in the tree that may change are updated. However, this is a very naïve system and much of the responsibility for limiting these rebuilds is up to the developer (you). We'll go over the problem, and devise a few solutions for it, however ultimately the decision is up to you.</p>
 <h2 id="builders"><a class="header" href="#builders">Builders</a></h2>
@@ -502,13 +502,13 @@ Key::Global(u64)
 }
 </code></pre>
 <h2 id="globals-1"><a class="header" href="#globals-1">Globals</a></h2>
-<p>Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. <a href="usage/state.html">You can read more about it here.</a></p>
+<p>Another option is utilizing globals.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. <a href="usage/state.html">You can read more about it here.</a></p>
 <h2 id="providers-and-consumers"><a class="header" href="#providers-and-consumers">Providers and Consumers</a></h2>
-<p>Instead of global state, you can use <a href="usage/../plugins/providers_and_consumers.html">Providers</a>. This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is <em>often</em> negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.</p>
+<p>Instead of globals, you can use <a href="usage/../plugins/providers_and_consumers.html">Providers</a>. This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is <em>often</em> negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="providers--consumers"><a class="header" href="#providers--consumers">Providers &amp; Consumers</a></h1>
 <p>The provider pattern can provide <em>(hah!)</em> some much needed structure to your state. That's why <code>agui</code> provides <em>(hah)</em> this plugin in <code>agui_widgets</code>, to provide <em>(hah—okay, I'll stop)</em> some standardization to this extremely useful pattern.</p>
 <h2 id="motivation-and-usage-3"><a class="header" href="#motivation-and-usage-3">Motivation and Usage</a></h2>
-<p>As your application grows, using global state can get messy. It becomes increasingly difficult to understand where state is mutated, and what widgets are listening to said state. It also makes your code significantly less reusable. In contrast to widget state or global state, the provider pattern acts as the middleground between these two possibilities: it makes state available <em>only to children</em> of a widget, rather than to the entirety of the widget tree.</p>
+<p>As your application grows, using globals can get messy. It becomes increasingly difficult to understand where state is mutated, and what widgets are listening to said state. It also makes your code significantly less reusable. In contrast to widget state or globals, the provider pattern acts as the middleground between these two possibilities: it makes state available <em>only to children</em> of a widget, rather than to the entirety of the widget tree.</p>
 <p>A perfect example of where this pattern shines is in the <code>Theme</code> plugin, of which we cover in more detail <a href="plugins/./themes.html">in this section</a>. Themes are generally &quot;global&quot; (in the sense that you want everything to look the same), but sometimes you want the style of your widgets to be different in a certain part of your application. The widgets <code>agui</code> provides use the <code>Theme</code> plugin extensively, making it simple for you to style your application however you desire.</p>
 <h3 id="providing-state"><a class="header" href="#providing-state">Providing State</a></h3>
 <p>To provide some state, we just need to provide it somewhere in the widget tree:</p>
@@ -527,7 +527,7 @@ Key::Global(u64)
 }
 </code></pre>
 <h3 id="consuming-state"><a class="header" href="#consuming-state">Consuming State</a></h3>
-<p>Consuming from a provided state is also extremely simple; the main difference between this pattern and global state is that <code>use_global</code> will init non-existent values, but the Provider pattern will return <code>None</code> if it doesn't exist in the tree.</p>
+<p>Consuming from a provided state is also extremely simple; the main difference in usage between this pattern and globals is that <code>use_global</code> will init non-existent values, but the Provider pattern will return <code>None</code> if it doesn't exist in the tree.</p>
 <pre><code class="language-rust noplaypen">use agui::widgets::plugins::provider::ConsumerExt;
 
 <span class="boring">#[functional_widget]
