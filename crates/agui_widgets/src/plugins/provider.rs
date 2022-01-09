@@ -88,6 +88,13 @@ impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
             let providers = plugin.providers.lock();
 
             if let Some(providers) = providers.get(&TypeId::of::<V>()) {
+                // If the widget calling this is also providing the state, return that.
+                if providers.contains(&self.get_self()) {
+                    return Some(
+                        self.get_state_for(self.get_self(), || panic!("provider state broken")),
+                    );
+                }
+
                 for parent_id in self.get_tree().iter_parents(self.get_self()) {
                     if providers.contains(&parent_id) {
                         return Some(
