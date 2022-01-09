@@ -193,7 +193,7 @@ impl<'ui> WidgetContext<'ui> {
     }
 }
 
-// Global state
+// Globals
 impl<'ui> WidgetContext<'ui> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V, F>(&self, func: F) -> Notify<V>

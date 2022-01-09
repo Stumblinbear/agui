@@ -38,4 +38,4 @@ fn hovering_widget(ctx: &WidgetContext) -> BuildResult {
 }
 ```
 
-In this case, the computed value's closure will be called whenever the `Hovering` global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.
+In this case, the computed value's closure will be called whenever the `Hovering` global is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.

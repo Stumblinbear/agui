@@ -71,7 +71,7 @@ Key::Local(u64)
 
 ## Global Keys
 
-Global keys, just like global state, can be used throughout the entirety of your application. They **must** follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.
+Global keys, just like globals, can be used throughout the entirety of your application. They **must** follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.
 
 ```rust,noplaypen
 Key::global(hashable_value)

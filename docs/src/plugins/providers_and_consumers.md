@@ -4,7 +4,7 @@ The provider pattern can provide *(hah!)* some much needed structure to your sta
 
 ## Motivation and Usage
 
-As your application grows, using global state can get messy. It becomes increasingly difficult to understand where state is mutated, and what widgets are listening to said state. It also makes your code significantly less reusable. In contrast to widget state or global state, the provider pattern acts as the middleground between these two possibilities: it makes state available *only to children* of a widget, rather than to the entirety of the widget tree.
+As your application grows, using globals can get messy. It becomes increasingly difficult to understand where state is mutated, and what widgets are listening to said state. It also makes your code significantly less reusable. In contrast to widget state or globals, the provider pattern acts as the middleground between these two possibilities: it makes state available *only to children* of a widget, rather than to the entirety of the widget tree.
 
 A perfect example of where this pattern shines is in the `Theme` plugin, of which we cover in more detail [in this section](./themes.md). Themes are generally "global" (in the sense that you want everything to look the same), but sometimes you want the style of your widgets to be different in a certain part of your application. The widgets `agui` provides use the `Theme` plugin extensively, making it simple for you to style your application however you desire.
 
@@ -30,7 +30,7 @@ fn provider_widget(ctx: &WidgetContext, child: WidgetRef) -> BuildResult {
 
 ### Consuming State
 
-Consuming from a provided state is also extremely simple; the main difference between this pattern and global state is that `use_global` will init non-existent values, but the Provider pattern will return `None` if it doesn't exist in the tree.
+Consuming from a provided state is also extremely simple; the main difference in usage between this pattern and globals is that `use_global` will init non-existent values, but the Provider pattern will return `None` if it doesn't exist in the tree.
 
 ```rust,noplaypen
 use agui::widgets::plugins::provider::ConsumerExt;

@@ -29,8 +29,8 @@ fn widget_with_builder(ctx: &WidgetContext) -> BuildResult {
 
 ## Globals
 
-Another option is utilizing global state.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. [You can read more about it here.](state.md)
+Another option is utilizing globals.  You can create state, then create sub-widgets which listen to that state, resulting in potentially fewer rebuilds of your application with little effort. However, this has the effect of making it difficult to grok exactly what your application is doing if used incorrectly, and potentially makes limiting the scope of rebuilds more troublesome as your application grows. [You can read more about it here.](state.md)
 
 ## Providers and Consumers
 
-Instead of global state, you can use [Providers](../plugins/providers_and_consumers.md). This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is *often* negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.
+Instead of globals, you can use [Providers](../plugins/providers_and_consumers.md). This is an optional plugin which makes state available to its subtree of widgets, however it's not free. Whenever a child needs to access the state, it needs to traverse the tree to find a parent which is providing that state. This is *often* negligable, but as your application grows it may become more pronounced if the children that use the state are deeper in the tree.
