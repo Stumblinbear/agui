@@ -9,6 +9,7 @@
 - [Widgets](usage/widgets.md)
 - [Layout](usage/layout.md)
 - [State](usage/state.md)
+- [Fonts](usage/fonts.md)
 - [Clipping](usage/clipping.md)
 - [Keyed Widgets](usage/keyed-widgets.md)
 - [Computed Values](usage/computed.md)
@@ -16,7 +17,6 @@
 
 # Plugins
 
-- [Fonts](plugins/fonts.md)
 - [Themes](plugins/themes.md)
 - [Providers & Consumers](plugins/providers_and_consumers.md)
 - [Animations](plugins/animations.md)

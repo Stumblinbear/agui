@@ -8,7 +8,7 @@ use agui::{
 use agui_agpu::UI;
 
 fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui: Hello, world!")
+    let program = agpu::GpuProgram::builder("agui: hello_world")
         .with_gpu_features(
             Features::POLYGON_MODE_LINE
                 | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

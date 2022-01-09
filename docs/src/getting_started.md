@@ -17,7 +17,7 @@ The smallest program you can start up to render something can be found in `agui_
 
 ```rust,noplaypen
 # fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui: Hello, world!")
+    let program = agpu::GpuProgram::builder("agui: hello_world")
         // The integration requires a few GPU features to be enabled
         .with_gpu_features(
                 Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
