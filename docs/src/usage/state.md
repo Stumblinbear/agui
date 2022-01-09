@@ -31,7 +31,7 @@ fn counter_widget(ctx: &WidgetContext, font: FontId) -> BuildResult {
 
 Any time you use `num.write()`, it will cause any listening widgets to be rebuilt on the next update, so ensure you only call it when you *actually* change something. The first time `ctx.use_state(|| 0)` is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.
 
-If you want to create state, but not listen to changes to it, you can instead use `ctx.init_state(|| 0)`. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that, instead, the state will have changed internally, but you wouldn't see any change to the UI.
+If you want to create state, but not listen to changes to it, you can instead use `ctx.init_state`. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that above, instead of `use_state`, the value would have changed internally, but you wouldn't see any change to the UI.
 
 ## Globals
 

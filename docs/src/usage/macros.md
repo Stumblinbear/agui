@@ -4,7 +4,7 @@ Before we get too much further, you must understand some of the macros we'll be 
 
 ## The `build!` macro
 
-This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code.
+This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code. It supports pretty much all of Rust syntax, so you can embed logic (such as `if` or `match` statements) within it as normal.
 
 ```rust,noplaypen
 // Before:

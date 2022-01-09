@@ -445,7 +445,7 @@ impl<'ui> WidgetContext<'ui> {
 
         WidgetRef::Keyed {
             owner_id: match key {
-                Key::Unique(_) | Key::Local(_) => Some(*widget_id),
+                Key::Local(_) => Some(*widget_id),
                 Key::Global(_) => None,
             },
             key,

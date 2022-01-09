@@ -5,26 +5,24 @@
 
 # Usage
 
-- [Basics](usage/basics.md)
-  - [Macros](usage/basics/macros.md)
-  - [Widgets](usage/basics/widgets.md)
-  - [Layout](usage/basics/layout.md)
-  - [State](usage/basics/state.md)
-  - [Conditional Rendering](usage/basics/conditional-rendering.md)
-  - [Computed Values](usage/basics/computed.md)
-  - [Limiting Rebuilds](usage/basics/limiting-rebuilds.md)
-- [Advanced](usage/advanced.md)
-  - [Clipping](usage/advanced/clipping.md)
-  - [Events](usage/advanced/events.md)
-  - [Keys](usage/advanced/keys.md)
-- [Plugins](usage/plugins.md)
-  - [Fonts](usage/plugins/fonts.md)
-  - [Themes](usage/plugins/themes.md)
-  - [Providers & Consumers](usage/plugins/providers_and_consumers.md)
-  - [Animations](usage/plugins/animations.md)
-  - [Mouse & Keyboard](usage/plugins/mouse_and_keyboard.md)
-  - [Hovering](usage/plugins/hovering.md)
-  - [Writing your Own](usage/plugins/writing_a_plugin.md)
+- [Macros](usage/macros.md)
+- [Widgets](usage/widgets.md)
+- [Layout](usage/layout.md)
+- [State](usage/state.md)
+- [Clipping](usage/clipping.md)
+- [Keyed Widgets](usage/keyed-widgets.md)
+- [Computed Values](usage/computed.md)
+- [Limiting Rebuilds](usage/limiting-rebuilds.md)
+
+# Plugins
+
+- [Fonts](plugins/fonts.md)
+- [Themes](plugins/themes.md)
+- [Providers & Consumers](plugins/providers_and_consumers.md)
+- [Animations](plugins/animations.md)
+- [Mouse & Keyboard](plugins/mouse_and_keyboard.md)
+- [Hovering](plugins/hovering.md)
+- [Writing your Own](plugins/writing_a_plugin.md)
 
 # Widget Reference
 

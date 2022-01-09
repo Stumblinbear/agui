@@ -2,7 +2,9 @@
 
 Computed functions are an extremely useful construct. They can listen to state and react to it, but will only cause the widget they're defined in to rebuild if their return value changes. Instead of implementing an event listener system, we use computed functions to achieve the same effect.
 
-To demonstrate computed functions, we'll check if the user is currently hovering over the widget by utilizing the `HoverPlugin`:
+## Motivation and Usage
+
+Sometimes you'll want to listen to some state, but your widget will not always react or otherwise respond to that state change. In cases where this can be guaranteed (and deterministically tested against), we can use computed values to achieve this effect. To demonstrate them, we'll check if the user is currently hovering over the widget by utilizing the `HoverPlugin`:
 
 ```rust,noplaypen
 # #[functional_widget]
