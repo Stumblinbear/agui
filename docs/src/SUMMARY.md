@@ -18,7 +18,6 @@
 # Plugins
 
 - [Providers & Consumers](plugins/providers_and_consumers.md)
-- [Mouse & Keyboard](plugins/mouse_and_keyboard.md)
 - [Hovering](plugins/hovering.md)
 - [Themes](plugins/themes.md)
 - [Animations](plugins/animations.md)
