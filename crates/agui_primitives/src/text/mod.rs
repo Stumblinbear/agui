@@ -105,7 +105,7 @@ impl WidgetBuilder for Text {
             .into(),
         );
 
-        BuildResult::Empty
+        BuildResult::None
     }
 }
 

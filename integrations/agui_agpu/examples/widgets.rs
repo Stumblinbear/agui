@@ -126,7 +126,7 @@ fn example_main(ctx: &WidgetContext, _color: Color, _child: WidgetRef) -> BuildR
 
                     theme.provide(ctx);
 
-                    build!{
+                    build! {
                         Button {
                             child: Padding {
                                 padding: Margin::All(10.0.into()),

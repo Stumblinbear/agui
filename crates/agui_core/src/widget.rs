@@ -9,7 +9,7 @@ use crate::{context::WidgetContext, unit::Key};
 #[non_exhaustive]
 pub enum BuildResult {
     /// Indicates that the widget has no children.
-    Empty,
+    None,
 
     /// The widget contains children.
     Some(Vec<WidgetRef>),
@@ -37,7 +37,7 @@ impl From<&WidgetRef> for BuildResult {
 impl From<Vec<WidgetRef>> for BuildResult {
     fn from(widgets: Vec<WidgetRef>) -> Self {
         if widgets.is_empty() {
-            Self::Empty
+            Self::None
         } else {
             Self::Some(widgets)
         }
@@ -47,7 +47,7 @@ impl From<Vec<WidgetRef>> for BuildResult {
 impl From<&Vec<WidgetRef>> for BuildResult {
     fn from(widgets: &Vec<WidgetRef>) -> Self {
         if widgets.is_empty() {
-            Self::Empty
+            Self::None
         } else {
             Self::Some(widgets.clone())
         }

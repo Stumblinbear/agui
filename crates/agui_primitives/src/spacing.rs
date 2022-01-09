@@ -39,6 +39,6 @@ impl WidgetBuilder for Spacing {
             .into(),
         );
 
-        BuildResult::Empty
+        BuildResult::None
     }
 }

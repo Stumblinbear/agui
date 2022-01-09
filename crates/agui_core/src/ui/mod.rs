@@ -516,12 +516,12 @@ impl<'ui> WidgetManager<'ui> {
         let result = node
             .widget
             .try_get()
-            .map_or(BuildResult::Empty, |widget| widget.build(&self.context));
+            .map_or(BuildResult::None, |widget| widget.build(&self.context));
 
         *self.context.current_id.lock() = None;
 
         match result {
-            BuildResult::Empty => {}
+            BuildResult::None => {}
             BuildResult::Some(children) => {
                 for child in children {
                     if !child.is_valid() {
@@ -642,7 +642,7 @@ mod tests {
             *self.builds.lock() += 1;
             *self.computed_value.lock() = computed_value;
 
-            BuildResult::Empty
+            BuildResult::None
         }
     }
 

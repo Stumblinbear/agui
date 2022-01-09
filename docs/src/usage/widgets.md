@@ -15,7 +15,7 @@ pub struct Button { }
 
 impl WidgetBuilder for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        BuildResult::Empty
+        BuildResult::None
     }
 }
 ```
