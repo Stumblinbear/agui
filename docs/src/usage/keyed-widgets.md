@@ -58,6 +58,10 @@ Additionally, keys only function if the widget is removed and re-added to the tr
 Local keys are just as the name implies: they're local to the widget that defined them. If your widget can function using local keys, it's highly recommended to use them over any other since they come with the fewest strings attached.
 
 ```rust,noplaypen
+Key::single() // If the widget only contains one keyed widget
+
+// Otherwise, we use
+
 Key::local(hashable_value)
 
 // or
@@ -67,7 +71,7 @@ Key::Local(u64)
 
 ## Global Keys
 
-Global keys, just like global state, can be used throughout the entirety of your application. They **must** follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. In those cases, they should either be used internally by the crate, or they should accept a key as a parameter.
+Global keys, just like global state, can be used throughout the entirety of your application. They **must** follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.
 
 ```rust,noplaypen
 Key::global(hashable_value)

@@ -35,7 +35,7 @@ If you want to create state, but not listen to changes to it, you can instead us
 
 ## Globals
 
-Global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.
+A global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.
 
 ```rust,noplaypen
 # #[functional_widget]
@@ -54,6 +54,6 @@ fn widget_with_global(ctx: &WidgetContext) -> BuildResult {
 
 In this case, `use_global` will fetch the global state or initialize it to zero if it does not already exist.
 
-## Parental rebuilds
+## Parental Rebuilds
 
 When a widget is rebuilt, its state is persisted. However, any children it has will be reinitialized, meaning *their* state will be destroyed. This means you need to be careful in how you structure your interface to reduce rebuilds, and to work around this limitation. For more information on this, you can see [Limiting Rebuilds](limiting-rebuilds.md).

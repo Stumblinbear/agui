@@ -43,7 +43,7 @@ The smallest program you can start up to render something can be found in `agui_
 # }
 ```
 
-There's a little initial setup to create the GpuProgram and UI, most of what we care about is loading the font and `ui.set_root`. The `build!` macro will be [explained soon](usage/basics/macros.md). How fonts work will be explained a bit futher in a [later section](usage/plugins/fonts.md).
+There's a little initial setup to create the GpuProgram and UI, most of what we care about is loading the font and `ui.set_root`. The `build!` macro will be [explained soon](usage/macros.md). How fonts work will be explained a bit futher in a [later section](usage/fonts.md).
 
 With the above code, you should be left with something like this:
 

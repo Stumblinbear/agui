@@ -15,7 +15,7 @@ Hopefully that wasn't too much jargon for you. Just in case, here's a tl;dr: **U
 - **State**: At its core, `agui` is a state manager. It takes in your application state, and manages its lifecycle end-to-end, listening for changes and updating your widgets as necessary.
 - **Global**: A global is state that exists as a singleton within your application. All widgets will read and write the same data.
 - **Plugin**: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage a global state that other widgets may listen to.
-- **Computed Functions**: A function returns a value, only causing updates to the widget if the returned value changes.
+- **Computed Values**: A function that returns a value, only causing updates to the widget if the returned value changes.
 - **Key**: A key is a way to instruct `agui` to cache a widget between rebuilds.
 
 ## Stability Warning

@@ -68,7 +68,7 @@ pub trait WidgetBuilder: Downcast {
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt, when its internal state changes, when
-    /// global state changes, when a computed function changes, or just because it feels like it. Hence,
+    /// global state changes, when a computed value changes, or just because it feels like it. Hence,
     /// it should not be relied on for any reason other than to return child widgets.
     fn build(&self, ctx: &WidgetContext) -> BuildResult;
 }
