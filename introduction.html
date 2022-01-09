@@ -145,7 +145,7 @@
 <li><strong>Layout</strong>: <code>agui</code> leverages <a href="https://github.com/geom3trik/morphorm">morphorm</a> for its layout system, which itself is modeled after the <a href="https://subformapp.com/articles/why-not-flexbox/">subform layout system</a>.</li>
 <li><strong>State</strong>: At its core, <code>agui</code> is a state manager. It takes in your application state, and manages its lifecycle end-to-end, listening for changes and updating your widgets as necessary.</li>
 <li><strong>Global</strong>: A global is state that exists as a singleton within your application. All widgets will read and write the same data.</li>
-<li><strong>Plugin</strong>: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage one (or more) Globals that other widgets may listen to.</li>
+<li><strong>Plugin</strong>: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage one (or more) globals that other widgets may listen to.</li>
 <li><strong>Computed Values</strong>: A function that returns a value, only causing updates to the widget if the returned value changes.</li>
 <li><strong>Key</strong>: A key is a way to instruct <code>agui</code> to cache a widget between rebuilds.</li>
 </ul>
