@@ -135,12 +135,13 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="computed-values"><a class="header" href="#computed-values">Computed Values</a></h1>
-<p>Computed functions are an extremely useful construct. They can listen to state and react to it, but will only cause the widget they're defined in to rebuild if their return value changes. Instead of implementing an event listener system, we use computed functions to achieve the same effect.</p>
+<p>Computed values are an extremely useful construct. They can listen to state and react to it, but will only cause the widget they're defined in to rebuild if their return value changes. Instead of implementing an event listener system, we use computed values to achieve the same effect.</p>
 <h2 id="motivation-and-usage"><a class="header" href="#motivation-and-usage">Motivation and Usage</a></h2>
 <p>Sometimes you'll want to listen to some state, but your widget will not always react or otherwise respond to that state change. In cases where this can be guaranteed (and deterministically tested against), we can use computed values to achieve this effect. To demonstrate them, we'll check if the user is currently hovering over the widget by utilizing the <code>HoverPlugin</code>:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
 </span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
     let is_hovering = ctx.computed(|ctx| {
+        // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
             if hovering.read().is_hovering(ctx) {
                 true
@@ -167,7 +168,7 @@
     }
 }
 </code></pre>
-<p>In this case, the computed function will be called whenever the <code>Hovering</code> global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
+<p>In this case, the computed value's closure will be called whenever the <code>Hovering</code> global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
 
                     </main>
 

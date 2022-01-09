@@ -147,7 +147,7 @@
 <li><strong>State</strong>: At its core, <code>agui</code> is a state manager. It takes in your application state, and manages its lifecycle end-to-end, listening for changes and updating your widgets as necessary.</li>
 <li><strong>Global</strong>: A global is state that exists as a singleton within your application. All widgets will read and write the same data.</li>
 <li><strong>Plugin</strong>: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage a global state that other widgets may listen to.</li>
-<li><strong>Computed Functions</strong>: A function returns a value, only causing updates to the widget if the returned value changes.</li>
+<li><strong>Computed Values</strong>: A function that returns a value, only causing updates to the widget if the returned value changes.</li>
 <li><strong>Key</strong>: A key is a way to instruct <code>agui</code> to cache a widget between rebuilds.</li>
 </ul>
 <h2 id="stability-warning"><a class="header" href="#stability-warning">Stability Warning</a></h2>
@@ -189,7 +189,7 @@ agui = &quot;0.3&quot; # ensure this is the latest version
     ui.run(program)
 <span class="boring">}
 </span></code></pre>
-<p>There's a little initial setup to create the GpuProgram and UI, most of what we care about is loading the font and <code>ui.set_root</code>. The <code>build!</code> macro will be <a href="usage/basics/macros.html">explained soon</a>. How fonts work will be explained a bit futher in a <a href="usage/plugins/fonts.html">later section</a>.</p>
+<p>There's a little initial setup to create the GpuProgram and UI, most of what we care about is loading the font and <code>ui.set_root</code>. The <code>build!</code> macro will be <a href="usage/macros.html">explained soon</a>. How fonts work will be explained a bit futher in a <a href="usage/fonts.html">later section</a>.</p>
 <p>With the above code, you should be left with something like this:</p>
 <p><img src="assets/hello_world.png" alt="Hello World" /></p>
 <p>Truly remarkable.</p>
@@ -244,9 +244,9 @@ fn example_widget(ctx: &amp;WidgetContext, layout: Ref&lt;Layout&gt;, child: Wid
 </code></pre>
 <p>See? Instead of establishing a struct called <code>ExampleWidget</code> with the fields of <code>layout</code> and <code>child</code>, we can just make a function and tag it with the macro. The <code>ctx: &amp;WidgetContext</code> parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement <code>Default + Clone</code> in some form or another, so that the widget may call the <code>example_widget</code> function without issue.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="widgets"><a class="header" href="#widgets">Widgets</a></h1>
-<p>A widget is anything that <em>exists</em> in the UI tree. It could be a visual element, a management system, or just plain-ol-data. You can find a full list of them in the <a href="usage/../../widgets/widgets.html">Widget Reference</a>.</p>
+<p>A widget is anything that <em>exists</em> in the UI tree. It could be a visual element, a management system, or just plain-ol-data. You can find a full list of them in the <a href="usage/../widgets/widgets.html">Widget Reference</a>.</p>
 <h2 id="primitives"><a class="header" href="#primitives">Primitives</a></h2>
-<p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="usage/../../widgets/primitives.html">Primitive Widget Reference</a>.</p>
+<p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="usage/../widgets/primitives.html">Primitive Widget Reference</a>.</p>
 <h2 id="creating-a-widget"><a class="header" href="#creating-a-widget">Creating a Widget</a></h2>
 <p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetBuilder</code>. We're going to start simple, with a basic box on the screen:</p>
 <pre><code class="language-rust noplaypen">pub struct Button { }
@@ -270,8 +270,8 @@ impl WidgetBuilder for Button {
     }
 }
 </code></pre>
-<p>This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Drawable</code> is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to <code>Drawable</code>, your widget should render exactly the same no matter where it's running.</p>
-<p>One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="usage/../advanced/clipping.html">later section</a>.</p>
+<p>This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Drawable</code> is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to <code>Drawable</code>, your widget should render exactly the same no matter what integration it is used in.</p>
+<p>One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="usage/./clipping.html">later section</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="layout"><a class="header" href="#layout">Layout</a></h1>
 <p><code>agui</code> leverages <a href="https://github.com/geom3trik/morphorm">morphorm</a> for its layout system, which itself is modeled after the <a href="https://subformapp.com/articles/why-not-flexbox/">subform layout system</a>. While we go into some detail here, it's recommended to do some research into those as well until this page is fleshed out a bit more.</p>
 <h2 id="why-subform-why-not-flexbox"><a class="header" href="#why-subform-why-not-flexbox">Why subform? Why not flexbox?</a></h2>
@@ -317,7 +317,7 @@ impl WidgetBuilder for Button {
 <p>Any time you use <code>num.write()</code>, it will cause any listening widgets to be rebuilt on the next update, so ensure you only call it when you <em>actually</em> change something. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
 <p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that above, instead of <code>use_state</code>, the value would have changed internally, but you wouldn't see any change to the UI.</p>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
-<p>Global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.</p>
+<p>A global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
 </span>fn widget_with_global(ctx: &amp;WidgetContext) -&gt; BuildResult {
     let state = ctx.use_global(|| 0);
@@ -332,7 +332,7 @@ impl WidgetBuilder for Button {
 }
 </code></pre>
 <p>In this case, <code>use_global</code> will fetch the global state or initialize it to zero if it does not already exist.</p>
-<h2 id="parental-rebuilds"><a class="header" href="#parental-rebuilds">Parental rebuilds</a></h2>
+<h2 id="parental-rebuilds"><a class="header" href="#parental-rebuilds">Parental Rebuilds</a></h2>
 <p>When a widget is rebuilt, its state is persisted. However, any children it has will be reinitialized, meaning <em>their</em> state will be destroyed. This means you need to be careful in how you structure your interface to reduce rebuilds, and to work around this limitation. For more information on this, you can see <a href="usage/limiting-rebuilds.html">Limiting Rebuilds</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
 <p><code>agui</code> comes with a built-in font system, managed by the <code>Fonts</code> struct as a global state. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration has their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
@@ -423,14 +423,18 @@ ctx.key(Key::single(), child).into()
 <p>Additionally, keys only function if the widget is removed and re-added to the tree within a single update. If you have a keyed widget that gets removed from the tree, but then gets added back into the tree in a subsequent <code>update()</code>, then it will be regenerated anew.</p>
 <h2 id="local-keys"><a class="header" href="#local-keys">Local Keys</a></h2>
 <p>Local keys are just as the name implies: they're local to the widget that defined them. If your widget can function using local keys, it's highly recommended to use them over any other since they come with the fewest strings attached.</p>
-<pre><code class="language-rust noplaypen">Key::local(hashable_value)
+<pre><code class="language-rust noplaypen">Key::single() // If the widget only contains one keyed widget
+
+// Otherwise, we use
+
+Key::local(hashable_value)
 
 // or
 
 Key::Local(u64)
 </code></pre>
 <h2 id="global-keys"><a class="header" href="#global-keys">Global Keys</a></h2>
-<p>Global keys, just like global state, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. In those cases, they should either be used internally by the crate, or they should accept a key as a parameter.</p>
+<p>Global keys, just like global state, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.</p>
 <pre><code class="language-rust noplaypen">Key::global(hashable_value)
 
 // or
@@ -440,12 +444,13 @@ Key::Global(u64)
 <h3 id="unique-keys"><a class="header" href="#unique-keys">Unique Keys</a></h3>
 <p>Unique keys are global keys, but they're designed to be passed as an argument to child widgets. These are non-deterministic, and a new one should be generated each time one is created, using <code>Key::unique()</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="computed-values"><a class="header" href="#computed-values">Computed Values</a></h1>
-<p>Computed functions are an extremely useful construct. They can listen to state and react to it, but will only cause the widget they're defined in to rebuild if their return value changes. Instead of implementing an event listener system, we use computed functions to achieve the same effect.</p>
+<p>Computed values are an extremely useful construct. They can listen to state and react to it, but will only cause the widget they're defined in to rebuild if their return value changes. Instead of implementing an event listener system, we use computed values to achieve the same effect.</p>
 <h2 id="motivation-and-usage-2"><a class="header" href="#motivation-and-usage-2">Motivation and Usage</a></h2>
 <p>Sometimes you'll want to listen to some state, but your widget will not always react or otherwise respond to that state change. In cases where this can be guaranteed (and deterministically tested against), we can use computed values to achieve this effect. To demonstrate them, we'll check if the user is currently hovering over the widget by utilizing the <code>HoverPlugin</code>:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
 </span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
     let is_hovering = ctx.computed(|ctx| {
+        // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
             if hovering.read().is_hovering(ctx) {
                 true
@@ -472,7 +477,7 @@ Key::Global(u64)
     }
 }
 </code></pre>
-<p>In this case, the computed function will be called whenever the <code>Hovering</code> global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
+<p>In this case, the computed value's closure will be called whenever the <code>Hovering</code> global state is updated, but will only mark the widget for rebuild when it returns a different value. In this case, it will only rebuild when it goes from a non-hover state to a hover state and vice versa.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="limiting-rebuilds"><a class="header" href="#limiting-rebuilds">Limiting Rebuilds</a></h1>
 <p>Rebuilds are at the heart of how <code>agui</code> works. Whenever state changes, the widgets in the tree that may change are updated. However, this is a very naïve system and much of the responsibility for limiting these rebuilds is up to the developer (you). We'll go over the problem, and devise a few solutions for it, however ultimately the decision is up to you.</p>
 <h2 id="builders"><a class="header" href="#builders">Builders</a></h2>

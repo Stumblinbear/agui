@@ -176,14 +176,18 @@ ctx.key(Key::single(), child).into()
 <p>Additionally, keys only function if the widget is removed and re-added to the tree within a single update. If you have a keyed widget that gets removed from the tree, but then gets added back into the tree in a subsequent <code>update()</code>, then it will be regenerated anew.</p>
 <h2 id="local-keys"><a class="header" href="#local-keys">Local Keys</a></h2>
 <p>Local keys are just as the name implies: they're local to the widget that defined them. If your widget can function using local keys, it's highly recommended to use them over any other since they come with the fewest strings attached.</p>
-<pre><code class="language-rust noplaypen">Key::local(hashable_value)
+<pre><code class="language-rust noplaypen">Key::single() // If the widget only contains one keyed widget
+
+// Otherwise, we use
+
+Key::local(hashable_value)
 
 // or
 
 Key::Local(u64)
 </code></pre>
 <h2 id="global-keys"><a class="header" href="#global-keys">Global Keys</a></h2>
-<p>Global keys, just like global state, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. In those cases, they should either be used internally by the crate, or they should accept a key as a parameter.</p>
+<p>Global keys, just like global state, can be used throughout the entirety of your application. They <strong>must</strong> follow the convention of each key being entirely unique to your application, and should not be used by third party widget crates. Third parties should use unique keys, or accept a key as a parameter.</p>
 <pre><code class="language-rust noplaypen">Key::global(hashable_value)
 
 // or
