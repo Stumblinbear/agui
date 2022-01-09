@@ -17,11 +17,11 @@
 
 # Plugins
 
-- [Themes](plugins/themes.md)
-- [Animations](plugins/animations.md)
+- [Providers & Consumers](plugins/providers_and_consumers.md)
 - [Mouse & Keyboard](plugins/mouse_and_keyboard.md)
 - [Hovering](plugins/hovering.md)
-- [Providers & Consumers](plugins/providers_and_consumers.md)
+- [Themes](plugins/themes.md)
+- [Animations](plugins/animations.md)
 - [Writing your Own](plugins/writing_a_plugin.md)
 
 # Widget Reference
