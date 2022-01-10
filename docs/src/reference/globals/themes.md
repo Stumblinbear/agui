@@ -4,7 +4,7 @@ Having a standardized Theme system is necessary for an easy-to-use UI library. H
 
 ## Usage
 
-Lets go over how a button handles its styling, as an example:
+Lets go over how the `Button` widget handles its styling, as an example:
 
 ```rust,noplaypen
 #[derive(Clone)]
