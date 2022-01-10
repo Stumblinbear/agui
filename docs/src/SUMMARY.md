@@ -19,8 +19,7 @@
 
 - [Providers & Consumers](plugins/providers_and_consumers.md)
 - [Hovering](plugins/hovering.md)
-- [Animations](plugins/animations.md)
-- [Writing your Own](plugins/writing_a_plugin.md)
+<!-- - [Writing your Own](plugins/writing_a_plugin.md) -->
 
 # Reference
 
@@ -32,8 +31,8 @@
   - [Mouse](reference/globals/mouse.md)
   - [Keyboard](reference/globals/keyboard.md)
   - [Themes](reference/globals/themes.md)
-
-# Integrations
+- [Animations](reference/animations.md)
+<!-- # Integrations
 
 - [How they work](integrations/how_they_work.md)
 - [Writing your own](integrations/writing_your_own.md)
@@ -44,4 +43,4 @@
 
 - [Title Screen](cookbook/title_screen.md)
 - [Settings](cookbook/settings.md)
-- [Scroll View](cookbook/scroll_view.md)
+- [Scroll View](cookbook/scroll_view.md) -->
