@@ -48,7 +48,7 @@ fn button(ctx: &WidgetContext, style: Option<ButtonStyle>, child: WidgetRef) -> 
     //   2. Check for a widget that's providing a Theme, and get_or_default from that
     //   3. Check global state for a Theme, and get_or_default from that
     //   4. Use the Default style
-    let style: ButtonStyle = self.style.resolve(ctx);
+    let style: ButtonStyle = style.resolve(ctx);
 
     BuildResult::None
 }
