@@ -1,6 +1,6 @@
 # Themes
 
-Having a standardized Theme system is necessary for an easy-to-use system. However, we don't use a single struct for styles, as this is wasteful and cannot cover every use case. Instead, each widget should create a struct with style information, that derives the traits: `Default + Send + Sync`.
+Having a standardized Theme system is necessary for an easy-to-use UI library. However, we don't use a single struct for styles, as this is wasteful and cannot cover every use case. Instead, each widget should create a struct with style information, that derives the traits: `Default + Send + Sync`.
 
 ## Usage
 
