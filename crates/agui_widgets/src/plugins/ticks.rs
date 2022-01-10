@@ -9,7 +9,7 @@ pub struct TickPlugin {
 impl Default for TickPlugin {
     fn default() -> Self {
         Self {
-            ticks_per_second: 4.0,
+            ticks_per_second: 10.0,
         }
     }
 }
