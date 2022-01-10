@@ -618,7 +618,7 @@ Spacing::vertical(Units) // Creates a widget with `Units` height.
 <div style="break-before: page; page-break-before: always;"></div><h1 id="themes"><a class="header" href="#themes">Themes</a></h1>
 <p>Having a standardized Theme system is necessary for an easy-to-use UI library. However, we don't use a single struct for styles, as this is wasteful and would not cover every use case. Instead, each widget should create a struct with style information, that derives the traits: <code>Default + Send + Sync</code>.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<p>Lets go over how a button handles its styling, as an example:</p>
+<p>Lets go over how the <code>Button</code> widget handles its styling, as an example:</p>
 <pre><code class="language-rust noplaypen">#[derive(Clone)]
 pub struct ButtonStyle {
     pub normal: DrawableStyle,
@@ -657,7 +657,7 @@ impl Default for ButtonStyle {
     //   2. Check for a widget that's providing a Theme, and get_or_default from that
     //   3. Check global state for a Theme, and get_or_default from that
     //   4. Use the Default style
-    let style: ButtonStyle = self.style.resolve(ctx);
+    let style: ButtonStyle = style.resolve(ctx);
 
     BuildResult::None
 }
