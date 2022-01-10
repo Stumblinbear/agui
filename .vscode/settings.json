@@ -23,6 +23,7 @@
         "RLOGO",
         "RSHIFT",
         "Sysrq",
-        "trybuild"
+        "trybuild",
+        "unopinionated"
     ]
 }

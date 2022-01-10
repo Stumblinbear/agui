@@ -25,13 +25,6 @@
 # Reference
 
 - [Primitives](reference/primitives.md)
-  - [Layout](reference/primitives/layout.md)
-    - [Row](reference/primitives/row.md)
-    - [Column](reference/primitives/column.md)
-    - [Padding](reference/primitives/padding.md)
-    - [Spacing](reference/primitives/spacing.md)
-  - [Drawable](reference/primitives/drawable.md)
-  - [Text](reference/primitives/text.md)
 - [Widgets](reference/widgets.md)
   - [App](reference/widgets/app.md)
   - [Button](reference/widgets/button.md)

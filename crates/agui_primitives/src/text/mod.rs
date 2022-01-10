@@ -86,7 +86,6 @@ impl WidgetBuilder for Text {
                 }
 
                 Sizing::Axis {
-                    // What even is this magic number
                     width: Units::Pixels(max_x),
                     height: Units::Pixels(max_y),
                 }
