@@ -534,7 +534,7 @@ mod tests {
     use super::Tree;
 
     #[test]
-    fn test_heirarchy() {
+    fn test_hierarchy() {
         let mut tree: Tree<WidgetId> = Tree::default();
 
         let root_id = tree.add(None, 0.into());

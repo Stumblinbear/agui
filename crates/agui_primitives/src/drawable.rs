@@ -10,6 +10,7 @@ use agui_macros::Widget;
 #[derive(Clone, Default)]
 pub struct DrawableStyle {
     pub color: Color,
+    pub opacity: f32,
 }
 
 #[derive(Default, Widget)]

@@ -19,23 +19,26 @@
 
 - [Providers & Consumers](plugins/providers_and_consumers.md)
 - [Hovering](plugins/hovering.md)
-- [Themes](plugins/themes.md)
 - [Animations](plugins/animations.md)
 - [Writing your Own](plugins/writing_a_plugin.md)
 
-# Widget Reference
+# Reference
 
-- [Primitives](widgets/primitives.md)
-  - [Layout](widgets/primitives/layout.md)
-    - [Row](widgets/primitives/row.md)
-    - [Column](widgets/primitives/column.md)
-    - [Padding](widgets/primitives/spadding.md)
-    - [Spacing](widgets/primitives/sspacing.md)
-  - [Drawable](widgets/primitives/drawable.md)
-  - [Text](widgets/primitives/text.md)
-- [Widgets](widgets/widgets.md)
-  - [App](widgets/widgets/app.md)
-  - [Button](widgets/widgets/button.md)
+- [Primitives](reference/primitives.md)
+  - [Layout](reference/primitives/layout.md)
+    - [Row](reference/primitives/row.md)
+    - [Column](reference/primitives/column.md)
+    - [Padding](reference/primitives/padding.md)
+    - [Spacing](reference/primitives/spacing.md)
+  - [Drawable](reference/primitives/drawable.md)
+  - [Text](reference/primitives/text.md)
+- [Widgets](reference/widgets.md)
+  - [App](reference/widgets/app.md)
+  - [Button](reference/widgets/button.md)
+- [Globals](reference/globals.md)
+  - [Mouse](reference/globals/mouse.md)
+  - [Keyboard](reference/globals/keyboard.md)
+  - [Themes](reference/globals/themes.md)
 
 # Integrations
 

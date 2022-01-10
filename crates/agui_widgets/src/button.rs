@@ -11,7 +11,7 @@ use agui_primitives::{Drawable, DrawableStyle};
 use crate::state::{
     hovering::Hovering,
     mouse::{Mouse, MouseButtonState},
-    theme::{Style, Theme},
+    theme::StyleExt,
 };
 
 #[derive(Clone)]
@@ -21,21 +21,22 @@ pub struct ButtonStyle {
     pub pressed: DrawableStyle,
 }
 
-impl Style for ButtonStyle {}
-
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
             normal: DrawableStyle {
                 color: Color::White,
+                opacity: 1.0,
             },
 
             hover: DrawableStyle {
                 color: Color::LightGray,
+                opacity: 1.0,
             },
 
             pressed: DrawableStyle {
                 color: Color::DarkGray,
+                opacity: 1.0,
             },
         }
     }
@@ -104,7 +105,7 @@ impl WidgetBuilder for Button {
             *last_state.write() = state;
         }
 
-        let style = Theme::resolve(ctx, &self.style);
+        let style: ButtonStyle = self.style.resolve(ctx);
 
         build! {
             Drawable {

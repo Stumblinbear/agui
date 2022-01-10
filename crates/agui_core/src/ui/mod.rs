@@ -178,7 +178,7 @@ impl<'ui> WidgetManager<'ui> {
     /// Update the UI tree.
     ///
     /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
-    /// changes that occured during the process, in order.
+    /// changes that occurred during the process, in order.
     #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, events: &mut Vec<WidgetEvent>) {
         if self.modifications.is_empty() && self.changed.lock().is_empty() {

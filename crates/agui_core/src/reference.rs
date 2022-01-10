@@ -75,7 +75,7 @@ impl<V> Ref<V> {
         }
     }
 
-    /// Attempst to fetch the value that this reference is wrapping.
+    /// Attempts to fetch the value that this reference is wrapping.
     #[must_use]
     pub fn try_get(&self) -> Option<Arc<V>> {
         match self {

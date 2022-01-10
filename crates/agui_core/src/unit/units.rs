@@ -96,7 +96,7 @@ impl From<Units> for morphorm::Units {
     fn from(val: Units) -> Self {
         match val {
             Units::Pixels(px) => Self::Pixels(px),
-            Units::Percentage(perc) => Self::Percentage(perc),
+            Units::Percentage(percent) => Self::Percentage(percent),
             Units::Stretch(val) => Self::Stretch(val),
             Units::Auto => Self::Auto,
         }

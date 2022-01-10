@@ -7,6 +7,8 @@ use crate::plugins::provider::ConsumerExt;
 
 pub trait Style: Downcast + Send + Sync {}
 
+impl<T> Style for T where T: Downcast + Send + Sync {}
+
 impl_downcast!(Style);
 
 #[derive(Default)]
@@ -48,7 +50,7 @@ impl Theme {
         }
     }
 
-    pub fn resolve<S>(ctx: &WidgetContext, style: &Option<S>) -> S
+    pub fn resolve<S>(ctx: &WidgetContext, style: Option<&S>) -> S
     where
         S: Style + Clone + Default,
     {
@@ -60,5 +62,39 @@ impl Theme {
         } else {
             S::default()
         }
+    }
+}
+
+pub trait StyleExt<S>
+where
+    S: Style + Clone + Default,
+{
+    fn resolve(&self, ctx: &WidgetContext) -> S;
+}
+
+impl<S> StyleExt<S> for S
+where
+    S: Style + Clone + Default,
+{
+    fn resolve(&self, ctx: &WidgetContext) -> S {
+        Theme::resolve(ctx, Some(self))
+    }
+}
+
+impl<S> StyleExt<S> for Option<S>
+where
+    S: Style + Clone + Default,
+{
+    fn resolve(&self, ctx: &WidgetContext) -> S {
+        Theme::resolve(ctx, self.as_ref())
+    }
+}
+
+impl<S> StyleExt<S> for Option<&S>
+where
+    S: Style + Clone + Default,
+{
+    fn resolve(&self, ctx: &WidgetContext) -> S {
+        Theme::resolve(ctx, *self)
     }
 }

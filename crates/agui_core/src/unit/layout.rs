@@ -87,7 +87,7 @@ impl LayoutType {
     }
 }
 
-/// Sets the margin around the elment.
+/// Sets the margin around the element.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
 pub enum Margin {
@@ -263,7 +263,7 @@ impl Position {
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Sizing {
-    /// Element size automatically set based onother factors.
+    /// Element size automatically set based another factors.
     Auto,
 
     /// Element size attempts to fill its parent container.

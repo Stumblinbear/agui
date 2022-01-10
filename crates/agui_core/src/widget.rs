@@ -194,7 +194,7 @@ impl WidgetRef {
 
     /// # Panics
     ///
-    /// Will panic if the widget cannot be downcasted to the generic type, or if it is None.
+    /// Will panic if the widget cannot be downcast to the generic type, or if it is None.
     #[must_use]
     pub fn downcast_ref<W>(&self) -> Rc<W>
     where
