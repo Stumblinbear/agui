@@ -33,5 +33,9 @@ name = "counter"
 path = "examples/counter.rs"
 
 [[example]]
-name = "widgets"
-path = "examples/widgets.rs"
+name = "input"
+path = "examples/input.rs"
+
+[[example]]
+name = "title_screen"
+path = "examples/title_screen.rs"

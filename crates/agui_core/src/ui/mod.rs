@@ -181,6 +181,19 @@ impl<'ui> WidgetManager<'ui> {
     /// changes that occurred during the process, in order.
     #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, events: &mut Vec<WidgetEvent>) {
+        // Update all plugins, as they may cause changes to state
+        {
+            let plugins = self.context.plugins.lock();
+
+            for (plugin_id, plugin) in plugins.iter() {
+                *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
+
+                plugin.pre_update(&self.context);
+            }
+
+            *self.context.current_id.lock() = None;
+        }
+
         if self.modifications.is_empty() && self.changed.lock().is_empty() {
             return;
         }
@@ -295,7 +308,7 @@ impl<'ui> WidgetManager<'ui> {
             for (plugin_id, plugin) in plugins.iter() {
                 *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
 
-                plugin.on_layout(&self.context);
+                plugin.post_update(&self.context);
             }
 
             *self.context.current_id.lock() = None;

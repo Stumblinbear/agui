@@ -9,7 +9,7 @@ use agui::{
     widget::{BuildResult, WidgetRef},
     widgets::{
         plugins::{hovering::HoveringPlugin, provider::ProviderExt},
-        primitives::{Builder, Column, DrawableStyle, FontId, Padding, Spacing, Text},
+        primitives::{Builder, Column, DrawableStyle, FontDescriptor, Padding, Spacing, Text},
         state::{
             keyboard::{Keyboard, KeyboardInput},
             mouse::{Mouse, Scroll},
@@ -61,7 +61,7 @@ fn example_main(ctx: &WidgetContext, _color: Color, _child: WidgetRef) -> BuildR
         .into(),
     );
 
-    let default_font = FontId(0);
+    let default_font = FontDescriptor(0);
 
     build! {
         Column {

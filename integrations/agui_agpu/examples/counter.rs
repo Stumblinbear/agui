@@ -2,7 +2,7 @@
 
 use agui::{
     macros::{build, functional_widget},
-    widgets::{primitives::{Text, Column, FontId, Padding}, App, Button, plugins::hovering::HoveringPlugin, state::mouse::{Mouse, Scroll}}, context::WidgetContext, widget::BuildResult, unit::{Margin, Callback},
+    widgets::{primitives::{Text, Column, FontDescriptor, Padding}, App, Button, plugins::hovering::HoveringPlugin, state::mouse::{Mouse, Scroll}}, context::WidgetContext, widget::BuildResult, unit::{Margin, Callback},
 };
 use agui_agpu::UI;
 
@@ -36,7 +36,7 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn counter_widget(ctx: &WidgetContext, font: FontId) -> BuildResult {
+fn counter_widget(ctx: &WidgetContext, font: FontDescriptor) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {

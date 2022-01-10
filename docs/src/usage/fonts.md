@@ -16,17 +16,17 @@
     let mut ui = UI::with_default(&program);
 
     // Import font bytes directly
-    let font_id = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
+    let font = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 
     // Import a font file
-    let font_id = ui.load_font_file("./fonts/DejaVuSans.ttf");
+    let font = ui.load_font_file("./fonts/DejaVuSans.ttf");
 # }
 ```
 
-The function returns a `FontId` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
+The function returns a `FontDescriptor` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
 
 ```rust,noplaypen
-Text::is(font_id, 32.0, "Hello, world!".into())
+Text::is(font, 32.0, "Hello, world!".into())
 ```
 
 ## Supported Font Formats

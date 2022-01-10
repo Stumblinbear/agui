@@ -13,17 +13,17 @@ use agui_macros::Widget;
 
 mod font;
 
-pub use self::font::{FontArc, Fonts, GlyphLayout};
-pub use glyph_brush_layout::{FontId, HorizontalAlign, SectionGlyph, VerticalAlign};
+pub use self::font::{FontDescriptor, FontArc, Fonts, GlyphLayout};
+pub use glyph_brush_layout::{HorizontalAlign, SectionGlyph, VerticalAlign};
 
 pub struct TextSection {
-    pub font: FontId,
+    pub font: FontDescriptor,
     pub text: String,
     pub scale: f32,
 }
 
 impl TextSection {
-    pub fn new(font: FontId, scale: f32, text: String) -> Self {
+    pub fn new(font: FontDescriptor, scale: f32, text: String) -> Self {
         Self { font, text, scale }
     }
 }
@@ -33,7 +33,7 @@ impl ToSectionText for TextSection {
         SectionText {
             text: &self.text,
             scale: self.scale.into(),
-            font_id: self.font,
+            font_id: self.font.into(),
         }
     }
 }
@@ -109,7 +109,7 @@ impl WidgetBuilder for Text {
 }
 
 impl Text {
-    pub fn is(font: FontId, scale: f32, text: String) -> Self {
+    pub fn is(font: FontDescriptor, scale: f32, text: String) -> Self {
         Self {
             sections: vec![TextSection::new(font, scale, text)],
             ..Text::default()

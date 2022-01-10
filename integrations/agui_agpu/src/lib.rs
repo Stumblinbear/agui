@@ -12,7 +12,7 @@ use agui::{
     event::WidgetEvent,
     widget::{WidgetId, WidgetRef},
     widgets::{
-        primitives::{FontId, Fonts},
+        primitives::{FontDescriptor, Fonts},
         state::{
             keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
             mouse::{Mouse, MouseButtonState, Scroll, XY},
@@ -92,29 +92,29 @@ impl UI {
         ui.add_pass(drawable_pass).add_pass(text_pass)
     }
 
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontId {
-        let (font_id, font) = self
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> FontDescriptor {
+        let (font, font_arc) = self
             .get_context()
             .use_global::<Fonts, _>(Fonts::default)
             .write()
             .load_bytes(bytes);
 
-        self.get_pass_mut::<TextRenderPass>().add_font(font);
+        self.get_pass_mut::<TextRenderPass>().add_font(font_arc);
 
-        font_id
+        font
     }
 
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontDescriptor> {
         match self
             .get_context()
             .use_global::<Fonts, _>(Fonts::default)
             .write()
             .load_file(filename)
         {
-            Ok((font_id, font)) => {
-                self.get_pass_mut::<TextRenderPass>().add_font(font);
+            Ok((font, font_arc)) => {
+                self.get_pass_mut::<TextRenderPass>().add_font(font_arc);
 
-                Ok(font_id)
+                Ok(font)
             }
             Err(err) => Err(err),
         }

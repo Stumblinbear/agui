@@ -12,7 +12,7 @@ pub trait ComputedFunc<'ui> {
 
 pub struct ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Copy + Value,
+    V: Eq + PartialEq + Clone + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     phantom: PhantomData<&'ui V>,
@@ -26,7 +26,7 @@ where
 
 impl<'ui, V, F> ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Copy + Value,
+    V: Eq + PartialEq + Clone + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     pub fn new(listener_id: ListenerId, func: F) -> Self {
@@ -44,7 +44,7 @@ where
 
 impl<'ui, V, F> ComputedFunc<'ui> for ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Copy + Value,
+    V: Eq + PartialEq + Clone + Value,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool {
@@ -60,8 +60,8 @@ where
             value
         };
 
-        self.did_change = match self.value {
-            Some(old_value) => old_value != new_value,
+        self.did_change = match &self.value {
+            Some(old_value) => *old_value != new_value,
             None => true,
         };
 
@@ -71,7 +71,7 @@ where
     }
 
     fn get(&self) -> Box<dyn Value> {
-        Box::new(self.value.unwrap())
+        Box::new(self.value.as_ref().unwrap().clone())
     }
 
     fn did_change(&self) -> bool {

@@ -34,14 +34,21 @@ pub enum ListenerId {
 }
 
 impl ListenerId {
-    /// # Panics
-    ///
-    /// Will panic if called on a plugin listener.
+    /// Returns `None` if not tied to a widget.
     #[must_use]
-    pub fn widget_id(&self) -> &WidgetId {
+    pub fn widget_id(&self) -> Option<WidgetId> {
         match self {
-            Self::Widget(widget_id) | Self::Computed(widget_id, _) => widget_id,
-            ListenerId::Plugin(_) => panic!("listener is not a widget"),
+            Self::Widget(widget_id) | Self::Computed(widget_id, _) => Some(*widget_id),
+            Self::Plugin(_) => None,
+        }
+    }
+
+    /// Attempts to convert listeners into their base widget listener, otherwise makes no changes.
+    #[must_use]
+    pub fn prefer_widget(&self) -> Self {
+        match self {
+            Self::Computed(widget_id, _) => Self::Widget(*widget_id),
+            _ => *self,
         }
     }
 }
@@ -56,7 +63,7 @@ pub struct WidgetContext<'ui> {
     pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
 
     global: NotifiableMap,
-    states: ScopedNotifiableMap<WidgetId>,
+    states: ScopedNotifiableMap<ListenerId>,
 
     layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
     layout_types: Mutex<FnvHashMap<WidgetId, Ref<LayoutType>>>,
@@ -100,28 +107,14 @@ impl<'ui> WidgetContext<'ui> {
         self.cache.get_rect(widget_id)
     }
 
-    /// # Panics
-    ///
-    /// Will panic if called outside of a widget build context, or in a plugin.
-    pub fn get_self(&self) -> WidgetId {
-        let current_id = self
-            .current_id
+    pub fn get_self(&self) -> ListenerId {
+        self.current_id
             .lock()
-            .expect("cannot get self while not iterating");
-
-        match current_id {
-            ListenerId::Widget(widget_id) | ListenerId::Computed(widget_id, _) => widget_id,
-            ListenerId::Plugin(_) => {
-                panic!("plugins do not exist in the tree, and thus they cannot get themselves")
-            }
-        }
+            .expect("cannot get self while not iterating")
     }
 
-    /// # Panics
-    ///
-    /// Will panic if called outside of a widget build context, or in a plugin.
-    pub fn is_self(&self, widget_id: WidgetId) -> bool {
-        self.get_self() == widget_id
+    pub fn is_self(&self, listener_id: ListenerId) -> bool {
+        self.get_self() == listener_id
     }
 
     pub(crate) fn remove(&mut self, widget_id: &WidgetId) {
@@ -131,7 +124,7 @@ impl<'ui> WidgetContext<'ui> {
 
         self.global.remove_listener(&listener_id);
 
-        self.states.remove(widget_id);
+        self.states.remove(&listener_id);
 
         self.states.remove_listeners(&listener_id);
 
@@ -242,11 +235,10 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot get state from context while not iterating")
+            .prefer_widget();
 
-        let widget_id = *current_id.widget_id();
-
-        self.states.get(widget_id, func)
+        self.states.get(current_id, func)
     }
 
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
@@ -258,16 +250,15 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot get state from context while not iterating")
+            .prefer_widget();
 
-        let widget_id = *current_id.widget_id();
+        self.states.add_listener::<V>(current_id, current_id);
 
-        self.states.add_listener::<V>(widget_id, current_id);
-
-        self.states.get(widget_id, func)
+        self.states.get(current_id, func)
     }
 
-    pub fn get_state_for<V, F>(&self, widget_id: WidgetId, func: F) -> Notify<V>
+    pub fn get_state_for<V, F>(&self, listener_id: ListenerId, func: F) -> Notify<V>
     where
         V: Value,
         F: FnOnce() -> V,
@@ -275,11 +266,12 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot get state from context while not iterating")
+            .prefer_widget();
 
-        self.states.add_listener::<V>(widget_id, current_id);
+        self.states.add_listener::<V>(listener_id, current_id);
 
-        self.states.get(widget_id, func)
+        self.states.get(listener_id, func)
     }
 }
 
@@ -386,7 +378,7 @@ impl<'ui> WidgetContext<'ui> {
     /// Will panic if called outside of a build context.
     pub fn computed<V, F>(&self, func: F) -> V
     where
-        V: Eq + PartialEq + Copy + Value,
+        V: Eq + PartialEq + Clone + Value,
         F: Fn(&Self) -> V + 'ui + 'static,
     {
         let current_id = self
@@ -394,16 +386,18 @@ impl<'ui> WidgetContext<'ui> {
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        let widget_id = current_id.widget_id();
+        let widget_id = current_id
+            .widget_id()
+            .expect("cannot create a computed value outside of a widget");
 
         let computed_id = TypeId::of::<F>();
 
-        let listener_id = ListenerId::Computed(*widget_id, computed_id);
+        let listener_id = ListenerId::Computed(widget_id, computed_id);
 
         let mut widgets = self.computed_funcs.lock();
 
         let computed_func = widgets
-            .entry(*widget_id)
+            .entry(widget_id)
             .or_insert_with(FnvHashMap::default)
             .entry(computed_id)
             .or_insert_with(|| {
@@ -441,11 +435,13 @@ impl<'ui> WidgetContext<'ui> {
             .lock()
             .expect("cannot key from context while not iterating");
 
-        let widget_id = current_id.widget_id();
+        let widget_id = current_id
+            .widget_id()
+            .expect("cannot create a key outside of a widget");
 
         WidgetRef::Keyed {
             owner_id: match key {
-                Key::Local(_) => Some(*widget_id),
+                Key::Local(_) => Some(widget_id),
                 Key::Global(_) => None,
             },
             key,

@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "Abnt",
+        "agpu",
         "agui",
         "bitflags",
         "downcasting",
@@ -24,6 +25,7 @@
         "RSHIFT",
         "Sysrq",
         "trybuild",
-        "unopinionated"
+        "unopinionated",
+        "Winit"
     ]
 }

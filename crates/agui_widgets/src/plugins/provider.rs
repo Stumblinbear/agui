@@ -5,7 +5,7 @@ use std::{
 };
 
 use agui_core::{
-    context::{Notify, Value, WidgetContext},
+    context::{ListenerId, Notify, Value, WidgetContext},
     event::WidgetEvent,
     plugin::WidgetPlugin,
     widget::WidgetId,
@@ -19,9 +19,11 @@ pub struct Provider {
 }
 
 impl WidgetPlugin for Provider {
+    fn pre_update(&self, _ctx: &WidgetContext) {}
+
     fn on_update(&self, _ctx: &WidgetContext) {}
 
-    fn on_layout(&self, _ctx: &WidgetContext) {}
+    fn post_update(&self, _ctx: &WidgetContext) {}
 
     fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
         for event in events {
@@ -56,14 +58,17 @@ where
 
         let type_id = TypeId::of::<V>();
 
+        let widget_id = ctx
+            .get_self()
+            .widget_id()
+            .expect("cannot provide state outside of a widget context");
+
         providers
             .entry(type_id)
             .or_insert_with(HashSet::default)
-            .insert(ctx.get_self());
+            .insert(widget_id);
 
         let mut widgets = plugin.widgets.lock();
-
-        let widget_id = ctx.get_self();
 
         widgets
             .entry(widget_id)
@@ -88,18 +93,23 @@ impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
             let providers = plugin.providers.lock();
 
             if let Some(providers) = providers.get(&TypeId::of::<V>()) {
+                let widget_id = self
+                    .get_self()
+                    .widget_id()
+                    .expect("cannot provide state outside of a widget context");
+
                 // If the widget calling this is also providing the state, return that.
-                if providers.contains(&self.get_self()) {
+                if providers.contains(&widget_id) {
                     return Some(
                         self.get_state_for(self.get_self(), || panic!("provider state broken")),
                     );
                 }
 
-                for parent_id in self.get_tree().iter_parents(self.get_self()) {
+                for parent_id in self.get_tree().iter_parents(widget_id) {
                     if providers.contains(&parent_id) {
-                        return Some(
-                            self.get_state_for(parent_id, || panic!("provider state broken")),
-                        );
+                        return Some(self.get_state_for(ListenerId::Widget(parent_id), || {
+                            panic!("provider state broken")
+                        }));
                     }
                 }
             }

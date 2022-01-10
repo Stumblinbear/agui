@@ -1,22 +1,25 @@
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Callback, Color, Shape, Sizing},
+    unit::{Callback, Color, Sizing},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::{build, Widget};
 use agui_primitives::{Drawable, DrawableStyle};
 
-use crate::state::{
-    hovering::Hovering,
-    mouse::{Mouse, MouseButtonState},
-    theme::StyleExt,
+use crate::{
+    plugins::hovering::Hovering,
+    state::{
+        mouse::{Mouse, MouseButtonState},
+        theme::StyleExt,
+    },
 };
 
 #[derive(Clone)]
 pub struct ButtonStyle {
     pub normal: DrawableStyle,
+    pub disabled: DrawableStyle,
     pub hover: DrawableStyle,
     pub pressed: DrawableStyle,
 }
@@ -26,6 +29,11 @@ impl Default for ButtonStyle {
         Self {
             normal: DrawableStyle {
                 color: Color::White,
+                opacity: 1.0,
+            },
+
+            disabled: DrawableStyle {
+                color: Color::LightGray,
                 opacity: 1.0,
             },
 
@@ -45,6 +53,7 @@ impl Default for ButtonStyle {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ButtonState {
     Normal,
+    Disabled,
     Hover,
     Pressed,
 }
@@ -62,16 +71,6 @@ pub struct Button {
 
 impl WidgetBuilder for Button {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
-        ctx.set_clipping(
-            Shape::RoundedRect {
-                top_left: 4.0,
-                top_right: 4.0,
-                bottom_right: 4.0,
-                bottom_left: 4.0,
-            }
-            .into(),
-        );
-
         ctx.set_layout(Ref::clone(&self.layout));
 
         let state = ctx.computed(|ctx| {
@@ -116,6 +115,7 @@ impl WidgetBuilder for Button {
                 },
                 style: match state {
                     ButtonState::Normal => style.normal.into(),
+                    ButtonState::Disabled => style.disabled.into(),
                     ButtonState::Hover => style.hover.into(),
                     ButtonState::Pressed => style.pressed.into(),
                 },
