@@ -616,7 +616,7 @@ Spacing::vertical(Units) // Creates a widget with `Units` height.
 <div style="break-before: page; page-break-before: always;"></div><h1 id="keyboard"><a class="header" href="#keyboard">Keyboard</a></h1>
 <p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/globals/keyboard.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="themes"><a class="header" href="#themes">Themes</a></h1>
-<p>Having a standardized Theme system is necessary for an easy-to-use UI library. However, we don't use a single struct for styles, as this is wasteful and cannot cover every use case. Instead, each widget should create a struct with style information, that derives the traits: <code>Default + Send + Sync</code>.</p>
+<p>Having a standardized Theme system is necessary for an easy-to-use UI library. However, we don't use a single struct for styles, as this is wasteful and would not cover every use case. Instead, each widget should create a struct with style information, that derives the traits: <code>Default + Send + Sync</code>.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
 <p>Lets go over how a button handles its styling, as an example:</p>
 <pre><code class="language-rust noplaypen">#[derive(Clone)]
