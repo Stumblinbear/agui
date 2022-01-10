@@ -6,7 +6,7 @@ The provider pattern can provide *(hah!)* some much needed structure to your sta
 
 As your application grows, using globals can get messy. It becomes increasingly difficult to understand where state is mutated, and what widgets are listening to said state. It also makes your code significantly less reusable. In contrast to widget state or globals, the provider pattern acts as the middleground between these two possibilities: it makes state available *only to children* of a widget, rather than to the entirety of the widget tree.
 
-A perfect example of where this pattern shines is in `Theme`, of which we cover in more detail [in this section](../reference/globals/themes.html). Themes are generally "global" (in the sense that you want everything to look the same), but sometimes you want the style of your widgets to be different in a certain part of your application. The widgets `agui` provides use styles that fit into `Theme` extensively, making it simple for you to style your application however you desire.
+A perfect example of where this pattern shines is in `Theme`, of which we cover in more detail [in this section](../reference/globals/themes.html). Themes are generally "global" (in the sense that you want everything to look the same), but sometimes you want the style of your widgets to be different in a certain part of your application. The widgets `agui` provides use styles that are designed to easily fit into `Theme`, making it simple for you to style your application however you desire.
 
 ### Providing State
 
