@@ -140,7 +140,7 @@
 // make sure you call `ui.init_plugin(HoveringPlugin::default);`
 
 <span class="boring">#[functional_widget]
-</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
+</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontDescriptor) -&gt; BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {
