@@ -50,10 +50,7 @@ impl WidgetPlugin for TimerPlugin {
 
             for pair in timeouts.iter() {
                 // Loop until we find the first timeout that hasn't been met
-
                 if now > pair.0 {
-                    println!("{:?} {:?}", now, pair);
-    
                     ctx.mark_dirty(pair.1);
 
                     updated.push(*pair);

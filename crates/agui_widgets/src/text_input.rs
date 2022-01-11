@@ -189,8 +189,6 @@ impl WidgetBuilder for TextInput {
                 return CursorState::Hidden;
             }
 
-            println!("updoot {:?}", input_state);
-
             // Keep track of time so we can blink blonk the cursor
             let instant = *ctx.init_state(Instant::now).read();
 
