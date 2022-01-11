@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ButtonStyle {
     pub normal: DrawableStyle,
     pub disabled: DrawableStyle,
@@ -113,12 +113,14 @@ impl WidgetBuilder for Button {
                 layout: Layout {
                     sizing: self.layout.try_get().map_or(Sizing::default(), |layout| layout.sizing)
                 },
+
                 style: match state {
                     ButtonState::Normal => style.normal.into(),
                     ButtonState::Disabled => style.disabled.into(),
                     ButtonState::Hover => style.hover.into(),
                     ButtonState::Pressed => style.pressed.into(),
                 },
+
                 child: &self.child
             }
         }

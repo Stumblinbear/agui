@@ -5,7 +5,7 @@ use std::{
 };
 
 use agui_core::{
-    context::{ListenerId, Notify, Value, WidgetContext},
+    context::{ListenerId, NotifiableValue, Notify, WidgetContext},
     event::WidgetEvent,
     plugin::WidgetPlugin,
     widget::WidgetId,
@@ -27,7 +27,7 @@ impl WidgetPlugin for Provider {
 
     fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
         let mut widgets = self.widgets.lock();
-        
+
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
                 if let Some(providing) = widgets.remove(widget_id) {
@@ -50,7 +50,7 @@ pub trait ProviderExt<'ui> {
 
 impl<'ui, V> ProviderExt<'ui> for Notify<V>
 where
-    V: Value,
+    V: NotifiableValue,
 {
     /// Makes some local widget state available to any child widget.
     fn provide(&self, ctx: &WidgetContext) {
@@ -82,14 +82,14 @@ where
 pub trait ConsumerExt<'ui> {
     fn consume<V>(&self) -> Option<Notify<V>>
     where
-        V: Value;
+        V: NotifiableValue;
 }
 
 impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&self) -> Option<Notify<V>>
     where
-        V: Value,
+        V: NotifiableValue,
     {
         if let Some(plugin) = self.get_plugin::<Provider>() {
             let providers = plugin.providers.lock();

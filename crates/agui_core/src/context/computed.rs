@@ -1,18 +1,18 @@
 use std::marker::PhantomData;
 
-use super::{ListenerId, Value, WidgetContext};
+use super::{ListenerId, NotifiableValue, WidgetContext};
 
 pub trait ComputedFunc<'ui> {
     fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool;
 
-    fn get(&self) -> Box<dyn Value>;
+    fn get(&self) -> Box<dyn NotifiableValue>;
 
     fn did_change(&self) -> bool;
 }
 
 pub struct ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Clone + Value,
+    V: Eq + PartialEq + Clone + NotifiableValue,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     phantom: PhantomData<&'ui V>,
@@ -26,7 +26,7 @@ where
 
 impl<'ui, V, F> ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Clone + Value,
+    V: Eq + PartialEq + Clone + NotifiableValue,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     pub fn new(listener_id: ListenerId, func: F) -> Self {
@@ -44,7 +44,7 @@ where
 
 impl<'ui, V, F> ComputedFunc<'ui> for ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Clone + Value,
+    V: Eq + PartialEq + Clone + NotifiableValue,
     F: Fn(&WidgetContext<'ui>) -> V,
 {
     fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool {
@@ -70,7 +70,7 @@ where
         self.did_change
     }
 
-    fn get(&self) -> Box<dyn Value> {
+    fn get(&self) -> Box<dyn NotifiableValue> {
         Box::new(self.value.as_ref().unwrap().clone())
     }
 

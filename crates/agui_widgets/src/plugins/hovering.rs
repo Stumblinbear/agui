@@ -52,7 +52,7 @@ impl WidgetPlugin for HoveringPlugin {
     fn on_events(&self, _ctx: &WidgetContext, _events: &[WidgetEvent]) {}
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Hovering {
     pub widget_ids: HashSet<WidgetId>,
 }

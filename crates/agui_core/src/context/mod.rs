@@ -7,14 +7,16 @@ mod cache;
 mod computed;
 mod notifiable;
 pub mod tree;
-mod value;
 
-pub use self::notifiable::{NotifiableMap, Notify, ScopedNotifiableMap};
-pub use self::value::Value;
 use self::{
     cache::LayoutCache,
     computed::{ComputedFn, ComputedFunc},
     tree::Tree,
+};
+
+pub use self::notifiable::{
+    state::{ScopedStateMap, StateMap},
+    NotifiableValue, Notify,
 };
 
 use crate::{
@@ -62,11 +64,11 @@ pub struct WidgetContext<'ui> {
 
     pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
 
-    global: NotifiableMap,
-    states: ScopedNotifiableMap<ListenerId>,
+    global: StateMap,
+    states: ScopedStateMap<ListenerId>,
 
-    layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
     layout_types: Mutex<FnvHashMap<WidgetId, Ref<LayoutType>>>,
+    layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
     clipping: Mutex<FnvHashMap<WidgetId, Ref<Shape>>>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
@@ -86,8 +88,8 @@ impl<'ui> WidgetContext<'ui> {
 
             plugins: Mutex::default(),
 
-            global: NotifiableMap::new(Arc::clone(&changed)),
-            states: ScopedNotifiableMap::new(Arc::clone(&changed)),
+            global: StateMap::new(Arc::clone(&changed)),
+            states: ScopedStateMap::new(Arc::clone(&changed)),
 
             layouts: Mutex::default(),
             layout_types: Mutex::default(),
@@ -199,36 +201,35 @@ impl<'ui> WidgetContext<'ui> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V, F>(&self, func: F) -> Notify<V>
     where
-        V: Value,
+        V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        if !self.global.contains::<V>() {
-            self.global.set(func());
-        }
-
-        self.global.get::<V>().expect("failed to init global")
-    }
-
-    /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
-    pub fn use_global<V, F>(&self, func: F) -> Notify<V>
-    where
-        V: Value,
-        F: FnOnce() -> V,
-    {
-        self.try_use_global::<V>()
-            .map_or_else(|| self.init_global(func), |v| v)
+        self.global.get_or(func)
     }
 
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn try_use_global<V>(&self) -> Option<Notify<V>>
     where
-        V: Value,
+        V: NotifiableValue,
     {
         if let Some(listener_id) = *self.current_id.lock() {
             self.global.add_listener::<V>(listener_id);
         }
 
         self.global.get::<V>()
+    }
+
+    /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
+    pub fn use_global<V, F>(&self, func: F) -> Notify<V>
+    where
+        V: NotifiableValue,
+        F: FnOnce() -> V,
+    {
+        if let Some(listener_id) = *self.current_id.lock() {
+            self.global.add_listener::<V>(listener_id);
+        }
+
+        self.global.get_or(func)
     }
 }
 
@@ -237,7 +238,7 @@ impl<'ui> WidgetContext<'ui> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
     pub fn init_state<V, F>(&self, func: F) -> Notify<V>
     where
-        V: Value,
+        V: NotifiableValue,
         F: FnOnce() -> V,
     {
         let current_id = self
@@ -252,7 +253,7 @@ impl<'ui> WidgetContext<'ui> {
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
     pub fn use_state<V, F>(&self, func: F) -> Notify<V>
     where
-        V: Value,
+        V: NotifiableValue,
         F: FnOnce() -> V,
     {
         let current_id = self
@@ -260,14 +261,15 @@ impl<'ui> WidgetContext<'ui> {
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        self.states.add_listener::<V>(current_id.prefer_widget(), current_id);
+        self.states
+            .add_listener::<V>(current_id.prefer_widget(), current_id);
 
         self.states.get(current_id.prefer_widget(), func)
     }
 
     pub fn get_state_for<V, F>(&self, listener_id: ListenerId, func: F) -> Notify<V>
     where
-        V: Value,
+        V: NotifiableValue,
         F: FnOnce() -> V,
     {
         let current_id = self
@@ -385,7 +387,7 @@ impl<'ui> WidgetContext<'ui> {
     /// Will panic if called outside of a build context.
     pub fn computed<V, F>(&self, func: F) -> V
     where
-        V: Eq + PartialEq + Clone + Value,
+        V: Eq + PartialEq + Clone + NotifiableValue,
         F: Fn(&Self) -> V + 'ui + 'static,
     {
         let current_id = self

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Keyboard {
     pub keys: HashMap<KeyCode, KeyState>,
     pub modifiers: Modifiers,
@@ -20,7 +20,7 @@ impl Keyboard {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct KeyboardInput(pub char);
 
 /// Describes the input state of a key.

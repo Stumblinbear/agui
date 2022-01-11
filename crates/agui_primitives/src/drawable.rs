@@ -7,7 +7,7 @@ use agui_core::{
 };
 use agui_macros::Widget;
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DrawableStyle {
     pub color: Color,
     pub opacity: f32,

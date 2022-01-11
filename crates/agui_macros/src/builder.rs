@@ -97,16 +97,40 @@ impl VisitMut for BuildVisitor {
 }
 
 pub(crate) fn build_impl(item: TokenStream2) -> TokenStream2 {
-    let mut item = match parse2(item) {
+    let mut expr = match parse2(item) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error(),
     };
 
     let mut visitor = BuildVisitor {};
 
-    visitor.visit_expr_mut(&mut item);
+    if let Expr::Array(mut array_expr) = expr {
+        visitor.visit_expr_array_mut(&mut array_expr);
 
-    let stream = item.into_token_stream();
+        let count = array_expr.elems.len();
+
+        let mut inner = quote::quote! {};
+
+        for expr in array_expr.elems {
+            inner.extend(quote::quote! {
+                vec.push(#expr.into());
+            });
+        }
+
+        expr = Expr::Block(parse_quote! {
+            {
+                let mut vec: Vec<agui_core::widget::WidgetRef> = Vec::with_capacity(#count);
+
+                #inner
+
+                vec
+            }
+        });
+    } else {
+        visitor.visit_expr_mut(&mut expr);
+    }
+
+    let stream = expr.into_token_stream();
 
     parse_quote! {
         (#stream).into()

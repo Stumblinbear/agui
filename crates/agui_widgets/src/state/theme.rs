@@ -5,13 +5,13 @@ use downcast_rs::{impl_downcast, Downcast};
 
 use crate::plugins::provider::ConsumerExt;
 
-pub trait Style: Downcast + Send + Sync {}
+pub trait Style: std::fmt::Debug + Downcast + Send + Sync {}
 
-impl<T> Style for T where T: Downcast + Send + Sync {}
+impl<T> Style for T where T: std::fmt::Debug + Downcast + Send + Sync {}
 
 impl_downcast!(Style);
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Theme {
     styles: BTreeMap<TypeId, Box<dyn Style>>,
 }

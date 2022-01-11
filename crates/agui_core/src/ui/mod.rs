@@ -611,7 +611,7 @@ mod tests {
 
     use super::WidgetManager;
 
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     struct TestGlobal(i32);
 
     #[derive(Debug, Default)]

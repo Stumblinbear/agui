@@ -6,6 +6,7 @@ use agui_core::{
 };
 use agui_macros::{build, Widget};
 
+#[derive(Debug)]
 pub struct AppSettings {
     pub width: f32,
     pub height: f32,

@@ -13,11 +13,13 @@ use agui_core::{
 };
 use parking_lot::Mutex;
 
-pub struct TimerPlugin {
-    widgets: Arc<Mutex<HashMap<WidgetId, BTreeSet<(Instant, ListenerId)>>>>,
+type WidgetTimeouts = HashMap<WidgetId, BTreeSet<(Instant, ListenerId)>>;
+
+pub struct TimeoutPlugin {
+    widgets: Arc<Mutex<WidgetTimeouts>>,
 }
 
-impl Default for TimerPlugin {
+impl Default for TimeoutPlugin {
     fn default() -> Self {
         Self {
             widgets: Arc::default(),
@@ -25,7 +27,7 @@ impl Default for TimerPlugin {
     }
 }
 
-impl TimerPlugin {
+impl TimeoutPlugin {
     pub fn create_timeout(&self, listener_id: ListenerId, duration: Duration) {
         self.widgets
             .lock()
@@ -39,7 +41,7 @@ impl TimerPlugin {
     }
 }
 
-impl WidgetPlugin for TimerPlugin {
+impl WidgetPlugin for TimeoutPlugin {
     fn pre_update(&self, ctx: &WidgetContext) {
         let now = Instant::now();
 
@@ -80,14 +82,14 @@ impl WidgetPlugin for TimerPlugin {
     }
 }
 
-pub trait TimerExt<'ui> {
+pub trait TimeoutExt<'ui> {
     fn use_timeout(&self, duration: Duration);
 }
 
-impl<'ui> TimerExt<'ui> for WidgetContext<'ui> {
+impl<'ui> TimeoutExt<'ui> for WidgetContext<'ui> {
     /// Marks the caller for updating when `duration` elapses.
     fn use_timeout(&self, duration: Duration) {
-        self.init_plugin(TimerPlugin::default)
+        self.init_plugin(TimeoutPlugin::default)
             .create_timeout(self.get_self(), duration);
     }
 }

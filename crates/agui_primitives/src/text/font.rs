@@ -15,7 +15,7 @@ impl From<FontDescriptor> for FontId {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Fonts {
     fonts: Vec<FontArc>,
 }

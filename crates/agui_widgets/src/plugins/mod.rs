@@ -1,3 +1,3 @@
-pub mod timer;
+pub mod timeout;
 pub mod provider;
 pub mod hovering;

@@ -1,17 +1,17 @@
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Mouse {
     pub pos: Option<XY>,
     pub button: MouseButtons,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct MouseButtons {
     pub left: MouseButtonState,
     pub middle: MouseButtonState,
     pub right: MouseButtonState,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MouseButtonState {
     Pressed,
     Held,
@@ -24,12 +24,12 @@ impl Default for MouseButtonState {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Scroll {
     pub delta: XY,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct XY {
     pub x: f64,
     pub y: f64,
