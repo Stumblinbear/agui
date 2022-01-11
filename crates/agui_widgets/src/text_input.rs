@@ -117,7 +117,7 @@ impl WidgetBuilder for TextInput {
     fn build(&self, ctx: &WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
-        let input_state = ctx.computed(move |ctx| {
+        let input_state = ctx.computed(|ctx| {
             let last_input_state = *ctx.init_state(TextInputState::default).read();
 
             if let Some(hovering) = ctx.try_use_global::<Hovering>() {
@@ -156,7 +156,7 @@ impl WidgetBuilder for TextInput {
         let style: TextInputStyle = self.style.resolve(ctx);
 
         // Since the value reacts to keyboard inputs, we use a computed value
-        let mut value = ctx.computed(move |ctx| {
+        let mut value = ctx.computed(|ctx| {
             let input_value = ctx.init_state::<String, _>(|| "".into());
 
             let input_state = *ctx.init_state(TextInputState::default).read();
@@ -181,7 +181,7 @@ impl WidgetBuilder for TextInput {
             String::clone(&input_value)
         });
 
-        let cursor_state = ctx.computed(move |ctx| {
+        let cursor_state = ctx.computed(|ctx| {
             // Listen to the input state so we can start blinking
             let input_state = *ctx.use_state(TextInputState::default).read();
 
