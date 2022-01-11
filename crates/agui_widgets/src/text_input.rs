@@ -120,23 +120,24 @@ impl WidgetBuilder for TextInput {
         let input_state = ctx.computed(|ctx| {
             let last_input_state = *ctx.init_state(TextInputState::default).read();
 
-            if let Some(hovering) = ctx.try_use_global::<Hovering>() {
-                if let Some(mouse) = ctx.try_use_global::<Mouse>() {
-                    let is_hovering = hovering.read().is_hovering(ctx);
-                    let is_pressed = mouse.read().button.left == MouseButtonState::Pressed;
+            if let Some((hovering, mouse)) = ctx
+                .try_use_global::<Hovering>()
+                .zip(ctx.try_use_global::<Mouse>())
+            {
+                let is_hovering = hovering.read().is_hovering(ctx);
+                let is_pressed = mouse.read().button.left == MouseButtonState::Pressed;
 
-                    if is_pressed {
-                        return if is_hovering {
-                            TextInputState::Focused
-                        } else {
-                            TextInputState::Normal
-                        };
-                    }
+                if is_pressed {
+                    return if is_hovering {
+                        TextInputState::Focused
+                    } else {
+                        TextInputState::Normal
+                    };
+                }
 
-                    // If we're not already focused, and we're hovering the widget
-                    if last_input_state != TextInputState::Focused && is_hovering {
-                        return TextInputState::Hover;
-                    }
+                // If we're not already focused, and we're hovering the widget
+                if last_input_state != TextInputState::Focused && is_hovering {
+                    return TextInputState::Hover;
                 }
             }
 
