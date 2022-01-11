@@ -218,7 +218,7 @@ impl Into<Vec<Self>> for WidgetRef {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WidgetId(GenerationalIndex);
 
 impl std::fmt::Display for WidgetId {

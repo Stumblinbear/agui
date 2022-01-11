@@ -6,7 +6,7 @@ use agui::{
     macros::build,
     unit::{Sizing, Units},
     widgets::{
-        plugins::{hovering::HoveringPlugin, ticks::TickPlugin},
+        plugins::{hovering::HoveringPlugin, timer::TimerPlugin},
         state::{
             keyboard::{Keyboard, KeyboardInput},
             mouse::{Mouse, Scroll},
@@ -31,7 +31,7 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.get_context().init_global(KeyboardInput::default);
 
     ui.get_context().init_plugin(HoveringPlugin::default);
-    ui.get_context().init_plugin(TickPlugin::default);
+    ui.get_context().init_plugin(TimerPlugin::default);
 
     ui.get_context().init_global(Mouse::default);
     ui.get_context().init_global(Scroll::default);

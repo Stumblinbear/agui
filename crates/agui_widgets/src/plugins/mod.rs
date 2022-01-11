@@ -1,3 +1,3 @@
-pub mod ticks;
+pub mod timer;
 pub mod provider;
 pub mod hovering;

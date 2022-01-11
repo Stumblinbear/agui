@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
@@ -9,7 +11,7 @@ use agui_macros::{build, Widget};
 use agui_primitives::{Drawable, DrawableStyle, FontDescriptor, Text};
 
 use crate::{
-    plugins::{hovering::Hovering, ticks::Tick},
+    plugins::{hovering::Hovering, timer::TimerExt},
     state::{
         keyboard::KeyboardInput,
         mouse::{Mouse, MouseButtonState},
@@ -180,24 +182,23 @@ impl WidgetBuilder for TextInput {
         });
 
         let cursor_state = ctx.computed(move |ctx| {
-            let input_state = *ctx.init_state(TextInputState::default).read();
-
-            if let Some(tick) = ctx.try_use_global::<Tick>() {
-                if input_state != TextInputState::Focused {
-                    return CursorState::Hidden;
-                }
-
-                // Alternate between shown and hidden
-                return if tick.read().elapsed().as_secs_f32() % (CURSOR_BLINK_SECS * 2.0)
-                    > CURSOR_BLINK_SECS
-                {
-                    CursorState::Hidden
-                } else {
-                    CursorState::Shown
-                };
-            }
+            // Listen to the input state so we can start blinking
+            let input_state = *ctx.use_state(TextInputState::default).read();
 
             if input_state != TextInputState::Focused {
+                return CursorState::Hidden;
+            }
+
+            println!("updoot {:?}", input_state);
+
+            // Keep track of time so we can blink blonk the cursor
+            let instant = *ctx.init_state(Instant::now).read();
+
+            // Request an update in x seconds
+            ctx.use_timeout(Duration::from_secs_f32(CURSOR_BLINK_SECS));
+
+            // Alternate between shown and hidden
+            if instant.elapsed().as_secs_f32() % (CURSOR_BLINK_SECS * 2.0) > CURSOR_BLINK_SECS {
                 CursorState::Hidden
             } else {
                 CursorState::Shown

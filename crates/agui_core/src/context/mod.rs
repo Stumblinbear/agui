@@ -26,7 +26,7 @@ use crate::{
 };
 
 /// A combined-type for anything that can listen for events in the system.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ListenerId {
     Widget(WidgetId),
     Computed(WidgetId, TypeId),
@@ -71,6 +71,8 @@ pub struct WidgetContext<'ui> {
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
+    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
+
     pub(crate) current_id: Arc<Mutex<Option<ListenerId>>>,
 }
 
@@ -92,6 +94,8 @@ impl<'ui> WidgetContext<'ui> {
             clipping: Mutex::default(),
 
             computed_funcs: Arc::new(Mutex::new(FnvHashMap::default())),
+
+            changed,
 
             current_id: Arc::default(),
         }
@@ -115,6 +119,10 @@ impl<'ui> WidgetContext<'ui> {
 
     pub fn is_self(&self, listener_id: ListenerId) -> bool {
         self.get_self() == listener_id
+    }
+
+    pub fn mark_dirty(&self, listener_id: ListenerId) {
+        self.changed.lock().insert(listener_id);
     }
 
     pub(crate) fn remove(&mut self, widget_id: &WidgetId) {
@@ -250,12 +258,11 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating")
-            .prefer_widget();
+            .expect("cannot get state from context while not iterating");
 
-        self.states.add_listener::<V>(current_id, current_id);
+        self.states.add_listener::<V>(current_id.prefer_widget(), current_id);
 
-        self.states.get(current_id, func)
+        self.states.get(current_id.prefer_widget(), func)
     }
 
     pub fn get_state_for<V, F>(&self, listener_id: ListenerId, func: F) -> Notify<V>

@@ -26,9 +26,11 @@ impl WidgetPlugin for Provider {
     fn post_update(&self, _ctx: &WidgetContext) {}
 
     fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
+        let mut widgets = self.widgets.lock();
+        
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                if let Some(providing) = self.widgets.lock().remove(widget_id) {
+                if let Some(providing) = widgets.remove(widget_id) {
                     let mut providers = self.providers.lock();
 
                     for type_id in providing {
