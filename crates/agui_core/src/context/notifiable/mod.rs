@@ -9,6 +9,7 @@ use parking_lot::{
 use super::ListenerId;
 
 pub mod state;
+pub mod readable;
 
 pub trait NotifiableValue: std::fmt::Debug + Downcast + Send + Sync + 'static {}
 
@@ -28,8 +29,6 @@ where
     listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
 
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
-    // pub(crate) listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
-    // pub(crate) changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
 }
 
 #[allow(clippy::missing_panics_doc)]

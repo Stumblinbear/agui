@@ -105,47 +105,39 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     }
 
     fn top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
-        Some(
-            store
-                .get(self.id())
-                .and_then(|node| node.layout.try_get())
-                .map_or(Position::default(), |layout| layout.position)
-                .get_top()
-                .into(),
-        )
+        store
+            .get(self.id())
+            .and_then(|node| node.layout.try_get())
+            .map_or(Position::default(), |layout| layout.position)
+            .get_top()
+            .map(Into::into)
     }
 
     fn right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
-        Some(
-            store
-                .get(self.id())
-                .and_then(|node| node.layout.try_get())
-                .map_or(Position::default(), |layout| layout.position)
-                .get_right()
-                .into(),
-        )
+        store
+            .get(self.id())
+            .and_then(|node| node.layout.try_get())
+            .map_or(Position::default(), |layout| layout.position)
+            .get_right()
+            .map(Into::into)
     }
 
     fn bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
-        Some(
-            store
-                .get(self.id())
-                .and_then(|node| node.layout.try_get())
-                .map_or(Position::default(), |layout| layout.position)
-                .get_bottom()
-                .into(),
-        )
+        store
+            .get(self.id())
+            .and_then(|node| node.layout.try_get())
+            .map_or(Position::default(), |layout| layout.position)
+            .get_bottom()
+            .map(Into::into)
     }
 
     fn left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
-        Some(
-            store
-                .get(self.id())
-                .and_then(|node| node.layout.try_get())
-                .map_or(Position::default(), |layout| layout.position)
-                .get_left()
-                .into(),
-        )
+        store
+            .get(self.id())
+            .and_then(|node| node.layout.try_get())
+            .map_or(Position::default(), |layout| layout.position)
+            .get_left()
+            .map(Into::into)
     }
 
     fn min_top(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {

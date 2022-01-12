@@ -1,5 +1,4 @@
 use glyph_brush_layout::{
-    ab_glyph::{Font, ScaleFont},
     BuiltInLineBreaker, GlyphPositioner, SectionGeometry, SectionText, ToSectionText,
 };
 
@@ -13,7 +12,7 @@ use agui_macros::Widget;
 
 mod font;
 
-pub use self::font::{FontDescriptor, FontArc, Fonts, GlyphLayout};
+pub use self::font::{Font, FontArc, FontDescriptor, Fonts, GlyphLayout, ScaleFont};
 pub use glyph_brush_layout::{HorizontalAlign, SectionGlyph, VerticalAlign};
 
 pub struct TextSection {
@@ -90,6 +89,43 @@ impl WidgetBuilder for Text {
                     height: Units::Pixels(max_y),
                 }
             }
+
+            Sizing::Axis { width, height } => {
+                if width != Units::Auto && height != Units::Auto {
+                    Sizing::Axis { width, height }
+                } else {
+                    let fonts = ctx.use_global(Fonts::default);
+                    let fonts = fonts.read();
+                    let fonts = fonts.get_fonts();
+
+                    let glyphs = self.get_glyphs(fonts, (f32::MAX, f32::MAX));
+
+                    let mut max_x: f32 = 0.0;
+                    let mut max_y: f32 = 0.0;
+
+                    for g in glyphs {
+                        if let Some(font) = fonts.get(g.font_id.0) {
+                            max_x += font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
+                            max_y = max_y.max(g.glyph.scale.y);
+                        }
+                    }
+
+                    Sizing::Axis {
+                        width: if width == Units::Auto {
+                            Units::Pixels(max_x)
+                        } else {
+                            width
+                        },
+
+                        height: if height == Units::Auto {
+                            Units::Pixels(max_y)
+                        } else {
+                            height
+                        },
+                    }
+                }
+            }
+
             sizing => sizing,
         };
 
@@ -110,10 +146,7 @@ impl WidgetBuilder for Text {
 
 impl Text {
     pub fn is(font: FontDescriptor, scale: f32, text: String) -> Self {
-        Self {
-            sections: vec![TextSection::new(font, scale, text)],
-            ..Text::default()
-        }
+        Self::new(vec![TextSection::new(font, scale, text)])
     }
 
     pub fn new(sections: Vec<TextSection>) -> Self {
@@ -121,6 +154,11 @@ impl Text {
             sections,
             ..Text::default()
         }
+    }
+
+    pub fn sizing(mut self, sizing: Sizing) -> Self {
+        self.sizing = sizing;
+        self
     }
 
     pub fn color(mut self, color: Color) -> Self {

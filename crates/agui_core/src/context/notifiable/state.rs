@@ -14,11 +14,11 @@ pub struct StateMap {
 }
 
 impl StateMap {
-    // #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             values: RwLock::default(),
+
             changed,
         }
     }
@@ -60,7 +60,6 @@ impl StateMap {
         }
     }
 
-    #[allow(clippy::missing_panics_doc)]
     pub fn add_listener<V>(&self, listener_id: ListenerId)
     where
         V: NotifiableValue,
@@ -74,7 +73,7 @@ impl StateMap {
         notify.listeners.lock().insert(listener_id);
     }
 
-    pub fn remove_listener(&self, listener_id: &ListenerId) {
+    pub fn remove_listeners(&self, listener_id: &ListenerId) {
         for notify in self.values.write().values() {
             notify.listeners.lock().remove(listener_id);
         }
@@ -138,6 +137,6 @@ where
         self.scopes
             .lock()
             .iter()
-            .for_each(|(_, states)| states.remove_listener(listener_id));
+            .for_each(|(_, states)| states.remove_listeners(listener_id));
     }
 }

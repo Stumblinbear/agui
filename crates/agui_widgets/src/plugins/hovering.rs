@@ -23,7 +23,7 @@ impl WidgetPlugin for HoveringPlugin {
                     let hovering_ids = ctx
                         .get_tree()
                         .iter()
-                        .filter(|widget_id| match ctx.get_rect(widget_id) {
+                        .filter(|widget_id| match ctx.get_rect_for(widget_id) {
                             Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),
                             None => false,
                         })

@@ -199,15 +199,20 @@ pub enum Position {
     Unset,
 
     /// Position set absolutely in the window.
-    Absolute {
-        top: Units,
-        right: Units,
-        bottom: Units,
-        left: Units,
-    },
+    // Absolute {
+    //     top: Option<Units>,
+    //     right: Option<Units>,
+    //     bottom: Option<Units>,
+    //     left: Option<Units>,
+    // },
 
     /// Position set relative to its parent.
-    Relative { top: Units, left: Units },
+    Relative {
+        top: Option<Units>,
+        right: Option<Units>,
+        bottom: Option<Units>,
+        left: Option<Units>,
+    },
 }
 
 impl Default for Position {
@@ -220,41 +225,46 @@ impl From<Position> for PositionType {
     fn from(pos: Position) -> Self {
         match pos {
             Position::Unset => Self::ParentDirected,
-            Position::Relative { .. } | Position::Absolute { .. } => Self::SelfDirected,
+            Position::Relative { .. } => Self::SelfDirected,
+            // Position::Absolute { .. } => Self::SelfDirected,
         }
     }
 }
 
 impl Position {
     #[must_use]
-    pub const fn get_top(&self) -> Units {
+    pub const fn get_top(&self) -> Option<Units> {
         match self {
-            Position::Unset => Units::Auto,
-            Position::Absolute { top, .. } | Position::Relative { top, .. } => *top,
+            Position::Unset => None,
+            // Position::Absolute { top, .. } => *top,
+            Position::Relative { top, .. } => *top,
         }
     }
 
     #[must_use]
-    pub const fn get_right(&self) -> Units {
+    pub const fn get_right(&self) -> Option<Units> {
         match self {
-            Position::Unset | Position::Relative { .. } => Units::Auto,
-            Position::Absolute { right, .. } => *right,
+            Position::Unset => None,
+            // Position::Absolute { right, .. } => *right,
+            Position::Relative { right, .. } => *right,
         }
     }
 
     #[must_use]
-    pub const fn get_bottom(&self) -> Units {
+    pub const fn get_bottom(&self) -> Option<Units> {
         match self {
-            Position::Unset | Position::Relative { .. } => Units::Auto,
-            Position::Absolute { bottom, .. } => *bottom,
+            Position::Unset => None,
+            // Position::Absolute { bottom, .. } => *bottom,
+            Position::Relative { bottom, .. } => *bottom,
         }
     }
 
     #[must_use]
-    pub const fn get_left(&self) -> Units {
+    pub const fn get_left(&self) -> Option<Units> {
         match self {
-            Position::Unset => Units::Auto,
-            Position::Absolute { left, .. } | Position::Relative { left, .. } => *left,
+            Position::Unset => None,
+            // Position::Absolute { left, .. } => *left,
+            Position::Relative { left, .. } => *left,
         }
     }
 }

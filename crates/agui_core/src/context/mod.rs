@@ -3,14 +3,13 @@ use std::{any::TypeId, rc::Rc, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::Mutex;
 
-mod cache;
 mod computed;
 mod notifiable;
 pub mod tree;
 
 use self::{
-    cache::LayoutCache,
     computed::{ComputedFn, ComputedFunc},
+    notifiable::readable::ReadableMap,
     tree::Tree,
 };
 
@@ -60,18 +59,18 @@ type WidgetComputedFuncs<'ui> =
 
 pub struct WidgetContext<'ui> {
     pub(crate) tree: Tree<WidgetId>,
-    pub(crate) cache: LayoutCache<WidgetId>,
-
     pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
 
     global: StateMap,
     states: ScopedStateMap<ListenerId>,
 
+    computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
+
     layout_types: Mutex<FnvHashMap<WidgetId, Ref<LayoutType>>>,
     layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
     clipping: Mutex<FnvHashMap<WidgetId, Ref<Shape>>>,
 
-    computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
+    pub(crate) rects: ReadableMap<WidgetId, Rect>,
 
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
 
@@ -84,18 +83,19 @@ impl<'ui> WidgetContext<'ui> {
     pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             tree: Tree::default(),
-            cache: LayoutCache::default(),
 
             plugins: Mutex::default(),
 
             global: StateMap::new(Arc::clone(&changed)),
             states: ScopedStateMap::new(Arc::clone(&changed)),
 
+            computed_funcs: Arc::new(Mutex::new(FnvHashMap::default())),
+
             layouts: Mutex::default(),
             layout_types: Mutex::default(),
             clipping: Mutex::default(),
 
-            computed_funcs: Arc::new(Mutex::new(FnvHashMap::default())),
+            rects: ReadableMap::new(Arc::clone(&changed)),
 
             changed,
 
@@ -106,11 +106,6 @@ impl<'ui> WidgetContext<'ui> {
     /// Returns the widget tree.
     pub fn get_tree(&self) -> &Tree<WidgetId> {
         &self.tree
-    }
-
-    /// Get the visual `Rect` of a widget.
-    pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
-        self.cache.get_rect(widget_id)
     }
 
     pub fn get_self(&self) -> ListenerId {
@@ -127,20 +122,32 @@ impl<'ui> WidgetContext<'ui> {
         self.changed.lock().insert(listener_id);
     }
 
-    pub(crate) fn remove(&mut self, widget_id: &WidgetId) {
-        let listener_id = ListenerId::Widget(*widget_id);
+    pub(crate) fn remove_widget(&mut self, widget_id: &WidgetId) {
+        let mut all_listeners = vec![ListenerId::Widget(*widget_id)];
 
-        self.cache.remove(widget_id);
+        if let Some(computed_funcs) = self.computed_funcs.lock().remove(widget_id) {
+            for type_id in computed_funcs.into_keys() {
+                all_listeners.push(ListenerId::Computed(*widget_id, type_id));
+            }
+        }
 
-        self.global.remove_listener(&listener_id);
+        self.layouts.lock().remove(widget_id);
+
+        self.rects.remove(widget_id);
+
+        for listener_id in all_listeners {
+            self.remove_listener(listener_id);
+        }
+    }
+
+    pub(crate) fn remove_listener(&mut self, listener_id: ListenerId) {
+        self.global.remove_listeners(&listener_id);
 
         self.states.remove(&listener_id);
 
         self.states.remove_listeners(&listener_id);
 
-        self.layouts.lock().remove(widget_id);
-
-        self.computed_funcs.lock().remove(widget_id);
+        self.rects.remove_listeners(&listener_id);
     }
 }
 
@@ -420,7 +427,6 @@ impl<'ui> WidgetContext<'ui> {
         *computed_func
             .get()
             .downcast()
-            .ok()
             .expect("failed to downcast ref")
     }
 
@@ -430,6 +436,44 @@ impl<'ui> WidgetContext<'ui> {
             .get_mut(widget_id)
             .and_then(|widgets| widgets.get_mut(&computed_id))
             .map_or(false, |computed_func| computed_func.call(self))
+    }
+}
+
+// Computed
+impl<'ui> WidgetContext<'ui> {
+    /// Get the visual `Rect` of a widget.
+    pub fn get_rect_for(&self, widget_id: &WidgetId) -> Option<&Rect> {
+        self.rects.get(widget_id)
+    }
+
+    /// Get to the visual rect of the widget.
+    pub fn get_rect(&self) -> Option<&Rect> {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get rect from context while not iterating");
+
+        self.rects.get(
+            &current_id
+                .widget_id()
+                .expect("cannot get rect outside of a widget context"),
+        )
+    }
+
+    /// Listen to the visual rect of the widget.
+    pub fn use_rect(&self) -> Option<&Rect> {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get rect from context while not iterating");
+
+        let widget_id = current_id
+            .widget_id()
+            .expect("cannot get rect outside of a widget context");
+
+        self.rects.add_listener(widget_id, current_id);
+
+        self.rects.get(&widget_id)
     }
 }
 

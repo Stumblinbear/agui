@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 use generational_arena::Arena;
@@ -13,14 +13,18 @@ use crate::{
     Ref,
 };
 
+mod cache;
 mod debug;
 mod node;
+
+use self::cache::LayoutCache;
 
 pub use self::node::WidgetNode;
 
 /// Handles the entirety of the widget lifecycle.
 pub struct WidgetManager<'ui> {
     widgets: Arena<WidgetNode>,
+    cache: LayoutCache<WidgetId>,
 
     context: WidgetContext<'ui>,
 
@@ -47,6 +51,7 @@ impl<'ui> Default for WidgetManager<'ui> {
 
         Self {
             widgets: Arena::default(),
+            cache: LayoutCache::default(),
 
             context: WidgetContext::new(Arc::clone(&changed)),
 
@@ -141,7 +146,7 @@ impl<'ui> WidgetManager<'ui> {
 
     /// Get the visual `Rect` of a widget.
     pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
-        self.context.get_rect(widget_id)
+        self.context.get_rect_for(widget_id)
     }
 
     /// Get the visual clipping `Path` for a widget.
@@ -200,6 +205,8 @@ impl<'ui> WidgetManager<'ui> {
 
         let mut root_changed = false;
 
+        let mut widgets_changed: HashSet<WidgetId> = HashSet::default();
+
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         //
@@ -209,21 +216,21 @@ impl<'ui> WidgetManager<'ui> {
                 // Apply any queued modifications
                 self.apply_modifications(events);
 
-                let changed = self.changed.lock().drain().collect::<Vec<_>>();
+                let notify = self.changed.lock().drain().collect::<Vec<_>>();
 
-                if changed.is_empty() {
+                if notify.is_empty() {
                     break 'modify;
                 }
 
                 cfg_if::cfg_if! {
                     if #[cfg(test)] {
-                        self.changes += changed.len();
+                        self.changes += notify.len();
                     }
                 }
 
                 let mut dirty_widgets = FnvHashSet::default();
 
-                for listener_id in changed {
+                for listener_id in notify {
                     match listener_id {
                         ListenerId::Widget(widget_id) => {
                             dirty_widgets.insert(widget_id);
@@ -301,7 +308,7 @@ impl<'ui> WidgetManager<'ui> {
                 root_changed = true;
             }
 
-            morphorm::layout(&mut self.context.cache, &self.context.tree, &self.widgets);
+            morphorm::layout(&mut self.cache, &self.context.tree, &self.widgets);
 
             let plugins = self.context.plugins.lock();
 
@@ -313,21 +320,40 @@ impl<'ui> WidgetManager<'ui> {
 
             *self.context.current_id.lock() = None;
 
+            // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
+            {
+                let mut changed = self.cache.take_changed();
+
+                if root_changed {
+                    if let Some(widget_id) = self.get_tree().get_root() {
+                        changed.insert(widget_id);
+                    }
+                }
+
+                // Update the widget rects in the context
+                for widget_id in &changed {
+                    self.context.rects.set(
+                        *widget_id,
+                        *self
+                            .cache
+                            .get_rect(widget_id)
+                            .expect("widget marked as changed, but has no rect"),
+                    );
+                }
+
+                // Add the changed widgets to the tracker
+                widgets_changed.extend(changed);
+            }
+
             if self.modifications.is_empty() {
                 break 'layout;
             }
         }
 
-        let mut changed = self.context.cache.take_changed();
-
-        if root_changed {
-            if let Some(widget_id) = self.get_tree().get_root() {
-                changed.insert(widget_id);
-            }
-        }
-
+        // Since some widgets may be added and removed multiple times, we should only add
+        // the events from widgets that are currently in the tree
         events.extend(
-            changed
+            widgets_changed
                 .into_iter()
                 .filter(|widget_id| self.contains(widget_id))
                 .map(|widget_id| {
@@ -358,42 +384,42 @@ impl<'ui> WidgetManager<'ui> {
 
         if let Some(widget_id) = self.get_tree().get_root() {
             if let Some(layout) = self.context.get_layout(&widget_id).try_get() {
-                if let Units::Pixels(px) = layout.position.get_left() {
-                    if (self.context.cache.posx(widget_id) - px).abs() > f32::EPSILON {
+                if let Some(Units::Pixels(px)) = layout.position.get_left() {
+                    if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.context.cache.set_posx(widget_id, px);
+                        self.cache.set_posx(widget_id, px);
                     }
                 }
 
-                if let Units::Pixels(px) = layout.position.get_top() {
-                    if (self.context.cache.posy(widget_id) - px).abs() > f32::EPSILON {
+                if let Some(Units::Pixels(px)) = layout.position.get_top() {
+                    if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.context.cache.set_posy(widget_id, px);
+                        self.cache.set_posy(widget_id, px);
                     }
                 }
 
                 if let Units::Pixels(px) = layout.sizing.get_width() {
-                    if (self.context.cache.width(widget_id) - px).abs() > f32::EPSILON {
+                    if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.context.cache.set_width(widget_id, px);
+                        self.cache.set_width(widget_id, px);
                     }
                 }
 
                 if let Units::Pixels(px) = layout.sizing.get_height() {
-                    if (self.context.cache.height(widget_id) - px).abs() > f32::EPSILON {
+                    if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
 
-                        self.context.cache.set_height(widget_id, px);
+                        self.cache.set_height(widget_id, px);
                     }
                 }
             } else {
-                self.context.cache.set_posx(widget_id, 0.0);
-                self.context.cache.set_posy(widget_id, 0.0);
-                self.context.cache.set_width(widget_id, 0.0);
-                self.context.cache.set_height(widget_id, 0.0);
+                self.cache.set_posx(widget_id, 0.0);
+                self.cache.set_posy(widget_id, 0.0);
+                self.cache.set_width(widget_id, 0.0);
+                self.cache.set_height(widget_id, 0.0);
             }
         }
 
@@ -492,7 +518,7 @@ impl<'ui> WidgetManager<'ui> {
 
         events.push(WidgetEvent::Spawned { type_id, widget_id });
 
-        self.context.cache.add(widget_id);
+        self.cache.add(widget_id);
     }
 
     fn process_rebuild(&mut self, widget_id: WidgetId) {
@@ -573,7 +599,8 @@ impl<'ui> WidgetManager<'ui> {
             }
         }
 
-        self.context.remove(&widget_id);
+        self.context.remove_widget(&widget_id);
+        self.cache.remove(&widget_id);
 
         self.changed.lock().remove(&ListenerId::Widget(widget_id));
 

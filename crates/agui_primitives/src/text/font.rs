@@ -3,7 +3,7 @@ use std::io::{self, BufReader, Read};
 
 use glyph_brush_layout::FontId;
 
-pub use glyph_brush_layout::ab_glyph::{Font, FontArc};
+pub use glyph_brush_layout::ab_glyph::{Font, ScaleFont, FontArc};
 pub use glyph_brush_layout::Layout as GlyphLayout;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
@@ -23,6 +23,10 @@ pub struct Fonts {
 impl Fonts {
     pub fn get_fonts(&self) -> &Vec<FontArc> {
         &self.fonts
+    }
+
+    pub fn get(&self, font_id: FontDescriptor) -> FontArc {
+        FontArc::clone(&self.fonts[font_id.0])
     }
 
     pub fn load_bytes(&mut self, bytes: &'static [u8]) -> (FontDescriptor, FontArc) {

@@ -3,12 +3,12 @@ use std::time::{Duration, Instant};
 use agui_core::{
     context::WidgetContext,
     layout::Layout,
-    unit::{Color, Key, Position, Shape, Sizing},
+    unit::{Color, Key, Position, Shape, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
     Ref,
 };
 use agui_macros::{build, Widget};
-use agui_primitives::{Drawable, DrawableStyle, FontDescriptor, Text};
+use agui_primitives::{Drawable, DrawableStyle, Font, FontDescriptor, Fonts, ScaleFont, Text};
 
 use crate::{
     plugins::{hovering::Hovering, timeout::TimeoutExt},
@@ -176,6 +176,55 @@ impl WidgetBuilder for TextInput {
             TextInputState::Focused => style.focused,
         };
 
+        const FONT_HEIGHT: f32 = 32.0;
+        const CURSOR_PADDING: f32 = 2.0;
+
+        let (text, cursor_pos) = if value.is_empty() {
+            (
+                Text::is(self.font, FONT_HEIGHT, String::clone(&self.placeholder))
+                    .color(input_state_style.placeholder_color),
+                None,
+            )
+        } else {
+            let text = Text::is(self.font, FONT_HEIGHT, String::clone(&value))
+                .sizing(self.layout.get().sizing)
+                .color(input_state_style.text_color);
+
+            // If we know the widget's rect, calculate the glyphs so we know where to place the cursor
+            if let Some(rect) = ctx.use_rect() {
+                let fonts = ctx.use_global(Fonts::default);
+                let fonts = fonts.read();
+                let fonts = fonts.get_fonts();
+
+                let glyphs = text.get_glyphs(fonts, (rect.width, rect.height));
+
+                if !glyphs.is_empty() {
+                    let g = glyphs.last().unwrap();
+
+                    let position = g.glyph.position;
+
+                    let mut pos_x = position.x;
+
+                    if let Some(font) = fonts.get(g.font_id.0) {
+                        pos_x += font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
+                    }
+
+                    // We have to subtract the rect height since morphorm doesn't let us stack widgets
+                    (
+                        text,
+                        Some((
+                            rect.x + pos_x,
+                            (-rect.height) + CURSOR_PADDING,
+                        )),
+                    )
+                } else {
+                    (text, None)
+                }
+            } else {
+                (text, None)
+            }
+        };
+
         build! {
             [
                 Drawable {
@@ -185,19 +234,16 @@ impl WidgetBuilder for TextInput {
 
                     style: input_state_style.drawable.into(),
 
-                    child: {
-                        if value.is_empty() {
-                            Text::is(self.font, 32.0, String::clone(&self.placeholder)).color(input_state_style.placeholder_color)
-                        }else{
-                            Text::is(self.font, 32.0, String::clone(&value)).color(input_state_style.text_color)
-                        }
-                    }
+                    child: text.into()
                 },
 
-                if input_state == TextInputState::Focused {
+                if cursor_pos.is_some() && input_state == TextInputState::Focused {
                     // Key the cursor so its timer doesn't get reset with every change
-                    ctx.key(Key::single(), Cursor {
-                        color: input_state_style.text_color
+                    ctx.key(Key::local(value), Cursor {
+                        position: cursor_pos.unwrap(),
+                        height: FONT_HEIGHT - CURSOR_PADDING * 2.0,
+
+                        color: input_state_style.text_color,
                     }.into())
                 }else{
                     WidgetRef::None
@@ -213,9 +259,23 @@ enum CursorState {
     Hidden,
 }
 
-#[derive(Default, Widget)]
+#[derive(Widget)]
 pub struct Cursor {
+    position: (f32, f32),
+    height: f32,
+
     color: Color,
+}
+
+impl Default for Cursor {
+    fn default() -> Self {
+        Self {
+            position: (0.0, 0.0),
+            height: 32.0,
+
+            color: Color::default(),
+        }
+    }
 }
 
 impl WidgetBuilder for Cursor {
@@ -240,10 +300,15 @@ impl WidgetBuilder for Cursor {
                 Drawable {
                     layout: Layout {
                         position: Position::Relative {
-                            top: 0.0,
-                            left: 0.0
+                            top: Units::Pixels(self.position.1),
+                            left: Units::Pixels(self.position.0),
+                            bottom: None,
+                            right: None
                         },
-                        sizing: Sizing::All(16.0.into())
+                        sizing: Sizing::Axis {
+                            width: 2.0,
+                            height: self.height.into()
+                        }
                     },
 
                     shape: Shape::Rect,
