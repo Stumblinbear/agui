@@ -15,16 +15,9 @@ use parking_lot::Mutex;
 
 type WidgetTimeouts = HashMap<WidgetId, BTreeSet<(Instant, ListenerId)>>;
 
+#[derive(Default)]
 pub struct TimeoutPlugin {
     widgets: Arc<Mutex<WidgetTimeouts>>,
-}
-
-impl Default for TimeoutPlugin {
-    fn default() -> Self {
-        Self {
-            widgets: Arc::default(),
-        }
-    }
 }
 
 impl TimeoutPlugin {
