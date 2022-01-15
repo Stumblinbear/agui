@@ -79,7 +79,7 @@ impl WidgetRenderPass for DrawableRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        _widget_id: &WidgetId,
+        _widget_id: WidgetId,
     ) {
     }
 
@@ -88,7 +88,7 @@ impl WidgetRenderPass for DrawableRenderPass {
         ctx: &RenderContext,
         manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
         layer: u32,
     ) {
         if type_id != &TypeId::of::<Drawable>() {
@@ -147,7 +147,7 @@ impl WidgetRenderPass for DrawableRenderPass {
             .create(&geometry.indices);
 
         self.widgets.insert(
-            *widget_id,
+            widget_id,
             WidgetBuffer {
                 drawable_data,
 
@@ -163,13 +163,13 @@ impl WidgetRenderPass for DrawableRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
     ) {
         if type_id != &TypeId::of::<Drawable>() {
             return;
         }
 
-        self.widgets.remove(widget_id);
+        self.widgets.remove(&widget_id);
     }
 
     fn update(&mut self, ctx: &RenderContext) {

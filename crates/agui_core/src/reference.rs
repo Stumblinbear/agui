@@ -1,9 +1,6 @@
-use std::{
-    fmt::Debug,
-    sync::{Arc, Weak},
-};
+use std::{fmt::Debug, sync::Arc};
 
-/// Holds a reference that is either `None`, `Owned`, or `Borrowed`.
+/// Holds a reference that is either `None` or `Some`.
 ///
 /// It's used to give a single field that can accept `Option` (without additional wrapping),
 /// an owned value, or a reference to an owned value (to prevent unnecessary clones).
@@ -17,6 +14,7 @@ use std::{
 ///     pub layout: Ref<Layout>,
 /// }
 /// ```
+#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum Ref<V>
 where
     V: ?Sized,
@@ -24,13 +22,8 @@ where
     /// No value.
     None,
 
-    /// Owned data.
-    Owned(Arc<V>),
-
-    /// Borrowed data. Unlike Owned, this is not guaranteed to exist, as it only
-    /// holds a weak reference to the Owned value. It should never be expected for the value
-    /// to exist.
-    Borrowed(Weak<V>),
+    /// Has value.
+    Some(Arc<V>),
 }
 
 impl<V> Default for Ref<V> {
@@ -39,39 +32,28 @@ impl<V> Default for Ref<V> {
     }
 }
 
-impl<V> Debug for Ref<V>
-where
-    V: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::Owned(value) => Debug::fmt(&value, f),
-            Self::Borrowed(value) => match value.upgrade() {
-                Some(value) => Debug::fmt(&value, f),
-                None => write!(f, "Gone"),
-            },
-        }
-    }
-}
-
 impl<V> Ref<V> {
     /// Creates an Owned reference to `value`.
     #[must_use]
     pub fn new(value: V) -> Self {
-        Self::Owned(Arc::new(value))
+        Self::Some(Arc::new(value))
+    }
+
+    /// Returns false if this reference points to nothing
+    #[must_use]
+    pub fn is_none(&self) -> bool {
+        match self {
+            Self::None => true,
+            Self::Some(_) => false,
+        }
     }
 
     /// Returns true if this reference points to a value in memory.
-    ///
-    /// Will always be `true` if the Ref is `Owned`, will always be `None` if the Ref is `None`,
-    /// but if it's `Borrowed`, it will only return `true` if the borrowed value is still in memory.
     #[must_use]
-    pub fn is_valid(&self) -> bool {
+    pub fn is_some(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Owned(_) => true,
-            Self::Borrowed(weak) => weak.strong_count() > 0,
+            Self::Some(_) => true,
         }
     }
 
@@ -80,8 +62,7 @@ impl<V> Ref<V> {
     pub fn try_get(&self) -> Option<Arc<V>> {
         match self {
             Self::None => None,
-            Self::Owned(value) => Some(Arc::clone(value)),
-            Self::Borrowed(weak) => weak.upgrade(),
+            Self::Some(value) => Some(Arc::clone(value)),
         }
     }
 
@@ -94,11 +75,7 @@ impl<V> Ref<V> {
     pub fn get(&self) -> Arc<V> {
         match self {
             Self::None => panic!("layout ref points to nothing"),
-            Self::Owned(value) => Arc::clone(value),
-            Self::Borrowed(weak) => match weak.upgrade() {
-                Some(value) => value,
-                None => panic!("value no longer exists"),
-            },
+            Self::Some(value) => Arc::clone(value),
         }
     }
 }
@@ -107,14 +84,13 @@ impl<V> Clone for Ref<V> {
     fn clone(&self) -> Self {
         match self {
             Self::None => Self::None,
-            Self::Owned(value) => Self::Borrowed(Arc::downgrade(value)),
-            Self::Borrowed(value) => Self::Borrowed(Weak::clone(value)),
+            Self::Some(value) => Self::Some(Arc::clone(value)),
         }
     }
 }
 
 impl<T> From<T> for Ref<T> {
     fn from(val: T) -> Self {
-        Self::Owned(Arc::new(val))
+        Self::Some(Arc::new(val))
     }
 }

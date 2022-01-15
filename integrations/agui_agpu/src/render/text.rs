@@ -98,7 +98,7 @@ impl WidgetRenderPass for TextRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        _widget_id: &WidgetId,
+        _widget_id: WidgetId,
     ) {
     }
 
@@ -107,7 +107,7 @@ impl WidgetRenderPass for TextRenderPass {
         ctx: &RenderContext,
         manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
         layer: u32,
     ) {
         if type_id != &TypeId::of::<Text>() {
@@ -178,7 +178,7 @@ impl WidgetRenderPass for TextRenderPass {
                     .as_vertex_buffer()
                     .create(bytemuck::cast_slice::<_, u8>(buffer.as_slice()));
 
-                self.widgets.insert(*widget_id, buffer);
+                self.widgets.insert(widget_id, buffer);
             }
         }
     }
@@ -188,13 +188,13 @@ impl WidgetRenderPass for TextRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
     ) {
         if type_id != &TypeId::of::<Text>() {
             return;
         }
 
-        self.widgets.remove(widget_id);
+        self.widgets.remove(&widget_id);
     }
 
     fn update(&mut self, ctx: &RenderContext) {

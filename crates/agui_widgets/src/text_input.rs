@@ -83,7 +83,7 @@ impl Default for TextInputStyle {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum TextInputState {
     Normal,
     Disabled,
@@ -253,7 +253,7 @@ impl WidgetBuilder for TextInput {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum CursorState {
     Shown,
     Hidden,

@@ -1,28 +1,25 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use agui::context::tree::Tree;
+use agui::{tree::Tree, widget::WidgetId};
 
 fn tree_ops(c: &mut Criterion) {
     c.bench_function("add to tree", |b| {
-        b.iter_with_setup(
-            Tree::<usize>::default,
-            |mut tree| {
-                tree.add(None, 0);
-            },
-        )
+        b.iter_with_setup(Tree::<WidgetId, usize>::default, |mut tree| {
+            tree.add(None, 0);
+        })
     });
-    
+
     c.bench_function("remove from tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
+                let widget_id = tree.add(None, 0);
 
-                tree
+                (tree, widget_id)
             },
-            |mut tree| {
-                tree.remove(&0);
+            |(mut tree, widget_id)| {
+                tree.remove(widget_id);
             },
         )
     });
@@ -32,17 +29,17 @@ fn tree_get_deepest_child(c: &mut Criterion) {
     c.bench_function("get deepest child in tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
-                tree.add(Some(0), 1);
-                tree.add(Some(1), 2);
-                tree.add(Some(2), 3);
+                let root_id = tree.add(None, 0);
+                let parent_id = tree.add(Some(root_id), 1);
+                let parent_id = tree.add(Some(parent_id), 2);
+                tree.add(Some(parent_id), 3);
 
-                tree
+                (tree, root_id)
             },
-            |tree| {
-                black_box(tree.get_deepest_child(Some(0)));
+            |(tree, root_id)| {
+                black_box(tree.get_deepest_child(Some(root_id)));
             },
         )
     });
@@ -52,19 +49,19 @@ fn tree_iter_down(c: &mut Criterion) {
     c.bench_function("iterate down from tree root", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
-                tree.add(Some(0), 1);
-                tree.add(Some(1), 2);
-                tree.add(Some(2), 3);
+                let parent_id = tree.add(None, 0);
+                let parent_id = tree.add(Some(parent_id), 1);
+                let parent_id = tree.add(Some(parent_id), 2);
+                tree.add(Some(parent_id), 3);
 
                 tree
             },
             |tree| {
                 let mut walker = black_box(tree.iter());
 
-                while walker.next().is_some() { }
+                while walker.next().is_some() {}
             },
         )
     });
@@ -72,20 +69,20 @@ fn tree_iter_down(c: &mut Criterion) {
     c.bench_function("iterate down from tree child", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
-                tree.add(Some(0), 1);
-                tree.add(Some(1), 2);
-                tree.add(Some(2), 3);
-                tree.add(Some(3), 4);
+                let parent_id = tree.add(None, 0);
+                let widget_id = tree.add(Some(parent_id), 1);
+                let parent_id = tree.add(Some(widget_id), 2);
+                let parent_id = tree.add(Some(parent_id), 3);
+                tree.add(Some(parent_id), 4);
 
-                tree
+                (tree, widget_id)
             },
-            |tree| {
-                let mut walker = black_box(tree.iter_from(1));
+            |(tree, widget_id)| {
+                let mut walker = black_box(tree.iter_from(widget_id));
 
-                while walker.next().is_some() { }
+                while walker.next().is_some() {}
             },
         )
     });
@@ -95,19 +92,19 @@ fn tree_iter_up(c: &mut Criterion) {
     c.bench_function("iterate up tree parents", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
-                tree.add(Some(0), 1);
-                tree.add(Some(1), 2);
-                tree.add(Some(2), 3);
+                let parent_id = tree.add(None, 0);
+                let widget_id = tree.add(Some(parent_id), 1);
+                let parent_id = tree.add(Some(widget_id), 2);
+                let widget_id = tree.add(Some(parent_id), 3);
 
-                tree
+                (tree, widget_id)
             },
-            |tree| {
-                let mut walker = black_box(tree.iter_parents(3));
+            |(tree, widget_id)| {
+                let mut walker = black_box(tree.iter_parents(widget_id));
 
-                while walker.next().is_some() { }
+                while walker.next().is_some() {}
             },
         )
     });
@@ -115,44 +112,49 @@ fn tree_iter_up(c: &mut Criterion) {
     c.bench_function("iterate up tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
-                tree.add(Some(0), 1);
-                tree.add(Some(1), 2);
-                tree.add(Some(2), 3);
+                let parent_id = tree.add(None, 0);
+                let widget_id = tree.add(Some(parent_id), 1);
+                let parent_id = tree.add(Some(widget_id), 2);
+                tree.add(Some(parent_id), 3);
 
                 tree
             },
             |tree| {
                 let mut walker = black_box(tree.iter_up());
 
-                while walker.next().is_some() { }
+                while walker.next().is_some() {}
             },
         )
     });
-    
+
     c.bench_function("iterate up from tree child", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<usize>::default();
+                let mut tree = Tree::<WidgetId, usize>::default();
 
-                tree.add(None, 0);
-                tree.add(Some(0), 1);
-                tree.add(Some(1), 2);
-                tree.add(Some(2), 3);
-                tree.add(Some(3), 4);
+                let parent_id = tree.add(None, 0);
+                let widget_id = tree.add(Some(parent_id), 1);
+                let parent_id = tree.add(Some(widget_id), 2);
+                let widget_id = tree.add(Some(parent_id), 3);
 
-                tree
+                (tree, widget_id)
             },
-            |tree| {
-                let mut walker = black_box(tree.iter_up_from(3));
+            |(tree, widget_id)| {
+                let mut walker = black_box(tree.iter_up_from(widget_id));
 
-                while walker.next().is_some() { }
+                while walker.next().is_some() {}
             },
         )
     });
 }
 
-criterion_group!(benches, tree_ops, tree_get_deepest_child, tree_iter_down, tree_iter_up);
+criterion_group!(
+    benches,
+    tree_ops,
+    tree_get_deepest_child,
+    tree_iter_down,
+    tree_iter_up
+);
 criterion_main!(benches);

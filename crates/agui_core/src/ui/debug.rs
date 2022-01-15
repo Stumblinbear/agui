@@ -26,21 +26,19 @@ const WHITE: &str = "\u{001b}[37;1m";
 pub fn print_tree(manager: &WidgetManager) {
     println!("Tree:");
 
-    for widget_id in manager.get_tree().iter() {
-        let depth = manager
-            .get_tree()
-            .get(&widget_id)
-            .expect("broken tree")
-            .depth;
+    let tree = manager.get_context().get_tree();
 
-        let layer = manager.get_node(&widget_id).layer;
+    for widget_id in tree.iter() {
+        let depth = tree.get_node(widget_id).expect("broken tree").depth;
 
-        let node = manager.get_node(&widget_id);
+        let layer = manager.get_node(widget_id).layer;
+
+        let node = manager.get_node(widget_id);
 
         print_node(
             depth,
             layer,
-            Some(&widget_id),
+            Some(widget_id),
             &node.widget.get(),
             WHITE,
             &format!(
@@ -65,6 +63,8 @@ pub fn print_tree(manager: &WidgetManager) {
 
 pub fn print_tree_modifications(manager: &WidgetManager) {
     println!("Tree:");
+
+    let tree = manager.get_context().get_tree();
 
     let mods = &manager.modifications;
 
@@ -97,7 +97,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
     }
 
     // No widgets are added to the tree
-    if manager.get_tree().get_root().is_none() {
+    if tree.get_root().is_none() {
         // If we have a new root widget queued, print it
         if let Some(widget) = new_root {
             print_node(0, 0, None, &widget.get(), GREEN, "");
@@ -106,14 +106,10 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
         return;
     }
 
-    for widget_id in manager.get_tree().iter() {
-        let depth = manager
-            .get_tree()
-            .get(&widget_id)
-            .expect("broken tree")
-            .depth;
+    for widget_id in tree.iter() {
+        let depth = tree.get_node(widget_id).expect("broken tree").depth;
 
-        let layer = manager.get_node(&widget_id).layer;
+        let layer = manager.get_node(widget_id).layer;
 
         let is_rebuild_queued = rebuilds.contains(&widget_id);
 
@@ -123,12 +119,12 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
             destroys.contains(&widget_id)
         };
 
-        let node = manager.get_node(&widget_id);
+        let node = manager.get_node(widget_id);
 
         print_node(
             depth,
             layer,
-            Some(&widget_id),
+            Some(widget_id),
             &node.widget.get(),
             if is_destroy_queued {
                 RED
@@ -164,7 +160,7 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
 fn print_node(
     depth: usize,
     layer: u32,
-    widget_id: Option<&WidgetId>,
+    widget_id: Option<WidgetId>,
     widget: &Rc<dyn Widget>,
     color: &'static str,
     suffix: &str,
@@ -190,7 +186,7 @@ fn print_node(
     print!("{}", GRAY);
 
     if let Some(widget_id) = widget_id {
-        print!(" (#{})", widget_id);
+        print!(" (#{:?})", widget_id);
     }
 
     print!(" [{}]", layer);

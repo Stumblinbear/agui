@@ -1,9 +1,13 @@
 use std::{any::TypeId, fmt::Debug, rc::Rc};
 
 use downcast_rs::{impl_downcast, Downcast};
-use generational_arena::Index as GenerationalIndex;
+use slotmap::new_key_type;
 
 use crate::{context::WidgetContext, unit::Key};
+
+new_key_type! {
+    pub struct WidgetId;
+}
 
 /// Encapsulates the result of a widget `build()` method.
 #[non_exhaustive]
@@ -24,13 +28,13 @@ pub enum BuildResult {
 
 impl From<WidgetRef> for BuildResult {
     fn from(widget: WidgetRef) -> Self {
-        Self::Some(vec![ widget ])
+        Self::Some(vec![widget])
     }
 }
 
 impl From<&WidgetRef> for BuildResult {
     fn from(widget: &WidgetRef) -> Self {
-        Self::Some(vec![ WidgetRef::clone(widget) ])
+        Self::Some(vec![WidgetRef::clone(widget)])
     }
 }
 
@@ -180,7 +184,7 @@ impl WidgetRef {
         self.get().get_type_name()
     }
 
-    /// Returns none of the widget is not the `W` type, or if it is None.
+    /// Returns none if the widget is not the `W` type, or if it is None.
     #[must_use]
     pub fn try_downcast_ref<W>(&self) -> Option<Rc<W>>
     where
@@ -215,38 +219,5 @@ impl From<&Self> for WidgetRef {
 impl Into<Vec<Self>> for WidgetRef {
     fn into(self) -> Vec<Self> {
         vec![Self::clone(&self)]
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WidgetId(GenerationalIndex);
-
-impl std::fmt::Display for WidgetId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.into_raw_parts().0)
-    }
-}
-
-impl WidgetId {
-    #[must_use]
-    pub const fn from(index: GenerationalIndex) -> Self {
-        Self(index)
-    }
-
-    #[must_use]
-    pub const fn id(&self) -> GenerationalIndex {
-        self.0
-    }
-}
-
-impl Default for WidgetId {
-    fn default() -> Self {
-        Self(GenerationalIndex::from_raw_parts(0, 0))
-    }
-}
-
-impl From<usize> for WidgetId {
-    fn from(val: usize) -> Self {
-        Self(GenerationalIndex::from_raw_parts(val, 0))
     }
 }

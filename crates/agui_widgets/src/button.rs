@@ -50,7 +50,7 @@ impl Default for ButtonStyle {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum ButtonState {
     Normal,
     Disabled,

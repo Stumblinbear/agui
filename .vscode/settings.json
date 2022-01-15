@@ -4,6 +4,8 @@
         "agpu",
         "agui",
         "bitflags",
+        "blonk",
+        "bytemuck",
         "downcasting",
         "elems",
         "funcs",
@@ -24,9 +26,14 @@
         "repr",
         "RLOGO",
         "RSHIFT",
+        "slotmap",
         "Sysrq",
+        "Tessellator",
         "trybuild",
         "unopinionated",
-        "Winit"
+        "Unorm",
+        "wgpu",
+        "Winit",
+        "Zeroable"
     ]
 }

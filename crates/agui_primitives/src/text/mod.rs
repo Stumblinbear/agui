@@ -15,6 +15,7 @@ mod font;
 pub use self::font::{Font, FontArc, FontDescriptor, Fonts, GlyphLayout, ScaleFont};
 pub use glyph_brush_layout::{HorizontalAlign, SectionGlyph, VerticalAlign};
 
+#[derive(Clone, PartialEq)]
 pub struct TextSection {
     pub font: FontDescriptor,
     pub text: String,

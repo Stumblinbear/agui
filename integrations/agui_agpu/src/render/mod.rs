@@ -84,7 +84,7 @@ pub trait WidgetRenderPass: Downcast {
         ctx: &RenderContext,
         manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
     );
 
     fn layout(
@@ -92,7 +92,7 @@ pub trait WidgetRenderPass: Downcast {
         ctx: &RenderContext,
         manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
         layer: u32,
     );
 
@@ -101,7 +101,7 @@ pub trait WidgetRenderPass: Downcast {
         ctx: &RenderContext,
         manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
     );
 
     fn update(&mut self, ctx: &RenderContext);

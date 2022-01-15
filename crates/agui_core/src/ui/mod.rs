@@ -1,13 +1,13 @@
 use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
-use generational_arena::Arena;
 use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    context::{tree::Tree, ListenerId, WidgetContext},
+    context::{ListenerId, WidgetContext},
     event::WidgetEvent,
+    tree::Tree,
     unit::{Key, Rect, Shape, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetRef},
     Ref,
@@ -15,21 +15,16 @@ use crate::{
 
 mod cache;
 mod debug;
-mod node;
+pub mod node;
 
-use self::cache::LayoutCache;
-
-pub use self::node::WidgetNode;
+use self::{cache::LayoutCache, node::WidgetNode};
 
 /// Handles the entirety of the widget lifecycle.
 pub struct WidgetManager<'ui> {
-    widgets: Arena<WidgetNode>,
+    context: WidgetContext<'ui>,
     cache: LayoutCache<WidgetId>,
 
-    context: WidgetContext<'ui>,
-
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
-
     modifications: Vec<Modify>,
 
     #[cfg(test)]
@@ -50,13 +45,10 @@ impl<'ui> Default for WidgetManager<'ui> {
         let changed = Arc::new(Mutex::new(FnvHashSet::default()));
 
         Self {
-            widgets: Arena::default(),
+            context: WidgetContext::new(Arc::clone(&changed)),
             cache: LayoutCache::default(),
 
-            context: WidgetContext::new(Arc::clone(&changed)),
-
             changed,
-
             modifications: Vec::default(),
 
             #[cfg(test)]
@@ -81,19 +73,19 @@ impl<'ui> WidgetManager<'ui> {
         Self::default()
     }
 
-    /// Returns the widget tree.
-    pub fn get_tree(&self) -> &Tree<WidgetId> {
-        self.context.get_tree()
+    /// Get the full widget tree.
+    pub fn get_tree(&self) -> &Tree<WidgetId, WidgetNode> {
+        &self.context.tree
     }
 
     /// Check if a widget exists in the tree.
-    pub fn contains(&self, widget_id: &WidgetId) -> bool {
-        self.widgets.contains(widget_id.id())
+    pub fn contains(&self, widget_id: WidgetId) -> bool {
+        self.context.tree.contains(widget_id)
     }
 
     /// Fetch the tree representation of a widget. Will be `None` if it doesn't exist.
     pub fn try_get_node(&self, widget_id: WidgetId) -> Option<&WidgetNode> {
-        self.widgets.get(widget_id.id())
+        self.context.tree.get(widget_id)
     }
 
     /// Fetch the tree representation of a widget.
@@ -101,16 +93,18 @@ impl<'ui> WidgetManager<'ui> {
     /// # Panics
     ///
     /// Will panic if the widget is not found.
-    pub fn get_node(&self, widget_id: &WidgetId) -> &WidgetNode {
-        self.widgets
-            .get(widget_id.id())
+    pub fn get_node(&self, widget_id: WidgetId) -> &WidgetNode {
+        self.context
+            .tree
+            .get(widget_id)
             .expect("widget does not exist")
     }
 
     /// Fetch a widget from the tree. Will be `None` if it doesn't exist.
-    pub fn try_get(&self, widget_id: &WidgetId) -> Option<WidgetRef> {
-        self.widgets
-            .get(widget_id.id())
+    pub fn try_get(&self, widget_id: WidgetId) -> Option<WidgetRef> {
+        self.context
+            .tree
+            .get(widget_id)
             .map(|node| WidgetRef::clone(&node.widget))
     }
 
@@ -119,13 +113,13 @@ impl<'ui> WidgetManager<'ui> {
     /// # Panics
     ///
     /// This will panic if the widget is not found.
-    pub fn get(&self, widget_id: &WidgetId) -> WidgetRef {
+    pub fn get(&self, widget_id: WidgetId) -> WidgetRef {
         self.try_get(widget_id).expect("widget does not exist")
     }
 
     /// Fetch a widget as the specified type. If it doesn't exist, or it is not the requested type, this
     /// will return `None`.
-    pub fn try_get_as<W>(&self, widget_id: &WidgetId) -> Option<Rc<W>>
+    pub fn try_get_as<W>(&self, widget_id: WidgetId) -> Option<Rc<W>>
     where
         W: Widget,
     {
@@ -137,7 +131,7 @@ impl<'ui> WidgetManager<'ui> {
     /// # Panics
     ///
     /// If the widget is not the requested type, it will panic.
-    pub fn get_as<W>(&self, widget_id: &WidgetId) -> Rc<W>
+    pub fn get_as<W>(&self, widget_id: WidgetId) -> Rc<W>
     where
         W: Widget,
     {
@@ -145,12 +139,12 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Get the visual `Rect` of a widget.
-    pub fn get_rect(&self, widget_id: &WidgetId) -> Option<&Rect> {
+    pub fn get_rect(&self, widget_id: WidgetId) -> Option<&Rect> {
         self.context.get_rect_for(widget_id)
     }
 
     /// Get the visual clipping `Path` for a widget.
-    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Shape> {
+    pub fn get_clipping(&self, widget_id: WidgetId) -> Ref<Shape> {
         self.context.get_clipping(widget_id)
     }
 
@@ -167,7 +161,7 @@ impl<'ui> WidgetManager<'ui> {
 
         if parent_id.is_none() {
             // Check if we already have a root node, and queue it for removal if so
-            if let Some(root_id) = self.get_tree().get_root() {
+            if let Some(root_id) = self.context.tree.get_root() {
                 self.modifications.push(Modify::Destroy(root_id));
             }
         }
@@ -237,7 +231,7 @@ impl<'ui> WidgetManager<'ui> {
                         }
 
                         ListenerId::Computed(widget_id, computed_id) => {
-                            if self.context.call_computed_func(&widget_id, computed_id) {
+                            if self.context.call_computed_func(widget_id, computed_id) {
                                 dirty_widgets.insert(widget_id);
                             }
                         }
@@ -261,12 +255,12 @@ impl<'ui> WidgetManager<'ui> {
                 let mut to_rebuild = Vec::new();
 
                 'main: for widget_id in dirty_widgets {
-                    let node = match self.get_tree().get(&widget_id) {
+                    let tree_node = match self.context.tree.get_node(widget_id) {
                         Some(widget) => widget,
                         None => continue,
                     };
 
-                    let widget_depth = node.depth;
+                    let widget_depth = tree_node.depth;
 
                     let mut to_remove = Vec::new();
 
@@ -279,12 +273,12 @@ impl<'ui> WidgetManager<'ui> {
                         if widget_depth > dirty_depth {
                             // If the widget is a child of one of the already queued widgets, bail. It's
                             // already going to be updated.
-                            if self.get_tree().has_child(&dirty_id, &widget_id) {
+                            if self.context.tree.has_child(dirty_id, widget_id) {
                                 continue 'main;
                             }
                         } else {
                             // If the widget is a parent of the widget already queued for render, remove it
-                            if self.get_tree().has_child(&widget_id, &dirty_id) {
+                            if self.context.tree.has_child(widget_id, dirty_id) {
                                 to_remove.push(i);
                             }
                         }
@@ -308,7 +302,7 @@ impl<'ui> WidgetManager<'ui> {
                 root_changed = true;
             }
 
-            morphorm::layout(&mut self.cache, &self.context.tree, &self.widgets);
+            morphorm::layout(&mut self.cache, &self.context.tree, &self.context.tree);
 
             let plugins = self.context.plugins.lock();
 
@@ -325,7 +319,7 @@ impl<'ui> WidgetManager<'ui> {
                 let mut changed = self.cache.take_changed();
 
                 if root_changed {
-                    if let Some(widget_id) = self.get_tree().get_root() {
+                    if let Some(widget_id) = self.context.tree.get_root() {
                         changed.insert(widget_id);
                     }
                 }
@@ -355,10 +349,10 @@ impl<'ui> WidgetManager<'ui> {
         events.extend(
             widgets_changed
                 .into_iter()
-                .filter(|widget_id| self.contains(widget_id))
+                .filter(|widget_id| self.contains(*widget_id))
                 .map(|widget_id| {
-                    let type_id = self.get(&widget_id).get_type_id();
-                    let layer = self.get_node(&widget_id).layer;
+                    let type_id = self.get(widget_id).get_type_id();
+                    let layer = self.get_node(widget_id).layer;
 
                     WidgetEvent::Layout {
                         type_id,
@@ -382,8 +376,8 @@ impl<'ui> WidgetManager<'ui> {
     fn morphorm_root_workaround(&mut self) -> bool {
         let mut root_changed = false;
 
-        if let Some(widget_id) = self.get_tree().get_root() {
-            if let Some(layout) = self.context.get_layout(&widget_id).try_get() {
+        if let Some(widget_id) = self.context.tree.get_root() {
+            if let Some(layout) = self.context.get_layout(widget_id).try_get() {
                 if let Some(Units::Pixels(px)) = layout.position.get_left() {
                     if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
@@ -460,8 +454,9 @@ impl<'ui> WidgetManager<'ui> {
 
                     // If we're about to remove a keyed widget, store it instead
                     if let WidgetRef::Keyed { owner_id, key, .. } = self
-                        .widgets
-                        .get(widget_id.id())
+                        .context
+                        .tree
+                        .get(widget_id)
                         .expect("cannot remove a widget that does not exist")
                         .widget
                     {
@@ -486,13 +481,13 @@ impl<'ui> WidgetManager<'ui> {
         parent_id: Option<WidgetId>,
         widget: WidgetRef,
     ) {
-        if parent_id.is_some() && !self.contains(parent_id.as_ref().unwrap()) {
+        if parent_id.is_some() && !self.contains(parent_id.unwrap()) {
             panic!("cannot add a widget to a nonexistent parent")
         }
 
         // Check if it's a keyed widget
-        if let WidgetRef::Keyed { owner_id, key, .. } = &widget {
-            if let Some(keyed_id) = removed_keyed.remove(&(*owner_id, *key)) {
+        if let WidgetRef::Keyed { owner_id, key, .. } = widget {
+            if let Some(keyed_id) = removed_keyed.remove(&(owner_id, key)) {
                 // Reparent the (removed) keyed widget to the new widget
                 self.context.tree.reparent(parent_id, keyed_id);
 
@@ -502,14 +497,15 @@ impl<'ui> WidgetManager<'ui> {
 
         let type_id = widget.get_type_id();
 
-        let widget_id = WidgetId::from(self.widgets.insert(WidgetNode {
-            widget,
-            layer: 0,
-            layout_type: Ref::None,
-            layout: Ref::None,
-        }));
-
-        self.context.tree.add(parent_id, widget_id);
+        let widget_id = self.context.tree.add(
+            parent_id,
+            WidgetNode {
+                widget,
+                layer: 0,
+                layout_type: Ref::None,
+                layout: Ref::None,
+            },
+        );
 
         // Sometimes widgets get changes queued before they're spawned
         self.changed.lock().remove(&ListenerId::Widget(widget_id));
@@ -527,23 +523,21 @@ impl<'ui> WidgetManager<'ui> {
             let parent = self
                 .context
                 .tree
-                .get(&widget_id)
+                .get_node(widget_id)
                 .expect("broken tree")
                 .parent;
 
             match parent {
-                Some(parent_id) => self.get_node(&parent_id).layer,
+                Some(parent_id) => self.get_node(parent_id).layer,
                 None => 0,
             }
         };
-
-        let node = self.widgets.get_mut(widget_id.id()).unwrap();
 
         // Queue the children for removal
         for child_id in &self
             .context
             .tree
-            .get(&widget_id)
+            .get_node(widget_id)
             .expect("cannot destroy a widget that doesn't exist")
             .children
         {
@@ -551,6 +545,8 @@ impl<'ui> WidgetManager<'ui> {
         }
 
         *self.context.current_id.lock() = Some(ListenerId::Widget(widget_id));
+
+        let node = self.context.tree.get(widget_id).unwrap();
 
         let result = node
             .widget
@@ -574,40 +570,44 @@ impl<'ui> WidgetManager<'ui> {
             BuildResult::Err(err) => panic!("build failed: {}", err),
         };
 
-        node.layer = parent_layer;
-
         // If this widget has clipping set, increment its depth by one
-        if self.context.get_clipping(&widget_id).is_valid() {
-            node.layer += 1;
-        }
+        let node_layer = if self.context.get_clipping(widget_id).is_some() {
+            parent_layer + 1
+        } else {
+            parent_layer
+        };
 
         // Store the node's layout so morphorm can access it
-        node.layout_type = self.context.get_layout_type(&widget_id);
-        node.layout = self.context.get_layout(&widget_id);
+        let node_layout_type = self.context.get_layout_type(widget_id);
+        let node_layout = self.context.get_layout(widget_id);
+
+        let node = self.context.tree.get_mut(widget_id).unwrap();
+
+        node.layer = node_layer;
+        node.layout_type = node_layout_type;
+        node.layout = node_layout;
     }
 
     fn process_destroy(&mut self, events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let widget = self
-            .widgets
-            .remove(widget_id.id())
-            .expect("cannot remove a widget that does not exist");
+        let tree_node = self
+            .context
+            .tree
+            .remove(widget_id);
 
-        // Add the child widgets to the removal queue
-        if let Some(tree_node) = self.context.tree.remove(&widget_id) {
-            for child_id in tree_node.children {
-                self.modifications.push(Modify::Destroy(child_id));
-            }
-        }
-
-        self.context.remove_widget(&widget_id);
+        self.context.remove_widget(widget_id);
         self.cache.remove(&widget_id);
 
         self.changed.lock().remove(&ListenerId::Widget(widget_id));
 
         events.push(WidgetEvent::Destroyed {
-            type_id: widget.widget.get_type_id(),
+            type_id: tree_node.widget.get_type_id(),
             widget_id,
         });
+        
+        // Add the child widgets to the removal queue
+        for child_id in tree_node.children {
+            self.modifications.push(Modify::Destroy(child_id));
+        }
     }
 
     pub fn print_tree(&self) {
@@ -700,8 +700,9 @@ mod tests {
 
         events.clear();
 
-        let widget_id = &manager
-            .get_tree()
+        let widget_id = manager
+            .context
+            .tree
             .get_root()
             .expect("failed to get root widget");
 
@@ -771,8 +772,9 @@ mod tests {
         assert_eq!(manager.rebuilds, 1, "should not have been rebuilt");
         assert_eq!(manager.changes, 0, "should not have changed");
 
-        let widget_id = &manager
-            .get_tree()
+        let widget_id = manager
+            .context
+            .tree
             .get_root()
             .expect("failed to get root widget");
 

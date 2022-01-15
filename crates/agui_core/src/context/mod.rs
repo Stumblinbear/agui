@@ -5,12 +5,10 @@ use parking_lot::Mutex;
 
 mod computed;
 mod notifiable;
-pub mod tree;
 
 use self::{
     computed::{ComputedFn, ComputedFunc},
     notifiable::readable::ReadableMap,
-    tree::Tree,
 };
 
 pub use self::notifiable::{
@@ -20,7 +18,9 @@ pub use self::notifiable::{
 
 use crate::{
     layout::Layout,
+    node::WidgetNode,
     plugin::WidgetPlugin,
+    tree::Tree,
     unit::{Key, LayoutType, Rect, Shape},
     widget::{WidgetId, WidgetRef},
     Ref,
@@ -58,7 +58,7 @@ type WidgetComputedFuncs<'ui> =
     FnvHashMap<WidgetId, FnvHashMap<TypeId, Box<dyn ComputedFunc<'ui> + 'ui>>>;
 
 pub struct WidgetContext<'ui> {
-    pub(crate) tree: Tree<WidgetId>,
+    pub(crate) tree: Tree<WidgetId, WidgetNode>,
     pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
 
     global: StateMap,
@@ -104,7 +104,7 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Returns the widget tree.
-    pub fn get_tree(&self) -> &Tree<WidgetId> {
+    pub fn get_tree(&self) -> &Tree<WidgetId, WidgetNode> {
         &self.tree
     }
 
@@ -122,18 +122,18 @@ impl<'ui> WidgetContext<'ui> {
         self.changed.lock().insert(listener_id);
     }
 
-    pub(crate) fn remove_widget(&mut self, widget_id: &WidgetId) {
-        let mut all_listeners = vec![ListenerId::Widget(*widget_id)];
+    pub(crate) fn remove_widget(&mut self, widget_id: WidgetId) {
+        let mut all_listeners = vec![ListenerId::Widget(widget_id)];
 
-        if let Some(computed_funcs) = self.computed_funcs.lock().remove(widget_id) {
+        if let Some(computed_funcs) = self.computed_funcs.lock().remove(&widget_id) {
             for type_id in computed_funcs.into_keys() {
-                all_listeners.push(ListenerId::Computed(*widget_id, type_id));
+                all_listeners.push(ListenerId::Computed(widget_id, type_id));
             }
         }
 
-        self.layouts.lock().remove(widget_id);
+        self.layouts.lock().remove(&widget_id);
 
-        self.rects.remove(widget_id);
+        self.rects.remove(&widget_id);
 
         for listener_id in all_listeners {
             self.remove_listener(listener_id);
@@ -316,10 +316,10 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch the layout of a widget.
-    pub fn get_layout_type(&self, widget_id: &WidgetId) -> Ref<LayoutType> {
+    pub fn get_layout_type(&self, widget_id: WidgetId) -> Ref<LayoutType> {
         self.layout_types
             .lock()
-            .get(widget_id)
+            .get(&widget_id)
             .map_or(Ref::None, Ref::clone)
     }
 
@@ -346,10 +346,10 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch the layout of a widget.
-    pub fn get_layout(&self, widget_id: &WidgetId) -> Ref<Layout> {
+    pub fn get_layout(&self, widget_id: WidgetId) -> Ref<Layout> {
         self.layouts
             .lock()
-            .get(widget_id)
+            .get(&widget_id)
             .map_or(Ref::None, Ref::clone)
     }
 }
@@ -379,10 +379,10 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch the clipping mask of a widget.
-    pub fn get_clipping(&self, widget_id: &WidgetId) -> Ref<Shape> {
+    pub fn get_clipping(&self, widget_id: WidgetId) -> Ref<Shape> {
         self.clipping
             .lock()
-            .get(widget_id)
+            .get(&widget_id)
             .map_or(Ref::None, Ref::clone)
     }
 }
@@ -430,10 +430,10 @@ impl<'ui> WidgetContext<'ui> {
             .expect("failed to downcast ref")
     }
 
-    pub(crate) fn call_computed_func(&mut self, widget_id: &WidgetId, computed_id: TypeId) -> bool {
+    pub(crate) fn call_computed_func(&mut self, widget_id: WidgetId, computed_id: TypeId) -> bool {
         self.computed_funcs
             .lock()
-            .get_mut(widget_id)
+            .get_mut(&widget_id)
             .and_then(|widgets| widgets.get_mut(&computed_id))
             .map_or(false, |computed_func| computed_func.call(self))
     }
@@ -442,8 +442,8 @@ impl<'ui> WidgetContext<'ui> {
 // Computed
 impl<'ui> WidgetContext<'ui> {
     /// Get the visual `Rect` of a widget.
-    pub fn get_rect_for(&self, widget_id: &WidgetId) -> Option<&Rect> {
-        self.rects.get(widget_id)
+    pub fn get_rect_for(&self, widget_id: WidgetId) -> Option<&Rect> {
+        self.rects.get(&widget_id)
     }
 
     /// Get to the visual rect of the widget.

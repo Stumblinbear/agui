@@ -100,7 +100,7 @@ impl WidgetRenderPass for ClippingRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        _widget_id: &WidgetId,
+        _widget_id: WidgetId,
     ) {
     }
 
@@ -109,7 +109,7 @@ impl WidgetRenderPass for ClippingRenderPass {
         ctx: &RenderContext,
         manager: &WidgetManager,
         _type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
         layer: u32,
     ) {
         if let Some(clipping) = manager.get_clipping(widget_id).try_get() {
@@ -154,7 +154,7 @@ impl WidgetRenderPass for ClippingRenderPass {
                 .create(&geometry.indices);
 
             self.widgets.insert(
-                *widget_id,
+                widget_id,
                 ClippingBuffer {
                     clipping_data,
 
@@ -164,7 +164,7 @@ impl WidgetRenderPass for ClippingRenderPass {
                 },
             );
 
-            self.widget_order.push(*widget_id);
+            self.widget_order.push(widget_id);
         }
     }
 
@@ -173,13 +173,13 @@ impl WidgetRenderPass for ClippingRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
     ) {
-        if self.widgets.remove(widget_id).is_some() {
+        if self.widgets.remove(&widget_id).is_some() {
             self.widget_order.remove(
                 self.widget_order
                     .iter()
-                    .position(|id| id == widget_id)
+                    .position(|id| *id == widget_id)
                     .unwrap(),
             );
         }

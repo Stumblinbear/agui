@@ -1,65 +1,136 @@
-use std::{hash::Hash};
+use std::ops::Deref;
 
-use fnv::FnvHashMap;
 use morphorm::Hierarchy;
+use slotmap::{HopSlotMap, Key};
 
 #[derive(Debug)]
-pub struct Tree<K> {
+pub struct Tree<K, V>
+where
+    K: Key,
+{
     root: Option<K>,
-    nodes: FnvHashMap<K, TreeNode<K>>,
+    nodes: HopSlotMap<K, TreeNode<K, V>>,
 }
 
-impl<K> Default for Tree<K> {
+impl<K, V> Default for Tree<K, V>
+where
+    K: Key,
+{
     fn default() -> Self {
         Self {
             root: None,
-            nodes: FnvHashMap::default(),
+            nodes: HopSlotMap::default(),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct TreeNode<K> {
+pub struct TreeNode<K, V>
+where
+    K: Key,
+{
     pub depth: usize,
+    pub value: V,
 
     pub parent: Option<K>,
     pub children: Vec<K>,
 }
 
-impl<K> Tree<K>
+impl<K, V> Deref for TreeNode<K, V>
 where
-    K: Copy + PartialEq + Eq + Hash,
+    K: Key,
+{
+    type Target = V;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<K, V> Tree<K, V>
+where
+    K: Key,
 {
     #[allow(dead_code)]
     pub fn get_root(&self) -> Option<K> {
         self.root
     }
 
-    /// # Panics
-    ///
-    /// Will panic if the node you're parenting to does not exist in the tree.
-    pub fn add(&mut self, parent_id: Option<K>, node_id: K) -> K {
-        self.set_node(
-            parent_id,
-            node_id,
-            TreeNode {
-                depth: 0,
-                parent: parent_id,
-                children: Vec::new(),
-            },
-        );
+    pub fn contains(&self, node_id: K) -> bool {
+        self.nodes.contains_key(node_id)
+    }
+
+    pub fn add(&mut self, parent_id: Option<K>, value: V) -> K {
+        let node_id = self.nodes.insert(TreeNode {
+            depth: 0,
+            value,
+            parent: parent_id,
+            children: Vec::new(),
+        });
+
+        self.propagate_node(parent_id, node_id);
 
         node_id
     }
 
-    /// # Panics
-    ///
-    /// Will panic if the node you're parenting to does not exist in the tree.
-    pub fn set_node(&mut self, parent_id: Option<K>, node_id: K, mut node: TreeNode<K>) {
+    pub fn remove(&mut self, node_id: K) -> TreeNode<K, V> {
+        let node = self
+            .nodes
+            .remove(node_id)
+            .expect("cannot remove a widget that isn't in the tree");
+
+        if let Some(parent_id) = node.parent {
+            if let Some(parent) = self.nodes.get_mut(parent_id) {
+                // Remove the child from its parent
+                parent.children.remove(
+                    parent
+                        .children
+                        .iter()
+                        .position(|child_id| node_id == *child_id)
+                        .expect("broken tree: unable to find child in removed node's parent"),
+                );
+            }
+        } else {
+            // If the node has no parent, then we can assume it was the root
+            self.root = None;
+        }
+
+        // We can't remove the children here, since the manager needs to have access to them.
+
+        node
+    }
+
+    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
+        let old_parent_id = self
+            .nodes
+            .get(node_id)
+            .expect("cannot reparent a node that isn't in the tree")
+            .parent;
+
+        if let Some(parent_id) = old_parent_id {
+            if let Some(parent) = self.nodes.get_mut(parent_id) {
+                // Remove the child from its parent
+                parent.children.remove(
+                    parent
+                        .children
+                        .iter()
+                        .position(|child_id| node_id == *child_id)
+                        .expect("broken tree: unable to find child in removed node's parent"),
+                );
+            }
+        } else {
+            // If the node has no parent, then we can assume it was the root
+            self.root = None;
+        }
+
+        self.propagate_node(new_parent_id, node_id);
+    }
+
+    fn propagate_node(&mut self, parent_id: Option<K>, node_id: K) {
         let mut new_depth = 0;
 
         if let Some(parent_id) = parent_id {
-            if let Some(parent) = self.nodes.get_mut(&parent_id) {
+            if let Some(parent) = self.nodes.get_mut(parent_id) {
                 new_depth = parent.depth + 1;
 
                 parent.children.push(node_id);
@@ -74,6 +145,8 @@ where
             self.root = Some(node_id);
         }
 
+        let node = self.nodes.get_mut(node_id).unwrap();
+
         if node.depth != new_depth {
             let diff = new_depth - node.depth;
 
@@ -86,7 +159,7 @@ where
                 while !queue.is_empty() {
                     let children = self
                         .nodes
-                        .get(&queue.remove(0))
+                        .get(queue.remove(0))
                         .expect("broken tree: unable to update child's depth")
                         .children
                         .clone();
@@ -94,7 +167,7 @@ where
                     for child_id in children {
                         let child = self
                             .nodes
-                            .get_mut(&child_id)
+                            .get_mut(child_id)
                             .expect("broken tree: unable to update child's depth");
 
                         child.depth += diff;
@@ -104,47 +177,21 @@ where
                 }
             }
         }
-
-        self.nodes.insert(node_id, node);
     }
 
-    pub fn remove(&mut self, node_id: &K) -> Option<TreeNode<K>> {
-        self.nodes.remove(node_id).map(|node| {
-            if let Some(parent_id) = &node.parent {
-                if let Some(parent) = self.nodes.get_mut(parent_id) {
-                    // Remove the child from its parent
-                    parent.children.remove(
-                        parent
-                            .children
-                            .iter()
-                            .position(|child_id| node_id == child_id)
-                            .expect("broken tree: unable to find child in removed node's parent"),
-                    );
-                }
-            }else{
-                // If the node has no parent, then we can assume it was the root
-                self.root = None;
-            }
-
-            // We can't remove the children here, since the manager needs to have access to them.
-
-            node
-        })
+    pub fn get(&self, node_id: K) -> Option<&V> {
+        self.nodes.get(node_id).map(|node| &node.value)
     }
 
-    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
-        let node = self
-            .remove(&node_id)
-            .expect("broken tree: cannot reparent a node that doesn't exist");
-
-        self.set_node(new_parent_id, node_id, node);
+    pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
+        self.nodes.get_mut(node_id).map(|node| &mut node.value)
     }
 
-    pub fn get(&self, node_id: &K) -> Option<&TreeNode<K>> {
+    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
         self.nodes.get(node_id)
     }
 
-    pub fn iter(&self) -> DownwardIterator<K> {
+    pub fn iter(&self) -> DownwardIterator<K, V> {
         DownwardIterator {
             tree: self,
             node_id: self.root,
@@ -152,7 +199,7 @@ where
         }
     }
 
-    pub fn iter_from(&self, node_id: K) -> DownwardIterator<K> {
+    pub fn iter_from(&self, node_id: K) -> DownwardIterator<K, V> {
         DownwardIterator {
             tree: self,
             node_id: Some(node_id),
@@ -160,7 +207,7 @@ where
         }
     }
 
-    pub fn iter_up(&self) -> UpwardIterator<K> {
+    pub fn iter_up(&self) -> UpwardIterator<K, V> {
         UpwardIterator {
             tree: self,
             node_id: self.get_deepest_child(self.root),
@@ -169,7 +216,7 @@ where
     }
 
     #[allow(dead_code)]
-    pub fn iter_up_from(&self, node_id: K) -> UpwardIterator<K> {
+    pub fn iter_up_from(&self, node_id: K) -> UpwardIterator<K, V> {
         UpwardIterator {
             tree: self,
             node_id: Some(node_id),
@@ -177,7 +224,7 @@ where
         }
     }
 
-    pub fn iter_parents(&self, node_id: K) -> ParentIterator<K> {
+    pub fn iter_parents(&self, node_id: K) -> ParentIterator<K, V> {
         ParentIterator {
             tree: self,
             node_id: Some(node_id),
@@ -185,9 +232,9 @@ where
     }
 
     #[allow(clippy::missing_panics_doc)]
-    pub fn has_child(&self, node_id: &K, child_id: &K) -> bool {
-        let node = self.get(node_id);
-        let child = self.get(child_id);
+    pub fn has_child(&self, node_id: K, child_id: K) -> bool {
+        let node = self.nodes.get(node_id);
+        let child = self.nodes.get(child_id);
 
         // Make sure they're actually in the tree
         if node.is_none() || child.is_none() {
@@ -201,10 +248,8 @@ where
             return false;
         }
 
-        let child_id = *child_id;
-
-        for node_id in self.iter_from(*node_id) {
-            let node = self.get(&node_id).expect("tree broken");
+        for node_id in self.iter_from(node_id) {
+            let node = self.nodes.get(node_id).expect("tree broken");
 
             // If we reach a depth lower than the child, bail, because the child won't be found. We do
             // not do an equality check, here, because we may find the child as a sibling
@@ -223,7 +268,7 @@ where
 
     pub fn get_deepest_child(&self, mut current_node_id: Option<K>) -> Option<K> {
         while let Some(node_id) = current_node_id {
-            if let Some(node) = self.nodes.get(&node_id) {
+            if let Some(node) = self.nodes.get(node_id) {
                 if let Some(last_child) = node.children.last() {
                     current_node_id = Some(*last_child);
                 } else {
@@ -237,7 +282,7 @@ where
     }
 
     #[allow(clippy::unused_self)]
-    fn get_next_sibling(&self, parent: &TreeNode<K>, sibling_id: K) -> Option<K> {
+    fn get_next_sibling(&self, parent: &TreeNode<K, V>, sibling_id: K) -> Option<K> {
         let mut children = parent.children.iter();
 
         while let Some(child_id) = children.next() {
@@ -256,7 +301,7 @@ where
     }
 
     #[allow(clippy::unused_self)]
-    fn get_prev_sibling(&self, parent: &TreeNode<K>, sibling_id: K) -> Option<K> {
+    fn get_prev_sibling(&self, parent: &TreeNode<K, V>, sibling_id: K) -> Option<K> {
         let mut last_child_id = None;
 
         for child_id in &parent.children {
@@ -271,15 +316,18 @@ where
     }
 }
 
-pub struct DownwardIterator<'a, K> {
-    tree: &'a Tree<K>,
+pub struct DownwardIterator<'a, K, V>
+where
+    K: Key,
+{
+    tree: &'a Tree<K, V>,
     node_id: Option<K>,
     first: bool,
 }
 
-impl<'a, K> Iterator for DownwardIterator<'a, K>
+impl<'a, K, V> Iterator for DownwardIterator<'a, K, V>
 where
-    K: Copy + PartialEq + Eq + Hash,
+    K: Key,
 {
     type Item = K;
 
@@ -291,7 +339,7 @@ where
 
         if let Some(node_id) = self.node_id {
             // Grab the node from the tree
-            if let Some(node) = self.tree.get(&node_id) {
+            if let Some(node) = self.tree.nodes.get(node_id) {
                 // Grab the first child node
                 if let Some(child_id) = node.children.first() {
                     self.node_id = Some(*child_id);
@@ -302,7 +350,7 @@ where
                     loop {
                         // If we have no children, return the sibling after the node_id
                         if let Some(parent_node_id) = current_parent {
-                            if let Some(parent_node) = self.tree.get(&parent_node_id) {
+                            if let Some(parent_node) = self.tree.nodes.get(parent_node_id) {
                                 if let Some(sibling_id) =
                                     self.tree.get_next_sibling(parent_node, after_child_id)
                                 {
@@ -337,15 +385,18 @@ where
     }
 }
 
-pub struct UpwardIterator<'a, K> {
-    tree: &'a Tree<K>,
+pub struct UpwardIterator<'a, K, V>
+where
+    K: Key,
+{
+    tree: &'a Tree<K, V>,
     node_id: Option<K>,
     first: bool,
 }
 
-impl<'a, K> Iterator for UpwardIterator<'a, K>
+impl<'a, K, V> Iterator for UpwardIterator<'a, K, V>
 where
-    K: Copy + PartialEq + Eq + Hash,
+    K: Key,
 {
     type Item = K;
 
@@ -357,9 +408,9 @@ where
 
         if let Some(node_id) = self.node_id {
             // Grab the node from the tree
-            if let Some(node) = self.tree.get(&node_id) {
+            if let Some(node) = self.tree.nodes.get(node_id) {
                 if let Some(parent_node_id) = node.parent {
-                    if let Some(parent_node) = self.tree.get(&parent_node_id) {
+                    if let Some(parent_node) = self.tree.nodes.get(parent_node_id) {
                         let first_child_id = parent_node.children.first().unwrap();
 
                         // If we're the parent's first child, then return the parent
@@ -386,21 +437,24 @@ where
     }
 }
 
-pub struct ParentIterator<'a, K> {
-    tree: &'a Tree<K>,
+pub struct ParentIterator<'a, K, V>
+where
+    K: Key,
+{
+    tree: &'a Tree<K, V>,
     node_id: Option<K>,
 }
 
-impl<'a, K> Iterator for ParentIterator<'a, K>
+impl<'a, K, V> Iterator for ParentIterator<'a, K, V>
 where
-    K: Copy + PartialEq + Eq + Hash,
+    K: Key,
 {
     type Item = K;
 
     fn next(&mut self) -> Option<K> {
         if let Some(node_id) = self.node_id {
             // Grab the node from the tree
-            if let Some(node) = self.tree.get(&node_id) {
+            if let Some(node) = self.tree.nodes.get(node_id) {
                 self.node_id = node.parent;
             } else {
                 // If the node doesn't exist in the tree, then there's nothing to iterate
@@ -412,21 +466,24 @@ where
     }
 }
 
-pub struct ChildIterator<'a, K> {
-    tree: &'a Tree<K>,
+pub struct ChildIterator<'a, K, V>
+where
+    K: Key,
+{
+    tree: &'a Tree<K, V>,
     node_id: K,
     current_child_id: Option<K>,
     first: bool,
 }
 
-impl<'a, K: 'a> Iterator for ChildIterator<'a, K>
+impl<'a, K, V> Iterator for ChildIterator<'a, K, V>
 where
-    K: Copy + PartialEq + Eq + Hash,
+    K: Key,
 {
     type Item = K;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(node) = self.tree.get(&self.node_id) {
+        if let Some(node) = self.tree.nodes.get(self.node_id) {
             let mut children = node.children.iter();
 
             if let Some(current_child_id) = self.current_child_id {
@@ -464,14 +521,14 @@ where
     }
 }
 
-impl<'a, K: 'a> Hierarchy<'a> for Tree<K>
+impl<'a, K: 'a, V: 'a> Hierarchy<'a> for Tree<K, V>
 where
-    K: PartialEq + Eq + Hash + for<'b> morphorm::Node<'b>,
+    K: Key + for<'b> morphorm::Node<'b>,
 {
     type Item = K;
-    type DownIter = DownwardIterator<'a, K>;
-    type UpIter = UpwardIterator<'a, K>;
-    type ChildIter = ChildIterator<'a, K>;
+    type DownIter = DownwardIterator<'a, K, V>;
+    type UpIter = UpwardIterator<'a, K, V>;
+    type ChildIter = ChildIterator<'a, K, V>;
 
     fn up_iter(&'a self) -> Self::UpIter {
         self.iter_up()
@@ -491,7 +548,7 @@ where
     }
 
     fn parent(&self, node_id: Self::Item) -> Option<Self::Item> {
-        if let Some(parent) = self.get(&node_id) {
+        if let Some(parent) = self.nodes.get(node_id) {
             return parent.parent;
         }
 
@@ -500,7 +557,7 @@ where
 
     fn is_first_child(&self, node_id: Self::Item) -> bool {
         if let Some(parent_id) = self.parent(node_id) {
-            if let Some(parent) = self.get(&parent_id) {
+            if let Some(parent) = self.nodes.get(parent_id) {
                 return parent
                     .children
                     .first()
@@ -513,7 +570,7 @@ where
 
     fn is_last_child(&self, node_id: Self::Item) -> bool {
         if let Some(parent_id) = self.parent(node_id) {
-            if let Some(parent) = self.get(&parent_id) {
+            if let Some(parent) = self.nodes.get(parent_id) {
                 return parent
                     .children
                     .last()
@@ -535,20 +592,20 @@ mod tests {
 
     #[test]
     fn test_hierarchy() {
-        let mut tree: Tree<WidgetId> = Tree::default();
+        let mut tree: Tree<WidgetId, usize> = Tree::default();
 
-        let root_id = tree.add(None, 0.into());
+        let root_id = tree.add(None, 0);
 
-        let child_1 = tree.add(Some(root_id), 1.into());
-        let child_1_1 = tree.add(Some(child_1), 2.into());
-        let child_1_1_1 = tree.add(Some(child_1_1), 3.into());
-        let child_1_2 = tree.add(Some(child_1), 4.into());
-        let child_1_3 = tree.add(Some(child_1), 5.into());
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
 
-        let child_2 = tree.add(Some(root_id), 6.into());
+        let child_2 = tree.add(Some(root_id), 6);
 
-        let child_3 = tree.add(Some(root_id), 7.into());
-        let child_3_1 = tree.add(Some(child_3), 8.into());
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
 
         assert!(
             tree.is_first_child(child_1),
@@ -625,20 +682,20 @@ mod tests {
 
     #[test]
     fn test_downward_iter() {
-        let mut tree: Tree<WidgetId> = Tree::default();
+        let mut tree: Tree<WidgetId, usize> = Tree::default();
 
-        let root_id = tree.add(None, 0.into());
+        let root_id = tree.add(None, 0);
 
-        let child_1 = tree.add(Some(root_id), 1.into());
-        let child_1_1 = tree.add(Some(child_1), 2.into());
-        let child_1_1_1 = tree.add(Some(child_1_1), 3.into());
-        let child_1_2 = tree.add(Some(child_1), 4.into());
-        let child_1_3 = tree.add(Some(child_1), 5.into());
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
 
-        let child_2 = tree.add(Some(root_id), 6.into());
+        let child_2 = tree.add(Some(root_id), 6);
 
-        let child_3 = tree.add(Some(root_id), 7.into());
-        let child_3_1 = tree.add(Some(child_3), 8.into());
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
 
         let mut iter = tree.iter();
 
@@ -719,20 +776,20 @@ mod tests {
 
     #[test]
     fn test_upward_iter() {
-        let mut tree: Tree<WidgetId> = Tree::default();
+        let mut tree: Tree<WidgetId, usize> = Tree::default();
 
-        let root_id = tree.add(None, 0.into());
+        let root_id = tree.add(None, 0);
 
-        let child_1 = tree.add(Some(root_id), 1.into());
-        let child_1_1 = tree.add(Some(child_1), 2.into());
-        let child_1_1_1 = tree.add(Some(child_1_1), 3.into());
-        let child_1_2 = tree.add(Some(child_1), 4.into());
-        let child_1_3 = tree.add(Some(child_1), 5.into());
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
 
-        let child_2 = tree.add(Some(root_id), 6.into());
+        let child_2 = tree.add(Some(root_id), 6);
 
-        let child_3 = tree.add(Some(root_id), 7.into());
-        let child_3_1 = tree.add(Some(child_3), 8.into());
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
 
         let mut iter = tree.iter_up();
 

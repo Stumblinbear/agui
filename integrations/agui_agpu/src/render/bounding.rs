@@ -61,7 +61,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        _widget_id: &WidgetId,
+        _widget_id: WidgetId,
     ) {
     }
 
@@ -70,7 +70,7 @@ impl WidgetRenderPass for BoundingRenderPass {
         ctx: &RenderContext,
         manager: &WidgetManager,
         type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
         _depth: u32,
     ) {
         let rect = match manager.get_rect(widget_id) {
@@ -121,7 +121,7 @@ impl WidgetRenderPass for BoundingRenderPass {
                 ],
             }));
 
-        self.widgets.insert(*widget_id, buffer);
+        self.widgets.insert(widget_id, buffer);
     }
 
     fn removed(
@@ -129,9 +129,9 @@ impl WidgetRenderPass for BoundingRenderPass {
         _ctx: &RenderContext,
         _manager: &WidgetManager,
         _type_id: &TypeId,
-        widget_id: &WidgetId,
+        widget_id: WidgetId,
     ) {
-        self.widgets.remove(widget_id);
+        self.widgets.remove(&widget_id);
     }
 
     fn update(&mut self, _ctx: &RenderContext) {}

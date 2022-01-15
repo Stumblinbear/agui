@@ -1,7 +1,6 @@
-use generational_arena::Arena;
-
 use crate::{
     layout::Layout,
+    tree::Tree,
     unit::{LayoutType, Margin, Position, Sizing},
     widget::{WidgetId, WidgetRef},
     Ref,
@@ -16,12 +15,12 @@ pub struct WidgetNode {
 }
 
 impl<'a> morphorm::Node<'a> for WidgetId {
-    type Data = Arena<WidgetNode>;
+    type Data = Tree<Self, WidgetNode>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout_type.try_get())
                 .map_or(LayoutType::default(), |layout| *layout)
                 .into(),
@@ -31,7 +30,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn position_type(&self, store: &'_ Self::Data) -> Option<morphorm::PositionType> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Position::default(), |layout| layout.position)
                 .into(),
@@ -41,7 +40,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.sizing)
                 .get_width()
@@ -52,7 +51,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.sizing)
                 .get_height()
@@ -63,7 +62,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn min_width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.min_sizing)
                 .get_width()
@@ -74,7 +73,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn min_height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.min_sizing)
                 .get_height()
@@ -85,7 +84,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn max_width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.max_sizing)
                 .get_width()
@@ -96,7 +95,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn max_height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Sizing::default(), |layout| layout.max_sizing)
                 .get_height()
@@ -106,7 +105,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout.try_get())
             .map_or(Position::default(), |layout| layout.position)
             .get_top()
@@ -115,7 +114,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout.try_get())
             .map_or(Position::default(), |layout| layout.position)
             .get_right()
@@ -124,7 +123,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout.try_get())
             .map_or(Position::default(), |layout| layout.position)
             .get_bottom()
@@ -133,7 +132,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout.try_get())
             .map_or(Position::default(), |layout| layout.position)
             .get_left()
@@ -175,7 +174,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn child_top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Margin::default(), |layout| layout.margin)
                 .get_top()
@@ -186,7 +185,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn child_right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Margin::default(), |layout| layout.margin)
                 .get_right()
@@ -197,7 +196,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn child_bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Margin::default(), |layout| layout.margin)
                 .get_bottom()
@@ -208,7 +207,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
     fn child_left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         Some(
             store
-                .get(self.id())
+                .get(*self)
                 .and_then(|node| node.layout.try_get())
                 .map_or(Margin::default(), |layout| layout.margin)
                 .get_left()
@@ -218,7 +217,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn row_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_column_spacing()
@@ -227,7 +226,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn col_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_row_spacing()
@@ -236,7 +235,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn grid_rows(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_rows()
@@ -245,7 +244,7 @@ impl<'a> morphorm::Node<'a> for WidgetId {
 
     fn grid_cols(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
         store
-            .get(self.id())
+            .get(*self)
             .and_then(|node| node.layout_type.try_get())
             .map_or(LayoutType::default(), |layout| *layout)
             .get_columns()

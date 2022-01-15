@@ -193,10 +193,10 @@ impl UI {
                 match event {
                     WidgetEvent::Spawned { type_id, widget_id } => {
                         self.clipping_pass
-                            .added(&self.ctx, &self.manager, &type_id, &widget_id);
+                            .added(&self.ctx, &self.manager, &type_id, widget_id);
 
                         for pass in self.render_passes.values_mut() {
-                            pass.added(&self.ctx, &self.manager, &type_id, &widget_id);
+                            pass.added(&self.ctx, &self.manager, &type_id, widget_id);
                         }
                     }
 
@@ -209,21 +209,21 @@ impl UI {
                             &self.ctx,
                             &self.manager,
                             &type_id,
-                            &widget_id,
+                            widget_id,
                             layer,
                         );
 
                         for pass in self.render_passes.values_mut() {
-                            pass.layout(&self.ctx, &self.manager, &type_id, &widget_id, layer);
+                            pass.layout(&self.ctx, &self.manager, &type_id, widget_id, layer);
                         }
                     }
 
                     WidgetEvent::Destroyed { type_id, widget_id } => {
                         self.clipping_pass
-                            .removed(&self.ctx, &self.manager, &type_id, &widget_id);
+                            .removed(&self.ctx, &self.manager, &type_id, widget_id);
 
                         for pass in self.render_passes.values_mut() {
-                            pass.removed(&self.ctx, &self.manager, &type_id, &widget_id);
+                            pass.removed(&self.ctx, &self.manager, &type_id, widget_id);
                         }
                     }
 
@@ -271,7 +271,7 @@ impl UI {
 
         program.run(move |event, program, _, _| {
             if self.update() {
-                // self.manager.print_tree();
+                self.manager.print_tree();
 
                 // If the program is not already demanding a specific framerate, request a redraw
                 if program.time.is_none() {

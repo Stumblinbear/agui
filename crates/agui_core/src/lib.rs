@@ -14,6 +14,7 @@
 
 mod reference;
 mod ui;
+pub mod tree;
 pub mod layout;
 pub mod widget;
 pub mod context;

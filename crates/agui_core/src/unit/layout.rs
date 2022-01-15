@@ -88,7 +88,7 @@ impl LayoutType {
 }
 
 /// Sets the margin around the element.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Margin {
     /// No margin.
@@ -192,7 +192,7 @@ impl Margin {
 }
 
 /// Sets the positioning of an element.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Position {
     /// Position unchanged.
