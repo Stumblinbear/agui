@@ -7,22 +7,27 @@ use parking_lot::Mutex;
 use crate::{
     context::{ListenerId, WidgetContext},
     event::WidgetEvent,
+    paint::RenderId,
     tree::Tree,
-    unit::{Key, Rect, Shape, Units},
+    unit::{Key, Rect, Ref, Shape, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetRef},
-    Ref,
 };
 
 mod cache;
 mod debug;
 pub mod node;
 
-use self::{cache::LayoutCache, node::WidgetNode};
+use self::{
+    cache::LayoutCache,
+    node::{RenderNode, WidgetNode},
+};
 
 /// Handles the entirety of the widget lifecycle.
 pub struct WidgetManager<'ui> {
     context: WidgetContext<'ui>,
     cache: LayoutCache<WidgetId>,
+
+    render: Tree<RenderId, RenderNode>,
 
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
     modifications: Vec<Modify>,
@@ -47,6 +52,8 @@ impl<'ui> Default for WidgetManager<'ui> {
         Self {
             context: WidgetContext::new(Arc::clone(&changed)),
             cache: LayoutCache::default(),
+
+            render: Tree::default(),
 
             changed,
             modifications: Vec::default(),
@@ -81,23 +88,6 @@ impl<'ui> WidgetManager<'ui> {
     /// Check if a widget exists in the tree.
     pub fn contains(&self, widget_id: WidgetId) -> bool {
         self.context.tree.contains(widget_id)
-    }
-
-    /// Fetch the tree representation of a widget. Will be `None` if it doesn't exist.
-    pub fn try_get_node(&self, widget_id: WidgetId) -> Option<&WidgetNode> {
-        self.context.tree.get(widget_id)
-    }
-
-    /// Fetch the tree representation of a widget.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if the widget is not found.
-    pub fn get_node(&self, widget_id: WidgetId) -> &WidgetNode {
-        self.context
-            .tree
-            .get(widget_id)
-            .expect("widget does not exist")
     }
 
     /// Fetch a widget from the tree. Will be `None` if it doesn't exist.
@@ -352,7 +342,12 @@ impl<'ui> WidgetManager<'ui> {
                 .filter(|widget_id| self.contains(*widget_id))
                 .map(|widget_id| {
                     let type_id = self.get(widget_id).get_type_id();
-                    let layer = self.get_node(widget_id).layer;
+                    let layer = self
+                        .context
+                        .tree
+                        .get(widget_id)
+                        .expect("change detection not properly filtering nodes")
+                        .layer;
 
                     WidgetEvent::Layout {
                         type_id,
@@ -524,11 +519,17 @@ impl<'ui> WidgetManager<'ui> {
                 .context
                 .tree
                 .get_node(widget_id)
-                .expect("broken tree")
+                .expect("broken tree: rebuilding node that doesn't exist")
                 .parent;
 
             match parent {
-                Some(parent_id) => self.get_node(parent_id).layer,
+                Some(parent_id) => {
+                    self.context
+                        .tree
+                        .get(parent_id)
+                        .expect("broken tree: rebuilding node with invalid parent")
+                        .layer
+                }
                 None => 0,
             }
         };
@@ -589,10 +590,7 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     fn process_destroy(&mut self, events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let tree_node = self
-            .context
-            .tree
-            .remove(widget_id);
+        let tree_node = self.context.tree.remove(widget_id);
 
         self.context.remove_widget(widget_id);
         self.cache.remove(&widget_id);
@@ -603,7 +601,7 @@ impl<'ui> WidgetManager<'ui> {
             type_id: tree_node.widget.get_type_id(),
             widget_id,
         });
-        
+
         // Add the child widgets to the removal queue
         for child_id in tree_node.children {
             self.modifications.push(Modify::Destroy(child_id));

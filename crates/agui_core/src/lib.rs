@@ -12,15 +12,13 @@
 
 // #![warn(missing_docs)]
 
-mod reference;
 mod ui;
+pub mod unit;
 pub mod tree;
-pub mod layout;
 pub mod widget;
 pub mod context;
-pub mod unit;
 pub mod event;
+pub mod paint;
 pub mod plugin;
 
-pub use self::reference::*;
 pub use self::ui::*;

@@ -209,7 +209,7 @@ impl UI {
     }
 
     pub fn render(&self, mut frame: Frame) {
-        // We complete rendering by first clearing the screen, then creating the depth buffer based on
+        // We complete rendering by first clearing the screen, then creating the layer buffer based on
         // clipping masks, before finally rendering the actual widgets through the added render passes.
         frame
             .render_pass_cleared("agui clear pass", 0x101010FF)

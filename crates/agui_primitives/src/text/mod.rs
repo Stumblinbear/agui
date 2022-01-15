@@ -4,8 +4,7 @@ use glyph_brush_layout::{
 
 use agui_core::{
     context::WidgetContext,
-    layout::Layout,
-    unit::{Color, Margin, Position, Sizing, Units},
+    unit::{Color, Layout, Margin, Position, Sizing, Units},
     widget::{BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;

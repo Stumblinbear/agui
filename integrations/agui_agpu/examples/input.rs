@@ -2,9 +2,8 @@
 
 use agpu::Features;
 use agui::{
-    layout::Layout,
     macros::build,
-    unit::{Sizing, Units},
+    unit::{Layout, Sizing, Units},
     widgets::{
         plugins::{hovering::HoveringPlugin, timeout::TimeoutPlugin},
         App, TextInput,

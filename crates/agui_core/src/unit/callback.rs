@@ -1,4 +1,4 @@
-use crate::Ref;
+use super::Ref;
 
 #[derive(Clone)]
 pub struct Callback<A>(pub Ref<Box<dyn Fn(A)>>);

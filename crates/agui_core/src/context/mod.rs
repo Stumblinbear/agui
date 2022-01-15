@@ -17,13 +17,12 @@ pub use self::notifiable::{
 };
 
 use crate::{
-    layout::Layout,
     node::WidgetNode,
+    paint::Painter,
     plugin::WidgetPlugin,
     tree::Tree,
-    unit::{Key, LayoutType, Rect, Shape},
+    unit::{Key, Layout, LayoutType, Rect, Ref, Shape},
     widget::{WidgetId, WidgetRef},
-    Ref,
 };
 
 /// A combined-type for anything that can listen for events in the system.
@@ -68,6 +67,8 @@ pub struct WidgetContext<'ui> {
 
     layout_types: Mutex<FnvHashMap<WidgetId, Ref<LayoutType>>>,
     layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
+
+    painter: Mutex<FnvHashMap<WidgetId, Rc<dyn Painter>>>,
     clipping: Mutex<FnvHashMap<WidgetId, Ref<Shape>>>,
 
     pub(crate) rects: ReadableMap<WidgetId, Rect>,
@@ -93,6 +94,8 @@ impl<'ui> WidgetContext<'ui> {
 
             layouts: Mutex::default(),
             layout_types: Mutex::default(),
+
+            painter: Mutex::default(),
             clipping: Mutex::default(),
 
             rects: ReadableMap::new(Arc::clone(&changed)),
@@ -296,23 +299,21 @@ impl<'ui> WidgetContext<'ui> {
     /// Set the layout type of the widget.
     ///
     /// Used in a `build()` method to set the layout type of the widget being built.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context.
     pub fn set_layout_type(&self, layout_type: Ref<LayoutType>) {
         let current_id = self
             .current_id
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        match &current_id {
-            ListenerId::Widget(widget_id) => {
-                self.layout_types.lock().insert(*widget_id, layout_type);
-            }
-            ListenerId::Computed(_, _) => {
-                log::warn!("layout types set in a computed function are ignored");
-            }
-            ListenerId::Plugin(_) => {
-                log::warn!("layout types set in a plugin are ignored");
-            }
-        };
+        if let ListenerId::Widget(widget_id) = current_id {
+            self.layout_types.lock().insert(widget_id, layout_type);
+        } else {
+            panic!("layout type can only be set in a widget build context");
+        }
     }
 
     /// Fetch the layout of a widget.
@@ -326,23 +327,21 @@ impl<'ui> WidgetContext<'ui> {
     /// Set the layout of the widget.
     ///
     /// Used in a `build()` method to set the layout of the widget being built.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context.
     pub fn set_layout(&self, layout: Ref<Layout>) {
         let current_id = self
             .current_id
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        match &current_id {
-            ListenerId::Widget(widget_id) => {
-                self.layouts.lock().insert(*widget_id, layout);
-            }
-            ListenerId::Computed(_, _) => {
-                log::warn!("layouts set in a computed function are ignored");
-            }
-            ListenerId::Plugin(_) => {
-                log::warn!("layouts set in a plugin are ignored");
-            }
-        };
+        if let ListenerId::Widget(widget_id) = current_id {
+            self.layouts.lock().insert(widget_id, layout);
+        } else {
+            panic!("layout can only be set in a widget build context");
+        }
     }
 
     /// Fetch the layout of a widget.
@@ -356,26 +355,50 @@ impl<'ui> WidgetContext<'ui> {
 
 // Clipping
 impl<'ui> WidgetContext<'ui> {
+    /// Set the painter of the widget.
+    ///
+    /// Used in a `build()` method to set the painter of the widget being built.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context.
+    pub fn set_painter<P>(&self, painter: P)
+    where
+        P: Painter + 'static,
+    {
+        let current_id = self
+            .current_id
+            .lock()
+            .expect("cannot get state from context while not iterating");
+
+        if let ListenerId::Widget(widget_id) = current_id {
+            self.painter.lock().insert(widget_id, Rc::new(painter));
+        } else {
+            panic!("painters can only be set in a widget build context");
+        }
+    }
+}
+
+// Clipping
+impl<'ui> WidgetContext<'ui> {
     /// Set the clipping mask of the widget.
     ///
     /// Used in a `build()` method to set the clipping mask of the widget being built.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if called outside of a widget build context.
     pub fn set_clipping(&self, clipping: Ref<Shape>) {
         let current_id = self
             .current_id
             .lock()
             .expect("cannot get state from context while not iterating");
 
-        match &current_id {
-            ListenerId::Widget(widget_id) => {
-                self.clipping.lock().insert(*widget_id, clipping);
-            }
-            ListenerId::Computed(_, _) => {
-                log::warn!("layouts set in a computed function are ignored");
-            }
-            ListenerId::Plugin(_) => {
-                log::warn!("layouts set in a plugin are ignored");
-            }
-        };
+        if let ListenerId::Widget(widget_id) = current_id {
+            self.clipping.lock().insert(widget_id, clipping);
+        } else {
+            panic!("clipping can only be set in a widget build context");
+        }
     }
 
     /// Fetch the clipping mask of a widget.

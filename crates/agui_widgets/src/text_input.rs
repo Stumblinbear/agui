@@ -2,10 +2,8 @@ use std::time::{Duration, Instant};
 
 use agui_core::{
     context::WidgetContext,
-    layout::Layout,
-    unit::{Color, Key, Position, Shape, Sizing, Units},
+    unit::{Color, Key, Layout, Position, Ref, Shape, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
-    Ref,
 };
 use agui_macros::{build, Widget};
 use agui_primitives::{Drawable, DrawableStyle, Font, FontDescriptor, Fonts, ScaleFont, Text};
@@ -212,10 +210,7 @@ impl WidgetBuilder for TextInput {
                     // We have to subtract the rect height since morphorm doesn't let us stack widgets
                     (
                         text,
-                        Some((
-                            rect.x + pos_x,
-                            (-rect.height) + CURSOR_PADDING,
-                        )),
+                        Some((rect.x + pos_x, (-rect.height) + CURSOR_PADDING)),
                     )
                 } else {
                     (text, None)

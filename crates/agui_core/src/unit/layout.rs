@@ -2,6 +2,17 @@ use morphorm::PositionType;
 
 use super::Units;
 
+/// Holds layout parameters to dictate how the element should be displayed.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Layout {
+    pub position: Position,
+    pub min_sizing: Sizing,
+    pub max_sizing: Sizing,
+    pub sizing: Sizing,
+
+    pub margin: Margin,
+}
+
 /// Indicates to the layout system how the children of a widget should be laid out.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]

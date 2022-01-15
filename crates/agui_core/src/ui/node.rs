@@ -1,9 +1,7 @@
 use crate::{
-    layout::Layout,
     tree::Tree,
-    unit::{LayoutType, Margin, Position, Sizing},
+    unit::{Layout, LayoutType, Margin, Position, Ref, Sizing},
     widget::{WidgetId, WidgetRef},
-    Ref,
 };
 
 /// Holds information about a widget in the UI tree.
@@ -13,6 +11,8 @@ pub struct WidgetNode {
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
 }
+
+pub struct RenderNode {}
 
 impl<'a> morphorm::Node<'a> for WidgetId {
     type Data = Tree<Self, WidgetNode>;

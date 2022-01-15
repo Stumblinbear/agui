@@ -5,10 +5,9 @@ use std::{
 };
 
 use crate::{
-    layout::Layout,
-    unit::LayoutType,
+    unit::{Layout, LayoutType, Ref},
     widget::{Widget, WidgetId},
-    Ref, WidgetManager,
+    WidgetManager,
 };
 
 use super::Modify;
@@ -29,11 +28,10 @@ pub fn print_tree(manager: &WidgetManager) {
     let tree = manager.get_context().get_tree();
 
     for widget_id in tree.iter() {
-        let depth = tree.get_node(widget_id).expect("broken tree").depth;
+        let node = tree.get_node(widget_id).expect("broken tree");
 
-        let layer = manager.get_node(widget_id).layer;
-
-        let node = manager.get_node(widget_id);
+        let depth = node.depth;
+        let layer = node.layer;
 
         print_node(
             depth,
@@ -107,9 +105,10 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
     }
 
     for widget_id in tree.iter() {
-        let depth = tree.get_node(widget_id).expect("broken tree").depth;
+        let node = tree.get_node(widget_id).expect("broken tree");
 
-        let layer = manager.get_node(widget_id).layer;
+        let depth = node.depth;
+        let layer = node.layer;
 
         let is_rebuild_queued = rebuilds.contains(&widget_id);
 
@@ -118,8 +117,6 @@ pub fn print_tree_modifications(manager: &WidgetManager) {
         } else {
             destroys.contains(&widget_id)
         };
-
-        let node = manager.get_node(widget_id);
 
         print_node(
             depth,
