@@ -139,7 +139,7 @@
 <h2 id="the-build-macro"><a class="header" href="#the-build-macro">The <code>build!</code> macro</a></h2>
 <p>This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code. It supports pretty much all of Rust syntax, so you can embed logic (such as <code>if</code> or <code>match</code> statements) within it as normal.</p>
 <pre><code class="language-rust noplaypen">// Before:
-fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
     BuildResult::One(
         Button {
             child: Drawable {
@@ -155,7 +155,7 @@ fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
 }
 
 // After:
-fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
     build!{
         Button {
             child: Drawable {

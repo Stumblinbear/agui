@@ -143,14 +143,14 @@
 <pre><code class="language-rust noplaypen">pub struct Button { }
 
 impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
         BuildResult::None
     }
 }
 </code></pre>
 <p>If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.</p>
 <pre><code class="language-rust noplaypen">impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
         build! {
             Drawable {
                 layout: Layout {

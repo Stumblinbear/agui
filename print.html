@@ -199,7 +199,7 @@ agui = &quot;0.3&quot; # ensure this is the latest version
 <h2 id="the-build-macro"><a class="header" href="#the-build-macro">The <code>build!</code> macro</a></h2>
 <p>This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code. It supports pretty much all of Rust syntax, so you can embed logic (such as <code>if</code> or <code>match</code> statements) within it as normal.</p>
 <pre><code class="language-rust noplaypen">// Before:
-fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
     BuildResult::One(
         Button {
             child: Drawable {
@@ -215,7 +215,7 @@ fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
 }
 
 // After:
-fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
     build!{
         Button {
             child: Drawable {
@@ -252,14 +252,14 @@ fn example_widget(ctx: &amp;WidgetContext, layout: Ref&lt;Layout&gt;, child: Wid
 <pre><code class="language-rust noplaypen">pub struct Button { }
 
 impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
         BuildResult::None
     }
 }
 </code></pre>
 <p>If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.</p>
 <pre><code class="language-rust noplaypen">impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;WidgetContext) -&gt; BuildResult {
+    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
         build! {
             Drawable {
                 layout: Layout {
