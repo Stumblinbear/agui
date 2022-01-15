@@ -1,0 +1,11 @@
+[advisories]
+ignore = [
+    # `serde_cbor` is an unmaintained dependency introduced by criterion.
+    # We are using criterion only for benchmarks, so we can ignore
+    # this vulnerability until criterion is fixing this.
+    # See https://github.com/bheisler/criterion.rs/issues/534.
+    "RUSTSEC-2021-0127",
+
+    # `nix` is a dependency introduced indirectly by winit.
+    "RUSTSEC-2021-0119"
+]
