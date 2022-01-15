@@ -9,6 +9,16 @@ fn tree_ops(c: &mut Criterion) {
         })
     });
 
+    c.bench_function("add many to tree", |b| {
+        b.iter_with_setup(Tree::<WidgetId, usize>::default, |mut tree| {
+            let root_id = tree.add(None, 0);
+
+            for i in 0..1000 {
+                tree.add(Some(root_id), i);
+            }
+        })
+    });
+
     c.bench_function("remove from tree", |b| {
         b.iter_with_setup(
             || {
@@ -20,6 +30,31 @@ fn tree_ops(c: &mut Criterion) {
             },
             |(mut tree, widget_id)| {
                 tree.remove(widget_id);
+            },
+        )
+    });
+
+    c.bench_function("remove many from tree", |b| {
+        b.iter_with_setup(
+            || {
+                let mut tree = Tree::<WidgetId, usize>::default();
+
+                let mut widget_ids = Vec::new();
+
+                let root_id = tree.add(None, 0);
+
+                widget_ids.push(root_id);
+
+                for i in 0..1000 {
+                    widget_ids.push(tree.add(Some(root_id), i));
+                }
+
+                (tree, widget_ids)
+            },
+            |(mut tree, widget_ids)| {
+                for widget_id in widget_ids {
+                    tree.remove(widget_id);
+                }
             },
         )
     });
