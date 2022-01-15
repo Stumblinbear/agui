@@ -15,7 +15,7 @@ pub struct Row {
 }
 
 impl WidgetBuilder for Row {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout_type(
             LayoutType::Row {
                 spacing: self.spacing,

@@ -1,7 +1,6 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
-    sync::Arc,
 };
 
 use agui_core::{
@@ -10,31 +9,36 @@ use agui_core::{
     plugin::WidgetPlugin,
     widget::WidgetId,
 };
-use parking_lot::Mutex;
 
-#[derive(Default)]
-pub struct Provider {
-    providers: Arc<Mutex<HashMap<TypeId, HashSet<WidgetId>>>>,
-    widgets: Arc<Mutex<HashMap<WidgetId, HashSet<TypeId>>>>,
+#[derive(Debug, Default)]
+struct ProviderPluginState {
+    providers: HashMap<TypeId, HashSet<WidgetId>>,
+    widgets: HashMap<WidgetId, HashSet<TypeId>>,
 }
 
-impl WidgetPlugin for Provider {
-    fn pre_update(&self, _ctx: &WidgetContext) {}
+#[derive(Default)]
+pub struct ProviderPlugin;
 
-    fn on_update(&self, _ctx: &WidgetContext) {}
+impl WidgetPlugin for ProviderPlugin {
+    fn pre_update(&self, _ctx: &mut WidgetContext) {}
 
-    fn post_update(&self, _ctx: &WidgetContext) {}
+    fn on_update(&self, _ctx: &mut WidgetContext) {}
 
-    fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
-        let mut widgets = self.widgets.lock();
+    fn post_update(&self, _ctx: &mut WidgetContext) {}
+
+    fn on_events(&self, ctx: &mut WidgetContext, events: &[WidgetEvent]) {
+        let plugin = ctx.init_global(ProviderPluginState::default);
+
+        let mut plugin = plugin.write();
 
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                if let Some(providing) = widgets.remove(widget_id) {
-                    let mut providers = self.providers.lock();
-
+                if let Some(providing) = plugin.widgets.remove(widget_id) {
                     for type_id in providing {
-                        let widgets = providers.get_mut(&type_id).expect("provider map broken");
+                        let widgets = plugin
+                            .providers
+                            .get_mut(&type_id)
+                            .expect("provider map broken");
 
                         widgets.remove(widget_id);
                     }
@@ -45,7 +49,7 @@ impl WidgetPlugin for Provider {
 }
 
 pub trait ProviderExt<'ui> {
-    fn provide(&self, ctx: &WidgetContext);
+    fn provide(&self, ctx: &mut WidgetContext);
 }
 
 impl<'ui, V> ProviderExt<'ui> for Notify<V>
@@ -53,10 +57,10 @@ where
     V: NotifiableValue,
 {
     /// Makes some local widget state available to any child widget.
-    fn provide(&self, ctx: &WidgetContext) {
-        let plugin = ctx.get_plugin_or::<Provider, _>(Provider::default);
+    fn provide(&self, ctx: &mut WidgetContext) {
+        let plugin = ctx.init_global(ProviderPluginState::default);
 
-        let mut providers = plugin.providers.lock();
+        let mut plugin = plugin.write();
 
         let type_id = TypeId::of::<V>();
 
@@ -65,14 +69,14 @@ where
             .widget_id()
             .expect("cannot provide state outside of a widget context");
 
-        providers
+        plugin
+            .providers
             .entry(type_id)
             .or_insert_with(HashSet::default)
             .insert(widget_id);
 
-        let mut widgets = plugin.widgets.lock();
-
-        widgets
+        plugin
+            .widgets
             .entry(widget_id)
             .or_insert_with(HashSet::new)
             .insert(type_id);
@@ -80,39 +84,39 @@ where
 }
 
 pub trait ConsumerExt<'ui> {
-    fn consume<V>(&self) -> Option<Notify<V>>
+    fn consume<V>(&mut self) -> Option<Notify<V>>
     where
         V: NotifiableValue;
 }
 
 impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
     /// Makes some local widget state available to any child widget.
-    fn consume<V>(&self) -> Option<Notify<V>>
+    fn consume<V>(&mut self) -> Option<Notify<V>>
     where
         V: NotifiableValue,
     {
-        if let Some(plugin) = self.get_plugin::<Provider>() {
-            let providers = plugin.providers.lock();
+        let plugin = self.init_global(ProviderPluginState::default);
 
-            if let Some(providers) = providers.get(&TypeId::of::<V>()) {
-                let widget_id = self
-                    .get_self()
-                    .widget_id()
-                    .expect("cannot provide state outside of a widget context");
+        let plugin = plugin.write();
 
-                // If the widget calling this is also providing the state, return that.
-                if providers.contains(&widget_id) {
-                    return Some(
-                        self.get_state_for(self.get_self(), || panic!("provider state broken")),
-                    );
-                }
+        if let Some(providers) = plugin.providers.get(&TypeId::of::<V>()) {
+            let widget_id = self
+                .get_self()
+                .widget_id()
+                .expect("cannot provide state outside of a widget context");
 
-                for parent_id in self.get_tree().iter_parents(widget_id) {
-                    if providers.contains(&parent_id) {
-                        return Some(self.get_state_for(ListenerId::Widget(parent_id), || {
-                            panic!("provider state broken")
-                        }));
-                    }
+            // If the widget calling this is also providing the state, return that.
+            if providers.contains(&widget_id) {
+                return Some(
+                    self.use_state_of(self.get_self(), || panic!("provider state broken")),
+                );
+            }
+
+            for parent_id in self.get_tree().iter_parents(widget_id) {
+                if providers.contains(&parent_id) {
+                    return Some(self.use_state_of(ListenerId::Widget(parent_id), || {
+                        panic!("provider state broken")
+                    }));
                 }
             }
         }

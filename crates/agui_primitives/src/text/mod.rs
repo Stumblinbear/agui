@@ -65,7 +65,7 @@ impl Default for Text {
 }
 
 impl WidgetBuilder for Text {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         let sizing = match self.sizing {
             Sizing::Auto => {
                 let fonts = ctx.use_global(Fonts::default);

@@ -8,7 +8,7 @@ This is a convenience macro. It's not technically required (in fact it's quite e
 
 ```rust,noplaypen
 // Before:
-fn build(&self, ctx: &WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
     BuildResult::One(
         Button {
             child: Drawable {
@@ -24,7 +24,7 @@ fn build(&self, ctx: &WidgetContext) -> BuildResult {
 }
 
 // After:
-fn build(&self, ctx: &WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
     build!{
         Button {
             child: Drawable {

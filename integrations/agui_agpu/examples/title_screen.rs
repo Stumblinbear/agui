@@ -3,12 +3,11 @@
 use agpu::Features;
 use agui::{
     context::WidgetContext,
-    layout::Layout,
     macros::{build, functional_widget},
-    unit::{Callback, Color, Margin, Sizing, Units},
+    unit::{Callback, Color, Layout, Margin, Sizing, Units},
     widget::{BuildResult, WidgetRef},
     widgets::{
-        plugins::{hovering::HoveringPlugin, provider::ProviderExt},
+        plugins::provider::ProviderExt,
         primitives::{Builder, Column, DrawableStyle, FontDescriptor, Padding, Spacing, Text},
         state::theme::Theme,
         App, Button, ButtonStyle,
@@ -28,8 +27,6 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::with_default(&program);
 
-    ui.get_context().init_plugin(HoveringPlugin::default);
-
     ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 
     ui.set_root(build! {
@@ -42,7 +39,7 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn example_main(ctx: &WidgetContext, _color: Color, _child: WidgetRef) -> BuildResult {
+fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> BuildResult {
     ctx.set_layout(
         Layout {
             sizing: Sizing::Fill,

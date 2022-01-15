@@ -1,4 +1,4 @@
-use std::{any::TypeId, rc::Rc, sync::Arc};
+use std::{any::TypeId, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::Mutex;
@@ -19,7 +19,6 @@ pub use self::notifiable::{
 use crate::{
     node::WidgetNode,
     paint::Painter,
-    plugin::WidgetPlugin,
     tree::{Tree, TreeNode},
     unit::{Key, Layout, LayoutType, Rect, Ref, Shape},
     widget::{WidgetId, WidgetRef},
@@ -59,17 +58,14 @@ type WidgetComputedFuncs<'ui> =
 pub struct WidgetContext<'ui> {
     pub(crate) tree: Tree<WidgetId, WidgetNode>,
     pub(crate) rects: ReadableMap<WidgetId, Rect>,
-
-    pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
-
-    pub(crate) current_id: Arc<Mutex<Option<ListenerId>>>,
+    pub(crate) computed_funcs: WidgetComputedFuncs<'ui>,
 
     global: StateMap,
     states: ScopedStateMap<ListenerId>,
 
-    computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
-
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
+
+    pub(crate) current_id: Option<ListenerId>,
 }
 
 impl<'ui> WidgetContext<'ui> {
@@ -79,17 +75,14 @@ impl<'ui> WidgetContext<'ui> {
         Self {
             tree: Tree::default(),
             rects: ReadableMap::new(Arc::clone(&changed)),
-
-            plugins: Mutex::default(),
-
-            current_id: Arc::default(),
+            computed_funcs: WidgetComputedFuncs::default(),
 
             global: StateMap::new(Arc::clone(&changed)),
             states: ScopedStateMap::new(Arc::clone(&changed)),
 
-            computed_funcs: Arc::new(Mutex::new(FnvHashMap::default())),
-
             changed,
+
+            current_id: None,
         }
     }
 
@@ -100,7 +93,6 @@ impl<'ui> WidgetContext<'ui> {
 
     pub fn get_self(&self) -> ListenerId {
         self.current_id
-            .lock()
             .expect("cannot get self while not iterating")
     }
 
@@ -117,7 +109,7 @@ impl<'ui> WidgetContext<'ui> {
 
         let mut all_listeners = vec![ListenerId::Widget(widget_id)];
 
-        if let Some(computed_funcs) = self.computed_funcs.lock().remove(&widget_id) {
+        if let Some(computed_funcs) = self.computed_funcs.remove(&widget_id) {
             for type_id in computed_funcs.into_keys() {
                 all_listeners.push(ListenerId::Computed(widget_id, type_id));
             }
@@ -139,62 +131,10 @@ impl<'ui> WidgetContext<'ui> {
     }
 }
 
-// Plugins
-impl<'ui> WidgetContext<'ui> {
-    /// Initialize a plugin if it's not set already.
-    pub fn init_plugin<P, F>(&self, func: F) -> Rc<P>
-    where
-        P: WidgetPlugin,
-        F: FnOnce() -> P,
-    {
-        if self.plugins.lock().contains_key(&TypeId::of::<P>()) {
-            self.get_plugin::<P>()
-                .expect("failed to get initialized plugin")
-        } else {
-            let plugin_id = TypeId::of::<P>();
-
-            let plugin = func();
-
-            let last_id = *self.current_id.lock();
-
-            *self.current_id.lock() = Some(ListenerId::Plugin(plugin_id));
-
-            plugin.on_update(self);
-
-            *self.current_id.lock() = last_id;
-
-            self.plugins.lock().insert(plugin_id, Rc::new(plugin));
-
-            self.get_plugin::<P>().expect("failed to set plugin")
-        }
-    }
-
-    /// Fetch a plugin, or initialize it with `func`.
-    pub fn get_plugin_or<P, F>(&self, func: F) -> Rc<P>
-    where
-        P: WidgetPlugin,
-        F: FnOnce() -> P,
-    {
-        self.get_plugin::<P>()
-            .map_or_else(|| self.init_plugin(func), |plugin| plugin)
-    }
-
-    /// Fetch a plugin if it exists.
-    pub fn get_plugin<P>(&self) -> Option<Rc<P>>
-    where
-        P: WidgetPlugin,
-    {
-        match Rc::clone(self.plugins.lock().get(&TypeId::of::<P>())?).downcast_rc::<P>() {
-            Ok(plugin) => Some(plugin),
-            Err(..) => None,
-        }
-    }
-}
-
 // Globals
 impl<'ui> WidgetContext<'ui> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
-    pub fn init_global<V, F>(&self, func: F) -> Notify<V>
+    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
@@ -203,11 +143,11 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
-    pub fn try_use_global<V>(&self) -> Option<Notify<V>>
+    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
     where
         V: NotifiableValue,
     {
-        if let Some(listener_id) = *self.current_id.lock() {
+        if let Some(listener_id) = self.current_id {
             self.global.add_listener::<V>(listener_id);
         }
 
@@ -215,12 +155,12 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
-    pub fn use_global<V, F>(&self, func: F) -> Notify<V>
+    pub fn use_global<V, F>(&mut self, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        if let Some(listener_id) = *self.current_id.lock() {
+        if let Some(listener_id) = self.current_id {
             self.global.add_listener::<V>(listener_id);
         }
 
@@ -231,14 +171,13 @@ impl<'ui> WidgetContext<'ui> {
 // Local state
 impl<'ui> WidgetContext<'ui> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
-    pub fn init_state<V, F>(&self, func: F) -> Notify<V>
+    pub fn init_state<V, F>(&mut self, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot get state from context while not iterating")
             .prefer_widget();
 
@@ -246,14 +185,13 @@ impl<'ui> WidgetContext<'ui> {
     }
 
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
-    pub fn use_state<V, F>(&self, func: F) -> Notify<V>
+    pub fn use_state<V, F>(&mut self, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot get state from context while not iterating");
 
         self.states
@@ -262,14 +200,13 @@ impl<'ui> WidgetContext<'ui> {
         self.states.get(current_id.prefer_widget(), func)
     }
 
-    pub fn get_state_for<V, F>(&self, listener_id: ListenerId, func: F) -> Notify<V>
+    pub fn use_state_of<V, F>(&mut self, listener_id: ListenerId, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot get state from context while not iterating")
             .prefer_widget();
 
@@ -288,10 +225,9 @@ impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a widget build context.
-    pub fn set_layout_type(&self, layout_type: Ref<LayoutType>) {
+    pub fn set_layout_type(&mut self, layout_type: Ref<LayoutType>) {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot set the layout type from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
@@ -318,10 +254,9 @@ impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a widget build context.
-    pub fn set_layout(&self, layout: Ref<Layout>) {
+    pub fn set_layout(&mut self, layout: Ref<Layout>) {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot set the layout from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
@@ -351,28 +286,29 @@ impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a widget build context.
-    pub fn set_painter<P>(&self, painter: P)
+    pub fn set_painter<P>(&mut self, painter: P)
     where
         P: Painter + 'static,
     {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot set the painter from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
-            // self.tree
-            //     .get_mut(widget_id)
-            //     .expect("broken tree: cannot set the painter of a widget not in the tree")
-            //     .painter = Ref::new(painter);
+            self.tree
+                .get_mut(widget_id)
+                .expect("broken tree: cannot set the painter of a widget not in the tree")
+                .painter = Some(Box::new(painter));
         } else {
             panic!("painters can only be set in a widget build context");
         }
     }
 
     /// Fetch the painter of a widget.
-    pub fn get_painter(&self, widget_id: WidgetId) -> Option<Box<dyn Painter>> {
-        self.tree.get(widget_id).and_then(|node| node.painter)
+    pub fn get_painter(&self, widget_id: WidgetId) -> Option<&Box<dyn Painter>> {
+        self.tree
+            .get(widget_id)
+            .and_then(|node| node.painter.as_ref())
     }
 }
 
@@ -385,10 +321,9 @@ impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a widget build context.
-    pub fn set_clipping(&self, clipping: Ref<Shape>) {
+    pub fn set_clipping(&mut self, clipping: Ref<Shape>) {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot set clipping from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
@@ -414,14 +349,13 @@ impl<'ui> WidgetContext<'ui> {
     /// # Panics
     ///
     /// Will panic if called outside of a build context.
-    pub fn computed<V, F>(&self, func: F) -> V
+    pub fn computed<V, F>(&mut self, func: F) -> V
     where
         V: Eq + PartialEq + Clone + NotifiableValue,
-        F: Fn(&Self) -> V + 'ui + 'static,
+        F: Fn(&mut Self) -> V + 'ui + 'static,
     {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot create a computed value while not iterating");
 
         let widget_id = current_id
@@ -432,61 +366,59 @@ impl<'ui> WidgetContext<'ui> {
 
         let listener_id = ListenerId::Computed(widget_id, computed_id);
 
-        let mut widgets = self.computed_funcs.lock();
+        if !self.computed_funcs.contains_key(&widget_id)
+            || !self
+                .computed_funcs
+                .get(&widget_id)
+                .unwrap()
+                .contains_key(&computed_id)
+        {
+            let mut computed_func = Box::new(ComputedFn::new(listener_id, func));
 
-        let computed_func = widgets
-            .entry(widget_id)
-            .or_insert_with(FnvHashMap::default)
-            .entry(computed_id)
-            .or_insert_with(|| {
-                let mut computed_func = Box::new(ComputedFn::new(listener_id, func));
+            computed_func.call(self);
 
-                computed_func.call(self);
+            self.computed_funcs
+                .entry(widget_id)
+                .or_insert_with(FnvHashMap::default)
+                .insert(computed_id, computed_func);
+        }
 
-                computed_func
-            });
-
-        *computed_func
+        *self
+            .computed_funcs
+            .get(&widget_id)
+            .unwrap()
+            .get(&computed_id)
+            .unwrap()
             .get()
             .downcast()
             .expect("failed to downcast ref")
-    }
-
-    pub(crate) fn call_computed_func(&mut self, widget_id: WidgetId, computed_id: TypeId) -> bool {
-        self.computed_funcs
-            .lock()
-            .get_mut(&widget_id)
-            .and_then(|widgets| widgets.get_mut(&computed_id))
-            .map_or(false, |computed_func| computed_func.call(self))
     }
 }
 
 // Computed
 impl<'ui> WidgetContext<'ui> {
     /// Get the visual `Rect` of a widget.
-    pub fn get_rect_for(&self, widget_id: WidgetId) -> Option<&Rect> {
-        self.rects.get(&widget_id)
+    pub fn get_rect_for(&self, widget_id: WidgetId) -> Option<Rect> {
+        self.rects.get(&widget_id).map(Rect::clone)
     }
 
     /// Get to the visual rect of the widget.
-    pub fn get_rect(&self) -> Option<&Rect> {
+    pub fn get_rect(&self) -> Option<Rect> {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot get rect from context while not iterating");
 
-        self.rects.get(
-            &current_id
-                .widget_id()
-                .expect("cannot get rect outside of a widget context"),
-        )
+        let widget_id = current_id
+            .widget_id()
+            .expect("cannot get rect outside of a widget context");
+
+        self.get_rect_for(widget_id)
     }
 
     /// Listen to the visual rect of the widget.
-    pub fn use_rect(&self) -> Option<&Rect> {
+    pub fn use_rect(&mut self) -> Option<Rect> {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot get rect from context while not iterating");
 
         let widget_id = current_id
@@ -495,7 +427,7 @@ impl<'ui> WidgetContext<'ui> {
 
         self.rects.add_listener(widget_id, current_id);
 
-        self.rects.get(&widget_id)
+        self.get_rect_for(widget_id)
     }
 }
 
@@ -507,7 +439,6 @@ impl<'ui> WidgetContext<'ui> {
     pub fn key(&self, key: Key, widget: WidgetRef) -> WidgetRef {
         let current_id = self
             .current_id
-            .lock()
             .expect("cannot key from context while not iterating");
 
         let widget_id = current_id

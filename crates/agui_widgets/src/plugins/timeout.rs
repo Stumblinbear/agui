@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
     ops::Add,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -11,19 +10,15 @@ use agui_core::{
     plugin::WidgetPlugin,
     widget::WidgetId,
 };
-use parking_lot::Mutex;
 
-type WidgetTimeouts = HashMap<WidgetId, BTreeSet<(Instant, ListenerId)>>;
-
-#[derive(Default)]
-pub struct TimeoutPlugin {
-    widgets: Arc<Mutex<WidgetTimeouts>>,
+#[derive(Debug, Default)]
+struct TimeoutPluginState {
+    widgets: HashMap<WidgetId, BTreeSet<(Instant, ListenerId)>>,
 }
 
-impl TimeoutPlugin {
-    pub fn create_timeout(&self, listener_id: ListenerId, duration: Duration) {
+impl TimeoutPluginState {
+    pub fn create_timeout(&mut self, listener_id: ListenerId, duration: Duration) {
         self.widgets
-            .lock()
             .entry(
                 listener_id
                     .widget_id()
@@ -34,13 +29,18 @@ impl TimeoutPlugin {
     }
 }
 
+#[derive(Default)]
+pub struct TimeoutPlugin;
+
 impl WidgetPlugin for TimeoutPlugin {
-    fn pre_update(&self, ctx: &WidgetContext) {
+    fn pre_update(&self, ctx: &mut WidgetContext) {
+        let plugin = ctx.init_global(TimeoutPluginState::default);
+
+        let mut plugin = plugin.write();
+
         let now = Instant::now();
 
-        let mut widgets = self.widgets.lock();
-
-        for timeouts in widgets.values_mut() {
+        for timeouts in plugin.widgets.values_mut() {
             let mut updated = Vec::new();
 
             for pair in timeouts.iter() {
@@ -60,29 +60,32 @@ impl WidgetPlugin for TimeoutPlugin {
         }
     }
 
-    fn on_update(&self, _ctx: &WidgetContext) {}
+    fn on_update(&self, _ctx: &mut WidgetContext) {}
 
-    fn post_update(&self, _ctx: &WidgetContext) {}
+    fn post_update(&self, _ctx: &mut WidgetContext) {}
 
-    fn on_events(&self, _ctx: &WidgetContext, events: &[WidgetEvent]) {
-        let mut widgets = self.widgets.lock();
+    fn on_events(&self, ctx: &mut WidgetContext, events: &[WidgetEvent]) {
+        let plugin = ctx.init_global(TimeoutPluginState::default);
+
+        let mut plugin = plugin.write();
 
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                widgets.remove(widget_id);
+                plugin.widgets.remove(widget_id);
             }
         }
     }
 }
 
 pub trait TimeoutExt<'ui> {
-    fn use_timeout(&self, duration: Duration);
+    fn use_timeout(&mut self, duration: Duration);
 }
 
 impl<'ui> TimeoutExt<'ui> for WidgetContext<'ui> {
     /// Marks the caller for updating when `duration` elapses.
-    fn use_timeout(&self, duration: Duration) {
-        self.init_plugin(TimeoutPlugin::default)
+    fn use_timeout(&mut self, duration: Duration) {
+        self.init_global(TimeoutPluginState::default)
+            .write()
             .create_timeout(self.get_self(), duration);
     }
 }

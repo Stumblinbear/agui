@@ -4,10 +4,7 @@ use agpu::Features;
 use agui::{
     macros::build,
     unit::{Layout, Sizing, Units},
-    widgets::{
-        plugins::{hovering::HoveringPlugin, timeout::TimeoutPlugin},
-        App, TextInput,
-    },
+    widgets::{App, TextInput},
 };
 use agui_agpu::UI;
 
@@ -21,9 +18,6 @@ fn main() -> Result<(), agpu::BoxError> {
         .build()?;
 
     let mut ui = UI::with_default(&program);
-
-    ui.get_context().init_plugin(HoveringPlugin::default);
-    ui.get_context().init_plugin(TimeoutPlugin::default);
 
     let deja_vu_sans = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 

@@ -68,7 +68,7 @@ pub struct MyWidget {
 
 impl WidgetBuilder for MyWidget {
     // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         // `ctx.set_layout_type` is what we use to define this widget's layout type (row, column, grid).
         ctx.set_layout_type(LayoutType::Row.into());
         
@@ -89,7 +89,7 @@ The `build!` macro makes it significantly cleaner and easier to init new widgets
 ```rust
 // It allows us to turn this:
 
-fn build(&self, ctx: &WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
     BuildResult::Some(
         Button {
             layout: Layout::default(),
@@ -105,7 +105,7 @@ fn build(&self, ctx: &WidgetContext) -> BuildResult {
 
 use agui::macros::build;
 
-fn build(&self, ctx: &WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
     build!{
         Button {
             child: Text {

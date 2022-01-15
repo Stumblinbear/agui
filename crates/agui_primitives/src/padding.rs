@@ -13,7 +13,7 @@ pub struct Padding {
 }
 
 impl WidgetBuilder for Padding {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout(
             Layout {
                 margin: self.padding,

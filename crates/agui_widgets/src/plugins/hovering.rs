@@ -6,16 +6,31 @@ use agui_core::{
 
 use crate::state::mouse::Mouse;
 
+#[derive(Debug, Default)]
+pub struct HoveringPluginState {
+    pub widget_ids: HashSet<WidgetId>,
+}
+
+impl HoveringPluginState {
+    pub fn is_hovering(&self, ctx: &WidgetContext) -> bool {
+        self.widget_ids.contains(
+            &ctx.get_self()
+                .widget_id()
+                .expect("cannot check hover state outside of a widget context"),
+        )
+    }
+}
+
 #[derive(Default)]
-pub struct HoveringPlugin {}
+pub struct HoveringPlugin;
 
 impl WidgetPlugin for HoveringPlugin {
-    fn pre_update(&self, _ctx: &WidgetContext) {}
+    fn pre_update(&self, _ctx: &mut WidgetContext) {}
 
-    fn on_update(&self, _ctx: &WidgetContext) {}
+    fn on_update(&self, _ctx: &mut WidgetContext) {}
 
-    fn post_update(&self, ctx: &WidgetContext) {
-        let hovering = ctx.init_global(Hovering::default);
+    fn post_update(&self, ctx: &mut WidgetContext) {
+        let hovering = ctx.init_global(HoveringPluginState::default);
 
         if let Some(mouse) = ctx.try_use_global::<Mouse>() {
             match &mouse.read().pos {
@@ -49,20 +64,17 @@ impl WidgetPlugin for HoveringPlugin {
         }
     }
 
-    fn on_events(&self, _ctx: &WidgetContext, _events: &[WidgetEvent]) {}
+    fn on_events(&self, _ctx: &mut WidgetContext, _events: &[WidgetEvent]) {}
 }
 
-#[derive(Debug, Default)]
-pub struct Hovering {
-    pub widget_ids: HashSet<WidgetId>,
+pub trait HoveringExt<'ui> {
+    fn is_hovering(&mut self) -> bool;
 }
 
-impl Hovering {
-    pub fn is_hovering(&self, ctx: &WidgetContext) -> bool {
-        self.widget_ids.contains(
-            &ctx.get_self()
-                .widget_id()
-                .expect("cannot check hover state outside of a widget context"),
-        )
+impl<'ui> HoveringExt<'ui> for WidgetContext<'ui> {
+    fn is_hovering(&mut self) -> bool {
+        self.init_global(HoveringPluginState::default)
+            .read()
+            .is_hovering(self)
     }
 }

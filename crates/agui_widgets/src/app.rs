@@ -26,7 +26,7 @@ pub struct App {
 }
 
 impl WidgetBuilder for App {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         let settings = ctx.use_global::<AppSettings, _>(AppSettings::default);
 
         let settings = settings.read();

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, rc::Rc, sync::Arc};
+use std::{any::TypeId, collections::HashSet, rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 use morphorm::Cache;
@@ -8,6 +8,7 @@ use crate::{
     context::{ListenerId, WidgetContext},
     event::WidgetEvent,
     paint::RenderId,
+    plugin::WidgetPlugin,
     tree::Tree,
     unit::{Key, Rect, Ref, Shape, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetRef},
@@ -24,6 +25,8 @@ use self::{
 
 /// Handles the entirety of the widget lifecycle.
 pub struct WidgetManager<'ui> {
+    plugins: FnvHashMap<TypeId, Box<dyn WidgetPlugin>>,
+
     context: WidgetContext<'ui>,
     cache: LayoutCache<WidgetId>,
 
@@ -50,6 +53,8 @@ impl<'ui> Default for WidgetManager<'ui> {
         let changed = Arc::new(Mutex::new(FnvHashSet::default()));
 
         Self {
+            plugins: FnvHashMap::default(),
+
             context: WidgetContext::new(Arc::clone(&changed)),
             cache: LayoutCache::default(),
 
@@ -78,6 +83,26 @@ impl<'ui> WidgetManager<'ui> {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Initializes a UI plugin.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if you attempt to initialize a plugin a second time.
+    pub fn init_plugin<P>(&mut self, plugin: P)
+    where
+        P: WidgetPlugin,
+    {
+        if self.plugins.contains_key(&TypeId::of::<P>()) {
+            panic!("plugin already initialized");
+        }
+
+        let plugin_id = TypeId::of::<P>();
+
+        self.plugins.insert(plugin_id, Box::new(plugin));
+
+        self.changed.lock().insert(ListenerId::Plugin(plugin_id));
     }
 
     /// Get the full widget tree.
@@ -129,7 +154,7 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     /// Get the visual `Rect` of a widget.
-    pub fn get_rect(&self, widget_id: WidgetId) -> Option<&Rect> {
+    pub fn get_rect(&self, widget_id: WidgetId) -> Option<Rect> {
         self.context.get_rect_for(widget_id)
     }
 
@@ -141,6 +166,11 @@ impl<'ui> WidgetManager<'ui> {
     /// Get the widget build context.
     pub const fn get_context(&self) -> &WidgetContext<'ui> {
         &self.context
+    }
+
+    /// Get the mutable widget build context.
+    pub fn get_context_mut(&mut self) -> &mut WidgetContext<'ui> {
+        &mut self.context
     }
 
     /// Queues the widget for addition into the tree
@@ -172,15 +202,13 @@ impl<'ui> WidgetManager<'ui> {
     pub fn update(&mut self, events: &mut Vec<WidgetEvent>) {
         // Update all plugins, as they may cause changes to state
         {
-            let plugins = self.context.plugins.lock();
+            for (plugin_id, plugin) in &self.plugins {
+                self.context.current_id = Some(ListenerId::Plugin(*plugin_id));
 
-            for (plugin_id, plugin) in plugins.iter() {
-                *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
-
-                plugin.pre_update(&self.context);
+                plugin.pre_update(&mut self.context);
             }
 
-            *self.context.current_id.lock() = None;
+            self.context.current_id = None;
         }
 
         if self.modifications.is_empty() && self.changed.lock().is_empty() {
@@ -221,23 +249,37 @@ impl<'ui> WidgetManager<'ui> {
                         }
 
                         ListenerId::Computed(widget_id, computed_id) => {
-                            if self.context.call_computed_func(widget_id, computed_id) {
+                            // Borrow rules mean we need to remove the computed function from the context in order to call it
+
+                            let mut computed_func = self
+                                .context
+                                .computed_funcs
+                                .get_mut(&widget_id)
+                                .and_then(|widget_funcs| widget_funcs.remove(&computed_id))
+                                .expect("invalid computed function listener");
+
+                            if computed_func.call(&mut self.context) {
                                 dirty_widgets.insert(widget_id);
                             }
+
+                            self.context
+                                .computed_funcs
+                                .get_mut(&widget_id)
+                                .expect("should not panic")
+                                .insert(computed_id, computed_func);
                         }
 
                         ListenerId::Plugin(plugin_id) => {
-                            let plugins = self.context.plugins.lock();
-
-                            let plugin = plugins
+                            let plugin = self
+                                .plugins
                                 .get(&plugin_id)
                                 .expect("cannot update a plugin that does not exist");
 
-                            *self.context.current_id.lock() = Some(ListenerId::Plugin(plugin_id));
+                            self.context.current_id = Some(ListenerId::Plugin(plugin_id));
 
-                            plugin.on_update(&self.context);
+                            plugin.on_update(&mut self.context);
 
-                            *self.context.current_id.lock() = None;
+                            self.context.current_id = None;
                         }
                     }
                 }
@@ -294,15 +336,13 @@ impl<'ui> WidgetManager<'ui> {
 
             morphorm::layout(&mut self.cache, &self.context.tree, &self.context.tree);
 
-            let plugins = self.context.plugins.lock();
+            for (plugin_id, plugin) in &self.plugins {
+                self.context.current_id = Some(ListenerId::Plugin(*plugin_id));
 
-            for (plugin_id, plugin) in plugins.iter() {
-                *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
-
-                plugin.post_update(&self.context);
+                plugin.post_update(&mut self.context);
             }
 
-            *self.context.current_id.lock() = None;
+            self.context.current_id = None;
 
             // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
             {
@@ -357,15 +397,13 @@ impl<'ui> WidgetManager<'ui> {
                 }),
         );
 
-        let plugins = self.context.plugins.lock();
+        for (plugin_id, plugin) in &self.plugins {
+            self.context.current_id = Some(ListenerId::Plugin(*plugin_id));
 
-        for (plugin_id, plugin) in plugins.iter() {
-            *self.context.current_id.lock() = Some(ListenerId::Plugin(*plugin_id));
-
-            plugin.on_events(&self.context, events);
+            plugin.on_events(&mut self.context, events);
         }
 
-        *self.context.current_id.lock() = None;
+        self.context.current_id = None;
     }
 
     fn morphorm_root_workaround(&mut self) -> bool {
@@ -543,16 +581,16 @@ impl<'ui> WidgetManager<'ui> {
             self.modifications.push(Modify::Destroy(*child_id));
         }
 
-        *self.context.current_id.lock() = Some(ListenerId::Widget(widget_id));
+        self.context.current_id = Some(ListenerId::Widget(widget_id));
 
         let node = self.context.tree.get(widget_id).unwrap();
 
         let result = node
             .widget
             .try_get()
-            .map_or(BuildResult::None, |widget| widget.build(&self.context));
+            .map_or(BuildResult::None, |widget| widget.build(&mut self.context));
 
-        *self.context.current_id.lock() = None;
+        self.context.current_id = None;
 
         match result {
             BuildResult::None => {}
@@ -576,17 +614,7 @@ impl<'ui> WidgetManager<'ui> {
             parent_layer
         };
 
-        // Store the node's layout so morphorm can access it
-        let node_layout_type = self.context.get_layout_type(widget_id);
-        let node_layout = self.context.get_layout(widget_id);
-
-        let node_painter = self.context.get_painter(widget_id);
-
-        let node = self.context.tree.get_mut(widget_id).unwrap();
-
-        node.layer = node_layer;
-        node.layout_type = node_layout_type;
-        node.layout = node_layout;
+        self.context.tree.get_mut(widget_id).unwrap().layer = node_layer;
     }
 
     fn process_destroy(&mut self, events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
@@ -657,7 +685,7 @@ mod tests {
     }
 
     impl WidgetBuilder for TestWidget {
-        fn build(&self, ctx: &WidgetContext) -> BuildResult {
+        fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
             let computes = Arc::clone(&self.computes);
 
             let computed_value = ctx.computed(move |ctx| {

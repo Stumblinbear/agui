@@ -9,7 +9,7 @@ use agui_macros::{build, Widget};
 use agui_primitives::{Drawable, DrawableStyle, Font, FontDescriptor, Fonts, ScaleFont, Text};
 
 use crate::{
-    plugins::{hovering::Hovering, timeout::TimeoutExt},
+    plugins::{hovering::HoveringExt, timeout::TimeoutExt},
     state::{
         keyboard::KeyboardInput,
         mouse::{Mouse, MouseButtonState},
@@ -106,18 +106,17 @@ pub struct TextInput {
 }
 
 impl WidgetBuilder for TextInput {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
         let input_state = ctx.computed(|ctx| {
             let last_input_state = *ctx.init_state(TextInputState::default).read();
 
-            let is_hovering = ctx.use_global(Hovering::default).read().is_hovering(ctx);
             let is_pressed =
                 ctx.use_global(Mouse::default).read().button.left == MouseButtonState::Pressed;
 
             if is_pressed {
-                return if is_hovering {
+                return if ctx.is_hovering() {
                     TextInputState::Focused
                 } else {
                     TextInputState::Normal
@@ -126,7 +125,7 @@ impl WidgetBuilder for TextInput {
 
             if last_input_state == TextInputState::Focused {
                 return TextInputState::Focused;
-            } else if is_hovering {
+            } else if ctx.is_hovering() {
                 return TextInputState::Hover;
             }
 
@@ -274,7 +273,7 @@ impl Default for Cursor {
 }
 
 impl WidgetBuilder for Cursor {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         let cursor_state = ctx.computed(|ctx| {
             // Keep track of time so we can blink blonk the cursor
             let instant = *ctx.init_state(Instant::now).read();

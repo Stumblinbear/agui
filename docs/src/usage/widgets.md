@@ -14,7 +14,7 @@ A widget consists of two things: its settings and a build function. In Rust, thi
 pub struct Button { }
 
 impl WidgetBuilder for Button {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         BuildResult::None
     }
 }
@@ -24,7 +24,7 @@ If you run this... Nothing will happen. Which makes sense, as we don't have any 
 
 ```rust,noplaypen
 impl WidgetBuilder for Button {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         build! {
             Drawable {
                 layout: Layout {

@@ -28,7 +28,7 @@ impl Default for Shape {
 
 impl Shape {
     #[must_use]
-    pub fn build_path(&self, rect: &super::Rect) -> Path {
+    pub fn build_path(&self, rect: super::Rect) -> Path {
         match self {
             Self::Rect => {
                 let mut builder = Path::builder();

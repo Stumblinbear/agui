@@ -15,7 +15,7 @@ pub struct Column {
 }
 
 impl WidgetBuilder for Column {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout_type(
             LayoutType::Column {
                 spacing: self.spacing,

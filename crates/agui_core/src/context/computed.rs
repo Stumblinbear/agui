@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use super::{ListenerId, NotifiableValue, WidgetContext};
 
 pub trait ComputedFunc<'ui> {
-    fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool;
+    fn call(&mut self, ctx: &mut WidgetContext<'ui>) -> bool;
 
     fn get(&self) -> Box<dyn NotifiableValue>;
 
@@ -13,7 +13,7 @@ pub trait ComputedFunc<'ui> {
 pub struct ComputedFn<'ui, V, F>
 where
     V: Eq + PartialEq + Clone + NotifiableValue,
-    F: Fn(&WidgetContext<'ui>) -> V,
+    F: Fn(&mut WidgetContext<'ui>) -> V,
 {
     phantom: PhantomData<&'ui V>,
 
@@ -27,7 +27,7 @@ where
 impl<'ui, V, F> ComputedFn<'ui, V, F>
 where
     V: Eq + PartialEq + Clone + NotifiableValue,
-    F: Fn(&WidgetContext<'ui>) -> V,
+    F: Fn(&mut WidgetContext<'ui>) -> V,
 {
     pub fn new(listener_id: ListenerId, func: F) -> Self {
         Self {
@@ -45,17 +45,17 @@ where
 impl<'ui, V, F> ComputedFunc<'ui> for ComputedFn<'ui, V, F>
 where
     V: Eq + PartialEq + Clone + NotifiableValue,
-    F: Fn(&WidgetContext<'ui>) -> V,
+    F: Fn(&mut WidgetContext<'ui>) -> V,
 {
-    fn call(&mut self, ctx: &WidgetContext<'ui>) -> bool {
+    fn call(&mut self, ctx: &mut WidgetContext<'ui>) -> bool {
         let new_value = {
-            let previous_id = *ctx.current_id.lock();
+            let previous_id = ctx.current_id;
 
-            *ctx.current_id.lock() = Some(self.listener_id);
+            ctx.current_id = Some(self.listener_id);
 
             let value = (self.func)(ctx);
 
-            *ctx.current_id.lock() = previous_id;
+            ctx.current_id = previous_id;
 
             value
         };

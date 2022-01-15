@@ -7,7 +7,7 @@ use agui_macros::{build, Widget};
 use agui_primitives::{Drawable, DrawableStyle};
 
 use crate::{
-    plugins::hovering::Hovering,
+    plugins::hovering::HoveringExt,
     state::{
         mouse::{Mouse, MouseButtonState},
         theme::StyleExt,
@@ -68,18 +68,16 @@ pub struct Button {
 }
 
 impl WidgetBuilder for Button {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
         let state = ctx.computed(|ctx| {
-            if let Some(hovering) = ctx.try_use_global::<Hovering>() {
-                if let Some(mouse) = ctx.try_use_global::<Mouse>() {
-                    if hovering.read().is_hovering(ctx) {
-                        if mouse.read().button.left == MouseButtonState::Pressed {
-                            return ButtonState::Pressed;
-                        } else {
-                            return ButtonState::Hover;
-                        }
+            if let Some(mouse) = ctx.try_use_global::<Mouse>() {
+                if ctx.is_hovering() {
+                    if mouse.read().button.left == MouseButtonState::Pressed {
+                        return ButtonState::Pressed;
+                    } else {
+                        return ButtonState::Hover;
                     }
                 }
             }

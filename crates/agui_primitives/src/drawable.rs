@@ -22,7 +22,7 @@ pub struct Drawable {
 }
 
 impl WidgetBuilder for Drawable {
-    fn build(&self, ctx: &WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
         (&self.child).into()
