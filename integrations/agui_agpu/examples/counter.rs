@@ -6,7 +6,6 @@ use agui::{
     unit::{Callback, Margin},
     widget::BuildResult,
     widgets::{
-        plugins::hovering::HoveringPlugin,
         primitives::{Column, FontDescriptor, Padding, Text},
         App, Button,
     },
@@ -24,8 +23,6 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let mut ui = UI::with_default(&program);
 
-    ui.get_context().init_plugin(HoveringPlugin::default);
-
     let deja_vu_sans = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 
     ui.set_root(build! {
@@ -40,7 +37,7 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn counter_widget(ctx: &WidgetContext, font: FontDescriptor) -> BuildResult {
+fn counter_widget(ctx: &mut WidgetContext, font: FontDescriptor) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {
