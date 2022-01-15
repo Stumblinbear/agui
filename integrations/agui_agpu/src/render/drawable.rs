@@ -1,7 +1,9 @@
-use std::{any::TypeId, collections::HashMap, mem};
+use std::{collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager};
+use agui::{
+    event::WidgetEvent, unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager,
+};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
@@ -74,105 +76,7 @@ impl DrawableRenderPass {
 }
 
 impl WidgetRenderPass for DrawableRenderPass {
-    fn added(
-        &mut self,
-        _ctx: &RenderContext,
-        _manager: &WidgetManager,
-        _type_id: &TypeId,
-        _widget_id: WidgetId,
-    ) {
-    }
-
-    fn layout(
-        &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: WidgetId,
-        layer: u32,
-    ) {
-        if type_id != &TypeId::of::<Drawable>() {
-            return;
-        }
-
-        let drawable = manager.get_as::<Drawable>(widget_id);
-
-        let geometry: VertexBuffers<[f32; 2], u16> = {
-            let rect = manager
-                .get_rect(widget_id)
-                .expect("widget does not have a rect");
-
-            let mut geometry = VertexBuffers::new();
-
-            let mut tessellator = FillTessellator::new();
-            {
-                // Compute the tessellation.
-                tessellator
-                    .tessellate_path(
-                        &drawable.shape.build_path(rect),
-                        &FillOptions::default(),
-                        &mut BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
-                            vertex.position().to_array()
-                        }),
-                    )
-                    .unwrap();
-            }
-
-            geometry
-        };
-
-        let drawable_data = ctx
-            .gpu
-            .new_buffer("agui drawable instance buffer")
-            .as_vertex_buffer()
-            .create(bytemuck::bytes_of(&DrawableData {
-                layer,
-                color: drawable
-                    .style
-                    .as_ref()
-                    .map_or(Color::default(), |style| style.color)
-                    .as_rgba(),
-            }));
-
-        let vertex_data = ctx
-            .gpu
-            .new_buffer("agui drawable vertex buffer")
-            .as_vertex_buffer()
-            .create(&geometry.vertices);
-
-        let index_data = ctx
-            .gpu
-            .new_buffer("agui drawable index buffer")
-            .as_index_buffer()
-            .create(&geometry.indices);
-
-        self.widgets.insert(
-            widget_id,
-            WidgetBuffer {
-                drawable_data,
-
-                vertex_data,
-                index_data,
-                count: geometry.indices.len() as u32,
-            },
-        );
-    }
-
-    fn removed(
-        &mut self,
-        _ctx: &RenderContext,
-        _manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: WidgetId,
-    ) {
-        if type_id != &TypeId::of::<Drawable>() {
-            return;
-        }
-
-        self.widgets.remove(&widget_id);
-    }
-
-    fn update(&mut self, ctx: &RenderContext) {
+    fn update(&mut self, ctx: &RenderContext, manager: &WidgetManager, changes: &[WidgetEvent]) {
         if ctx.size != self.last_size {
             self.last_size = ctx.size;
 
@@ -183,6 +87,87 @@ impl WidgetRenderPass for DrawableRenderPass {
             ];
 
             self.bind_group = ctx.gpu.create_bind_group(bindings);
+        }
+
+        for change in changes {
+            if !change.is_widget::<Drawable>() {
+                continue;
+            }
+
+            match change {
+                WidgetEvent::Layout {
+                    widget_id, layer, ..
+                } => {
+                    let drawable = manager.get_as::<Drawable>(*widget_id);
+
+                    let geometry: VertexBuffers<[f32; 2], u16> = {
+                        let rect = manager
+                            .get_rect(*widget_id)
+                            .expect("widget does not have a rect");
+
+                        let mut geometry = VertexBuffers::new();
+
+                        let mut tessellator = FillTessellator::new();
+                        {
+                            // Compute the tessellation.
+                            tessellator
+                                .tessellate_path(
+                                    &drawable.shape.build_path(rect),
+                                    &FillOptions::default(),
+                                    &mut BuffersBuilder::new(
+                                        &mut geometry,
+                                        |vertex: FillVertex| vertex.position().to_array(),
+                                    ),
+                                )
+                                .unwrap();
+                        }
+
+                        geometry
+                    };
+
+                    let drawable_data = ctx
+                        .gpu
+                        .new_buffer("agui drawable instance buffer")
+                        .as_vertex_buffer()
+                        .create(bytemuck::bytes_of(&DrawableData {
+                            layer: *layer,
+                            color: drawable
+                                .style
+                                .as_ref()
+                                .map_or(Color::default(), |style| style.color)
+                                .as_rgba(),
+                        }));
+
+                    let vertex_data = ctx
+                        .gpu
+                        .new_buffer("agui drawable vertex buffer")
+                        .as_vertex_buffer()
+                        .create(&geometry.vertices);
+
+                    let index_data = ctx
+                        .gpu
+                        .new_buffer("agui drawable index buffer")
+                        .as_index_buffer()
+                        .create(&geometry.indices);
+
+                    self.widgets.insert(
+                        *widget_id,
+                        WidgetBuffer {
+                            drawable_data,
+
+                            vertex_data,
+                            index_data,
+                            count: geometry.indices.len() as u32,
+                        },
+                    );
+                }
+
+                WidgetEvent::Destroyed { widget_id, .. } => {
+                    self.widgets.remove(widget_id);
+                }
+
+                _ => { }
+            }
         }
     }
 

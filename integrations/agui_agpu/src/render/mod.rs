@@ -1,7 +1,5 @@
-use std::any::TypeId;
-
 use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Sampler, Texture, TextureFormat};
-use agui::{context::Notify, widget::WidgetId, widgets::AppSettings, WidgetManager};
+use agui::{context::Notify, widgets::AppSettings, WidgetManager, event::WidgetEvent};
 use downcast_rs::{impl_downcast, Downcast};
 
 pub mod bounding;
@@ -79,32 +77,7 @@ impl RenderContext {
 }
 
 pub trait WidgetRenderPass: Downcast {
-    fn added(
-        &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: WidgetId,
-    );
-
-    fn layout(
-        &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: WidgetId,
-        layer: u32,
-    );
-
-    fn removed(
-        &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: WidgetId,
-    );
-
-    fn update(&mut self, ctx: &RenderContext);
+    fn update(&mut self, ctx: &RenderContext, manager: &WidgetManager, changes: &[WidgetEvent]);
 
     fn render(&self, ctx: &RenderContext, frame: &mut Frame);
 }

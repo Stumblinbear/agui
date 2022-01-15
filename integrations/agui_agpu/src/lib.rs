@@ -189,58 +189,18 @@ impl UI {
         self.manager.update(&mut self.events);
 
         if !self.events.is_empty() {
-            for event in self.events.drain(..) {
-                match event {
-                    WidgetEvent::Spawned { type_id, widget_id } => {
-                        self.clipping_pass
-                            .added(&self.ctx, &self.manager, &type_id, widget_id);
-
-                        for pass in self.render_passes.values_mut() {
-                            pass.added(&self.ctx, &self.manager, &type_id, widget_id);
-                        }
-                    }
-
-                    WidgetEvent::Layout {
-                        type_id,
-                        widget_id,
-                        layer,
-                    } => {
-                        self.clipping_pass.layout(
-                            &self.ctx,
-                            &self.manager,
-                            &type_id,
-                            widget_id,
-                            layer,
-                        );
-
-                        for pass in self.render_passes.values_mut() {
-                            pass.layout(&self.ctx, &self.manager, &type_id, widget_id, layer);
-                        }
-                    }
-
-                    WidgetEvent::Destroyed { type_id, widget_id } => {
-                        self.clipping_pass
-                            .removed(&self.ctx, &self.manager, &type_id, widget_id);
-
-                        for pass in self.render_passes.values_mut() {
-                            pass.removed(&self.ctx, &self.manager, &type_id, widget_id);
-                        }
-                    }
-
-                    _ => {}
-                }
-            }
-
             self.ctx.update();
 
-            self.clipping_pass.update(&self.ctx);
+            self.clipping_pass.update(&self.ctx, &self.manager, &self.events);
 
             for pass_type_id in &self.render_pass_order {
                 self.render_passes
                     .get_mut(pass_type_id)
                     .expect("render pass does not exist")
-                    .update(&self.ctx);
+                    .update(&self.ctx, &self.manager, &self.events);
             }
+
+            self.events.clear();
 
             true
         } else {

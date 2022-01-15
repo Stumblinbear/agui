@@ -1,12 +1,11 @@
 use std::{
-    any::TypeId,
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     mem,
 };
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{widget::WidgetId, WidgetManager};
+use agui::{event::WidgetEvent, widget::WidgetId, WidgetManager};
 
 use super::{RenderContext, WidgetRenderPass};
 
@@ -56,85 +55,73 @@ impl BoundingRenderPass {
 }
 
 impl WidgetRenderPass for BoundingRenderPass {
-    fn added(
-        &mut self,
-        _ctx: &RenderContext,
-        _manager: &WidgetManager,
-        _type_id: &TypeId,
-        _widget_id: WidgetId,
-    ) {
+    fn update(&mut self, ctx: &RenderContext, manager: &WidgetManager, changes: &[WidgetEvent]) {
+        for change in changes {
+            match change {
+                WidgetEvent::Layout {
+                    type_id,
+                    widget_id,
+                    layer: _,
+                } => {
+                    let rect = match manager.get_rect(*widget_id) {
+                        Some(rect) => rect,
+                        None => return,
+                    };
+
+                    let mut hasher = DefaultHasher::new();
+                    type_id.hash(&mut hasher);
+                    let c = hasher.finish().to_ne_bytes();
+
+                    let rect = rect.to_slice();
+
+                    let buffer = ctx
+                        .gpu
+                        .new_buffer("agui bounding buffer")
+                        .as_vertex_buffer()
+                        .create(bytemuck::bytes_of(&BoundingData {
+                            rect: [
+                                // Ensure the bounding box always shows on screen (not hidden on either 0 axis)
+                                if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
+                                    1.0
+                                } else {
+                                    rect[0]
+                                },
+                                if rect[1] > -f32::EPSILON && rect[1] < f32::EPSILON {
+                                    1.0
+                                } else {
+                                    rect[1]
+                                },
+                                if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
+                                    rect[2] - 1.0
+                                } else {
+                                    rect[2]
+                                },
+                                if rect[1] > -f32::EPSILON && rect[1] < f32::EPSILON {
+                                    rect[3] - 1.0
+                                } else {
+                                    rect[3]
+                                },
+                            ],
+                            z: 0.0,
+                            color: [
+                                (c[0] as f32) / 255.0,
+                                (c[1] as f32) / 255.0,
+                                (c[2] as f32) / 255.0,
+                                1.0,
+                            ],
+                        }));
+
+                    self.widgets.insert(*widget_id, buffer);
+                }
+
+                WidgetEvent::Destroyed { widget_id, .. } => {
+                    self.widgets.remove(widget_id);
+                }
+
+                _ => {}
+            }
+        }
     }
-
-    fn layout(
-        &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
-        type_id: &TypeId,
-        widget_id: WidgetId,
-        _depth: u32,
-    ) {
-        let rect = match manager.get_rect(widget_id) {
-            Some(rect) => rect,
-            None => return,
-        };
-
-        let mut hasher = DefaultHasher::new();
-        type_id.hash(&mut hasher);
-        let c = hasher.finish().to_ne_bytes();
-
-        let rect = rect.to_slice();
-
-        let buffer = ctx
-            .gpu
-            .new_buffer("agui bounding buffer")
-            .as_vertex_buffer()
-            .create(bytemuck::bytes_of(&BoundingData {
-                rect: [
-                    // Ensure the bounding box always shows on screen (not hidden on either 0 axis)
-                    if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
-                        1.0
-                    } else {
-                        rect[0]
-                    },
-                    if rect[1] > -f32::EPSILON && rect[1] < f32::EPSILON {
-                        1.0
-                    } else {
-                        rect[1]
-                    },
-                    if rect[0] > -f32::EPSILON && rect[0] < f32::EPSILON {
-                        rect[2] - 1.0
-                    } else {
-                        rect[2]
-                    },
-                    if rect[1] > -f32::EPSILON && rect[1] < f32::EPSILON {
-                        rect[3] - 1.0
-                    } else {
-                        rect[3]
-                    },
-                ],
-                z: 0.0,
-                color: [
-                    (c[0] as f32) / 255.0,
-                    (c[1] as f32) / 255.0,
-                    (c[2] as f32) / 255.0,
-                    1.0,
-                ],
-            }));
-
-        self.widgets.insert(widget_id, buffer);
-    }
-
-    fn removed(
-        &mut self,
-        _ctx: &RenderContext,
-        _manager: &WidgetManager,
-        _type_id: &TypeId,
-        widget_id: WidgetId,
-    ) {
-        self.widgets.remove(&widget_id);
-    }
-
-    fn update(&mut self, _ctx: &RenderContext) {}
 
     fn render(&self, _ctx: &RenderContext, frame: &mut Frame) {
         let mut r = frame

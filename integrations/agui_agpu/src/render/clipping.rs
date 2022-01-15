@@ -1,10 +1,10 @@
-use std::{any::TypeId, collections::HashMap, mem};
+use std::{collections::HashMap, mem};
 
 use agpu::{
     BindGroup, Buffer, Frame, GpuProgram, RenderAttachmentBuild, RenderPipeline, Texture,
     TextureDimensions, TextureFormat,
 };
-use agui::{widget::WidgetId, WidgetManager};
+use agui::{event::WidgetEvent, widget::WidgetId, WidgetManager};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
@@ -95,97 +95,7 @@ impl ClippingRenderPass {
 }
 
 impl WidgetRenderPass for ClippingRenderPass {
-    fn added(
-        &mut self,
-        _ctx: &RenderContext,
-        _manager: &WidgetManager,
-        _type_id: &TypeId,
-        _widget_id: WidgetId,
-    ) {
-    }
-
-    fn layout(
-        &mut self,
-        ctx: &RenderContext,
-        manager: &WidgetManager,
-        _type_id: &TypeId,
-        widget_id: WidgetId,
-        layer: u32,
-    ) {
-        if let Some(clipping) = manager.get_clipping(widget_id).try_get() {
-            let rect = manager
-                .get_rect(widget_id)
-                .expect("cannot have clipping on a widget with no size");
-
-            let path = clipping.build_path(rect);
-
-            let mut geometry: VertexBuffers<[f32; 2], u16> = VertexBuffers::new();
-
-            let mut tessellator = FillTessellator::new();
-            {
-                // Compute the tessellation.
-                tessellator
-                    .tessellate_path(
-                        &path,
-                        &FillOptions::default(),
-                        &mut BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
-                            vertex.position().to_array()
-                        }),
-                    )
-                    .unwrap();
-            }
-
-            let clipping_data = ctx
-                .gpu
-                .new_buffer("agui clipping instance buffer")
-                .as_vertex_buffer()
-                .create(bytemuck::bytes_of(&ClippingData { layer }));
-
-            let vertex_data = ctx
-                .gpu
-                .new_buffer("agui clipping vertex buffer")
-                .as_vertex_buffer()
-                .create(&geometry.vertices);
-
-            let index_data = ctx
-                .gpu
-                .new_buffer("agui clipping index buffer")
-                .as_index_buffer()
-                .create(&geometry.indices);
-
-            self.widgets.insert(
-                widget_id,
-                ClippingBuffer {
-                    clipping_data,
-
-                    vertex_data,
-                    index_data,
-                    count: geometry.indices.len() as u32,
-                },
-            );
-
-            self.widget_order.push(widget_id);
-        }
-    }
-
-    fn removed(
-        &mut self,
-        _ctx: &RenderContext,
-        _manager: &WidgetManager,
-        _type_id: &TypeId,
-        widget_id: WidgetId,
-    ) {
-        if self.widgets.remove(&widget_id).is_some() {
-            self.widget_order.remove(
-                self.widget_order
-                    .iter()
-                    .position(|id| *id == widget_id)
-                    .unwrap(),
-            );
-        }
-    }
-
-    fn update(&mut self, ctx: &RenderContext) {
+    fn update(&mut self, ctx: &RenderContext, manager: &WidgetManager, changes: &[WidgetEvent]) {
         if ctx.size != self.last_size {
             self.last_size = ctx.size;
 
@@ -197,6 +107,83 @@ impl WidgetRenderPass for ClippingRenderPass {
             ];
 
             self.bind_group = ctx.gpu.create_bind_group(bindings);
+        }
+
+        for change in changes {
+            match change {
+                WidgetEvent::Layout {
+                    widget_id, layer, ..
+                } => {
+                    if let Some(clipping) = manager.get_clipping(*widget_id).try_get() {
+                        let rect = manager
+                            .get_rect(*widget_id)
+                            .expect("cannot have clipping on a widget with no size");
+
+                        let path = clipping.build_path(rect);
+
+                        let mut geometry: VertexBuffers<[f32; 2], u16> = VertexBuffers::new();
+
+                        let mut tessellator = FillTessellator::new();
+                        {
+                            // Compute the tessellation.
+                            tessellator
+                                .tessellate_path(
+                                    &path,
+                                    &FillOptions::default(),
+                                    &mut BuffersBuilder::new(
+                                        &mut geometry,
+                                        |vertex: FillVertex| vertex.position().to_array(),
+                                    ),
+                                )
+                                .unwrap();
+                        }
+
+                        let clipping_data = ctx
+                            .gpu
+                            .new_buffer("agui clipping instance buffer")
+                            .as_vertex_buffer()
+                            .create(bytemuck::bytes_of(&ClippingData { layer: *layer }));
+
+                        let vertex_data = ctx
+                            .gpu
+                            .new_buffer("agui clipping vertex buffer")
+                            .as_vertex_buffer()
+                            .create(&geometry.vertices);
+
+                        let index_data = ctx
+                            .gpu
+                            .new_buffer("agui clipping index buffer")
+                            .as_index_buffer()
+                            .create(&geometry.indices);
+
+                        self.widgets.insert(
+                            *widget_id,
+                            ClippingBuffer {
+                                clipping_data,
+
+                                vertex_data,
+                                index_data,
+                                count: geometry.indices.len() as u32,
+                            },
+                        );
+
+                        self.widget_order.push(*widget_id);
+                    }
+                }
+
+                WidgetEvent::Destroyed { widget_id, .. } => {
+                    if self.widgets.remove(widget_id).is_some() {
+                        self.widget_order.remove(
+                            self.widget_order
+                                .iter()
+                                .position(|id| id == widget_id)
+                                .unwrap(),
+                        );
+                    }
+                }
+
+                _ => { }
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use crate::widget::WidgetId;
+use crate::widget::{Widget, WidgetId};
 
 /// Used to indicate a change to widgets in the tree.
 #[derive(Debug, Copy, Clone)]
@@ -24,4 +24,18 @@ pub enum WidgetEvent {
         type_id: TypeId,
         widget_id: WidgetId,
     },
+}
+
+impl WidgetEvent {
+    #[must_use]
+    pub fn is_widget<W>(&self) -> bool
+    where
+        W: Widget + 'static,
+    {
+        match self {
+            WidgetEvent::Spawned { type_id, .. }
+            | WidgetEvent::Layout { type_id, .. }
+            | WidgetEvent::Destroyed { type_id, .. } => TypeId::of::<W>() == *type_id,
+        }
+    }
 }
