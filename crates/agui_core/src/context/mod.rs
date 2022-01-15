@@ -20,7 +20,7 @@ use crate::{
     node::WidgetNode,
     paint::Painter,
     plugin::WidgetPlugin,
-    tree::Tree,
+    tree::{Tree, TreeNode},
     unit::{Key, Layout, LayoutType, Rect, Ref, Shape},
     widget::{WidgetId, WidgetRef},
 };
@@ -58,24 +58,18 @@ type WidgetComputedFuncs<'ui> =
 
 pub struct WidgetContext<'ui> {
     pub(crate) tree: Tree<WidgetId, WidgetNode>,
+    pub(crate) rects: ReadableMap<WidgetId, Rect>,
+
     pub(crate) plugins: Mutex<FnvHashMap<TypeId, Rc<dyn WidgetPlugin>>>,
+
+    pub(crate) current_id: Arc<Mutex<Option<ListenerId>>>,
 
     global: StateMap,
     states: ScopedStateMap<ListenerId>,
 
     computed_funcs: Arc<Mutex<WidgetComputedFuncs<'ui>>>,
 
-    layout_types: Mutex<FnvHashMap<WidgetId, Ref<LayoutType>>>,
-    layouts: Mutex<FnvHashMap<WidgetId, Ref<Layout>>>,
-
-    painter: Mutex<FnvHashMap<WidgetId, Rc<dyn Painter>>>,
-    clipping: Mutex<FnvHashMap<WidgetId, Ref<Shape>>>,
-
-    pub(crate) rects: ReadableMap<WidgetId, Rect>,
-
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
-
-    pub(crate) current_id: Arc<Mutex<Option<ListenerId>>>,
 }
 
 impl<'ui> WidgetContext<'ui> {
@@ -84,25 +78,18 @@ impl<'ui> WidgetContext<'ui> {
     pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             tree: Tree::default(),
+            rects: ReadableMap::new(Arc::clone(&changed)),
 
             plugins: Mutex::default(),
+
+            current_id: Arc::default(),
 
             global: StateMap::new(Arc::clone(&changed)),
             states: ScopedStateMap::new(Arc::clone(&changed)),
 
             computed_funcs: Arc::new(Mutex::new(FnvHashMap::default())),
 
-            layouts: Mutex::default(),
-            layout_types: Mutex::default(),
-
-            painter: Mutex::default(),
-            clipping: Mutex::default(),
-
-            rects: ReadableMap::new(Arc::clone(&changed)),
-
             changed,
-
-            current_id: Arc::default(),
         }
     }
 
@@ -125,7 +112,9 @@ impl<'ui> WidgetContext<'ui> {
         self.changed.lock().insert(listener_id);
     }
 
-    pub(crate) fn remove_widget(&mut self, widget_id: WidgetId) {
+    pub(crate) fn remove_widget(&mut self, widget_id: WidgetId) -> TreeNode<WidgetId, WidgetNode> {
+        let node = self.tree.remove(widget_id);
+
         let mut all_listeners = vec![ListenerId::Widget(widget_id)];
 
         if let Some(computed_funcs) = self.computed_funcs.lock().remove(&widget_id) {
@@ -134,13 +123,11 @@ impl<'ui> WidgetContext<'ui> {
             }
         }
 
-        self.layouts.lock().remove(&widget_id);
-
-        self.rects.remove(&widget_id);
-
         for listener_id in all_listeners {
             self.remove_listener(listener_id);
         }
+
+        node
     }
 
     pub(crate) fn remove_listener(&mut self, listener_id: ListenerId) {
@@ -149,8 +136,6 @@ impl<'ui> WidgetContext<'ui> {
         self.states.remove(&listener_id);
 
         self.states.remove_listeners(&listener_id);
-
-        self.rects.remove_listeners(&listener_id);
     }
 }
 
@@ -307,10 +292,13 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot set the layout type from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
-            self.layout_types.lock().insert(widget_id, layout_type);
+            self.tree
+                .get_mut(widget_id)
+                .expect("broken tree: cannot set the layout type of a widget not in the tree")
+                .layout_type = layout_type;
         } else {
             panic!("layout type can only be set in a widget build context");
         }
@@ -318,10 +306,9 @@ impl<'ui> WidgetContext<'ui> {
 
     /// Fetch the layout of a widget.
     pub fn get_layout_type(&self, widget_id: WidgetId) -> Ref<LayoutType> {
-        self.layout_types
-            .lock()
-            .get(&widget_id)
-            .map_or(Ref::None, Ref::clone)
+        self.tree
+            .get(widget_id)
+            .map_or(Ref::None, |node| Ref::clone(&node.layout_type))
     }
 
     /// Set the layout of the widget.
@@ -335,10 +322,13 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot set the layout from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
-            self.layouts.lock().insert(widget_id, layout);
+            self.tree
+                .get_mut(widget_id)
+                .expect("broken tree: cannot set the layout of a widget not in the tree")
+                .layout = layout;
         } else {
             panic!("layout can only be set in a widget build context");
         }
@@ -346,10 +336,9 @@ impl<'ui> WidgetContext<'ui> {
 
     /// Fetch the layout of a widget.
     pub fn get_layout(&self, widget_id: WidgetId) -> Ref<Layout> {
-        self.layouts
-            .lock()
-            .get(&widget_id)
-            .map_or(Ref::None, Ref::clone)
+        self.tree
+            .get(widget_id)
+            .map_or(Ref::None, |node| Ref::clone(&node.layout))
     }
 }
 
@@ -369,13 +358,21 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot set the painter from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
-            self.painter.lock().insert(widget_id, Rc::new(painter));
+            // self.tree
+            //     .get_mut(widget_id)
+            //     .expect("broken tree: cannot set the painter of a widget not in the tree")
+            //     .painter = Ref::new(painter);
         } else {
             panic!("painters can only be set in a widget build context");
         }
+    }
+
+    /// Fetch the painter of a widget.
+    pub fn get_painter(&self, widget_id: WidgetId) -> Option<Box<dyn Painter>> {
+        self.tree.get(widget_id).and_then(|node| node.painter)
     }
 }
 
@@ -392,10 +389,13 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot set clipping from context while not iterating");
 
         if let ListenerId::Widget(widget_id) = current_id {
-            self.clipping.lock().insert(widget_id, clipping);
+            self.tree
+                .get_mut(widget_id)
+                .expect("broken tree: cannot set the layout type of a widget not in the tree")
+                .clipping = clipping;
         } else {
             panic!("clipping can only be set in a widget build context");
         }
@@ -403,10 +403,9 @@ impl<'ui> WidgetContext<'ui> {
 
     /// Fetch the clipping mask of a widget.
     pub fn get_clipping(&self, widget_id: WidgetId) -> Ref<Shape> {
-        self.clipping
-            .lock()
-            .get(&widget_id)
-            .map_or(Ref::None, Ref::clone)
+        self.tree
+            .get(widget_id)
+            .map_or(Ref::None, |node| Ref::clone(&node.clipping))
     }
 }
 
@@ -423,7 +422,7 @@ impl<'ui> WidgetContext<'ui> {
         let current_id = self
             .current_id
             .lock()
-            .expect("cannot get state from context while not iterating");
+            .expect("cannot create a computed value while not iterating");
 
         let widget_id = current_id
             .widget_id()

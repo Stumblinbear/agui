@@ -496,20 +496,18 @@ impl<'ui> WidgetManager<'ui> {
             parent_id,
             WidgetNode {
                 widget,
-                layer: 0,
-                layout_type: Ref::None,
-                layout: Ref::None,
+                ..WidgetNode::default()
             },
         );
+
+        self.cache.add(widget_id);
+
+        self.modifications.push(Modify::Rebuild(widget_id));
 
         // Sometimes widgets get changes queued before they're spawned
         self.changed.lock().remove(&ListenerId::Widget(widget_id));
 
-        self.modifications.push(Modify::Rebuild(widget_id));
-
         events.push(WidgetEvent::Spawned { type_id, widget_id });
-
-        self.cache.add(widget_id);
     }
 
     fn process_rebuild(&mut self, widget_id: WidgetId) {
@@ -582,6 +580,8 @@ impl<'ui> WidgetManager<'ui> {
         let node_layout_type = self.context.get_layout_type(widget_id);
         let node_layout = self.context.get_layout(widget_id);
 
+        let node_painter = self.context.get_painter(widget_id);
+
         let node = self.context.tree.get_mut(widget_id).unwrap();
 
         node.layer = node_layer;
@@ -590,11 +590,9 @@ impl<'ui> WidgetManager<'ui> {
     }
 
     fn process_destroy(&mut self, events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let tree_node = self.context.tree.remove(widget_id);
+        let tree_node = self.context.remove_widget(widget_id);
 
-        self.context.remove_widget(widget_id);
         self.cache.remove(&widget_id);
-
         self.changed.lock().remove(&ListenerId::Widget(widget_id));
 
         events.push(WidgetEvent::Destroyed {

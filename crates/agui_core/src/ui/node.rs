@@ -1,15 +1,35 @@
 use crate::{
+    paint::Painter,
     tree::Tree,
-    unit::{Layout, LayoutType, Margin, Position, Ref, Sizing},
+    unit::{Layout, LayoutType, Margin, Position, Ref, Shape, Sizing},
     widget::{WidgetId, WidgetRef},
 };
 
 /// Holds information about a widget in the UI tree.
 pub struct WidgetNode {
     pub widget: WidgetRef,
+
     pub layer: u32,
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
+
+    pub clipping: Ref<Shape>,
+    pub painter: Option<Box<dyn Painter>>,
+}
+
+impl Default for WidgetNode {
+    fn default() -> Self {
+        Self {
+            widget: WidgetRef::default(),
+
+            layer: 0,
+            layout_type: Ref::None,
+            layout: Ref::None,
+
+            clipping: Ref::None,
+            painter: None,
+        }
+    }
 }
 
 pub struct RenderNode {}
