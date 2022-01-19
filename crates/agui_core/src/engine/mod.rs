@@ -5,25 +5,19 @@ use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    context::{ComputedContext, ListenerId, PluginContext, WidgetContext},
-    notifiable::{state::StateMap, NotifiableValue, Notify},
+    computed::ComputedContext,
+    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
+    plugin::{EnginePlugin, PluginContext, PluginId},
     tree::Tree,
     unit::{Key, Units},
-    widget::{BuildResult, Widget, WidgetId, WidgetRef},
+    widget::{BuildResult, Widget, WidgetContext, WidgetId, WidgetRef},
 };
 
-use self::{
-    cache::LayoutCache,
-    event::WidgetEvent,
-    node::WidgetNode,
-    plugin::{EnginePlugin, PluginId},
-};
+use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
 
 mod cache;
-pub mod computed;
 pub mod event;
 pub mod node;
-pub mod plugin;
 
 /// Handles the entirety of the agui lifecycle.
 pub struct Engine<'ui> {
@@ -623,10 +617,7 @@ mod tests {
 
     use parking_lot::Mutex;
 
-    use crate::{
-        context::WidgetContext,
-        widget::{BuildResult, Widget, WidgetBuilder, WidgetRef, WidgetType},
-    };
+    use crate::widget::{BuildResult, Widget, WidgetBuilder, WidgetContext, WidgetRef, WidgetType};
 
     use super::Engine;
 

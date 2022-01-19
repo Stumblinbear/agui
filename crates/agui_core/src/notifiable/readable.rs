@@ -3,7 +3,7 @@ use std::{hash::Hash, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::{Mutex, RwLock};
 
-use crate::context::ListenerId;
+use super::ListenerId;
 
 pub struct ReadableMap<K, V>
 where

@@ -4,10 +4,11 @@ use std::{
 };
 
 use agui_core::{
-    context::{ComputedContext, PluginContext, WidgetContext},
-    engine::{event::WidgetEvent, plugin::EnginePlugin},
+    computed::ComputedContext,
+    engine::event::WidgetEvent,
     notifiable::{NotifiableValue, Notify},
-    widget::WidgetId,
+    plugin::{EnginePlugin, PluginContext},
+    widget::{WidgetContext, WidgetId},
 };
 
 #[derive(Debug, Default)]

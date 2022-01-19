@@ -1,6 +1,10 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{context::ComputedContext, notifiable::NotifiableValue};
+use crate::notifiable::NotifiableValue;
+
+mod context;
+
+pub use context::ComputedContext;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct ComputedId(TypeId);

@@ -5,14 +5,12 @@ use parking_lot::Mutex;
 
 use crate::{
     canvas::painter::Painter,
-    context::ListenerId,
-    notifiable::{state::StateMap, Notify},
+    computed::{ComputedFunc, ComputedId},
+    notifiable::{state::StateMap, ListenerId, Notify},
     tree::Tree,
     unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Shape, Sizing},
     widget::{WidgetId, WidgetRef},
 };
-
-use super::computed::{ComputedFunc, ComputedId};
 
 /// Holds information about a widget in the UI tree.
 pub struct WidgetNode<'ui> {

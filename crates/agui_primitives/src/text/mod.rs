@@ -3,9 +3,8 @@ use glyph_brush_layout::{
 };
 
 use agui_core::{
-    context::WidgetContext,
     unit::{Color, Layout, Margin, Position, Sizing, Units},
-    widget::{BuildResult, WidgetBuilder},
+    widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
 use agui_macros::Widget;
 

@@ -1,7 +1,6 @@
 use agui_core::{
-    context::WidgetContext,
     unit::{Key, Layout, Sizing, Units},
-    widget::{BuildResult, WidgetBuilder, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
 use agui_macros::{build, Widget};
 

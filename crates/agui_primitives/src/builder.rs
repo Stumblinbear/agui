@@ -1,7 +1,4 @@
-use agui_core::{
-    context::WidgetContext,
-    widget::{BuildResult, WidgetBuilder, WidgetRef},
-};
+use agui_core::widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef};
 use agui_macros::Widget;
 
 #[derive(Widget)]

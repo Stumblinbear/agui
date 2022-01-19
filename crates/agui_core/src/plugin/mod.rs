@@ -2,9 +2,11 @@ use std::any::TypeId;
 
 use downcast_rs::{impl_downcast, Downcast};
 
-use crate::context::PluginContext;
+use crate::engine::event::WidgetEvent;
 
-use super::event::WidgetEvent;
+mod context;
+
+pub use context::PluginContext;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct PluginId(TypeId);

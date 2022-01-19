@@ -1,8 +1,7 @@
 use agui_core::{
     canvas::painter::shape::RectPainter,
-    context::WidgetContext,
     unit::{Callback, Color, Layout, Ref},
-    widget::{BuildResult, WidgetBuilder, WidgetRef},
+    widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
 use agui_macros::Widget;
 

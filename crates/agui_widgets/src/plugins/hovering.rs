@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
 use agui_core::{
-    context::{ComputedContext, PluginContext, WidgetContext},
-    engine::{event::WidgetEvent, plugin::EnginePlugin},
-    widget::WidgetId,
+    computed::ComputedContext,
+    engine::event::WidgetEvent,
+    plugin::{EnginePlugin, PluginContext},
+    widget::{WidgetContext, WidgetId},
 };
 
 use crate::state::mouse::Mouse;

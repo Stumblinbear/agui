@@ -6,10 +6,11 @@ use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
-use crate::context::ListenerId;
-
+mod listener;
 pub mod readable;
 pub mod state;
+
+pub use listener::ListenerId;
 
 pub trait NotifiableValue: std::fmt::Debug + Downcast + Send + Sync + 'static {}
 

@@ -3,7 +3,7 @@ use std::{any::TypeId, hash::Hash, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::{Mutex, RwLock};
 
-use crate::context::ListenerId;
+use super::ListenerId;
 
 use super::{NotifiableValue, Notify};
 

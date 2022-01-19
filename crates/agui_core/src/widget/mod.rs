@@ -3,10 +3,12 @@ use std::{any::TypeId, fmt::Debug, rc::Rc};
 use downcast_rs::{impl_downcast, Downcast};
 use slotmap::new_key_type;
 
-use crate::{context::WidgetContext, unit::Key};
+use crate::unit::Key;
 
+mod context;
 mod result;
 
+pub use context::WidgetContext;
 pub use result::BuildResult;
 
 new_key_type! {

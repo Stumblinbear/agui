@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::BTreeMap};
 
-use agui_core::context::WidgetContext;
+use agui_core::widget::WidgetContext;
 use downcast_rs::{impl_downcast, Downcast};
 
 use crate::plugins::provider::ConsumerExt;

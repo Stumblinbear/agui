@@ -4,13 +4,12 @@ use fnv::FnvHashSet;
 use parking_lot::Mutex;
 
 use crate::{
-    engine::{node::WidgetNode, plugin::PluginId},
-    notifiable::{state::StateMap, NotifiableValue, Notify},
+    engine::node::WidgetNode,
+    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
+    plugin::PluginId,
     tree::Tree,
     widget::WidgetId,
 };
-
-use super::ListenerId;
 
 pub struct PluginContext<'ui, 'ctx> {
     pub(crate) plugin_id: PluginId,

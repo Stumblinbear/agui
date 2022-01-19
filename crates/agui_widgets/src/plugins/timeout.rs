@@ -5,9 +5,11 @@ use std::{
 };
 
 use agui_core::{
-    context::{ComputedContext, ListenerId, PluginContext, WidgetContext},
-    engine::{event::WidgetEvent, plugin::EnginePlugin},
-    widget::WidgetId,
+    computed::ComputedContext,
+    engine::event::WidgetEvent,
+    notifiable::ListenerId,
+    plugin::{EnginePlugin, PluginContext},
+    widget::{WidgetContext, WidgetId},
 };
 
 #[derive(Debug, Default)]
