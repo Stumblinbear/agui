@@ -8,13 +8,13 @@ use crate::{
     widget::WidgetId,
 };
 
+pub mod event;
+pub mod node;
+
 use self::{
     event::RenderEvent,
     node::{RenderId, RenderNode},
 };
-
-pub mod event;
-pub mod node;
 
 #[derive(Default)]
 pub struct RenderManager {

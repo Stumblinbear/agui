@@ -1,19 +1,10 @@
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 
-use glyph_brush_layout::FontId;
+use agui_core::canvas::font::FontDescriptor;
 
-pub use glyph_brush_layout::ab_glyph::{Font, ScaleFont, FontArc};
+pub use glyph_brush_layout::ab_glyph::{Font, FontArc, ScaleFont};
 pub use glyph_brush_layout::Layout as GlyphLayout;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-pub struct FontDescriptor(pub usize);
-
-impl From<FontDescriptor> for FontId {
-    fn from(font: FontDescriptor) -> Self {
-        FontId(font.0)
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct Fonts {

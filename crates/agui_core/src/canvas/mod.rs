@@ -2,6 +2,10 @@ use lyon::path::Path;
 
 use crate::unit::{Bounds, Color, Shape, Size};
 
+use self::{command::CanvasCommand, font::FontDescriptor};
+
+pub mod command;
+pub mod font;
 pub mod painter;
 
 const BOUNDS_FULL: Bounds = Bounds {
@@ -15,15 +19,7 @@ const BOUNDS_FULL: Bounds = Bounds {
 pub struct Canvas {
     size: Size,
 
-    shapes: Vec<CanvasShape>,
-}
-
-#[derive(PartialEq)]
-pub struct CanvasShape {
-    pub bounds: Bounds,
-
-    pub color: Color,
-    pub shape: Shape,
+    commands: Vec<CanvasCommand>,
 }
 
 impl Canvas {
@@ -31,12 +27,16 @@ impl Canvas {
         Self {
             size,
 
-            shapes: Vec::default(),
+            commands: Vec::default(),
         }
     }
 
     pub fn get_size(&self) -> Size {
         self.size
+    }
+
+    pub fn get_commands(&self) -> &Vec<CanvasCommand> {
+        &self.commands
     }
 
     fn validate_bounds(&self, bounds: Bounds) {
@@ -69,7 +69,7 @@ impl Canvas {
     pub fn draw_rect_at(&mut self, bounds: Bounds, color: Color) {
         self.validate_bounds(bounds);
 
-        self.shapes.push(CanvasShape {
+        self.commands.push(CanvasCommand::Shape {
             bounds,
 
             color,
@@ -109,7 +109,7 @@ impl Canvas {
     ) {
         self.validate_bounds(bounds);
 
-        self.shapes.push(CanvasShape {
+        self.commands.push(CanvasCommand::Shape {
             bounds,
 
             color,
@@ -132,11 +132,25 @@ impl Canvas {
     pub fn draw_path_at(&mut self, bounds: Bounds, color: Color, path: Path) {
         self.validate_bounds(bounds);
 
-        self.shapes.push(CanvasShape {
+        self.commands.push(CanvasCommand::Shape {
             bounds,
 
-            color,
             shape: Shape::Path(path),
+
+            color,
+        });
+    }
+
+    pub fn draw_text(&mut self, bounds: Bounds, color: Color, font: FontDescriptor, text: String) {
+        self.validate_bounds(bounds);
+
+        self.commands.push(CanvasCommand::Text {
+            bounds,
+
+            font,
+            text,
+
+            color,
         });
     }
 }

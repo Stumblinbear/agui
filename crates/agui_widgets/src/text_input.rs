@@ -1,12 +1,12 @@
 use std::time::{Duration, Instant};
 
 use agui_core::{
-    canvas::painter::shape::RectPainter,
+    canvas::{font::FontDescriptor, painter::shape::RectPainter},
     unit::{Color, Key, Layout, Position, Ref, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
 use agui_macros::{build, Widget};
-use agui_primitives::{Font, FontDescriptor, Fonts, ScaleFont, Text};
+use agui_primitives::{Font, Fonts, ScaleFont, Text};
 
 use crate::{
     plugins::{hovering::HoveringExt, timeout::TimeoutExt},

@@ -166,7 +166,7 @@ where
         }
     }
 
-    pub(crate) fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
+    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
         self.nodes.get(node_id)
     }
 
@@ -178,7 +178,7 @@ where
         self.nodes.get(node_id).and_then(|node| node.value.as_ref())
     }
 
-    pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
+    pub(crate) fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
         self.nodes
             .get_mut(node_id)
             .and_then(|node| node.value.as_mut())

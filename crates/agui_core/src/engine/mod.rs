@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::{marker::PhantomData, rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 use morphorm::Cache;
@@ -13,14 +13,20 @@ use crate::{
     widget::{BuildResult, Widget, WidgetContext, WidgetId, WidgetRef},
 };
 
-use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
-
 mod cache;
 pub mod event;
 pub mod node;
+pub mod render;
+
+use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
 
 /// Handles the entirety of the agui lifecycle.
-pub struct Engine<'ui> {
+pub struct Engine<'ui, Renderer, Picture>
+where
+    Renderer: self::render::Renderer<Picture>,
+{
+    phantom: PhantomData<Picture>,
+
     plugins: FnvHashMap<PluginId, Box<dyn EnginePlugin>>,
 
     tree: Tree<WidgetId, WidgetNode<'ui>>,
@@ -30,13 +36,20 @@ pub struct Engine<'ui> {
 
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
     modifications: Vec<Modify>,
+
+    renderer: Renderer,
 }
 
-impl Default for Engine<'_> {
-    fn default() -> Self {
+impl<'ui, Renderer, Picture> Engine<'ui, Renderer, Picture>
+where
+    Renderer: self::render::Renderer<Picture>,
+{
+    pub fn new(renderer: Renderer) -> Self {
         let changed = Arc::new(Mutex::new(FnvHashSet::default()));
 
         Self {
+            phantom: PhantomData,
+
             plugins: FnvHashMap::default(),
 
             tree: Tree::default(),
@@ -46,14 +59,9 @@ impl Default for Engine<'_> {
 
             changed,
             modifications: Vec::default(),
-        }
-    }
-}
 
-impl<'ui> Engine<'ui> {
-    /// Create a new `Engine`.
-    pub fn new() -> Self {
-        Self::default()
+            renderer,
+        }
     }
 
     /// Initializes an engine plugin.
@@ -617,9 +625,24 @@ mod tests {
 
     use parking_lot::Mutex;
 
-    use crate::widget::{BuildResult, Widget, WidgetBuilder, WidgetContext, WidgetRef, WidgetType};
+    use crate::{
+        canvas::Canvas,
+        widget::{BuildResult, Widget, WidgetBuilder, WidgetContext, WidgetRef, WidgetType},
+    };
 
-    use super::Engine;
+    use super::{render::Renderer, Engine};
+
+    struct TestRenderer {}
+
+    struct TestPicture {}
+
+    impl Renderer<TestPicture> for TestRenderer {
+        fn draw(&self, _canvas: &Canvas) -> TestPicture {
+            TestPicture {}
+        }
+
+        fn render(&self, _picture: &TestPicture) {}
+    }
 
     #[derive(Debug, Default)]
     struct TestGlobal(i32);
@@ -671,7 +694,7 @@ mod tests {
 
     #[test]
     pub fn test_builds() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(TestRenderer {});
 
         engine.set_root(WidgetRef::new(TestWidget::default()));
 
@@ -716,7 +739,7 @@ mod tests {
 
     #[test]
     pub fn test_globals() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(TestRenderer {});
 
         let test_global = engine.init_global(TestGlobal::default);
 

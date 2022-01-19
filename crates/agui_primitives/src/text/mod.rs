@@ -1,8 +1,9 @@
 use glyph_brush_layout::{
-    BuiltInLineBreaker, GlyphPositioner, SectionGeometry, SectionText, ToSectionText,
+    BuiltInLineBreaker, FontId, GlyphPositioner, SectionGeometry, SectionText, ToSectionText,
 };
 
 use agui_core::{
+    canvas::font::FontDescriptor,
     unit::{Color, Layout, Margin, Position, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
@@ -10,7 +11,7 @@ use agui_macros::Widget;
 
 mod font;
 
-pub use self::font::{Font, FontArc, FontDescriptor, Fonts, GlyphLayout, ScaleFont};
+pub use self::font::{Font, FontArc, Fonts, GlyphLayout, ScaleFont};
 pub use glyph_brush_layout::{HorizontalAlign, SectionGlyph, VerticalAlign};
 
 #[derive(Clone, PartialEq)]
@@ -31,7 +32,7 @@ impl ToSectionText for TextSection {
         SectionText {
             text: &self.text,
             scale: self.scale.into(),
-            font_id: self.font.into(),
+            font_id: FontId(self.font.0),
         }
     }
 }
