@@ -4,11 +4,8 @@ use fnv::FnvHashSet;
 use parking_lot::Mutex;
 
 use crate::{
-    engine::{
-        node::WidgetNode,
-        notifiable::{state::StateMap, NotifiableValue, Notify},
-        plugin::PluginId,
-    },
+    engine::{node::WidgetNode, plugin::PluginId},
+    notifiable::{state::StateMap, NotifiableValue, Notify},
     tree::Tree,
     widget::WidgetId,
 };

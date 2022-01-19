@@ -3,8 +3,8 @@ use crate::{
     engine::{
         computed::{ComputedFn, ComputedFunc, ComputedId},
         node::WidgetNode,
-        notifiable::{state::StateMap, NotifiableValue, Notify},
     },
+    notifiable::{state::StateMap, NotifiableValue, Notify},
     tree::Tree,
     unit::{Key, Layout, LayoutType, Rect, Ref, Shape},
     widget::{WidgetId, WidgetRef},

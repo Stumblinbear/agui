@@ -5,11 +5,8 @@ use std::{
 
 use agui_core::{
     context::{ComputedContext, PluginContext, WidgetContext},
-    engine::{
-        event::WidgetEvent,
-        notifiable::{NotifiableValue, Notify},
-        plugin::EnginePlugin,
-    },
+    engine::{event::WidgetEvent, plugin::EnginePlugin},
+    notifiable::{NotifiableValue, Notify},
     widget::WidgetId,
 };
 

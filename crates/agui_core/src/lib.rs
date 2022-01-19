@@ -13,10 +13,11 @@
 
 // #![warn(missing_docs)]
 
-pub mod unit;
-pub mod tree;
-pub mod widget;
 pub mod canvas;
 pub mod context;
 pub mod engine;
+pub mod notifiable;
+pub mod tree;
+pub mod unit;
+pub mod widget;
 // pub mod render;

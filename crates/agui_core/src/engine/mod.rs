@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 
 use crate::{
     context::{ComputedContext, ListenerId, PluginContext, WidgetContext},
+    notifiable::{state::StateMap, NotifiableValue, Notify},
     tree::Tree,
     unit::{Key, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetRef},
@@ -15,7 +16,6 @@ use self::{
     cache::LayoutCache,
     event::WidgetEvent,
     node::WidgetNode,
-    notifiable::{state::StateMap, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginId},
 };
 
@@ -23,7 +23,6 @@ mod cache;
 pub mod computed;
 pub mod event;
 pub mod node;
-pub mod notifiable;
 pub mod plugin;
 
 /// Handles the entirety of the agui lifecycle.
