@@ -7,7 +7,6 @@ use parking_lot::{
 };
 
 mod listener;
-pub mod readable;
 pub mod state;
 
 pub use listener::ListenerId;
