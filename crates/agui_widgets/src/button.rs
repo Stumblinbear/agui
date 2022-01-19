@@ -1,10 +1,10 @@
 use agui_core::{
+    canvas::painter::shape::RectPainter,
     context::WidgetContext,
-    unit::{Callback, Color, Layout, Ref, Sizing},
+    unit::{Callback, Color, Layout, Ref},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
 };
-use agui_macros::{build, Widget};
-use agui_primitives::{Drawable, DrawableStyle};
+use agui_macros::Widget;
 
 use crate::{
     plugins::hovering::HoveringExt,
@@ -16,34 +16,19 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct ButtonStyle {
-    pub normal: DrawableStyle,
-    pub disabled: DrawableStyle,
-    pub hover: DrawableStyle,
-    pub pressed: DrawableStyle,
+    pub normal: Color,
+    pub disabled: Color,
+    pub hover: Color,
+    pub pressed: Color,
 }
 
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
-            normal: DrawableStyle {
-                color: Color::White,
-                opacity: 1.0,
-            },
-
-            disabled: DrawableStyle {
-                color: Color::LightGray,
-                opacity: 1.0,
-            },
-
-            hover: DrawableStyle {
-                color: Color::LightGray,
-                opacity: 1.0,
-            },
-
-            pressed: DrawableStyle {
-                color: Color::DarkGray,
-                opacity: 1.0,
-            },
+            normal: Color::White,
+            disabled: Color::LightGray,
+            hover: Color::LightGray,
+            pressed: Color::DarkGray,
         }
     }
 }
@@ -102,23 +87,15 @@ impl WidgetBuilder for Button {
 
         let style: ButtonStyle = self.style.resolve(ctx);
 
-        build! {
-            Drawable {
-                // We need to pass through sizing parameters so that the Drawable can react to child size if necessary,
-                // but also fill the Button if the button itself is set to a non-Auto size.
-                layout: Layout {
-                    sizing: self.layout.try_get().map_or(Sizing::default(), |layout| layout.sizing)
-                },
+        ctx.set_painter(RectPainter {
+            color: match state {
+                ButtonState::Normal => style.normal,
+                ButtonState::Disabled => style.disabled,
+                ButtonState::Hover => style.hover,
+                ButtonState::Pressed => style.pressed,
+            },
+        });
 
-                style: match state {
-                    ButtonState::Normal => style.normal.into(),
-                    ButtonState::Disabled => style.disabled.into(),
-                    ButtonState::Hover => style.hover.into(),
-                    ButtonState::Pressed => style.pressed.into(),
-                },
-
-                child: &self.child
-            }
-        }
+        (&self.child).into()
     }
 }

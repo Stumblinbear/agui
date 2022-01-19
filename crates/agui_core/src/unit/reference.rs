@@ -34,13 +34,11 @@ impl<V> Default for Ref<V> {
 
 impl<V> Ref<V> {
     /// Creates an Owned reference to `value`.
-    #[must_use]
     pub fn new(value: V) -> Self {
         Self::Some(Arc::new(value))
     }
 
     /// Returns false if this reference points to nothing
-    #[must_use]
     pub fn is_none(&self) -> bool {
         match self {
             Self::None => true,
@@ -49,7 +47,6 @@ impl<V> Ref<V> {
     }
 
     /// Returns true if this reference points to a value in memory.
-    #[must_use]
     pub fn is_some(&self) -> bool {
         match self {
             Self::None => false,
@@ -58,7 +55,6 @@ impl<V> Ref<V> {
     }
 
     /// Attempts to fetch the value that this reference is wrapping.
-    #[must_use]
     pub fn try_get(&self) -> Option<Arc<V>> {
         match self {
             Self::None => None,
@@ -71,7 +67,6 @@ impl<V> Ref<V> {
     /// # Panics
     ///
     /// Will panic if the value no longer exists, or the reference is empty.
-    #[must_use]
     pub fn get(&self) -> Arc<V> {
         match self {
             Self::None => panic!("layout ref points to nothing"),

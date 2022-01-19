@@ -1,12 +1,13 @@
 use std::time::{Duration, Instant};
 
 use agui_core::{
+    canvas::painter::shape::RectPainter,
     context::WidgetContext,
-    unit::{Color, Key, Layout, Position, Ref, Shape, Sizing, Units},
+    unit::{Color, Key, Layout, Position, Ref, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::{build, Widget};
-use agui_primitives::{Drawable, DrawableStyle, Font, FontDescriptor, Fonts, ScaleFont, Text};
+use agui_primitives::{Font, FontDescriptor, Fonts, ScaleFont, Text};
 
 use crate::{
     plugins::{hovering::HoveringExt, timeout::TimeoutExt},
@@ -21,8 +22,7 @@ const CURSOR_BLINK_SECS: f32 = 0.5;
 
 #[derive(Debug, Default, Clone)]
 pub struct TextInputStateStyle {
-    pub drawable: DrawableStyle,
-
+    pub background_color: Color,
     pub placeholder_color: Color,
     pub text_color: Color,
 }
@@ -39,41 +39,25 @@ impl Default for TextInputStyle {
     fn default() -> Self {
         Self {
             normal: TextInputStateStyle {
-                drawable: DrawableStyle {
-                    color: Color::White,
-                    opacity: 1.0,
-                },
-
+                background_color: Color::White,
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
 
             disabled: TextInputStateStyle {
-                drawable: DrawableStyle {
-                    color: Color::DarkGray,
-                    opacity: 1.0,
-                },
-
+                background_color: Color::DarkGray,
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
 
             hover: TextInputStateStyle {
-                drawable: DrawableStyle {
-                    color: Color::LightGray,
-                    opacity: 1.0,
-                },
-
+                background_color: Color::LightGray,
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
 
             focused: TextInputStateStyle {
-                drawable: DrawableStyle {
-                    color: Color::White,
-                    opacity: 1.0,
-                },
-
+                background_color: Color::White,
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
@@ -219,17 +203,13 @@ impl WidgetBuilder for TextInput {
             }
         };
 
+        ctx.set_painter(RectPainter {
+            color: input_state_style.background_color,
+        });
+
         build! {
             [
-                Drawable {
-                    // We need to pass through sizing parameters so that the Drawable can react to child size if necessary,
-                    // but also fill the Button if the button itself is set to a non-Auto size.
-                    layout: Ref::clone(&self.layout),
-
-                    style: input_state_style.drawable.into(),
-
-                    child: text.into()
-                },
+                text,
 
                 if cursor_pos.is_some() && input_state == TextInputState::Focused {
                     // Key the cursor so its timer doesn't get reset with every change
@@ -289,29 +269,30 @@ impl WidgetBuilder for Cursor {
             }
         });
 
-        match cursor_state {
-            CursorState::Shown => build! {
-                Drawable {
-                    layout: Layout {
-                        position: Position::Relative {
-                            top: Units::Pixels(self.position.1),
-                            left: Units::Pixels(self.position.0),
-                            bottom: None,
-                            right: None
-                        },
-                        sizing: Sizing::Axis {
-                            width: 2.0,
-                            height: self.height.into()
-                        }
-                    },
-
-                    shape: Shape::Rect,
-                    style: DrawableStyle {
-                        color: self.color
-                    }
+        ctx.set_layout(build! {
+            Layout {
+                position: Position::Relative {
+                    top: Units::Pixels(self.position.1),
+                    left: Units::Pixels(self.position.0),
+                    bottom: None,
+                    right: None
+                },
+                sizing: Sizing::Axis {
+                    width: 2.0,
+                    height: self.height.into()
                 }
-            },
-            CursorState::Hidden => BuildResult::None,
-        }
+            }
+        });
+
+        let mut rgba = self.color.as_rgba();
+
+        rgba[3] = match cursor_state {
+            CursorState::Shown => 1.0,
+            CursorState::Hidden => 0.0,
+        };
+
+        ctx.set_painter(RectPainter { color: rgba.into() });
+
+        BuildResult::None
     }
 }

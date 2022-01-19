@@ -4,7 +4,7 @@ use agpu::{
     BindGroup, Buffer, Frame, GpuProgram, RenderAttachmentBuild, RenderPipeline, Texture,
     TextureDimensions, TextureFormat,
 };
-use agui::{event::WidgetEvent, widget::WidgetId, WidgetManager};
+use agui::{event::WidgetEvent, manager::WidgetManager, widget::WidgetId};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
@@ -182,7 +182,7 @@ impl WidgetRenderPass for ClippingRenderPass {
                     }
                 }
 
-                _ => { }
+                _ => {}
             }
         }
     }

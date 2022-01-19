@@ -51,7 +51,6 @@ impl From<LayoutType> for morphorm::LayoutType {
 }
 
 impl LayoutType {
-    #[must_use]
     pub fn get_rows(&self) -> Option<Vec<Units>> {
         match self {
             LayoutType::Row { .. } | LayoutType::Column { .. } => None,
@@ -65,7 +64,6 @@ impl LayoutType {
         }
     }
 
-    #[must_use]
     pub const fn get_row_spacing(&self) -> Option<Units> {
         match self {
             LayoutType::Row { spacing } => Some(*spacing),
@@ -74,7 +72,6 @@ impl LayoutType {
         }
     }
 
-    #[must_use]
     pub fn get_columns(&self) -> Option<Vec<Units>> {
         match self {
             LayoutType::Row { .. } | LayoutType::Column { .. } => None,
@@ -88,7 +85,6 @@ impl LayoutType {
         }
     }
 
-    #[must_use]
     pub const fn get_column_spacing(&self) -> Option<Units> {
         match self {
             LayoutType::Row { .. } => None,
@@ -127,7 +123,6 @@ impl Default for Margin {
 }
 
 impl Margin {
-    #[must_use]
     pub fn center() -> Self {
         Self::Axis {
             vertical: Units::Stretch(1.0),
@@ -135,17 +130,14 @@ impl Margin {
         }
     }
 
-    #[must_use]
     pub fn h_center() -> Self {
         Self::horizontal(Units::Stretch(1.0))
     }
 
-    #[must_use]
     pub fn v_center() -> Self {
         Self::vertical(Units::Stretch(1.0))
     }
 
-    #[must_use]
     pub fn horizontal(units: Units) -> Self {
         Self::Axis {
             vertical: Units::default(),
@@ -153,7 +145,6 @@ impl Margin {
         }
     }
 
-    #[must_use]
     pub fn vertical(units: Units) -> Self {
         Self::Axis {
             vertical: units,
@@ -161,7 +152,6 @@ impl Margin {
         }
     }
 
-    #[must_use]
     pub const fn get_top(&self) -> Units {
         match self {
             Margin::Unset => Units::Auto,
@@ -171,7 +161,6 @@ impl Margin {
         }
     }
 
-    #[must_use]
     pub const fn get_right(&self) -> Units {
         match self {
             Margin::Unset => Units::Auto,
@@ -181,7 +170,6 @@ impl Margin {
         }
     }
 
-    #[must_use]
     pub const fn get_bottom(&self) -> Units {
         match self {
             Margin::Unset => Units::Auto,
@@ -191,7 +179,6 @@ impl Margin {
         }
     }
 
-    #[must_use]
     pub const fn get_left(&self) -> Units {
         match self {
             Margin::Unset => Units::Auto,
@@ -243,7 +230,6 @@ impl From<Position> for PositionType {
 }
 
 impl Position {
-    #[must_use]
     pub const fn get_top(&self) -> Option<Units> {
         match self {
             Position::Unset => None,
@@ -252,7 +238,6 @@ impl Position {
         }
     }
 
-    #[must_use]
     pub const fn get_right(&self) -> Option<Units> {
         match self {
             Position::Unset => None,
@@ -261,7 +246,6 @@ impl Position {
         }
     }
 
-    #[must_use]
     pub const fn get_bottom(&self) -> Option<Units> {
         match self {
             Position::Unset => None,
@@ -270,7 +254,6 @@ impl Position {
         }
     }
 
-    #[must_use]
     pub const fn get_left(&self) -> Option<Units> {
         match self {
             Position::Unset => None,
@@ -304,7 +287,6 @@ impl Default for Sizing {
 }
 
 impl Sizing {
-    #[must_use]
     pub const fn get_width(&self) -> Units {
         match self {
             Sizing::Auto => Units::Auto,
@@ -314,7 +296,6 @@ impl Sizing {
         }
     }
 
-    #[must_use]
     pub const fn get_height(&self) -> Units {
         match self {
             Sizing::Auto => Units::Auto,
@@ -326,7 +307,7 @@ impl Sizing {
 }
 
 /// Holds width and height values.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
@@ -342,14 +323,11 @@ pub struct Rect {
 }
 
 impl Rect {
-    #[allow(dead_code)]
-    #[must_use]
     pub fn contains(&self, point: (f32, f32)) -> bool {
         (point.0 >= self.x && point.0 <= self.x + self.width)
             && (point.1 >= self.y && point.1 <= self.y + self.height)
     }
 
-    #[must_use]
     pub const fn to_slice(self) -> [f32; 4] {
         [self.x, self.y, self.width, self.height]
     }
@@ -365,8 +343,6 @@ pub struct Bounds {
 }
 
 impl Bounds {
-    #[allow(dead_code)]
-    #[must_use]
     pub fn contains(&self, point: (f32, f32)) -> bool {
         (point.0 >= self.left && point.0 <= self.right)
             && (point.1 >= self.top && point.1 <= self.bottom)

@@ -25,7 +25,6 @@ impl Default for Color {
 }
 
 impl Color {
-    #[must_use]
     pub const fn as_rgba(&self) -> [f32; 4] {
         match self {
             Color::Black => [0.0, 0.0, 0.0, 1.0],
@@ -44,5 +43,17 @@ impl Color {
             Color::Rgb(r, g, b) => [*r, *g, *b, 1.0],
             Color::Rgba(r, g, b, a) => [*r, *g, *b, *a],
         }
+    }
+}
+
+impl From<[f32; 3]> for Color {
+    fn from(rgba: [f32; 3]) -> Self {
+        Self::Rgb(rgba[0], rgba[1], rgba[2])
+    }
+}
+
+impl From<[f32; 4]> for Color {
+    fn from(rgba: [f32; 4]) -> Self {
+        Self::Rgba(rgba[0], rgba[1], rgba[2], rgba[3])
     }
 }

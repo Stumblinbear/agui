@@ -30,7 +30,7 @@ where
     K: Key,
 {
     pub depth: usize,
-    pub value: V,
+    pub value: Option<V>,
 
     pub parent: Option<K>,
     pub children: Vec<K>,
@@ -43,7 +43,7 @@ where
     type Target = V;
 
     fn deref(&self) -> &Self::Target {
-        &self.value
+        self.value.as_ref().expect("currently in use")
     }
 }
 
@@ -63,7 +63,7 @@ where
     pub fn add(&mut self, parent_id: Option<K>, value: V) -> K {
         let node_id = self.nodes.insert(TreeNode {
             depth: 0,
-            value,
+            value: Some(value),
             parent: parent_id,
             children: Vec::new(),
         });
@@ -87,7 +87,7 @@ where
                         .children
                         .iter()
                         .position(|child_id| node_id == *child_id)
-                        .expect("broken tree: unable to find child in removed node's parent"),
+                        .expect("unable to find child in removed node's parent"),
                 );
             }
         } else {
@@ -95,7 +95,7 @@ where
             self.root = None;
         }
 
-        // We can't remove the children here, since the manager needs to have access to them.
+        // We can't remove the children here, since the engine needs to have access to them.
 
         node
     }
@@ -115,7 +115,7 @@ where
                         .children
                         .iter()
                         .position(|child_id| node_id == *child_id)
-                        .expect("broken tree: unable to find child in removed node's parent"),
+                        .expect("unable to find child in removed node's parent"),
                 );
             }
         } else {
@@ -138,10 +138,6 @@ where
                 panic!("cannot add a node to a parent that doesn't exist");
             }
         } else {
-            if self.root.is_some() {
-                panic!("root node must be removed before a new root can be added`")
-            }
-
             self.root = Some(node_id);
         }
 
@@ -157,38 +153,35 @@ where
                 let mut queue = node.children.clone();
 
                 while !queue.is_empty() {
-                    let children = self
+                    let child = self
                         .nodes
-                        .get(queue.remove(0))
-                        .expect("broken tree: unable to update child's depth")
-                        .children
-                        .clone();
+                        .get_mut(queue.remove(0))
+                        .expect("unable to update child's depth, as it's not in the tree");
 
-                    for child_id in children {
-                        let child = self
-                            .nodes
-                            .get_mut(child_id)
-                            .expect("broken tree: unable to update child's depth");
+                    child.depth += diff;
 
-                        child.depth += diff;
-
-                        queue.extend(child.children.iter());
-                    }
+                    queue.extend(child.children.iter());
                 }
             }
         }
     }
 
+    pub(crate) fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
+        self.nodes.get(node_id)
+    }
+
+    pub(crate) fn get_node_mut(&mut self, node_id: K) -> Option<&mut TreeNode<K, V>> {
+        self.nodes.get_mut(node_id)
+    }
+
     pub fn get(&self, node_id: K) -> Option<&V> {
-        self.nodes.get(node_id).map(|node| &node.value)
+        self.nodes.get(node_id).and_then(|node| node.value.as_ref())
     }
 
     pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.nodes.get_mut(node_id).map(|node| &mut node.value)
-    }
-
-    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
-        self.nodes.get(node_id)
+        self.nodes
+            .get_mut(node_id)
+            .and_then(|node| node.value.as_mut())
     }
 
     pub fn iter(&self) -> DownwardIterator<K, V> {

@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
 use agui_core::{
-    context::WidgetContext, event::WidgetEvent, plugin::WidgetPlugin, widget::WidgetId,
+    context::{ComputedContext, PluginContext, WidgetContext},
+    engine::{event::WidgetEvent, plugin::EnginePlugin},
+    widget::WidgetId,
 };
 
 use crate::state::mouse::Mouse;
@@ -12,24 +14,20 @@ pub struct HoveringPluginState {
 }
 
 impl HoveringPluginState {
-    pub fn is_hovering(&self, ctx: &WidgetContext) -> bool {
-        self.widget_ids.contains(
-            &ctx.get_self()
-                .widget_id()
-                .expect("cannot check hover state outside of a widget context"),
-        )
+    pub fn is_hovering(&self, widget_id: WidgetId) -> bool {
+        self.widget_ids.contains(&widget_id)
     }
 }
 
 #[derive(Default)]
 pub struct HoveringPlugin;
 
-impl WidgetPlugin for HoveringPlugin {
-    fn pre_update(&self, _ctx: &mut WidgetContext) {}
+impl EnginePlugin for HoveringPlugin {
+    fn pre_update(&self, _ctx: &mut PluginContext) {}
 
-    fn on_update(&self, _ctx: &mut WidgetContext) {}
+    fn on_update(&self, _ctx: &mut PluginContext) {}
 
-    fn post_update(&self, ctx: &mut WidgetContext) {
+    fn post_update(&self, ctx: &mut PluginContext) {
         let hovering = ctx.init_global(HoveringPluginState::default);
 
         if let Some(mouse) = ctx.try_use_global::<Mouse>() {
@@ -38,9 +36,16 @@ impl WidgetPlugin for HoveringPlugin {
                     let hovering_ids = ctx
                         .get_tree()
                         .iter()
-                        .filter(|widget_id| match ctx.get_rect_for(*widget_id) {
-                            Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),
-                            None => false,
+                        .filter(|widget_id| {
+                            match ctx
+                                .get_tree()
+                                .get(*widget_id)
+                                .filter(|node| node.rect.has_value())
+                                .map(|node| node.rect.read())
+                            {
+                                Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),
+                                None => false,
+                            }
                         })
                         .collect::<HashSet<_>>();
 
@@ -64,17 +69,25 @@ impl WidgetPlugin for HoveringPlugin {
         }
     }
 
-    fn on_events(&self, _ctx: &mut WidgetContext, _events: &[WidgetEvent]) {}
+    fn on_events(&self, _ctx: &mut PluginContext, _events: &[WidgetEvent]) {}
 }
 
-pub trait HoveringExt<'ui> {
+pub trait HoveringExt {
     fn is_hovering(&mut self) -> bool;
 }
 
-impl<'ui> HoveringExt<'ui> for WidgetContext<'ui> {
+impl<'ui, 'ctx> HoveringExt for WidgetContext<'ui, 'ctx> {
     fn is_hovering(&mut self) -> bool {
         self.init_global(HoveringPluginState::default)
             .read()
-            .is_hovering(self)
+            .is_hovering(self.get_widget())
+    }
+}
+
+impl<'ui, 'ctx> HoveringExt for ComputedContext<'ui, 'ctx> {
+    fn is_hovering(&mut self) -> bool {
+        self.init_global(HoveringPluginState::default)
+            .read()
+            .is_hovering(self.get_widget())
     }
 }

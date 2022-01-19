@@ -37,5 +37,7 @@ fn main() -> Result<(), agpu::BoxError> {
         }
     });
 
-    ui.run(program)
+    program.run(move |event, program, _, _| {
+        ui.handle(event, program);
+    });
 }

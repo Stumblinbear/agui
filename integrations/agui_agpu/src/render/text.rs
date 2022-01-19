@@ -3,9 +3,9 @@ use std::{collections::HashMap, mem};
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline, Sampler, Texture, TextureFormat};
 use agui::{
     event::WidgetEvent,
+    manager::WidgetManager,
     widget::WidgetId,
     widgets::primitives::{FontArc, Text},
-    WidgetManager,
 };
 use glyph_brush_draw_cache::{CachedBy, DrawCache};
 
@@ -193,7 +193,7 @@ impl WidgetRenderPass for TextRenderPass {
                     self.widgets.remove(widget_id);
                 }
 
-                _ => { }
+                _ => {}
             }
         }
     }

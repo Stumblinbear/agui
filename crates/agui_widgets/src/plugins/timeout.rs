@@ -5,9 +5,8 @@ use std::{
 };
 
 use agui_core::{
-    context::{ListenerId, WidgetContext},
-    event::WidgetEvent,
-    plugin::WidgetPlugin,
+    context::{ComputedContext, ListenerId, PluginContext, WidgetContext},
+    engine::{event::WidgetEvent, plugin::EnginePlugin},
     widget::WidgetId,
 };
 
@@ -32,8 +31,8 @@ impl TimeoutPluginState {
 #[derive(Default)]
 pub struct TimeoutPlugin;
 
-impl WidgetPlugin for TimeoutPlugin {
-    fn pre_update(&self, ctx: &mut WidgetContext) {
+impl EnginePlugin for TimeoutPlugin {
+    fn pre_update(&self, ctx: &mut PluginContext) {
         let plugin = ctx.init_global(TimeoutPluginState::default);
 
         let mut plugin = plugin.write();
@@ -60,11 +59,11 @@ impl WidgetPlugin for TimeoutPlugin {
         }
     }
 
-    fn on_update(&self, _ctx: &mut WidgetContext) {}
+    fn on_update(&self, _ctx: &mut PluginContext) {}
 
-    fn post_update(&self, _ctx: &mut WidgetContext) {}
+    fn post_update(&self, _ctx: &mut PluginContext) {}
 
-    fn on_events(&self, ctx: &mut WidgetContext, events: &[WidgetEvent]) {
+    fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(TimeoutPluginState::default);
 
         let mut plugin = plugin.write();
@@ -77,15 +76,24 @@ impl WidgetPlugin for TimeoutPlugin {
     }
 }
 
-pub trait TimeoutExt<'ui> {
+pub trait TimeoutExt {
     fn use_timeout(&mut self, duration: Duration);
 }
 
-impl<'ui> TimeoutExt<'ui> for WidgetContext<'ui> {
+impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
     /// Marks the caller for updating when `duration` elapses.
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)
             .write()
-            .create_timeout(self.get_self(), duration);
+            .create_timeout(self.get_widget().into(), duration);
+    }
+}
+
+impl<'ui, 'ctx> TimeoutExt for ComputedContext<'ui, 'ctx> {
+    /// Marks the caller for updating when `duration` elapses.
+    fn use_timeout(&mut self, duration: Duration) {
+        self.init_global(TimeoutPluginState::default)
+            .write()
+            .create_timeout(self.get_widget().into(), duration);
     }
 }

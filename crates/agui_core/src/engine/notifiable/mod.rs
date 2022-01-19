@@ -6,10 +6,10 @@ use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 
-use super::ListenerId;
+use crate::context::ListenerId;
 
-pub mod state;
 pub mod readable;
+pub mod state;
 
 pub trait NotifiableValue: std::fmt::Debug + Downcast + Send + Sync + 'static {}
 
@@ -46,6 +46,22 @@ where
 
             changed,
         }
+    }
+
+    pub fn add_listener(&self, listener_id: ListenerId) {
+        self.listeners.lock().insert(listener_id);
+    }
+
+    pub fn remove_listener(&self, listener_id: ListenerId) {
+        self.listeners.lock().remove(&listener_id);
+    }
+
+    pub fn has_value(&self) -> bool {
+        self.value.read().is_some()
+    }
+
+    pub fn set_value(&mut self, value: V) {
+        *self.value.write() = Some(Box::new(value));
     }
 
     pub(crate) fn cast<N>(&self) -> Notify<N>

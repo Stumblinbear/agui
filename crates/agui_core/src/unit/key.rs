@@ -28,13 +28,11 @@ pub enum Key {
 
 impl Key {
     /// A helper function to cache a single `Local` widget.
-    #[must_use]
     pub const fn single() -> Self {
         Self::Local(0)
     }
 
     /// Create a `Local` key based on the `value`.
-    #[must_use]
     pub fn local<V>(value: V) -> Self
     where
         V: Hash,
@@ -45,7 +43,6 @@ impl Key {
     }
 
     /// Create a `Global` key based on the `value`.
-    #[must_use]
     pub fn global<V>(value: V) -> Self
     where
         V: Hash,
@@ -59,7 +56,6 @@ impl Key {
     ///
     /// This should generally be created "above" the widget that uses it as a key, because it's
     /// designed to be created anew on each rebuild.
-    #[must_use]
     pub fn unique() -> Self {
         Self::Global(rand::thread_rng().gen())
     }

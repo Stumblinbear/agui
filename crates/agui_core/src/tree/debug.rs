@@ -7,10 +7,8 @@ use std::{
 use crate::{
     unit::{Layout, LayoutType, Ref},
     widget::{Widget, WidgetId},
-    WidgetManager,
+    Engine,
 };
-
-use super::Modify;
 
 const RESET: &str = "\u{001b}[0m";
 const GRAY: &str = "\u{001b}[30;1m";
@@ -22,10 +20,10 @@ const YELLOW: &str = "\u{001b}[33;1m";
 const CYAN: &str = "\u{001b}[36;1m";
 const WHITE: &str = "\u{001b}[37;1m";
 
-pub fn print_tree(manager: &WidgetManager) {
+pub fn print_tree(engine: &Engine) {
     println!("Tree:");
 
-    let tree = manager.get_context().get_tree();
+    let tree = engine.get_context().get_tree();
 
     for widget_id in tree.iter() {
         let node = tree.get_node(widget_id).expect("broken tree");
@@ -59,12 +57,12 @@ pub fn print_tree(manager: &WidgetManager) {
     }
 }
 
-pub fn print_tree_modifications(manager: &WidgetManager) {
+pub fn print_tree_modifications(engine: &Engine) {
     println!("Tree:");
 
-    let tree = manager.get_context().get_tree();
+    let tree = engine.get_context().get_tree();
 
-    let mods = &manager.modifications;
+    let mods = &engine.modifications;
 
     let mut new_root = None;
     let mut spawns = HashMap::new();

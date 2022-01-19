@@ -3,9 +3,9 @@ use std::{any::TypeId, hash::Hash, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::{Mutex, RwLock};
 
-use crate::context::{ListenerId, NotifiableValue};
+use crate::context::ListenerId;
 
-use super::Notify;
+use super::{NotifiableValue, Notify};
 
 pub struct StateMap {
     values: RwLock<FnvHashMap<TypeId, Notify<Box<dyn NotifiableValue>>>>,
@@ -14,7 +14,6 @@ pub struct StateMap {
 }
 
 impl StateMap {
-    #[must_use]
     pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             values: RwLock::default(),
@@ -29,15 +28,15 @@ impl StateMap {
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        let notify = self
+        let mut notify = self
             .values
             .write()
             .entry(TypeId::of::<V>())
             .or_insert_with(|| Notify::new(Arc::clone(&self.changed)))
             .cast();
 
-        if notify.value.read().is_none() {
-            *notify.value.write() = Some(Box::new(func()));
+        if !notify.has_value() {
+            notify.set_value(func());
         }
 
         notify
@@ -93,7 +92,6 @@ impl<K> ScopedStateMap<K>
 where
     K: Eq + Hash,
 {
-    #[must_use]
     pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             scopes: Mutex::default(),

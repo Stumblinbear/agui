@@ -13,7 +13,6 @@ impl Default for Units {
 }
 
 impl Units {
-    #[must_use]
     pub fn value_or(&self, parent_value: f32, auto: f32) -> f32 {
         match *self {
             Units::Pixels(pixels) => pixels,

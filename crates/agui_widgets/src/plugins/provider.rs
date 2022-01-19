@@ -4,9 +4,12 @@ use std::{
 };
 
 use agui_core::{
-    context::{ListenerId, NotifiableValue, Notify, WidgetContext},
-    event::WidgetEvent,
-    plugin::WidgetPlugin,
+    context::{ComputedContext, PluginContext, WidgetContext},
+    engine::{
+        event::WidgetEvent,
+        notifiable::{NotifiableValue, Notify},
+        plugin::EnginePlugin,
+    },
     widget::WidgetId,
 };
 
@@ -19,14 +22,14 @@ struct ProviderPluginState {
 #[derive(Default)]
 pub struct ProviderPlugin;
 
-impl WidgetPlugin for ProviderPlugin {
-    fn pre_update(&self, _ctx: &mut WidgetContext) {}
+impl EnginePlugin for ProviderPlugin {
+    fn pre_update(&self, _ctx: &mut PluginContext) {}
 
-    fn on_update(&self, _ctx: &mut WidgetContext) {}
+    fn on_update(&self, _ctx: &mut PluginContext) {}
 
-    fn post_update(&self, _ctx: &mut WidgetContext) {}
+    fn post_update(&self, _ctx: &mut PluginContext) {}
 
-    fn on_events(&self, ctx: &mut WidgetContext, events: &[WidgetEvent]) {
+    fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(ProviderPluginState::default);
 
         let mut plugin = plugin.write();
@@ -48,11 +51,11 @@ impl WidgetPlugin for ProviderPlugin {
     }
 }
 
-pub trait ProviderExt<'ui> {
+pub trait ProviderExt {
     fn provide(&self, ctx: &mut WidgetContext);
 }
 
-impl<'ui, V> ProviderExt<'ui> for Notify<V>
+impl<'ui, V> ProviderExt for Notify<V>
 where
     V: NotifiableValue,
 {
@@ -64,10 +67,7 @@ where
 
         let type_id = TypeId::of::<V>();
 
-        let widget_id = ctx
-            .get_self()
-            .widget_id()
-            .expect("cannot provide state outside of a widget context");
+        let widget_id = ctx.get_widget();
 
         plugin
             .providers
@@ -83,13 +83,13 @@ where
     }
 }
 
-pub trait ConsumerExt<'ui> {
+pub trait ConsumerExt {
     fn consume<V>(&mut self) -> Option<Notify<V>>
     where
         V: NotifiableValue;
 }
 
-impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
+impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Notify<V>>
     where
@@ -100,23 +100,54 @@ impl<'ui> ConsumerExt<'ui> for WidgetContext<'ui> {
         let plugin = plugin.write();
 
         if let Some(providers) = plugin.providers.get(&TypeId::of::<V>()) {
-            let widget_id = self
-                .get_self()
-                .widget_id()
-                .expect("cannot provide state outside of a widget context");
+            let widget_id = self.get_widget();
 
             // If the widget calling this is also providing the state, return that.
             if providers.contains(&widget_id) {
-                return Some(
-                    self.use_state_of(self.get_self(), || panic!("provider state broken")),
-                );
+                return Some(self.use_state(|| panic!("provider state broken")));
             }
 
             for parent_id in self.get_tree().iter_parents(widget_id) {
                 if providers.contains(&parent_id) {
-                    return Some(self.use_state_of(ListenerId::Widget(parent_id), || {
-                        panic!("provider state broken")
-                    }));
+                    return Some(
+                        self.use_state_of(parent_id.into(), || panic!("provider state broken")),
+                    );
+                }
+            }
+        }
+
+        // Fall back to global state
+        if let Some(state) = self.try_use_global::<V>() {
+            return Some(state);
+        }
+
+        None
+    }
+}
+
+impl<'ui, 'ctx> ConsumerExt for ComputedContext<'ui, 'ctx> {
+    /// Makes some local widget state available to any child widget.
+    fn consume<V>(&mut self) -> Option<Notify<V>>
+    where
+        V: NotifiableValue,
+    {
+        let plugin = self.init_global(ProviderPluginState::default);
+
+        let plugin = plugin.write();
+
+        if let Some(providers) = plugin.providers.get(&TypeId::of::<V>()) {
+            let widget_id = self.get_widget();
+
+            // If the widget calling this is also providing the state, return that.
+            if providers.contains(&widget_id) {
+                return Some(self.use_state(|| panic!("provider state broken")));
+            }
+
+            for parent_id in self.get_tree().iter_parents(widget_id) {
+                if providers.contains(&parent_id) {
+                    return Some(
+                        self.use_state_of(parent_id.into(), || panic!("provider state broken")),
+                    );
                 }
             }
         }

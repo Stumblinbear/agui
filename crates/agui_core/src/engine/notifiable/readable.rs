@@ -20,7 +20,6 @@ impl<K, V> ReadableMap<K, V>
 where
     K: Hash + Eq,
 {
-    #[must_use]
     pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
         Self {
             values: FnvHashMap::default(),

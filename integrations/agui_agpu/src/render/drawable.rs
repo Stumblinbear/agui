@@ -2,7 +2,8 @@ use std::{collections::HashMap, mem};
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
 use agui::{
-    event::WidgetEvent, unit::Color, widget::WidgetId, widgets::primitives::Drawable, WidgetManager,
+    event::WidgetEvent, manager::WidgetManager, unit::Color, widget::WidgetId,
+    widgets::primitives::Drawable,
 };
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
@@ -166,7 +167,7 @@ impl WidgetRenderPass for DrawableRenderPass {
                     self.widgets.remove(widget_id);
                 }
 
-                _ => { }
+                _ => {}
             }
         }
     }

@@ -93,7 +93,6 @@ impl WidgetRef {
     }
 
     /// Returns true if the widget is still allocated in memory.
-    #[must_use]
     pub fn is_valid(&self) -> bool {
         match self {
             Self::None => false,
@@ -102,7 +101,6 @@ impl WidgetRef {
         }
     }
 
-    #[must_use]
     pub fn try_get(&self) -> Option<Rc<dyn Widget>> {
         match self {
             Self::None => None,
@@ -114,7 +112,6 @@ impl WidgetRef {
     /// # Panics
     ///
     /// Will panic if the reference is None.
-    #[must_use]
     pub fn get(&self) -> Rc<dyn Widget> {
         match self {
             Self::None => panic!("widget ref points to nothing"),
@@ -123,7 +120,6 @@ impl WidgetRef {
         }
     }
 
-    #[must_use]
     /// # Panics
     ///
     /// Will panic if the reference is None.
@@ -131,7 +127,6 @@ impl WidgetRef {
         self.get().get_type_id()
     }
 
-    #[must_use]
     /// # Panics
     ///
     /// Will panic if the reference is None.
@@ -140,7 +135,6 @@ impl WidgetRef {
     }
 
     /// Returns none if the widget is not the `W` type, or if it is None.
-    #[must_use]
     pub fn try_downcast_ref<W>(&self) -> Option<Rc<W>>
     where
         W: Widget,
@@ -154,7 +148,6 @@ impl WidgetRef {
     /// # Panics
     ///
     /// Will panic if the widget cannot be downcast to the generic type, or if it is None.
-    #[must_use]
     pub fn downcast_ref<W>(&self) -> Rc<W>
     where
         W: Widget,

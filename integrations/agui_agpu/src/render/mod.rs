@@ -1,11 +1,11 @@
 use agpu::{Binding, Buffer, Frame, GpuHandle, GpuProgram, Sampler, Texture, TextureFormat};
-use agui::{context::Notify, widgets::AppSettings, WidgetManager, event::WidgetEvent};
+use agui::{context::Notify, event::WidgetEvent, engine::WidgetManager, widgets::AppSettings};
 use downcast_rs::{impl_downcast, Downcast};
 
-pub mod bounding;
-pub mod clipping;
-pub mod drawable;
-pub mod text;
+// pub mod bounding;
+// pub mod clipping;
+// pub mod drawable;
+// pub mod text;
 
 pub struct RenderContext {
     pub gpu: GpuHandle,
@@ -77,7 +77,7 @@ impl RenderContext {
 }
 
 pub trait WidgetRenderPass: Downcast {
-    fn update(&mut self, ctx: &RenderContext, manager: &WidgetManager, changes: &[WidgetEvent]);
+    fn update(&mut self, ctx: &RenderContext, engine: &WidgetManager, changes: &[WidgetEvent]);
 
     fn render(&self, ctx: &RenderContext, frame: &mut Frame);
 }

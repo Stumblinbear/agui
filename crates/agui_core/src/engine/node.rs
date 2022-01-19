@@ -1,13 +1,28 @@
+use std::sync::Arc;
+
+use fnv::{FnvHashMap, FnvHashSet};
+use parking_lot::Mutex;
+
 use crate::{
-    paint::Painter,
+    canvas::painter::Painter,
+    context::ListenerId,
+    engine::notifiable::state::StateMap,
     tree::Tree,
-    unit::{Layout, LayoutType, Margin, Position, Ref, Shape, Sizing},
+    unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Shape, Sizing},
     widget::{WidgetId, WidgetRef},
 };
 
+use super::{
+    computed::{ComputedFunc, ComputedId},
+    notifiable::Notify,
+};
+
 /// Holds information about a widget in the UI tree.
-pub struct WidgetNode {
+pub struct WidgetNode<'ui> {
     pub widget: WidgetRef,
+
+    pub state: StateMap,
+    pub computed_funcs: FnvHashMap<ComputedId, Box<dyn ComputedFunc<'ui> + 'ui>>,
 
     pub layer: u32,
     pub layout_type: Ref<LayoutType>,
@@ -15,12 +30,17 @@ pub struct WidgetNode {
 
     pub clipping: Ref<Shape>,
     pub painter: Option<Box<dyn Painter>>,
+
+    pub rect: Notify<Rect>,
 }
 
-impl Default for WidgetNode {
-    fn default() -> Self {
+impl WidgetNode<'_> {
+    pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>, widget: WidgetRef) -> Self {
         Self {
-            widget: WidgetRef::default(),
+            widget,
+
+            state: StateMap::new(Arc::clone(&changed)),
+            computed_funcs: FnvHashMap::default(),
 
             layer: 0,
             layout_type: Ref::None,
@@ -28,14 +48,14 @@ impl Default for WidgetNode {
 
             clipping: Ref::None,
             painter: None,
+
+            rect: Notify::new(changed),
         }
     }
 }
 
-pub struct RenderNode {}
-
 impl<'a> morphorm::Node<'a> for WidgetId {
-    type Data = Tree<Self, WidgetNode>;
+    type Data = Tree<Self, WidgetNode<'a>>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         Some(

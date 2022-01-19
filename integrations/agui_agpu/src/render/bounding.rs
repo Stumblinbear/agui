@@ -5,7 +5,7 @@ use std::{
 };
 
 use agpu::{BindGroup, Buffer, Frame, GpuProgram, RenderPipeline};
-use agui::{event::WidgetEvent, widget::WidgetId, WidgetManager};
+use agui::{event::WidgetEvent, manager::WidgetManager, widget::WidgetId};
 
 use super::{RenderContext, WidgetRenderPass};
 

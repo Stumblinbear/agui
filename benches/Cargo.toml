@@ -16,6 +16,6 @@ path = "benches/agui_core/tree.rs"
 harness = false
 
 [[bench]]
-name = "manager"
-path = "benches/agui_core/manager.rs"
+name = "engine"
+path = "benches/agui_core/engine.rs"
 harness = false
