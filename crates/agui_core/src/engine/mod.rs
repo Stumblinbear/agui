@@ -1,10 +1,18 @@
-use std::{marker::PhantomData, rc::Rc, sync::Arc};
+use std::{
+    fs::File,
+    io::{self, BufReader, Read},
+    marker::PhantomData,
+    rc::Rc,
+    sync::Arc,
+};
 
 use fnv::{FnvHashMap, FnvHashSet};
+use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
+    canvas::font::FontDescriptor,
     computed::ComputedContext,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
@@ -26,6 +34,7 @@ where
     Renderer: self::render::Renderer<Picture>,
 {
     phantom: PhantomData<Picture>,
+    renderer: Renderer,
 
     plugins: FnvHashMap<PluginId, Box<dyn EnginePlugin>>,
 
@@ -37,7 +46,7 @@ where
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
     modifications: Vec<Modify>,
 
-    renderer: Renderer,
+    fonts: Vec<FontArc>,
 }
 
 impl<'ui, Renderer, Picture> Engine<'ui, Renderer, Picture>
@@ -61,7 +70,12 @@ where
             modifications: Vec::default(),
 
             renderer,
+            fonts: Vec::default(),
         }
+    }
+
+    pub fn get_renderer(&mut self) -> &mut Renderer {
+        &mut self.renderer
     }
 
     /// Initializes an engine plugin.
@@ -82,6 +96,13 @@ where
         self.plugins.insert(plugin_id, Box::new(plugin));
 
         self.changed.lock().insert(plugin_id.into());
+    }
+
+    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
+    where
+        V: NotifiableValue,
+    {
+        self.global.try_get()
     }
 
     pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
@@ -156,11 +177,36 @@ where
         }
     }
 
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontDescriptor, InvalidFont> {
+        let font = FontArc::try_from_slice(bytes)?;
+
+        self.fonts.push(FontArc::clone(&font));
+
+        Ok(FontDescriptor(self.fonts.len() - 1))
+    }
+
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontDescriptor> {
+        let f = File::open(filename)?;
+
+        let mut reader = BufReader::new(f);
+
+        let mut bytes = Vec::new();
+
+        reader.read_to_end(&mut bytes)?;
+
+        let font = FontArc::try_from_vec(bytes)
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+
+        self.fonts.push(font);
+
+        Ok(FontDescriptor(self.fonts.len() - 1))
+    }
+
     /// Update the UI tree.
     ///
     /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
     /// changes that occurred during the process, in order.
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> bool {
         // Update all plugins, as they may cause changes to state
         {
             for (plugin_id, plugin) in &self.plugins {
@@ -176,7 +222,7 @@ where
         }
 
         if self.modifications.is_empty() && self.changed.lock().is_empty() {
-            return;
+            return false;
         }
 
         let mut widget_events = Vec::new();
@@ -228,7 +274,11 @@ where
                 &widget_events,
             );
         }
+
+        true
     }
+
+    pub fn redraw(&mut self) {}
 
     #[allow(clippy::too_many_lines)]
     fn resolve_modifications(

@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Debug, Default)]
 pub struct Keyboard {
@@ -21,7 +24,21 @@ impl Keyboard {
 }
 
 #[derive(Debug, Default)]
-pub struct KeyboardInput(pub char);
+pub struct KeyboardInput(char);
+
+impl Deref for KeyboardInput {
+    type Target = char;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for KeyboardInput {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 /// Describes the input state of a key.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -241,7 +258,7 @@ bitflags::bitflags! {
         const SHIFT = 0b100;
         // const LSHIFT = 0b010 << 0;
         // const RSHIFT = 0b001 << 0;
-        
+
         /// The "control" key.
         const CTRL = 0b100 << 3;
         // const LCTRL = 0b010 << 3;

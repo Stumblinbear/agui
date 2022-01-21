@@ -140,7 +140,7 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
         }
 
         impl #agui_core::widget::WidgetBuilder for #ident {
-            fn build(&self, ctx: &mut #agui_core::context::WidgetContext) -> #agui_core::widget::BuildResult {
+            fn build(&self, ctx: &mut #agui_core::widget::WidgetContext) -> #agui_core::widget::BuildResult {
                 #fn_ident(#args)
             }
         }

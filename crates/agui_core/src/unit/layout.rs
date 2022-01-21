@@ -306,6 +306,13 @@ impl Sizing {
     }
 }
 
+/// Holds x and y values.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
 /// Holds width and height values.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Size {

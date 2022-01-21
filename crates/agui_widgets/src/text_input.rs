@@ -130,7 +130,7 @@ impl WidgetBuilder for TextInput {
             let keyboard_input = ctx.use_global(KeyboardInput::default);
 
             if input_state == TextInputState::Focused {
-                match keyboard_input.read().0 {
+                match **keyboard_input.read() {
                     // Backspace character
                     '\u{8}' => {
                         if input_value.read().len() > 0 {

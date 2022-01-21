@@ -4,6 +4,8 @@ use agui_core::{
 };
 use agui_macros::{build, Widget};
 
+use crate::state::window::WindowSize;
+
 #[derive(Debug)]
 pub struct AppSettings {
     pub width: f32,
@@ -26,18 +28,18 @@ pub struct App {
 
 impl WidgetBuilder for App {
     fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
-        let settings = ctx.use_global::<AppSettings, _>(AppSettings::default);
+        if let Some(window_size) = ctx.try_use_global::<WindowSize>() {
+            let window_size = window_size.read();
 
-        let settings = settings.read();
-
-        ctx.set_layout(build! {
-            Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Pixels(settings.width),
-                    height: Units::Pixels(settings.height),
+            ctx.set_layout(build! {
+                Layout {
+                    sizing: Sizing::Axis {
+                        width: Units::Pixels(window_size.width),
+                        height: Units::Pixels(window_size.height),
+                    }
                 }
-            }
-        });
+            });
+        }
 
         ctx.key(Key::single(), (&self.child).into()).into()
     }

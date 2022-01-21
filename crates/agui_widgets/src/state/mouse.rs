@@ -1,6 +1,8 @@
+use agui_core::unit::Point;
+
 #[derive(Debug, Default)]
 pub struct Mouse {
-    pub pos: Option<XY>,
+    pub pos: Option<Point>,
     pub button: MouseButtons,
 }
 
@@ -26,11 +28,5 @@ impl Default for MouseButtonState {
 
 #[derive(Debug, Default)]
 pub struct Scroll {
-    pub delta: XY,
-}
-
-#[derive(Debug, Default)]
-pub struct XY {
-    pub x: f64,
-    pub y: f64,
+    pub delta: Point,
 }

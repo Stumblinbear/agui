@@ -1,41 +1,38 @@
 #![allow(clippy::needless_update)]
 
-use agpu::Features;
 use agui::{
-    context::WidgetContext,
+    canvas::font::FontDescriptor,
+    engine::Engine,
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
-    widget::{BuildResult, WidgetRef},
+    widget::{BuildResult, WidgetContext, WidgetRef},
     widgets::{
-        plugins::provider::ProviderExt,
-        primitives::{Builder, Column, DrawableStyle, FontDescriptor, Padding, Spacing, Text},
+        plugins::{provider::ProviderExt, DefaultPluginsExt},
+        primitives::{Builder, Column, Padding, Spacing, Text},
         state::theme::Theme,
         App, Button, ButtonStyle,
     },
 };
-use agui_agpu::UI;
+use agui_agpu::{AgpuEngineExt, AgpuRenderer};
 
 fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui widgets")
-        .with_gpu_features(
-            Features::POLYGON_MODE_LINE
-                | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | Features::VERTEX_WRITABLE_STORAGE,
-        )
-        // .with_framerate(f32::MAX)
-        .build()?;
+    let program = agpu::GpuProgram::builder("agui widgets").build()?;
 
-    let mut ui = UI::with_default(&program);
+    let mut engine = Engine::new(AgpuRenderer::from_program(&program));
 
-    ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
+    engine.register_default_plugins();
 
-    ui.set_root(build! {
+    engine.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
+
+    engine.set_root(build! {
         App {
             child: ExampleMain::default()
         }
     });
 
-    ui.run(program)
+    program.run(move |event, program, _, _| {
+        engine.handle_event(event, program);
+    })
 }
 
 #[functional_widget]
@@ -95,17 +92,9 @@ fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> Bu
                         let mut theme = Theme::new();
 
                         theme.set(ButtonStyle {
-                            normal: DrawableStyle {
-                                color: Color::Red,
-                            },
-
-                            hover: DrawableStyle {
-                                color: Color::Green,
-                            },
-
-                            pressed: DrawableStyle {
-                                color: Color::Blue,
-                            },
+                            normal: Color::Red,
+                            hover: Color::Green,
+                            pressed: Color::Blue,
                         });
 
                         theme

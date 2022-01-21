@@ -22,6 +22,23 @@ impl StateMap {
         }
     }
 
+    pub fn try_get<V>(&self) -> Option<Notify<V>>
+    where
+        V: NotifiableValue,
+    {
+        let mut values = self.values.write();
+
+        let notify = values
+            .entry(TypeId::of::<V>())
+            .or_insert_with(|| Notify::new(Arc::clone(&self.changed)));
+
+        if notify.value.read().is_some() {
+            Some(notify.cast())
+        } else {
+            None
+        }
+    }
+
     #[allow(clippy::missing_panics_doc)]
     pub fn get_or<V, F>(&self, func: F) -> Notify<V>
     where
@@ -40,23 +57,6 @@ impl StateMap {
         }
 
         notify
-    }
-
-    pub fn get<V>(&self) -> Option<Notify<V>>
-    where
-        V: NotifiableValue,
-    {
-        let mut values = self.values.write();
-
-        let notify = values
-            .entry(TypeId::of::<V>())
-            .or_insert_with(|| Notify::new(Arc::clone(&self.changed)));
-
-        if notify.value.read().is_some() {
-            Some(notify.cast())
-        } else {
-            None
-        }
     }
 
     pub fn add_listener<V>(&self, listener_id: ListenerId)

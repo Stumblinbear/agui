@@ -32,15 +32,6 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
 
 // Globals
 impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
-    /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
-    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
-    where
-        V: NotifiableValue,
-        F: FnOnce() -> V,
-    {
-        self.global.get_or(func)
-    }
-
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
     where
@@ -48,7 +39,16 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     {
         self.global.add_listener::<V>(self.plugin_id.into());
 
-        self.global.get::<V>()
+        self.global.try_get::<V>()
+    }
+    
+    /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
+    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
+    where
+        V: NotifiableValue,
+        F: FnOnce() -> V,
+    {
+        self.global.get_or(func)
     }
 
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
