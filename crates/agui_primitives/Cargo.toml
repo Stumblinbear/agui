@@ -14,6 +14,3 @@ readme = "README.md"
 [dependencies]
 agui_core = { path = "../agui_core", version = "0.3" }
 agui_macros = { path = "../agui_macros", version = "0.3", features = [ "internal" ]}
-
-# glyph_brush = "0.7"
-glyph_brush_layout = "0.2"

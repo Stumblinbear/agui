@@ -108,7 +108,7 @@ impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
             for parent_id in self.get_tree().iter_parents(widget_id) {
                 if providers.contains(&parent_id) {
                     return Some(
-                        self.use_state_of(parent_id.into(), || panic!("provider state broken")),
+                        self.use_state_from(parent_id, || panic!("provider state broken")),
                     );
                 }
             }

@@ -1,18 +1,9 @@
-use glyph_brush_layout::{
-    BuiltInLineBreaker, FontId, GlyphPositioner, SectionGeometry, SectionText, ToSectionText,
-};
-
 use agui_core::{
     canvas::font::FontDescriptor,
     unit::{Color, Layout, Margin, Position, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
 use agui_macros::Widget;
-
-mod font;
-
-pub use self::font::{Font, FontArc, Fonts, GlyphLayout, ScaleFont};
-pub use glyph_brush_layout::{HorizontalAlign, SectionGlyph, VerticalAlign};
 
 #[derive(Clone, PartialEq)]
 pub struct TextSection {

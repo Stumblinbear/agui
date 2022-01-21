@@ -8,7 +8,7 @@ use agui::{
     widget::{BuildResult, WidgetContext, WidgetRef},
     widgets::{
         plugins::{provider::ProviderExt, DefaultPluginsExt},
-        primitives::{Builder, Column, Padding, Spacing, Text},
+        primitives::{Builder, Column, Padding, Spacing},
         state::theme::Theme,
         App, Button, ButtonStyle,
     },
@@ -22,11 +22,13 @@ fn main() -> Result<(), agpu::BoxError> {
 
     engine.register_default_plugins();
 
-    engine.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
+    let deja_vu = engine.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
     engine.set_root(build! {
         App {
-            child: ExampleMain::default()
+            child: ExampleMain {
+                font: deja_vu
+            }
         }
     });
 
@@ -36,7 +38,7 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> BuildResult {
+fn example_main(ctx: &mut WidgetContext, font: FontDescriptor, _color: Color, _child: WidgetRef) -> BuildResult {
     ctx.set_layout(
         Layout {
             sizing: Sizing::Fill,
@@ -44,8 +46,6 @@ fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> Bu
         }
         .into(),
     );
-
-    let default_font = FontDescriptor(0);
 
     build! {
         Column {
@@ -58,12 +58,12 @@ fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> Bu
             },
             spacing: Units::Pixels(16.0),
             children: [
-                Text::is(default_font, 64.0, "A Title".into()).color(Color::White),
+                // Text::is(font, 64.0, "A Title".into()).color(Color::White),
                 Spacing::vertical(32.0.into()),
                 Button {
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text::is(default_font, 32.0, "A Button".into())
+                        // child: Text::is(font, 32.0, "A Button".into())
                     },
                     on_pressed: Callback::from(|()| {
                         println!("Pressed 1");
@@ -72,7 +72,7 @@ fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> Bu
                 Button {
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text::is(default_font, 32.0, "Another Button".into())
+                        // child: Text::is(font, 32.0, "Another Button".into())
                     },
                     on_pressed: Callback::from(|()| {
                         println!("Pressed 1");
@@ -81,7 +81,7 @@ fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> Bu
                 Button {
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text::is(default_font, 32.0, "Also a Button".into())
+                        // child: Text::is(font, 32.0, "Also a Button".into())
                     },
                     on_pressed: Callback::from(|()| {
                         println!("Pressed 2");
@@ -106,7 +106,7 @@ fn example_main(ctx: &mut WidgetContext, _color: Color, _child: WidgetRef) -> Bu
                         Button {
                             child: Padding {
                                 padding: Margin::All(10.0.into()),
-                                child: Text::is(default_font, 32.0, "Beuton".into()).color(Color::White)
+                                // child: Text::is(font, 32.0, "Beuton".into()).color(Color::White)
                             },
                             on_pressed: Callback::from(|()| {
                                 println!("Pressed 3");

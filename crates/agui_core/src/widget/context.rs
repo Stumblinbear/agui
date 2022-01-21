@@ -2,7 +2,7 @@ use crate::{
     canvas::painter::Painter,
     computed::{ComputedContext, ComputedFn, ComputedFunc, ComputedId},
     engine::node::WidgetNode,
-    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
+    notifiable::{state::StateMap, NotifiableValue, Notify},
     tree::Tree,
     unit::{Key, Layout, LayoutType, Rect, Ref, Shape},
     widget::{WidgetId, WidgetRef},
@@ -12,7 +12,7 @@ pub struct WidgetContext<'ui, 'ctx> {
     pub(crate) widget_id: WidgetId,
     pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 
-    pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
+    pub(crate) tree: &'ctx mut Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
 }
 
@@ -21,7 +21,11 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         self.widget_id
     }
 
-    pub fn get_tree(&self) -> &'ctx Tree<WidgetId, WidgetNode<'ui>> {
+    pub fn get_tree(&mut self) -> &Tree<WidgetId, WidgetNode<'ui>> {
+        self.tree
+    }
+
+    pub fn get_tree_mut(&mut self) -> &mut Tree<WidgetId, WidgetNode<'ui>> {
         self.tree
     }
 }
@@ -81,14 +85,19 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         self.widget.state.get_or::<V, F>(func)
     }
 
-    pub fn use_state_of<V, F>(&mut self, listener_id: ListenerId, func: F) -> Notify<V>
+    pub fn use_state_from<V, F>(&mut self, widget_id: WidgetId, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        self.widget.state.add_listener::<V>(listener_id);
+        let target_widget = self
+            .tree
+            .get_mut(widget_id)
+            .expect("cannot use state from a widget that doesn't exist");
 
-        self.widget.state.get_or::<V, F>(func)
+        target_widget.state.add_listener::<V>(self.widget_id.into());
+
+        target_widget.state.get_or::<V, F>(func)
     }
 }
 

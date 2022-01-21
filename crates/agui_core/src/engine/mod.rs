@@ -611,7 +611,7 @@ where
                 widget_id,
                 widget: &mut node,
 
-                tree: &self.tree,
+                tree: &mut self.tree,
                 global: &mut self.global,
             })
         });
