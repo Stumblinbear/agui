@@ -4,11 +4,11 @@ use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::Mutex;
 
 use crate::{
-    canvas::painter::Painter,
+    canvas::painter::CanvasPainter,
     computed::{ComputedFunc, ComputedId},
     notifiable::{state::StateMap, ListenerId, Notify},
     tree::Tree,
-    unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Shape, Sizing},
+    unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Sizing},
     widget::{WidgetId, WidgetRef},
 };
 
@@ -19,14 +19,12 @@ pub struct WidgetNode<'ui> {
     pub state: StateMap,
     pub computed_funcs: FnvHashMap<ComputedId, Box<dyn ComputedFunc<'ui> + 'ui>>,
 
-    pub layer: u32,
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
 
-    pub clipping: Ref<Shape>,
-    pub painter: Option<Box<dyn Painter>>,
+    pub painter: Option<Box<dyn CanvasPainter>>,
 
-    pub rect: Notify<Rect>,
+    pub rect: Notify<Option<Rect>>,
 }
 
 impl WidgetNode<'_> {
@@ -37,11 +35,9 @@ impl WidgetNode<'_> {
             state: StateMap::new(Arc::clone(&changed)),
             computed_funcs: FnvHashMap::default(),
 
-            layer: 0,
             layout_type: Ref::None,
             layout: Ref::None,
 
-            clipping: Ref::None,
             painter: None,
 
             rect: Notify::new(changed),

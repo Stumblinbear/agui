@@ -1,47 +1,110 @@
-use std::mem;
+use std::{
+    mem,
+    ops::{Deref, DerefMut},
+};
 
 use agpu::{
     winit::winit::event::{
         ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
     },
-    Event, GpuProgram,
+    Event, Frame, GpuHandle, GpuProgram,
 };
 use agui::{
     engine::Engine,
     unit::Point,
-    widgets::{
-        state::{
-            keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
-            mouse::{Mouse, MouseButtonState, Scroll},
-            window::{WindowFocus, WindowPosition, WindowSize},
-        },
-        AppSettings,
+    widgets::state::{
+        keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
+        mouse::{Mouse, MouseButtonState, Scroll},
+        window::{WindowFocus, WindowPosition, WindowSize},
     },
 };
 
-use crate::{AgpuPicture, AgpuRenderer};
+use crate::render::RenderEngine;
 
-pub trait AgpuEngineExt {
-    fn handle_event(&mut self, event: Event<'_, ()>, program: &GpuProgram);
+pub struct UI<'ui> {
+    engine: Engine<'ui>,
+
+    renderer: RenderEngine,
 }
 
-impl AgpuEngineExt for Engine<'_, AgpuRenderer, AgpuPicture> {
-    fn handle_event(&mut self, event: Event<'_, ()>, program: &GpuProgram) {
-        if self.update() {
+impl<'ui> Deref for UI<'ui> {
+    type Target = Engine<'ui>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.engine
+    }
+}
+
+impl<'ui> DerefMut for UI<'ui> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.engine
+    }
+}
+
+impl<'ui> UI<'ui> {
+    pub fn from_program(program: &GpuProgram) -> Self {
+        Self::using_gpu(&program.gpu)
+    }
+
+    pub fn using_gpu(gpu: &GpuHandle) -> Self {
+        Self {
+            engine: Engine::new(),
+
+            renderer: RenderEngine::new(gpu),
+        }
+    }
+
+    pub fn redraw(&'ui mut self) {
+        self.renderer.redraw(self.engine.get_tree());
+    }
+
+    pub fn render(&mut self, frame: Frame) {
+        self.renderer.render(frame);
+    }
+
+    pub fn handle_event(&'ui mut self, event: Event<'_, ()>, program: &GpuProgram) {
+        if let Some(_widget_events) = self.engine.update() {
+            self.renderer.redraw(self.engine.get_tree());
+
+            // TODO: optimize layer rendering
+
+            // let mut redraw_widgets = HashSet::new();
+
+            // for event in widget_events {
+            //     match event {
+            //         WidgetEvent::Rebuilt { widget_id, .. }
+            //         | WidgetEvent::Layout { widget_id, .. } => {
+            //             redraw_widgets.insert(widget_id);
+            //         }
+
+            //         WidgetEvent::Destroyed { widget_id, .. } => {
+            //             self.tree.remove(widget_id);
+            //         }
+
+            //         _ => {}
+            //     }
+            // }
+            //
+            // for widget_id in self.get_tree().filter_topmost(redraw_widgets.into_iter()) {
+            //     println!("redraw: {:?}", widget_id);
+            // }
+
             // If the program is not already demanding a specific framerate, request a redraw
             if program.time.is_none() {
                 program.viewport.request_redraw();
             }
+
+            return;
         }
 
         if let Event::RedrawFrame(frame) = event {
-            self.redraw();
-
-            self.get_renderer().render(frame);
+            self.render(frame);
         } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
             match event {
                 WindowEvent::Resized(size) => {
                     if let Some(state) = self.try_use_global::<WindowSize>() {
+                        println!("size: {:?}", size);
+
                         let mut state = state.write();
 
                         state.width = size.width as f32;

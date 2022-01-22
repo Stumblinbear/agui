@@ -1,22 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use agui::{
-    engine::{render::Renderer, Engine},
-    widget::WidgetRef,
-    widgets::primitives::Column,
-};
-
-struct BenchRenderer {}
-
-struct BenchPicture {}
-
-impl Renderer<BenchPicture> for BenchRenderer {
-    fn draw(&self, _canvas: &agui::canvas::Canvas) -> BenchPicture {
-        BenchPicture {}
-    }
-
-    fn render(&self, _picture: &BenchPicture) {}
-}
+use agui::{engine::Engine, widget::WidgetRef, widgets::primitives::Column};
 
 fn engine_ops(c: &mut Criterion) {
     c.bench_function("add to engine", |b| {
@@ -28,7 +12,7 @@ fn engine_ops(c: &mut Criterion) {
                     column.children.push(Column::default().into());
                 }
 
-                (Engine::new(BenchRenderer {}), WidgetRef::new(column))
+                (Engine::new(), WidgetRef::new(column))
             },
             |(mut engine, widget)| {
                 engine.set_root(widget);
@@ -47,7 +31,7 @@ fn engine_ops(c: &mut Criterion) {
                     column.children.push(Column::default().into());
                 }
 
-                let mut engine = Engine::new(BenchRenderer {});
+                let mut engine = Engine::new();
 
                 engine.set_root(WidgetRef::new(column));
 

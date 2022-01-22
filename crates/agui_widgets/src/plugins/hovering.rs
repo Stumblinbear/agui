@@ -24,11 +24,11 @@ impl HoveringPluginState {
 pub struct HoveringPlugin;
 
 impl EnginePlugin for HoveringPlugin {
-    fn pre_update(&self, _ctx: &mut PluginContext) {}
-
     fn on_update(&self, _ctx: &mut PluginContext) {}
 
-    fn post_update(&self, ctx: &mut PluginContext) {
+    fn on_build(&self, _ctx: &mut PluginContext) {}
+
+    fn on_layout(&self, ctx: &mut PluginContext) {
         let hovering = ctx.init_global(HoveringPluginState::default);
 
         if let Some(mouse) = ctx.try_use_global::<Mouse>() {
@@ -42,7 +42,7 @@ impl EnginePlugin for HoveringPlugin {
                                 .get_tree()
                                 .get(*widget_id)
                                 .filter(|node| node.rect.has_value())
-                                .map(|node| node.rect.read())
+                                .and_then(|node| *node.rect.read())
                             {
                                 Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),
                                 None => false,

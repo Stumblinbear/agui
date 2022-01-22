@@ -12,15 +12,14 @@ pub enum WidgetEvent {
         widget_id: WidgetId,
     },
 
-    /// A widget has changed in the layout.
-    Layout {
-        type_id: TypeId,
-        widget_id: WidgetId,
-        layer: u32,
-    },
-
     /// A widget has been rebuilt.
     Rebuilt {
+        type_id: TypeId,
+        widget_id: WidgetId,
+    },
+
+    /// A widget has changed in the layout.
+    Layout {
         type_id: TypeId,
         widget_id: WidgetId,
     },

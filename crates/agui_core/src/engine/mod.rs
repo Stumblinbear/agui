@@ -1,7 +1,6 @@
 use std::{
     fs::File,
     io::{self, BufReader, Read},
-    marker::PhantomData,
     rc::Rc,
     sync::Arc,
 };
@@ -12,7 +11,7 @@ use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    canvas::font::FontDescriptor,
+    canvas::font::FontStyle,
     computed::ComputedContext,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
@@ -24,18 +23,11 @@ use crate::{
 mod cache;
 pub mod event;
 pub mod node;
-pub mod render;
 
 use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
 
 /// Handles the entirety of the agui lifecycle.
-pub struct Engine<'ui, Renderer, Picture>
-where
-    Renderer: self::render::Renderer<Picture>,
-{
-    phantom: PhantomData<Picture>,
-    renderer: Renderer,
-
+pub struct Engine<'ui> {
     plugins: FnvHashMap<PluginId, Box<dyn EnginePlugin>>,
 
     tree: Tree<WidgetId, WidgetNode<'ui>>,
@@ -49,16 +41,12 @@ where
     fonts: Vec<FontArc>,
 }
 
-impl<'ui, Renderer, Picture> Engine<'ui, Renderer, Picture>
-where
-    Renderer: self::render::Renderer<Picture>,
-{
-    pub fn new(renderer: Renderer) -> Self {
+impl<'ui> Engine<'ui> {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
         let changed = Arc::new(Mutex::new(FnvHashSet::default()));
 
         Self {
-            phantom: PhantomData,
-
             plugins: FnvHashMap::default(),
 
             tree: Tree::default(),
@@ -69,13 +57,8 @@ where
             changed,
             modifications: Vec::default(),
 
-            renderer,
             fonts: Vec::default(),
         }
-    }
-
-    pub fn get_renderer(&mut self) -> &mut Renderer {
-        &mut self.renderer
     }
 
     /// Initializes an engine plugin.
@@ -98,19 +81,9 @@ where
         self.changed.lock().insert(plugin_id.into());
     }
 
-    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
-    where
-        V: NotifiableValue,
-    {
-        self.global.try_get()
-    }
-
-    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
-    where
-        V: NotifiableValue,
-        F: FnOnce() -> V,
-    {
-        self.global.get_or(func)
+    /// Get the widget build context.
+    pub fn get_tree(&'ui self) -> &Tree<WidgetId, WidgetNode> {
+        &self.tree
     }
 
     /// Get the widget build context.
@@ -118,9 +91,16 @@ where
         self.tree.get_root()
     }
 
-    /// Get the widget build context.
-    pub fn get_tree<'a: 'ui>(&self) -> &'a Tree<WidgetId, WidgetNode> {
-        &self.tree
+    /// Queues the widget for addition into the tree
+    pub fn set_root(&mut self, widget: WidgetRef) {
+        // Check if we already have a root node, and queue it for removal if so
+        if let Some(root_id) = self.tree.get_root() {
+            self.modifications.push(Modify::Destroy(root_id));
+        }
+
+        if widget.is_valid() {
+            self.modifications.push(Modify::Spawn(None, widget));
+        }
     }
 
     /// Check if a widget exists in the tree.
@@ -165,27 +145,33 @@ where
         self.get(widget_id).downcast_ref()
     }
 
-    /// Queues the widget for addition into the tree
-    pub fn set_root(&mut self, widget: WidgetRef) {
-        // Check if we already have a root node, and queue it for removal if so
-        if let Some(root_id) = self.tree.get_root() {
-            self.modifications.push(Modify::Destroy(root_id));
-        }
-
-        if widget.is_valid() {
-            self.modifications.push(Modify::Spawn(None, widget));
-        }
+    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
+    where
+        V: NotifiableValue,
+    {
+        self.global.try_get()
     }
 
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontDescriptor, InvalidFont> {
+    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
+    where
+        V: NotifiableValue,
+        F: FnOnce() -> V,
+    {
+        self.global.get_or(func)
+    }
+
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontStyle, InvalidFont> {
         let font = FontArc::try_from_slice(bytes)?;
 
         self.fonts.push(FontArc::clone(&font));
 
-        Ok(FontDescriptor(self.fonts.len() - 1))
+        Ok(FontStyle {
+            font_id: self.fonts.len() - 1,
+            ..FontStyle::default()
+        })
     }
 
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontDescriptor> {
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontStyle> {
         let f = File::open(filename)?;
 
         let mut reader = BufReader::new(f);
@@ -199,67 +185,112 @@ where
 
         self.fonts.push(font);
 
-        Ok(FontDescriptor(self.fonts.len() - 1))
+        Ok(FontStyle {
+            font_id: self.fonts.len() - 1,
+            ..FontStyle::default()
+        })
     }
 
     /// Update the UI tree.
-    ///
-    /// This processes any pending additions, removals, and updates. The `events` parameter is a list of all
-    /// changes that occurred during the process, in order.
-    pub fn update(&mut self) -> bool {
+    pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
         // Update all plugins, as they may cause changes to state
-        {
-            for (plugin_id, plugin) in &self.plugins {
-                plugin.pre_update(&mut PluginContext {
-                    plugin_id: *plugin_id,
+        for (plugin_id, plugin) in &self.plugins {
+            plugin.on_update(&mut PluginContext {
+                plugin_id: *plugin_id,
 
-                    tree: &self.tree,
-                    global: &mut self.global,
+                tree: &self.tree,
+                global: &mut self.global,
 
-                    changed: Arc::clone(&self.changed),
-                });
-            }
+                changed: Arc::clone(&self.changed),
+            });
         }
 
         if self.modifications.is_empty() && self.changed.lock().is_empty() {
-            return false;
+            return None;
         }
 
         let mut widget_events = Vec::new();
 
-        let mut widgets_changed = FnvHashSet::default();
+        let mut widgets_layout = FnvHashSet::default();
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         loop {
-            widgets_changed.extend(self.resolve_modifications(&mut widget_events));
+            loop {
+                widget_events.extend(self.flush_modifications());
+
+                self.flush_changes();
+
+                if self.modifications.is_empty() {
+                    break;
+                }
+            }
+
+            widgets_layout.extend(self.flush_layout());
 
             if self.modifications.is_empty() {
                 break;
             }
         }
 
-        // Since some widgets may be added and removed multiple times, we should only add
-        // the events from widgets that are currently in the tree
         widget_events.extend(
-            widgets_changed
+            widgets_layout
                 .into_iter()
                 .filter(|widget_id| self.contains(*widget_id))
                 .map(|widget_id| {
                     let type_id = self.get(widget_id).get_type_id();
-                    let layer = self
-                        .tree
-                        .get(widget_id)
-                        .expect("change detection not properly filtering nodes")
-                        .layer;
 
-                    WidgetEvent::Layout {
-                        type_id,
-                        widget_id,
-                        layer,
-                    }
+                    WidgetEvent::Layout { type_id, widget_id }
                 }),
         );
+
+        if widget_events.is_empty() {
+            return None;
+        }
+
+        Some(widget_events)
+    }
+
+    pub fn flush_modifications(&mut self) -> Vec<WidgetEvent> {
+        let mut widget_events = Vec::new();
+
+        if self.modifications.is_empty() {
+            return widget_events;
+        }
+
+        // Apply any queued modifications
+        let mut removed_keyed = FnvHashMap::default();
+
+        while !self.modifications.is_empty() {
+            match self.modifications.remove(0) {
+                Modify::Spawn(parent_id, widget) => {
+                    self.process_spawn(&mut widget_events, &mut removed_keyed, parent_id, widget);
+                }
+
+                Modify::Rebuild(widget_id) => {
+                    self.process_rebuild(&mut widget_events, widget_id);
+                }
+
+                Modify::Destroy(widget_id) => {
+                    // If we're about to remove a keyed widget, store it instead
+                    if let WidgetRef::Keyed { owner_id, key, .. } = self
+                        .tree
+                        .get(widget_id)
+                        .expect("cannot remove a widget that does not exist")
+                        .widget
+                    {
+                        removed_keyed.insert((owner_id, key), widget_id);
+                    } else {
+                        self.process_destroy(&mut widget_events, widget_id);
+                    }
+                }
+            }
+        }
+
+        // Remove any keyed widgets that didn't get re-parented
+        for (_, widget_id) in removed_keyed.drain() {
+            self.process_destroy(&mut widget_events, widget_id);
+        }
 
         for (plugin_id, plugin) in &self.plugins {
             plugin.on_events(
@@ -275,134 +306,85 @@ where
             );
         }
 
-        true
+        widget_events
     }
 
-    pub fn redraw(&mut self) {}
+    pub fn flush_changes(&mut self) {
+        let mut changed = self.changed.lock();
 
-    #[allow(clippy::too_many_lines)]
-    fn resolve_modifications(
-        &mut self,
-        widget_events: &mut Vec<WidgetEvent>,
-    ) -> FnvHashSet<WidgetId> {
-        'main: loop {
-            // Apply any queued modifications
-            self.apply_modifications(widget_events);
+        if changed.is_empty() {
+            return;
+        }
 
-            let notify = self.changed.lock().drain().collect::<Vec<_>>();
+        let mut dirty_widgets = FnvHashSet::default();
 
-            if notify.is_empty() {
-                break 'main;
-            }
+        for listener_id in changed.drain().collect::<Vec<_>>() {
+            match listener_id {
+                ListenerId::Widget(widget_id) => {
+                    dirty_widgets.insert(widget_id);
+                }
 
-            let mut dirty_widgets = FnvHashSet::default();
+                ListenerId::Computed(widget_id, computed_id) => {
+                    let mut node = self
+                        .tree
+                        .get_node_mut(widget_id)
+                        .expect("invalid computed function widget")
+                        .value
+                        .take()
+                        .expect("widget is already in use");
 
-            for listener_id in notify {
-                match listener_id {
-                    ListenerId::Widget(widget_id) => {
+                    let mut computed_func = node
+                        .computed_funcs
+                        .remove(&computed_id)
+                        .expect("invalid computed function listener");
+
+                    if computed_func.call(&mut ComputedContext {
+                        widget_id,
+                        computed_id,
+
+                        widget: &mut node,
+
+                        tree: &self.tree,
+                        global: &mut self.global,
+                    }) {
                         dirty_widgets.insert(widget_id);
                     }
 
-                    ListenerId::Computed(widget_id, computed_id) => {
-                        let mut node = self
-                            .tree
-                            .get_node_mut(widget_id)
-                            .expect("invalid computed function widget")
-                            .value
-                            .take()
-                            .expect("widget is already in use");
+                    node.computed_funcs.insert(computed_id, computed_func);
 
-                        let mut computed_func = node
-                            .computed_funcs
-                            .remove(&computed_id)
-                            .expect("invalid computed function listener");
+                    self.tree
+                        .get_node_mut(widget_id)
+                        .expect("computed function destroyed while in use")
+                        .value
+                        .replace(node);
+                }
 
-                        if computed_func.call(&mut ComputedContext {
-                            widget_id,
-                            computed_id,
-
-                            widget: &mut node,
+                ListenerId::Plugin(plugin_id) => {
+                    self.plugins
+                        .get(&plugin_id)
+                        .expect("cannot update a plugin that does not exist")
+                        .on_build(&mut PluginContext {
+                            plugin_id,
 
                             tree: &self.tree,
                             global: &mut self.global,
-                        }) {
-                            dirty_widgets.insert(widget_id);
-                        }
 
-                        node.computed_funcs.insert(computed_id, computed_func);
-
-                        self.tree
-                            .get_node_mut(widget_id)
-                            .expect("computed function destroyed while in use")
-                            .value
-                            .replace(node);
-                    }
-
-                    ListenerId::Plugin(plugin_id) => {
-                        self.plugins
-                            .get(&plugin_id)
-                            .expect("cannot update a plugin that does not exist")
-                            .on_update(&mut PluginContext {
-                                plugin_id,
-
-                                tree: &self.tree,
-                                global: &mut self.global,
-
-                                changed: Arc::clone(&self.changed),
-                            });
-                    }
+                            changed: Arc::clone(&self.changed),
+                        });
                 }
-            }
-
-            let mut to_rebuild = Vec::new();
-
-            'dirty: for widget_id in dirty_widgets {
-                let tree_node = match self.tree.get_node(widget_id) {
-                    Some(widget) => widget,
-                    None => continue 'dirty,
-                };
-
-                let widget_depth = tree_node.depth;
-
-                let mut to_remove = Vec::new();
-
-                for (i, &(dirty_id, dirty_depth)) in to_rebuild.iter().enumerate() {
-                    // If they're at the same depth, bail. No reason to check if they're children.
-                    if widget_depth == dirty_depth {
-                        continue 'dirty;
-                    }
-
-                    if widget_depth > dirty_depth {
-                        // If the widget is a child of one of the already queued widgets, bail. It's
-                        // already going to be updated.
-                        if self.tree.has_child(dirty_id, widget_id) {
-                            continue 'dirty;
-                        }
-                    } else {
-                        // If the widget is a parent of the widget already queued for render, remove it
-                        if self.tree.has_child(widget_id, dirty_id) {
-                            to_remove.push(i);
-                        }
-                    }
-                }
-
-                // Remove the queued widgets that will be updated as a consequence of updating `widget`
-                for (offset, index) in to_remove.into_iter().enumerate() {
-                    to_rebuild.remove(index - offset);
-                }
-
-                to_rebuild.push((widget_id, widget_depth));
-            }
-
-            for (widget_id, _) in to_rebuild {
-                self.modifications.push(Modify::Rebuild(widget_id));
             }
         }
 
+        for widget_id in self.tree.filter_topmost(dirty_widgets.into_iter()) {
+            self.modifications.push(Modify::Rebuild(widget_id));
+        }
+    }
+
+    pub fn flush_layout(&mut self) -> FnvHashSet<WidgetId> {
         morphorm::layout(&mut self.cache, &self.tree, &self.tree);
 
         for (plugin_id, plugin) in &self.plugins {
-            plugin.post_update(&mut PluginContext {
+            plugin.on_layout(&mut PluginContext {
                 plugin_id: *plugin_id,
 
                 tree: &self.tree,
@@ -416,30 +398,6 @@ where
         let mut newly_changed = self.cache.take_changed();
 
         // Workaround for morphorm ignoring root sizing
-        if self.morphorm_root_workaround() {
-            if let Some(widget_id) = self.tree.get_root() {
-                newly_changed.insert(widget_id);
-            }
-        }
-
-        // Update the widget rects in the context
-        for widget_id in &newly_changed {
-            self.tree
-                .get_mut(*widget_id)
-                .expect("newly changed widget does not exist in the tree")
-                .rect
-                .set_value(
-                    *self
-                        .cache
-                        .get_rect(widget_id)
-                        .expect("widget marked as changed, but has no rect"),
-                );
-        }
-
-        newly_changed
-    }
-
-    fn morphorm_root_workaround(&mut self) -> bool {
         let mut root_changed = false;
 
         if let Some(widget_id) = self.tree.get_root() {
@@ -488,42 +446,25 @@ where
             }
         }
 
-        root_changed
-    }
-
-    fn apply_modifications(&mut self, widget_events: &mut Vec<WidgetEvent>) {
-        let mut removed_keyed = FnvHashMap::default();
-
-        while !self.modifications.is_empty() {
-            match self.modifications.remove(0) {
-                Modify::Spawn(parent_id, widget) => {
-                    self.process_spawn(widget_events, &mut removed_keyed, parent_id, widget);
-                }
-
-                Modify::Rebuild(widget_id) => {
-                    self.process_rebuild(widget_events, widget_id);
-                }
-
-                Modify::Destroy(widget_id) => {
-                    // If we're about to remove a keyed widget, store it instead
-                    if let WidgetRef::Keyed { owner_id, key, .. } = self
-                        .tree
-                        .get(widget_id)
-                        .expect("cannot remove a widget that does not exist")
-                        .widget
-                    {
-                        removed_keyed.insert((owner_id, key), widget_id);
-                    } else {
-                        self.process_destroy(widget_events, widget_id);
-                    }
-                }
+        if root_changed {
+            if let Some(widget_id) = self.tree.get_root() {
+                newly_changed.insert(widget_id);
             }
         }
 
-        // Remove any keyed widgets that didn't get re-parented
-        for (_, widget_id) in removed_keyed.drain() {
-            self.process_destroy(widget_events, widget_id);
+        // Update the widget rects in the context
+        for widget_id in &newly_changed {
+            let node = self
+                .tree
+                .get_mut(*widget_id)
+                .expect("newly changed widget does not exist in the tree");
+
+            let rect = self.cache.get_rect(widget_id);
+
+            node.rect.set_value(rect.copied());
         }
+
+        newly_changed
     }
 
     fn process_spawn(
@@ -565,25 +506,6 @@ where
     }
 
     fn process_rebuild(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        // Grab the parent's depth
-        let parent_layer = {
-            let parent = self
-                .tree
-                .get_node(widget_id)
-                .expect("rebuilding node that doesn't exist")
-                .parent;
-
-            match parent {
-                Some(parent_id) => {
-                    self.tree
-                        .get(parent_id)
-                        .expect("rebuilding node with invalid parent")
-                        .layer
-                }
-                None => 0,
-            }
-        };
-
         // Queue the children for removal
         for child_id in &self
             .tree
@@ -631,13 +553,6 @@ where
             BuildResult::Err(err) => panic!("build failed: {}", err),
         };
 
-        // If this widget has clipping set, increment its depth by one
-        node.layer = if node.clipping.is_some() {
-            parent_layer + 1
-        } else {
-            parent_layer
-        };
-
         self.tree
             .get_node_mut(widget_id)
             .expect("widget destroyed while in use")
@@ -675,24 +590,9 @@ mod tests {
 
     use parking_lot::Mutex;
 
-    use crate::{
-        canvas::Canvas,
-        widget::{BuildResult, Widget, WidgetBuilder, WidgetContext, WidgetRef, WidgetType},
-    };
+    use crate::widget::{BuildResult, Widget, WidgetBuilder, WidgetContext, WidgetRef, WidgetType};
 
-    use super::{render::Renderer, Engine};
-
-    struct TestRenderer {}
-
-    struct TestPicture {}
-
-    impl Renderer<TestPicture> for TestRenderer {
-        fn draw(&self, _canvas: &Canvas) -> TestPicture {
-            TestPicture {}
-        }
-
-        fn render(&self, _picture: &TestPicture) {}
-    }
+    use super::Engine;
 
     #[derive(Debug, Default)]
     struct TestGlobal(i32);
@@ -744,7 +644,7 @@ mod tests {
 
     #[test]
     pub fn test_builds() {
-        let mut engine = Engine::new(TestRenderer {});
+        let mut engine = Engine::new();
 
         engine.set_root(WidgetRef::new(TestWidget::default()));
 
@@ -789,7 +689,7 @@ mod tests {
 
     #[test]
     pub fn test_globals() {
-        let mut engine = Engine::new(TestRenderer {});
+        let mut engine = Engine::new();
 
         let test_global = engine.init_global(TestGlobal::default);
 

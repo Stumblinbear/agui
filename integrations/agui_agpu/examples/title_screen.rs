@@ -1,8 +1,7 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::font::FontDescriptor,
-    engine::Engine,
+    canvas::font::FontStyle,
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
     widget::{BuildResult, WidgetContext, WidgetRef},
@@ -13,18 +12,16 @@ use agui::{
         App, Button, ButtonStyle,
     },
 };
-use agui_agpu::{AgpuEngineExt, AgpuRenderer};
+use agui_agpu::UIProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui widgets").build()?;
+    let mut ui = UIProgram::new("agui widgets")?;
 
-    let mut engine = Engine::new(AgpuRenderer::from_program(&program));
+    ui.register_default_plugins();
 
-    engine.register_default_plugins();
+    let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    let deja_vu = engine.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
-
-    engine.set_root(build! {
+    ui.set_root(build! {
         App {
             child: ExampleMain {
                 font: deja_vu
@@ -32,13 +29,16 @@ fn main() -> Result<(), agpu::BoxError> {
         }
     });
 
-    program.run(move |event, program, _, _| {
-        engine.handle_event(event, program);
-    })
+    ui.run()
 }
 
 #[functional_widget]
-fn example_main(ctx: &mut WidgetContext, font: FontDescriptor, _color: Color, _child: WidgetRef) -> BuildResult {
+fn example_main(
+    ctx: &mut WidgetContext,
+    font: FontStyle,
+    _color: Color,
+    _child: WidgetRef,
+) -> BuildResult {
     ctx.set_layout(
         Layout {
             sizing: Sizing::Fill,

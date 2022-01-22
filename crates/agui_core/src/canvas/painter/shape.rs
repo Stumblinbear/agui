@@ -1,14 +1,19 @@
-use crate::{canvas::Canvas, unit::Color};
+use crate::{
+    canvas::{paint::Paint, Canvas},
+    unit::Color,
+};
 
-use super::Painter;
+use super::CanvasPainter;
 
 pub struct RectPainter {
     pub color: Color,
 }
 
-impl Painter for RectPainter {
-    fn paint(&self, canvas: &mut Canvas) {
-        canvas.draw_rect(self.color);
+impl CanvasPainter for RectPainter {
+    fn draw(&self, canvas: &mut Canvas) {
+        let brush = canvas.new_brush(Paint { color: self.color });
+
+        canvas.draw_rect(brush);
     }
 }
 
@@ -21,10 +26,12 @@ pub struct RoundedRectPainter {
     pub bottom_left: f32,
 }
 
-impl Painter for RoundedRectPainter {
-    fn paint(&self, canvas: &mut Canvas) {
+impl CanvasPainter for RoundedRectPainter {
+    fn draw(&self, canvas: &mut Canvas) {
+        let brush = canvas.new_brush(Paint { color: self.color });
+
         canvas.draw_rounded_rect(
-            self.color,
+            brush,
             self.top_left,
             self.top_right,
             self.bottom_right,

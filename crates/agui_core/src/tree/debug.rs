@@ -29,11 +29,9 @@ pub fn print_tree(engine: &Engine) {
         let node = tree.get_node(widget_id).expect("broken tree");
 
         let depth = node.depth;
-        let layer = node.layer;
 
         print_node(
             depth,
-            layer,
             Some(widget_id),
             &node.widget.get(),
             WHITE,
@@ -106,7 +104,6 @@ pub fn print_tree_modifications(engine: &Engine) {
         let node = tree.get_node(widget_id).expect("broken tree");
 
         let depth = node.depth;
-        let layer = node.layer;
 
         let is_rebuild_queued = rebuilds.contains(&widget_id);
 
@@ -118,7 +115,6 @@ pub fn print_tree_modifications(engine: &Engine) {
 
         print_node(
             depth,
-            layer,
             Some(widget_id),
             &node.widget.get(),
             if is_destroy_queued {
@@ -147,14 +143,13 @@ pub fn print_tree_modifications(engine: &Engine) {
         );
 
         for to_spawn in spawns.get(&widget_id).unwrap_or(&Vec::new()) {
-            print_node(depth + 1, layer, None, to_spawn, GREEN, "");
+            print_node(depth + 1, None, to_spawn, GREEN, "");
         }
     }
 }
 
 fn print_node(
     depth: usize,
-    layer: u32,
     widget_id: Option<WidgetId>,
     widget: &Rc<dyn Widget>,
     color: &'static str,
@@ -183,8 +178,6 @@ fn print_node(
     if let Some(widget_id) = widget_id {
         print!(" (#{:?})", widget_id);
     }
-
-    print!(" [{}]", layer);
 
     println!(" {}", suffix);
 

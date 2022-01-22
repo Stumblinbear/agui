@@ -1,23 +1,29 @@
-use crate::unit::{Bounds, Color, Shape};
+use crate::unit::{Rect, Shape};
 
-use super::font::FontDescriptor;
+use super::{clipping::Clip, font::FontStyle, paint::Brush};
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum CanvasCommand {
-    Shape {
-        bounds: Bounds,
+    Clip {
+        rect: Rect,
+        clip: Clip,
 
         shape: Shape,
+    },
 
-        color: Color,
+    Shape {
+        rect: Rect,
+        brush: Brush,
+
+        shape: Shape,
     },
 
     Text {
-        bounds: Bounds,
+        rect: Rect,
+        brush: Brush,
 
-        font: FontDescriptor,
+        font: FontStyle,
         text: String,
-
-        color: Color,
     },
 }

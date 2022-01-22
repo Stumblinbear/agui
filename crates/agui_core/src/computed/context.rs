@@ -111,7 +111,7 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
             .add_listener((self.widget_id, self.computed_id).into());
 
         if self.widget.rect.has_value() {
-            Some(*self.widget.rect.read())
+            *self.widget.rect.read()
         } else {
             None
         }

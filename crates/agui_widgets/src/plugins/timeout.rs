@@ -34,7 +34,7 @@ impl TimeoutPluginState {
 pub struct TimeoutPlugin;
 
 impl EnginePlugin for TimeoutPlugin {
-    fn pre_update(&self, ctx: &mut PluginContext) {
+    fn on_update(&self, ctx: &mut PluginContext) {
         let plugin = ctx.init_global(TimeoutPluginState::default);
 
         let mut plugin = plugin.write();
@@ -61,9 +61,9 @@ impl EnginePlugin for TimeoutPlugin {
         }
     }
 
-    fn on_update(&self, _ctx: &mut PluginContext) {}
+    fn on_build(&self, _ctx: &mut PluginContext) {}
 
-    fn post_update(&self, _ctx: &mut PluginContext) {}
+    fn on_layout(&self, _ctx: &mut PluginContext) {}
 
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(TimeoutPluginState::default);

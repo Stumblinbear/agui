@@ -1,10 +1,10 @@
 use crate::{
-    canvas::painter::Painter,
+    canvas::painter::CanvasPainter,
     computed::{ComputedContext, ComputedFn, ComputedFunc, ComputedId},
     engine::node::WidgetNode,
     notifiable::{state::StateMap, NotifiableValue, Notify},
     tree::Tree,
-    unit::{Key, Layout, LayoutType, Rect, Ref, Shape},
+    unit::{Key, Layout, LayoutType, Rect, Ref},
     widget::{WidgetId, WidgetRef},
 };
 
@@ -162,7 +162,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         self.widget.rect.add_listener(self.widget_id.into());
 
         if self.widget.rect.has_value() {
-            Some(*self.widget.rect.read())
+            *self.widget.rect.read()
         } else {
             None
         }
@@ -174,14 +174,9 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Set the painter of the widget.
     pub fn set_painter<P>(&mut self, painter: P)
     where
-        P: Painter + 'static,
+        P: CanvasPainter + 'static,
     {
         self.widget.painter = Some(Box::new(painter));
-    }
-
-    /// Set the clipping mask of the widget.
-    pub fn set_clipping(&mut self, clipping: Ref<Shape>) {
-        self.widget.clipping = clipping;
     }
 }
 

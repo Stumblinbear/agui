@@ -1,93 +1,92 @@
 use lyon::path::Path;
 
-use crate::unit::{Bounds, Color, Shape, Size};
+use crate::unit::{Rect, Shape};
 
-use self::{command::CanvasCommand, font::FontDescriptor};
+use self::{
+    clipping::Clip,
+    command::CanvasCommand,
+    font::FontStyle,
+    paint::{Brush, Paint},
+};
 
+pub mod clipping;
 pub mod command;
 pub mod font;
+pub mod paint;
 pub mod painter;
-
-const BOUNDS_FULL: Bounds = Bounds {
-    top: 0.0,
-    right: 0.0,
-    bottom: 0.0,
-    left: 0.0,
-};
 
 #[derive(PartialEq)]
 pub struct Canvas {
-    size: Size,
+    rect: Rect,
+
+    paint: Vec<Paint>,
 
     commands: Vec<CanvasCommand>,
 }
 
 impl Canvas {
-    pub fn new(size: Size) -> Self {
+    pub fn new(rect: Rect) -> Self {
         Self {
-            size,
+            rect,
+
+            paint: Vec::default(),
 
             commands: Vec::default(),
         }
     }
 
-    pub fn get_size(&self) -> Size {
-        self.size
+    pub fn get_rect(&self) -> Rect {
+        self.rect
     }
 
     pub fn get_commands(&self) -> &Vec<CanvasCommand> {
         &self.commands
     }
 
-    fn validate_bounds(&self, bounds: Bounds) {
-        if bounds.top < 0.0 || bounds.right < 0.0 || bounds.bottom < 0.0 || bounds.left < 0.0 {
-            panic!(
-                "cannot draw outside of canvas bounds: (0.0, 0.0) >= {:?}",
-                bounds
-            );
-        }
+    pub fn new_brush(&mut self, paint: Paint) -> Brush {
+        self.paint.push(paint);
 
-        if bounds.top > self.size.height
-            || bounds.right > self.size.width
-            || bounds.bottom > self.size.height
-            || bounds.left > self.size.width
-        {
-            panic!(
-                "cannot draw outside of canvas bounds: ({:.2}, {:.2}) >= {:?}",
-                self.size.width, self.size.height, bounds
-            );
-        }
+        Brush(self.paint.len() - 1)
     }
 
-    pub fn draw_rect(&mut self, color: Color) {
-        self.draw_rect_at(BOUNDS_FULL, color);
+    /// Begins clipping. It will be the `rect` of the canvas.
+    pub fn clip(&mut self, clip: Clip, shape: Shape) {
+        self.clip_at(self.rect, clip, shape);
     }
 
-    /// # Panics
-    ///
-    /// Will panic if you attempt to draw outside of the canvas bounds.
-    pub fn draw_rect_at(&mut self, bounds: Bounds, color: Color) {
-        self.validate_bounds(bounds);
+    /// Begins clipping the defined `rect`.
+    pub fn clip_at(&mut self, rect: Rect, clip: Clip, shape: Shape) {
+        self.commands
+            .push(CanvasCommand::Clip { rect, clip, shape });
+    }
 
+    /// Draws a rectangle. It will be the `rect` of the canvas.
+    pub fn draw_rect(&mut self, brush: Brush) {
+        self.draw_rect_at(self.rect, brush);
+    }
+
+    /// Draws a rectangle in the defined `rect`.
+    pub fn draw_rect_at(&mut self, rect: Rect, brush: Brush) {
         self.commands.push(CanvasCommand::Shape {
-            bounds,
+            rect,
+            brush,
 
-            color,
             shape: Shape::Rect,
         });
     }
 
+    /// Draws a rounded rectangle. It will be the `rect` of the canvas.
     pub fn draw_rounded_rect(
         &mut self,
-        color: Color,
+        brush: Brush,
         top_left: f32,
         top_right: f32,
         bottom_right: f32,
         bottom_left: f32,
     ) {
         self.draw_rounded_rect_at(
-            color,
-            BOUNDS_FULL,
+            self.rect,
+            brush,
             top_left,
             top_right,
             bottom_right,
@@ -95,24 +94,20 @@ impl Canvas {
         );
     }
 
-    /// # Panics
-    ///
-    /// Will panic if you attempt to draw outside of the canvas bounds.
+    /// Draws a rounded rectangle in the defined `rect`.
     pub fn draw_rounded_rect_at(
         &mut self,
-        color: Color,
-        bounds: Bounds,
+        rect: Rect,
+        brush: Brush,
         top_left: f32,
         top_right: f32,
         bottom_right: f32,
         bottom_left: f32,
     ) {
-        self.validate_bounds(bounds);
-
         self.commands.push(CanvasCommand::Shape {
-            bounds,
+            brush,
+            rect,
 
-            color,
             shape: Shape::RoundedRect {
                 top_left,
                 top_right,
@@ -122,35 +117,34 @@ impl Canvas {
         });
     }
 
-    pub fn draw_path(&mut self, color: Color, path: Path) {
-        self.draw_path_at(BOUNDS_FULL, color, path);
+    /// Draws a path. It will be the `rect` of the canvas.
+    pub fn draw_path(&mut self, brush: Brush, path: Path) {
+        self.draw_path_at(self.rect, brush, path);
     }
 
-    /// # Panics
-    ///
-    /// Will panic if you attempt to draw outside of the canvas bounds.
-    pub fn draw_path_at(&mut self, bounds: Bounds, color: Color, path: Path) {
-        self.validate_bounds(bounds);
-
+    /// Draws a path in the defined `rect`.
+    pub fn draw_path_at(&mut self, rect: Rect, brush: Brush, path: Path) {
         self.commands.push(CanvasCommand::Shape {
-            bounds,
+            rect,
+            brush,
 
             shape: Shape::Path(path),
-
-            color,
         });
     }
 
-    pub fn draw_text(&mut self, bounds: Bounds, color: Color, font: FontDescriptor, text: String) {
-        self.validate_bounds(bounds);
+    /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
+    pub fn draw_text(&mut self, brush: Brush, font: FontStyle, text: String) {
+        self.draw_text_at(self.rect, brush, font, text);
+    }
 
+    /// Draws text on the canvas, ensuring it remains within the `rect`.
+    pub fn draw_text_at(&mut self, rect: Rect, brush: Brush, font: FontStyle, text: String) {
         self.commands.push(CanvasCommand::Text {
-            bounds,
+            rect,
+            brush,
 
             font,
             text,
-
-            color,
         });
     }
 }

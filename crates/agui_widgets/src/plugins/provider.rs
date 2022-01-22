@@ -21,11 +21,11 @@ struct ProviderPluginState {
 pub struct ProviderPlugin;
 
 impl EnginePlugin for ProviderPlugin {
-    fn pre_update(&self, _ctx: &mut PluginContext) {}
-
     fn on_update(&self, _ctx: &mut PluginContext) {}
 
-    fn post_update(&self, _ctx: &mut PluginContext) {}
+    fn on_build(&self, _ctx: &mut PluginContext) {}
+
+    fn on_layout(&self, _ctx: &mut PluginContext) {}
 
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(ProviderPluginState::default);

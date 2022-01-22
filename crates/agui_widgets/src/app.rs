@@ -28,18 +28,18 @@ pub struct App {
 
 impl WidgetBuilder for App {
     fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
-        if let Some(window_size) = ctx.try_use_global::<WindowSize>() {
-            let window_size = window_size.read();
+        let window_size = ctx.use_global(WindowSize::default);
 
-            ctx.set_layout(build! {
-                Layout {
-                    sizing: Sizing::Axis {
-                        width: Units::Pixels(window_size.width),
-                        height: Units::Pixels(window_size.height),
-                    }
+        let window_size = window_size.read();
+
+        ctx.set_layout(build! {
+            Layout {
+                sizing: Sizing::Axis {
+                    width: Units::Pixels(window_size.width),
+                    height: Units::Pixels(window_size.height),
                 }
-            });
-        }
+            }
+        });
 
         ctx.key(Key::single(), (&self.child).into()).into()
     }

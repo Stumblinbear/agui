@@ -307,6 +307,54 @@ where
 
         last_child_id
     }
+
+    /// Returns any nodes that do not have any other node as a parent.
+    pub fn filter_topmost<I>(&self, nodes: I) -> Vec<K>
+    where
+        I: Iterator<Item = K>,
+    {
+        let mut topmost = Vec::new();
+
+        'main: for key in nodes {
+            let tree_node = match self.nodes.get(key) {
+                Some(widget) => widget,
+                None => continue,
+            };
+
+            let node_depth = tree_node.depth;
+
+            let mut i = 0;
+
+            while i < topmost.len() {
+                let (dirty_id, dirty_depth) = topmost[i];
+
+                // If they're at the same depth, bail. No reason to check if they're children.
+                if node_depth != dirty_depth {
+                    if node_depth > dirty_depth {
+                        // If the node is a child of one of the `topmost` nodes, bail
+                        if self.has_child(dirty_id, key) {
+                            continue 'main;
+                        }
+                    } else {
+                        // If the node is a parent of the node already in the `topmost` vec, remove it
+                        if self.has_child(key, dirty_id) {
+                            topmost.remove(i);
+                            continue 'main;
+                        }
+                    }
+                }
+
+                i += 1;
+            }
+
+            topmost.push((key, node_depth));
+        }
+
+        topmost
+            .into_iter()
+            .map(|(widget_id, _)| widget_id)
+            .collect::<Vec<_>>()
+    }
 }
 
 pub struct DownwardIterator<'a, K, V>

@@ -61,7 +61,6 @@ impl WidgetRenderPass for BoundingRenderPass {
                 WidgetEvent::Layout {
                     type_id,
                     widget_id,
-                    layer: _,
                 } => {
                     let rect = match manager.get_rect(*widget_id) {
                         Some(rect) => rect,
