@@ -1,6 +1,8 @@
+use std::borrow::Cow;
+
 use crate::unit::{Rect, Shape};
 
-use super::{clipping::Clip, font::FontStyle, paint::Brush};
+use super::{clipping::Clip, font::FontId, paint::Brush};
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -23,8 +25,8 @@ pub enum CanvasCommand {
         rect: Rect,
         brush: Brush,
 
-        font: FontStyle,
-        text: String,
+        font: FontId,
+        text: Cow<'static, str>,
     },
 }
 

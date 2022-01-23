@@ -3,7 +3,7 @@ use morphorm::PositionType;
 use super::Units;
 
 /// Holds layout parameters to dictate how the element should be displayed.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Layout {
     pub position: Position,
     pub min_sizing: Sizing,

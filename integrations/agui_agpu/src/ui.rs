@@ -120,8 +120,6 @@ impl<'ui> UI<'ui> {
                     });
 
                     if let Some(state) = self.try_use_global::<WindowSize>() {
-                        println!("size: {:?}", size);
-
                         let mut state = state.write();
 
                         state.width = size.width as f32;

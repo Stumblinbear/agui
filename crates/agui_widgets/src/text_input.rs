@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use agui_core::{
-    canvas::{font::FontStyle, painter::shape::RectPainter},
+    canvas::{font::FontId, painter::shape::RectPainter},
     unit::{Color, Key, Layout, Position, Ref, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
@@ -84,7 +84,7 @@ pub struct TextInput {
 
     pub style: Option<TextInputStyle>,
 
-    pub font: FontStyle,
+    pub font: FontId,
     pub placeholder: String,
 }
 

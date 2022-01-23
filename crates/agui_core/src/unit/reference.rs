@@ -14,7 +14,7 @@ use std::{fmt::Debug, sync::Arc};
 ///     pub layout: Ref<Layout>,
 /// }
 /// ```
-#[derive(PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Ref<V>
 where
     V: ?Sized,

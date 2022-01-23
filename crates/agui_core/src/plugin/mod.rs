@@ -8,7 +8,7 @@ mod context;
 
 pub use context::PluginContext;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PluginId(TypeId);
 
 impl PluginId {

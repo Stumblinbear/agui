@@ -1,14 +1,14 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::{clipping::Clip, font::FontStyle},
+    canvas::{clipping::Clip, font::FontId},
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
     widget::{BuildResult, WidgetContext, WidgetRef},
     widgets::{
         plugins::{provider::ProviderExt, DefaultPluginsExt},
-        primitives::{Builder, Column, Padding, Spacing},
-        state::theme::Theme,
+        primitives::{Builder, Column, Padding, Spacing, Text},
+        state::{theme::Theme, DefaultGlobalsExt},
         App, Button, ButtonStyle,
     },
 };
@@ -18,6 +18,7 @@ fn main() -> Result<(), agpu::BoxError> {
     let mut ui = UIProgram::new("agui widgets")?;
 
     ui.register_default_plugins();
+    ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
@@ -35,7 +36,7 @@ fn main() -> Result<(), agpu::BoxError> {
 #[functional_widget]
 fn example_main(
     ctx: &mut WidgetContext,
-    font: FontStyle,
+    font: FontId,
     _color: Color,
     _child: WidgetRef,
 ) -> BuildResult {
@@ -61,24 +62,24 @@ fn example_main(
                 // Text::is(font, 64.0, "A Title".into()).color(Color::White),
                 Spacing::vertical(32.0.into()),
                 Button {
-                    layout: Layout {
-                        sizing: Sizing::All(32.0.into()),
-                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        // child: Text::is(font, 32.0, "A Button".into())
+                        child: Text {
+                            font: font.styled(),
+                            text: "A Button"
+                        }
                     },
                     on_pressed: Callback::from(|()| {
                         println!("Pressed 1");
                     })
                 },
                 Button {
-                    layout: Layout {
-                        sizing: Sizing::All(32.0.into()),
-                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        // child: Text::is(font, 32.0, "Another Button".into())
+                        child: Text {
+                            font: font.styled(),
+                            text: "Another Button"
+                        }
                     },
                     on_pressed: Callback::from(|()| {
                         println!("Pressed 1");
@@ -86,12 +87,12 @@ fn example_main(
                 },
                 Button {
                     clip: Clip::Hard.into(),
-                    layout: Layout {
-                        sizing: Sizing::All(32.0.into()),
-                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        // child: Text::is(font, 32.0, "Also a Button".into())
+                        child: Text {
+                            font: font.styled(),
+                            text: "Also a Button"
+                        }
                     },
                     on_pressed: Callback::from(|()| {
                         println!("Pressed 2");
@@ -114,12 +115,12 @@ fn example_main(
 
                     build! {
                         Button {
-                            layout: Layout {
-                                sizing: Sizing::All(32.0.into()),
-                            },
                             child: Padding {
                                 padding: Margin::All(10.0.into()),
-                                // child: Text::is(font, 32.0, "Beuton".into()).color(Color::White)
+                                child: Text {
+                                    font: font.styled().color(Color::White),
+                                    text: "Beuton"
+                                }
                             },
                             on_pressed: Callback::from(|()| {
                                 println!("Pressed 3");

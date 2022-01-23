@@ -13,7 +13,7 @@ use agui::{
     },
     engine::node::WidgetNode,
     tree::Tree,
-    unit::{Rect, Shape, Size},
+    unit::{Rect, Shape, Size, Color},
     widget::WidgetId,
 };
 use lyon::lyon_tessellation::{
@@ -121,8 +121,6 @@ impl RenderEngine {
                     .expect("tree node missing during redraw")
             })
             .for_each(|node| {
-                println!("{:?}", node.rect);
-
                 if !layer_stack.is_empty() {
                     // Pop any layer off the stack that has a higher depth than our current node
                     while !layer_stack.is_empty() {
@@ -202,8 +200,17 @@ impl RenderEngine {
 
         self.layers.clear();
 
+        println!("building");
+
         for layer in layers {
-            let mut brush_data = Vec::with_capacity(layer.paint_map.len());
+            let mut brush_data = vec![
+                BrushData {
+                    color: [0.0; 4],
+                };
+                layer.paint_map.len()
+            ];
+
+            println!("{:?}", layer.paint_map);
 
             for (paint, brush) in layer.paint_map {
                 brush_data.insert(

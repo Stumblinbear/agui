@@ -6,7 +6,7 @@ use lyon::{
 
 use crate::unit::Rect;
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub enum Shape {
     Rect,
 

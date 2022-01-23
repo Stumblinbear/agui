@@ -23,7 +23,7 @@
 # }
 ```
 
-The function returns a `FontStyle` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
+The function returns a `FontId` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
 
 ```rust,noplaypen
 Text::is(font, 32.0, "Hello, world!".into())

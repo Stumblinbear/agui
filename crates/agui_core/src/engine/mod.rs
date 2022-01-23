@@ -11,7 +11,7 @@ use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    canvas::font::FontStyle,
+    canvas::font::FontId,
     computed::ComputedContext,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
@@ -160,18 +160,15 @@ impl<'ui> Engine<'ui> {
         self.global.get_or(func)
     }
 
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontStyle, InvalidFont> {
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontId, InvalidFont> {
         let font = FontArc::try_from_slice(bytes)?;
 
         self.fonts.push(FontArc::clone(&font));
 
-        Ok(FontStyle {
-            font_id: self.fonts.len() - 1,
-            ..FontStyle::default()
-        })
+        Ok(FontId(self.fonts.len() - 1))
     }
 
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontStyle> {
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
         let f = File::open(filename)?;
 
         let mut reader = BufReader::new(f);
@@ -185,10 +182,7 @@ impl<'ui> Engine<'ui> {
 
         self.fonts.push(font);
 
-        Ok(FontStyle {
-            font_id: self.fonts.len() - 1,
-            ..FontStyle::default()
-        })
+        Ok(FontId(self.fonts.len() - 1))
     }
 
     /// Update the UI tree.
