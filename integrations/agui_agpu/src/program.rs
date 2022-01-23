@@ -15,7 +15,7 @@ pub struct UIProgram {
 
 impl UIProgram {
     pub fn new(title: &str) -> Result<UIProgram, agpu::BoxError> {
-        Ok(Self::from(agpu::GpuProgram::builder(title).with_framerate(f32::MAX).build()?))
+        Ok(Self::from(agpu::GpuProgram::builder(title).build()?))
     }
 
     pub fn from(program: GpuProgram) -> Self {
