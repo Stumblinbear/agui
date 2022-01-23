@@ -7,8 +7,15 @@ const mat4 INVERT_Y_AXIS_AND_SCALE = mat4(
     vec4(-1.0, 1.0, 0.0, 1.0)
 );
 
-layout(location = 0) in vec2 pos;
-layout(location = 1) in vec4 color;
+layout (binding = 0) uniform Viewport {
+    vec2 size;
+} viewport;
+
+layout(std430, binding = 1) restrict readonly buffer BrushBuffer { vec4 Brushes[]; };
+layout(std430, binding = 2) restrict readonly buffer IndexBuffer { uint Indices[]; };
+layout(std430, binding = 3) restrict readonly buffer PositionBuffer { vec2 Positions[]; };
+
+layout(location = 0) in uint brushId;
 
 layout(location = 0) out vec4 outColor;
 
@@ -17,9 +24,13 @@ out gl_PerVertex {
 };
 
 void main() {
-    // vec2 screen_pos = pos / viewport.size;
-     
-    // gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(screen_pos.x, screen_pos.y, 0.0, 1.0);
+    uint index = Indices[gl_VertexIndex];
     
+    vec2 screen_pos = Positions[index] / viewport.size;
+
+    gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(screen_pos.x, screen_pos.y, 0.0, 1.0);
+
+    vec4 color = Brushes[brushId];
+
     outColor = color;
 }

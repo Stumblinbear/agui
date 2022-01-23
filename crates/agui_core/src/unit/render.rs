@@ -1,4 +1,11 @@
-#[derive(Debug, Copy, Clone, PartialEq)]
+use std::hash::{Hash, Hasher};
+
+/// We want to merge colors for the renderer when we can, so we have a margin of error
+/// for doing so. 1 / 255 is approximately `0.004_f32`, but we want a bit more granularity
+/// as many monitors can render many more colors than that margin would allow.
+const EQ_MARGIN_OF_ERROR: f32 = 0.001;
+
+#[derive(Debug, Copy, Clone)]
 pub enum Color {
     Black,
     DarkGray,
@@ -24,7 +31,41 @@ impl Default for Color {
     }
 }
 
+impl PartialEq for Color {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Rgb(r0, g0, b0), Self::Rgb(r1, g1, b1)) => {
+                (r0 - r1).abs() < EQ_MARGIN_OF_ERROR
+                    && (g0 - g1).abs() < EQ_MARGIN_OF_ERROR
+                    && (b0 - b1).abs() < EQ_MARGIN_OF_ERROR
+            }
+
+            (Self::Rgba(r0, g0, b0, a0), Self::Rgba(r1, g1, b1, a1)) => {
+                (r0 - r1).abs() < EQ_MARGIN_OF_ERROR
+                    && (g0 - g1).abs() < EQ_MARGIN_OF_ERROR
+                    && (b0 - b1).abs() < EQ_MARGIN_OF_ERROR
+                    && (a0 - a1).abs() < EQ_MARGIN_OF_ERROR
+            }
+            
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl Eq for Color {}
+
+impl Hash for Color {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
+
 impl Color {
+    pub const fn as_rgb(&self) -> [f32; 3] {
+        let rgba = self.as_rgba();
+        [rgba[0], rgba[1], rgba[2]]
+    }
+
     pub const fn as_rgba(&self) -> [f32; 4] {
         match self {
             Color::Black => [0.0, 0.0, 0.0, 1.0],
@@ -55,5 +96,17 @@ impl From<[f32; 3]> for Color {
 impl From<[f32; 4]> for Color {
     fn from(rgba: [f32; 4]) -> Self {
         Self::Rgba(rgba[0], rgba[1], rgba[2], rgba[3])
+    }
+}
+
+impl From<Color> for [f32; 3] {
+    fn from(color: Color) -> Self {
+        color.as_rgb()
+    }
+}
+
+impl From<Color> for [f32; 4] {
+    fn from(color: Color) -> Self {
+        color.as_rgba()
     }
 }

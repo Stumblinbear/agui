@@ -1,11 +1,19 @@
-use std::mem;
+use std::{collections::HashMap, mem};
 
-use agpu::{Buffer, Frame, GpuHandle, GpuProgram, RenderPipeline};
+use agpu::{
+    wgpu::{self},
+    BindGroup, Buffer, Frame, GpuHandle, RenderPipeline,
+};
 use agui::{
-    canvas::{clipping::Clip, command::CanvasCommand, Canvas},
+    canvas::{
+        clipping::Clip,
+        command::CanvasCommand,
+        paint::{Brush, Paint},
+        Canvas,
+    },
     engine::node::WidgetNode,
     tree::Tree,
-    unit::{Color, Rect, Shape},
+    unit::{Rect, Shape, Size},
     widget::WidgetId,
 };
 use lyon::lyon_tessellation::{
@@ -16,40 +24,128 @@ pub struct RenderEngine {
     gpu: GpuHandle,
     pipeline: RenderPipeline,
 
+    // window_size_bind_group: BindGroup,
+    render_size: Buffer,
+
     layers: Vec<Layer>,
 }
 
 impl RenderEngine {
-    pub fn new(gpu: &GpuHandle) -> Self {
+    pub fn new(gpu: &GpuHandle, size: Size) -> Self {
+        // let window_size_bind_group_layout =
+        //     gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        //         label: None,
+        //         entries: &[wgpu::BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: wgpu::ShaderStages::VERTEX,
+        //             ty: wgpu::BindingType::Buffer {
+        //                 ty: wgpu::BufferBindingType::Uniform,
+        //                 has_dynamic_offset: false,
+        //                 min_binding_size: None,
+        //             },
+        //             count: None,
+        //         }],
+        //     });
+
+        let binding = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
         let pipeline = gpu
             .new_pipeline("agui layer pipeline")
             .with_vertex(include_bytes!("shader/layer.vert.spv"))
             .with_fragment(include_bytes!("shader/layer.frag.spv"))
             .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: mem::size_of::<[f32; 2]>() as u64,
+                array_stride: mem::size_of::<VertexData>() as u64,
                 step_mode: agpu::wgpu::VertexStepMode::Vertex,
-                attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4],
+                attributes: &agpu::wgpu::vertex_attr_array![0 => Uint32],
             }])
+            .with_bind_groups(&[&binding])
             .create();
+
+        // let window_size = gpu
+        //     .new_buffer("AppSettings")
+        //     .as_uniform_buffer()
+        //     .allow_copy_to()
+        //     .create(&[size.width, size.height]);
 
         Self {
             gpu: GpuHandle::clone(gpu),
             pipeline,
 
+            // window_size_bind_group: gpu.create_bind_group(&[window_size.bind_uniform()]),
+            render_size: gpu
+                .new_buffer("agui render size")
+                .as_uniform_buffer()
+                .allow_copy_to()
+                .create(&[size.width, size.height]),
+
             layers: Vec::default(),
         }
     }
 
-    pub fn redraw<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>) {
+    pub fn set_size(&mut self, size: Size) {
+        self.render_size.write_unchecked(&[size.width, size.height]);
+    }
+
+    pub fn clear(&mut self) {
+        self.layers.clear();
+    }
+
+    pub fn redraw<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>, node_id: WidgetId) {
         let mut layers: Vec<CanvasLayer> = Vec::default();
         let mut layer_stack: Vec<(usize, usize)> = Vec::default();
 
-        tree.iter()
+        tree.iter_from(node_id)
             .map(|widget_id| {
                 tree.get_node(widget_id)
                     .expect("tree node missing during redraw")
             })
             .for_each(|node| {
+                println!("{:?}", node.rect);
+
                 if !layer_stack.is_empty() {
                     // Pop any layer off the stack that has a higher depth than our current node
                     while !layer_stack.is_empty() {
@@ -85,7 +181,7 @@ impl RenderEngine {
 
                 painter.draw(&mut canvas);
 
-                let commands = canvas.get_commands();
+                let commands = canvas.get_commands().clone();
 
                 // If the canvas added no new commands, bail
                 if commands.is_empty() {
@@ -104,12 +200,24 @@ impl RenderEngine {
                             layer_stack.push((node.depth, layers.len() - 1));
                         }
 
-                        cmd => {
-                            // if cmd.is_noop() {
-                            //     continue;
-                            // }
+                        mut cmd => {
+                            if let Some(brush) = cmd.get_brush() {
+                                let layer = layers.last_mut().unwrap();
 
-                            layers.last_mut().unwrap().commands.push(cmd.clone());
+                                let paint = canvas.get_paint(brush);
+
+                                if let Some(new_brush) = layer.paint_map.get(paint) {
+                                    cmd.set_brush(*new_brush);
+                                } else {
+                                    let new_brush = Brush::from(layer.paint_map.len());
+
+                                    layer.paint_map.insert(paint.clone(), new_brush);
+
+                                    cmd.set_brush(new_brush);
+                                }
+                            }
+
+                            layers.last_mut().unwrap().commands.push(cmd);
                         }
                     }
                 }
@@ -117,80 +225,104 @@ impl RenderEngine {
 
         self.layers.clear();
 
-        println!("{} layers:", layers.len());
-
         for layer in layers {
-            println!("  - clip: {:?}", layer.clip);
-            
-            for cmd in layer.commands {
-                println!("    | {:?}", cmd);
+            let mut brush_data = Vec::with_capacity(layer.paint_map.len());
+
+            for (paint, brush) in layer.paint_map {
+                brush_data.insert(
+                    brush.into(),
+                    BrushData {
+                        color: paint.color.into(),
+                    },
+                );
             }
+
+            let mut vertex_data = Vec::default();
+
+            let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
+
+            let mut builder = BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
+                vertex.position().to_array()
+            });
+
+            let mut tessellator = FillTessellator::new();
+
+            for cmd in layer.commands {
+                match cmd {
+                    CanvasCommand::Shape { rect, brush, shape } => {
+                        let count = tessellator
+                            .tessellate_path(
+                                &shape.build_path(rect),
+                                &FillOptions::default(),
+                                &mut builder,
+                            )
+                            .unwrap();
+
+                        vertex_data.resize(
+                            vertex_data.len() + count.indices as usize,
+                            VertexData {
+                                brush_id: (<Brush as Into<usize>>::into(brush)) as u32,
+                            },
+                        );
+                    }
+
+                    cmd => panic!("unknown command: {:?}", cmd),
+                }
+            }
+
+            // No point in making a 0 size buffer
+            if vertex_data.is_empty() {
+                continue;
+            }
+
+            self.layers.push(Layer {
+                count: geometry.indices.len() as u32,
+
+                vertex_data: self
+                    .gpu
+                    .new_buffer("agui layer vertex buffer")
+                    .as_vertex_buffer()
+                    .create(&vertex_data),
+
+                bind_group: self.gpu.create_bind_group(&[
+                    self.render_size.bind_uniform().in_vertex(),
+                    self.gpu
+                        .new_buffer("agui layer brush buffer")
+                        .as_storage_buffer()
+                        .create(&brush_data)
+                        .bind_storage_readonly()
+                        .in_vertex(),
+                    self.gpu
+                        .new_buffer("agui layer index buffer")
+                        .as_storage_buffer()
+                        .create(&geometry.indices)
+                        .bind_storage_readonly()
+                        .in_vertex(),
+                    self.gpu
+                        .new_buffer("agui layer position buffer")
+                        .as_storage_buffer()
+                        .create(&geometry.vertices)
+                        .bind_storage_readonly()
+                        .in_vertex(),
+                ]),
+            })
         }
-
-        // let mut geometry: VertexBuffers<[f32; 2], u16> = VertexBuffers::new();
-
-        // let mut builder = BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
-        //     vertex.position().to_array()
-        // });
-
-        // let mut tessellator = FillTessellator::new();
-
-        // for cmd in commands {
-        //     match cmd {
-        //         CanvasCommand::Clip { rect, clip, shape } => todo!(),
-        //         CanvasCommand::Shape { rect, brush, shape } => {
-        //             let count = tessellator
-        //                 .tessellate_path(
-        //                     &shape.build_path(rect),
-        //                     &FillOptions::default(),
-        //                     &mut builder,
-        //                 )
-        //                 .unwrap();
-
-        //             // vertices.push(vertex);
-        //         }
-        //         cmd => panic!("unknown command: {:?}", cmd),
-        //     }
-        // }
-
-        // let layer_data = self
-        //     .gpu
-        //     .new_buffer("agui layer instance buffer")
-        //     .as_vertex_buffer()
-        //     .create(bytemuck::bytes_of(&LayerData {}));
-
-        // let vertex_data = self
-        //     .gpu
-        //     .new_buffer("agui layer vertex buffer")
-        //     .as_vertex_buffer()
-        //     .create(&geometry.vertices);
-
-        // let index_data = self
-        //     .gpu
-        //     .new_buffer("agui layer index buffer")
-        //     .as_index_buffer()
-        //     .create(&geometry.indices);
-
-        // self.layers.push(Layer {
-        //     layer_data,
-        //     vertex_data,
-        //     index_data,
-        //     count: todo!(),
-        // })
     }
 
-    pub fn render(&mut self, frame: Frame) {
-        // let mut r = frame
-        //     .render_pass("agui layer pass")
-        //     .with_pipeline(&self.pipeline)
-        //     .begin();
+    pub fn render(&mut self, mut frame: Frame) {
+        let mut r = frame
+            .render_pass_cleared("agui layer pass", 0x44444444)
+            .with_pipeline(&self.pipeline)
+            .begin();
 
-        // for widget_buffer in self.widgets.values() {
-        //     r.set_vertex_buffer(0, widget_buffer.drawable_data.slice(..))
-        //         .set_vertex_buffer(1, widget_buffer.vertex_data.slice(..))
-        //         .set_index_buffer(widget_buffer.index_data.slice(..))
-        //         .draw_indexed(0..widget_buffer.count, 0, 0..1);
-        // }
+        // r.set_bind_group(0, &self.window_size_bind_group, &[]);
+
+        for layer in &self.layers {
+            r.set_bind_group(0, &layer.bind_group, &[]);
+
+            r.set_vertex_buffer(0, layer.vertex_data.slice(..))
+                .draw(0..layer.count, 0..1);
+        }
     }
 }
 
@@ -198,19 +330,39 @@ impl RenderEngine {
 struct CanvasLayer {
     clip: Option<(Rect, Clip, Shape)>,
 
+    paint_map: HashMap<Paint, Brush>,
+
     commands: Vec<CanvasCommand>,
+}
+
+pub struct Layer {
+    count: u32,
+
+    vertex_data: Buffer,
+
+    bind_group: BindGroup,
 }
 
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
-struct LayerData {}
+struct VertexData {
+    brush_id: u32,
+}
 
-pub struct Layer {
-    commands: Vec<CanvasCommand>,
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+struct BrushData {
+    color: [f32; 4],
+}
 
-    layer_data: Buffer,
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+struct IndexData {
+    index: u32,
+}
 
-    vertex_data: Buffer,
-    index_data: Buffer,
-    count: u32,
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+struct PositionData {
+    pos: [f32; 2],
 }

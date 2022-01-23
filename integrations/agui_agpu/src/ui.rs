@@ -11,7 +11,7 @@ use agpu::{
 };
 use agui::{
     engine::Engine,
-    unit::Point,
+    unit::{Point, Size},
     widgets::state::{
         keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
         mouse::{Mouse, MouseButtonState, Scroll},
@@ -43,19 +43,31 @@ impl<'ui> DerefMut for UI<'ui> {
 
 impl<'ui> UI<'ui> {
     pub fn from_program(program: &GpuProgram) -> Self {
-        Self::using_gpu(&program.gpu)
+        let surface = program.viewport.sc_desc.borrow();
+
+        Self::using_gpu(
+            &program.gpu,
+            Size {
+                width: surface.width as f32,
+                height: surface.height as f32,
+            },
+        )
     }
 
-    pub fn using_gpu(gpu: &GpuHandle) -> Self {
+    pub fn using_gpu(gpu: &GpuHandle, size: Size) -> Self {
         Self {
             engine: Engine::new(),
 
-            renderer: RenderEngine::new(gpu),
+            renderer: RenderEngine::new(gpu, size),
         }
     }
 
     pub fn redraw(&'ui mut self) {
-        self.renderer.redraw(self.engine.get_tree());
+        if let Some(root_id) = self.engine.get_root() {
+            self.renderer.redraw(self.engine.get_tree(), root_id);
+        } else {
+            self.renderer.clear();
+        }
     }
 
     pub fn render(&mut self, frame: Frame) {
@@ -64,7 +76,7 @@ impl<'ui> UI<'ui> {
 
     pub fn handle_event(&'ui mut self, event: Event<'_, ()>, program: &GpuProgram) {
         if let Some(_widget_events) = self.engine.update() {
-            self.renderer.redraw(self.engine.get_tree());
+            self.redraw();
 
             // TODO: optimize layer rendering
 
@@ -102,6 +114,11 @@ impl<'ui> UI<'ui> {
         } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
             match event {
                 WindowEvent::Resized(size) => {
+                    self.renderer.set_size(Size {
+                        width: size.width as f32,
+                        height: size.height as f32,
+                    });
+
                     if let Some(state) = self.try_use_global::<WindowSize>() {
                         println!("size: {:?}", size);
 

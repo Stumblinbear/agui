@@ -61,6 +61,9 @@ fn example_main(
                 // Text::is(font, 64.0, "A Title".into()).color(Color::White),
                 Spacing::vertical(32.0.into()),
                 Button {
+                    layout: Layout {
+                        sizing: Sizing::All(32.0.into()),
+                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         // child: Text::is(font, 32.0, "A Button".into())
@@ -70,6 +73,9 @@ fn example_main(
                     })
                 },
                 Button {
+                    layout: Layout {
+                        sizing: Sizing::All(32.0.into()),
+                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         // child: Text::is(font, 32.0, "Another Button".into())
@@ -80,6 +86,9 @@ fn example_main(
                 },
                 Button {
                     clip: Clip::Hard.into(),
+                    layout: Layout {
+                        sizing: Sizing::All(32.0.into()),
+                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         // child: Text::is(font, 32.0, "Also a Button".into())
@@ -105,6 +114,9 @@ fn example_main(
 
                     build! {
                         Button {
+                            layout: Layout {
+                                sizing: Sizing::All(32.0.into()),
+                            },
                             child: Padding {
                                 padding: Margin::All(10.0.into()),
                                 // child: Text::is(font, 32.0, "Beuton".into()).color(Color::White)

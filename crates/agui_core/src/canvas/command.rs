@@ -44,4 +44,20 @@ impl CanvasCommand {
 
         false
     }
+
+    pub fn get_brush(&self) -> Option<Brush> {
+        match self {
+            CanvasCommand::Shape { brush, .. } | CanvasCommand::Text { brush, .. } => Some(*brush),
+            _ => None,
+        }
+    }
+
+    pub fn set_brush(&mut self, new_brush: Brush) {
+        match self {
+            CanvasCommand::Shape { brush, .. } | CanvasCommand::Text { brush, .. } => {
+                *brush = new_brush;
+            }
+            _ => {}
+        }
+    }
 }

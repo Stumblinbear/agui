@@ -19,7 +19,7 @@ downcast-rs = "1.2"
 parking_lot = "0.11"
 
 agpu = { git = "https://github.com/lyricwulf/agpu", commit = "4ea1e92d3450ac94dca0c3a887ce54193d4b52e9" }
-bytemuck = "1.7"
+bytemuck = { version = "1.7", features = ["extern_crate_alloc"] }
 
 lyon = "0.17"
 glyph_brush_draw_cache = "0.1"

@@ -39,14 +39,18 @@ impl Canvas {
         self.rect
     }
 
-    pub fn get_commands(self) -> Vec<CanvasCommand> {
-        self.commands
+    pub fn get_paint(&self, brush: Brush) -> &Paint {
+        &self.paint[<Brush as Into<usize>>::into(brush)]
+    }
+
+    pub fn get_commands(&self) -> &Vec<CanvasCommand> {
+        &self.commands
     }
 
     pub fn new_brush(&mut self, paint: Paint) -> Brush {
         self.paint.push(paint);
 
-        Brush(self.paint.len() - 1)
+        Brush::from(self.paint.len() - 1)
     }
 
     /// Begins clipping. It will be the `rect` of the canvas.
