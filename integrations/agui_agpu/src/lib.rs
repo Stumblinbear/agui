@@ -1,7 +1,6 @@
-mod layer;
 mod program;
-mod ui;
 mod render;
+mod ui;
 
 pub use program::UIProgram;
 pub use ui::UI;

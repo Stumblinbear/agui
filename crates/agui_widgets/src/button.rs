@@ -1,5 +1,5 @@
 use agui_core::{
-    canvas::painter::shape::RectPainter,
+    canvas::{clipping::Clip, painter::shape::RectPainter},
     unit::{Callback, Color, Layout, Ref},
     widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
@@ -48,6 +48,8 @@ pub struct Button {
 
     pub child: WidgetRef,
 
+    pub clip: Option<Clip>,
+
     pub on_pressed: Callback<()>,
 }
 
@@ -93,6 +95,8 @@ impl WidgetBuilder for Button {
                 ButtonState::Hover => style.hover,
                 ButtonState::Pressed => style.pressed,
             },
+
+            clip: self.clip,
         });
 
         (&self.child).into()

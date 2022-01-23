@@ -171,35 +171,37 @@ impl WidgetBuilder for TextInput {
                 .color(input_state_style.text_color);
 
             // If we know the widget's rect, calculate the glyphs so we know where to place the cursor
-            if let Some(rect) = ctx.use_rect() {
-                let fonts = ctx.use_global(Fonts::default);
-                let fonts = fonts.read();
-                let fonts = fonts.get_fonts();
+            // if let Some(rect) = ctx.use_rect() {
+            //     let fonts = ctx.use_global(Fonts::default);
+            //     let fonts = fonts.read();
+            //     let fonts = fonts.get_fonts();
 
-                let glyphs = text.get_glyphs(fonts, (rect.width, rect.height));
+            //     let glyphs = text.get_glyphs(fonts, (rect.width, rect.height));
 
-                if !glyphs.is_empty() {
-                    let g = glyphs.last().unwrap();
+            //     if !glyphs.is_empty() {
+            //         let g = glyphs.last().unwrap();
 
-                    let position = g.glyph.position;
+            //         let position = g.glyph.position;
 
-                    let mut pos_x = position.x;
+            //         let mut pos_x = position.x;
 
-                    if let Some(font) = fonts.get(g.font_id.0) {
-                        pos_x += font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
-                    }
+            //         if let Some(font) = fonts.get(g.font_id.0) {
+            //             pos_x += font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
+            //         }
 
-                    // We have to subtract the rect height since morphorm doesn't let us stack widgets
-                    (
-                        text,
-                        Some((rect.x + pos_x, (-rect.height) + CURSOR_PADDING)),
-                    )
-                } else {
-                    (text, None)
-                }
-            } else {
-                (text, None)
-            }
+            //         // We have to subtract the rect height since morphorm doesn't let us stack widgets
+            //         (
+            //             text,
+            //             Some((rect.x + pos_x, (-rect.height) + CURSOR_PADDING)),
+            //         )
+            //     } else {
+            //         (text, None)
+            //     }
+            // } else {
+            //     (text, None)
+            // }
+
+            (text, None)
         };
 
         ctx.set_painter(RectPainter {

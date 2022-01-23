@@ -461,7 +461,7 @@ impl<'ui> Engine<'ui> {
 
             let rect = self.cache.get_rect(widget_id);
 
-            node.rect.set_value(rect.copied());
+            node.rect = rect.copied();
         }
 
         newly_changed

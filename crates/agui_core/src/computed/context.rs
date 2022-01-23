@@ -3,7 +3,7 @@ use crate::{
     engine::node::WidgetNode,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     tree::Tree,
-    unit::{LayoutType, Rect, Ref},
+    unit::{LayoutType, Ref},
     widget::WidgetId,
 };
 
@@ -102,18 +102,5 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
     /// Fetch the layout of a widget.
     pub fn get_layout_type(&self) -> Ref<LayoutType> {
         Ref::clone(&self.widget.layout_type)
-    }
-
-    /// Listen to the visual rect of the widget.
-    pub fn use_rect(&mut self) -> Option<Rect> {
-        self.widget
-            .rect
-            .add_listener((self.widget_id, self.computed_id).into());
-
-        if self.widget.rect.has_value() {
-            *self.widget.rect.read()
-        } else {
-            None
-        }
     }
 }

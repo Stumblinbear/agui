@@ -1,12 +1,14 @@
 use crate::{
-    canvas::{paint::Paint, Canvas},
-    unit::Color,
+    canvas::{clipping::Clip, paint::Paint, Canvas},
+    unit::{Color, Shape},
 };
 
 use super::CanvasPainter;
 
 pub struct RectPainter {
     pub color: Color,
+
+    pub clip: Option<Clip>,
 }
 
 impl CanvasPainter for RectPainter {
@@ -14,6 +16,10 @@ impl CanvasPainter for RectPainter {
         let brush = canvas.new_brush(Paint { color: self.color });
 
         canvas.draw_rect(brush);
+
+        if let Some(clip) = &self.clip {
+            canvas.start_clipping(*clip, Shape::Rect);
+        }
     }
 }
 

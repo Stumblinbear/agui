@@ -4,7 +4,7 @@ use crate::{
     engine::node::WidgetNode,
     notifiable::{state::StateMap, NotifiableValue, Notify},
     tree::Tree,
-    unit::{Key, Layout, LayoutType, Rect, Ref},
+    unit::{Key, Layout, LayoutType, Ref},
     widget::{WidgetId, WidgetRef},
 };
 
@@ -155,17 +155,6 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Set the layout of the widget.
     pub fn set_layout(&mut self, layout: Ref<Layout>) {
         self.widget.layout = layout;
-    }
-
-    /// Listen to the visual rect of the widget.
-    pub fn use_rect(&mut self) -> Option<Rect> {
-        self.widget.rect.add_listener(self.widget_id.into());
-
-        if self.widget.rect.has_value() {
-            *self.widget.rect.read()
-        } else {
-            None
-        }
     }
 }
 

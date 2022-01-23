@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use crate::{
     canvas::painter::CanvasPainter,
     computed::{ComputedFunc, ComputedId},
-    notifiable::{state::StateMap, ListenerId, Notify},
+    notifiable::{state::StateMap, ListenerId},
     tree::Tree,
     unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Sizing},
     widget::{WidgetId, WidgetRef},
@@ -24,7 +24,7 @@ pub struct WidgetNode<'ui> {
 
     pub painter: Option<Box<dyn CanvasPainter>>,
 
-    pub rect: Notify<Option<Rect>>,
+    pub rect: Option<Rect>,
 }
 
 impl WidgetNode<'_> {
@@ -40,7 +40,7 @@ impl WidgetNode<'_> {
 
             painter: None,
 
-            rect: Notify::new(changed),
+            rect: None,
         }
     }
 }

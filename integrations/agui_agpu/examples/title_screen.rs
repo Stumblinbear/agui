@@ -1,7 +1,7 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::font::FontStyle,
+    canvas::{clipping::Clip, font::FontStyle},
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
     widget::{BuildResult, WidgetContext, WidgetRef},
@@ -79,6 +79,7 @@ fn example_main(
                     })
                 },
                 Button {
+                    clip: Clip::Hard.into(),
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         // child: Text::is(font, 32.0, "Also a Button".into())

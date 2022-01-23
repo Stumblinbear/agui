@@ -38,12 +38,7 @@ impl EnginePlugin for HoveringPlugin {
                         .get_tree()
                         .iter()
                         .filter(|widget_id| {
-                            match ctx
-                                .get_tree()
-                                .get(*widget_id)
-                                .filter(|node| node.rect.has_value())
-                                .and_then(|node| *node.rect.read())
-                            {
+                            match ctx.get_tree().get(*widget_id).and_then(|node| node.rect) {
                                 Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),
                                 None => false,
                             }

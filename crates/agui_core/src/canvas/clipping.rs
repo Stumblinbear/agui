@@ -1,6 +1,4 @@
-use crate::unit::Shape;
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Clip {
-    Hard { shape: Shape },
+    Hard,
 }

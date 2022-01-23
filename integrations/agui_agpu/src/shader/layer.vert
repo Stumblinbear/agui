@@ -17,9 +17,9 @@ out gl_PerVertex {
 };
 
 void main() {
-    vec2 screen_pos = pos / viewport.size;
+    // vec2 screen_pos = pos / viewport.size;
      
-    gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(screen_pos.x, screen_pos.y, 0.0, 1.0);
+    // gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(screen_pos.x, screen_pos.y, 0.0, 1.0);
     
     outColor = color;
 }

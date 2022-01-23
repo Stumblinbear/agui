@@ -39,8 +39,8 @@ impl Canvas {
         self.rect
     }
 
-    pub fn get_commands(&self) -> &Vec<CanvasCommand> {
-        &self.commands
+    pub fn get_commands(self) -> Vec<CanvasCommand> {
+        self.commands
     }
 
     pub fn new_brush(&mut self, paint: Paint) -> Brush {
@@ -50,12 +50,12 @@ impl Canvas {
     }
 
     /// Begins clipping. It will be the `rect` of the canvas.
-    pub fn clip(&mut self, clip: Clip, shape: Shape) {
-        self.clip_at(self.rect, clip, shape);
+    pub fn start_clipping(&mut self, clip: Clip, shape: Shape) {
+        self.start_clipping_at(self.rect, clip, shape);
     }
 
     /// Begins clipping the defined `rect`.
-    pub fn clip_at(&mut self, rect: Rect, clip: Clip, shape: Shape) {
+    pub fn start_clipping_at(&mut self, rect: Rect, clip: Clip, shape: Shape) {
         self.commands
             .push(CanvasCommand::Clip { rect, clip, shape });
     }
