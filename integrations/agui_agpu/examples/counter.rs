@@ -1,12 +1,11 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    context::WidgetContext,
     macros::{build, functional_widget},
     unit::{Callback, Margin},
     widget::BuildResult,
     widgets::{
-        primitives::{Column, FontDescriptor, Padding, Text},
+        primitives::{Column, Padding},
         App, Button,
     },
 };
@@ -37,7 +36,7 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn counter_widget(ctx: &mut WidgetContext, font: FontDescriptor) -> BuildResult {
+fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {

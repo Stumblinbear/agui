@@ -1,3 +1,11 @@
+> **Preface**
+> 
+> This book (or guide, whatever you want to call it) does not always take itself seriously (I mean, the library is called `agui`, what did you expect?). This is largely because I (the writer) personally find the Rust ecosystem's documentation dreadfully dull at the best of times. Now, for core libraries, I understand it; I even appreciate it! It's important that core functionality is explained well, and explained in great detail, leaving no room for misinterpretation (a comma mustn't end up being the debate of the century).
+> 
+> That said: I don't believe this library deserves to be treated in such a robotic manner. When building UIs, we no longer are just code monkeys, tasked with building things users will never directly interact with, hiding flaws in the deepest foundation only we can see. In here, we draw, we paint, we render. We, in effect, become artists ourselves; and a robotic artist is a starving artist.
+> 
+> I've put personality in this book (guide) to reflect that reality. Why can't programming be fun?
+
 # Introduction
 
 **Agui** is a reactive UI library, built in pure Rust, made for pure Rust. It's inspired by Flutter and other reactive UI libraries, and almost more importantly: it's renderer-agnostic.  There are a few basic concepts to learn, but if you come from a background of Flutter, React, Vue, or other similar libraries, you'll feel right at home. However, I'll explain for those that have never heard of them.
@@ -12,7 +20,7 @@ Hopefully that wasn't too much jargon for you. Just in case, here's a tl;dr: **U
 
 - **Widget**: A user interface is built on Widgets, which can be anything from pure data, to managers, to elements drawn on screen. `agui` makes little distinction between them.
 - **Layout**: `agui` leverages [morphorm](https://github.com/geom3trik/morphorm) for its layout system, which itself is modeled after the [subform layout system](https://subformapp.com/articles/why-not-flexbox/).
-- **State**: At its core, `agui` is a state manager. It takes in your application state, and manages its lifecycle end-to-end, listening for changes and updating your widgets as necessary.
+- **State**: At its core, `agui` is a state manager. It takes in your application's variables, and manages their lifecycle end-to-end, listening for changes and updating your widgets as necessary.
 - **Global**: A global is state that exists as a singleton within your application. All widgets will read and write the same data.
 - **Plugin**: A plugin is essentially a singleton widget that does not exist in the tree. They are often used to manage one (or more) globals that other widgets may listen to.
 - **Computed Values**: A function that returns a value, only causing updates to the widget if the returned value changes.

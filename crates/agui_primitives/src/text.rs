@@ -1,5 +1,5 @@
 use agui_core::{
-    canvas::font::FontDescriptor,
+    canvas::font::FontStyle,
     unit::{Color, Layout, Margin, Position, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
@@ -7,13 +7,13 @@ use agui_macros::Widget;
 
 #[derive(Clone, PartialEq)]
 pub struct TextSection {
-    pub font: FontDescriptor,
+    pub font: FontStyle,
     pub text: String,
     pub scale: f32,
 }
 
 impl TextSection {
-    pub fn new(font: FontDescriptor, scale: f32, text: String) -> Self {
+    pub fn new(font: FontStyle, scale: f32, text: String) -> Self {
         Self { font, text, scale }
     }
 }
@@ -136,7 +136,7 @@ impl WidgetBuilder for Text {
 }
 
 impl Text {
-    pub fn is(font: FontDescriptor, scale: f32, text: String) -> Self {
+    pub fn is(font: FontStyle, scale: f32, text: String) -> Self {
         Self::new(vec![TextSection::new(font, scale, text)])
     }
 

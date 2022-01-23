@@ -7,7 +7,7 @@ Widgets may contain their own, self contained state, which persists across rebui
 // make sure you call `ui.init_plugin(HoveringPlugin::default);`
 
 # #[functional_widget]
-fn counter_widget(ctx: &WidgetContext, font: FontDescriptor) -> BuildResult {
+fn counter_widget(ctx: &WidgetContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {

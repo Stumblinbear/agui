@@ -1,6 +1,6 @@
 # Fonts
 
-`agui` comes with a built-in font system, managed by the `Fonts` struct as a global. In order to render text, you must begin by loading the font into `agui`; this is because the layout system must know how large text will be before rendering. While each integration has their own methods for doing so, most of them should follow the same general convention. Using `agui_agpu` as an example, we just need to load the font file, or bytes:
+`agui` comes with a built-in font system. In order to render text, you must begin by loading the font into `agui`; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using `agui_agpu` as an example, we just need to load the font file, or bytes:
 
 ```rust,noplaypen
 # fn main() -> Result<(), agpu::BoxError> {
@@ -23,7 +23,7 @@
 # }
 ```
 
-The function returns a `FontDescriptor` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
+The function returns a `FontStyle` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
 
 ```rust,noplaypen
 Text::is(font, 32.0, "Hello, world!".into())
