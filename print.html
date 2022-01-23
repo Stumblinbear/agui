@@ -299,7 +299,7 @@ impl WidgetBuilder for Button {
 // make sure you call `ui.init_plugin(HoveringPlugin::default);`
 
 <span class="boring">#[functional_widget]
-</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontStyle) -&gt; BuildResult {
+</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {
@@ -361,7 +361,7 @@ impl WidgetBuilder for Button {
     let font = ui.load_font_file(&quot;./fonts/DejaVuSans.ttf&quot;);
 <span class="boring">}
 </span></code></pre>
-<p>The function returns a <code>FontStyle</code> which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating <code>Text</code> widgets:</p>
+<p>The function returns a <code>FontId</code> which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating <code>Text</code> widgets:</p>
 <pre><code class="language-rust noplaypen">Text::is(font, 32.0, &quot;Hello, world!&quot;.into())
 </code></pre>
 <h2 id="supported-font-formats"><a class="header" href="#supported-font-formats">Supported Font Formats</a></h2>
