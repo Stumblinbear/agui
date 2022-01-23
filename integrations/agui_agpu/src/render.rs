@@ -13,7 +13,7 @@ use agui::{
     },
     engine::node::WidgetNode,
     tree::Tree,
-    unit::{Rect, Shape, Size, Color},
+    unit::{Rect, Shape, Size},
     widget::WidgetId,
 };
 use lyon::lyon_tessellation::{
@@ -200,25 +200,13 @@ impl RenderEngine {
 
         self.layers.clear();
 
-        println!("building");
-
         for layer in layers {
-            let mut brush_data = vec![
-                BrushData {
-                    color: [0.0; 4],
-                };
-                layer.paint_map.len()
-            ];
-
-            println!("{:?}", layer.paint_map);
+            let mut brush_data = vec![BrushData { color: [0.0; 4] }; layer.paint_map.len()];
 
             for (paint, brush) in layer.paint_map {
-                brush_data.insert(
-                    brush.into(),
-                    BrushData {
-                        color: paint.color.into(),
-                    },
-                );
+                brush_data[brush.idx()] = BrushData {
+                    color: paint.color.into(),
+                };
             }
 
             let mut vertex_data = Vec::default();
@@ -231,21 +219,19 @@ impl RenderEngine {
 
             let mut tessellator = FillTessellator::new();
 
+            let fill_options = FillOptions::default();
+
             for cmd in layer.commands {
                 match cmd {
                     CanvasCommand::Shape { rect, brush, shape } => {
                         let count = tessellator
-                            .tessellate_path(
-                                &shape.build_path(rect),
-                                &FillOptions::default(),
-                                &mut builder,
-                            )
+                            .tessellate_path(&shape.build_path(rect), &fill_options, &mut builder)
                             .unwrap();
 
                         vertex_data.resize(
                             vertex_data.len() + count.indices as usize,
                             VertexData {
-                                brush_id: (<Brush as Into<usize>>::into(brush)) as u32,
+                                brush_id: brush.idx() as u32,
                             },
                         );
                     }
@@ -332,19 +318,7 @@ struct VertexData {
 }
 
 #[repr(C)]
-#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Debug, Copy, Clone)]
 struct BrushData {
     color: [f32; 4],
-}
-
-#[repr(C)]
-#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
-struct IndexData {
-    index: u32,
-}
-
-#[repr(C)]
-#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
-struct PositionData {
-    pos: [f32; 2],
 }

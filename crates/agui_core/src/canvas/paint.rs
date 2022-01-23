@@ -8,15 +8,14 @@ pub struct Paint {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Brush(usize);
 
-impl From<usize> for Brush {
-    fn from(index: usize) -> Self {
-        Self(index)
+impl Brush {
+    pub fn idx(self) -> usize {
+        self.0
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<usize> for Brush {
-    fn into(self) -> usize {
-        self.0
+impl From<usize> for Brush {
+    fn from(index: usize) -> Self {
+        Self(index)
     }
 }

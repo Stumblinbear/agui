@@ -42,7 +42,7 @@ impl Canvas {
     }
 
     pub fn get_paint(&self, brush: Brush) -> &Paint {
-        &self.paint[<Brush as Into<usize>>::into(brush)]
+        &self.paint[brush.idx()]
     }
 
     pub fn get_commands(&self) -> &Vec<CanvasCommand> {
