@@ -24,7 +24,6 @@ pub struct RenderEngine {
     gpu: GpuHandle,
     pipeline: RenderPipeline,
 
-    // window_size_bind_group: BindGroup,
     render_size: Buffer,
 
     layers: Vec<Layer>,
@@ -32,21 +31,6 @@ pub struct RenderEngine {
 
 impl RenderEngine {
     pub fn new(gpu: &GpuHandle, size: Size) -> Self {
-        // let window_size_bind_group_layout =
-        //     gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        //         label: None,
-        //         entries: &[wgpu::BindGroupLayoutEntry {
-        //             binding: 0,
-        //             visibility: wgpu::ShaderStages::VERTEX,
-        //             ty: wgpu::BindingType::Buffer {
-        //                 ty: wgpu::BufferBindingType::Uniform,
-        //                 has_dynamic_offset: false,
-        //                 min_binding_size: None,
-        //             },
-        //             count: None,
-        //         }],
-        //     });
-
         let binding = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -105,17 +89,10 @@ impl RenderEngine {
             .with_bind_groups(&[&binding])
             .create();
 
-        // let window_size = gpu
-        //     .new_buffer("AppSettings")
-        //     .as_uniform_buffer()
-        //     .allow_copy_to()
-        //     .create(&[size.width, size.height]);
-
         Self {
             gpu: GpuHandle::clone(gpu),
             pipeline,
 
-            // window_size_bind_group: gpu.create_bind_group(&[window_size.bind_uniform()]),
             render_size: gpu
                 .new_buffer("agui render size")
                 .as_uniform_buffer()
@@ -314,8 +291,6 @@ impl RenderEngine {
             .render_pass_cleared("agui layer pass", 0x44444444)
             .with_pipeline(&self.pipeline)
             .begin();
-
-        // r.set_bind_group(0, &self.window_size_bind_group, &[]);
 
         for layer in &self.layers {
             r.set_bind_group(0, &layer.bind_group, &[]);
