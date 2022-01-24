@@ -1,12 +1,13 @@
 use std::{
+    cell::RefCell,
     fs::File,
     io::{self, BufReader, Read},
     mem,
 };
 
 use agpu::{
-    wgpu::{self},
-    Buffer, Frame, GpuHandle, RenderPipeline,
+    wgpu::{self, TextureSampleType, TextureViewDimension},
+    Buffer, Frame, GpuHandle, RenderPipeline, Sampler, Texture, TextureFormat,
 };
 use agui::{
     canvas::{command::CanvasCommand, font::FontId, paint::Brush, texture::TextureId, Canvas},
@@ -15,11 +16,16 @@ use agui::{
     unit::Size,
     widget::WidgetId,
 };
-use glyph_brush_draw_cache::ab_glyph::{FontArc, InvalidFont};
+use glyph_brush_draw_cache::{
+    ab_glyph::{FontArc, InvalidFont},
+    DrawCache,
+};
 
 mod layer;
 
-use self::layer::{canvas::CanvasLayer, Layer, ShapeVertexData, TexturedShapeVertexData};
+use crate::render::layer::VertexData;
+
+use self::layer::{canvas::CanvasLayer, Layer};
 
 const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 
@@ -28,10 +34,50 @@ pub struct RenderContext {
 
     render_size: Buffer,
 
-    fonts: Vec<FontArc>,
-    textures: Vec<TextureId>,
+    textures: Vec<Texture<agpu::D2>>,
 
-    font_texture_id: Option<TextureId>,
+    fonts: Vec<FontArc>,
+    font_texture: Texture<agpu::D2>,
+    font_sampler: Sampler,
+    font_draw_cache: RefCell<DrawCache>,
+}
+
+impl RenderContext {
+    pub fn get_texture(&self, texture_id: TextureId) -> Option<&Texture<agpu::D2>> {
+        if let Some(texture_idx) = texture_id.idx() {
+            if texture_idx < self.textures.len() {
+                return Some(&self.textures[texture_idx]);
+            }
+        }
+
+        None
+    }
+
+    pub fn load_texture(&mut self, texture: Texture<agpu::D2>) -> TextureId {
+        self.textures.push(texture);
+
+        TextureId::new(self.textures.len() - 1)
+    }
+
+    pub fn get_fonts(&self) -> &[FontArc] {
+        &self.fonts
+    }
+
+    pub fn get_font(&self, font_id: FontId) -> Option<FontArc> {
+        if let Some(font_idx) = font_id.idx() {
+            if font_idx < self.fonts.len() {
+                return Some(FontArc::clone(&self.fonts[font_idx]));
+            }
+        }
+
+        None
+    }
+
+    pub fn load_font(&mut self, font: FontArc) -> FontId {
+        self.fonts.push(font);
+
+        FontId::new(self.fonts.len() - 1)
+    }
 }
 
 pub struct RenderEngine {
@@ -45,6 +91,12 @@ pub struct RenderEngine {
 
 impl RenderEngine {
     pub fn new(gpu: &GpuHandle, size: Size) -> Self {
+        const VERTEX_LAYOUT: wgpu::VertexBufferLayout = wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<VertexData>() as u64,
+            step_mode: agpu::wgpu::VertexStepMode::Vertex,
+            attributes: &agpu::wgpu::vertex_attr_array![0 => Uint32],
+        };
+
         const VIEWPORT_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX,
@@ -93,11 +145,7 @@ impl RenderEngine {
             .new_pipeline("agui layer shape pipeline")
             .with_vertex(include_bytes!("shaders/shape.vert.spv"))
             .with_fragment(include_bytes!("shaders/shape.frag.spv"))
-            .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: mem::size_of::<ShapeVertexData>() as u64,
-                step_mode: agpu::wgpu::VertexStepMode::Vertex,
-                attributes: &agpu::wgpu::vertex_attr_array![0 => Uint32],
-            }])
+            .with_vertex_layouts(&[VERTEX_LAYOUT])
             .with_bind_groups(&[
                 &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
@@ -112,14 +160,10 @@ impl RenderEngine {
             .create();
 
         let textured_pipeline = gpu
-            .new_pipeline("agui layer shape pipeline")
+            .new_pipeline("agui layer textured pipeline")
             .with_vertex(include_bytes!("shaders/texture.vert.spv"))
             .with_fragment(include_bytes!("shaders/texture.frag.spv"))
-            .with_vertex_layouts(&[agpu::wgpu::VertexBufferLayout {
-                array_stride: mem::size_of::<TexturedShapeVertexData>() as u64,
-                step_mode: agpu::wgpu::VertexStepMode::Vertex,
-                attributes: &agpu::wgpu::vertex_attr_array![0 => Uint32],
-            }])
+            .with_vertex_layouts(&[VERTEX_LAYOUT])
             .with_bind_groups(&[
                 &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
@@ -128,9 +172,30 @@ impl RenderEngine {
                         BRUSHES_BINDING,
                         INDICES_BINDING,
                         POSITIONS_BINDING,
-                        // Texture
+                        // UV
                         wgpu::BindGroupLayoutEntry {
                             binding: 4,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        // Texture
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 5,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: TextureSampleType::Float { filterable: true },
+                                view_dimension: TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 6,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
@@ -156,7 +221,20 @@ impl RenderEngine {
                 textures: Vec::default(),
 
                 fonts: Vec::default(),
-                font_texture_id: None,
+
+                font_texture: gpu
+                    .new_texture("agui font texture")
+                    .with_format(TextureFormat::R8Unorm)
+                    .allow_binding()
+                    .create_empty(INITIAL_FONT_CACHE_SIZE),
+
+                font_sampler: gpu.new_sampler("agui font sampler").create(),
+
+                font_draw_cache: RefCell::new(
+                    DrawCache::builder()
+                        .dimensions(INITIAL_FONT_CACHE_SIZE.0, INITIAL_FONT_CACHE_SIZE.1)
+                        .build(),
+                ),
             },
 
             layers: Vec::default(),
@@ -169,12 +247,14 @@ impl RenderEngine {
             .write_unchecked(&[size.width, size.height]);
     }
 
+    pub fn load_texture(&mut self, texture: Texture<agpu::D2>) -> TextureId {
+        self.ctx.load_texture(texture)
+    }
+
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontId, InvalidFont> {
         let font = FontArc::try_from_slice(bytes)?;
 
-        self.ctx.fonts.push(FontArc::clone(&font));
-
-        Ok(FontId::new(self.ctx.fonts.len() - 1))
+        Ok(self.ctx.load_font(font))
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
@@ -189,9 +269,7 @@ impl RenderEngine {
         let font = FontArc::try_from_vec(bytes)
             .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
 
-        self.ctx.fonts.push(font);
-
-        Ok(FontId::new(self.ctx.fonts.len() - 1))
+        Ok(self.ctx.load_font(font))
     }
 
     pub fn redraw<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>) {
@@ -254,16 +332,6 @@ impl RenderEngine {
                     return;
                 }
 
-                /*
-                        let font_texture = gpu
-                            .new_texture("agui font cache")
-                            .with_format(TextureFormat::R8Unorm)
-                            .allow_binding()
-                            .create_empty(INITIAL_FONT_CACHE_SIZE);
-
-                        let font_sampler = gpu.new_sampler("agui font cache sampler").create();
-                */
-
                 for cmd in commands {
                     match cmd {
                         CanvasCommand::Clip { rect, clip, shape } => {
@@ -302,24 +370,43 @@ impl RenderEngine {
         self.layers.clear();
 
         for layer in layers {
-            if let Some(layer) = layer.resolve(&self.ctx) {
+            if let Some(layer) = layer.resolve(&mut self.ctx) {
                 self.layers.push(layer);
             }
         }
     }
 
     pub fn render(&mut self, mut frame: Frame) {
-        let mut r = frame
-            .render_pass_cleared("agui layer pass", 0x44444444)
+        frame
+            .render_pass_cleared("agui clear pass", 0x44444444)
             .with_pipeline(&self.shape_pipeline)
             .begin();
 
         for layer in &self.layers {
             if let Some(shapes) = &layer.shapes {
+                let mut r = frame
+                    .render_pass("agui layer shapes pass")
+                    .with_pipeline(&self.shape_pipeline)
+                    .begin();
+
                 r.set_bind_group(0, &shapes.bind_group, &[]);
 
                 r.set_vertex_buffer(0, shapes.vertex_data.slice(..))
                     .draw(0..shapes.count, 0..1);
+            }
+
+            if !layer.textured.is_empty() {
+                let mut r = frame
+                    .render_pass("agui layer texture pass")
+                    .with_pipeline(&self.textured_pipeline)
+                    .begin();
+
+                for textured in &layer.textured {
+                    r.set_bind_group(0, &textured.bind_group, &[]);
+
+                    r.set_vertex_buffer(0, textured.vertex_data.slice(..))
+                        .draw(0..textured.count, 0..1);
+                }
             }
         }
     }

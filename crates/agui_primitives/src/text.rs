@@ -2,22 +2,31 @@ use std::borrow::Cow;
 
 use agui_core::{
     canvas::{font::FontStyle, paint::Paint, painter::CanvasPainter, Canvas},
-    unit::{Layout, Ref},
+    unit::{Layout, Ref, Sizing},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
 use agui_macros::Widget;
 
 #[derive(Default, Widget)]
 pub struct Text {
-    pub layout: Ref<Layout>,
-
     pub font: FontStyle,
     pub text: Cow<'static, str>,
 }
 
 impl WidgetBuilder for Text {
     fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
-        ctx.set_layout(Ref::clone(&self.layout));
+        ctx.set_layout(
+            Layout {
+                sizing: Sizing::Fill,
+                ..Layout::default()
+            }
+            .into(),
+        );
+
+        ctx.set_painter(TextPainter {
+            font: self.font,
+            text: self.text.clone(),
+        });
 
         BuildResult::None
     }
@@ -34,7 +43,12 @@ impl CanvasPainter for TextPainter {
             color: self.font.color,
         });
 
-        canvas.draw_text(brush, self.font.font_id, Cow::clone(&self.text));
+        canvas.draw_text(
+            brush,
+            self.font.font_id,
+            self.font.size,
+            Cow::clone(&self.text),
+        );
     }
 }
 

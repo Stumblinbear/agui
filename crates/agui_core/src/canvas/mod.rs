@@ -140,8 +140,14 @@ impl Canvas {
     }
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
-    pub fn draw_text(&mut self, brush: Brush, font_id: FontId, text: Cow<'static, str>) {
-        self.draw_text_at(self.rect, brush, font_id, text);
+    pub fn draw_text(
+        &mut self,
+        brush: Brush,
+        font_id: FontId,
+        scale: f32,
+        text: Cow<'static, str>,
+    ) {
+        self.draw_text_at(self.rect, brush, font_id, scale, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
@@ -150,6 +156,7 @@ impl Canvas {
         rect: Rect,
         brush: Brush,
         font_id: FontId,
+        scale: f32,
         text: Cow<'static, str>,
     ) {
         self.commands.push(CanvasCommand::Text {
@@ -157,7 +164,8 @@ impl Canvas {
             brush,
 
             font_id,
-            
+            scale,
+
             text,
         });
     }

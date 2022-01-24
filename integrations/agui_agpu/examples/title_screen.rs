@@ -62,6 +62,12 @@ fn example_main(
                 // Text::is(font, 64.0, "A Title".into()).color(Color::White),
                 Spacing::vertical(32.0.into()),
                 Button {
+                    layout: Layout {
+                        sizing: Sizing::Axis {
+                            width: 256.0,
+                            height: 64.0,
+                        },
+                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         child: Text {

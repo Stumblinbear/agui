@@ -36,6 +36,8 @@ pub enum CanvasCommand {
         brush: Brush,
 
         font_id: FontId,
+        scale: f32,
+        
         text: Cow<'static, str>,
     },
 }

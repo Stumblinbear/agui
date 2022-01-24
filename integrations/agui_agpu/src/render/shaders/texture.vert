@@ -14,10 +14,12 @@ layout (binding = 0) uniform Viewport {
 layout(std430, binding = 1) restrict readonly buffer BrushBuffer { vec4 Brushes[]; };
 layout(std430, binding = 2) restrict readonly buffer IndexBuffer { uint Indices[]; };
 layout(std430, binding = 3) restrict readonly buffer PositionBuffer { vec2 Positions[]; };
+layout(std430, binding = 4) restrict readonly buffer TexCoordsBuffer { vec2 TexCoords[]; };
 
 layout(location = 0) in uint brushId;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec2 outUV;
 
 out gl_PerVertex {
     vec4 gl_Position;
@@ -33,4 +35,5 @@ void main() {
     vec4 color = Brushes[brushId];
 
     outColor = color;
+    outUV = TexCoords[index];
 }

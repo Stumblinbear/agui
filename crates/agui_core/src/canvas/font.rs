@@ -23,6 +23,7 @@ impl FontId {
     pub fn styled(&self) -> FontStyle {
         FontStyle {
             font_id: *self,
+            color: Color::Black,
             ..FontStyle::default()
         }
     }
@@ -31,7 +32,7 @@ impl FontId {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FontStyle {
     pub font_id: FontId,
-    pub font_size: f32,
+    pub size: f32,
     pub color: Color,
 }
 
@@ -39,7 +40,7 @@ impl Default for FontStyle {
     fn default() -> Self {
         Self {
             font_id: FontId(None),
-            font_size: 32.0,
+            size: 32.0,
             color: Color::Black,
         }
     }
