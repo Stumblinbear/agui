@@ -16,6 +16,7 @@ pub mod command;
 pub mod font;
 pub mod paint;
 pub mod painter;
+pub mod texture;
 
 #[derive(PartialEq)]
 pub struct Canvas {
@@ -139,8 +140,8 @@ impl Canvas {
     }
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
-    pub fn draw_text(&mut self, brush: Brush, font: FontId, text: Cow<'static, str>) {
-        self.draw_text_at(self.rect, brush, font, text);
+    pub fn draw_text(&mut self, brush: Brush, font_id: FontId, text: Cow<'static, str>) {
+        self.draw_text_at(self.rect, brush, font_id, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
@@ -148,14 +149,15 @@ impl Canvas {
         &mut self,
         rect: Rect,
         brush: Brush,
-        font: FontId,
+        font_id: FontId,
         text: Cow<'static, str>,
     ) {
         self.commands.push(CanvasCommand::Text {
             rect,
             brush,
 
-            font,
+            font_id,
+            
             text,
         });
     }

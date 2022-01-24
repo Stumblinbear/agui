@@ -1,5 +1,5 @@
 use std::{
-    mem,
+    io, mem,
     ops::{Deref, DerefMut},
 };
 
@@ -10,6 +10,7 @@ use agpu::{
     Event, Frame, GpuHandle, GpuProgram,
 };
 use agui::{
+    canvas::font::FontId,
     engine::Engine,
     unit::{Point, Size},
     widgets::state::{
@@ -18,6 +19,7 @@ use agui::{
         window::{WindowFocus, WindowPosition, WindowSize},
     },
 };
+use glyph_brush_draw_cache::ab_glyph::InvalidFont;
 
 use crate::render::RenderEngine;
 
@@ -62,12 +64,16 @@ impl<'ui> UI<'ui> {
         }
     }
 
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontId, InvalidFont> {
+        self.renderer.load_font_bytes(bytes)
+    }
+
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
+        self.renderer.load_font_file(filename)
+    }
+
     pub fn redraw(&'ui mut self) {
-        if let Some(root_id) = self.engine.get_root() {
-            self.renderer.redraw(self.engine.get_tree(), root_id);
-        } else {
-            self.renderer.clear();
-        }
+        self.renderer.redraw(self.engine.get_tree());
     }
 
     pub fn render(&mut self, frame: Frame) {

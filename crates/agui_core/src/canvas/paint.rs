@@ -9,7 +9,7 @@ pub struct Paint {
 pub struct Brush(usize);
 
 impl Brush {
-    pub fn idx(self) -> usize {
+    pub fn idx(&self) -> usize {
         self.0
     }
 }

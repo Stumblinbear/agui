@@ -1,17 +1,10 @@
-use std::{
-    fs::File,
-    io::{self, BufReader, Read},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
-use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    canvas::font::FontId,
     computed::ComputedContext,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
@@ -37,8 +30,6 @@ pub struct Engine<'ui> {
 
     changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
     modifications: Vec<Modify>,
-
-    fonts: Vec<FontArc>,
 }
 
 impl<'ui> Engine<'ui> {
@@ -56,8 +47,6 @@ impl<'ui> Engine<'ui> {
 
             changed,
             modifications: Vec::default(),
-
-            fonts: Vec::default(),
         }
     }
 
@@ -158,31 +147,6 @@ impl<'ui> Engine<'ui> {
         F: FnOnce() -> V,
     {
         self.global.get_or(func)
-    }
-
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontId, InvalidFont> {
-        let font = FontArc::try_from_slice(bytes)?;
-
-        self.fonts.push(FontArc::clone(&font));
-
-        Ok(FontId(self.fonts.len() - 1))
-    }
-
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
-        let f = File::open(filename)?;
-
-        let mut reader = BufReader::new(f);
-
-        let mut bytes = Vec::new();
-
-        reader.read_to_end(&mut bytes)?;
-
-        let font = FontArc::try_from_vec(bytes)
-            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
-
-        self.fonts.push(font);
-
-        Ok(FontId(self.fonts.len() - 1))
     }
 
     /// Update the UI tree.
