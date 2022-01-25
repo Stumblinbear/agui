@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::unit::{Bounds, Rect, Shape};
 
-use super::{clipping::Clip, font::FontId, paint::Brush, texture::TextureId};
+use super::{clipping::Clip, font::FontStyle, paint::Brush, texture::TextureId};
 
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -35,9 +35,8 @@ pub enum CanvasCommand {
         rect: Rect,
         brush: Brush,
 
-        font_id: FontId,
-        scale: f32,
-        
+        font: FontStyle,
+
         text: Cow<'static, str>,
     },
 }
@@ -61,14 +60,14 @@ impl CanvasCommand {
 
     pub fn get_brush(&self) -> Option<Brush> {
         match self {
-            CanvasCommand::Shape { brush, .. } => Some(*brush),
+            CanvasCommand::Shape { brush, .. } | CanvasCommand::Text { brush, .. } => Some(*brush),
             _ => None,
         }
     }
 
     pub fn set_brush(&mut self, new_brush: Brush) {
         match self {
-            CanvasCommand::Shape { brush, .. } => {
+            CanvasCommand::Shape { brush, .. } | CanvasCommand::Text { brush, .. } => {
                 *brush = new_brush;
             }
             _ => {}

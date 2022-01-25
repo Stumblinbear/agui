@@ -1,7 +1,10 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::{clipping::Clip, font::FontId},
+    canvas::{
+        clipping::Clip,
+        font::{FontId, HorizontalAlign, VerticalAlign},
+    },
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
     widget::{BuildResult, WidgetContext, WidgetRef},
@@ -71,7 +74,7 @@ fn example_main(
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         child: Text {
-                            font: font.styled(),
+                            font: font.styled().h_align(HorizontalAlign::Center).v_align(VerticalAlign::Center),
                             text: "A Button"
                         }
                     },
@@ -80,10 +83,16 @@ fn example_main(
                     })
                 },
                 Button {
+                    layout: Layout {
+                        sizing: Sizing::Axis {
+                            width: 400.0,
+                            height: 50.0,
+                        },
+                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         child: Text {
-                            font: font.styled(),
+                            font: font.styled().h_align(HorizontalAlign::Center).v_align(VerticalAlign::Center),
                             text: "Another Button"
                         }
                     },
@@ -92,11 +101,17 @@ fn example_main(
                     })
                 },
                 Button {
+                    layout: Layout {
+                        sizing: Sizing::Axis {
+                            width: 150.0,
+                            height: 100.0,
+                        },
+                    },
                     clip: Clip::Hard.into(),
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         child: Text {
-                            font: font.styled(),
+                            font: font.styled().h_align(HorizontalAlign::Left).v_align(VerticalAlign::Bottom),
                             text: "Also a Button"
                         }
                     },
@@ -121,10 +136,16 @@ fn example_main(
 
                     build! {
                         Button {
+                            layout: Layout {
+                                sizing: Sizing::Axis {
+                                    width: 256.0,
+                                    height: 64.0,
+                                },
+                            },
                             child: Padding {
                                 padding: Margin::All(10.0.into()),
                                 child: Text {
-                                    font: font.styled().color(Color::White),
+                                    font: font.styled().color(Color::White).h_align(HorizontalAlign::Right).v_align(VerticalAlign::Bottom),
                                     text: "Beuton"
                                 }
                             },

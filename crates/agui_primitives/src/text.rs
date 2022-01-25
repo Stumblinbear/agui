@@ -43,30 +43,6 @@ impl CanvasPainter for TextPainter {
             color: self.font.color,
         });
 
-        canvas.draw_text(
-            brush,
-            self.font.font_id,
-            self.font.size,
-            Cow::clone(&self.text),
-        );
+        canvas.draw_text(brush, self.font, Cow::clone(&self.text));
     }
-}
-
-impl Text {
-    // pub fn get_glyphs(&self, fonts: &[FontArc], bounds: (f32, f32)) -> Vec<SectionGlyph> {
-    //     let glyphs_layout = GlyphLayout::Wrap {
-    //         line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
-    //         h_align: HorizontalAlign::Left,
-    //         v_align: VerticalAlign::Top,
-    //     };
-
-    //     glyphs_layout.calculate_glyphs(
-    //         fonts,
-    //         &SectionGeometry {
-    //             screen_position: (0.0, 0.0),
-    //             bounds,
-    //         },
-    //         &self.sections,
-    //     )
-    // }
 }

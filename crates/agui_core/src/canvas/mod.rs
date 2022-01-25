@@ -7,7 +7,7 @@ use crate::unit::{Rect, Shape};
 use self::{
     clipping::Clip,
     command::CanvasCommand,
-    font::FontId,
+    font::FontStyle,
     paint::{Brush, Paint},
 };
 
@@ -140,31 +140,17 @@ impl Canvas {
     }
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
-    pub fn draw_text(
-        &mut self,
-        brush: Brush,
-        font_id: FontId,
-        scale: f32,
-        text: Cow<'static, str>,
-    ) {
-        self.draw_text_at(self.rect, brush, font_id, scale, text);
+    pub fn draw_text(&mut self, brush: Brush, font: FontStyle, text: Cow<'static, str>) {
+        self.draw_text_at(self.rect, brush, font, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
-    pub fn draw_text_at(
-        &mut self,
-        rect: Rect,
-        brush: Brush,
-        font_id: FontId,
-        scale: f32,
-        text: Cow<'static, str>,
-    ) {
+    pub fn draw_text_at(&mut self, rect: Rect, brush: Brush, font: FontStyle, text: Cow<'static, str>) {
         self.commands.push(CanvasCommand::Text {
             rect,
             brush,
 
-            font_id,
-            scale,
+            font,
 
             text,
         });

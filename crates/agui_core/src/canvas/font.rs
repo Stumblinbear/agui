@@ -32,8 +32,12 @@ impl FontId {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct FontStyle {
     pub font_id: FontId,
+
     pub size: f32,
     pub color: Color,
+
+    pub h_align: HorizontalAlign,
+    pub v_align: VerticalAlign,
 }
 
 impl Default for FontStyle {
@@ -42,13 +46,57 @@ impl Default for FontStyle {
             font_id: FontId(None),
             size: 32.0,
             color: Color::Black,
+
+            h_align: HorizontalAlign::Left,
+            v_align: VerticalAlign::Top,
         }
     }
 }
 
 impl FontStyle {
+    pub fn size(mut self, size: f32) -> Self {
+        self.size = size;
+        self
+    }
+
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
+    }
+
+    pub fn h_align(mut self, h_align: HorizontalAlign) -> Self {
+        self.h_align = h_align;
+        self
+    }
+
+    pub fn v_align(mut self, v_align: VerticalAlign) -> Self {
+        self.v_align = v_align;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HorizontalAlign {
+    Left,
+    Center,
+    Right,
+}
+
+impl Default for HorizontalAlign {
+    fn default() -> Self {
+        Self::Left
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VerticalAlign {
+    Top,
+    Center,
+    Bottom,
+}
+
+impl Default for VerticalAlign {
+    fn default() -> Self {
+        Self::Top
     }
 }

@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem};
 
 use agui::{
     canvas::{
         clipping::Clip,
         command::CanvasCommand,
+        font::{HorizontalAlign, VerticalAlign},
         paint::{Brush, Paint},
     },
     unit::{Rect, Shape},
@@ -11,8 +12,8 @@ use agui::{
 
 use glyph_brush_draw_cache::CachedBy;
 use glyph_brush_layout::{
-    BuiltInLineBreaker, FontId as GlyphFontId, GlyphPositioner, HorizontalAlign,
-    Layout as GlyphLayout, SectionGeometry, SectionText, VerticalAlign,
+    BuiltInLineBreaker, FontId as GlyphFontId, GlyphPositioner, Layout as GlyphLayout,
+    SectionGeometry, SectionText,
 };
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
@@ -20,10 +21,7 @@ use lyon::lyon_tessellation::{
 
 use crate::render::RenderContext;
 
-use super::{
-    textured::{LayerTextureShapes, TexCoordsData},
-    BrushData, Layer, LayerShapes, PositionData, VertexData,
-};
+use super::{BrushData, Layer, LayerDraw, PositionData, VertexData};
 
 #[derive(Debug, Default)]
 pub struct CanvasLayer {
@@ -47,7 +45,8 @@ impl CanvasLayer {
         let mut vertex_data = Vec::default();
         let mut geometry: VertexBuffers<PositionData, u32> = VertexBuffers::new();
         let mut builder = BuffersBuilder::new(&mut geometry, |vertex: FillVertex| PositionData {
-            pos: vertex.position().to_array(),
+            xy: vertex.position().to_array(),
+            uv: [0.0, 0.0],
         });
         let mut tessellator = FillTessellator::new();
 
@@ -81,13 +80,12 @@ impl CanvasLayer {
                 } => {}
 
                 CanvasCommand::Text {
-                    rect,
+                    mut rect,
                     brush,
-                    font_id,
-                    scale,
+                    font,
                     text,
                 } => {
-                    let font_id = match font_id.idx() {
+                    let font_id = match font.font_id.idx() {
                         Some(font_id) => font_id,
                         None => {
                             log::warn!("attempted to draw text using a null font");
@@ -97,8 +95,32 @@ impl CanvasLayer {
 
                     let glyphs_layout = GlyphLayout::Wrap {
                         line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
-                        h_align: HorizontalAlign::Left,
-                        v_align: VerticalAlign::Top,
+                        h_align: match font.h_align {
+                            HorizontalAlign::Left => glyph_brush_layout::HorizontalAlign::Left,
+                            HorizontalAlign::Center => {
+                                rect.x += rect.width / 2.0;
+
+                                glyph_brush_layout::HorizontalAlign::Center
+                            }
+                            HorizontalAlign::Right => {
+                                rect.x += rect.width;
+
+                                glyph_brush_layout::HorizontalAlign::Right
+                            }
+                        },
+                        v_align: match font.v_align {
+                            VerticalAlign::Top => glyph_brush_layout::VerticalAlign::Top,
+                            VerticalAlign::Center => {
+                                rect.y += rect.height / 2.0;
+
+                                glyph_brush_layout::VerticalAlign::Center
+                            }
+                            VerticalAlign::Bottom => {
+                                rect.y += rect.height;
+
+                                glyph_brush_layout::VerticalAlign::Bottom
+                            }
+                        },
                     };
 
                     glyphs.extend(
@@ -111,7 +133,7 @@ impl CanvasLayer {
                                 },
                                 &[SectionText {
                                     text: &text,
-                                    scale: scale.into(),
+                                    scale: font.size.into(),
                                     font_id: GlyphFontId(font_id),
                                 }],
                             )
@@ -125,13 +147,13 @@ impl CanvasLayer {
         }
 
         let mut layer = Layer {
-            shapes: None,
-            textured: Vec::default(),
+            draws: Vec::default(),
+            font: None,
         };
 
         if !vertex_data.is_empty() {
-            layer.shapes = Some(LayerShapes {
-                count: geometry.indices.len() as u32,
+            layer.draws.push(LayerDraw {
+                count: vertex_data.len() as u32,
 
                 vertex_data: ctx
                     .gpu
@@ -159,6 +181,8 @@ impl CanvasLayer {
                         .create(&geometry.vertices)
                         .bind_storage_readonly()
                         .in_vertex(),
+                    ctx.unknown_texture.bind_texture().in_fragment(),
+                    ctx.texture_sampler.bind().in_fragment(),
                 ]),
             });
         }
@@ -192,11 +216,10 @@ impl CanvasLayer {
 
             if let CachedBy::Reordering = cached_by {
                 todo!();
-            } else if !glyphs.is_empty() {
+            } else {
                 let mut vertex_data = Vec::with_capacity(glyphs.len());
                 let mut index_data = Vec::with_capacity(glyphs.len() * 6);
                 let mut position_data = Vec::with_capacity(glyphs.len() * 4);
-                let mut uv_data = Vec::with_capacity(glyphs.len() * 4);
 
                 for (brush, sg) in glyphs.into_iter() {
                     if let Some((tex_coords, px_coords)) = ctx
@@ -211,22 +234,26 @@ impl CanvasLayer {
                             },
                         );
 
-                        let index = index_data.len() as u32;
+                        let index = position_data.len() as u32;
 
                         position_data.push(PositionData {
-                            pos: [px_coords.min.x, px_coords.min.y],
+                            xy: [px_coords.min.x, px_coords.min.y],
+                            uv: [tex_coords.min.x, tex_coords.min.y],
                         });
 
                         position_data.push(PositionData {
-                            pos: [px_coords.max.x, px_coords.min.y],
+                            xy: [px_coords.max.x, px_coords.min.y],
+                            uv: [tex_coords.max.x, tex_coords.min.y],
                         });
 
                         position_data.push(PositionData {
-                            pos: [px_coords.max.x, px_coords.max.y],
+                            xy: [px_coords.max.x, px_coords.max.y],
+                            uv: [tex_coords.max.x, tex_coords.max.y],
                         });
 
                         position_data.push(PositionData {
-                            pos: [px_coords.min.x, px_coords.max.y],
+                            xy: [px_coords.min.x, px_coords.max.y],
+                            uv: [tex_coords.min.x, tex_coords.max.y],
                         });
 
                         index_data.push(index);
@@ -236,27 +263,11 @@ impl CanvasLayer {
                         index_data.push(index + 1);
                         index_data.push(index + 2);
                         index_data.push(index + 3);
-
-                        uv_data.push(TexCoordsData {
-                            uv: [tex_coords.min.x, tex_coords.min.y],
-                        });
-
-                        uv_data.push(TexCoordsData {
-                            uv: [tex_coords.max.x, tex_coords.min.y],
-                        });
-
-                        uv_data.push(TexCoordsData {
-                            uv: [tex_coords.max.x, tex_coords.max.y],
-                        });
-
-                        uv_data.push(TexCoordsData {
-                            uv: [tex_coords.min.x, tex_coords.max.y],
-                        });
                     }
                 }
 
-                layer.textured.push(LayerTextureShapes {
-                    count: index_data.len() as u32,
+                layer.font = Some(LayerDraw {
+                    count: vertex_data.len() as u32,
 
                     vertex_data: ctx
                         .gpu
@@ -284,21 +295,14 @@ impl CanvasLayer {
                             .create(&position_data)
                             .bind_storage_readonly()
                             .in_vertex(),
-                        ctx.gpu
-                            .new_buffer("agui layer uv buffer")
-                            .as_storage_buffer()
-                            .create(&uv_data)
-                            .bind_storage_readonly()
-                            .in_vertex(),
-                        ctx.font_texture.bind_texture(),
-                        ctx.font_sampler.bind(),
+                        ctx.font_texture.bind_texture().in_fragment(),
+                        ctx.texture_sampler.bind().in_fragment(),
                     ]),
                 });
             }
         }
 
-        // No point in making a 0 size buffer
-        if layer.shapes.is_none() && layer.textured.is_empty() {
+        if layer.draws.is_empty() && layer.font.is_none() {
             None
         } else {
             Some(layer)

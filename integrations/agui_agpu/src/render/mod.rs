@@ -7,7 +7,7 @@ use std::{
 
 use agpu::{
     wgpu::{self, TextureSampleType, TextureViewDimension},
-    Buffer, Frame, GpuHandle, RenderPipeline, Sampler, Texture, TextureFormat,
+    Frame, GpuHandle, RenderPipeline, Texture, TextureFormat,
 };
 use agui::{
     canvas::{command::CanvasCommand, font::FontId, paint::Brush, texture::TextureId, Canvas},
@@ -21,68 +21,19 @@ use glyph_brush_draw_cache::{
     DrawCache,
 };
 
+mod context;
 mod layer;
 
-use crate::render::layer::VertexData;
-
-use self::layer::{canvas::CanvasLayer, Layer};
+use self::{
+    context::RenderContext,
+    layer::{canvas::CanvasLayer, Layer, VertexData},
+};
 
 const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 
-pub struct RenderContext {
-    gpu: GpuHandle,
-
-    render_size: Buffer,
-
-    textures: Vec<Texture<agpu::D2>>,
-
-    fonts: Vec<FontArc>,
-    font_texture: Texture<agpu::D2>,
-    font_sampler: Sampler,
-    font_draw_cache: RefCell<DrawCache>,
-}
-
-impl RenderContext {
-    pub fn get_texture(&self, texture_id: TextureId) -> Option<&Texture<agpu::D2>> {
-        if let Some(texture_idx) = texture_id.idx() {
-            if texture_idx < self.textures.len() {
-                return Some(&self.textures[texture_idx]);
-            }
-        }
-
-        None
-    }
-
-    pub fn load_texture(&mut self, texture: Texture<agpu::D2>) -> TextureId {
-        self.textures.push(texture);
-
-        TextureId::new(self.textures.len() - 1)
-    }
-
-    pub fn get_fonts(&self) -> &[FontArc] {
-        &self.fonts
-    }
-
-    pub fn get_font(&self, font_id: FontId) -> Option<FontArc> {
-        if let Some(font_idx) = font_id.idx() {
-            if font_idx < self.fonts.len() {
-                return Some(FontArc::clone(&self.fonts[font_idx]));
-            }
-        }
-
-        None
-    }
-
-    pub fn load_font(&mut self, font: FontArc) -> FontId {
-        self.fonts.push(font);
-
-        FontId::new(self.fonts.len() - 1)
-    }
-}
-
 pub struct RenderEngine {
-    shape_pipeline: RenderPipeline,
-    textured_pipeline: RenderPipeline,
+    layer_pipeline: RenderPipeline,
+    font_pipeline: RenderPipeline,
 
     ctx: RenderContext,
 
@@ -141,10 +92,28 @@ impl RenderEngine {
             count: None,
         };
 
-        let shape_pipeline = gpu
-            .new_pipeline("agui layer shape pipeline")
-            .with_vertex(include_bytes!("shaders/shape.vert.spv"))
-            .with_fragment(include_bytes!("shaders/shape.frag.spv"))
+        const TEXTURE_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+            binding: 4,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: TextureSampleType::Float { filterable: true },
+                view_dimension: TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+
+        const SAMPLER_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+            binding: 5,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            count: None,
+        };
+
+        let layer_pipeline = gpu
+            .new_pipeline("agui layer pipeline")
+            .with_vertex(include_bytes!("shaders/layer.vert.spv"))
+            .with_fragment(include_bytes!("shaders/layer.frag.spv"))
             .with_vertex_layouts(&[VERTEX_LAYOUT])
             .with_bind_groups(&[
                 &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -154,15 +123,17 @@ impl RenderEngine {
                         BRUSHES_BINDING,
                         INDICES_BINDING,
                         POSITIONS_BINDING,
+                        TEXTURE_BINDING,
+                        SAMPLER_BINDING,
                     ],
                 }),
             ])
             .create();
 
-        let textured_pipeline = gpu
-            .new_pipeline("agui layer textured pipeline")
-            .with_vertex(include_bytes!("shaders/texture.vert.spv"))
-            .with_fragment(include_bytes!("shaders/texture.frag.spv"))
+        let font_pipeline = gpu
+            .new_pipeline("agui layer font pipeline")
+            .with_vertex(include_bytes!("shaders/layer.vert.spv"))
+            .with_fragment(include_bytes!("shaders/font.frag.spv"))
             .with_vertex_layouts(&[VERTEX_LAYOUT])
             .with_bind_groups(&[
                 &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -172,42 +143,16 @@ impl RenderEngine {
                         BRUSHES_BINDING,
                         INDICES_BINDING,
                         POSITIONS_BINDING,
-                        // UV
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 4,
-                            visibility: wgpu::ShaderStages::VERTEX,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        // Texture
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 5,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: TextureSampleType::Float { filterable: true },
-                                view_dimension: TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 6,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
+                        TEXTURE_BINDING,
+                        SAMPLER_BINDING,
                     ],
                 }),
             ])
             .create();
 
         Self {
-            shape_pipeline,
-            textured_pipeline,
+            layer_pipeline,
+            font_pipeline,
 
             ctx: RenderContext {
                 gpu: GpuHandle::clone(gpu),
@@ -218,6 +163,12 @@ impl RenderEngine {
                     .allow_copy_to()
                     .create(&[size.width, size.height]),
 
+                unknown_texture: gpu
+                    .new_texture("agui unknown texture")
+                    .allow_binding()
+                    .create((1, 1), &[255_u8, 255, 255, 255]),
+                texture_sampler: gpu.new_sampler("agui texture sampler").create(),
+
                 textures: Vec::default(),
 
                 fonts: Vec::default(),
@@ -227,8 +178,6 @@ impl RenderEngine {
                     .with_format(TextureFormat::R8Unorm)
                     .allow_binding()
                     .create_empty(INITIAL_FONT_CACHE_SIZE),
-
-                font_sampler: gpu.new_sampler("agui font sampler").create(),
 
                 font_draw_cache: RefCell::new(
                     DrawCache::builder()
@@ -378,35 +327,34 @@ impl RenderEngine {
 
     pub fn render(&mut self, mut frame: Frame) {
         frame
-            .render_pass_cleared("agui clear pass", 0x44444444)
-            .with_pipeline(&self.shape_pipeline)
+            .render_pass_cleared("agui clear pass", 0x11111111)
             .begin();
 
         for layer in &self.layers {
-            if let Some(shapes) = &layer.shapes {
+            {
                 let mut r = frame
-                    .render_pass("agui layer shapes pass")
-                    .with_pipeline(&self.shape_pipeline)
+                    .render_pass("agui layer pass")
+                    .with_pipeline(&self.layer_pipeline)
                     .begin();
 
-                r.set_bind_group(0, &shapes.bind_group, &[]);
+                for draw in &layer.draws {
+                    r.set_bind_group(0, &draw.bind_group, &[]);
 
-                r.set_vertex_buffer(0, shapes.vertex_data.slice(..))
-                    .draw(0..shapes.count, 0..1);
+                    r.set_vertex_buffer(0, draw.vertex_data.slice(..))
+                        .draw(0..draw.count, 0..1);
+                }
             }
 
-            if !layer.textured.is_empty() {
+            if let Some(font_shapes) = &layer.font {
                 let mut r = frame
-                    .render_pass("agui layer texture pass")
-                    .with_pipeline(&self.textured_pipeline)
+                    .render_pass("agui layer font pass")
+                    .with_pipeline(&self.font_pipeline)
                     .begin();
 
-                for textured in &layer.textured {
-                    r.set_bind_group(0, &textured.bind_group, &[]);
+                r.set_bind_group(0, &font_shapes.bind_group, &[]);
 
-                    r.set_vertex_buffer(0, textured.vertex_data.slice(..))
-                        .draw(0..textured.count, 0..1);
-                }
+                r.set_vertex_buffer(0, font_shapes.vertex_data.slice(..))
+                    .draw(0..font_shapes.count, 0..1);
             }
         }
     }

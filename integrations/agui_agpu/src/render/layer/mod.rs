@@ -1,12 +1,16 @@
-pub mod canvas;
-pub mod shape;
-pub mod textured;
+use agpu::{BindGroup, Buffer};
 
-use self::{shape::LayerShapes, textured::LayerTextureShapes};
+pub mod canvas;
 
 pub struct Layer {
-    pub shapes: Option<LayerShapes>,
-    pub textured: Vec<LayerTextureShapes>,
+    pub draws: Vec<LayerDraw>,
+    pub font: Option<LayerDraw>,
+}
+
+pub struct LayerDraw {
+    pub count: u32,
+    pub vertex_data: Buffer,
+    pub bind_group: BindGroup,
 }
 
 #[repr(C)]
@@ -21,9 +25,9 @@ pub struct VertexData {
     pub brush_id: u32,
 }
 
-
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Clone)]
 pub struct PositionData {
-    pub pos: [f32; 2],
+    pub xy: [f32; 2],
+    pub uv: [f32; 2],
 }
