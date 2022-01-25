@@ -15,12 +15,8 @@ layout(location = 0) out vec4 outColor;
 void main() {
     vec4 color = texture(sampler2D(tex, textureSampler), uv);
 
-    if(draw_type == 0) {
-        color = texture(sampler2D(tex, textureSampler), uv);
-    } else if(draw_type == 1) {
-        float alpha = texture(sampler2D(tex, textureSampler), uv).r;
-
-        color = vec4(1.0, 1.0, 1.0, alpha);
+    if(draw_type == 1) {
+        color = vec4(1.0, 1.0, 1.0, color.r);
     }
 
     if(color.a <= 0.0) {
