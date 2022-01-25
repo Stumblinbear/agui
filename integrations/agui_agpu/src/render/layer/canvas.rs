@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem};
+use std::collections::HashMap;
 
 use agui::{
     canvas::{
@@ -148,7 +148,6 @@ impl CanvasLayer {
 
         let mut layer = Layer {
             draws: Vec::default(),
-            font: None,
         };
 
         if !vertex_data.is_empty() {
@@ -181,6 +180,7 @@ impl CanvasLayer {
                         .create(&geometry.vertices)
                         .bind_storage_readonly()
                         .in_vertex(),
+                    ctx.draw_types.texture.bind_uniform().in_vertex_fragment(),
                     ctx.unknown_texture.bind_texture().in_fragment(),
                     ctx.texture_sampler.bind().in_fragment(),
                 ]),
@@ -266,7 +266,7 @@ impl CanvasLayer {
                     }
                 }
 
-                layer.font = Some(LayerDraw {
+                layer.draws.push(LayerDraw {
                     count: vertex_data.len() as u32,
 
                     vertex_data: ctx
@@ -295,6 +295,7 @@ impl CanvasLayer {
                             .create(&position_data)
                             .bind_storage_readonly()
                             .in_vertex(),
+                        ctx.draw_types.font.bind_uniform().in_vertex_fragment(),
                         ctx.font_texture.bind_texture().in_fragment(),
                         ctx.texture_sampler.bind().in_fragment(),
                     ]),
@@ -302,7 +303,7 @@ impl CanvasLayer {
             }
         }
 
-        if layer.draws.is_empty() && layer.font.is_none() {
+        if layer.draws.is_empty() {
             None
         } else {
             Some(layer)

@@ -24,6 +24,8 @@ use glyph_brush_draw_cache::{
 mod context;
 mod layer;
 
+use crate::render::layer::LayerDrawTypes;
+
 use self::{
     context::RenderContext,
     layer::{canvas::CanvasLayer, Layer, VertexData},
@@ -33,7 +35,6 @@ const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 
 pub struct RenderEngine {
     layer_pipeline: RenderPipeline,
-    font_pipeline: RenderPipeline,
 
     ctx: RenderContext,
 
@@ -92,8 +93,19 @@ impl RenderEngine {
             count: None,
         };
 
-        const TEXTURE_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+        const TYPE_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
             binding: 4,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+
+        const TEXTURE_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+            binding: 5,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
                 sample_type: TextureSampleType::Float { filterable: true },
@@ -104,7 +116,7 @@ impl RenderEngine {
         };
 
         const SAMPLER_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
-            binding: 5,
+            binding: 6,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
             count: None,
@@ -120,26 +132,7 @@ impl RenderEngine {
                     label: None,
                     entries: &[
                         VIEWPORT_BINDING,
-                        BRUSHES_BINDING,
-                        INDICES_BINDING,
-                        POSITIONS_BINDING,
-                        TEXTURE_BINDING,
-                        SAMPLER_BINDING,
-                    ],
-                }),
-            ])
-            .create();
-
-        let font_pipeline = gpu
-            .new_pipeline("agui layer font pipeline")
-            .with_vertex(include_bytes!("shaders/layer.vert.spv"))
-            .with_fragment(include_bytes!("shaders/font.frag.spv"))
-            .with_vertex_layouts(&[VERTEX_LAYOUT])
-            .with_bind_groups(&[
-                &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[
-                        VIEWPORT_BINDING,
+                        TYPE_BINDING,
                         BRUSHES_BINDING,
                         INDICES_BINDING,
                         POSITIONS_BINDING,
@@ -152,7 +145,6 @@ impl RenderEngine {
 
         Self {
             layer_pipeline,
-            font_pipeline,
 
             ctx: RenderContext {
                 gpu: GpuHandle::clone(gpu),
@@ -162,6 +154,8 @@ impl RenderEngine {
                     .as_uniform_buffer()
                     .allow_copy_to()
                     .create(&[size.width, size.height]),
+
+                draw_types: LayerDrawTypes::new(gpu),
 
                 unknown_texture: gpu
                     .new_texture("agui unknown texture")
@@ -330,13 +324,13 @@ impl RenderEngine {
             .render_pass_cleared("agui clear pass", 0x11111111)
             .begin();
 
+        let mut r = frame
+            .render_pass("agui layer pass")
+            .with_pipeline(&self.layer_pipeline)
+            .begin();
+
         for layer in &self.layers {
             {
-                let mut r = frame
-                    .render_pass("agui layer pass")
-                    .with_pipeline(&self.layer_pipeline)
-                    .begin();
-
                 for draw in &layer.draws {
                     r.set_bind_group(0, &draw.bind_group, &[]);
 
@@ -345,17 +339,17 @@ impl RenderEngine {
                 }
             }
 
-            if let Some(font_shapes) = &layer.font {
-                let mut r = frame
-                    .render_pass("agui layer font pass")
-                    .with_pipeline(&self.font_pipeline)
-                    .begin();
+            // if let Some(font_shapes) = &layer.font {
+            //     let mut r = frame
+            //         .render_pass("agui layer font pass")
+            //         .with_pipeline(&self.font_pipeline)
+            //         .begin();
 
-                r.set_bind_group(0, &font_shapes.bind_group, &[]);
+            //     r.set_bind_group(0, &font_shapes.bind_group, &[]);
 
-                r.set_vertex_buffer(0, font_shapes.vertex_data.slice(..))
-                    .draw(0..font_shapes.count, 0..1);
-            }
+            //     r.set_vertex_buffer(0, font_shapes.vertex_data.slice(..))
+            //         .draw(0..font_shapes.count, 0..1);
+            // }
         }
     }
 }

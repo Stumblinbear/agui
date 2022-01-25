@@ -1,10 +1,32 @@
-use agpu::{BindGroup, Buffer};
+use agpu::{BindGroup, Buffer, GpuHandle};
 
 pub mod canvas;
 
+const TEXTURE_TYPE: u32 = 0;
+const FONT_TYPE: u32 = 1;
+
+pub struct LayerDrawTypes {
+    pub texture: Buffer,
+    pub font: Buffer,
+}
+
+impl LayerDrawTypes {
+    pub fn new(gpu: &GpuHandle) -> Self {
+        Self {
+            texture: gpu
+                .new_buffer("agui layer (texture)")
+                .as_uniform_buffer()
+                .create(&[TEXTURE_TYPE]),
+            font: gpu
+                .new_buffer("agui layer (font)")
+                .as_uniform_buffer()
+                .create(&[FONT_TYPE]),
+        }
+    }
+}
+
 pub struct Layer {
     pub draws: Vec<LayerDraw>,
-    pub font: Option<LayerDraw>,
 }
 
 pub struct LayerDraw {

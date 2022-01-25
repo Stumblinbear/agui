@@ -4,10 +4,14 @@ use agpu::{Buffer, GpuHandle, Sampler, Texture};
 use agui::canvas::{font::FontId, texture::TextureId};
 use glyph_brush_draw_cache::{ab_glyph::FontArc, DrawCache};
 
+use super::layer::LayerDrawTypes;
+
 pub struct RenderContext {
     pub(crate) gpu: GpuHandle,
 
     pub(crate) render_size: Buffer,
+
+    pub(crate) draw_types: LayerDrawTypes,
 
     pub(crate) unknown_texture: Texture<agpu::D2>,
     pub(crate) texture_sampler: Sampler,
