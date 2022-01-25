@@ -1,6 +1,6 @@
 use crate::unit::Color;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct Paint {
     pub color: Color,
 }

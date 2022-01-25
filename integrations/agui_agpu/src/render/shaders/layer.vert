@@ -11,10 +11,13 @@ layout (binding = 0) uniform Viewport {
     vec2 size;
 } viewport;
 
-layout(std430, binding = 1) restrict readonly buffer BrushBuffer { vec4 Brushes[]; };
-layout(std430, binding = 2) restrict readonly buffer IndexBuffer { uint Indices[]; };
-layout(std430, binding = 3) restrict readonly buffer PositionBuffer { vec4 Positions[]; };
-layout(std430, binding = 4) restrict readonly buffer TexCoordsBuffer { vec2 TexCoords[]; };
+layout(binding = 1) uniform DrawOptions {
+    uint draw_type;
+};
+
+layout(std430, binding = 2) restrict readonly buffer BrushBuffer { vec4 Brushes[]; };
+layout(std430, binding = 3) restrict readonly buffer IndexBuffer { uint Indices[]; };
+layout(std430, binding = 4) restrict readonly buffer PositionBuffer { vec4 Positions[]; };
 
 layout(location = 0) in uint brushId;
 

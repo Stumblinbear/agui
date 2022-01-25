@@ -1,6 +1,6 @@
 #version 460
 
-layout(binding = 4) uniform DrawType {
+layout(binding = 1) uniform DrawOptions {
     uint draw_type;
 };
 

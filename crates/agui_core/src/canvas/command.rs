@@ -4,7 +4,7 @@ use crate::unit::{Bounds, Rect, Shape};
 
 use super::{clipping::Clip, font::FontStyle, paint::Brush, texture::TextureId};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 #[non_exhaustive]
 pub enum CanvasCommand {
     Clip {

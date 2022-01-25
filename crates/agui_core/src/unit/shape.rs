@@ -1,10 +1,12 @@
 use lyon::{
-    geom::euclid::{approxeq::ApproxEq, Point2D, Size2D},
+    geom::euclid::{Point2D, Size2D},
     math::{Angle, Vector},
     path::{builder::BorderRadii, traits::PathBuilder, Path, Winding},
 };
 
 use crate::unit::Rect;
+
+use super::MARGIN_OF_ERROR;
 
 #[derive(Debug, Clone)]
 pub enum Shape {
@@ -28,35 +30,62 @@ impl Default for Shape {
     }
 }
 
-impl PartialEq for Shape {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                Self::RoundedRect {
-                    top_left: l_top_left,
-                    top_right: l_top_right,
-                    bottom_right: l_bottom_right,
-                    bottom_left: l_bottom_left,
-                },
-                Self::RoundedRect {
-                    top_left: r_top_left,
-                    top_right: r_top_right,
-                    bottom_right: r_bottom_right,
-                    bottom_left: r_bottom_left,
-                },
-            ) => {
-                l_top_left.approx_eq(r_top_left)
-                    && l_top_right.approx_eq(r_top_right)
-                    && l_bottom_right.approx_eq(r_bottom_right)
-                    && l_bottom_left.approx_eq(r_bottom_left)
+impl std::hash::Hash for Shape {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Shape::Rect => 0.hash(state),
+
+            Shape::RoundedRect {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => {
+                1.hash(state);
+                ((top_left * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+                ((top_right * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+                ((bottom_right * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+                ((bottom_left * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
             }
 
-            (Self::Path(l0), Self::Path(r0)) => l0.iter().eq(r0),
+            Shape::Circle => 2.hash(state),
 
-            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+            Shape::Path(_) => {
+                3.hash(state);
+            }
         }
     }
 }
+
+// impl PartialEq for Shape {
+//     fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (
+//                 Self::RoundedRect {
+//                     top_left: l_top_left,
+//                     top_right: l_top_right,
+//                     bottom_right: l_bottom_right,
+//                     bottom_left: l_bottom_left,
+//                 },
+//                 Self::RoundedRect {
+//                     top_left: r_top_left,
+//                     top_right: r_top_right,
+//                     bottom_right: r_bottom_right,
+//                     bottom_left: r_bottom_left,
+//                 },
+//             ) => {
+//                 l_top_left.approx_eq(r_top_left)
+//                     && l_top_right.approx_eq(r_top_right)
+//                     && l_bottom_right.approx_eq(r_bottom_right)
+//                     && l_bottom_left.approx_eq(r_bottom_left)
+//             }
+
+//             (Self::Path(l0), Self::Path(r0)) => l0.iter().eq(r0),
+
+//             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+//         }
+//     }
+// }
 
 impl Shape {
     pub fn build_path(&self, rect: Rect) -> Path {

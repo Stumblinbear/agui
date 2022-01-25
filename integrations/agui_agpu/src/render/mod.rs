@@ -1,8 +1,10 @@
 use std::{
     cell::RefCell,
     fs::File,
+    hash::{Hash, Hasher},
     io::{self, BufReader, Read},
     mem,
+    time::Instant,
 };
 
 use agpu::{
@@ -23,8 +25,6 @@ use glyph_brush_draw_cache::{
 
 mod context;
 mod layer;
-
-use crate::render::layer::LayerDrawTypes;
 
 use self::{
     context::RenderContext,
@@ -60,18 +60,18 @@ impl RenderEngine {
             count: None,
         };
 
-        const BRUSHES_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+        const OPTIONS_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
             binding: 1,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
             count: None,
         };
 
-        const INDICES_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+        const BRUSHES_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
             binding: 2,
             visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
@@ -82,7 +82,7 @@ impl RenderEngine {
             count: None,
         };
 
-        const POSITIONS_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+        const INDICES_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
             binding: 3,
             visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
@@ -93,11 +93,11 @@ impl RenderEngine {
             count: None,
         };
 
-        const TYPE_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
+        const POSITIONS_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
             binding: 4,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -132,7 +132,7 @@ impl RenderEngine {
                     label: None,
                     entries: &[
                         VIEWPORT_BINDING,
-                        TYPE_BINDING,
+                        OPTIONS_BINDING,
                         BRUSHES_BINDING,
                         INDICES_BINDING,
                         POSITIONS_BINDING,
@@ -143,19 +143,19 @@ impl RenderEngine {
             ])
             .create();
 
+        let render_size = gpu
+            .new_buffer("agui render size")
+            .as_uniform_buffer()
+            .allow_copy_to()
+            .create(&[size.width, size.height]);
+
         Self {
             layer_pipeline,
 
             ctx: RenderContext {
                 gpu: GpuHandle::clone(gpu),
 
-                render_size: gpu
-                    .new_buffer("agui render size")
-                    .as_uniform_buffer()
-                    .allow_copy_to()
-                    .create(&[size.width, size.height]),
-
-                draw_types: LayerDrawTypes::new(gpu),
+                render_size,
 
                 unknown_texture: gpu
                     .new_texture("agui unknown texture")
@@ -216,11 +216,15 @@ impl RenderEngine {
     }
 
     pub fn redraw<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>) {
+        let now = Instant::now();
+
         if let Some(root_id) = tree.get_root() {
             self.redraw_node(tree, root_id);
         } else {
             self.layers.clear();
         }
+
+        println!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
     pub fn redraw_node<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>, node_id: WidgetId) {
@@ -275,6 +279,8 @@ impl RenderEngine {
                     return;
                 }
 
+                canvas.hash(&mut layers.last_mut().unwrap().hasher);
+
                 for cmd in commands {
                     match cmd {
                         CanvasCommand::Clip { rect, clip, shape } => {
@@ -310,10 +316,19 @@ impl RenderEngine {
                 }
             });
 
-        self.layers.clear();
+        for i in 0..layers.len() {
+            let layer = layers.remove(0);
 
-        for layer in layers {
-            if let Some(layer) = layer.resolve(&mut self.ctx) {
+            // Very rudimentary way to not regenerate layers that are the same
+            if let Some(old_layer) = self.layers.get(i) {
+                if old_layer.hash == layer.hasher.finish() {
+                    continue;
+                }
+
+                if let Some(layer) = layer.resolve(&mut self.ctx) {
+                    self.layers[i] = layer;
+                }
+            } else if let Some(layer) = layer.resolve(&mut self.ctx) {
                 self.layers.push(layer);
             }
         }

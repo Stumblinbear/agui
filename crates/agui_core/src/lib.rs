@@ -1,4 +1,4 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![warn(clippy::all, clippy::nursery, clippy::cargo)]
 #![allow(clippy::cargo_common_metadata)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_const_for_fn)]

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use lyon::path::Path;
 
-use crate::unit::{Rect, Shape};
+use crate::unit::{Rect, Shape, Size};
 
 use self::{
     clipping::Clip,
@@ -18,7 +18,7 @@ pub mod paint;
 pub mod painter;
 pub mod texture;
 
-#[derive(PartialEq)]
+#[derive(Hash)]
 pub struct Canvas {
     rect: Rect,
 
@@ -40,6 +40,10 @@ impl Canvas {
 
     pub fn get_rect(&self) -> Rect {
         self.rect
+    }
+
+    pub fn get_paints(&self) -> &Vec<Paint> {
+        &self.paint
     }
 
     pub fn get_paint(&self, brush: Brush) -> &Paint {
@@ -145,7 +149,13 @@ impl Canvas {
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
-    pub fn draw_text_at(&mut self, rect: Rect, brush: Brush, font: FontStyle, text: Cow<'static, str>) {
+    pub fn draw_text_at(
+        &mut self,
+        rect: Rect,
+        brush: Brush,
+        font: FontStyle,
+        text: Cow<'static, str>,
+    ) {
         self.commands.push(CanvasCommand::Text {
             rect,
             brush,

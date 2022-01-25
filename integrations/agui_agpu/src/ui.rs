@@ -25,7 +25,6 @@ use crate::render::RenderEngine;
 
 pub struct UI<'ui> {
     engine: Engine<'ui>,
-
     renderer: RenderEngine,
 }
 
@@ -59,7 +58,6 @@ impl<'ui> UI<'ui> {
     pub fn using_gpu(gpu: &GpuHandle, size: Size) -> Self {
         Self {
             engine: Engine::new(),
-
             renderer: RenderEngine::new(gpu, size),
         }
     }

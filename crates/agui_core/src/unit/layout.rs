@@ -1,9 +1,9 @@
 use morphorm::PositionType;
 
-use super::Units;
+use super::{Units, MARGIN_OF_ERROR};
 
 /// Holds layout parameters to dictate how the element should be displayed.
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, Hash)]
 pub struct Layout {
     pub position: Position,
     pub min_sizing: Sizing,
@@ -14,7 +14,7 @@ pub struct Layout {
 }
 
 /// Indicates to the layout system how the children of a widget should be laid out.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash)]
 #[non_exhaustive]
 pub enum LayoutType {
     /// Widgets should be laid out side-by-side.
@@ -95,7 +95,7 @@ impl LayoutType {
 }
 
 /// Sets the margin around the element.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash)]
 #[non_exhaustive]
 pub enum Margin {
     /// No margin.
@@ -190,7 +190,7 @@ impl Margin {
 }
 
 /// Sets the positioning of an element.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash)]
 #[non_exhaustive]
 pub enum Position {
     /// Position unchanged.
@@ -264,7 +264,7 @@ impl Position {
 }
 
 /// The sizing of the element.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash)]
 #[non_exhaustive]
 pub enum Sizing {
     /// Element size automatically set based another factors.
@@ -307,26 +307,49 @@ impl Sizing {
 }
 
 /// Holds x and y values.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
 }
 
+impl std::hash::Hash for Point {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ((self.x * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.y * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+    }
+}
+
 /// Holds width and height values.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
 }
 
+impl std::hash::Hash for Size {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+    }
+}
+
 /// Holds exact position and size values.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
     pub width: f32,
     pub height: f32,
+}
+
+impl std::hash::Hash for Rect {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ((self.x * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.y * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+    }
 }
 
 impl Rect {
@@ -340,6 +363,26 @@ impl Rect {
     }
 }
 
+impl From<Size> for Rect {
+    fn from(size: Size) -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: size.width,
+            height: size.height,
+        }
+    }
+}
+
+impl From<Rect> for Size {
+    fn from(rect: Rect) -> Self {
+        Self {
+            width: rect.width,
+            height: rect.height,
+        }
+    }
+}
+
 /// Holds information about each side.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Bounds {
@@ -347,6 +390,15 @@ pub struct Bounds {
     pub right: f32,
     pub bottom: f32,
     pub left: f32,
+}
+
+impl std::hash::Hash for Bounds {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ((self.top * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.right * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.bottom * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.left * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+    }
 }
 
 impl Bounds {

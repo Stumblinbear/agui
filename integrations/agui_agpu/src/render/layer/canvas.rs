@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::Hasher,
+    time::Instant,
+};
 
 use agui::{
     canvas::{
@@ -19,12 +23,17 @@ use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
 
-use crate::render::RenderContext;
+use crate::render::{
+    layer::{LayerDrawOptions, LayerDrawType},
+    RenderContext,
+};
 
 use super::{BrushData, Layer, LayerDraw, PositionData, VertexData};
 
 #[derive(Debug, Default)]
 pub struct CanvasLayer {
+    pub hasher: DefaultHasher,
+
     pub clip: Option<(Rect, Clip, Shape)>,
 
     pub paint_map: HashMap<Paint, Brush>,
@@ -52,12 +61,12 @@ impl CanvasLayer {
 
         let mut glyphs = Vec::default();
 
-        for cmd in self.commands {
+        for cmd in &self.commands {
             match cmd {
                 CanvasCommand::Shape { rect, brush, shape } => {
                     let count = tessellator
                         .tessellate_path(
-                            &shape.build_path(rect),
+                            &shape.build_path(*rect),
                             &FillOptions::default(),
                             &mut builder,
                         )
@@ -147,6 +156,7 @@ impl CanvasLayer {
         }
 
         let mut layer = Layer {
+            hash: self.hasher.finish(),
             draws: Vec::default(),
         };
 
@@ -162,6 +172,14 @@ impl CanvasLayer {
 
                 bind_group: ctx.gpu.create_bind_group(&[
                     ctx.render_size.bind_uniform().in_vertex(),
+                    ctx.gpu
+                        .new_buffer("agui layer draw options")
+                        .as_uniform_buffer()
+                        .create(bytemuck::bytes_of(&LayerDrawOptions {
+                            r#type: LayerDrawType::Texture as u32,
+                        }))
+                        .bind_uniform()
+                        .in_vertex_fragment(),
                     ctx.gpu
                         .new_buffer("agui layer brush buffer")
                         .as_storage_buffer()
@@ -180,7 +198,6 @@ impl CanvasLayer {
                         .create(&geometry.vertices)
                         .bind_storage_readonly()
                         .in_vertex(),
-                    ctx.draw_types.texture.bind_uniform().in_vertex_fragment(),
                     ctx.unknown_texture.bind_texture().in_fragment(),
                     ctx.texture_sampler.bind().in_fragment(),
                 ]),
@@ -278,6 +295,14 @@ impl CanvasLayer {
                     bind_group: ctx.gpu.create_bind_group(&[
                         ctx.render_size.bind_uniform().in_vertex(),
                         ctx.gpu
+                            .new_buffer("agui layer draw options")
+                            .as_uniform_buffer()
+                            .create(bytemuck::bytes_of(&LayerDrawOptions {
+                                r#type: LayerDrawType::Font as u32,
+                            }))
+                            .bind_uniform()
+                            .in_vertex_fragment(),
+                        ctx.gpu
                             .new_buffer("agui layer brush buffer")
                             .as_storage_buffer()
                             .create(&brush_data)
@@ -295,7 +320,6 @@ impl CanvasLayer {
                             .create(&position_data)
                             .bind_storage_readonly()
                             .in_vertex(),
-                        ctx.draw_types.font.bind_uniform().in_vertex_fragment(),
                         ctx.font_texture.bind_texture().in_fragment(),
                         ctx.texture_sampler.bind().in_fragment(),
                     ]),

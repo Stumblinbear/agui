@@ -1,3 +1,5 @@
+pub(crate) const MARGIN_OF_ERROR: f32 = 0.01;
+
 mod reference;
 mod callback;
 mod units;

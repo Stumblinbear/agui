@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 /// as many monitors can render many more colors than that margin would allow.
 const EQ_MARGIN_OF_ERROR: f32 = 0.001;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialOrd)]
 pub enum Color {
     Black,
     DarkGray,
@@ -46,7 +46,7 @@ impl PartialEq for Color {
                     && (b0 - b1).abs() < EQ_MARGIN_OF_ERROR
                     && (a0 - a1).abs() < EQ_MARGIN_OF_ERROR
             }
-            
+
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }

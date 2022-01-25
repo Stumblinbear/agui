@@ -6,9 +6,9 @@
 // pub use glyph_brush_layout::Layout as GlyphLayout;
 // pub use glyph_brush_layout::{HorizontalAlign, SectionGlyph, VerticalAlign};
 
-use crate::unit::Color;
+use crate::unit::{Color, MARGIN_OF_ERROR};
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FontId(Option<usize>);
 
 impl FontId {
@@ -29,7 +29,7 @@ impl FontId {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone)]
 pub struct FontStyle {
     pub font_id: FontId,
 
@@ -50,6 +50,16 @@ impl Default for FontStyle {
             h_align: HorizontalAlign::Left,
             v_align: VerticalAlign::Top,
         }
+    }
+}
+
+impl std::hash::Hash for FontStyle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.font_id.hash(state);
+        ((self.size * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        self.color.hash(state);
+        self.h_align.hash(state);
+        self.v_align.hash(state);
     }
 }
 

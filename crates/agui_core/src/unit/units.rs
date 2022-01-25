@@ -1,9 +1,22 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
+use super::MARGIN_OF_ERROR;
+
+#[derive(Debug, Clone, Copy)]
 pub enum Units {
     Pixels(f32),
     Percentage(f32),
     Stretch(f32),
     Auto,
+}
+
+impl std::hash::Hash for Units {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Units::Pixels(val) | Units::Percentage(val) | Units::Stretch(val) => {
+                ((val * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+            }
+            Units::Auto => usize::MAX.hash(state),
+        }
+    }
 }
 
 impl Default for Units {
