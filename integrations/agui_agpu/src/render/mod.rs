@@ -330,26 +330,12 @@ impl RenderEngine {
             .begin();
 
         for layer in &self.layers {
-            {
-                for draw in &layer.draws {
-                    r.set_bind_group(0, &draw.bind_group, &[]);
+            for draw in &layer.draws {
+                r.set_bind_group(0, &draw.bind_group, &[]);
 
-                    r.set_vertex_buffer(0, draw.vertex_data.slice(..))
-                        .draw(0..draw.count, 0..1);
-                }
+                r.set_vertex_buffer(0, draw.vertex_data.slice(..))
+                    .draw(0..draw.count, 0..1);
             }
-
-            // if let Some(font_shapes) = &layer.font {
-            //     let mut r = frame
-            //         .render_pass("agui layer font pass")
-            //         .with_pipeline(&self.font_pipeline)
-            //         .begin();
-
-            //     r.set_bind_group(0, &font_shapes.bind_group, &[]);
-
-            //     r.set_vertex_buffer(0, font_shapes.vertex_data.slice(..))
-            //         .draw(0..font_shapes.count, 0..1);
-            // }
         }
     }
 }
