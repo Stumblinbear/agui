@@ -1,8 +1,4 @@
-use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::Hasher,
-    time::Instant,
-};
+use std::collections::HashMap;
 
 use agui::{
     canvas::{
@@ -23,17 +19,12 @@ use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
 
-use crate::render::{
-    layer::{LayerDrawOptions, LayerDrawType},
-    RenderContext,
-};
+use crate::render::{layer::LayerDrawOptions, RenderContext};
 
-use super::{BrushData, Layer, LayerDraw, PositionData, VertexData};
+use super::{BrushData, CanvasBuffer, Layer, LayerDrawType, PositionData, VertexData};
 
 #[derive(Debug, Default)]
-pub struct CanvasLayer {
-    pub hasher: DefaultHasher,
-
+pub struct CanvasBufferBuilder {
     pub clip: Option<(Rect, Clip, Shape)>,
 
     pub paint_map: HashMap<Paint, Brush>,
@@ -41,8 +32,8 @@ pub struct CanvasLayer {
     pub commands: Vec<CanvasCommand>,
 }
 
-impl CanvasLayer {
-    pub fn resolve(self, ctx: &mut RenderContext) -> Option<Layer> {
+impl CanvasBufferBuilder {
+    pub fn build(self, ctx: &mut RenderContext) -> CanvasBuffer {
         let mut brush_data = vec![BrushData { color: [0.0; 4] }; self.paint_map.len()];
 
         for (paint, brush) in self.paint_map {
@@ -63,6 +54,8 @@ impl CanvasLayer {
 
         for cmd in &self.commands {
             match cmd {
+                CanvasCommand::Clip { rect, clip, shape } => {}
+
                 CanvasCommand::Shape { rect, brush, shape } => {
                     let count = tessellator
                         .tessellate_path(
@@ -155,13 +148,12 @@ impl CanvasLayer {
             }
         }
 
-        let mut layer = Layer {
-            hash: self.hasher.finish(),
-            draws: Vec::default(),
+        let mut canvas_buffer = CanvasBuffer {
+            layers: Vec::default(),
         };
 
         if !vertex_data.is_empty() {
-            layer.draws.push(LayerDraw {
+            canvas_buffer.layers.push(Layer {
                 count: vertex_data.len() as u32,
 
                 vertex_data: ctx
@@ -283,7 +275,7 @@ impl CanvasLayer {
                     }
                 }
 
-                layer.draws.push(LayerDraw {
+                canvas_buffer.layers.push(Layer {
                     count: vertex_data.len() as u32,
 
                     vertex_data: ctx
@@ -327,10 +319,6 @@ impl CanvasLayer {
             }
         }
 
-        if layer.draws.is_empty() {
-            None
-        } else {
-            Some(layer)
-        }
+        canvas_buffer
     }
 }

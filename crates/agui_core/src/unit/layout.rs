@@ -363,6 +363,15 @@ impl Rect {
     }
 }
 
+impl From<Rect> for Point {
+    fn from(rect: Rect) -> Self {
+        Self {
+            x: rect.x,
+            y: rect.y,
+        }
+    }
+}
+
 impl From<Size> for Rect {
     fn from(size: Size) -> Self {
         Self {

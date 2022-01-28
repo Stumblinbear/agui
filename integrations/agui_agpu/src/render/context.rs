@@ -1,8 +1,10 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap, rc::Weak};
 
-use agpu::{BindGroup, Buffer, GpuHandle, Sampler, Texture};
+use agpu::{Buffer, GpuHandle, Sampler, Texture};
 use agui::canvas::{font::FontId, texture::TextureId};
 use glyph_brush_draw_cache::{ab_glyph::FontArc, DrawCache};
+
+use super::layer::CanvasBuffer;
 
 pub struct RenderContext {
     pub(crate) gpu: GpuHandle,

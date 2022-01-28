@@ -1,9 +1,11 @@
 use std::{
     cell::RefCell,
+    collections::{hash_map::DefaultHasher, HashMap},
     fs::File,
     hash::{Hash, Hasher},
     io::{self, BufReader, Read},
     mem,
+    rc::{Rc, Weak},
     time::Instant,
 };
 
@@ -12,7 +14,7 @@ use agpu::{
     Frame, GpuHandle, RenderPipeline, Texture, TextureFormat,
 };
 use agui::{
-    canvas::{command::CanvasCommand, font::FontId, paint::Brush, texture::TextureId, Canvas},
+    canvas::{font::FontId, paint::Brush, texture::TextureId, Canvas},
     engine::node::WidgetNode,
     tree::Tree,
     unit::Size,
@@ -26,27 +28,37 @@ use glyph_brush_draw_cache::{
 mod context;
 mod layer;
 
+use crate::render::layer::InstanceData;
+
 use self::{
     context::RenderContext,
-    layer::{canvas::CanvasLayer, Layer, VertexData},
+    layer::{canvas::CanvasBufferBuilder, CanvasBuffer, RenderNode, VertexData},
 };
 
 const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 
 pub struct RenderEngine {
-    layer_pipeline: RenderPipeline,
+    pipeline: RenderPipeline,
 
     ctx: RenderContext,
 
-    layers: Vec<Layer>,
+    cache: HashMap<u64, Weak<CanvasBuffer>>,
+
+    nodes: Vec<RenderNode>,
 }
 
 impl RenderEngine {
     pub fn new(gpu: &GpuHandle, size: Size) -> Self {
+        const INSTANCE_LAYOUT: wgpu::VertexBufferLayout = wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<InstanceData>() as u64,
+            step_mode: agpu::wgpu::VertexStepMode::Instance,
+            attributes: &agpu::wgpu::vertex_attr_array![0 => Float32x2],
+        };
+
         const VERTEX_LAYOUT: wgpu::VertexBufferLayout = wgpu::VertexBufferLayout {
             array_stride: mem::size_of::<VertexData>() as u64,
             step_mode: agpu::wgpu::VertexStepMode::Vertex,
-            attributes: &agpu::wgpu::vertex_attr_array![0 => Uint32],
+            attributes: &agpu::wgpu::vertex_attr_array![1 => Uint32],
         };
 
         const VIEWPORT_BINDING: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
@@ -122,11 +134,11 @@ impl RenderEngine {
             count: None,
         };
 
-        let layer_pipeline = gpu
+        let pipeline = gpu
             .new_pipeline("agui layer pipeline")
             .with_vertex(include_bytes!("shaders/layer.vert.spv"))
             .with_fragment(include_bytes!("shaders/layer.frag.spv"))
-            .with_vertex_layouts(&[VERTEX_LAYOUT])
+            .with_vertex_layouts(&[INSTANCE_LAYOUT, VERTEX_LAYOUT])
             .with_bind_groups(&[
                 &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
@@ -150,7 +162,7 @@ impl RenderEngine {
             .create(&[size.width, size.height]);
 
         Self {
-            layer_pipeline,
+            pipeline,
 
             ctx: RenderContext {
                 gpu: GpuHandle::clone(gpu),
@@ -180,7 +192,9 @@ impl RenderEngine {
                 ),
             },
 
-            layers: Vec::default(),
+            cache: HashMap::default(),
+
+            nodes: Vec::default(),
         }
     }
 
@@ -221,15 +235,14 @@ impl RenderEngine {
         if let Some(root_id) = tree.get_root() {
             self.redraw_node(tree, root_id);
         } else {
-            self.layers.clear();
+            // self.nodes.clear();
         }
 
         println!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
     pub fn redraw_node<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>, node_id: WidgetId) {
-        let mut layers: Vec<CanvasLayer> = Vec::default();
-        let mut layer_stack: Vec<(usize, usize)> = Vec::default();
+        let mut nodes: Vec<RenderNode> = Vec::default();
 
         tree.iter_from(node_id)
             .map(|widget_id| {
@@ -237,27 +250,6 @@ impl RenderEngine {
                     .expect("tree node missing during redraw")
             })
             .for_each(|node| {
-                if !layer_stack.is_empty() {
-                    // Pop any layer off the stack that has a higher depth than our current node
-                    while !layer_stack.is_empty() {
-                        let (depth, _idx) = layer_stack.last().unwrap();
-
-                        // If the layer on the top of the stack has a higher (or equal) depth, then
-                        // we've returned to a node higher in the tree than the layer we were building
-                        if *depth >= node.depth {
-                            layer_stack.pop();
-                        } else {
-                            break;
-                        }
-                    }
-                } else {
-                    // Even if the node doesn't draw anything, it should still begin a layer
-                    // this generally only runs on the first node that is checked
-                    layers.push(CanvasLayer::default());
-
-                    layer_stack.push((node.depth, layers.len() - 1));
-                }
-
                 let painter = match node.painter.as_ref() {
                     Some(painter) => painter,
                     None => return,
@@ -268,89 +260,100 @@ impl RenderEngine {
                     None => return,
                 };
 
-                let mut canvas = Canvas::new(rect);
+                let mut canvas = Canvas::new(rect.into());
 
                 painter.draw(&mut canvas);
 
                 let commands = canvas.get_commands().clone();
 
-                // If the canvas added no new commands, bail
+                // If the canvas added no commands, bail
                 if commands.is_empty() {
                     return;
                 }
 
-                canvas.hash(&mut layers.last_mut().unwrap().hasher);
+                let mut hasher = DefaultHasher::new();
+                canvas.hash(&mut hasher);
+                let hash = hasher.finish();
 
-                for cmd in commands {
-                    match cmd {
-                        CanvasCommand::Clip { rect, clip, shape } => {
-                            layers.push(CanvasLayer {
-                                clip: Some((rect, clip, shape)),
-
-                                ..CanvasLayer::default()
-                            });
-
-                            layer_stack.push((node.depth, layers.len() - 1));
-                        }
-
-                        mut cmd => {
-                            if let Some(brush) = cmd.get_brush() {
-                                let layer = layers.last_mut().unwrap();
-
-                                let paint = canvas.get_paint(brush);
-
-                                if let Some(new_brush) = layer.paint_map.get(paint) {
-                                    cmd.set_brush(*new_brush);
-                                } else {
-                                    let new_brush = Brush::from(layer.paint_map.len());
-
-                                    layer.paint_map.insert(paint.clone(), new_brush);
-
-                                    cmd.set_brush(new_brush);
-                                }
-                            }
-
-                            layers.last_mut().unwrap().commands.push(cmd);
-                        }
+                let canvas_buffer = if let Some(canvas_buffer) = self.cache.get(&hash) {
+                    if let Some(canvas_buffer) = canvas_buffer.upgrade() {
+                        canvas_buffer
+                    } else {
+                        panic!("attempted to pull a dead buffer from the cache");
                     }
-                }
+                } else {
+                    let mut builder = CanvasBufferBuilder {
+                        clip: None,
+                        paint_map: HashMap::default(),
+                        commands: Vec::default(),
+                    };
+
+                    for mut cmd in commands {
+                        if let Some(brush) = cmd.get_brush() {
+                            let paint = canvas.get_paint(brush);
+
+                            if let Some(new_brush) = builder.paint_map.get(paint) {
+                                cmd.set_brush(*new_brush);
+                            } else {
+                                let new_brush = Brush::from(builder.paint_map.len());
+
+                                builder.paint_map.insert(paint.clone(), new_brush);
+
+                                cmd.set_brush(new_brush);
+                            }
+                        }
+
+                        builder.commands.push(cmd);
+                    }
+
+                    let canvas_buffer = Rc::new(builder.build(&mut self.ctx));
+
+                    self.cache.insert(hash, Rc::downgrade(&canvas_buffer));
+
+                    canvas_buffer
+                };
+
+                nodes.push(RenderNode {
+                    pos: self
+                        .ctx
+                        .gpu
+                        .new_buffer("agui layer instance buffer")
+                        .as_vertex_buffer()
+                        .create(&[rect.x, rect.y]),
+                    canvas_buffer,
+                });
             });
 
-        for i in 0..layers.len() {
-            let layer = layers.remove(0);
+        self.nodes = nodes;
 
-            // Very rudimentary way to not regenerate layers that are the same
-            if let Some(old_layer) = self.layers.get(i) {
-                if old_layer.hash == layer.hasher.finish() {
-                    continue;
-                }
-
-                if let Some(layer) = layer.resolve(&mut self.ctx) {
-                    self.layers[i] = layer;
-                }
-            } else if let Some(layer) = layer.resolve(&mut self.ctx) {
-                self.layers.push(layer);
-            }
-        }
+        // Remove any invalidated buffers from the cache
+        self.cache
+            .retain(|_, canvas_buffer| canvas_buffer.upgrade().is_some());
     }
 
     pub fn render(&mut self, mut frame: Frame) {
+        let now = Instant::now();
+
         frame
             .render_pass_cleared("agui clear pass", 0x11111111)
             .begin();
 
         let mut r = frame
             .render_pass("agui layer pass")
-            .with_pipeline(&self.layer_pipeline)
+            .with_pipeline(&self.pipeline)
             .begin();
 
-        for layer in &self.layers {
-            for draw in &layer.draws {
-                r.set_bind_group(0, &draw.bind_group, &[]);
+        for node in &self.nodes {
+            r.set_vertex_buffer(0, node.pos.slice(..));
 
-                r.set_vertex_buffer(0, draw.vertex_data.slice(..))
-                    .draw(0..draw.count, 0..1);
+            for layer in &node.canvas_buffer.layers {
+                r.set_bind_group(0, &layer.bind_group, &[]);
+
+                r.set_vertex_buffer(1, layer.vertex_data.slice(..))
+                    .draw(0..layer.count, 0..1);
             }
         }
+
+        println!("rendered in: {:?}", Instant::now().duration_since(now));
     }
 }

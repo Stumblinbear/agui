@@ -19,7 +19,8 @@ layout(std430, binding = 2) restrict readonly buffer BrushBuffer { vec4 Brushes[
 layout(std430, binding = 3) restrict readonly buffer IndexBuffer { uint Indices[]; };
 layout(std430, binding = 4) restrict readonly buffer PositionBuffer { vec4 Positions[]; };
 
-layout(location = 0) in uint brushId;
+layout(location = 0) in vec2 pos;
+layout(location = 1) in uint brushId;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec2 outUV;
@@ -31,14 +32,14 @@ out gl_PerVertex {
 void main() {
     uint index = Indices[gl_VertexIndex];
 
-    vec4 pos = Positions[index];
+    vec4 vertex_pos = Positions[index];
     
-    vec2 screen_pos = pos.xy / viewport.size;
+    vec2 screen_pos = (pos + vertex_pos.xy) / viewport.size;
 
     gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(screen_pos.x, screen_pos.y, 0.0, 1.0);
 
     vec4 color = Brushes[brushId];
 
     outColor = color;
-    outUV = pos.zw;
+    outUV = vertex_pos.zw;
 }

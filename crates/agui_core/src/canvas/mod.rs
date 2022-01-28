@@ -20,7 +20,7 @@ pub mod texture;
 
 #[derive(Hash)]
 pub struct Canvas {
-    rect: Rect,
+    size: Size,
 
     paint: Vec<Paint>,
 
@@ -28,9 +28,9 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    pub fn new(rect: Rect) -> Self {
+    pub fn new(size: Size) -> Self {
         Self {
-            rect,
+            size,
 
             paint: Vec::default(),
 
@@ -38,8 +38,8 @@ impl Canvas {
         }
     }
 
-    pub fn get_rect(&self) -> Rect {
-        self.rect
+    pub fn get_size(&self) -> Size {
+        self.size
     }
 
     pub fn get_paints(&self) -> &Vec<Paint> {
@@ -62,7 +62,7 @@ impl Canvas {
 
     /// Begins clipping. It will be the `rect` of the canvas.
     pub fn start_clipping(&mut self, clip: Clip, shape: Shape) {
-        self.start_clipping_at(self.rect, clip, shape);
+        self.start_clipping_at(self.size.into(), clip, shape);
     }
 
     /// Begins clipping the defined `rect`.
@@ -73,7 +73,7 @@ impl Canvas {
 
     /// Draws a rectangle. It will be the `rect` of the canvas.
     pub fn draw_rect(&mut self, brush: Brush) {
-        self.draw_rect_at(self.rect, brush);
+        self.draw_rect_at(self.size.into(), brush);
     }
 
     /// Draws a rectangle in the defined `rect`.
@@ -96,7 +96,7 @@ impl Canvas {
         bottom_left: f32,
     ) {
         self.draw_rounded_rect_at(
-            self.rect,
+            self.size.into(),
             brush,
             top_left,
             top_right,
@@ -130,7 +130,7 @@ impl Canvas {
 
     /// Draws a path. It will be the `rect` of the canvas.
     pub fn draw_path(&mut self, brush: Brush, path: Path) {
-        self.draw_path_at(self.rect, brush, path);
+        self.draw_path_at(self.size.into(), brush, path);
     }
 
     /// Draws a path in the defined `rect`.
@@ -145,7 +145,7 @@ impl Canvas {
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
     pub fn draw_text(&mut self, brush: Brush, font: FontStyle, text: Cow<'static, str>) {
-        self.draw_text_at(self.rect, brush, font, text);
+        self.draw_text_at(self.size.into(), brush, font, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
