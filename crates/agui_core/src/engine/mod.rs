@@ -14,6 +14,7 @@ use crate::{
 };
 
 mod cache;
+pub mod debug;
 pub mod event;
 pub mod node;
 
@@ -355,6 +356,8 @@ impl<'ui> Engine<'ui> {
         // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
         let mut newly_changed = self.cache.take_changed();
 
+        newly_changed.retain(|widget_id| self.tree.contains(*widget_id));
+
         // Workaround for morphorm ignoring root sizing
         let mut root_changed = false;
 
@@ -527,7 +530,29 @@ impl<'ui> Engine<'ui> {
         });
 
         self.cache.remove(&widget_id);
-        self.changed.lock().remove(&ListenerId::Widget(widget_id));
+
+        let mut listeners = vec![ListenerId::Widget(widget_id)];
+
+        for computed_id in node.computed_funcs.keys() {
+            listeners.push(ListenerId::Computed(widget_id, *computed_id));
+        }
+
+        for listener_id in &listeners {
+            self.global.remove_listeners(listener_id);
+
+            self.changed.lock().remove(listener_id);
+        }
+
+        for widget_id in self.tree.iter() {
+            let node = self
+                .tree
+                .get(widget_id)
+                .expect("widget tree borked during destruction");
+
+            for listener_id in &listeners {
+                node.state.remove_listeners(listener_id);
+            }
+        }
 
         // Add the child widgets to the removal queue
         for child_id in node.children {

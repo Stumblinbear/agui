@@ -1,52 +1,55 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
+    canvas::font::FontStyle,
     macros::{build, functional_widget},
-    unit::{Callback, Margin},
-    widget::BuildResult,
+    unit::{Callback, Layout, Margin, Sizing},
+    widget::{BuildResult, WidgetContext},
     widgets::{
-        primitives::{Column, Padding},
+        plugins::DefaultPluginsExt,
+        primitives::{Column, Padding, Text},
+        state::DefaultGlobalsExt,
         App, Button,
     },
 };
-use agui_agpu::UI;
+use agui_agpu::UIProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui: counter")
-        .with_gpu_features(
-            agpu::Features::POLYGON_MODE_LINE
-                | agpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | agpu::Features::VERTEX_WRITABLE_STORAGE,
-        )
-        .build()?;
+    let mut ui = UIProgram::new("agui counter")?;
 
-    let mut ui = UI::with_default(&program);
+    ui.register_default_plugins();
+    ui.register_default_globals();
 
-    let deja_vu_sans = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
+    let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
     ui.set_root(build! {
         App {
             child: CounterWidget {
-                font: deja_vu_sans
+                font: deja_vu.styled()
             }
         }
     });
 
-    ui.run(program)
+    ui.run()
 }
 
 #[functional_widget]
-fn counter_widget(ctx: &mut WidgetContext, font: FontId) -> BuildResult {
+fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {
         Column {
             children: [
-                Text::is(font, 32.0, format!("clicked: {} times", num.read())),
                 Button {
+                    layout: Layout {
+                        sizing: Sizing::Axis {
+                            width: 256.0,
+                            height: 64.0,
+                        },
+                    },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text::is(font, 32.0, "A Button".into())
+                        child: Text { font, text: "A Button" }
                     },
                     on_pressed: Callback::from(move |()| {
                         *num.write() += 1;

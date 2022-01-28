@@ -18,7 +18,7 @@ use agui::{
 use agui_agpu::UIProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
-    let mut ui = UIProgram::new("agui widgets")?;
+    let mut ui = UIProgram::new("agui title screen")?;
 
     ui.register_default_plugins();
     ui.register_default_globals();

@@ -5,10 +5,12 @@ use std::{
 };
 
 use crate::{
+    engine::Modify,
     unit::{Layout, LayoutType, Ref},
     widget::{Widget, WidgetId},
-    Engine,
 };
+
+use super::Engine;
 
 const RESET: &str = "\u{001b}[0m";
 const GRAY: &str = "\u{001b}[30;1m";
@@ -20,10 +22,10 @@ const YELLOW: &str = "\u{001b}[33;1m";
 const CYAN: &str = "\u{001b}[36;1m";
 const WHITE: &str = "\u{001b}[37;1m";
 
-pub fn print_tree(engine: &Engine) {
+pub fn print_tree<'ui>(engine: &'ui Engine<'ui>) {
     println!("Tree:");
 
-    let tree = engine.get_context().get_tree();
+    let tree = engine.get_tree();
 
     for widget_id in tree.iter() {
         let node = tree.get_node(widget_id).expect("broken tree");
@@ -55,10 +57,10 @@ pub fn print_tree(engine: &Engine) {
     }
 }
 
-pub fn print_tree_modifications(engine: &Engine) {
+pub fn print_tree_modifications<'ui>(engine: &'ui Engine<'ui>) {
     println!("Tree:");
 
-    let tree = engine.get_context().get_tree();
+    let tree = engine.get_tree();
 
     let mods = &engine.modifications;
 
@@ -94,7 +96,7 @@ pub fn print_tree_modifications(engine: &Engine) {
     if tree.get_root().is_none() {
         // If we have a new root widget queued, print it
         if let Some(widget) = new_root {
-            print_node(0, 0, None, &widget.get(), GREEN, "");
+            print_node(0, None, &widget.get(), GREEN, "");
         }
 
         return;

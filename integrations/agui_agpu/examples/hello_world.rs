@@ -1,30 +1,27 @@
 #![allow(clippy::needless_update)]
 
-use agpu::Features;
 use agui::{
     macros::build,
-    widgets::{primitives::Text, App},
+    widgets::{plugins::DefaultPluginsExt, primitives::Text, state::DefaultGlobalsExt, App},
 };
-use agui_agpu::UI;
+use agui_agpu::UIProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui: hello_world")
-        .with_gpu_features(
-            Features::POLYGON_MODE_LINE
-                | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | Features::VERTEX_WRITABLE_STORAGE,
-        )
-        .build()?;
+    let mut ui = UIProgram::new("agui hello world")?;
 
-    let mut ui = UI::with_default(&program);
+    ui.register_default_plugins();
+    ui.register_default_globals();
 
-    let deja_vu_sans = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
+    let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
     ui.set_root(build! {
         App {
-            child: Text::is(deja_vu_sans, 32.0, "Hello, world!".into())
+            child: Text {
+                font: deja_vu.styled(),
+                text: "Hello, world!"
+            }
         }
     });
 
-    ui.run(program)
+    ui.run()
 }

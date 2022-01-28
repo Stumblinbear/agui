@@ -235,7 +235,7 @@ impl RenderEngine {
         if let Some(root_id) = tree.get_root() {
             self.redraw_node(tree, root_id);
         } else {
-            // self.nodes.clear();
+            self.nodes.clear();
         }
 
         println!("redrew in: {:?}", Instant::now().duration_since(now));
@@ -332,8 +332,6 @@ impl RenderEngine {
     }
 
     pub fn render(&mut self, mut frame: Frame) {
-        let now = Instant::now();
-
         frame
             .render_pass_cleared("agui clear pass", 0x11111111)
             .begin();
@@ -353,7 +351,5 @@ impl RenderEngine {
                     .draw(0..layer.count, 0..1);
             }
         }
-
-        println!("rendered in: {:?}", Instant::now().duration_since(now));
     }
 }
