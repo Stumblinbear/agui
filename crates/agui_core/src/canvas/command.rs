@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::unit::{Bounds, Rect, Shape};
+use crate::unit::{Bounds, Rect, Shape, Size};
 
 use super::{clipping::Clip, font::FontStyle, paint::Brush, texture::TextureId};
 
@@ -39,6 +39,16 @@ pub enum CanvasCommand {
 
         text: Cow<'static, str>,
     },
+
+    TextListener {
+        size: Size,
+
+        font: FontStyle,
+
+        text: Cow<'static, str>,
+
+        id: TextListenerId,
+    },
 }
 
 impl CanvasCommand {
@@ -74,3 +84,6 @@ impl CanvasCommand {
         }
     }
 }
+
+#[derive(Debug, Clone, Hash)]
+pub struct TextListenerId(pub(crate) usize);

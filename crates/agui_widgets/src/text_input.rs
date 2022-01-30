@@ -1,11 +1,14 @@
-use std::time::{Duration, Instant};
+use std::{
+    borrow::Cow,
+    time::{Duration, Instant},
+};
 
 use agui_core::{
-    canvas::{font::FontId, painter::shape::RectPainter},
-    unit::{Color, Key, Layout, Position, Ref, Sizing, Units},
-    widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
+    canvas::{font::FontStyle, paint::Paint},
+    unit::{Color, Layout, Rect, Ref},
+    widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
-use agui_macros::{build, Widget};
+use agui_macros::Widget;
 
 use crate::{
     plugins::{hovering::HoveringExt, timeout::TimeoutExt},
@@ -21,6 +24,8 @@ const CURSOR_BLINK_SECS: f32 = 0.5;
 #[derive(Debug, Default, Clone)]
 pub struct TextInputStateStyle {
     pub background_color: Color,
+    pub cursor_color: Color,
+
     pub placeholder_color: Color,
     pub text_color: Color,
 }
@@ -38,24 +43,32 @@ impl Default for TextInputStyle {
         Self {
             normal: TextInputStateStyle {
                 background_color: Color::White,
+                cursor_color: Color::Black,
+
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
 
             disabled: TextInputStateStyle {
                 background_color: Color::DarkGray,
+                cursor_color: Color::Black,
+
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
 
             hover: TextInputStateStyle {
                 background_color: Color::LightGray,
+                cursor_color: Color::Black,
+
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
 
             focused: TextInputStateStyle {
                 background_color: Color::White,
+                cursor_color: Color::Black,
+
                 placeholder_color: Color::DarkGray,
                 text_color: Color::Black,
             },
@@ -77,14 +90,20 @@ impl Default for TextInputState {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum CursorState {
+    Shown,
+    Hidden,
+}
+
 #[derive(Default, Widget)]
 pub struct TextInput {
     pub layout: Ref<Layout>,
 
     pub style: Option<TextInputStyle>,
 
-    pub font: FontId,
-    pub placeholder: String,
+    pub font: FontStyle,
+    pub placeholder: Cow<'static, str>,
 }
 
 impl WidgetBuilder for TextInput {
@@ -146,120 +165,18 @@ impl WidgetBuilder for TextInput {
             String::clone(&input_value)
         });
 
-        let style: TextInputStyle = self.style.resolve(ctx);
-
-        let input_state_style = match input_state {
-            TextInputState::Normal => style.normal,
-            TextInputState::Disabled => style.disabled,
-            TextInputState::Hover => style.hover,
-            TextInputState::Focused => style.focused,
-        };
-
-        const FONT_HEIGHT: f32 = 32.0;
-        const CURSOR_PADDING: f32 = 2.0;
-
-        let (text, cursor_pos) = if value.is_empty() {
-            (
-                Text::is(self.font, FONT_HEIGHT, String::clone(&self.placeholder))
-                    .color(input_state_style.placeholder_color),
-                None,
-            )
-        } else {
-            let text = Text::is(self.font, FONT_HEIGHT, String::clone(&value))
-                .sizing(self.layout.get().sizing)
-                .color(input_state_style.text_color);
-
-            // If we know the widget's rect, calculate the glyphs so we know where to place the cursor
-            // if let Some(rect) = ctx.use_rect() {
-            //     let fonts = ctx.use_global(Fonts::default);
-            //     let fonts = fonts.read();
-            //     let fonts = fonts.get_fonts();
-
-            //     let glyphs = text.get_glyphs(fonts, (rect.width, rect.height));
-
-            //     if !glyphs.is_empty() {
-            //         let g = glyphs.last().unwrap();
-
-            //         let position = g.glyph.position;
-
-            //         let mut pos_x = position.x;
-
-            //         if let Some(font) = fonts.get(g.font_id.0) {
-            //             pos_x += font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
-            //         }
-
-            //         // We have to subtract the rect height since morphorm doesn't let us stack widgets
-            //         (
-            //             text,
-            //             Some((rect.x + pos_x, (-rect.height) + CURSOR_PADDING)),
-            //         )
-            //     } else {
-            //         (text, None)
-            //     }
-            // } else {
-            //     (text, None)
-            // }
-
-            (text, None)
-        };
-
-        ctx.set_painter(RectPainter {
-            color: input_state_style.background_color,
-        });
-
-        build! {
-            [
-                text,
-
-                if cursor_pos.is_some() && input_state == TextInputState::Focused {
-                    // Key the cursor so its timer doesn't get reset with every change
-                    ctx.key(Key::local(value), Cursor {
-                        position: cursor_pos.unwrap(),
-                        height: FONT_HEIGHT - CURSOR_PADDING * 2.0,
-
-                        color: input_state_style.text_color,
-                    }.into())
-                }else{
-                    WidgetRef::None
-                },
-            ]
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum CursorState {
-    Shown,
-    Hidden,
-}
-
-#[derive(Widget)]
-pub struct Cursor {
-    position: (f32, f32),
-    height: f32,
-
-    color: Color,
-}
-
-impl Default for Cursor {
-    fn default() -> Self {
-        Self {
-            position: (0.0, 0.0),
-            height: 32.0,
-
-            color: Color::default(),
-        }
-    }
-}
-
-impl WidgetBuilder for Cursor {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         let cursor_state = ctx.computed(|ctx| {
             // Keep track of time so we can blink blonk the cursor
             let instant = *ctx.init_state(Instant::now).read();
 
             // Request an update in x seconds
             ctx.use_timeout(Duration::from_secs_f32(CURSOR_BLINK_SECS));
+
+            let input_state = *ctx.init_state(TextInputState::default).read();
+
+            if input_state != TextInputState::Focused {
+                return CursorState::Hidden;
+            }
 
             // Alternate between shown and hidden
             if instant.elapsed().as_secs_f32() % (CURSOR_BLINK_SECS * 2.0) > CURSOR_BLINK_SECS {
@@ -269,29 +186,72 @@ impl WidgetBuilder for Cursor {
             }
         });
 
-        ctx.set_layout(build! {
-            Layout {
-                position: Position::Relative {
-                    top: Units::Pixels(self.position.1),
-                    left: Units::Pixels(self.position.0),
-                    bottom: None,
-                    right: None
-                },
-                sizing: Sizing::Axis {
-                    width: 2.0,
-                    height: self.height.into()
-                }
-            }
-        });
+        let style: TextInputStyle = self.style.resolve(ctx);
 
-        let mut rgba = self.color.as_rgba();
-
-        rgba[3] = match cursor_state {
-            CursorState::Shown => 1.0,
-            CursorState::Hidden => 0.0,
+        let input_state_style = match input_state {
+            TextInputState::Normal => style.normal,
+            TextInputState::Disabled => style.disabled,
+            TextInputState::Hover => style.hover,
+            TextInputState::Focused => style.focused,
         };
 
-        ctx.set_painter(RectPainter { color: rgba.into() });
+        ctx.on_draw({
+            let background_color = input_state_style.background_color;
+
+            let text_color = input_state_style.text_color;
+
+            let cursor_color = input_state_style.cursor_color;
+
+            let (is_placeholder, text) = if value.is_empty() {
+                (true, self.placeholder.clone())
+            } else {
+                (false, value.into())
+            };
+
+            let font = self.font;
+
+            move |canvas| {
+                let bg_brush = canvas.new_brush(Paint {
+                    color: background_color,
+                });
+
+                canvas.draw_rect(bg_brush);
+
+                if cursor_state == CursorState::Shown {
+                    let cursor_brush = canvas.new_brush(Paint {
+                        color: cursor_color,
+                    });
+
+                    if is_placeholder {
+                        canvas.draw_rect_at(
+                            Rect {
+                                x: 0.0,
+                                y: 0.0,
+                                width: font.size / 2.0,
+                                height: font.size,
+                            },
+                            cursor_brush,
+                        );
+                    } else {
+                        canvas.calc_text_size(font, text.clone(), move |canvas, size| {
+                            canvas.draw_rect_at(
+                                Rect {
+                                    x: size.width,
+                                    y: 0.0,
+                                    width: font.size / 2.0,
+                                    height: font.size,
+                                },
+                                cursor_brush,
+                            );
+                        });
+                    }
+                }
+
+                let text_brush = canvas.new_brush(Paint { color: text_color });
+
+                canvas.draw_text(text_brush, font, text.clone());
+            }
+        });
 
         BuildResult::None
     }

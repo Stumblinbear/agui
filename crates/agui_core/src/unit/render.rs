@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 /// We want to merge colors for the renderer when we can, so we have a margin of error
 /// for doing so. 1 / 255 is approximately `0.004_f32`, but we want a bit more granularity
 /// as many monitors can render many more colors than that margin would allow.
@@ -54,8 +52,8 @@ impl PartialEq for Color {
 
 impl Eq for Color {}
 
-impl Hash for Color {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Color {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
     }
 }

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use agpu::{BindGroup, Buffer};
 
+pub mod builder;
 pub mod canvas;
 
 pub struct RenderNode {

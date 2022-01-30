@@ -21,11 +21,11 @@ fn main() -> Result<(), agpu::BoxError> {
                 layout: Layout {
                     sizing: Sizing::Axis {
                         width: Units::Stretch(1.0),
-                        height: Units::Auto,
+                        height: Units::Pixels(32.0),
                     }
                 },
 
-                font: deja_vu,
+                font: deja_vu.styled(),
                 placeholder: "some text here"
             }
         }

@@ -14,15 +14,18 @@ use agpu::{
     Frame, GpuHandle, RenderPipeline, Texture, TextureFormat,
 };
 use agui::{
-    canvas::{font::FontId, paint::Brush, texture::TextureId, Canvas},
+    canvas::{command::CanvasCommand, font::FontId, paint::Brush, texture::TextureId, Canvas},
     engine::node::WidgetNode,
     tree::Tree,
     unit::Size,
     widget::WidgetId,
 };
 use glyph_brush_draw_cache::{
-    ab_glyph::{FontArc, InvalidFont},
+    ab_glyph::{Font, FontArc, InvalidFont, ScaleFont},
     DrawCache,
+};
+use glyph_brush_layout::{
+    FontId as GlyphFontId, GlyphPositioner, Layout as GlyphLayout, SectionGeometry, SectionText,
 };
 
 mod context;
@@ -261,10 +264,8 @@ impl RenderEngine {
 
                 render_func.call(&mut canvas);
 
-                let commands = canvas.get_commands().clone();
-
                 // If the canvas added no commands, bail
-                if commands.is_empty() {
+                if canvas.is_empty() {
                     return;
                 }
 
@@ -285,22 +286,76 @@ impl RenderEngine {
                         commands: Vec::default(),
                     };
 
-                    for mut cmd in commands {
-                        if let Some(brush) = cmd.get_brush() {
-                            let paint = canvas.get_paint(brush);
+                    while let Some(mut cmd) = canvas.consume() {
+                        if let CanvasCommand::TextListener {
+                            size,
+                            font,
+                            text,
+                            id,
+                        } = cmd
+                        {
+                            let font_id = match font.font_id.idx() {
+                                Some(font_id) => font_id,
+                                None => {
+                                    log::warn!("attempted to draw text using a null font");
+                                    continue;
+                                }
+                            };
 
-                            if let Some(new_brush) = builder.paint_map.get(paint) {
-                                cmd.set_brush(*new_brush);
-                            } else {
-                                let new_brush = Brush::from(builder.paint_map.len());
+                            let text_size = {
+                                let glyphs = GlyphLayout::default().calculate_glyphs(
+                                    self.ctx.get_fonts(),
+                                    &SectionGeometry {
+                                        screen_position: (0.0, 0.0),
+                                        bounds: (size.width, size.height),
+                                    },
+                                    &[SectionText {
+                                        text: &text,
+                                        scale: font.size.into(),
+                                        font_id: GlyphFontId(font_id),
+                                    }],
+                                );
 
-                                builder.paint_map.insert(paint.clone(), new_brush);
+                                if glyphs.is_empty() {
+                                    Size {
+                                        width: 0.0,
+                                        height: 0.0,
+                                    }
+                                } else {
+                                    let g = glyphs.last().unwrap();
 
-                                cmd.set_brush(new_brush);
+                                    let mut position = g.glyph.position;
+
+                                    if let Some(font) = self.ctx.get_fonts().get(g.font_id.0) {
+                                        position.x +=
+                                            font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
+                                    }
+
+                                    Size {
+                                        width: position.x,
+                                        height: position.y,
+                                    }
+                                }
+                            };
+
+                            canvas.resolve_text_listener(id, text_size);
+                        } else {
+                            if let Some(brush) = cmd.get_brush() {
+                                let paint = canvas.get_paint(brush);
+
+                                if let Some(new_brush) = builder.paint_map.get(paint) {
+                                    cmd.set_brush(*new_brush);
+                                } else {
+                                    let new_brush = Brush::from(builder.paint_map.len());
+
+                                    builder.paint_map.insert(paint.clone(), new_brush);
+
+                                    cmd.set_brush(new_brush);
+                                }
                             }
-                        }
 
-                        builder.commands.push(cmd);
+                            builder.commands.push(cmd);
+                        }
                     }
 
                     let canvas_buffer = Rc::new(builder.build(&mut self.ctx));
