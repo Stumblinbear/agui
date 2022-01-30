@@ -28,12 +28,9 @@ use glyph_brush_draw_cache::{
 mod context;
 mod layer;
 
-use crate::render::layer::InstanceData;
+use crate::render::{context::RenderContext, layer::InstanceData};
 
-use self::{
-    context::RenderContext,
-    layer::{canvas::CanvasBufferBuilder, CanvasBuffer, RenderNode, VertexData},
-};
+use self::layer::{canvas::CanvasBufferBuilder, CanvasBuffer, RenderNode, VertexData};
 
 const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 
@@ -250,8 +247,8 @@ impl RenderEngine {
                     .expect("tree node missing during redraw")
             })
             .for_each(|node| {
-                let painter = match node.painter.as_ref() {
-                    Some(painter) => painter,
+                let render_func = match node.renderer.as_ref() {
+                    Some(render_func) => render_func,
                     None => return,
                 };
 
@@ -262,7 +259,7 @@ impl RenderEngine {
 
                 let mut canvas = Canvas::new(rect.into());
 
-                painter.draw(&mut canvas);
+                render_func.call(&mut canvas);
 
                 let commands = canvas.get_commands().clone();
 

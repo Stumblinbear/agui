@@ -6,7 +6,6 @@ use agui_core::{
     widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
 use agui_macros::{build, Widget};
-use agui_primitives::{Font, Fonts, ScaleFont, Text};
 
 use crate::{
     plugins::{hovering::HoveringExt, timeout::TimeoutExt},

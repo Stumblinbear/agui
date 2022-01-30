@@ -24,7 +24,7 @@ where
 {
     phantom: PhantomData<V>,
 
-    value: Arc<RwLock<Option<Box<dyn NotifiableValue>>>>,
+    pub(crate) value: Arc<RwLock<Option<Box<dyn NotifiableValue>>>>,
 
     listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
 
@@ -54,14 +54,6 @@ where
 
     pub fn remove_listener(&self, listener_id: ListenerId) {
         self.listeners.lock().remove(&listener_id);
-    }
-
-    pub fn has_value(&self) -> bool {
-        self.value.read().is_some()
-    }
-
-    pub fn set_value(&mut self, value: V) {
-        *self.value.write() = Some(Box::new(value));
     }
 
     pub(crate) fn cast<N>(&self) -> Notify<N>

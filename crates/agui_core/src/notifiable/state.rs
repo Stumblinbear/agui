@@ -45,15 +45,15 @@ impl StateMap {
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        let mut notify = self
+        let notify = self
             .values
             .write()
             .entry(TypeId::of::<V>())
             .or_insert_with(|| Notify::new(Arc::clone(&self.changed)))
             .cast();
 
-        if !notify.has_value() {
-            notify.set_value(func());
+        if notify.value.read().is_none() {
+            *notify.value.write() = Some(Box::new(func()));
         }
 
         notify

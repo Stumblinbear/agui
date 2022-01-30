@@ -15,7 +15,7 @@ pub mod clipping;
 pub mod command;
 pub mod font;
 pub mod paint;
-pub mod painter;
+pub mod renderer;
 pub mod texture;
 
 #[derive(Hash)]

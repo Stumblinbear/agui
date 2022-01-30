@@ -19,7 +19,7 @@ use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
 
-use crate::render::{layer::LayerDrawOptions, RenderContext};
+use crate::render::{context::RenderContext, layer::LayerDrawOptions};
 
 use super::{BrushData, CanvasBuffer, Layer, LayerDrawType, PositionData, VertexData};
 

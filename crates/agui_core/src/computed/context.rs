@@ -14,7 +14,7 @@ pub struct ComputedContext<'ui, 'ctx> {
     pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 
     pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
-    pub(crate) global: &'ctx mut StateMap,
+    pub(crate) global: &'ctx StateMap,
 }
 
 impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
@@ -22,7 +22,11 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
         self.widget_id
     }
 
-    pub fn get_tree(&self) -> &'ctx Tree<WidgetId, WidgetNode<'ui>> {
+    pub fn get_listener(&self) -> ListenerId {
+        (self.widget_id, self.computed_id).into()
+    }
+
+    pub fn get_tree(&mut self) -> &Tree<WidgetId, WidgetNode<'ui>> {
         self.tree
     }
 }
@@ -34,8 +38,7 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
     where
         V: NotifiableValue,
     {
-        self.global
-            .add_listener::<V>((self.widget_id, self.computed_id).into());
+        self.global.add_listener::<V>(self.get_listener());
 
         self.global.try_get::<V>()
     }
@@ -55,8 +58,7 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        self.global
-            .add_listener::<V>((self.widget_id, self.computed_id).into());
+        self.global.add_listener::<V>(self.get_listener());
 
         self.global.get_or(func)
     }
@@ -79,21 +81,24 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        self.widget
-            .state
-            .add_listener::<V>((self.widget_id, self.computed_id).into());
+        self.widget.state.add_listener::<V>(self.get_listener());
 
         self.widget.state.get_or::<V, F>(func)
     }
 
-    pub fn use_state_of<V, F>(&mut self, listener_id: ListenerId, func: F) -> Notify<V>
+    pub fn use_state_from<V, F>(&mut self, widget_id: WidgetId, func: F) -> Notify<V>
     where
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        self.widget.state.add_listener::<V>(listener_id);
+        let target_widget = self
+            .tree
+            .get(widget_id)
+            .expect("cannot use state from a widget that doesn't exist");
 
-        self.widget.state.get_or::<V, F>(func)
+        target_widget.state.add_listener::<V>(self.get_listener());
+
+        target_widget.state.get_or::<V, F>(func)
     }
 }
 

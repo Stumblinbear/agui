@@ -87,7 +87,7 @@ impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)
             .write()
-            .create_timeout(self.get_widget().into(), duration);
+            .create_timeout(self.get_listener(), duration);
     }
 }
 
@@ -96,6 +96,6 @@ impl<'ui, 'ctx> TimeoutExt for ComputedContext<'ui, 'ctx> {
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)
             .write()
-            .create_timeout(self.get_widget().into(), duration);
+            .create_timeout(self.get_listener(), duration);
     }
 }

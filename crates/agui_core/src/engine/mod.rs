@@ -303,7 +303,7 @@ impl<'ui> Engine<'ui> {
 
                         widget: &mut node,
 
-                        tree: &self.tree,
+                        tree: &mut self.tree,
                         global: &mut self.global,
                     }) {
                         dirty_widgets.insert(widget_id);
@@ -494,7 +494,7 @@ impl<'ui> Engine<'ui> {
                 widget_id,
                 widget: &mut node,
 
-                tree: &mut self.tree,
+                tree: &self.tree,
                 global: &mut self.global,
             })
         });
@@ -522,10 +522,10 @@ impl<'ui> Engine<'ui> {
     }
 
     fn process_destroy(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let node = self.tree.remove(widget_id);
+        let tree_node = self.tree.remove(widget_id);
 
         widget_events.push(WidgetEvent::Destroyed {
-            type_id: node.widget.get_type_id(),
+            type_id: tree_node.widget.get_type_id(),
             widget_id,
         });
 
@@ -533,11 +533,20 @@ impl<'ui> Engine<'ui> {
 
         let mut listeners = vec![ListenerId::Widget(widget_id)];
 
-        for computed_id in node.computed_funcs.keys() {
+        for computed_id in tree_node.computed_funcs.keys() {
             listeners.push(ListenerId::Computed(widget_id, *computed_id));
         }
 
-        for listener_id in &listeners {
+        self.remove_listeners(&listeners);
+
+        // Add the child widgets to the removal queue
+        for child_id in tree_node.children {
+            self.modifications.push(Modify::Destroy(child_id));
+        }
+    }
+
+    fn remove_listeners(&mut self, listeners: &[ListenerId]) {
+        for listener_id in listeners {
             self.global.remove_listeners(listener_id);
 
             self.changed.lock().remove(listener_id);
@@ -547,16 +556,11 @@ impl<'ui> Engine<'ui> {
             let node = self
                 .tree
                 .get(widget_id)
-                .expect("widget tree borked during destruction");
+                .expect("widget tree borked during removal");
 
-            for listener_id in &listeners {
+            for listener_id in listeners {
                 node.state.remove_listeners(listener_id);
             }
-        }
-
-        // Add the child widgets to the removal queue
-        for child_id in node.children {
-            self.modifications.push(Modify::Destroy(child_id));
         }
     }
 }

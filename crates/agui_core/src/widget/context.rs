@@ -1,8 +1,8 @@
 use crate::{
-    canvas::painter::CanvasPainter,
+    canvas::{renderer::RenderFn, Canvas},
     computed::{ComputedContext, ComputedFn, ComputedFunc, ComputedId},
     engine::node::WidgetNode,
-    notifiable::{state::StateMap, NotifiableValue, Notify},
+    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     tree::Tree,
     unit::{Key, Layout, LayoutType, Ref},
     widget::{WidgetId, WidgetRef},
@@ -12,7 +12,7 @@ pub struct WidgetContext<'ui, 'ctx> {
     pub(crate) widget_id: WidgetId,
     pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 
-    pub(crate) tree: &'ctx mut Tree<WidgetId, WidgetNode<'ui>>,
+    pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
 }
 
@@ -21,11 +21,11 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         self.widget_id
     }
 
-    pub fn get_tree(&mut self) -> &Tree<WidgetId, WidgetNode<'ui>> {
-        self.tree
+    pub fn get_listener(&self) -> ListenerId {
+        self.widget_id.into()
     }
 
-    pub fn get_tree_mut(&mut self) -> &mut Tree<WidgetId, WidgetNode<'ui>> {
+    pub fn get_tree(&mut self) -> &Tree<WidgetId, WidgetNode<'ui>> {
         self.tree
     }
 }
@@ -37,7 +37,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     where
         V: NotifiableValue,
     {
-        self.global.add_listener::<V>(self.widget_id.into());
+        self.global.add_listener::<V>(self.get_listener());
 
         self.global.try_get::<V>()
     }
@@ -57,7 +57,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        self.global.add_listener::<V>(self.widget_id.into());
+        self.global.add_listener::<V>(self.get_listener());
 
         self.global.get_or(func)
     }
@@ -80,7 +80,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         V: NotifiableValue,
         F: FnOnce() -> V,
     {
-        self.widget.state.add_listener::<V>(self.widget_id.into());
+        self.widget.state.add_listener::<V>(self.get_listener());
 
         self.widget.state.get_or::<V, F>(func)
     }
@@ -92,10 +92,10 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     {
         let target_widget = self
             .tree
-            .get_mut(widget_id)
+            .get(widget_id)
             .expect("cannot use state from a widget that doesn't exist");
 
-        target_widget.state.add_listener::<V>(self.widget_id.into());
+        target_widget.state.add_listener::<V>(self.get_listener());
 
         target_widget.state.get_or::<V, F>(func)
     }
@@ -160,12 +160,11 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 
 // Rendering
 impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
-    /// Set the painter of the widget.
-    pub fn set_painter<P>(&mut self, painter: P)
+    pub fn on_draw<F>(&mut self, func: F)
     where
-        P: CanvasPainter + 'static,
+        F: Fn(&mut Canvas) + 'ui + 'static,
     {
-        self.widget.painter = Some(Box::new(painter));
+        self.widget.renderer = Some(RenderFn::new(func));
     }
 }
 

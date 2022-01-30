@@ -1,5 +1,5 @@
 use agui_core::{
-    canvas::{clipping::Clip, painter::shape::RectPainter},
+    canvas::{clipping::Clip, paint::Paint},
     unit::{Callback, Color, Layout, Ref},
     widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
@@ -7,10 +7,7 @@ use agui_macros::Widget;
 
 use crate::{
     plugins::hovering::HoveringExt,
-    state::{
-        mouse::{Mouse, MouseButtonState},
-        theme::StyleExt,
-    },
+    state::mouse::{Mouse, MouseButtonState},
 };
 
 #[derive(Debug, Clone)]
@@ -86,17 +83,21 @@ impl WidgetBuilder for Button {
             *last_state.write() = state;
         }
 
-        let style: ButtonStyle = self.style.resolve(ctx);
+        ctx.on_draw({
+            let style = self.style.clone().unwrap_or_default();
 
-        ctx.set_painter(RectPainter {
-            color: match state {
-                ButtonState::Normal => style.normal,
-                ButtonState::Disabled => style.disabled,
-                ButtonState::Hover => style.hover,
-                ButtonState::Pressed => style.pressed,
-            },
+            move |canvas| {
+                let color = match state {
+                    ButtonState::Normal => style.normal,
+                    ButtonState::Disabled => style.disabled,
+                    ButtonState::Hover => style.hover,
+                    ButtonState::Pressed => style.pressed,
+                };
 
-            clip: self.clip,
+                let brush = canvas.new_brush(Paint { color });
+
+                canvas.draw_rect(brush);
+            }
         });
 
         (&self.child).into()

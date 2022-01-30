@@ -4,7 +4,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::Mutex;
 
 use crate::{
-    canvas::painter::CanvasPainter,
+    canvas::renderer::RenderFn,
     computed::{ComputedFunc, ComputedId},
     notifiable::{state::StateMap, ListenerId},
     tree::Tree,
@@ -22,7 +22,7 @@ pub struct WidgetNode<'ui> {
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
 
-    pub painter: Option<Box<dyn CanvasPainter>>,
+    pub renderer: Option<RenderFn<'ui>>,
 
     pub rect: Option<Rect>,
 }
@@ -38,7 +38,7 @@ impl WidgetNode<'_> {
             layout_type: Ref::None,
             layout: Ref::None,
 
-            painter: None,
+            renderer: None,
 
             rect: None,
         }

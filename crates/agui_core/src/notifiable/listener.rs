@@ -12,8 +12,8 @@ impl ListenerId {
     /// Returns `None` if not tied to a widget.
     pub fn widget_id(&self) -> Option<WidgetId> {
         match self {
-            Self::Widget(widget_id) | Self::Computed(widget_id, _) => Some(*widget_id),
-            Self::Plugin(_) => None,
+            Self::Widget(widget_id) | Self::Computed(widget_id, ..) => Some(*widget_id),
+            Self::Plugin(..) => None,
         }
     }
 }

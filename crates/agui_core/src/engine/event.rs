@@ -41,7 +41,7 @@ impl WidgetEvent {
         }
     }
 
-    pub fn is_widget<W>(&self) -> bool
+    pub fn is_type<W>(&self) -> bool
     where
         W: Widget + 'static,
     {
