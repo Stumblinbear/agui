@@ -40,6 +40,7 @@ fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
     build! {
         Column {
             children: [
+                Text { font, text: format!("clicked: {} times", num.read()).into() },
                 Button {
                     layout: Layout {
                         sizing: Sizing::Axis {

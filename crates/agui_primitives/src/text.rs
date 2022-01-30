@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use agui_core::{
     canvas::{font::FontStyle, paint::Paint},
-    unit::{Layout, Sizing},
+    unit::{Layout, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
 use agui_macros::Widget;
@@ -11,13 +11,21 @@ use agui_macros::Widget;
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
+    pub multiline: bool,
 }
 
 impl WidgetBuilder for Text {
     fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
         ctx.set_layout(
             Layout {
-                sizing: Sizing::Fill,
+                sizing: if self.multiline {
+                    Sizing::Fill
+                } else {
+                    Sizing::Axis {
+                        width: Units::Stretch(1.0),
+                        height: Units::Pixels(self.font.size),
+                    }
+                },
                 ..Layout::default()
             }
             .into(),
