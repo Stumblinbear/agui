@@ -269,7 +269,7 @@ impl<'ui> Engine<'ui> {
     }
 
     pub fn flush_changes(&mut self) {
-        let mut changed = self.changed.lock();
+        let changed = { self.changed.lock().drain().collect::<Vec<_>>() };
 
         if changed.is_empty() {
             return;
@@ -277,7 +277,7 @@ impl<'ui> Engine<'ui> {
 
         let mut dirty_widgets = FnvHashSet::default();
 
-        for listener_id in changed.drain().collect::<Vec<_>>() {
+        for listener_id in changed {
             match listener_id {
                 ListenerId::Widget(widget_id) => {
                     dirty_widgets.insert(widget_id);
