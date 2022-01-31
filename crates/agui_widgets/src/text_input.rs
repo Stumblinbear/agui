@@ -4,7 +4,8 @@ use std::{
 };
 
 use agui_core::{
-    canvas::{font::FontStyle, paint::Paint},
+    canvas::paint::Paint,
+    font::FontStyle,
     unit::{Color, Layout, Rect, Ref},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
@@ -139,30 +140,46 @@ impl WidgetBuilder for TextInput {
             *last_input_state.write() = input_state;
         }
 
+        let cursor = ctx.use_state(Cursor::default);
+
         // Since the value reacts to keyboard inputs, we use a computed value
-        let value = ctx.computed(|ctx| {
-            let input_value = ctx.init_state::<String, _>(|| "".into());
+        let value = ctx.computed({
+            let cursor = cursor.clone();
 
-            let input_state = *ctx.init_state(TextInputState::default).read();
+            move |ctx| {
+                let input_value = ctx.init_state::<String, _>(|| "".into());
 
-            let keyboard_input = ctx.use_global(KeyboardInput::default);
+                let input_state = *ctx.init_state(TextInputState::default).read();
 
-            if input_state == TextInputState::Focused {
-                match **keyboard_input.read() {
-                    // Backspace character
-                    '\u{8}' => {
-                        if input_value.read().len() > 0 {
-                            input_value.write().pop();
+                let keyboard_input = ctx.use_global(KeyboardInput::default);
+
+                if input_state == TextInputState::Focused {
+                    let mut loc = cursor.read().loc;
+
+                    match **keyboard_input.read() {
+                        // Backspace character
+                        '\u{8}' => {
+                            if input_value.read().len() > 0 {
+                                loc -= 1;
+
+                                input_value.write().pop();
+                            }
+                        }
+
+                        ch => {
+                            loc += 1;
+
+                            input_value.write().push(ch)
                         }
                     }
 
-                    ch => input_value.write().push(ch),
+                    cursor.write().loc = loc.max(0).min(input_value.read().len() - 1);
                 }
+
+                let input_value = input_value.read();
+
+                String::clone(&input_value)
             }
-
-            let input_value = input_value.read();
-
-            String::clone(&input_value)
         });
 
         let cursor_state = ctx.computed(|ctx| {
@@ -195,64 +212,67 @@ impl WidgetBuilder for TextInput {
             TextInputState::Focused => style.focused,
         };
 
+        let glyphs = if value.is_empty() {
+            Vec::default()
+        } else if let Some(size) = ctx.get_size() {
+            self.font.get_glyphs(size.into(), &value)
+        } else {
+            Vec::default()
+        };
+
         ctx.on_draw({
-            let background_color = input_state_style.background_color;
-
-            let text_color = input_state_style.text_color;
-
-            let cursor_color = input_state_style.cursor_color;
-
-            let (is_placeholder, text) = if value.is_empty() {
-                (true, self.placeholder.clone())
-            } else {
-                (false, value.into())
-            };
-
-            let font = self.font;
+            let font = self.font.clone();
 
             move |canvas| {
                 let bg_brush = canvas.new_brush(Paint {
-                    color: background_color,
+                    color: input_state_style.background_color,
                 });
 
                 canvas.draw_rect(bg_brush);
 
                 if cursor_state == CursorState::Shown {
                     let cursor_brush = canvas.new_brush(Paint {
-                        color: cursor_color,
+                        color: input_state_style.cursor_color,
                     });
 
-                    if is_placeholder {
+                    if value.is_empty() {
                         canvas.draw_rect_at(
                             Rect {
                                 x: 0.0,
                                 y: 0.0,
-                                width: font.size / 2.0,
+                                width: 4.0,
                                 height: font.size,
                             },
                             cursor_brush,
                         );
-                    } else {
-                        canvas.calc_text_size(font, text.clone(), move |canvas, size| {
-                            canvas.draw_rect_at(
-                                Rect {
-                                    x: size.width,
-                                    y: 0.0,
-                                    width: font.size / 2.0,
-                                    height: font.size,
-                                },
-                                cursor_brush,
-                            );
-                        });
+                    } else if let Some(g) = glyphs.get(cursor.read().loc) {
+                        let pos = g.glyph.position;
+
+                        canvas.draw_rect_at(
+                            Rect {
+                                x: pos.x + font.h_advance(g.glyph.id),
+                                y: 0.0,
+                                width: 4.0,
+                                height: font.size,
+                            },
+                            cursor_brush,
+                        );
                     }
                 }
 
-                let text_brush = canvas.new_brush(Paint { color: text_color });
+                let text_brush = canvas.new_brush(Paint {
+                    color: input_state_style.text_color,
+                });
 
-                canvas.draw_text(text_brush, font, text.clone());
+                canvas.draw_text(text_brush, font.clone(), value.clone().into());
             }
         });
 
         BuildResult::None
     }
+}
+
+#[derive(Debug, Default)]
+struct Cursor {
+    loc: usize,
 }

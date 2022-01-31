@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
 use agui_core::{
-    canvas::{font::FontStyle, paint::Paint},
+    canvas::paint::Paint,
+    font::FontStyle,
     unit::{Layout, Sizing, Units},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
@@ -32,13 +33,13 @@ impl WidgetBuilder for Text {
         );
 
         ctx.on_draw({
-            let font = self.font;
+            let font = self.font.clone();
             let text = self.text.clone();
 
             move |canvas| {
                 let brush = canvas.new_brush(Paint { color: font.color });
 
-                canvas.draw_text(brush, font, Cow::clone(&text));
+                canvas.draw_text(brush, font.clone(), Cow::clone(&text));
             }
         });
 

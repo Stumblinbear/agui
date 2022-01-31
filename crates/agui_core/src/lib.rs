@@ -12,6 +12,7 @@
 pub mod canvas;
 pub mod computed;
 pub mod engine;
+pub mod font;
 pub mod notifiable;
 pub mod plugin;
 pub mod tree;

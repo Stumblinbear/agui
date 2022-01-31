@@ -1,7 +1,7 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::font::FontStyle,
+    font::FontStyle,
     macros::{build, functional_widget},
     unit::{Callback, Layout, Margin, Sizing},
     widget::{BuildResult, WidgetContext},
@@ -40,7 +40,7 @@ fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
     build! {
         Column {
             children: [
-                Text { font, text: format!("clicked: {} times", num.read()).into() },
+                Text { font: font.clone(), text: format!("clicked: {} times", num.read()).into() },
                 Button {
                     layout: Layout {
                         sizing: Sizing::Axis {
@@ -50,7 +50,7 @@ fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
                     },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text { font, text: "A Button" }
+                        child: Text { font: font.clone(), text: "A Button" }
                     },
                     on_pressed: Callback::from(move |()| {
                         *num.write() += 1;

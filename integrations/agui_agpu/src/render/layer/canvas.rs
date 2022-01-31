@@ -8,6 +8,7 @@ use agui::{
     },
     unit::{Rect, Shape},
 };
+use glyph_brush_draw_cache::ab_glyph::FontArc;
 
 use crate::render::context::RenderContext;
 
@@ -17,7 +18,9 @@ use super::{
 };
 
 #[derive(Debug, Default)]
-pub struct CanvasBufferBuilder {
+pub struct CanvasBufferBuilder<'builder> {
+    pub fonts: &'builder [FontArc],
+
     pub clip: Option<(Rect, Clip, Shape)>,
 
     pub paint_map: HashMap<Paint, Brush>,
@@ -25,7 +28,7 @@ pub struct CanvasBufferBuilder {
     pub commands: Vec<CanvasCommand>,
 }
 
-impl CanvasBufferBuilder {
+impl CanvasBufferBuilder<'_> {
     pub fn build(self, ctx: &mut RenderContext) -> CanvasBuffer {
         let mut brush_data = vec![BrushData { color: [0.0; 4] }; self.paint_map.len()];
 
@@ -41,10 +44,10 @@ impl CanvasBufferBuilder {
 
         let mut layer_builder: Option<Box<dyn LayerBuilder>> = None;
 
-        for cmd in &self.commands {
+        for cmd in self.commands {
             // Check if the current layer builder can process the command, and finalize the build if not
             if let Some(builder) = layer_builder.as_ref() {
-                if !builder.can_process(cmd) {
+                if !builder.can_process(&cmd) {
                     canvas_buffer.layers.extend(builder.build(ctx, &brush_data));
                     layer_builder = None;
                 }
@@ -63,14 +66,17 @@ impl CanvasBufferBuilder {
 
                 CanvasCommand::Text { .. } => {
                     if layer_builder.is_none() {
-                        layer_builder = Some(Box::new(TextLayerBuilder::default()));
+                        layer_builder = Some(Box::new(TextLayerBuilder {
+                            fonts: self.fonts,
+                            ..TextLayerBuilder::default()
+                        }));
                     }
                 }
 
                 cmd => panic!("unknown command: {:?}", cmd),
             }
 
-            layer_builder.as_mut().unwrap().process(ctx, cmd);
+            layer_builder.as_mut().unwrap().process(cmd);
         }
 
         if let Some(builder) = layer_builder.take() {

@@ -19,7 +19,7 @@ pub trait LayerBuilder<'builder> {
 
     fn can_process(&self, cmd: &CanvasCommand) -> bool;
 
-    fn process(&mut self, ctx: &mut RenderContext, cmd: &'builder CanvasCommand);
+    fn process(&mut self, cmd: CanvasCommand);
 
     fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<Layer>;
 }

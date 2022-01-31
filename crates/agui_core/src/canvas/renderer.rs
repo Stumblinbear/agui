@@ -7,7 +7,7 @@ pub struct RenderFn<'ui> {
 impl<'ui> RenderFn<'ui> {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&mut Canvas) + 'ui + 'static,
+        F: Fn(&mut Canvas) + 'ui,
     {
         Self {
             func: Box::new(func),

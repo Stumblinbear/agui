@@ -4,7 +4,7 @@ use crate::{
     engine::node::WidgetNode,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     tree::Tree,
-    unit::{Key, Layout, LayoutType, Ref},
+    unit::{Key, Layout, LayoutType, Rect, Ref, Size},
     widget::{WidgetId, WidgetRef},
 };
 
@@ -156,13 +156,21 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     pub fn set_layout(&mut self, layout: Ref<Layout>) {
         self.widget.layout = layout;
     }
+
+    pub fn get_rect(&self) -> Option<Rect> {
+        self.widget.rect
+    }
+
+    pub fn get_size(&self) -> Option<Size> {
+        self.widget.rect.map(|rect| rect.into())
+    }
 }
 
 // Rendering
 impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     pub fn on_draw<F>(&mut self, func: F)
     where
-        F: Fn(&mut Canvas) + 'ui + 'static,
+        F: Fn(&mut Canvas) + 'ui,
     {
         self.widget.renderer = Some(RenderFn::new(func));
     }

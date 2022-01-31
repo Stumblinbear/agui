@@ -1,11 +1,18 @@
-use std::{rc::Rc, sync::Arc};
+use std::{
+    fs::File,
+    io::{self, BufReader, Read},
+    rc::Rc,
+    sync::Arc,
+};
 
 use fnv::{FnvHashMap, FnvHashSet};
+use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
     computed::ComputedContext,
+    font::Font,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
     tree::Tree,
@@ -24,6 +31,8 @@ use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
 pub struct Engine<'ui> {
     plugins: FnvHashMap<PluginId, Box<dyn EnginePlugin>>,
 
+    fonts: Vec<FontArc>,
+
     tree: Tree<WidgetId, WidgetNode<'ui>>,
 
     global: StateMap,
@@ -41,6 +50,8 @@ impl<'ui> Engine<'ui> {
         Self {
             plugins: FnvHashMap::default(),
 
+            fonts: Vec::default(),
+
             tree: Tree::default(),
 
             global: StateMap::new(Arc::clone(&changed)),
@@ -49,6 +60,10 @@ impl<'ui> Engine<'ui> {
             changed,
             modifications: Vec::default(),
         }
+    }
+
+    pub fn get_fonts(&self) -> &[FontArc] {
+        &self.fonts
     }
 
     /// Initializes an engine plugin.
@@ -69,6 +84,35 @@ impl<'ui> Engine<'ui> {
         self.plugins.insert(plugin_id, Box::new(plugin));
 
         self.changed.lock().insert(plugin_id.into());
+    }
+
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
+        let f = File::open(filename)?;
+
+        let mut reader = BufReader::new(f);
+
+        let mut bytes = Vec::new();
+
+        reader.read_to_end(&mut bytes)?;
+
+        let font = FontArc::try_from_vec(bytes)
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+
+        Ok(self.load_font(font))
+    }
+
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<Font, InvalidFont> {
+        let font = FontArc::try_from_slice(bytes)?;
+
+        Ok(self.load_font(font))
+    }
+
+    pub fn load_font(&mut self, font: FontArc) -> Font {
+        let font_id = self.fonts.len();
+
+        self.fonts.push(font.clone());
+
+        Font(font_id, Some(font))
     }
 
     /// Get the widget build context.
@@ -420,9 +464,16 @@ impl<'ui> Engine<'ui> {
                 .get_mut(*widget_id)
                 .expect("newly changed widget does not exist in the tree");
 
-            let rect = self.cache.get_rect(widget_id);
+            let rect = self.cache.get_rect(widget_id).copied();
 
-            node.rect = rect.copied();
+            if node.rect != rect {
+                node.rect = rect;
+
+                // Notify any listeners of the change
+                self.changed
+                    .lock()
+                    .extend(node.rect_listeners.lock().iter());
+            }
         }
 
         newly_changed

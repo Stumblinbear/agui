@@ -37,7 +37,7 @@ impl LayerBuilder<'_> for ShapeLayerBuilder {
         matches!(cmd, CanvasCommand::Shape { .. })
     }
 
-    fn process(&mut self, _ctx: &mut RenderContext, cmd: &CanvasCommand) {
+    fn process(&mut self, cmd: CanvasCommand) {
         if let CanvasCommand::Shape { rect, brush, shape } = cmd {
             let mut builder =
                 BuffersBuilder::new(&mut self.geometry, |vertex: FillVertex| PositionData {
@@ -48,7 +48,7 @@ impl LayerBuilder<'_> for ShapeLayerBuilder {
             let count = self
                 .tessellator
                 .tessellate_path(
-                    &shape.build_path(*rect),
+                    &shape.build_path(rect),
                     &FillOptions::default(),
                     &mut builder,
                 )

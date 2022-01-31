@@ -24,6 +24,7 @@ pub struct WidgetNode<'ui> {
 
     pub renderer: Option<RenderFn<'ui>>,
 
+    pub rect_listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
     pub rect: Option<Rect>,
 }
 
@@ -40,6 +41,7 @@ impl WidgetNode<'_> {
 
             renderer: None,
 
+            rect_listeners: Arc::default(),
             rect: None,
         }
     }

@@ -1,10 +1,8 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::{
-        clipping::Clip,
-        font::{FontId, HorizontalAlign, VerticalAlign},
-    },
+    canvas::clipping::Clip,
+    font::{Font, HorizontalAlign, VerticalAlign},
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
     widget::{BuildResult, WidgetContext, WidgetRef},
@@ -39,7 +37,7 @@ fn main() -> Result<(), agpu::BoxError> {
 #[functional_widget]
 fn example_main(
     ctx: &mut WidgetContext,
-    font: FontId,
+    font: Font,
     _color: Color,
     _child: WidgetRef,
 ) -> BuildResult {

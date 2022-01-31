@@ -1,9 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap},
-    fs::File,
     hash::{Hash, Hasher},
-    io::{self, BufReader, Read},
     mem,
     rc::{Rc, Weak},
     time::Instant,
@@ -11,22 +9,15 @@ use std::{
 
 use agpu::{
     wgpu::{self, TextureSampleType, TextureViewDimension},
-    Frame, GpuHandle, RenderPipeline, Texture, TextureFormat,
+    Frame, GpuHandle, RenderPipeline, TextureFormat,
 };
 use agui::{
-    canvas::{command::CanvasCommand, font::FontId, paint::Brush, texture::TextureId, Canvas},
-    engine::node::WidgetNode,
-    tree::Tree,
+    canvas::{paint::Brush, Canvas},
+    engine::Engine,
     unit::Size,
     widget::WidgetId,
 };
-use glyph_brush_draw_cache::{
-    ab_glyph::{Font, FontArc, InvalidFont, ScaleFont},
-    DrawCache,
-};
-use glyph_brush_layout::{
-    FontId as GlyphFontId, GlyphPositioner, Layout as GlyphLayout, SectionGeometry, SectionText,
-};
+use glyph_brush_draw_cache::DrawCache;
 
 mod context;
 mod layer;
@@ -177,8 +168,6 @@ impl RenderEngine {
 
                 textures: Vec::default(),
 
-                fonts: Vec::default(),
-
                 font_texture: gpu
                     .new_texture("agui font texture")
                     .with_format(TextureFormat::R8Unorm)
@@ -198,42 +187,21 @@ impl RenderEngine {
         }
     }
 
+    pub fn get_context(&self) -> &RenderContext {
+        &self.ctx
+    }
+
     pub fn set_size(&mut self, size: Size) {
         self.ctx
             .render_size
             .write_unchecked(&[size.width, size.height]);
     }
 
-    pub fn load_texture(&mut self, texture: Texture<agpu::D2>) -> TextureId {
-        self.ctx.load_texture(texture)
-    }
-
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontId, InvalidFont> {
-        let font = FontArc::try_from_slice(bytes)?;
-
-        Ok(self.ctx.load_font(font))
-    }
-
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
-        let f = File::open(filename)?;
-
-        let mut reader = BufReader::new(f);
-
-        let mut bytes = Vec::new();
-
-        reader.read_to_end(&mut bytes)?;
-
-        let font = FontArc::try_from_vec(bytes)
-            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
-
-        Ok(self.ctx.load_font(font))
-    }
-
-    pub fn redraw<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>) {
+    pub fn redraw<'ui>(&mut self, engine: &'ui Engine<'ui>) {
         let now = Instant::now();
 
-        if let Some(root_id) = tree.get_root() {
-            self.redraw_node(tree, root_id);
+        if let Some(root_id) = engine.get_tree().get_root() {
+            self.redraw_node(engine, root_id);
         } else {
             self.nodes.clear();
         }
@@ -241,8 +209,12 @@ impl RenderEngine {
         println!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    pub fn redraw_node<'ui>(&mut self, tree: &Tree<WidgetId, WidgetNode<'ui>>, node_id: WidgetId) {
+    pub fn redraw_node<'ui>(&mut self, engine: &'ui Engine<'ui>, node_id: WidgetId) {
         let mut nodes: Vec<RenderNode> = Vec::default();
+
+        let fonts = engine.get_fonts();
+
+        let tree = engine.get_tree();
 
         tree.iter_from(node_id)
             .map(|widget_id| {
@@ -281,81 +253,29 @@ impl RenderEngine {
                     }
                 } else {
                     let mut builder = CanvasBufferBuilder {
+                        fonts,
+                        
                         clip: None,
                         paint_map: HashMap::default(),
                         commands: Vec::default(),
                     };
 
                     while let Some(mut cmd) = canvas.consume() {
-                        if let CanvasCommand::TextListener {
-                            size,
-                            font,
-                            text,
-                            id,
-                        } = cmd
-                        {
-                            let font_id = match font.font_id.idx() {
-                                Some(font_id) => font_id,
-                                None => {
-                                    log::warn!("attempted to draw text using a null font");
-                                    continue;
-                                }
-                            };
+                        if let Some(brush) = cmd.get_brush() {
+                            let paint = canvas.get_paint(brush);
 
-                            let text_size = {
-                                let glyphs = GlyphLayout::default().calculate_glyphs(
-                                    self.ctx.get_fonts(),
-                                    &SectionGeometry {
-                                        screen_position: (0.0, 0.0),
-                                        bounds: (size.width, size.height),
-                                    },
-                                    &[SectionText {
-                                        text: &text,
-                                        scale: font.size.into(),
-                                        font_id: GlyphFontId(font_id),
-                                    }],
-                                );
+                            if let Some(new_brush) = builder.paint_map.get(paint) {
+                                cmd.set_brush(*new_brush);
+                            } else {
+                                let new_brush = Brush::from(builder.paint_map.len());
 
-                                if glyphs.is_empty() {
-                                    Size {
-                                        width: 0.0,
-                                        height: 0.0,
-                                    }
-                                } else {
-                                    let g = glyphs.last().unwrap();
+                                builder.paint_map.insert(paint.clone(), new_brush);
 
-                                    let mut position = g.glyph.position;
-
-                                    if let Some(font) = self.ctx.get_fonts().get(g.font_id.0) {
-                                        position.x +=
-                                            font.as_scaled(g.glyph.scale).h_advance(g.glyph.id);
-                                    }
-
-                                    Size {
-                                        width: position.x,
-                                        height: position.y,
-                                    }
-                                }
-                            };
-
-                            canvas.resolve_text_listener(id, text_size);
-                        } else {
-                            if let Some(brush) = cmd.get_brush() {
-                                let paint = canvas.get_paint(brush);
-
-                                if let Some(new_brush) = builder.paint_map.get(paint) {
-                                    cmd.set_brush(*new_brush);
-                                } else {
-                                    let new_brush = Brush::from(builder.paint_map.len());
-
-                                    builder.paint_map.insert(paint.clone(), new_brush);
-
-                                    cmd.set_brush(new_brush);
-                                }
+                                cmd.set_brush(new_brush);
                             }
-
-                            builder.commands.push(cmd);
                         }
+
+                        builder.commands.push(cmd);
                     }
 
                     let canvas_buffer = Rc::new(builder.build(&mut self.ctx));

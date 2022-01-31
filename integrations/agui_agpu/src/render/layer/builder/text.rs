@@ -1,13 +1,6 @@
-use agui::canvas::{
-    command::CanvasCommand,
-    font::{HorizontalAlign, VerticalAlign},
-    paint::Brush,
-};
-use glyph_brush_draw_cache::CachedBy;
-use glyph_brush_layout::{
-    BuiltInLineBreaker, FontId as GlyphFontId, GlyphPositioner, Layout as GlyphLayout,
-    SectionGeometry, SectionGlyph, SectionText,
-};
+use agui::canvas::{command::CanvasCommand, paint::Brush};
+use glyph_brush_draw_cache::{ab_glyph::FontArc, CachedBy};
+use glyph_brush_layout::SectionGlyph;
 
 use crate::render::{
     context::RenderContext,
@@ -18,7 +11,9 @@ use super::{LayerBuilder, LayerType};
 
 #[derive(Default)]
 pub struct TextLayerBuilder<'builder> {
-    glyphs: Vec<(&'builder Brush, SectionGlyph)>,
+    pub fonts: &'builder [FontArc],
+
+    pub glyphs: Vec<(Brush, SectionGlyph)>,
 }
 
 impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
@@ -30,9 +25,9 @@ impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
         matches!(cmd, CanvasCommand::Text { .. })
     }
 
-    fn process(&mut self, ctx: &mut RenderContext, cmd: &'builder CanvasCommand) {
+    fn process(&mut self, cmd: CanvasCommand) {
         if let CanvasCommand::Text {
-            mut rect,
+            rect,
             brush,
 
             font,
@@ -40,61 +35,12 @@ impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
             text,
         } = cmd
         {
-            let font_id = match font.font_id.idx() {
-                Some(font_id) => font_id,
-                None => {
-                    log::warn!("attempted to draw text using a null font");
-                    return;
-                }
-            };
+            if font.get().is_none() {
+                return;
+            }
 
-            let glyphs_layout = GlyphLayout::Wrap {
-                line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
-                h_align: match font.h_align {
-                    HorizontalAlign::Left => glyph_brush_layout::HorizontalAlign::Left,
-                    HorizontalAlign::Center => {
-                        rect.x += rect.width / 2.0;
-
-                        glyph_brush_layout::HorizontalAlign::Center
-                    }
-                    HorizontalAlign::Right => {
-                        rect.x += rect.width;
-
-                        glyph_brush_layout::HorizontalAlign::Right
-                    }
-                },
-                v_align: match font.v_align {
-                    VerticalAlign::Top => glyph_brush_layout::VerticalAlign::Top,
-                    VerticalAlign::Center => {
-                        rect.y += rect.height / 2.0;
-
-                        glyph_brush_layout::VerticalAlign::Center
-                    }
-                    VerticalAlign::Bottom => {
-                        rect.y += rect.height;
-
-                        glyph_brush_layout::VerticalAlign::Bottom
-                    }
-                },
-            };
-
-            self.glyphs.extend(
-                glyphs_layout
-                    .calculate_glyphs(
-                        ctx.get_fonts(),
-                        &SectionGeometry {
-                            screen_position: (rect.x, rect.y),
-                            bounds: (rect.width, rect.height),
-                        },
-                        &[SectionText {
-                            text,
-                            scale: font.size.into(),
-                            font_id: GlyphFontId(font_id),
-                        }],
-                    )
-                    .into_iter()
-                    .map(|v| (brush, v)),
-            );
+            self.glyphs
+                .extend(font.get_glyphs(rect, &text).into_iter().map(|v| (brush, v)));
         }
     }
 
@@ -110,16 +56,16 @@ impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
         }
 
         let cached_by = loop {
-            match ctx.font_draw_cache.borrow_mut().cache_queued(
-                ctx.get_fonts(),
-                |rect, tex_data| {
+            match ctx
+                .font_draw_cache
+                .borrow_mut()
+                .cache_queued(self.fonts, |rect, tex_data| {
                     ctx.font_texture.write_block(
                         (rect.min[0], rect.min[1]),
                         (rect.width(), rect.height()),
                         tex_data,
                     );
-                },
-            ) {
+                }) {
                 Ok(cached_by) => break cached_by,
                 Err(_) => {
                     let size = ctx.font_texture.size;

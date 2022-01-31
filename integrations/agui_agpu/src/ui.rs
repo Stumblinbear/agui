@@ -10,8 +10,8 @@ use agpu::{
     Event, Frame, GpuHandle, GpuProgram,
 };
 use agui::{
-    canvas::font::FontId,
-    engine::{Engine, self},
+    engine::Engine,
+    font::Font,
     unit::{Point, Size},
     widgets::state::{
         keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
@@ -62,16 +62,16 @@ impl<'ui> UI<'ui> {
         }
     }
 
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<FontId, InvalidFont> {
-        self.renderer.load_font_bytes(bytes)
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<Font, InvalidFont> {
+        self.engine.load_font_bytes(bytes)
     }
 
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<FontId> {
-        self.renderer.load_font_file(filename)
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
+        self.engine.load_font_file(filename)
     }
 
     pub fn redraw(&'ui mut self) {
-        self.renderer.redraw(self.engine.get_tree());
+        self.renderer.redraw(&self.engine);
     }
 
     pub fn render(&mut self, frame: Frame) {
@@ -81,29 +81,6 @@ impl<'ui> UI<'ui> {
     pub fn handle_event(&'ui mut self, event: Event<'_, ()>, program: &GpuProgram) {
         if let Some(_widget_events) = self.engine.update() {
             self.redraw();
-
-            // TODO: optimize layer rendering
-
-            // let mut redraw_widgets = HashSet::new();
-
-            // for event in widget_events {
-            //     match event {
-            //         WidgetEvent::Rebuilt { widget_id, .. }
-            //         | WidgetEvent::Layout { widget_id, .. } => {
-            //             redraw_widgets.insert(widget_id);
-            //         }
-
-            //         WidgetEvent::Destroyed { widget_id, .. } => {
-            //             self.tree.remove(widget_id);
-            //         }
-
-            //         _ => {}
-            //     }
-            // }
-            //
-            // for widget_id in self.get_tree().filter_topmost(redraw_widgets.into_iter()) {
-            //     println!("redraw: {:?}", widget_id);
-            // }
 
             // If the program is not already demanding a specific framerate, request a redraw
             if program.time.is_none() {

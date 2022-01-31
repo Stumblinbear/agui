@@ -327,6 +327,15 @@ pub struct Size {
     pub height: f32,
 }
 
+impl PartialEq for Size {
+    fn eq(&self, other: &Self) -> bool {
+        ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize)
+            == ((other.width * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.height * (1.0 / MARGIN_OF_ERROR)) as usize)
+    }
+}
+
 impl std::hash::Hash for Size {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
@@ -335,12 +344,25 @@ impl std::hash::Hash for Size {
 }
 
 /// Holds exact position and size values.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
     pub width: f32,
     pub height: f32,
+}
+
+impl PartialEq for Rect {
+    fn eq(&self, other: &Self) -> bool {
+        ((self.x * (1.0 / MARGIN_OF_ERROR)) as usize)
+            == ((other.x * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.y * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.y * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.width * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.height * (1.0 / MARGIN_OF_ERROR)) as usize)
+    }
 }
 
 impl std::hash::Hash for Rect {
@@ -393,12 +415,25 @@ impl From<Rect> for Size {
 }
 
 /// Holds information about each side.
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Bounds {
     pub top: f32,
     pub right: f32,
     pub bottom: f32,
     pub left: f32,
+}
+
+impl PartialEq for Bounds {
+    fn eq(&self, other: &Self) -> bool {
+        ((self.top * (1.0 / MARGIN_OF_ERROR)) as usize)
+            == ((other.top * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.right * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.right * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.bottom * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.bottom * (1.0 / MARGIN_OF_ERROR)) as usize)
+            && ((self.left * (1.0 / MARGIN_OF_ERROR)) as usize)
+                == ((other.left * (1.0 / MARGIN_OF_ERROR)) as usize)
+    }
 }
 
 impl std::hash::Hash for Bounds {
