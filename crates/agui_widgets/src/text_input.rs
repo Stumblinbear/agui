@@ -168,7 +168,7 @@ impl WidgetBuilder for TextInput {
                                     if index == input_value.read().len() {
                                         input_value.write().pop();
                                     } else {
-                                        input_value.write().remove(index);
+                                        input_value.write().remove(index - 1);
                                     }
                                 }
                             }
