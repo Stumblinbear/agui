@@ -6,7 +6,7 @@ use std::{
 use agui_core::{
     canvas::paint::Paint,
     font::FontStyle,
-    unit::{Color, Layout, Rect, Ref},
+    unit::{Color, Layout, Point, Rect, Ref},
     widget::{BuildResult, WidgetBuilder, WidgetContext},
 };
 use agui_macros::Widget;
@@ -14,7 +14,7 @@ use agui_macros::Widget;
 use crate::{
     plugins::{hovering::HoveringExt, timeout::TimeoutExt},
     state::{
-        keyboard::KeyboardInput,
+        keyboard::{self, KeyCode, Keyboard, KeyboardInput},
         mouse::{Mouse, MouseButtonState},
         theme::StyleExt,
     },
@@ -148,35 +148,55 @@ impl WidgetBuilder for TextInput {
 
             move |ctx| {
                 let input_value = ctx.init_state::<String, _>(|| "".into());
-
                 let input_state = *ctx.init_state(TextInputState::default).read();
 
-                let keyboard_input = ctx.use_global(KeyboardInput::default);
+                let keyboard = ctx.use_global(Keyboard::default);
+                let keyboard = keyboard.read();
+
+                let instant = ctx.init_state(Instant::now);
 
                 if input_state == TextInputState::Focused {
-                    let mut loc = cursor.read().loc;
+                    let index = cursor.read().index;
 
-                    match **keyboard_input.read() {
-                        // Backspace character
-                        '\u{8}' => {
-                            if input_value.read().len() > 0 {
-                                loc -= 1;
+                    if let Some(input) = keyboard.input {
+                        match input {
+                            // Backspace character
+                            '\u{8}' => {
+                                if input_value.read().len() > 0 && index > 0 {
+                                    cursor.write().index = index.saturating_sub(1);
 
-                                input_value.write().pop();
+                                    if index == input_value.read().len() {
+                                        input_value.write().pop();
+                                    } else {
+                                        input_value.write().remove(index);
+                                    }
+                                }
+                            }
+
+                            // Delete character
+                            '\u{7f}' => {
+                                if input_value.read().len() > 0 && index < input_value.read().len()
+                                {
+                                    input_value.write().remove(index);
+                                }
+                            }
+
+                            ch => {
+                                cursor.write().index += 1;
+
+                                input_value.write().insert(index, ch);
                             }
                         }
-
-                        ch => {
-                            loc += 1;
-
-                            input_value.write().push(ch)
-                        }
+                    } else if keyboard.is_pressed(&KeyCode::Right) {
+                        cursor.write().index = (index + 1).min(input_value.read().len());
+                    } else if keyboard.is_pressed(&KeyCode::Left) {
+                        cursor.write().index = (index.saturating_sub(1)).max(0);
                     }
 
-                    cursor.write().loc = loc.max(0).min(input_value.read().len() - 1);
+                    *instant.write() = Instant::now();
                 }
 
-                let input_value = input_value.read();
+                let input_value = input_value.read().clone();
 
                 String::clone(&input_value)
             }
@@ -223,6 +243,8 @@ impl WidgetBuilder for TextInput {
         ctx.on_draw({
             let font = self.font.clone();
 
+            let placeholder = self.placeholder.clone();
+
             move |canvas| {
                 let bg_brush = canvas.new_brush(Paint {
                     color: input_state_style.background_color,
@@ -245,12 +267,24 @@ impl WidgetBuilder for TextInput {
                             },
                             cursor_brush,
                         );
-                    } else if let Some(g) = glyphs.get(cursor.read().loc) {
-                        let pos = g.glyph.position;
+                    } else {
+                        let pos = if let Some(g) = glyphs.get(cursor.read().index) {
+                            Point {
+                                x: g.glyph.position.x,
+                                y: g.glyph.position.y,
+                            }
+                        } else if let Some(g) = glyphs.last() {
+                            Point {
+                                x: g.glyph.position.x + font.h_advance(g.glyph.id),
+                                y: g.glyph.position.y,
+                            }
+                        } else {
+                            Point { x: 0.0, y: 0.0 }
+                        };
 
                         canvas.draw_rect_at(
                             Rect {
-                                x: pos.x + font.h_advance(g.glyph.id),
+                                x: pos.x,
                                 y: 0.0,
                                 width: 4.0,
                                 height: font.size,
@@ -260,11 +294,19 @@ impl WidgetBuilder for TextInput {
                     }
                 }
 
-                let text_brush = canvas.new_brush(Paint {
-                    color: input_state_style.text_color,
-                });
+                if value.is_empty() {
+                    let text_brush = canvas.new_brush(Paint {
+                        color: input_state_style.placeholder_color,
+                    });
 
-                canvas.draw_text(text_brush, font.clone(), value.clone().into());
+                    canvas.draw_text(text_brush, font.clone(), placeholder.clone());
+                } else {
+                    let text_brush = canvas.new_brush(Paint {
+                        color: input_state_style.text_color,
+                    });
+
+                    canvas.draw_text(text_brush, font.clone(), value.clone().into());
+                }
             }
         });
 
@@ -274,5 +316,5 @@ impl WidgetBuilder for TextInput {
 
 #[derive(Debug, Default)]
 struct Cursor {
-    loc: usize,
+    index: usize,
 }

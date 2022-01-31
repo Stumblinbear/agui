@@ -7,6 +7,7 @@ use std::{
 pub struct Keyboard {
     pub keys: HashMap<KeyCode, KeyState>,
     pub modifiers: Modifiers,
+    pub input: Option<char>,
 }
 
 impl Keyboard {

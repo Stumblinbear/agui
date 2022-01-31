@@ -118,6 +118,10 @@ impl<'ui> UI<'ui> {
                 }
 
                 WindowEvent::ReceivedCharacter(c) => {
+                    if let Some(state) = self.try_use_global::<Keyboard>() {
+                        state.write().input = Some(c);
+                    }
+
                     if let Some(state) = self.try_use_global::<KeyboardInput>() {
                         **state.write() = c;
                     }
@@ -132,6 +136,8 @@ impl<'ui> UI<'ui> {
                 WindowEvent::KeyboardInput { input, .. } => {
                     if let Some(state) = self.try_use_global::<Keyboard>() {
                         let mut state = state.write();
+
+                        state.input = None;
 
                         if let Some(key) = input.virtual_keycode {
                             let key: KeyCode = unsafe { mem::transmute(key as u32) };
