@@ -1,14 +1,19 @@
 use crate::{
     canvas::{renderer::RenderFn, Canvas},
-    computed::{ComputedContext, ComputedFn, ComputedFunc, ComputedId},
     engine::node::WidgetNode,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     tree::Tree,
     unit::{Key, Layout, LayoutType, Rect, Ref, Size},
-    widget::{WidgetId, WidgetRef},
+    widget::{
+        computed::{ComputedFn, ComputedFunc},
+        effect::{EffectFn, EffectFunc},
+        WidgetId, WidgetRef,
+    },
 };
 
-pub struct WidgetContext<'ui, 'ctx> {
+use super::widget::{HandlerId, HandlerType, WidgetContext};
+
+pub struct BuildContext<'ui, 'ctx> {
     pub(crate) widget_id: WidgetId,
     pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 
@@ -16,7 +21,7 @@ pub struct WidgetContext<'ui, 'ctx> {
     pub(crate) global: &'ctx mut StateMap,
 }
 
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn get_widget(&self) -> WidgetId {
         self.widget_id
     }
@@ -31,7 +36,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Globals
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
     where
@@ -64,7 +69,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Local state
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
     pub fn init_state<V, F>(&mut self, func: F) -> Notify<V>
     where
@@ -101,38 +106,63 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     }
 }
 
-// Computed
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
-    pub fn computed<V, F>(&mut self, func: F) -> V
+// Effects
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
+    pub fn use_effect<F>(&mut self, func: F)
     where
-        V: Eq + PartialEq + Clone + NotifiableValue,
-        F: Fn(&mut ComputedContext<'ui, '_>) -> V + 'ui + 'static,
+        F: Fn(&mut WidgetContext<'ui, '_>) + 'ui + 'static,
     {
-        let computed_id = ComputedId::of::<F>();
+        let handler_id = HandlerId::of::<F>(HandlerType::Effect);
 
         #[allow(clippy::map_entry)]
-        if !self.widget.computed_funcs.contains_key(&computed_id) {
-            let mut computed_func = Box::new(ComputedFn::new(func));
+        if !self.widget.effect_funcs.contains_key(&handler_id) {
+            let effect_func = Box::new(EffectFn::new(func));
 
-            computed_func.call(&mut ComputedContext {
+            effect_func.call(&mut WidgetContext {
                 widget_id: self.widget_id,
-                computed_id,
-
-                widget: &mut self.widget,
+                handler_id,
 
                 tree: self.tree,
                 global: &mut self.global,
+
+                widget: &mut self.widget,
             });
 
-            self.widget
-                .computed_funcs
-                .insert(computed_id, computed_func);
+            self.widget.effect_funcs.insert(handler_id, effect_func);
+        }
+    }
+}
+
+// Computed
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
+    pub fn computed<V, F>(&mut self, func: F) -> V
+    where
+        V: Eq + PartialEq + Clone + NotifiableValue,
+        F: Fn(&mut WidgetContext<'ui, '_>) -> V + 'ui + 'static,
+    {
+        let handler_id = HandlerId::of::<F>(HandlerType::Computed);
+
+        #[allow(clippy::map_entry)]
+        if !self.widget.computed_funcs.contains_key(&handler_id) {
+            let mut computed_func = Box::new(ComputedFn::new(func));
+
+            computed_func.call(&mut WidgetContext {
+                widget_id: self.widget_id,
+                handler_id,
+
+                tree: self.tree,
+                global: &mut self.global,
+
+                widget: &mut self.widget,
+            });
+
+            self.widget.computed_funcs.insert(handler_id, computed_func);
         }
 
         *self
             .widget
             .computed_funcs
-            .get(&computed_id)
+            .get(&handler_id)
             .expect("failed to set computed function")
             .get()
             .downcast()
@@ -141,7 +171,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Layout
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Set the layout type of the widget.
     pub fn set_layout_type(&mut self, layout_type: Ref<LayoutType>) {
         self.widget.layout_type = layout_type;
@@ -167,7 +197,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Rendering
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn on_draw<F>(&mut self, func: F)
     where
         F: Fn(&mut Canvas) + 'ui,
@@ -177,7 +207,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Keys
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn key(&self, key: Key, widget: WidgetRef) -> WidgetRef {
         WidgetRef::Keyed {
             owner_id: match key {

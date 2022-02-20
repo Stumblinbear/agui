@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::BTreeMap};
 
-use agui_core::widget::WidgetContext;
+use agui_core::widget::BuildContext;
 use downcast_rs::{impl_downcast, Downcast};
 
 use crate::plugins::provider::ConsumerExt;
@@ -50,7 +50,7 @@ impl Theme {
         }
     }
 
-    pub fn resolve<S>(ctx: &mut WidgetContext, style: Option<&S>) -> S
+    pub fn resolve<S>(ctx: &mut BuildContext, style: Option<&S>) -> S
     where
         S: Style + Clone + Default,
     {
@@ -69,14 +69,14 @@ pub trait StyleExt<S>
 where
     S: Style + Clone + Default,
 {
-    fn resolve(&self, ctx: &mut WidgetContext) -> S;
+    fn resolve(&self, ctx: &mut BuildContext) -> S;
 }
 
 impl<S> StyleExt<S> for S
 where
     S: Style + Clone + Default,
 {
-    fn resolve(&self, ctx: &mut WidgetContext) -> S {
+    fn resolve(&self, ctx: &mut BuildContext) -> S {
         Theme::resolve(ctx, Some(self))
     }
 }
@@ -85,7 +85,7 @@ impl<S> StyleExt<S> for Option<S>
 where
     S: Style + Clone + Default,
 {
-    fn resolve(&self, ctx: &mut WidgetContext) -> S {
+    fn resolve(&self, ctx: &mut BuildContext) -> S {
         Theme::resolve(ctx, self.as_ref())
     }
 }
@@ -94,7 +94,7 @@ impl<S> StyleExt<S> for Option<&S>
 where
     S: Style + Clone + Default,
 {
-    fn resolve(&self, ctx: &mut WidgetContext) -> S {
+    fn resolve(&self, ctx: &mut BuildContext) -> S {
         Theme::resolve(ctx, *self)
     }
 }

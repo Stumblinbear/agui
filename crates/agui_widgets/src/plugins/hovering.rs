@@ -1,10 +1,9 @@
 use std::collections::HashSet;
 
 use agui_core::{
-    computed::ComputedContext,
     engine::event::WidgetEvent,
     plugin::{EnginePlugin, PluginContext},
-    widget::{WidgetContext, WidgetId},
+    widget::{BuildContext, WidgetContext, WidgetId},
 };
 
 use crate::state::mouse::Mouse;
@@ -72,7 +71,7 @@ pub trait HoveringExt {
     fn is_hovering(&mut self) -> bool;
 }
 
-impl<'ui, 'ctx> HoveringExt for WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> HoveringExt for BuildContext<'ui, 'ctx> {
     fn is_hovering(&mut self) -> bool {
         self.init_global(HoveringPluginState::default)
             .read()
@@ -80,7 +79,7 @@ impl<'ui, 'ctx> HoveringExt for WidgetContext<'ui, 'ctx> {
     }
 }
 
-impl<'ui, 'ctx> HoveringExt for ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> HoveringExt for WidgetContext<'ui, 'ctx> {
     fn is_hovering(&mut self) -> bool {
         self.init_global(HoveringPluginState::default)
             .read()

@@ -1,5 +1,6 @@
+use std::any::TypeId;
+
 use crate::{
-    computed::ComputedId,
     engine::node::WidgetNode,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     tree::Tree,
@@ -7,23 +8,45 @@ use crate::{
     widget::WidgetId,
 };
 
-pub struct ComputedContext<'ui, 'ctx> {
-    pub(crate) widget_id: WidgetId,
-    pub(crate) computed_id: ComputedId,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum HandlerType {
+    Effect,
+    Computed,
+}
 
-    pub(crate) widget: &'ctx mut WidgetNode<'ui>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HandlerId(HandlerType, TypeId);
+
+impl HandlerId {
+    pub fn of<F>(ty: HandlerType) -> Self
+    where
+        F: ?Sized + 'static,
+    {
+        Self(ty, TypeId::of::<F>())
+    }
+
+    pub fn get_type(&self) -> HandlerType {
+        self.0
+    }
+}
+
+pub struct WidgetContext<'ui, 'ctx> {
+    pub(crate) widget_id: WidgetId,
+    pub(crate) handler_id: HandlerId,
 
     pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx StateMap,
+
+    pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 }
 
-impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     pub fn get_widget(&self) -> WidgetId {
         self.widget_id
     }
 
     pub fn get_listener(&self) -> ListenerId {
-        (self.widget_id, self.computed_id).into()
+        (self.widget_id, self.handler_id).into()
     }
 
     pub fn get_tree(&mut self) -> &Tree<WidgetId, WidgetNode<'ui>> {
@@ -32,7 +55,7 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
 }
 
 // Globals
-impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
     where
@@ -65,7 +88,7 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
 }
 
 // Local state
-impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
     pub fn init_state<V, F>(&mut self, func: F) -> Notify<V>
     where
@@ -103,7 +126,7 @@ impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
 }
 
 // Layout
-impl<'ui, 'ctx> ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Fetch the layout of a widget.
     pub fn get_layout_type(&self) -> Ref<LayoutType> {
         Ref::clone(&self.widget.layout_type)

@@ -7,14 +7,15 @@ use agui_core::{
     canvas::paint::Paint,
     font::FontStyle,
     unit::{Color, Layout, Point, Rect, Ref},
-    widget::{BuildResult, WidgetBuilder, WidgetContext},
+    widget::{BuildResult, WidgetBuilder, BuildContext},
 };
-use agui_macros::Widget;
+use agui_macros::{build, Widget};
+use agui_primitives::edit::EditableText;
 
 use crate::{
     plugins::{hovering::HoveringExt, timeout::TimeoutExt},
     state::{
-        keyboard::{self, KeyCode, Keyboard, KeyboardInput},
+        keyboard::{KeyCode, Keyboard},
         mouse::{Mouse, MouseButtonState},
         theme::StyleExt,
     },
@@ -97,18 +98,39 @@ enum CursorState {
     Hidden,
 }
 
-#[derive(Default, Widget)]
-pub struct TextInput {
+#[derive(Widget)]
+pub struct TextInput<S>
+where
+    S: EditableText + 'static,
+{
     pub layout: Ref<Layout>,
 
     pub style: Option<TextInputStyle>,
 
     pub font: FontStyle,
     pub placeholder: Cow<'static, str>,
+    pub value: S,
 }
 
-impl WidgetBuilder for TextInput {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+impl Default for TextInput<String> {
+    fn default() -> Self {
+        Self {
+            layout: Ref::None,
+
+            style: None,
+
+            font: FontStyle::default(),
+            placeholder: "".into(),
+            value: "".into(),
+        }
+    }
+}
+
+impl<S> WidgetBuilder for TextInput<S>
+where
+    S: EditableText + 'static,
+{
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
         let input_state = ctx.computed(|ctx| {
@@ -143,64 +165,71 @@ impl WidgetBuilder for TextInput {
         let cursor = ctx.use_state(Cursor::default);
 
         // Since the value reacts to keyboard inputs, we use a computed value
-        let value = ctx.computed({
+        let value = {
             let cursor = cursor.clone();
 
-            move |ctx| {
-                let input_value = ctx.init_state::<String, _>(|| "".into());
+            let input_value = ctx.init_state(|| self.value.clone());
+
+            ctx.computed(move |ctx| {
                 let input_state = *ctx.init_state(TextInputState::default).read();
-
                 let keyboard = ctx.use_global(Keyboard::default);
-                let keyboard = keyboard.read();
-
                 let instant = ctx.init_state(Instant::now);
 
+                let keyboard = keyboard.read();
+
                 if input_state == TextInputState::Focused {
-                    let index = cursor.read().index;
+                    let cursor_offset = cursor.read().index;
 
                     if let Some(input) = keyboard.input {
                         match input {
                             // Backspace character
                             '\u{8}' => {
-                                if input_value.read().len() > 0 && index > 0 {
-                                    cursor.write().index = index.saturating_sub(1);
+                                let grapheme_idx = input_value.read().prev_grapheme_offset(cursor_offset);
 
-                                    if index == input_value.read().len() {
-                                        input_value.write().pop();
-                                    } else {
-                                        input_value.write().remove(index - 1);
-                                    }
+                                if let Some(idx) = grapheme_idx {
+                                    input_value.write().remove(idx..cursor_offset);
+
+                                    cursor.write().index = idx;
                                 }
                             }
 
                             // Delete character
                             '\u{7f}' => {
-                                if input_value.read().len() > 0 && index < input_value.read().len()
-                                {
-                                    input_value.write().remove(index);
+                                let grapheme_idx = input_value.read().next_grapheme_offset(cursor_offset);
+
+                                if let Some(idx) = grapheme_idx {
+                                    input_value.write().remove(cursor_offset..idx);
                                 }
                             }
 
                             ch => {
-                                cursor.write().index += 1;
+                                input_value.write().insert(cursor_offset, ch);
 
-                                input_value.write().insert(index, ch);
+                                let grapheme_idx = input_value.read().next_grapheme_offset(cursor_offset);
+
+                                cursor.write().index = grapheme_idx.unwrap_or(0);
                             }
                         }
                     } else if keyboard.is_pressed(&KeyCode::Right) {
-                        cursor.write().index = (index + 1).min(input_value.read().len());
+                        let grapheme_idx = input_value.read().next_grapheme_offset(cursor_offset);
+
+                        if let Some(idx) = grapheme_idx {
+                            cursor.write().index = idx;
+                        }
                     } else if keyboard.is_pressed(&KeyCode::Left) {
-                        cursor.write().index = (index.saturating_sub(1)).max(0);
+                        let grapheme_idx = input_value.read().prev_grapheme_offset(cursor_offset);
+
+                        if let Some(idx) = grapheme_idx {
+                            cursor.write().index = idx;
+                        }
                     }
 
                     *instant.write() = Instant::now();
                 }
 
-                let input_value = input_value.read().clone();
-
-                String::clone(&input_value)
-            }
-        });
+                input_value.read().clone()
+            })
+        };
 
         let cursor_state = ctx.computed(|ctx| {
             // Keep track of time so we can blink blonk the cursor
@@ -235,7 +264,7 @@ impl WidgetBuilder for TextInput {
         let glyphs = if value.is_empty() {
             Vec::default()
         } else if let Some(size) = ctx.get_size() {
-            self.font.get_glyphs(size.into(), &value)
+            self.font.get_glyphs(size.into(), value.as_str())
         } else {
             Vec::default()
         };
@@ -274,6 +303,8 @@ impl WidgetBuilder for TextInput {
                                 y: g.glyph.position.y,
                             }
                         } else if let Some(g) = glyphs.last() {
+                            println!("{:?}", g.glyph.position.x + font.h_advance(g.glyph.id));
+
                             Point {
                                 x: g.glyph.position.x + font.h_advance(g.glyph.id),
                                 y: g.glyph.position.y,
@@ -305,7 +336,7 @@ impl WidgetBuilder for TextInput {
                         color: input_state_style.text_color,
                     });
 
-                    canvas.draw_text(text_brush, font.clone(), value.clone().into());
+                    canvas.draw_text(text_brush, font.clone(), Cow::Owned(value.clone().into()));
                 }
             }
         });

@@ -5,11 +5,10 @@ use parking_lot::Mutex;
 
 use crate::{
     canvas::renderer::RenderFn,
-    computed::{ComputedFunc, ComputedId},
     notifiable::{state::StateMap, ListenerId},
     tree::Tree,
     unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Sizing},
-    widget::{WidgetId, WidgetRef},
+    widget::{computed::ComputedFunc, effect::EffectFunc, HandlerId, WidgetId, WidgetRef},
 };
 
 /// Holds information about a widget in the UI tree.
@@ -17,7 +16,8 @@ pub struct WidgetNode<'ui> {
     pub widget: WidgetRef,
 
     pub state: StateMap,
-    pub computed_funcs: FnvHashMap<ComputedId, Box<dyn ComputedFunc<'ui> + 'ui>>,
+    pub effect_funcs: FnvHashMap<HandlerId, Box<dyn EffectFunc<'ui> + 'ui>>,
+    pub computed_funcs: FnvHashMap<HandlerId, Box<dyn ComputedFunc<'ui> + 'ui>>,
 
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
@@ -34,6 +34,7 @@ impl WidgetNode<'_> {
             widget,
 
             state: StateMap::new(Arc::clone(&changed)),
+            effect_funcs: FnvHashMap::default(),
             computed_funcs: FnvHashMap::default(),
 
             layout_type: Ref::None,

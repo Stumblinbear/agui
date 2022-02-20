@@ -4,9 +4,11 @@ use agui_core::{
     canvas::paint::Paint,
     font::FontStyle,
     unit::{Layout, Sizing, Units},
-    widget::{BuildResult, WidgetBuilder, WidgetContext},
+    widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
+
+pub mod edit;
 
 #[derive(Default, Widget)]
 pub struct Text {
@@ -16,7 +18,7 @@ pub struct Text {
 }
 
 impl WidgetBuilder for Text {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         ctx.set_layout(
             Layout {
                 sizing: if self.multiline {

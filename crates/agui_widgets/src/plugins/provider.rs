@@ -4,11 +4,10 @@ use std::{
 };
 
 use agui_core::{
-    computed::ComputedContext,
     engine::event::WidgetEvent,
     notifiable::{NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext},
-    widget::{WidgetContext, WidgetId},
+    widget::{BuildContext, WidgetContext, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -50,7 +49,7 @@ impl EnginePlugin for ProviderPlugin {
 }
 
 pub trait ProviderExt {
-    fn provide(&self, ctx: &mut WidgetContext);
+    fn provide(&self, ctx: &mut BuildContext);
 }
 
 impl<'ui, V> ProviderExt for Notify<V>
@@ -58,7 +57,7 @@ where
     V: NotifiableValue,
 {
     /// Makes some local widget state available to any child widget.
-    fn provide(&self, ctx: &mut WidgetContext) {
+    fn provide(&self, ctx: &mut BuildContext) {
         let plugin = ctx.init_global(ProviderPluginState::default);
 
         let mut plugin = plugin.write();
@@ -87,7 +86,7 @@ pub trait ConsumerExt {
         V: NotifiableValue;
 }
 
-impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> ConsumerExt for BuildContext<'ui, 'ctx> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Notify<V>>
     where
@@ -123,7 +122,7 @@ impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
     }
 }
 
-impl<'ui, 'ctx> ConsumerExt for ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Notify<V>>
     where

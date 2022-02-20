@@ -11,13 +11,12 @@ use morphorm::Cache;
 use parking_lot::Mutex;
 
 use crate::{
-    computed::ComputedContext,
     font::Font,
     notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
     tree::Tree,
     unit::{Key, Units},
-    widget::{BuildResult, Widget, WidgetContext, WidgetId, WidgetRef},
+    widget::{BuildContext, BuildResult, HandlerType, Widget, WidgetContext, WidgetId, WidgetRef},
 };
 
 mod cache;
@@ -327,34 +326,56 @@ impl<'ui> Engine<'ui> {
                     dirty_widgets.insert(widget_id);
                 }
 
-                ListenerId::Computed(widget_id, computed_id) => {
+                ListenerId::Handler(widget_id, handler_id) => {
                     let mut node = self
                         .tree
                         .get_node_mut(widget_id)
-                        .expect("invalid computed function widget")
+                        .expect("invalid handler function widget")
                         .value
                         .take()
                         .expect("widget is already in use");
 
-                    let mut computed_func = node
-                        .computed_funcs
-                        .remove(&computed_id)
-                        .expect("invalid computed function listener");
+                    match handler_id.get_type() {
+                        HandlerType::Effect => {
+                            let effect_func = node
+                                .effect_funcs
+                                .remove(&handler_id)
+                                .expect("invalid effect function listener");
 
-                    if computed_func.call(&mut ComputedContext {
-                        widget_id,
-                        computed_id,
+                            effect_func.call(&mut WidgetContext {
+                                widget_id,
+                                handler_id,
 
-                        widget: &mut node,
+                                tree: &mut self.tree,
+                                global: &mut self.global,
 
-                        tree: &mut self.tree,
-                        global: &mut self.global,
-                    }) {
-                        dirty_widgets.insert(widget_id);
+                                widget: &mut node,
+                            });
+
+                            node.effect_funcs.insert(handler_id, effect_func);
+                        }
+
+                        HandlerType::Computed => {
+                            let mut computed_func = node
+                                .computed_funcs
+                                .remove(&handler_id)
+                                .expect("invalid computed function listener");
+
+                            if computed_func.call(&mut WidgetContext {
+                                widget_id,
+                                handler_id,
+
+                                tree: &mut self.tree,
+                                global: &mut self.global,
+
+                                widget: &mut node,
+                            }) {
+                                dirty_widgets.insert(widget_id);
+                            }
+
+                            node.computed_funcs.insert(handler_id, computed_func);
+                        }
                     }
-
-                    node.computed_funcs.insert(computed_id, computed_func);
-
                     self.tree
                         .get_node_mut(widget_id)
                         .expect("computed function destroyed while in use")
@@ -541,7 +562,7 @@ impl<'ui> Engine<'ui> {
         });
 
         let result = node.widget.try_get().map_or(BuildResult::None, |widget| {
-            widget.build(&mut WidgetContext {
+            widget.build(&mut BuildContext {
                 widget_id,
                 widget: &mut node,
 
@@ -584,9 +605,19 @@ impl<'ui> Engine<'ui> {
 
         let mut listeners = vec![ListenerId::Widget(widget_id)];
 
-        for computed_id in tree_node.computed_funcs.keys() {
-            listeners.push(ListenerId::Computed(widget_id, *computed_id));
-        }
+        listeners.extend(
+            tree_node
+                .effect_funcs
+                .keys()
+                .map(|handler_id| ListenerId::Handler(widget_id, *handler_id)),
+        );
+
+        listeners.extend(
+            tree_node
+                .computed_funcs
+                .keys()
+                .map(|handler_id| ListenerId::Handler(widget_id, *handler_id)),
+        );
 
         self.remove_listeners(&listeners);
 
@@ -628,7 +659,7 @@ mod tests {
 
     use parking_lot::Mutex;
 
-    use crate::widget::{BuildResult, Widget, WidgetBuilder, WidgetContext, WidgetRef, WidgetType};
+    use crate::widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetRef, WidgetType};
 
     use super::Engine;
 
@@ -655,7 +686,7 @@ mod tests {
     }
 
     impl WidgetBuilder for TestWidget {
-        fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+        fn build(&self, ctx: &mut BuildContext) -> BuildResult {
             let computes = Arc::clone(&self.computes);
 
             let computed_value = ctx.computed(move |ctx| {

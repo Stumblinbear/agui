@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Layout, Sizing, Units},
-    widget::{BuildResult, WidgetBuilder, WidgetContext},
+    widget::{BuildResult, WidgetBuilder, BuildContext},
 };
 use agui_macros::Widget;
 
@@ -28,7 +28,7 @@ impl Spacing {
 }
 
 impl WidgetBuilder for Spacing {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         ctx.set_layout(
             Layout {
                 sizing: self.0,

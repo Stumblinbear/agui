@@ -10,7 +10,6 @@
 // #![warn(missing_docs)]
 
 pub mod canvas;
-pub mod computed;
 pub mod engine;
 pub mod font;
 pub mod notifiable;

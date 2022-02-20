@@ -5,7 +5,7 @@ use agui::{
     font::{Font, HorizontalAlign, VerticalAlign},
     macros::{build, functional_widget},
     unit::{Callback, Color, Layout, Margin, Sizing, Units},
-    widget::{BuildResult, WidgetContext, WidgetRef},
+    widget::{BuildResult, BuildContext, WidgetRef},
     widgets::{
         plugins::{provider::ProviderExt, DefaultPluginsExt},
         primitives::{Builder, Column, Padding, Spacing, Text},
@@ -36,7 +36,7 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn example_main(
-    ctx: &mut WidgetContext,
+    ctx: &mut BuildContext,
     font: Font,
     _color: Color,
     _child: WidgetRef,

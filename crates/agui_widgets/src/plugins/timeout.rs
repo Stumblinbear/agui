@@ -5,11 +5,10 @@ use std::{
 };
 
 use agui_core::{
-    computed::ComputedContext,
     engine::event::WidgetEvent,
     notifiable::ListenerId,
     plugin::{EnginePlugin, PluginContext},
-    widget::{WidgetContext, WidgetId},
+    widget::{BuildContext, WidgetContext, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -82,7 +81,7 @@ pub trait TimeoutExt {
     fn use_timeout(&mut self, duration: Duration);
 }
 
-impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> TimeoutExt for BuildContext<'ui, 'ctx> {
     /// Marks the caller for updating when `duration` elapses.
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)
@@ -91,7 +90,7 @@ impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
     }
 }
 
-impl<'ui, 'ctx> TimeoutExt for ComputedContext<'ui, 'ctx> {
+impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
     /// Marks the caller for updating when `duration` elapses.
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)

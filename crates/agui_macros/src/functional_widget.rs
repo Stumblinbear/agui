@@ -61,21 +61,21 @@ impl Visit<'_> for FunctionVisitor {
 
             if let Type::Reference(ty) = ty {
                 if ty.mutability.is_none() {
-                    panic!("first argument must be &mut WidgetContext");
+                    panic!("first argument must be &mut BuildContext");
                 }
 
                 if let Type::Path(ty_path) = &*ty.elem {
                     let segment = ty_path.path.segments.last().unwrap();
 
-                    if segment.ident != "WidgetContext" {
-                        panic!("first argument must be &mut WidgetContext");
+                    if segment.ident != "BuildContext" {
+                        panic!("first argument must be &mut BuildContext");
                     }
                 } else {
-                    panic!("first argument must be &mut WidgetContext");
+                    panic!("first argument must be &mut BuildContext");
                 }
             }
         } else {
-            panic!("first argument must be &mut WidgetContext");
+            panic!("first argument must be &mut BuildContext");
         }
     }
 }
@@ -140,7 +140,7 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
         }
 
         impl #agui_core::widget::WidgetBuilder for #ident {
-            fn build(&self, ctx: &mut #agui_core::widget::WidgetContext) -> #agui_core::widget::BuildResult {
+            fn build(&self, ctx: &mut #agui_core::widget::BuildContext) -> #agui_core::widget::BuildResult {
                 #fn_ident(#args)
             }
         }

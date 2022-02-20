@@ -1,7 +1,7 @@
 use agui_core::{
     canvas::{clipping::Clip, paint::Paint},
     unit::{Callback, Color, Layout, Ref},
-    widget::{BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::Widget;
 
@@ -33,64 +33,55 @@ impl Default for ButtonStyle {
 enum ButtonState {
     Normal,
     Disabled,
-    Hover,
     Pressed,
 }
 
 #[derive(Default, Widget)]
 pub struct Button {
     pub layout: Ref<Layout>,
-
     pub style: Option<ButtonStyle>,
-
-    pub child: WidgetRef,
-
     pub clip: Option<Clip>,
 
     pub on_pressed: Callback<()>,
+
+    pub child: WidgetRef,
 }
 
 impl WidgetBuilder for Button {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
-        let state = ctx.computed(|ctx| {
-            if let Some(mouse) = ctx.try_use_global::<Mouse>() {
-                if ctx.is_hovering() {
+        let state = ctx.use_state(|| ButtonState::Normal);
+
+        ctx.use_effect({
+            let on_pressed = self.on_pressed.clone();
+
+            move |ctx| {
+                if let Some(mouse) = ctx.try_use_global::<Mouse>() {
+                    let state = ctx.init_state(|| ButtonState::Normal);
+
                     if mouse.read().button.left == MouseButtonState::Pressed {
-                        return ButtonState::Pressed;
-                    } else {
-                        return ButtonState::Hover;
+                        if ctx.is_hovering() {
+                            *state.write() = ButtonState::Pressed;
+                        }
+                    } else if *state.read() == ButtonState::Pressed {
+                        *state.write() = ButtonState::Normal;
+
+                        on_pressed.emit(());
                     }
                 }
             }
-
-            ButtonState::Normal
         });
 
-        // We init the state, instead of using `use_state`, because we don't want to react to
-        // these changes, only keep track of them.
-        let last_state = ctx.init_state(|| state);
-
-        if *last_state.read() == ButtonState::Pressed {
-            if let ButtonState::Pressed = state {
-            } else {
-                self.on_pressed.emit(());
-            }
-        }
-
-        if *last_state.read() != state {
-            *last_state.write() = state;
-        }
+        println!("state: {:?}", state.read());
 
         ctx.on_draw({
             let style = self.style.clone().unwrap_or_default();
 
             move |canvas| {
-                let color = match state {
+                let color = match *state.read() {
                     ButtonState::Normal => style.normal,
                     ButtonState::Disabled => style.disabled,
-                    ButtonState::Hover => style.hover,
                     ButtonState::Pressed => style.pressed,
                 };
 

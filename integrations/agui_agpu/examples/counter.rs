@@ -4,7 +4,7 @@ use agui::{
     font::FontStyle,
     macros::{build, functional_widget},
     unit::{Callback, Layout, Margin, Sizing},
-    widget::{BuildResult, WidgetContext},
+    widget::{BuildContext, BuildResult},
     widgets::{
         plugins::DefaultPluginsExt,
         primitives::{Column, Padding, Text},
@@ -34,7 +34,7 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
+fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
     build! {
@@ -50,7 +50,7 @@ fn counter_widget(ctx: &mut WidgetContext, font: FontStyle) -> BuildResult {
                     },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text { font: font.clone(), text: "A Button" }
+                        child: Text { font, text: "A Button" }
                     },
                     on_pressed: Callback::from(move |()| {
                         *num.write() += 1;
