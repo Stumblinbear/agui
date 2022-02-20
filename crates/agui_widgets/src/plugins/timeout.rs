@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     ops::Add,
     time::{Duration, Instant},
 };
@@ -13,19 +13,28 @@ use agui_core::{
 
 #[derive(Debug, Default)]
 struct TimeoutPluginState {
-    widgets: HashMap<WidgetId, BTreeSet<(Instant, ListenerId)>>,
+    widgets: HashMap<WidgetId, HashMap<ListenerId, Instant>>,
 }
 
 impl TimeoutPluginState {
     pub fn create_timeout(&mut self, listener_id: ListenerId, duration: Duration) {
-        self.widgets
+        let entry = self
+            .widgets
             .entry(
                 listener_id
                     .widget_id()
                     .expect("cannot use timers outside of a widget context"),
             )
-            .or_insert_with(BTreeSet::default)
-            .insert((Instant::now().add(duration), listener_id));
+            .or_insert_with(HashMap::default)
+            .entry(listener_id);
+
+        let target_instant = Instant::now().add(duration);
+
+        entry
+            .and_modify(|instant| {
+                *instant = (*instant).min(target_instant);
+            })
+            .or_insert(target_instant);
     }
 }
 
@@ -46,14 +55,12 @@ impl EnginePlugin for TimeoutPlugin {
             for (widget_id, timeouts) in &plugin.widgets {
                 let mut updated = Vec::new();
 
-                for pair in timeouts.iter() {
+                for (listener_id, instant) in timeouts.iter() {
                     // Loop until we find the first timeout that hasn't been met
-                    if now > pair.0 {
-                        ctx.mark_dirty(pair.1);
+                    if now > *instant {
+                        ctx.mark_dirty(*listener_id);
 
-                        updated.push(*pair);
-                    } else {
-                        break;
+                        updated.push(*listener_id);
                     }
                 }
 
