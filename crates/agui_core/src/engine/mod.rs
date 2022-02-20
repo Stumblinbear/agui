@@ -115,7 +115,7 @@ impl<'ui> Engine<'ui> {
     }
 
     /// Get the widget build context.
-    pub fn get_tree(&'ui self) -> &Tree<WidgetId, WidgetNode> {
+    pub fn get_tree(&self) -> &Tree<WidgetId, WidgetNode<'ui>> {
         &self.tree
     }
 

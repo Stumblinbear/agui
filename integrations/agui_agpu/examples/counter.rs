@@ -1,12 +1,14 @@
 #![allow(clippy::needless_update)]
 
+use std::time::Duration;
+
 use agui::{
     font::FontStyle,
     macros::{build, functional_widget},
     unit::{Callback, Layout, Margin, Sizing},
     widget::{BuildContext, BuildResult},
     widgets::{
-        plugins::DefaultPluginsExt,
+        plugins::{timeout::TimeoutExt, DefaultPluginsExt},
         primitives::{Column, Padding, Text},
         state::DefaultGlobalsExt,
         App, Button,
@@ -36,6 +38,8 @@ fn main() -> Result<(), agpu::BoxError> {
 #[functional_widget]
 fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
+
+    ctx.use_timeout(Duration::from_secs_f32(0.1));
 
     build! {
         Column {

@@ -1,7 +1,4 @@
-use std::{
-    mem,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 use agpu::GpuProgram;
 
@@ -15,7 +12,11 @@ pub struct UIProgram {
 
 impl UIProgram {
     pub fn new(title: &str) -> Result<UIProgram, agpu::BoxError> {
-        Ok(Self::from(agpu::GpuProgram::builder(title).with_framerate(f32::MAX).build()?))
+        Ok(Self::from(
+            agpu::GpuProgram::builder(title)
+                .with_framerate(f32::MAX)
+                .build()?,
+        ))
     }
 
     pub fn from(program: GpuProgram) -> Self {
@@ -26,10 +27,7 @@ impl UIProgram {
 
     pub fn run(mut self) -> ! {
         self.program.run(move |event, program, _, _| {
-            // Dirty black magic fuckery due to the 'static lifetime requirement
-            let ui: &mut UI<'static> = unsafe { mem::transmute(&mut self.ui) };
-
-            ui.handle_event(event, program);
+            self.ui.handle_event(event, program);
         });
     }
 }

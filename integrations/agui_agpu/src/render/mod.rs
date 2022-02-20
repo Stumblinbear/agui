@@ -197,7 +197,7 @@ impl RenderEngine {
             .write_unchecked(&[size.width, size.height]);
     }
 
-    pub fn redraw<'ui>(&mut self, engine: &'ui Engine<'ui>) {
+    pub fn redraw(&mut self, engine: &Engine<'_>) {
         let now = Instant::now();
 
         if let Some(root_id) = engine.get_tree().get_root() {
@@ -209,7 +209,7 @@ impl RenderEngine {
         println!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    pub fn redraw_node<'ui>(&mut self, engine: &'ui Engine<'ui>, node_id: WidgetId) {
+    pub fn redraw_node(&mut self, engine: &Engine<'_>, node_id: WidgetId) {
         let mut nodes: Vec<RenderNode> = Vec::default();
 
         let fonts = engine.get_fonts();
@@ -254,7 +254,7 @@ impl RenderEngine {
                 } else {
                     let mut builder = CanvasBufferBuilder {
                         fonts,
-                        
+
                         clip: None,
                         paint_map: HashMap::default(),
                         commands: Vec::default(),
@@ -303,7 +303,7 @@ impl RenderEngine {
             .retain(|_, canvas_buffer| canvas_buffer.upgrade().is_some());
     }
 
-    pub fn render(&mut self, mut frame: Frame) {
+    pub fn render(&self, mut frame: Frame) {
         frame
             .render_pass_cleared("agui clear pass", 0x11111111)
             .begin();

@@ -7,10 +7,10 @@ use agpu::{
     winit::winit::event::{
         ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
     },
-    Event, Frame, GpuHandle, GpuProgram,
+    Event, GpuHandle, GpuProgram,
 };
 use agui::{
-    engine::{debug::print_tree, Engine},
+    engine::Engine,
     font::Font,
     unit::{Point, Size},
     widgets::state::{
@@ -70,17 +70,13 @@ impl<'ui> UI<'ui> {
         self.engine.load_font_file(filename)
     }
 
-    pub fn redraw(&'ui mut self) {
+    pub fn redraw(&mut self) {
         self.renderer.redraw(&self.engine);
 
         // print_tree(&self.engine);
     }
 
-    pub fn render(&mut self, frame: Frame) {
-        self.renderer.render(frame);
-    }
-
-    pub fn handle_event(&'ui mut self, event: Event<'_, ()>, program: &GpuProgram) {
+    pub fn handle_event(&mut self, event: Event<'_, ()>, program: &GpuProgram) {
         if let Some(_widget_events) = self.engine.update() {
             self.redraw();
 
@@ -88,12 +84,10 @@ impl<'ui> UI<'ui> {
             if program.time.is_none() {
                 program.viewport.request_redraw();
             }
-
-            return;
         }
 
         if let Event::RedrawFrame(frame) = event {
-            self.render(frame);
+            self.renderer.render(frame);
         } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
             match event {
                 WindowEvent::Resized(size) => {
