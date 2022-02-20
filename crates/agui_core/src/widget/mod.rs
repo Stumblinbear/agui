@@ -173,3 +173,12 @@ impl Into<Vec<Self>> for WidgetRef {
         vec![Self::clone(&self)]
     }
 }
+
+impl<W> From<W> for WidgetRef
+where
+    W: Widget,
+{
+    fn from(widget: W) -> Self {
+        Self::new(widget)
+    }
+}

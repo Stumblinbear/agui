@@ -146,23 +146,5 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
         }
 
         impl #agui_core::widget::Widget for #ident { }
-
-        impl From<#ident> for #agui_core::widget::WidgetRef {
-            fn from(widget: #ident) -> Self {
-                Self::new(widget)
-            }
-        }
-
-        impl From<#ident> for Option<#agui_core::widget::WidgetRef> {
-            fn from(widget: #ident) -> Self {
-                Some(#agui_core::widget::WidgetRef::new(widget))
-            }
-        }
-
-        impl From<#ident> for #agui_core::widget::BuildResult {
-            fn from(widget: #ident) -> Self {
-                Self::Some(vec![ widget.into() ])
-            }
-        }
     }
 }

@@ -336,10 +336,10 @@ where
                             continue 'main;
                         }
                     } else {
-                        // If the node is a parent of the node already in the `topmost` vec, remove it
+                        // If the node is a parent of a node already in the `topmost` vec, remove it
                         if self.has_child(key, dirty_id) {
                             topmost.remove(i);
-                            continue 'main;
+                            continue;
                         }
                     }
                 }

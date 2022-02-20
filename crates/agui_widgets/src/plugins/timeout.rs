@@ -36,26 +36,40 @@ impl EnginePlugin for TimeoutPlugin {
     fn on_update(&self, ctx: &mut PluginContext) {
         let plugin = ctx.init_global(TimeoutPluginState::default);
 
-        let mut plugin = plugin.write();
-
         let now = Instant::now();
 
-        for timeouts in plugin.widgets.values_mut() {
-            let mut updated = Vec::new();
+        let mut updated_timeouts = HashMap::new();
 
-            for pair in timeouts.iter() {
-                // Loop until we find the first timeout that hasn't been met
-                if now > pair.0 {
-                    ctx.mark_dirty(pair.1);
+        {
+            let plugin = plugin.read();
 
-                    updated.push(*pair);
-                } else {
-                    break;
+            for (widget_id, timeouts) in &plugin.widgets {
+                let mut updated = Vec::new();
+
+                for pair in timeouts.iter() {
+                    // Loop until we find the first timeout that hasn't been met
+                    if now > pair.0 {
+                        ctx.mark_dirty(pair.1);
+
+                        updated.push(*pair);
+                    } else {
+                        break;
+                    }
+                }
+
+                if !updated.is_empty() {
+                    updated_timeouts.insert(*widget_id, updated);
                 }
             }
+        }
 
-            for pair in updated {
-                timeouts.remove(&pair);
+        if !updated_timeouts.is_empty() {
+            let mut plugin = plugin.write();
+
+            for (widget_id, updated) in updated_timeouts {
+                for pair in updated {
+                    plugin.widgets.get_mut(&widget_id).unwrap().remove(&pair);
+                }
             }
         }
     }
@@ -67,11 +81,9 @@ impl EnginePlugin for TimeoutPlugin {
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(TimeoutPluginState::default);
 
-        let mut plugin = plugin.write();
-
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                plugin.widgets.remove(widget_id);
+                plugin.write().widgets.remove(widget_id);
             }
         }
     }

@@ -33,7 +33,7 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
                 fn get_type_id(&self) -> std::any::TypeId {
                     std::any::TypeId::of::<Self>()
                 }
-                
+
                 fn get_type_name(&self) -> &'static str {
                     #type_name
                 }
@@ -41,35 +41,9 @@ pub fn parse_widget_derive(input: TokenStream) -> TokenStream {
         }
     };
 
-    let widget_ref_impl = if args.into.unwrap_or(true) {
-        quote! {
-            impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::WidgetRef #where_clause {
-                fn from(widget: #ident #ty_generics) -> Self {
-                    Self::new(widget)
-                }
-            }
-
-            impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::widget::WidgetRef> #where_clause {
-                fn from(widget: #ident #ty_generics) -> Self {
-                    Some(#agui_core::widget::WidgetRef::new(widget))
-                }
-            }
-
-            impl #impl_generics From<#ident #ty_generics> for #agui_core::widget::BuildResult #where_clause {
-                fn from(widget: #ident #ty_generics) -> Self {
-                    Self::Some(vec![ widget.into() ])
-                }
-            }
-        }
-    }else{
-        quote! { }
-    };
-
     TokenStream::from(quote! {
         impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause { }
 
         #widget_type_impl
-
-        #widget_ref_impl
     })
 }

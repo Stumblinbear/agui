@@ -376,6 +376,7 @@ impl<'ui> Engine<'ui> {
                             node.computed_funcs.insert(handler_id, computed_func);
                         }
                     }
+
                     self.tree
                         .get_node_mut(widget_id)
                         .expect("computed function destroyed while in use")
@@ -406,17 +407,6 @@ impl<'ui> Engine<'ui> {
 
     pub fn flush_layout(&mut self) -> FnvHashSet<WidgetId> {
         morphorm::layout(&mut self.cache, &self.tree, &self.tree);
-
-        for (plugin_id, plugin) in &self.plugins {
-            plugin.on_layout(&mut PluginContext {
-                plugin_id: *plugin_id,
-
-                tree: &self.tree,
-                global: &mut self.global,
-
-                changed: Arc::clone(&self.changed),
-            });
-        }
 
         // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
         let mut newly_changed = self.cache.take_changed();
@@ -495,6 +485,17 @@ impl<'ui> Engine<'ui> {
                     .lock()
                     .extend(node.rect_listeners.lock().iter());
             }
+        }
+
+        for (plugin_id, plugin) in &self.plugins {
+            plugin.on_layout(&mut PluginContext {
+                plugin_id: *plugin_id,
+
+                tree: &self.tree,
+                global: &mut self.global,
+
+                changed: Arc::clone(&self.changed),
+            });
         }
 
         newly_changed

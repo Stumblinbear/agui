@@ -67,13 +67,13 @@ impl WidgetBuilder for Button {
                     } else if *state.read() == ButtonState::Pressed {
                         *state.write() = ButtonState::Normal;
 
-                        on_pressed.emit(());
+                        if ctx.is_hovering() {
+                            on_pressed.emit(());
+                        }
                     }
                 }
             }
         });
-
-        println!("state: {:?}", state.read());
 
         ctx.on_draw({
             let style = self.style.clone().unwrap_or_default();

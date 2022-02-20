@@ -29,10 +29,10 @@ impl EnginePlugin for ProviderPlugin {
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(ProviderPluginState::default);
 
-        let mut plugin = plugin.write();
-
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
+                let mut plugin = plugin.write();
+
                 if let Some(providing) = plugin.widgets.remove(widget_id) {
                     for type_id in providing {
                         let widgets = plugin

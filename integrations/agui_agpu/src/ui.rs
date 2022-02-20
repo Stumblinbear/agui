@@ -10,7 +10,7 @@ use agpu::{
     Event, Frame, GpuHandle, GpuProgram,
 };
 use agui::{
-    engine::Engine,
+    engine::{debug::print_tree, Engine},
     font::Font,
     unit::{Point, Size},
     widgets::state::{
@@ -72,6 +72,8 @@ impl<'ui> UI<'ui> {
 
     pub fn redraw(&'ui mut self) {
         self.renderer.redraw(&self.engine);
+
+        // print_tree(&self.engine);
     }
 
     pub fn render(&mut self, frame: Frame) {

@@ -1,4 +1,4 @@
-use agui_core::widget::{BuildResult, WidgetBuilder, BuildContext, WidgetRef};
+use agui_core::widget::{BuildContext, BuildResult, WidgetBuilder};
 use agui_macros::Widget;
 
 #[derive(Widget)]
@@ -34,14 +34,5 @@ where
 {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         (self.func)(ctx)
-    }
-}
-
-impl<F> From<Builder<F>> for WidgetRef
-where
-    F: Fn(&mut BuildContext) -> BuildResult + 'static,
-{
-    fn from(builder: Builder<F>) -> Self {
-        Self::new(builder)
     }
 }

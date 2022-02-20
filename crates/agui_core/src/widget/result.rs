@@ -1,4 +1,4 @@
-use super::WidgetRef;
+use super::{Widget, WidgetRef};
 
 /// Encapsulates the result of a widget `build()` method.
 #[non_exhaustive]
@@ -15,6 +15,15 @@ pub enum BuildResult {
     ///
     /// Currently this results in a `panic!()`, however that may change in the future.
     Err(Box<dyn std::error::Error>),
+}
+
+impl<W> From<W> for BuildResult
+where
+    W: Widget,
+{
+    fn from(widget: W) -> Self {
+        Self::Some(vec![WidgetRef::new(widget)])
+    }
 }
 
 impl From<WidgetRef> for BuildResult {

@@ -7,7 +7,7 @@ use agui_core::{
     canvas::paint::Paint,
     font::FontStyle,
     unit::{Color, Layout, Point, Rect, Ref},
-    widget::{BuildResult, WidgetBuilder, BuildContext},
+    widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 use agui_macros::{build, Widget};
 use agui_primitives::edit::EditableText;
@@ -184,7 +184,8 @@ where
                         match input {
                             // Backspace character
                             '\u{8}' => {
-                                let grapheme_idx = input_value.read().prev_grapheme_offset(cursor_offset);
+                                let grapheme_idx =
+                                    input_value.read().prev_grapheme_offset(cursor_offset);
 
                                 if let Some(idx) = grapheme_idx {
                                     input_value.write().remove(idx..cursor_offset);
@@ -195,7 +196,8 @@ where
 
                             // Delete character
                             '\u{7f}' => {
-                                let grapheme_idx = input_value.read().next_grapheme_offset(cursor_offset);
+                                let grapheme_idx =
+                                    input_value.read().next_grapheme_offset(cursor_offset);
 
                                 if let Some(idx) = grapheme_idx {
                                     input_value.write().remove(cursor_offset..idx);
@@ -205,7 +207,8 @@ where
                             ch => {
                                 input_value.write().insert(cursor_offset, ch);
 
-                                let grapheme_idx = input_value.read().next_grapheme_offset(cursor_offset);
+                                let grapheme_idx =
+                                    input_value.read().next_grapheme_offset(cursor_offset);
 
                                 cursor.write().index = grapheme_idx.unwrap_or(0);
                             }
