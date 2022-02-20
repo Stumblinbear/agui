@@ -39,8 +39,6 @@ fn main() -> Result<(), agpu::BoxError> {
 fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
-    ctx.use_timeout(Duration::from_secs_f32(0.1));
-
     build! {
         Column {
             children: [
