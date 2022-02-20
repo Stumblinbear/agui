@@ -9,7 +9,7 @@ use agui_core::{
     unit::{Color, Layout, Point, Rect, Ref},
     widget::{BuildContext, BuildResult, WidgetBuilder},
 };
-use agui_macros::{build, Widget};
+use agui_macros::Widget;
 use agui_primitives::edit::EditableText;
 
 use crate::{
@@ -178,52 +178,60 @@ where
                 let keyboard = keyboard.read();
 
                 if input_state == TextInputState::Focused {
-                    let cursor_offset = cursor.read().index;
+                    let Cursor { string_index, .. } = *cursor.read();
 
                     if let Some(input) = keyboard.input {
                         match input {
                             // Backspace character
                             '\u{8}' => {
                                 let grapheme_idx =
-                                    input_value.read().prev_grapheme_offset(cursor_offset);
+                                    input_value.read().prev_grapheme_offset(string_index);
 
                                 if let Some(idx) = grapheme_idx {
-                                    input_value.write().remove(idx..cursor_offset);
+                                    input_value.write().remove(idx..string_index);
 
-                                    cursor.write().index = idx;
+                                    cursor.write().string_index = idx;
+                                    cursor.write().glyph_index -= 1;
                                 }
                             }
 
                             // Delete character
                             '\u{7f}' => {
                                 let grapheme_idx =
-                                    input_value.read().next_grapheme_offset(cursor_offset);
+                                    input_value.read().next_grapheme_offset(string_index);
 
                                 if let Some(idx) = grapheme_idx {
-                                    input_value.write().remove(cursor_offset..idx);
+                                    input_value.write().remove(string_index..idx);
                                 }
                             }
 
                             ch => {
-                                input_value.write().insert(cursor_offset, ch);
+                                input_value.write().insert(string_index, ch);
 
                                 let grapheme_idx =
-                                    input_value.read().next_grapheme_offset(cursor_offset);
+                                    input_value.read().next_grapheme_offset(string_index);
 
-                                cursor.write().index = grapheme_idx.unwrap_or(0);
+                                if let Some(idx) = grapheme_idx {
+                                    cursor.write().string_index = idx;
+                                    cursor.write().glyph_index += 1;
+                                }
                             }
                         }
+
+                        println!("{:?}", cursor.read());
                     } else if keyboard.is_pressed(&KeyCode::Right) {
-                        let grapheme_idx = input_value.read().next_grapheme_offset(cursor_offset);
+                        let grapheme_idx = input_value.read().next_grapheme_offset(string_index);
 
                         if let Some(idx) = grapheme_idx {
-                            cursor.write().index = idx;
+                            cursor.write().string_index = idx;
+                            cursor.write().glyph_index += 1;
                         }
                     } else if keyboard.is_pressed(&KeyCode::Left) {
-                        let grapheme_idx = input_value.read().prev_grapheme_offset(cursor_offset);
+                        let grapheme_idx = input_value.read().prev_grapheme_offset(string_index);
 
                         if let Some(idx) = grapheme_idx {
-                            cursor.write().index = idx;
+                            cursor.write().string_index = idx;
+                            cursor.write().glyph_index -= 1;
                         }
                     }
 
@@ -300,7 +308,7 @@ where
                             cursor_brush,
                         );
                     } else {
-                        let pos = if let Some(g) = glyphs.get(cursor.read().index) {
+                        let pos = if let Some(g) = glyphs.get(cursor.read().glyph_index) {
                             Point {
                                 x: g.glyph.position.x,
                                 y: g.glyph.position.y,
@@ -350,5 +358,6 @@ where
 
 #[derive(Debug, Default)]
 struct Cursor {
-    index: usize,
+    string_index: usize,
+    glyph_index: usize,
 }
