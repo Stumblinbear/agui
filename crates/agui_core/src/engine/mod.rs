@@ -12,8 +12,8 @@ use parking_lot::Mutex;
 
 use crate::{
     font::Font,
-    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext, PluginId},
+    state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
     unit::{Key, Units},
     widget::{BuildContext, BuildResult, HandlerType, Widget, WidgetContext, WidgetId, WidgetRef},
@@ -178,23 +178,25 @@ impl<'ui> Engine<'ui> {
         self.get(widget_id).downcast_ref()
     }
 
-    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
+    pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: NotifiableValue,
+        V: StateValue,
     {
-        self.global.try_get()
+        self.global.try_get(None)
     }
 
-    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.global.get_or(func)
+        self.global.get_or(None, func)
     }
 
     /// Update the UI tree.
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
+        self.global.apply_updates();
+
         // Update all plugins, as they may cause changes to state
         for (plugin_id, plugin) in &self.plugins {
             plugin.on_update(&mut PluginContext {
@@ -562,12 +564,14 @@ impl<'ui> Engine<'ui> {
             widget_id,
         });
 
+        node.state.apply_updates();
+
         let result = node.widget.try_get().map_or(BuildResult::None, |widget| {
             widget.build(&mut BuildContext {
                 widget_id,
                 widget: &mut node,
 
-                tree: &self.tree,
+                tree: &mut self.tree,
                 global: &mut self.global,
             })
         });
@@ -664,7 +668,7 @@ mod tests {
 
     use super::Engine;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Copy, Clone)]
     struct TestGlobal(i32);
 
     #[derive(Debug, Default)]
@@ -695,14 +699,7 @@ mod tests {
 
                 let test_global = ctx.try_use_global::<TestGlobal>();
 
-                test_global.map_or_else(
-                    || -1,
-                    |test_global| {
-                        let test_global = test_global.read();
-
-                        test_global.0
-                    },
-                )
+                test_global.map_or_else(|| -1, |test_global| test_global.0)
             });
 
             *self.builds.lock() += 1;
@@ -785,11 +782,7 @@ mod tests {
             "widget `test` should be 0"
         );
 
-        {
-            let mut test_global = test_global.write();
-
-            test_global.0 = 5;
-        }
+        test_global.write().0 = 5;
 
         assert_eq!(
             *engine.get_as::<TestWidget>(widget_id).computes.lock(),

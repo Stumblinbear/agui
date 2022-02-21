@@ -1,4 +1,4 @@
-use crate::{widget::HandlerId, plugin::PluginId, widget::WidgetId};
+use crate::{plugin::PluginId, widget::HandlerId, widget::WidgetId};
 
 /// A combined-type for anything that can listen for events in the system.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

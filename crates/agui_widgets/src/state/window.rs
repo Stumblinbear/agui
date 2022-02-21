@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use agui_core::unit::{Point, Size};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct WindowFocus(bool);
 
 impl Deref for WindowFocus {
@@ -19,7 +19,7 @@ impl DerefMut for WindowFocus {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct WindowPosition(Point);
 
 impl Deref for WindowPosition {
@@ -36,7 +36,7 @@ impl DerefMut for WindowPosition {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct WindowSize(Size);
 
 impl Deref for WindowSize {

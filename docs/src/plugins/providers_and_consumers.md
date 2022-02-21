@@ -20,7 +20,7 @@ fn provider_widget(ctx: &WidgetContext, child: WidgetRef) -> BuildResult {
     // The generic isn't required, here; it's just used for clarity.
     let some_number = ctx.use_state::<usize, _>(|| 0);
 
-    // `ProviderExt` gives an easy-to-use extension trait onto `Notify` (which is what `use_state` and `init_state` return).
+    // `ProviderExt` gives an easy-to-use extension trait onto `State` (which is what `use_state` and `init_state` return).
     some_number.provide(ctx);
 
     // This child, and all children within it, will now have access to `some_number`, as long as they Consume it properly.

@@ -5,12 +5,12 @@ use std::{
 
 use agui_core::{
     engine::event::WidgetEvent,
-    notifiable::{NotifiableValue, Notify},
     plugin::{EnginePlugin, PluginContext},
+    state::{State, StateValue},
     widget::{BuildContext, WidgetContext, WidgetId},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct ProviderPluginState {
     providers: HashMap<TypeId, HashSet<WidgetId>>,
     widgets: HashMap<WidgetId, HashSet<TypeId>>,
@@ -29,10 +29,20 @@ impl EnginePlugin for ProviderPlugin {
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(ProviderPluginState::default);
 
+        let mut removed_widgets = Vec::new();
+
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                let mut plugin = plugin.write();
+                if plugin.widgets.contains_key(widget_id) {
+                    removed_widgets.push(widget_id);
+                }
+            }
+        }
 
+        if !removed_widgets.is_empty() {
+            let mut plugin = plugin.write();
+
+            for widget_id in removed_widgets {
                 if let Some(providing) = plugin.widgets.remove(widget_id) {
                     for type_id in providing {
                         let widgets = plugin
@@ -52,15 +62,13 @@ pub trait ProviderExt {
     fn provide(&self, ctx: &mut BuildContext);
 }
 
-impl<'ui, V> ProviderExt for Notify<V>
+impl<'ui, V> ProviderExt for State<V>
 where
-    V: NotifiableValue,
+    V: StateValue,
 {
     /// Makes some local widget state available to any child widget.
     fn provide(&self, ctx: &mut BuildContext) {
-        let plugin = ctx.init_global(ProviderPluginState::default);
-
-        let mut plugin = plugin.write();
+        let mut plugin = ctx.init_global(ProviderPluginState::default).write();
 
         let type_id = TypeId::of::<V>();
 
@@ -81,20 +89,18 @@ where
 }
 
 pub trait ConsumerExt {
-    fn consume<V>(&mut self) -> Option<Notify<V>>
+    fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: NotifiableValue;
+        V: StateValue;
 }
 
 impl<'ui, 'ctx> ConsumerExt for BuildContext<'ui, 'ctx> {
     /// Makes some local widget state available to any child widget.
-    fn consume<V>(&mut self) -> Option<Notify<V>>
+    fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: NotifiableValue,
+        V: StateValue,
     {
         let plugin = self.init_global(ProviderPluginState::default);
-
-        let plugin = plugin.write();
 
         if let Some(providers) = plugin.providers.get(&TypeId::of::<V>()) {
             let widget_id = self.get_widget();
@@ -124,13 +130,11 @@ impl<'ui, 'ctx> ConsumerExt for BuildContext<'ui, 'ctx> {
 
 impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
     /// Makes some local widget state available to any child widget.
-    fn consume<V>(&mut self) -> Option<Notify<V>>
+    fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: NotifiableValue,
+        V: StateValue,
     {
         let plugin = self.init_global(ProviderPluginState::default);
-
-        let plugin = plugin.write();
 
         if let Some(providers) = plugin.providers.get(&TypeId::of::<V>()) {
             let widget_id = self.get_widget();

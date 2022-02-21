@@ -58,7 +58,7 @@ impl Theme {
             style.clone()
         // This either grabs a provided theme or uses global state
         } else if let Some(theme) = ctx.consume::<Theme>() {
-            theme.read().get_or_init::<S>()
+            theme.get_or_init::<S>()
         } else {
             S::default()
         }

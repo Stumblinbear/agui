@@ -60,12 +60,12 @@ impl WidgetBuilder for Button {
                 if let Some(mouse) = ctx.try_use_global::<Mouse>() {
                     let state = ctx.init_state(|| ButtonState::Normal);
 
-                    if mouse.read().button.left == MouseButtonState::Pressed {
-                        if ctx.is_hovering() {
-                            *state.write() = ButtonState::Pressed;
+                    if mouse.button.left == MouseButtonState::Pressed {
+                        if ctx.is_hovering() && *state != ButtonState::Pressed {
+                            state.set(ButtonState::Pressed);
                         }
-                    } else if *state.read() == ButtonState::Pressed {
-                        *state.write() = ButtonState::Normal;
+                    } else if *state == ButtonState::Pressed {
+                        state.set(ButtonState::Normal);
 
                         if ctx.is_hovering() {
                             on_pressed.emit(());
@@ -79,7 +79,7 @@ impl WidgetBuilder for Button {
             let style = self.style.clone().unwrap_or_default();
 
             move |canvas| {
-                let color = match *state.read() {
+                let color = match *state {
                     ButtonState::Normal => style.normal,
                     ButtonState::Disabled => style.disabled,
                     ButtonState::Pressed => style.pressed,

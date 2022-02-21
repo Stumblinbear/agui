@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 
 use crate::{
     canvas::renderer::RenderFn,
-    notifiable::{state::StateMap, ListenerId},
+    state::{map::StateMap, ListenerId},
     tree::Tree,
     unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Sizing},
     widget::{computed::ComputedFunc, effect::EffectFunc, HandlerId, WidgetId, WidgetRef},

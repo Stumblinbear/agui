@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use crate::{
     engine::node::WidgetNode,
-    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
+    state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
     unit::{LayoutType, Rect, Ref, Size},
     widget::WidgetId,
@@ -34,8 +34,8 @@ pub struct WidgetContext<'ui, 'ctx> {
     pub(crate) widget_id: WidgetId,
     pub(crate) handler_id: HandlerId,
 
-    pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
-    pub(crate) global: &'ctx StateMap,
+    pub(crate) tree: &'ctx mut Tree<WidgetId, WidgetNode<'ui>>,
+    pub(crate) global: &'ctx mut StateMap,
 
     pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 }
@@ -57,71 +57,67 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 // Globals
 impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
-    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
+    pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: NotifiableValue,
+        V: StateValue,
     {
-        self.global.add_listener::<V>(self.get_listener());
-
-        self.global.try_get::<V>()
+        self.global.try_get::<V>(Some(self.get_listener()))
     }
 
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
-    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.global.get_or(func)
+        self.global.get_or(None, func)
     }
 
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
-    pub fn use_global<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn use_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.global.add_listener::<V>(self.get_listener());
-
-        self.global.get_or(func)
+        self.global.get_or(Some(self.get_listener()), func)
     }
 }
 
 // Local state
 impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
-    pub fn init_state<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn init_state<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.widget.state.get_or::<V, F>(func)
+        self.widget.state.get_or::<V, F>(None, func)
     }
 
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
-    pub fn use_state<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn use_state<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.widget.state.add_listener::<V>(self.get_listener());
-
-        self.widget.state.get_or::<V, F>(func)
+        self.widget
+            .state
+            .get_or::<V, F>(Some(self.get_listener()), func)
     }
 
-    pub fn use_state_from<V, F>(&mut self, widget_id: WidgetId, func: F) -> Notify<V>
+    pub fn use_state_from<V, F>(&mut self, widget_id: WidgetId, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
+        let listener_id = self.get_listener();
+
         let target_widget = self
             .tree
-            .get(widget_id)
+            .get_mut(widget_id)
             .expect("cannot use state from a widget that doesn't exist");
 
-        target_widget.state.add_listener::<V>(self.get_listener());
-
-        target_widget.state.get_or::<V, F>(func)
+        target_widget.state.get_or::<V, F>(Some(listener_id), func)
     }
 }
 

@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Key, Layout, Sizing, Units},
-    widget::{BuildResult, WidgetBuilder, BuildContext, WidgetRef},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::{build, Widget};
 
@@ -29,8 +29,6 @@ pub struct App {
 impl WidgetBuilder for App {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         let window_size = ctx.use_global(WindowSize::default);
-
-        let window_size = window_size.read();
 
         ctx.set_layout(build! {
             Layout {

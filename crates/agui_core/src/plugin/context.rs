@@ -5,8 +5,8 @@ use parking_lot::Mutex;
 
 use crate::{
     engine::node::WidgetNode,
-    notifiable::{state::StateMap, ListenerId, NotifiableValue, Notify},
     plugin::PluginId,
+    state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
     widget::WidgetId,
 };
@@ -25,6 +25,10 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
         self.tree
     }
 
+    pub fn get_listener(&self) -> ListenerId {
+        self.plugin_id.into()
+    }
+
     pub fn mark_dirty(&self, listener_id: ListenerId) {
         self.changed.lock().insert(listener_id);
     }
@@ -33,32 +37,28 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
 // Globals
 impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
-    pub fn try_use_global<V>(&mut self) -> Option<Notify<V>>
+    pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: NotifiableValue,
+        V: StateValue,
     {
-        self.global.add_listener::<V>(self.plugin_id.into());
-
-        self.global.try_get::<V>()
+        self.global.try_get::<V>(Some(self.get_listener()))
     }
-    
+
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
-    pub fn init_global<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.global.get_or(func)
+        self.global.get_or(None, func)
     }
 
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
-    pub fn use_global<V, F>(&mut self, func: F) -> Notify<V>
+    pub fn use_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: NotifiableValue,
+        V: StateValue,
         F: FnOnce() -> V,
     {
-        self.global.add_listener::<V>(self.plugin_id.into());
-
-        self.global.get_or(func)
+        self.global.get_or(Some(self.get_listener()), func)
     }
 }

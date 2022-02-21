@@ -1,19 +1,19 @@
 use agui_core::unit::Point;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Mouse {
     pub pos: Option<Point>,
     pub button: MouseButtons,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MouseButtons {
     pub left: MouseButtonState,
     pub middle: MouseButtonState,
     pub right: MouseButtonState,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MouseButtonState {
     Pressed,
     Held,
@@ -26,7 +26,7 @@ impl Default for MouseButtonState {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Scroll {
     pub delta: Point,
 }

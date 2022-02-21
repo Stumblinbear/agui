@@ -134,10 +134,10 @@ where
         ctx.set_layout(Ref::clone(&self.layout));
 
         let input_state = ctx.computed(|ctx| {
-            let last_input_state = *ctx.init_state(TextInputState::default).read();
+            let last_input_state = ctx.init_state(TextInputState::default);
 
             let is_pressed =
-                ctx.use_global(Mouse::default).read().button.left == MouseButtonState::Pressed;
+                ctx.use_global(Mouse::default).button.left == MouseButtonState::Pressed;
 
             if is_pressed {
                 return if ctx.is_hovering() {
@@ -147,7 +147,7 @@ where
                 };
             }
 
-            if last_input_state == TextInputState::Focused {
+            if *last_input_state == TextInputState::Focused {
                 return TextInputState::Focused;
             } else if ctx.is_hovering() {
                 return TextInputState::Hover;
@@ -158,8 +158,8 @@ where
 
         let last_input_state = ctx.init_state(TextInputState::default);
 
-        if *last_input_state.read() != input_state {
-            *last_input_state.write() = input_state;
+        if *last_input_state != input_state {
+            last_input_state.set(input_state);
         }
 
         let cursor = ctx.use_state(Cursor::default);
@@ -171,24 +171,20 @@ where
             let input_value = ctx.init_state(|| self.value.clone());
 
             ctx.computed(move |ctx| {
-                let input_state = *ctx.init_state(TextInputState::default).read();
+                let input_state = ctx.init_state(TextInputState::default);
                 let keyboard = ctx.use_global(Keyboard::default);
                 let instant = ctx.init_state(Instant::now);
 
-                let keyboard = keyboard.read();
-
-                if input_state == TextInputState::Focused {
-                    let Cursor { string_index, .. } = *cursor.read();
-
+                if *input_state == TextInputState::Focused {
                     if let Some(input) = keyboard.input {
                         match input {
                             // Backspace character
                             '\u{8}' => {
                                 let grapheme_idx =
-                                    input_value.read().prev_grapheme_offset(string_index);
+                                    input_value.prev_grapheme_offset(cursor.string_index);
 
                                 if let Some(idx) = grapheme_idx {
-                                    input_value.write().remove(idx..string_index);
+                                    input_value.write().remove(idx..(cursor.string_index));
 
                                     cursor.write().string_index = idx;
                                     cursor.write().glyph_index -= 1;
@@ -198,18 +194,18 @@ where
                             // Delete character
                             '\u{7f}' => {
                                 let grapheme_idx =
-                                    input_value.read().next_grapheme_offset(string_index);
+                                    input_value.next_grapheme_offset(cursor.string_index);
 
                                 if let Some(idx) = grapheme_idx {
-                                    input_value.write().remove(string_index..idx);
+                                    input_value.write().remove((cursor.string_index)..idx);
                                 }
                             }
 
                             ch => {
-                                input_value.write().insert(string_index, ch);
+                                input_value.write().insert(cursor.string_index, ch);
 
                                 let grapheme_idx =
-                                    input_value.read().next_grapheme_offset(string_index);
+                                    input_value.next_grapheme_offset(cursor.string_index);
 
                                 if let Some(idx) = grapheme_idx {
                                     cursor.write().string_index = idx;
@@ -218,16 +214,16 @@ where
                             }
                         }
 
-                        println!("{:?}", cursor.read());
+                        println!("{:?}", cursor);
                     } else if keyboard.is_pressed(&KeyCode::Right) {
-                        let grapheme_idx = input_value.read().next_grapheme_offset(string_index);
+                        let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
 
                         if let Some(idx) = grapheme_idx {
                             cursor.write().string_index = idx;
                             cursor.write().glyph_index += 1;
                         }
                     } else if keyboard.is_pressed(&KeyCode::Left) {
-                        let grapheme_idx = input_value.read().prev_grapheme_offset(string_index);
+                        let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
 
                         if let Some(idx) = grapheme_idx {
                             cursor.write().string_index = idx;
@@ -238,20 +234,20 @@ where
                     *instant.write() = Instant::now();
                 }
 
-                input_value.read().clone()
+                (*input_value).clone()
             })
         };
 
         let cursor_state = ctx.computed(|ctx| {
             // Keep track of time so we can blink blonk the cursor
-            let instant = *ctx.init_state(Instant::now).read();
+            let instant = ctx.init_state(Instant::now);
 
             // Request an update in x seconds
             ctx.use_timeout(Duration::from_secs_f32(CURSOR_BLINK_SECS));
 
-            let input_state = *ctx.init_state(TextInputState::default).read();
+            let input_state = ctx.init_state(TextInputState::default);
 
-            if input_state != TextInputState::Focused {
+            if *input_state != TextInputState::Focused {
                 return CursorState::Hidden;
             }
 
@@ -308,7 +304,7 @@ where
                             cursor_brush,
                         );
                     } else {
-                        let pos = if let Some(g) = glyphs.get(cursor.read().glyph_index) {
+                        let pos = if let Some(g) = glyphs.get(cursor.glyph_index) {
                             Point {
                                 x: g.glyph.position.x,
                                 y: g.glyph.position.y,
@@ -356,7 +352,7 @@ where
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 struct Cursor {
     string_index: usize,
     glyph_index: usize,

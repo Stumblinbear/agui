@@ -8,7 +8,7 @@ use agui_core::{
 
 use crate::state::mouse::Mouse;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct HoveringPluginState {
     pub widget_ids: HashSet<WidgetId>,
 }
@@ -31,7 +31,7 @@ impl EnginePlugin for HoveringPlugin {
         let hovering = ctx.init_global(HoveringPluginState::default);
 
         if let Some(mouse) = ctx.try_use_global::<Mouse>() {
-            match &mouse.read().pos {
+            match &mouse.pos {
                 Some(pos) => {
                     let hovering_ids = ctx
                         .get_tree()
@@ -46,7 +46,6 @@ impl EnginePlugin for HoveringPlugin {
 
                     // If there are any differing widgets, update the list
                     if hovering
-                        .read()
                         .widget_ids
                         .symmetric_difference(&hovering_ids)
                         .next()
@@ -56,7 +55,7 @@ impl EnginePlugin for HoveringPlugin {
                     }
                 }
                 None => {
-                    if !hovering.read().widget_ids.is_empty() {
+                    if !hovering.widget_ids.is_empty() {
                         hovering.write().widget_ids.clear();
                     }
                 }
@@ -74,7 +73,6 @@ pub trait HoveringExt {
 impl<'ui, 'ctx> HoveringExt for BuildContext<'ui, 'ctx> {
     fn is_hovering(&mut self) -> bool {
         self.init_global(HoveringPluginState::default)
-            .read()
             .is_hovering(self.get_widget())
     }
 }
@@ -82,7 +80,6 @@ impl<'ui, 'ctx> HoveringExt for BuildContext<'ui, 'ctx> {
 impl<'ui, 'ctx> HoveringExt for WidgetContext<'ui, 'ctx> {
     fn is_hovering(&mut self) -> bool {
         self.init_global(HoveringPluginState::default)
-            .read()
             .is_hovering(self.get_widget())
     }
 }

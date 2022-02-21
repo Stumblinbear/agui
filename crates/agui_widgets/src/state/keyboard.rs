@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Keyboard {
     pub keys: HashMap<KeyCode, KeyState>,
     pub modifiers: Modifiers,
@@ -24,7 +24,7 @@ impl Keyboard {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct KeyboardInput(char);
 
 impl Deref for KeyboardInput {

@@ -6,12 +6,12 @@ use std::{
 
 use agui_core::{
     engine::event::WidgetEvent,
-    notifiable::ListenerId,
     plugin::{EnginePlugin, PluginContext},
+    state::ListenerId,
     widget::{BuildContext, WidgetContext, WidgetId},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct TimeoutPluginState {
     widgets: HashMap<WidgetId, HashMap<ListenerId, Instant>>,
 }
@@ -49,24 +49,20 @@ impl EnginePlugin for TimeoutPlugin {
 
         let mut updated_timeouts = HashMap::new();
 
-        {
-            let plugin = plugin.read();
+        for (widget_id, timeouts) in &plugin.widgets {
+            let mut updated = Vec::new();
 
-            for (widget_id, timeouts) in &plugin.widgets {
-                let mut updated = Vec::new();
+            for (listener_id, instant) in timeouts.iter() {
+                // Loop until we find the first timeout that hasn't been met
+                if now > *instant {
+                    ctx.mark_dirty(*listener_id);
 
-                for (listener_id, instant) in timeouts.iter() {
-                    // Loop until we find the first timeout that hasn't been met
-                    if now > *instant {
-                        ctx.mark_dirty(*listener_id);
-
-                        updated.push(*listener_id);
-                    }
+                    updated.push(*listener_id);
                 }
+            }
 
-                if !updated.is_empty() {
-                    updated_timeouts.insert(*widget_id, updated);
-                }
+            if !updated.is_empty() {
+                updated_timeouts.insert(*widget_id, updated);
             }
         }
 
@@ -88,9 +84,21 @@ impl EnginePlugin for TimeoutPlugin {
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
         let plugin = ctx.init_global(TimeoutPluginState::default);
 
+        let mut removed_widgets = Vec::new();
+
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                plugin.write().widgets.remove(widget_id);
+                if plugin.widgets.contains_key(widget_id) {
+                    removed_widgets.push(widget_id);
+                }
+            }
+        }
+
+        if !removed_widgets.is_empty() {
+            let mut plugin = plugin.write();
+
+            for widget_id in removed_widgets {
+                plugin.widgets.remove(widget_id);
             }
         }
     }
