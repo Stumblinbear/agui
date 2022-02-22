@@ -119,9 +119,9 @@ impl Shape {
                     },
                     &BorderRadii {
                         top_left: top_left.max(f32::EPSILON), // Lyon sucks ass
-                        top_right: *top_right,
-                        bottom_left: *bottom_left,
-                        bottom_right: *bottom_right,
+                        top_right: top_right.max(0.0),
+                        bottom_left: bottom_left.max(0.0),
+                        bottom_right: bottom_right.max(0.0),
                     },
                     Winding::Positive,
                 );
