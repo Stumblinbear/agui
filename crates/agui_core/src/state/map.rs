@@ -3,6 +3,8 @@ use std::{any::TypeId, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 use parking_lot::Mutex;
 
+use crate::engine::ChangedListeners;
+
 use super::ListenerId;
 
 use super::{State, StateValue};
@@ -11,19 +13,19 @@ struct StateEntry {
     value: Arc<dyn StateValue>,
     updated_value: Arc<Mutex<Option<Arc<dyn StateValue>>>>,
 
-    listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
+    listeners: FnvHashSet<ListenerId>,
 }
 
 pub struct StateMap {
-    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
+    changed_listeners: ChangedListeners,
 
     entries: FnvHashMap<TypeId, StateEntry>,
 }
 
 impl StateMap {
-    pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>) -> Self {
+    pub fn new(changed_listeners: ChangedListeners) -> Self {
         Self {
-            changed,
+            changed_listeners,
 
             entries: FnvHashMap::default(),
         }
@@ -33,6 +35,8 @@ impl StateMap {
         for (.., entry) in self.entries.iter_mut() {
             if let Some(value) = entry.updated_value.lock().take() {
                 entry.value = value;
+
+                self.changed_listeners.notify_many(entry.listeners.iter());
             }
         }
     }
@@ -51,18 +55,14 @@ impl StateMap {
             }
 
             if let Some(listener_id) = listener_id {
-                entry.listeners.lock().insert(listener_id);
+                entry.listeners.insert(listener_id);
             }
 
             Some(State {
-                changed: Arc::clone(&self.changed),
-
                 value: Arc::clone(&entry.value)
                     .downcast_arc()
                     .expect("state failed to downcast ref"),
                 updated_value: Arc::clone(&entry.updated_value),
-
-                listeners: Arc::clone(&entry.listeners),
             })
         } else {
             None
@@ -86,7 +86,7 @@ impl StateMap {
                     value: Arc::new(func()),
                     updated_value: Arc::default(),
 
-                    listeners: Arc::default(),
+                    listeners: FnvHashSet::default(),
                 },
             );
 
@@ -95,9 +95,9 @@ impl StateMap {
         }
     }
 
-    pub fn remove_listeners(&self, listener_id: &ListenerId) {
-        for entry in self.entries.values() {
-            entry.listeners.lock().remove(listener_id);
+    pub fn remove_listeners(&mut self, listener_id: &ListenerId) {
+        for entry in self.entries.values_mut() {
+            entry.listeners.remove(listener_id);
         }
     }
 }

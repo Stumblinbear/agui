@@ -26,6 +26,23 @@ pub mod node;
 
 use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
 
+#[derive(Default, Clone)]
+pub struct ChangedListeners(Arc<Mutex<FnvHashSet<ListenerId>>>);
+
+impl ChangedListeners {
+    pub fn is_empty(&self) -> bool {
+        self.0.lock().is_empty()
+    }
+
+    pub fn notify(&self, listener_id: ListenerId) {
+        self.0.lock().insert(listener_id);
+    }
+
+    pub fn notify_many<'a>(&self, listener_ids: impl IntoIterator<Item = &'a ListenerId>) {
+        self.0.lock().extend(listener_ids);
+    }
+}
+
 /// Handles the entirety of the agui lifecycle.
 pub struct Engine<'ui> {
     plugins: FnvHashMap<PluginId, Box<dyn EnginePlugin>>,
@@ -37,14 +54,14 @@ pub struct Engine<'ui> {
     global: StateMap,
     cache: LayoutCache<WidgetId>,
 
-    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
+    changed_listeners: ChangedListeners,
     modifications: Vec<Modify>,
 }
 
 impl<'ui> Engine<'ui> {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let changed = Arc::new(Mutex::new(FnvHashSet::default()));
+        let changed_listeners = ChangedListeners::default();
 
         Self {
             plugins: FnvHashMap::default(),
@@ -53,10 +70,10 @@ impl<'ui> Engine<'ui> {
 
             tree: Tree::default(),
 
-            global: StateMap::new(Arc::clone(&changed)),
+            global: StateMap::new(ChangedListeners::clone(&changed_listeners)),
             cache: LayoutCache::default(),
 
-            changed,
+            changed_listeners,
             modifications: Vec::default(),
         }
     }
@@ -82,7 +99,7 @@ impl<'ui> Engine<'ui> {
 
         self.plugins.insert(plugin_id, Box::new(plugin));
 
-        self.changed.lock().insert(plugin_id.into());
+        self.changed_listeners.notify(plugin_id.into());
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
@@ -197,6 +214,10 @@ impl<'ui> Engine<'ui> {
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
         self.global.apply_updates();
 
+        for (_, node) in self.tree.iter_mut() {
+            node.state.apply_updates();
+        }
+
         // Update all plugins, as they may cause changes to state
         for (plugin_id, plugin) in &self.plugins {
             plugin.on_update(&mut PluginContext {
@@ -205,11 +226,11 @@ impl<'ui> Engine<'ui> {
                 tree: &self.tree,
                 global: &mut self.global,
 
-                changed: Arc::clone(&self.changed),
+                changed_listeners: ChangedListeners::clone(&self.changed_listeners),
             });
         }
 
-        if self.modifications.is_empty() && self.changed.lock().is_empty() {
+        if self.modifications.is_empty() && self.changed_listeners.is_empty() {
             return None;
         }
 
@@ -304,7 +325,7 @@ impl<'ui> Engine<'ui> {
                     tree: &self.tree,
                     global: &mut self.global,
 
-                    changed: Arc::clone(&self.changed),
+                    changed_listeners: ChangedListeners::clone(&self.changed_listeners),
                 },
                 &widget_events,
             );
@@ -314,7 +335,7 @@ impl<'ui> Engine<'ui> {
     }
 
     pub fn flush_changes(&mut self) {
-        let changed = { self.changed.lock().drain().collect::<Vec<_>>() };
+        let changed = { self.changed_listeners.0.lock().drain().collect::<Vec<_>>() };
 
         if changed.is_empty() {
             return;
@@ -396,7 +417,7 @@ impl<'ui> Engine<'ui> {
                             tree: &self.tree,
                             global: &mut self.global,
 
-                            changed: Arc::clone(&self.changed),
+                            changed_listeners: ChangedListeners::clone(&self.changed_listeners),
                         });
                 }
             }
@@ -483,9 +504,8 @@ impl<'ui> Engine<'ui> {
                 node.rect = rect;
 
                 // Notify any listeners of the change
-                self.changed
-                    .lock()
-                    .extend(node.rect_listeners.lock().iter());
+                self.changed_listeners
+                    .notify_many(node.rect_listeners.lock().iter());
             }
         }
 
@@ -496,7 +516,7 @@ impl<'ui> Engine<'ui> {
                 tree: &self.tree,
                 global: &mut self.global,
 
-                changed: Arc::clone(&self.changed),
+                changed_listeners: ChangedListeners::clone(&self.changed_listeners),
             });
         }
 
@@ -528,15 +548,12 @@ impl<'ui> Engine<'ui> {
 
         let widget_id = self.tree.add(
             parent_id,
-            WidgetNode::new(Arc::clone(&self.changed), widget),
+            WidgetNode::new(ChangedListeners::clone(&self.changed_listeners), widget),
         );
 
         widget_events.push(WidgetEvent::Spawned { type_id, widget_id });
 
         self.cache.add(widget_id);
-
-        // Sometimes widgets get changes queued before they're spawned
-        self.changed.lock().remove(&ListenerId::Widget(widget_id));
 
         self.modifications.push(Modify::Rebuild(widget_id));
     }
@@ -563,8 +580,6 @@ impl<'ui> Engine<'ui> {
             type_id: node.widget.get_type_id(),
             widget_id,
         });
-
-        node.state.apply_updates();
 
         let result = node.widget.try_get().map_or(BuildResult::None, |widget| {
             widget.build(&mut BuildContext {
@@ -636,15 +651,10 @@ impl<'ui> Engine<'ui> {
         for listener_id in listeners {
             self.global.remove_listeners(listener_id);
 
-            self.changed.lock().remove(listener_id);
+            self.changed_listeners.0.lock().remove(listener_id);
         }
 
-        for widget_id in self.tree.iter() {
-            let node = self
-                .tree
-                .get(widget_id)
-                .expect("widget tree borked during removal");
-
+        for (_, node) in self.tree.iter_mut() {
             for listener_id in listeners {
                 node.state.remove_listeners(listener_id);
             }

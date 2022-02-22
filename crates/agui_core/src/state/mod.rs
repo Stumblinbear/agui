@@ -4,7 +4,6 @@ use std::{
 };
 
 use downcast_rs::{impl_downcast, DowncastSync};
-use fnv::FnvHashSet;
 use parking_lot::Mutex;
 
 mod listener;
@@ -23,12 +22,8 @@ pub struct State<V>
 where
     V: StateValue,
 {
-    changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
-
     value: Arc<V>,
     updated_value: Arc<Mutex<Option<Arc<dyn StateValue>>>>,
-
-    listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
 }
 
 impl<V> State<V>
@@ -39,8 +34,6 @@ where
     ///
     /// This will trigger an update of any components listening to the state. Use only if something legitimately changes.
     pub fn set(&self, value: V) {
-        self.changed.lock().extend(self.listeners.lock().iter());
-
         *self.updated_value.lock() = Some(Arc::new(value));
     }
 }
@@ -51,9 +44,6 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            listeners: Arc::clone(&self.listeners),
-            changed: Arc::clone(&self.changed),
-
             value: Arc::clone(&self.value),
             updated_value: Arc::clone(&self.updated_value),
         }
@@ -94,8 +84,6 @@ where
     V: StateValue + Clone,
 {
     pub fn write(&self) -> Write<V> {
-        self.changed.lock().extend(self.listeners.lock().iter());
-
         Write {
             value: self.value.as_ref().clone(),
             updated_value: Arc::clone(&self.updated_value),

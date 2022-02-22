@@ -1,10 +1,5 @@
-use std::sync::Arc;
-
-use fnv::FnvHashSet;
-use parking_lot::Mutex;
-
 use crate::{
-    engine::node::WidgetNode,
+    engine::{node::WidgetNode, ChangedListeners},
     plugin::PluginId,
     state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
@@ -17,7 +12,7 @@ pub struct PluginContext<'ui, 'ctx> {
     pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
 
-    pub(crate) changed: Arc<Mutex<FnvHashSet<ListenerId>>>,
+    pub(crate) changed_listeners: ChangedListeners,
 }
 
 impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
@@ -30,7 +25,7 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     }
 
     pub fn mark_dirty(&self, listener_id: ListenerId) {
-        self.changed.lock().insert(listener_id);
+        self.changed_listeners.notify(listener_id);
     }
 }
 

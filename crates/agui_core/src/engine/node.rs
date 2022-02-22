@@ -11,6 +11,8 @@ use crate::{
     widget::{computed::ComputedFunc, effect::EffectFunc, HandlerId, WidgetId, WidgetRef},
 };
 
+use super::ChangedListeners;
+
 /// Holds information about a widget in the UI tree.
 pub struct WidgetNode<'ui> {
     pub widget: WidgetRef,
@@ -29,11 +31,11 @@ pub struct WidgetNode<'ui> {
 }
 
 impl WidgetNode<'_> {
-    pub fn new(changed: Arc<Mutex<FnvHashSet<ListenerId>>>, widget: WidgetRef) -> Self {
+    pub fn new(changed_listeners: ChangedListeners, widget: WidgetRef) -> Self {
         Self {
             widget,
 
-            state: StateMap::new(Arc::clone(&changed)),
+            state: StateMap::new(ChangedListeners::clone(&changed_listeners)),
             effect_funcs: FnvHashMap::default(),
             computed_funcs: FnvHashMap::default(),
 

@@ -1,14 +1,12 @@
 #![allow(clippy::needless_update)]
 
-use std::time::Duration;
-
 use agui::{
     font::FontStyle,
     macros::{build, functional_widget},
     unit::{Callback, Layout, Margin, Sizing},
     widget::{BuildContext, BuildResult},
     widgets::{
-        plugins::{timeout::TimeoutExt, DefaultPluginsExt},
+        plugins::DefaultPluginsExt,
         primitives::{Column, Padding, Text},
         state::DefaultGlobalsExt,
         App, Button,

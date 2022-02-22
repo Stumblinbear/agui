@@ -1,7 +1,7 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use morphorm::Hierarchy;
-use slotmap::{HopSlotMap, Key};
+use slotmap::{hop::IterMut, HopSlotMap, Key};
 
 #[derive(Debug)]
 pub struct Tree<K, V>
@@ -44,6 +44,15 @@ where
 
     fn deref(&self) -> &Self::Target {
         self.value.as_ref().expect("currently in use")
+    }
+}
+
+impl<K, V> DerefMut for TreeNode<K, V>
+where
+    K: Key,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value.as_mut().expect("currently in use")
     }
 }
 
@@ -190,6 +199,10 @@ where
             node_id: self.root,
             first: true,
         }
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<K, TreeNode<K, V>> {
+        self.nodes.iter_mut()
     }
 
     pub fn iter_from(&self, node_id: K) -> DownwardIterator<K, V> {
