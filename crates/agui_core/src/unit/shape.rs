@@ -118,7 +118,7 @@ impl Shape {
                         size: Size2D::new(rect.width, rect.height),
                     },
                     &BorderRadii {
-                        top_left: *top_left,
+                        top_left: top_left.max(f32::EPSILON), // Lyon sucks ass
                         top_right: *top_right,
                         bottom_left: *bottom_left,
                         bottom_right: *bottom_right,
