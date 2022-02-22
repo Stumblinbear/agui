@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
-use fnv::{FnvHashMap, FnvHashSet};
-use parking_lot::Mutex;
+use fnv::FnvHashMap;
 
 use crate::{
     canvas::renderer::RenderFn,
-    state::{map::StateMap, ListenerId},
+    state::map::StateMap,
     tree::Tree,
     unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Sizing},
     widget::{computed::ComputedFunc, effect::EffectFunc, HandlerId, WidgetId, WidgetRef},
@@ -26,7 +23,6 @@ pub struct WidgetNode<'ui> {
 
     pub renderer: Option<RenderFn<'ui>>,
 
-    pub rect_listeners: Arc<Mutex<FnvHashSet<ListenerId>>>,
     pub rect: Option<Rect>,
 }
 
@@ -44,7 +40,6 @@ impl WidgetNode<'_> {
 
             renderer: None,
 
-            rect_listeners: Arc::default(),
             rect: None,
         }
     }

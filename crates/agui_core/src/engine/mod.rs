@@ -502,10 +502,6 @@ impl<'ui> Engine<'ui> {
 
             if node.rect != rect {
                 node.rect = rect;
-
-                // Notify any listeners of the change
-                self.changed_listeners
-                    .notify_many(node.rect_listeners.lock().iter());
             }
         }
 

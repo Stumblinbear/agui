@@ -24,7 +24,7 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
         self.plugin_id.into()
     }
 
-    pub fn mark_dirty(&self, listener_id: ListenerId) {
+    pub fn mark_dirty(&mut self, listener_id: ListenerId) {
         self.changed_listeners.notify(listener_id);
     }
 }
