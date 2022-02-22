@@ -18,7 +18,7 @@ log = "0.4"
 downcast-rs = "1.2"
 parking_lot = "0.11"
 
-agpu = { git = "https://github.com/lyricwulf/agpu", rev = "4ea1e92d3450ac94dca0c3a887ce54193d4b52e9" }
+agpu = { git = "https://github.com/lyricwulf/agpu", rev = "3ca6f7669b862945b550c7f10f92f663adaf0f89" }
 bytemuck = { version = "1.7", features = ["extern_crate_alloc"] }
 
 lyon = "0.17"
