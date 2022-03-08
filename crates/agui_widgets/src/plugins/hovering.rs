@@ -28,7 +28,7 @@ impl EnginePlugin for HoveringPlugin {
     fn on_build(&self, _ctx: &mut PluginContext) {}
 
     fn on_layout(&self, ctx: &mut PluginContext) {
-        let hovering = ctx.init_global(HoveringPluginState::default);
+        let mut hovering = ctx.init_global(HoveringPluginState::default);
 
         if let Some(mouse) = ctx.try_use_global::<Mouse>() {
             match &mouse.pos {
@@ -51,12 +51,12 @@ impl EnginePlugin for HoveringPlugin {
                         .next()
                         .is_some()
                     {
-                        hovering.write().widget_ids = hovering_ids;
+                        hovering.widget_ids = hovering_ids;
                     }
                 }
                 None => {
                     if !hovering.widget_ids.is_empty() {
-                        hovering.write().widget_ids.clear();
+                        hovering.widget_ids.clear();
                     }
                 }
             }

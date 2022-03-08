@@ -1,7 +1,7 @@
 use agui_core::{
     canvas::{clipping::Clip, paint::Paint},
-    unit::{Callback, Color, Layout, Ref},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
+    unit::{Color, Layout, Ref},
+    widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::Widget;
 
@@ -51,14 +51,12 @@ impl WidgetBuilder for Button {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         ctx.set_layout(Ref::clone(&self.layout));
 
-        let state = ctx.use_state(|| ButtonState::Normal);
-
         ctx.use_effect({
-            let on_pressed = self.on_pressed.clone();
+            let on_pressed = self.on_pressed;
 
             move |ctx| {
                 if let Some(mouse) = ctx.try_use_global::<Mouse>() {
-                    let state = ctx.init_state(|| ButtonState::Normal);
+                    let mut state = ctx.init_state(|| ButtonState::Normal);
 
                     if mouse.button.left == MouseButtonState::Pressed {
                         if ctx.is_hovering() && *state != ButtonState::Pressed {
@@ -68,17 +66,18 @@ impl WidgetBuilder for Button {
                         state.set(ButtonState::Normal);
 
                         if ctx.is_hovering() {
-                            on_pressed.emit(());
+                            ctx.emit(on_pressed, ());
                         }
                     }
                 }
             }
         });
 
-        ctx.on_draw({
+        {
+            let state = ctx.use_state(|| ButtonState::Normal);
             let style = self.style.clone().unwrap_or_default();
 
-            move |canvas| {
+            ctx.on_draw(move |canvas| {
                 let color = match *state {
                     ButtonState::Normal => style.normal,
                     ButtonState::Disabled => style.disabled,
@@ -88,8 +87,8 @@ impl WidgetBuilder for Button {
                 let brush = canvas.new_brush(Paint { color });
 
                 canvas.draw_rect(brush);
-            }
-        });
+            });
+        }
 
         (&self.child).into()
     }

@@ -4,8 +4,8 @@ use agui::{
     canvas::clipping::Clip,
     font::{Font, HorizontalAlign, VerticalAlign},
     macros::{build, functional_widget},
-    unit::{Callback, Color, Layout, Margin, Sizing, Units},
-    widget::{BuildResult, BuildContext, WidgetRef},
+    unit::{Color, Layout, Margin, Sizing, Units},
+    widget::{BuildContext, BuildResult, WidgetRef},
     widgets::{
         plugins::{provider::ProviderExt, DefaultPluginsExt},
         primitives::{Builder, Column, Padding, Spacing, Text},
@@ -76,7 +76,7 @@ fn example_main(
                             text: "A Button"
                         }
                     },
-                    on_pressed: Callback::from(|()| {
+                    on_pressed: ctx.use_callback(|_ctx, ()| {
                         println!("Pressed 1");
                     })
                 },
@@ -94,8 +94,8 @@ fn example_main(
                             text: "Another Button"
                         }
                     },
-                    on_pressed: Callback::from(|()| {
-                        println!("Pressed 1");
+                    on_pressed: ctx.use_callback(|_ctx, ()| {
+                        println!("Pressed 2");
                     })
                 },
                 Button {
@@ -113,8 +113,8 @@ fn example_main(
                             text: "Also a Button"
                         }
                     },
-                    on_pressed: Callback::from(|()| {
-                        println!("Pressed 2");
+                    on_pressed: ctx.use_callback(|_ctx, ()| {
+                        println!("Pressed 3");
                     })
                 },
                 Builder::new(move |ctx| {
@@ -147,8 +147,8 @@ fn example_main(
                                     text: "Beuton"
                                 }
                             },
-                            on_pressed: Callback::from(|()| {
-                                println!("Pressed 3");
+                            on_pressed: ctx.use_callback(|_ctx, ()| {
+                                println!("Pressed 4");
                             })
                         }
                     }

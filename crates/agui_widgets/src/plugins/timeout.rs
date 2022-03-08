@@ -43,7 +43,7 @@ pub struct TimeoutPlugin;
 
 impl EnginePlugin for TimeoutPlugin {
     fn on_update(&self, ctx: &mut PluginContext) {
-        let plugin = ctx.init_global(TimeoutPluginState::default);
+        let mut plugin = ctx.init_global(TimeoutPluginState::default);
 
         let now = Instant::now();
 
@@ -67,8 +67,6 @@ impl EnginePlugin for TimeoutPlugin {
         }
 
         if !updated_timeouts.is_empty() {
-            let mut plugin = plugin.write();
-
             for (widget_id, updated) in updated_timeouts {
                 for pair in updated {
                     plugin.widgets.get_mut(&widget_id).unwrap().remove(&pair);
@@ -82,23 +80,13 @@ impl EnginePlugin for TimeoutPlugin {
     fn on_layout(&self, _ctx: &mut PluginContext) {}
 
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
-        let plugin = ctx.init_global(TimeoutPluginState::default);
-
-        let mut removed_widgets = Vec::new();
+        let mut plugin = ctx.init_global(TimeoutPluginState::default);
 
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
                 if plugin.widgets.contains_key(widget_id) {
-                    removed_widgets.push(widget_id);
+                    plugin.widgets.remove(widget_id);
                 }
-            }
-        }
-
-        if !removed_widgets.is_empty() {
-            let mut plugin = plugin.write();
-
-            for widget_id in removed_widgets {
-                plugin.widgets.remove(widget_id);
             }
         }
     }
@@ -112,7 +100,6 @@ impl<'ui, 'ctx> TimeoutExt for BuildContext<'ui, 'ctx> {
     /// Marks the caller for updating when `duration` elapses.
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)
-            .write()
             .create_timeout(self.get_listener(), duration);
     }
 }
@@ -121,7 +108,6 @@ impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
     /// Marks the caller for updating when `duration` elapses.
     fn use_timeout(&mut self, duration: Duration) {
         self.init_global(TimeoutPluginState::default)
-            .write()
             .create_timeout(self.get_listener(), duration);
     }
 }

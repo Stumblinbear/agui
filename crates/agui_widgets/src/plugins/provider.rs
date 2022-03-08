@@ -27,7 +27,7 @@ impl EnginePlugin for ProviderPlugin {
     fn on_layout(&self, _ctx: &mut PluginContext) {}
 
     fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
-        let plugin = ctx.init_global(ProviderPluginState::default);
+        let mut plugin = ctx.init_global(ProviderPluginState::default);
 
         let mut removed_widgets = Vec::new();
 
@@ -40,8 +40,6 @@ impl EnginePlugin for ProviderPlugin {
         }
 
         if !removed_widgets.is_empty() {
-            let mut plugin = plugin.write();
-
             for widget_id in removed_widgets {
                 if let Some(providing) = plugin.widgets.remove(widget_id) {
                     for type_id in providing {
@@ -62,13 +60,13 @@ pub trait ProviderExt {
     fn provide(&self, ctx: &mut BuildContext);
 }
 
-impl<'ui, V> ProviderExt for State<V>
+impl<V> ProviderExt for State<V>
 where
-    V: StateValue,
+    V: StateValue + Clone,
 {
     /// Makes some local widget state available to any child widget.
     fn provide(&self, ctx: &mut BuildContext) {
-        let mut plugin = ctx.init_global(ProviderPluginState::default).write();
+        let mut plugin = ctx.init_global(ProviderPluginState::default);
 
         let type_id = TypeId::of::<V>();
 
@@ -91,14 +89,14 @@ where
 pub trait ConsumerExt {
     fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue;
+        V: StateValue + Clone;
 }
 
-impl<'ui, 'ctx> ConsumerExt for BuildContext<'ui, 'ctx> {
+impl ConsumerExt for BuildContext<'_, '_> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue,
+        V: StateValue + Clone,
     {
         let plugin = self.init_global(ProviderPluginState::default);
 
@@ -128,11 +126,11 @@ impl<'ui, 'ctx> ConsumerExt for BuildContext<'ui, 'ctx> {
     }
 }
 
-impl<'ui, 'ctx> ConsumerExt for WidgetContext<'ui, 'ctx> {
+impl ConsumerExt for WidgetContext<'_, '_> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue,
+        V: StateValue + Clone,
     {
         let plugin = self.init_global(ProviderPluginState::default);
 

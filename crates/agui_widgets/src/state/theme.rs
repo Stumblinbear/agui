@@ -1,19 +1,19 @@
-use std::{any::TypeId, collections::BTreeMap};
+use std::{any::TypeId, collections::BTreeMap, rc::Rc};
 
 use agui_core::widget::BuildContext;
 use downcast_rs::{impl_downcast, Downcast};
 
 use crate::plugins::provider::ConsumerExt;
 
-pub trait Style: std::fmt::Debug + Downcast + Send + Sync {}
+pub trait Style: std::fmt::Debug + Downcast {}
 
-impl<T> Style for T where T: std::fmt::Debug + Downcast + Send + Sync {}
+impl<T> Style for T where T: std::fmt::Debug + Downcast {}
 
 impl_downcast!(Style);
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Theme {
-    styles: BTreeMap<TypeId, Box<dyn Style>>,
+    styles: BTreeMap<TypeId, Rc<dyn Style>>,
 }
 
 impl Theme {
@@ -25,29 +25,29 @@ impl Theme {
     where
         S: Style,
     {
-        self.styles.insert(TypeId::of::<S>(), Box::new(style));
+        self.styles.insert(TypeId::of::<S>(), Rc::new(style));
     }
 
-    pub fn get<S>(&self) -> Option<&S>
+    pub fn get<S>(&self) -> Option<S>
     where
-        S: Style,
+        S: Style + Clone,
     {
         let style_id = TypeId::of::<S>();
 
-        self.styles
-            .get(&style_id)
-            .map(|s| s.downcast_ref::<S>().expect("failed to downcast style"))
+        self.styles.get(&style_id).map(|s| {
+            Rc::clone(s)
+                .downcast_rc::<S>()
+                .expect("failed to downcast style")
+                .as_ref()
+                .clone()
+        })
     }
 
     pub fn get_or_init<S>(&self) -> S
     where
         S: Style + Clone + Default,
     {
-        if let Some(style) = self.get::<S>() {
-            style.clone()
-        } else {
-            S::default()
-        }
+        self.get::<S>().unwrap_or_default()
     }
 
     pub fn resolve<S>(ctx: &mut BuildContext, style: Option<&S>) -> S

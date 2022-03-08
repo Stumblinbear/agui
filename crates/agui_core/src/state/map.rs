@@ -1,103 +1,90 @@
-use std::{any::TypeId, sync::Arc};
+use std::{any::TypeId, cell::RefCell, rc::Rc};
 
 use fnv::{FnvHashMap, FnvHashSet};
-use parking_lot::Mutex;
 
-use crate::engine::ChangedListeners;
+use crate::engine::notify::Notifier;
 
 use super::ListenerId;
 
 use super::{State, StateValue};
 
 struct StateEntry {
-    value: Arc<dyn StateValue>,
-    updated_value: Arc<Mutex<Option<Arc<dyn StateValue>>>>,
-
-    listeners: FnvHashSet<ListenerId>,
+    value: Rc<dyn StateValue>,
+    updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
 }
 
 pub struct StateMap {
-    changed_listeners: ChangedListeners,
+    notifier: Rc<RefCell<Notifier>>,
 
     entries: FnvHashMap<TypeId, StateEntry>,
+    listeners: FnvHashMap<TypeId, Rc<RefCell<FnvHashSet<ListenerId>>>>,
 }
 
 impl StateMap {
-    pub fn new(changed_listeners: ChangedListeners) -> Self {
+    pub fn new(notifier: Rc<RefCell<Notifier>>) -> Self {
         Self {
-            changed_listeners,
+            notifier,
 
             entries: FnvHashMap::default(),
-        }
-    }
-
-    pub fn apply_updates(&mut self) {
-        for (.., entry) in self.entries.iter_mut() {
-            if let Some(value) = entry.updated_value.lock().take() {
-                entry.value = value;
-
-                self.changed_listeners.notify_many(entry.listeners.iter());
-            }
+            listeners: FnvHashMap::default(),
         }
     }
 
     pub fn try_get<V>(&mut self, listener_id: Option<ListenerId>) -> Option<State<V>>
     where
-        V: StateValue,
+        V: StateValue + Clone,
     {
-        if let Some(entry) = self.entries.get_mut(&TypeId::of::<V>()) {
-            {
-                let mut updated_value = entry.updated_value.lock();
+        let type_id = TypeId::of::<V>();
 
-                if let Some(updated_value) = updated_value.take() {
-                    entry.value = updated_value;
-                }
-            }
+        let listeners = self.listeners.entry(type_id).or_default();
 
-            if let Some(listener_id) = listener_id {
-                entry.listeners.insert(listener_id);
-            }
-
-            Some(State {
-                value: Arc::clone(&entry.value)
-                    .downcast_arc()
-                    .expect("state failed to downcast ref"),
-                updated_value: Arc::clone(&entry.updated_value),
-            })
-        } else {
-            None
+        if let Some(listener_id) = listener_id {
+            listeners.borrow_mut().insert(listener_id);
         }
+
+        self.entries.get_mut(&type_id).map(|entry| {
+            if let Some(updated_value) = entry.updated_value.borrow_mut().take() {
+                entry.value = updated_value;
+            }
+
+            State::new(
+                Rc::clone(&self.notifier),
+                Rc::clone(self.listeners.get(&type_id).unwrap()),
+                Rc::clone(&entry.value)
+                    .downcast_rc()
+                    .expect("failed to downcast ref"),
+                Rc::clone(&entry.updated_value),
+            )
+        })
     }
 
     #[allow(clippy::missing_panics_doc)]
     pub fn get_or<V, F>(&mut self, listener_id: Option<ListenerId>, func: F) -> State<V>
     where
-        V: StateValue,
+        V: StateValue + Clone,
         F: FnOnce() -> V,
     {
-        if let Some(state) = self.try_get::<V>(listener_id) {
-            state
-        } else {
-            let type_id = TypeId::of::<V>();
+        self.entries
+            .entry(TypeId::of::<V>())
+            .or_insert_with(|| StateEntry {
+                value: Rc::new(func()),
+                updated_value: Rc::default(),
+            });
 
-            self.entries.insert(
-                type_id,
-                StateEntry {
-                    value: Arc::new(func()),
-                    updated_value: Arc::default(),
+        self.try_get::<V>(listener_id)
+            .expect("did not properly insert state")
+    }
 
-                    listeners: FnvHashSet::default(),
-                },
-            );
-
-            self.try_get::<V>(listener_id)
-                .expect("did not properly insert state")
-        }
+    pub fn set<V>(&mut self, value: V) -> State<V>
+    where
+        V: StateValue + Clone,
+    {
+        self.get_or(None, || value)
     }
 
     pub fn remove_listeners(&mut self, listener_id: &ListenerId) {
-        for entry in self.entries.values_mut() {
-            entry.listeners.remove(listener_id);
+        for entry in self.listeners.values_mut() {
+            entry.borrow_mut().remove(listener_id);
         }
     }
 }

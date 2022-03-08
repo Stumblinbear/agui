@@ -96,43 +96,37 @@ impl<'ui> UI<'ui> {
                         height: size.height as f32,
                     });
 
-                    if let Some(state) = self.try_use_global::<WindowSize>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<WindowSize>() {
                         state.width = size.width as f32;
                         state.height = size.height as f32;
                     }
                 }
 
                 WindowEvent::Moved(pos) => {
-                    if let Some(state) = self.try_use_global::<WindowPosition>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<WindowPosition>() {
                         state.x = pos.x as f32;
                         state.y = pos.y as f32;
                     }
                 }
 
                 WindowEvent::ReceivedCharacter(c) => {
-                    if let Some(state) = self.try_use_global::<Keyboard>() {
-                        state.write().input = Some(c);
+                    if let Some(mut state) = self.try_use_global::<Keyboard>() {
+                        state.input = Some(c);
                     }
 
-                    if let Some(state) = self.try_use_global::<KeyboardInput>() {
-                        **state.write() = c;
+                    if let Some(mut state) = self.try_use_global::<KeyboardInput>() {
+                        **state = c;
                     }
                 }
 
                 WindowEvent::Focused(focused) => {
-                    if let Some(state) = self.try_use_global::<WindowFocus>() {
-                        **state.write() = focused;
+                    if let Some(mut state) = self.try_use_global::<WindowFocus>() {
+                        **state = focused;
                     }
                 }
 
                 WindowEvent::KeyboardInput { input, .. } => {
-                    if let Some(state) = self.try_use_global::<Keyboard>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<Keyboard>() {
                         state.input = None;
 
                         if let Some(key) = input.virtual_keycode {
@@ -151,17 +145,13 @@ impl<'ui> UI<'ui> {
                 }
 
                 WindowEvent::ModifiersChanged(modifiers) => {
-                    if let Some(state) = self.try_use_global::<Keyboard>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<Keyboard>() {
                         state.modifiers = unsafe { mem::transmute(modifiers) };
                     }
                 }
 
                 WindowEvent::CursorMoved { position, .. } => {
-                    if let Some(state) = self.try_use_global::<Mouse>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<Mouse>() {
                         match state.pos {
                             Some(ref mut pos) => {
                                 pos.x = position.x as f32;
@@ -178,17 +168,13 @@ impl<'ui> UI<'ui> {
                 }
 
                 WindowEvent::CursorLeft { .. } => {
-                    if let Some(state) = self.try_use_global::<Mouse>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<Mouse>() {
                         state.pos = None;
                     }
                 }
 
                 WindowEvent::MouseWheel { delta, .. } => {
-                    if let Some(state) = self.try_use_global::<Scroll>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<Scroll>() {
                         match delta {
                             MouseScrollDelta::LineDelta(x, y) => {
                                 state.delta.x = x;
@@ -207,9 +193,7 @@ impl<'ui> UI<'ui> {
                     state: value,
                     ..
                 } => {
-                    if let Some(state) = self.try_use_global::<Mouse>() {
-                        let mut state = state.write();
-
+                    if let Some(mut state) = self.try_use_global::<Mouse>() {
                         let button = match button {
                             MouseButton::Left => &mut state.button.left,
                             MouseButton::Middle => &mut state.button.middle,

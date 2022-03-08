@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use fnv::FnvHashMap;
 
 use crate::{
@@ -5,18 +7,25 @@ use crate::{
     state::map::StateMap,
     tree::Tree,
     unit::{Layout, LayoutType, Margin, Position, Rect, Ref, Sizing},
-    widget::{computed::ComputedFunc, effect::EffectFunc, HandlerId, WidgetId, WidgetRef},
+    widget::{
+        callback::{CallbackFunc, CallbackId},
+        computed::ComputedFunc,
+        effect::EffectFunc,
+        HandlerId, WidgetId, WidgetRef,
+    },
 };
 
-use super::ChangedListeners;
+use super::notify::Notifier;
 
 /// Holds information about a widget in the UI tree.
 pub struct WidgetNode<'ui> {
     pub widget: WidgetRef,
 
     pub state: StateMap,
-    pub effect_funcs: FnvHashMap<HandlerId, Box<dyn EffectFunc<'ui> + 'ui>>,
+
     pub computed_funcs: FnvHashMap<HandlerId, Box<dyn ComputedFunc<'ui> + 'ui>>,
+    pub effect_funcs: FnvHashMap<HandlerId, Box<dyn EffectFunc<'ui> + 'ui>>,
+    pub callback_funcs: FnvHashMap<CallbackId, Box<dyn CallbackFunc<'ui> + 'ui>>,
 
     pub layout_type: Ref<LayoutType>,
     pub layout: Ref<Layout>,
@@ -27,13 +36,15 @@ pub struct WidgetNode<'ui> {
 }
 
 impl WidgetNode<'_> {
-    pub fn new(changed_listeners: ChangedListeners, widget: WidgetRef) -> Self {
+    pub fn new(notifier: Rc<RefCell<Notifier>>, widget: WidgetRef) -> Self {
         Self {
             widget,
 
-            state: StateMap::new(ChangedListeners::clone(&changed_listeners)),
-            effect_funcs: FnvHashMap::default(),
+            state: StateMap::new(notifier),
+
             computed_funcs: FnvHashMap::default(),
+            effect_funcs: FnvHashMap::default(),
+            callback_funcs: FnvHashMap::default(),
 
             layout_type: Ref::None,
             layout: Ref::None,
@@ -45,8 +56,8 @@ impl WidgetNode<'_> {
     }
 }
 
-impl<'a> morphorm::Node<'a> for WidgetId {
-    type Data = Tree<Self, WidgetNode<'a>>;
+impl<'ui> morphorm::Node<'ui> for WidgetId {
+    type Data = Tree<Self, WidgetNode<'ui>>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         Some(

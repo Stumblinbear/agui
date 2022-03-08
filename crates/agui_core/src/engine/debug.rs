@@ -22,7 +22,7 @@ const YELLOW: &str = "\u{001b}[33;1m";
 const CYAN: &str = "\u{001b}[36;1m";
 const WHITE: &str = "\u{001b}[37;1m";
 
-pub fn print_tree<'ui>(engine: &'ui Engine<'ui>) {
+pub fn print_tree(engine: &Engine<'_>) {
     println!("Tree:");
 
     let tree = engine.get_tree();
@@ -57,7 +57,7 @@ pub fn print_tree<'ui>(engine: &'ui Engine<'ui>) {
     }
 }
 
-pub fn print_tree_modifications<'ui>(engine: &'ui Engine<'ui>) {
+pub fn print_tree_modifications(engine: &Engine<'_>) {
     println!("Tree:");
 
     let tree = engine.get_tree();

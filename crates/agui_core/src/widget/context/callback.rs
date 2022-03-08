@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     engine::{node::WidgetNode, notify::Notifier},
@@ -8,31 +8,8 @@ use crate::{
     widget::{callback::Callback, WidgetId},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum HandlerType {
-    Effect,
-    Computed,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct HandlerId(HandlerType, TypeId);
-
-impl HandlerId {
-    pub fn of<F>(ty: HandlerType) -> Self
-    where
-        F: ?Sized + 'static,
-    {
-        Self(ty, TypeId::of::<F>())
-    }
-
-    pub fn get_type(&self) -> HandlerType {
-        self.0
-    }
-}
-
-pub struct WidgetContext<'ui, 'ctx> {
+pub struct CallbackContext<'ui, 'ctx> {
     pub(crate) widget_id: WidgetId,
-    pub(crate) handler_id: HandlerId,
 
     pub(crate) tree: &'ctx mut Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
@@ -42,13 +19,9 @@ pub struct WidgetContext<'ui, 'ctx> {
     pub(crate) notifier: Rc<RefCell<Notifier>>,
 }
 
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     pub fn get_widget(&self) -> WidgetId {
         self.widget_id
-    }
-
-    pub fn get_listener(&self) -> ListenerId {
-        (self.widget_id, self.handler_id).into()
     }
 
     pub fn get_tree(&mut self) -> &Tree<WidgetId, WidgetNode<'ui>> {
@@ -61,15 +34,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Globals
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
-    /// Fetch a global value if it exists. The caller will be updated when the value is changed.
-    pub fn try_use_global<V>(&mut self) -> Option<State<V>>
-    where
-        V: StateValue + Clone,
-    {
-        self.global.try_get::<V>(Some(self.get_listener()))
-    }
-
+impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
@@ -77,15 +42,6 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         F: FnOnce() -> V,
     {
         self.global.get_or(None, func)
-    }
-
-    /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
-    pub fn use_global<V, F>(&mut self, func: F) -> State<V>
-    where
-        V: StateValue + Clone,
-        F: FnOnce() -> V,
-    {
-        self.global.get_or(Some(self.get_listener()), func)
     }
 
     /// Get a global value. This will panic if the global does not exist.
@@ -106,7 +62,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Local state
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
     pub fn init_state<V, F>(&mut self, func: F) -> State<V>
     where
@@ -114,32 +70,6 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
         F: FnOnce() -> V,
     {
         self.widget.state.get_or::<V, F>(None, func)
-    }
-
-    /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
-    pub fn use_state<V, F>(&mut self, func: F) -> State<V>
-    where
-        V: StateValue + Clone,
-        F: FnOnce() -> V,
-    {
-        self.widget
-            .state
-            .get_or::<V, F>(Some(self.get_listener()), func)
-    }
-
-    pub fn use_state_from<V, F>(&mut self, widget_id: WidgetId, func: F) -> State<V>
-    where
-        V: StateValue + Clone,
-        F: FnOnce() -> V,
-    {
-        let listener_id = self.get_listener();
-
-        let target_widget = self
-            .tree
-            .get_mut(widget_id)
-            .expect("cannot use state from a widget that doesn't exist");
-
-        target_widget.state.get_or::<V, F>(Some(listener_id), func)
     }
 
     /// Get the state of the widget. This will panic if the state does not exist.
@@ -163,7 +93,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Layout
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     /// Fetch the layout of a widget.
     pub fn get_layout_type(&self) -> Ref<LayoutType> {
         Ref::clone(&self.widget.layout_type)
@@ -179,7 +109,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 }
 
 // Callbacks
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
+impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     pub fn emit<A>(&mut self, callback: Callback<A>, args: A)
     where
         A: 'static,

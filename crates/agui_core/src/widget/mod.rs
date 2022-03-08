@@ -5,6 +5,7 @@ use slotmap::new_key_type;
 
 use crate::unit::Key;
 
+pub mod callback;
 pub mod computed;
 mod context;
 pub mod effect;

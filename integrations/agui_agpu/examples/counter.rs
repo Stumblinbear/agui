@@ -3,7 +3,7 @@
 use agui::{
     font::FontStyle,
     macros::{build, functional_widget},
-    unit::{Callback, Layout, Margin, Sizing},
+    unit::{Layout, Margin, Sizing},
     widget::{BuildContext, BuildResult},
     widgets::{
         plugins::DefaultPluginsExt,
@@ -37,6 +37,12 @@ fn main() -> Result<(), agpu::BoxError> {
 fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
     let num = ctx.use_state(|| 0);
 
+    let on_pressed = ctx.use_callback(|ctx, ()| {
+        let mut num = ctx.get_state::<i32>();
+
+        *num += 1;
+    });
+
     build! {
         Column {
             children: [
@@ -52,9 +58,7 @@ fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
                         padding: Margin::All(10.0.into()),
                         child: Text { font, text: "A Button" }
                     },
-                    on_pressed: Callback::from(move |()| {
-                        *num.write() += 1;
-                    })
+                    on_pressed
                 }
             ]
         }

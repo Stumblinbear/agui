@@ -1,129 +1,145 @@
+use core::panic;
 use std::{
+    cell::RefCell,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    rc::Rc,
 };
 
-use downcast_rs::{impl_downcast, DowncastSync};
-use parking_lot::Mutex;
+use downcast_rs::{impl_downcast, Downcast};
 
 mod listener;
 pub(crate) mod map;
 
+use fnv::FnvHashSet;
 pub use listener::ListenerId;
 
-pub trait StateValue: std::fmt::Debug + DowncastSync + Send + Sync + 'static {}
+use crate::engine::notify::Notifier;
 
-impl<T> StateValue for T where T: std::fmt::Debug + Send + Sync + 'static {}
+pub trait StateValue: std::fmt::Debug + Downcast {}
 
-impl_downcast!(sync StateValue);
+impl<T> StateValue for T where T: std::fmt::Debug + 'static {}
+
+impl_downcast!(StateValue);
+
+enum StateRef<V> {
+    Owned(Option<V>),
+    Reference(Rc<V>),
+}
+
+impl<V> StateRef<V>
+where
+    V: StateValue + Clone,
+{
+    fn get(&self) -> &V {
+        match &self {
+            Self::Owned(value) => value.as_ref().expect("state missing"),
+            Self::Reference(value) => value,
+        }
+    }
+}
 
 /// Holds the state of a value, with notify-on-write.
 pub struct State<V>
 where
-    V: StateValue,
+    V: StateValue + Clone,
 {
-    value: Arc<V>,
-    updated_value: Arc<Mutex<Option<Arc<dyn StateValue>>>>,
+    notifier: Rc<RefCell<Notifier>>,
+    listeners: Rc<RefCell<FnvHashSet<ListenerId>>>,
+
+    value: StateRef<V>,
+
+    updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
 }
 
 impl<V> State<V>
 where
-    V: StateValue,
+    V: StateValue + Clone,
 {
-    /// Write to the state.
-    ///
-    /// This will trigger an update of any components listening to the state. Use only if something legitimately changes.
-    pub fn set(&self, value: V) {
-        *self.updated_value.lock() = Some(Arc::new(value));
+    pub(crate) fn new(
+        notifier: Rc<RefCell<Notifier>>,
+        listeners: Rc<RefCell<FnvHashSet<ListenerId>>>,
+        value: Rc<V>,
+        updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
+    ) -> Self {
+        Self {
+            notifier,
+            listeners,
+
+            value: StateRef::Reference(value),
+            updated_value,
+        }
+    }
+
+    /// Set the state.
+    pub fn set(&mut self, value: V) {
+        self.value = StateRef::Owned(Some(value));
     }
 }
 
-impl<V> Clone for State<V>
+impl<V> Deref for State<V>
 where
-    V: StateValue,
+    V: StateValue + Clone,
 {
-    fn clone(&self) -> Self {
-        Self {
-            value: Arc::clone(&self.value),
-            updated_value: Arc::clone(&self.updated_value),
+    type Target = V;
+
+    fn deref(&self) -> &Self::Target {
+        self.value.get()
+    }
+}
+
+impl<V> DerefMut for State<V>
+where
+    V: StateValue + Clone,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        if let StateRef::Reference(value) = &mut self.value {
+            self.value = StateRef::Owned(Some(value.as_ref().clone()));
+        }
+
+        if let StateRef::Owned(value) = &mut self.value {
+            value.as_mut().expect("state missing")
+        } else {
+            panic!("state value is not Owned");
+        }
+    }
+}
+
+impl<V> Drop for State<V>
+where
+    V: StateValue + Clone,
+{
+    fn drop(&mut self) {
+        if let StateRef::Owned(value) = &mut self.value {
+            let mut updated_value = self.updated_value.borrow_mut();
+
+            if updated_value.is_some() {
+                panic!("state values cannot be written twice in a single frame");
+            }
+
+            updated_value
+                .replace(Rc::new(value.take().expect("state is gone")) as Rc<dyn StateValue>);
+
+            self.notifier
+                .borrow_mut()
+                .notify_many(self.listeners.borrow().iter());
         }
     }
 }
 
 impl<V> std::fmt::Display for State<V>
 where
-    V: StateValue + std::fmt::Display,
+    V: StateValue + Clone + std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
+        std::fmt::Display::fmt(&self.value.get(), f)
     }
 }
 
 impl<V> std::fmt::Debug for State<V>
 where
-    V: StateValue + std::fmt::Debug,
+    V: StateValue + Clone + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
-    }
-}
-
-impl<V> Deref for State<V>
-where
-    V: StateValue,
-{
-    type Target = V;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<V> State<V>
-where
-    V: StateValue + Clone,
-{
-    pub fn write(&self) -> Write<V> {
-        Write {
-            value: self.value.as_ref().clone(),
-            updated_value: Arc::clone(&self.updated_value),
-        }
-    }
-}
-
-pub struct Write<V>
-where
-    V: StateValue + Clone,
-{
-    value: V,
-    updated_value: Arc<Mutex<Option<Arc<dyn StateValue>>>>,
-}
-
-impl<V> Deref for Write<V>
-where
-    V: StateValue + Clone,
-{
-    type Target = V;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<V> DerefMut for Write<V>
-where
-    V: StateValue + Clone,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
-
-impl<V> Drop for Write<V>
-where
-    V: StateValue + Clone,
-{
-    fn drop(&mut self) {
-        *self.updated_value.lock() = Some(Arc::new(self.value.clone()));
+        std::fmt::Debug::fmt(&self.value.get(), f)
     }
 }

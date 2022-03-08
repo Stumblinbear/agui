@@ -1,14 +1,13 @@
 use std::{
+    cell::RefCell,
     fs::File,
     io::{self, BufReader, Read},
     rc::Rc,
-    sync::Arc,
 };
 
 use fnv::{FnvHashMap, FnvHashSet};
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
-use parking_lot::Mutex;
 
 use crate::{
     font::Font,
@@ -16,32 +15,19 @@ use crate::{
     state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
     unit::{Key, Units},
-    widget::{BuildContext, BuildResult, HandlerType, Widget, WidgetContext, WidgetId, WidgetRef},
+    widget::{
+        BuildContext, BuildResult, CallbackContext, HandlerType, Widget, WidgetContext, WidgetId,
+        WidgetRef,
+    },
 };
 
 mod cache;
 pub mod debug;
 pub mod event;
 pub mod node;
+pub mod notify;
 
-use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode};
-
-#[derive(Default, Clone)]
-pub struct ChangedListeners(Arc<Mutex<FnvHashSet<ListenerId>>>);
-
-impl ChangedListeners {
-    pub fn is_empty(&self) -> bool {
-        self.0.lock().is_empty()
-    }
-
-    pub fn notify(&self, listener_id: ListenerId) {
-        self.0.lock().insert(listener_id);
-    }
-
-    pub fn notify_many<'a>(&self, listener_ids: impl IntoIterator<Item = &'a ListenerId>) {
-        self.0.lock().extend(listener_ids);
-    }
-}
+use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode, notify::Notifier};
 
 /// Handles the entirety of the agui lifecycle.
 pub struct Engine<'ui> {
@@ -54,14 +40,15 @@ pub struct Engine<'ui> {
     global: StateMap,
     cache: LayoutCache<WidgetId>,
 
-    changed_listeners: ChangedListeners,
+    notifier: Rc<RefCell<Notifier>>,
+
     modifications: Vec<Modify>,
 }
 
 impl<'ui> Engine<'ui> {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let changed_listeners = ChangedListeners::default();
+        let notifier = Rc::default();
 
         Self {
             plugins: FnvHashMap::default(),
@@ -70,10 +57,11 @@ impl<'ui> Engine<'ui> {
 
             tree: Tree::default(),
 
-            global: StateMap::new(ChangedListeners::clone(&changed_listeners)),
+            global: StateMap::new(Rc::clone(&notifier)),
             cache: LayoutCache::default(),
 
-            changed_listeners,
+            notifier,
+
             modifications: Vec::default(),
         }
     }
@@ -99,7 +87,7 @@ impl<'ui> Engine<'ui> {
 
         self.plugins.insert(plugin_id, Box::new(plugin));
 
-        self.changed_listeners.notify(plugin_id.into());
+        self.notifier.borrow_mut().notify(plugin_id.into());
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
@@ -197,14 +185,14 @@ impl<'ui> Engine<'ui> {
 
     pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue,
+        V: StateValue + Clone,
     {
         self.global.try_get(None)
     }
 
     pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue,
+        V: StateValue + Clone,
         F: FnOnce() -> V,
     {
         self.global.get_or(None, func)
@@ -212,12 +200,6 @@ impl<'ui> Engine<'ui> {
 
     /// Update the UI tree.
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
-        self.global.apply_updates();
-
-        for (_, node) in self.tree.iter_mut() {
-            node.state.apply_updates();
-        }
-
         // Update all plugins, as they may cause changes to state
         for (plugin_id, plugin) in &self.plugins {
             plugin.on_update(&mut PluginContext {
@@ -226,11 +208,11 @@ impl<'ui> Engine<'ui> {
                 tree: &self.tree,
                 global: &mut self.global,
 
-                changed_listeners: ChangedListeners::clone(&self.changed_listeners),
+                notifier: Rc::clone(&self.notifier),
             });
         }
 
-        if self.modifications.is_empty() && self.changed_listeners.is_empty() {
+        if self.modifications.is_empty() && self.notifier.borrow().is_empty() {
             return None;
         }
 
@@ -245,6 +227,8 @@ impl<'ui> Engine<'ui> {
                 widget_events.extend(self.flush_modifications());
 
                 self.flush_changes();
+
+                self.flush_callbacks();
 
                 if self.modifications.is_empty() {
                     break;
@@ -325,7 +309,7 @@ impl<'ui> Engine<'ui> {
                     tree: &self.tree,
                     global: &mut self.global,
 
-                    changed_listeners: ChangedListeners::clone(&self.changed_listeners),
+                    notifier: Rc::clone(&self.notifier),
                 },
                 &widget_events,
             );
@@ -335,7 +319,13 @@ impl<'ui> Engine<'ui> {
     }
 
     pub fn flush_changes(&mut self) {
-        let changed = { self.changed_listeners.0.lock().drain().collect::<Vec<_>>() };
+        let changed = {
+            self.notifier
+                .borrow_mut()
+                .changed
+                .drain()
+                .collect::<Vec<_>>()
+        };
 
         if changed.is_empty() {
             return;
@@ -373,6 +363,8 @@ impl<'ui> Engine<'ui> {
                                 global: &mut self.global,
 
                                 widget: &mut node,
+
+                                notifier: Rc::clone(&self.notifier),
                             });
 
                             node.effect_funcs.insert(handler_id, effect_func);
@@ -392,6 +384,8 @@ impl<'ui> Engine<'ui> {
                                 global: &mut self.global,
 
                                 widget: &mut node,
+
+                                notifier: Rc::clone(&self.notifier),
                             }) {
                                 dirty_widgets.insert(widget_id);
                             }
@@ -417,7 +411,7 @@ impl<'ui> Engine<'ui> {
                             tree: &self.tree,
                             global: &mut self.global,
 
-                            changed_listeners: ChangedListeners::clone(&self.changed_listeners),
+                            notifier: Rc::clone(&self.notifier),
                         });
                 }
             }
@@ -425,6 +419,59 @@ impl<'ui> Engine<'ui> {
 
         for widget_id in self.tree.filter_topmost(dirty_widgets.into_iter()) {
             self.modifications.push(Modify::Rebuild(widget_id));
+        }
+    }
+
+    pub fn flush_callbacks(&mut self) {
+        let callbacks = {
+            self.notifier
+                .borrow_mut()
+                .callbacks
+                .drain(..)
+                .collect::<Vec<_>>()
+        };
+
+        if callbacks.is_empty() {
+            return;
+        }
+
+        for (callback_id, args) in callbacks {
+            let widget_id = callback_id.0;
+
+            let mut node = self
+                .tree
+                .get_node_mut(widget_id)
+                .expect("invalid callback function widget")
+                .value
+                .take()
+                .expect("widget is already in use");
+
+            let callback_func = node
+                .callback_funcs
+                .remove(&callback_id)
+                .expect("invalid callback function listener");
+
+            callback_func.call(
+                &mut CallbackContext {
+                    widget_id,
+
+                    tree: &mut self.tree,
+                    global: &mut self.global,
+
+                    widget: &mut node,
+
+                    notifier: Rc::clone(&self.notifier),
+                },
+                args,
+            );
+
+            node.callback_funcs.insert(callback_id, callback_func);
+
+            self.tree
+                .get_node_mut(widget_id)
+                .expect("computed function destroyed while in use")
+                .value
+                .replace(node);
         }
     }
 
@@ -512,7 +559,7 @@ impl<'ui> Engine<'ui> {
                 tree: &self.tree,
                 global: &mut self.global,
 
-                changed_listeners: ChangedListeners::clone(&self.changed_listeners),
+                notifier: Rc::clone(&self.notifier),
             });
         }
 
@@ -544,7 +591,7 @@ impl<'ui> Engine<'ui> {
 
         let widget_id = self.tree.add(
             parent_id,
-            WidgetNode::new(ChangedListeners::clone(&self.changed_listeners), widget),
+            WidgetNode::new(Rc::clone(&self.notifier), widget),
         );
 
         widget_events.push(WidgetEvent::Spawned { type_id, widget_id });
@@ -584,6 +631,8 @@ impl<'ui> Engine<'ui> {
 
                 tree: &mut self.tree,
                 global: &mut self.global,
+
+                notifier: Rc::clone(&self.notifier),
             })
         });
 
@@ -647,7 +696,7 @@ impl<'ui> Engine<'ui> {
         for listener_id in listeners {
             self.global.remove_listeners(listener_id);
 
-            self.changed_listeners.0.lock().remove(listener_id);
+            self.notifier.borrow_mut().changed.remove(listener_id);
         }
 
         for (_, node) in self.tree.iter_mut() {
@@ -764,7 +813,7 @@ mod tests {
     pub fn test_globals() {
         let mut engine = Engine::new();
 
-        let test_global = engine.init_global(TestGlobal::default);
+        engine.init_global(TestGlobal::default);
 
         engine.set_root(WidgetRef::new(TestWidget::default()));
 
@@ -788,7 +837,7 @@ mod tests {
             "widget `test` should be 0"
         );
 
-        test_global.write().0 = 5;
+        engine.init_global(TestGlobal::default).0 = 5;
 
         assert_eq!(
             *engine.get_as::<TestWidget>(widget_id).computes.lock(),
