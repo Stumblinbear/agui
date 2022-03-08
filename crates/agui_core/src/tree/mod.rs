@@ -152,6 +152,8 @@ where
 
         let node = self.nodes.get_mut(node_id).unwrap();
 
+        node.parent = parent_id;
+
         if node.depth != new_depth {
             let diff = new_depth - node.depth;
 

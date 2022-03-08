@@ -271,13 +271,17 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
 // Keys
 impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn key(&self, key: Key, widget: WidgetRef) -> WidgetRef {
-        WidgetRef::Keyed {
-            owner_id: match key {
-                Key::Local(_) => Some(self.widget_id),
-                Key::Global(_) => None,
-            },
-            key,
-            widget: Box::new(widget),
+        if let WidgetRef::Ref(widget) = widget {
+            return WidgetRef::Keyed {
+                owner_id: match key {
+                    Key::Local(_) => Some(self.widget_id),
+                    Key::Global(_) => None,
+                },
+                key,
+                widget: Rc::clone(&widget),
+            };
         }
+
+        widget
     }
 }

@@ -51,9 +51,7 @@ fn example_main(
         .into(),
     );
 
-    let value = ctx.init_state(|| "".to_owned());
-
-    value.provide(ctx);
+    let value = ctx.use_state(|| "".to_owned());
 
     let on_value = ctx.use_callback(|ctx, input: &String| {
         ctx.set_state(input.clone());
@@ -68,7 +66,7 @@ fn example_main(
                 }
             },
             children: [
-                TextInput {
+                ctx.key(Key::single(), TextInput {
                     layout: Layout {
                         sizing: Sizing::Axis {
                             width: Units::Stretch(1.0),
@@ -80,17 +78,11 @@ fn example_main(
                     placeholder: "some text here",
 
                     on_value
+                }.into()),
+                Text {
+                    font: font.styled().color(Color::White),
+                    text: value.clone().into(),
                 },
-                Builder::new(move |ctx| {
-                    let value = ctx.consume::<String>().unwrap();
-
-                    build! {
-                        Text {
-                            font: font.styled().color(Color::White),
-                            text: value.clone().into(),
-                        }
-                    }
-                }),
             ]
         }
     }

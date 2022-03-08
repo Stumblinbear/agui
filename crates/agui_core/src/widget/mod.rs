@@ -57,7 +57,7 @@ pub enum WidgetRef {
     Keyed {
         owner_id: Option<WidgetId>,
         key: Key,
-        widget: Box<WidgetRef>,
+        widget: Rc<dyn Widget>,
     },
 }
 
@@ -67,7 +67,7 @@ impl Debug for WidgetRef {
             Self::None => write!(f, "None"),
             Self::Ref(widget) => write!(f, "{}", widget.get_type_name()),
             Self::Keyed { key, widget, .. } => {
-                write!(f, "Keyed {{ key: {:?}, {:?} }}", key, widget)
+                write!(f, "Keyed {{ key: {:?}, {} }}", key, widget.get_type_name())
             }
         }
     }
@@ -84,7 +84,15 @@ impl Clone for WidgetRef {
         match self {
             Self::None => Self::None,
             Self::Ref(widget) => Self::Ref(Rc::clone(widget)),
-            Self::Keyed { widget, .. } => Self::clone(widget),
+            Self::Keyed {
+                owner_id,
+                key,
+                widget,
+            } => Self::Keyed {
+                owner_id: *owner_id,
+                key: *key,
+                widget: Rc::clone(widget),
+            },
         }
     }
 }
@@ -101,16 +109,14 @@ impl WidgetRef {
     pub fn is_valid(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Ref(_) => true,
-            Self::Keyed { widget, .. } => widget.is_valid(),
+            Self::Ref(_) | Self::Keyed { .. } => true,
         }
     }
 
     pub fn try_get(&self) -> Option<Rc<dyn Widget>> {
         match self {
             Self::None => None,
-            Self::Ref(widget) => Some(Rc::clone(widget)),
-            Self::Keyed { widget, .. } => widget.try_get(),
+            Self::Ref(widget) | Self::Keyed { widget, .. } => Some(Rc::clone(widget)),
         }
     }
 
@@ -120,8 +126,7 @@ impl WidgetRef {
     pub fn get(&self) -> Rc<dyn Widget> {
         match self {
             Self::None => panic!("widget ref points to nothing"),
-            Self::Ref(widget) => Rc::clone(widget),
-            Self::Keyed { widget, .. } => widget.get(),
+            Self::Ref(widget) | Self::Keyed { widget, .. } => Rc::clone(widget),
         }
     }
 
