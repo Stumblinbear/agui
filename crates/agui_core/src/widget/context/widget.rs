@@ -32,13 +32,13 @@ impl HandlerId {
 
 pub struct WidgetContext<'ui, 'ctx> {
     pub(crate) widget_id: WidgetId,
-    pub(crate) handler_id: HandlerId,
+    pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 
     pub(crate) tree: &'ctx mut Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
 
-    pub(crate) widget: &'ctx mut WidgetNode<'ui>,
-
+    pub(crate) handler_id: HandlerId,
+    
     pub(crate) notifier: Rc<Notifier>,
 }
 

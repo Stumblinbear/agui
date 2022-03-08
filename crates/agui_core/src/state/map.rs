@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::{any::TypeId, cell::RefCell, rc::Rc};
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -79,7 +80,21 @@ impl StateMap {
     where
         V: StateValue + Clone,
     {
-        self.get_or(None, || value)
+        let type_id = TypeId::of::<V>();
+
+        if let Entry::Vacant(e) = self.entries.entry(type_id) {
+            e.insert(StateEntry {
+                value: Rc::new(value),
+                updated_value: Rc::default(),
+            });
+        } else {
+            let entry = self.entries.get_mut(&type_id).unwrap();
+
+            entry.updated_value.borrow_mut().replace(Rc::new(value));
+        }
+
+        self.try_get::<V>(None)
+            .expect("did not properly insert state")
     }
 
     pub fn remove_listeners(&mut self, listener_id: &ListenerId) {

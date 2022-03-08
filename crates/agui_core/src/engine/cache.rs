@@ -324,4 +324,12 @@ where
     fn set_stack_last_child(&mut self, node: Self::Item, value: bool) {
         self.stack_last_child.insert(node, value);
     }
+
+    fn set_grid_row_max(&mut self, node: Self::Item, value: f32) {
+        self.grid_row_max.insert(node, value);
+    }
+
+    fn set_grid_col_max(&mut self, node: Self::Item, value: f32) {
+        self.grid_col_max.insert(node, value);
+    }
 }

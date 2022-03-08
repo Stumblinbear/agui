@@ -241,7 +241,7 @@ where
 
         let cursor_state = ctx.computed(|ctx| {
             // Keep track of time so we can blink blonk the cursor
-            let instant = ctx.init_state(Instant::now);
+            let instant = ctx.use_state(Instant::now);
 
             // Request an update in x seconds
             ctx.use_timeout(Duration::from_secs_f32(CURSOR_BLINK_SECS));
