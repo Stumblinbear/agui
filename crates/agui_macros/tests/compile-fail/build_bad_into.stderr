@@ -1,16 +1,16 @@
-error[E0277]: the trait bound `f32: From<Drawable>` is not satisfied
+error[E0277]: the trait bound `f32: From<Row>` is not satisfied
  --> tests/compile-fail/build_bad_into.rs:5:24
   |
 5 |       let _widget: f32 = build! {
   |  ________________________^
-6 | |         Drawable { }
+6 | |         Row { }
 7 | |     };
-  | |_____^ the trait `From<Drawable>` is not implemented for `f32`
+  | |_____^ the trait `From<Row>` is not implemented for `f32`
   |
   = help: the following implementations were found:
             <f32 as From<i16>>
             <f32 as From<i8>>
             <f32 as From<u16>>
             <f32 as From<u8>>
-  = note: required because of the requirements on the impl of `Into<f32>` for `Drawable`
+  = note: required because of the requirements on the impl of `Into<f32>` for `Row`
   = note: this error originates in the macro `build` (in Nightly builds, run with -Z macro-backtrace for more info)

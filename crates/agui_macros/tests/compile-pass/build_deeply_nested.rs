@@ -1,23 +1,16 @@
-use agui_core::{unit::Color, widget::WidgetRef};
+use agui_core::{unit::Margin, widget::WidgetRef};
 use agui_macros::build;
-use agui_primitives::{Drawable, DrawableStyle};
+use agui_primitives::{Column, Padding, Row};
 
 fn main() {
     let _widget: WidgetRef = build! {
-        Drawable {
-            style: DrawableStyle {
-                color: Color::Black,
-            },
-            child: Drawable {
-                style: DrawableStyle {
-                    color: Color::Rgb(1.0, 1.0, 1.0),
-                },
-                child: Drawable {
-                    style: DrawableStyle {
-                        color: Color::White,
-                    },
-                    child: Drawable { }
-                }
+        Padding {
+            padding: Margin::All(10.0.into()),
+            child: Column {
+                children: [
+                    Row { },
+                    Row { },
+                ]
             }
         }
     };
