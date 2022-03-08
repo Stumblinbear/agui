@@ -76,7 +76,7 @@ impl StateMap {
             .expect("did not properly insert state")
     }
 
-    pub fn set<V>(&mut self, value: V) -> State<V>
+    pub fn set<V>(&mut self, value: V)
     where
         V: StateValue + Clone,
     {
@@ -93,8 +93,9 @@ impl StateMap {
             entry.updated_value.borrow_mut().replace(Rc::new(value));
         }
 
-        self.try_get::<V>(None)
-            .expect("did not properly insert state")
+        if let Some(listeners) = self.listeners.get(&type_id) {
+            self.notifier.notify_many(listeners.borrow().iter());
+        }
     }
 
     pub fn remove_listeners(&mut self, listener_id: &ListenerId) {

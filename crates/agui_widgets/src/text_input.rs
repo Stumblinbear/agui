@@ -7,7 +7,7 @@ use agui_core::{
     canvas::paint::Paint,
     font::FontStyle,
     unit::{Color, Layout, Point, Rect, Ref},
-    widget::{BuildContext, BuildResult, WidgetBuilder},
+    widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
 use agui_primitives::edit::EditableText;
@@ -110,6 +110,8 @@ where
     pub font: FontStyle,
     pub placeholder: Cow<'static, str>,
     pub value: S,
+
+    pub on_value: Callback<S>,
 }
 
 impl Default for TextInput<String> {
@@ -122,6 +124,8 @@ impl Default for TextInput<String> {
             font: FontStyle::default(),
             placeholder: "".into(),
             value: "".into(),
+
+            on_value: Callback::default(),
         }
     }
 }
@@ -164,80 +168,86 @@ where
             last_input_state.set(input_state);
         }
 
-        let value = ctx.computed(|ctx| {
-            let input_state = ctx.init_state(TextInputState::default);
-            let keyboard = ctx.use_global(Keyboard::default);
+        let value = {
+            let on_value = self.on_value.clone();
 
-            let mut input_value = ctx.init_state::<S, _>(|| panic!("value not initialized"));
-            let mut cursor = ctx.init_state(Cursor::default);
+            ctx.computed(move |ctx| {
+                let input_state = ctx.init_state(TextInputState::default);
+                let keyboard = ctx.use_global(Keyboard::default);
 
-            if *input_state == TextInputState::Focused {
-                if let Some(input) = keyboard.input {
-                    match input {
-                        // Backspace character
-                        '\u{8}' => {
-                            let grapheme_idx =
-                                input_value.prev_grapheme_offset(cursor.string_index);
+                let mut input_value = ctx.init_state::<S, _>(|| panic!("value not initialized"));
+                let mut cursor = ctx.init_state(Cursor::default);
 
-                            if let Some(idx) = grapheme_idx {
-                                input_value.remove(idx..(cursor.string_index));
+                if *input_state == TextInputState::Focused {
+                    if let Some(input) = keyboard.input {
+                        match input {
+                            // Backspace character
+                            '\u{8}' => {
+                                let grapheme_idx =
+                                    input_value.prev_grapheme_offset(cursor.string_index);
 
-                                cursor.set(Cursor {
-                                    string_index: idx,
-                                    glyph_index: cursor.glyph_index - 1,
-                                });
+                                if let Some(idx) = grapheme_idx {
+                                    input_value.remove(idx..(cursor.string_index));
+
+                                    cursor.set(Cursor {
+                                        string_index: idx,
+                                        glyph_index: cursor.glyph_index - 1,
+                                    });
+                                }
+                            }
+
+                            // Delete character
+                            '\u{7f}' => {
+                                let grapheme_idx =
+                                    input_value.next_grapheme_offset(cursor.string_index);
+
+                                if let Some(idx) = grapheme_idx {
+                                    input_value.remove((cursor.string_index)..idx);
+                                }
+                            }
+
+                            ch => {
+                                input_value.insert(cursor.string_index, ch);
+
+                                let grapheme_idx =
+                                    input_value.next_grapheme_offset(cursor.string_index);
+
+                                if let Some(idx) = grapheme_idx {
+                                    cursor.set(Cursor {
+                                        string_index: idx,
+                                        glyph_index: cursor.glyph_index + 1,
+                                    });
+                                }
                             }
                         }
 
-                        // Delete character
-                        '\u{7f}' => {
-                            let grapheme_idx =
-                                input_value.next_grapheme_offset(cursor.string_index);
+                        on_value.emit(input_value.clone());
+                    } else if keyboard.is_pressed(&KeyCode::Right) {
+                        let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
 
-                            if let Some(idx) = grapheme_idx {
-                                input_value.remove((cursor.string_index)..idx);
-                            }
+                        if let Some(idx) = grapheme_idx {
+                            cursor.set(Cursor {
+                                string_index: idx,
+                                glyph_index: cursor.glyph_index + 1,
+                            });
                         }
+                    } else if keyboard.is_pressed(&KeyCode::Left) {
+                        let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
 
-                        ch => {
-                            input_value.insert(cursor.string_index, ch);
-
-                            let grapheme_idx =
-                                input_value.next_grapheme_offset(cursor.string_index);
-
-                            if let Some(idx) = grapheme_idx {
-                                cursor.set(Cursor {
-                                    string_index: idx,
-                                    glyph_index: cursor.glyph_index + 1,
-                                });
-                            }
+                        if let Some(idx) = grapheme_idx {
+                            cursor.set(Cursor {
+                                string_index: idx,
+                                glyph_index: cursor.glyph_index - 1,
+                            });
                         }
                     }
-                } else if keyboard.is_pressed(&KeyCode::Right) {
-                    let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
 
-                    if let Some(idx) = grapheme_idx {
-                        cursor.set(Cursor {
-                            string_index: idx,
-                            glyph_index: cursor.glyph_index + 1,
-                        });
-                    }
-                } else if keyboard.is_pressed(&KeyCode::Left) {
-                    let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
-
-                    if let Some(idx) = grapheme_idx {
-                        cursor.set(Cursor {
-                            string_index: idx,
-                            glyph_index: cursor.glyph_index - 1,
-                        });
-                    }
+                    ctx.set_state(Instant::now());
                 }
 
-                ctx.set_state(Instant::now());
-            }
-
-            input_value.clone()
-        });
+                input_value.clone()
+            })
+        };
 
         let cursor_state = ctx.computed(|ctx| {
             // Keep track of time so we can blink blonk the cursor

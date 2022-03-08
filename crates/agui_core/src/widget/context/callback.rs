@@ -53,7 +53,7 @@ impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     }
 
     /// Set a global value. This does not cause the initializer to be updated when its value is changed.
-    pub fn set_global<V>(&mut self, value: V) -> State<V>
+    pub fn set_global<V>(&mut self, value: V)
     where
         V: StateValue + Clone,
     {
@@ -84,7 +84,7 @@ impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     }
 
     /// Set the state of the widget.
-    pub fn set_state<V>(&mut self, value: V) -> State<V>
+    pub fn set_state<V>(&mut self, value: V)
     where
         V: StateValue + Clone,
     {

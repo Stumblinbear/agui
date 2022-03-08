@@ -395,7 +395,7 @@ impl<'ui> Engine<'ui> {
 
                     self.tree
                         .get_node_mut(widget_id)
-                        .expect("computed function destroyed while in use")
+                        .expect("widget destroyed while in use by computed function")
                         .value
                         .replace(node);
                 }
@@ -462,7 +462,7 @@ impl<'ui> Engine<'ui> {
 
             self.tree
                 .get_node_mut(widget_id)
-                .expect("computed function destroyed while in use")
+                .expect("widget destroyed while in use by callback")
                 .value
                 .replace(node);
         }
