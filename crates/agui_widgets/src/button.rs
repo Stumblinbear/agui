@@ -52,7 +52,7 @@ impl WidgetBuilder for Button {
         ctx.set_layout(Ref::clone(&self.layout));
 
         ctx.use_effect({
-            let on_pressed = self.on_pressed;
+            let on_pressed = self.on_pressed.clone();
 
             move |ctx| {
                 if let Some(mouse) = ctx.try_use_global::<Mouse>() {
@@ -66,7 +66,7 @@ impl WidgetBuilder for Button {
                         state.set(ButtonState::Normal);
 
                         if ctx.is_hovering() {
-                            ctx.emit(on_pressed, ());
+                            on_pressed.emit(());
                         }
                     }
                 }

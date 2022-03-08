@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     engine::{node::WidgetNode, notify::Notifier},
@@ -14,7 +14,7 @@ pub struct PluginContext<'ui, 'ctx> {
     pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
 
-    pub(crate) notifier: Rc<RefCell<Notifier>>,
+    pub(crate) notifier: Rc<Notifier>,
 }
 
 impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
@@ -27,7 +27,7 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     }
 
     pub fn mark_dirty(&mut self, listener_id: ListenerId) {
-        self.notifier.borrow_mut().notify(listener_id);
+        self.notifier.notify(listener_id);
     }
 }
 

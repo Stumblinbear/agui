@@ -36,7 +36,7 @@ pub struct WidgetNode<'ui> {
 }
 
 impl WidgetNode<'_> {
-    pub fn new(notifier: Rc<RefCell<Notifier>>, widget: WidgetRef) -> Self {
+    pub fn new(notifier: Rc<Notifier>, widget: WidgetRef) -> Self {
         Self {
             widget,
 

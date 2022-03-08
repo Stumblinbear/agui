@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     fs::File,
     io::{self, BufReader, Read},
     rc::Rc,
@@ -40,7 +39,7 @@ pub struct Engine<'ui> {
     global: StateMap,
     cache: LayoutCache<WidgetId>,
 
-    notifier: Rc<RefCell<Notifier>>,
+    notifier: Rc<Notifier>,
 
     modifications: Vec<Modify>,
 }
@@ -87,7 +86,7 @@ impl<'ui> Engine<'ui> {
 
         self.plugins.insert(plugin_id, Box::new(plugin));
 
-        self.notifier.borrow_mut().notify(plugin_id.into());
+        self.notifier.notify(plugin_id.into());
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
@@ -212,7 +211,7 @@ impl<'ui> Engine<'ui> {
             });
         }
 
-        if self.modifications.is_empty() && self.notifier.borrow().is_empty() {
+        if self.modifications.is_empty() && self.notifier.is_empty() {
             return None;
         }
 
@@ -321,8 +320,8 @@ impl<'ui> Engine<'ui> {
     pub fn flush_changes(&mut self) {
         let changed = {
             self.notifier
-                .borrow_mut()
                 .changed
+                .borrow_mut()
                 .drain()
                 .collect::<Vec<_>>()
         };
@@ -423,13 +422,7 @@ impl<'ui> Engine<'ui> {
     }
 
     pub fn flush_callbacks(&mut self) {
-        let callbacks = {
-            self.notifier
-                .borrow_mut()
-                .callbacks
-                .drain(..)
-                .collect::<Vec<_>>()
-        };
+        let callbacks = { self.notifier.callbacks.lock().drain(..).collect::<Vec<_>>() };
 
         if callbacks.is_empty() {
             return;
@@ -696,7 +689,7 @@ impl<'ui> Engine<'ui> {
         for listener_id in listeners {
             self.global.remove_listeners(listener_id);
 
-            self.notifier.borrow_mut().changed.remove(listener_id);
+            self.notifier.changed.borrow_mut().remove(listener_id);
         }
 
         for (_, node) in self.tree.iter_mut() {

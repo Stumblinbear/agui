@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{any::TypeId, rc::Rc};
 
 use crate::{
     canvas::{renderer::RenderFn, Canvas},
@@ -26,7 +26,7 @@ pub struct BuildContext<'ui, 'ctx> {
     pub(crate) tree: &'ctx mut Tree<WidgetId, WidgetNode<'ui>>,
     pub(crate) global: &'ctx mut StateMap,
 
-    pub(crate) notifier: Rc<RefCell<Notifier>>,
+    pub(crate) notifier: Rc<Notifier>,
 }
 
 impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
@@ -218,11 +218,11 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn use_callback<F, A>(&mut self, func: F) -> Callback<A>
     where
         F: Fn(&mut CallbackContext<'ui, '_>, &A) + 'ui + 'static,
-        A: 'static,
+        A: StateValue + Clone,
     {
         let callback_id = CallbackId(self.get_widget(), TypeId::of::<F>());
 
-        let callback = Callback(PhantomData, Some(callback_id));
+        let callback = Callback::new(callback_id, Rc::clone(&self.notifier));
 
         self.widget
             .callback_funcs

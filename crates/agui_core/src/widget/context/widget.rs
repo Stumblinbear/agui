@@ -1,11 +1,11 @@
-use std::{any::TypeId, cell::RefCell, rc::Rc};
+use std::{any::TypeId, rc::Rc};
 
 use crate::{
     engine::{node::WidgetNode, notify::Notifier},
     state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
     unit::{LayoutType, Rect, Ref, Size},
-    widget::{callback::Callback, WidgetId},
+    widget::WidgetId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,7 +39,7 @@ pub struct WidgetContext<'ui, 'ctx> {
 
     pub(crate) widget: &'ctx mut WidgetNode<'ui>,
 
-    pub(crate) notifier: Rc<RefCell<Notifier>>,
+    pub(crate) notifier: Rc<Notifier>,
 }
 
 impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
@@ -56,7 +56,7 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
     }
 
     pub fn mark_dirty(&mut self, listener_id: ListenerId) {
-        self.notifier.borrow_mut().notify(listener_id);
+        self.notifier.notify(listener_id);
     }
 }
 
@@ -175,15 +175,5 @@ impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
 
     pub fn get_size(&self) -> Option<Size> {
         self.widget.rect.map(|rect| rect.into())
-    }
-}
-
-// Callbacks
-impl<'ui, 'ctx> WidgetContext<'ui, 'ctx> {
-    pub fn emit<A>(&mut self, callback: Callback<A>, args: A)
-    where
-        A: 'static,
-    {
-        self.notifier.borrow_mut().emit(callback, args);
     }
 }

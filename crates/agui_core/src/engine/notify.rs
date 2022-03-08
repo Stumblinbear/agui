@@ -1,37 +1,32 @@
-use std::{any::Any, collections::hash_set::Iter};
+use std::{cell::RefCell, collections::hash_set::Iter, sync::Arc};
 
 use fnv::FnvHashSet;
+use parking_lot::Mutex;
 
 use crate::{
-    state::ListenerId,
-    widget::callback::{Callback, CallbackId},
+    state::{ListenerId, StateValue},
+    widget::callback::CallbackId,
 };
+
+pub type NotifyChanged = RefCell<FnvHashSet<ListenerId>>;
+pub type NotifyCallback = Arc<Mutex<Vec<(CallbackId, Box<dyn StateValue>)>>>;
 
 #[derive(Default)]
 pub struct Notifier {
-    pub(crate) changed: FnvHashSet<ListenerId>,
-    pub(crate) callbacks: Vec<(CallbackId, Box<dyn Any>)>,
+    pub(crate) changed: NotifyChanged,
+    pub(crate) callbacks: NotifyCallback,
 }
 
 impl Notifier {
     pub fn is_empty(&self) -> bool {
-        self.changed.is_empty() && self.callbacks.is_empty()
+        self.changed.borrow().is_empty() && self.callbacks.lock().is_empty()
     }
 
-    pub fn notify(&mut self, listener_id: ListenerId) {
-        self.changed.insert(listener_id);
+    pub fn notify(&self, listener_id: ListenerId) {
+        self.changed.borrow_mut().insert(listener_id);
     }
 
-    pub fn notify_many(&mut self, listener_ids: Iter<'_, ListenerId>) {
-        self.changed.extend(listener_ids);
-    }
-
-    pub fn emit<A>(&mut self, callback: Callback<A>, args: A)
-    where
-        A: 'static,
-    {
-        if let Some(callback_id) = callback.get_id() {
-            self.callbacks.push((callback_id, Box::new(args)));
-        }
+    pub fn notify_many(&self, listener_ids: Iter<'_, ListenerId>) {
+        self.changed.borrow_mut().extend(listener_ids);
     }
 }

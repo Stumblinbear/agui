@@ -43,7 +43,7 @@ pub struct State<V>
 where
     V: StateValue + Clone,
 {
-    notifier: Rc<RefCell<Notifier>>,
+    notifier: Rc<Notifier>,
     listeners: Rc<RefCell<FnvHashSet<ListenerId>>>,
 
     value: StateRef<V>,
@@ -56,7 +56,7 @@ where
     V: StateValue + Clone,
 {
     pub(crate) fn new(
-        notifier: Rc<RefCell<Notifier>>,
+        notifier: Rc<Notifier>,
         listeners: Rc<RefCell<FnvHashSet<ListenerId>>>,
         value: Rc<V>,
         updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
@@ -119,9 +119,7 @@ where
             updated_value
                 .replace(Rc::new(value.take().expect("state is gone")) as Rc<dyn StateValue>);
 
-            self.notifier
-                .borrow_mut()
-                .notify_many(self.listeners.borrow().iter());
+            self.notifier.notify_many(self.listeners.borrow().iter());
         }
     }
 }

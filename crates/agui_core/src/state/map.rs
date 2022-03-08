@@ -14,14 +14,14 @@ struct StateEntry {
 }
 
 pub struct StateMap {
-    notifier: Rc<RefCell<Notifier>>,
+    notifier: Rc<Notifier>,
 
     entries: FnvHashMap<TypeId, StateEntry>,
     listeners: FnvHashMap<TypeId, Rc<RefCell<FnvHashSet<ListenerId>>>>,
 }
 
 impl StateMap {
-    pub fn new(notifier: Rc<RefCell<Notifier>>) -> Self {
+    pub fn new(notifier: Rc<Notifier>) -> Self {
         Self {
             notifier,
 
