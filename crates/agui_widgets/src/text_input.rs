@@ -172,8 +172,6 @@ where
             let mut cursor = ctx.init_state(Cursor::default);
 
             if *input_state == TextInputState::Focused {
-                println!("{:?}", keyboard);
-
                 if let Some(input) = keyboard.input {
                     match input {
                         // Backspace character
@@ -314,8 +312,6 @@ where
                                 y: g.glyph.position.y,
                             }
                         } else if let Some(g) = glyphs.last() {
-                            println!("{:?}", g.glyph.position.x + font.h_advance(g.glyph.id));
-
                             Point {
                                 x: g.glyph.position.x + font.h_advance(g.glyph.id),
                                 y: g.glyph.position.y,
