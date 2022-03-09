@@ -187,10 +187,6 @@ impl RenderEngine {
         }
     }
 
-    pub fn get_context(&self) -> &RenderContext {
-        &self.ctx
-    }
-
     pub fn set_size(&mut self, size: Size) {
         self.ctx
             .render_size
@@ -255,7 +251,6 @@ impl RenderEngine {
                     let mut builder = CanvasBufferBuilder {
                         fonts,
 
-                        clip: None,
                         paint_map: HashMap::default(),
                         commands: Vec::default(),
                     };

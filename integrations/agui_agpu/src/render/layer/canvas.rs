@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
-use agui::{
-    canvas::{
-        clipping::Clip,
-        command::CanvasCommand,
-        paint::{Brush, Paint},
-    },
-    unit::{Rect, Shape},
+use agui::canvas::{
+    command::CanvasCommand,
+    paint::{Brush, Paint},
 };
 use glyph_brush_draw_cache::ab_glyph::FontArc;
 
@@ -20,8 +16,6 @@ use super::{
 #[derive(Debug, Default)]
 pub struct CanvasBufferBuilder<'builder> {
     pub fonts: &'builder [FontArc],
-
-    pub clip: Option<(Rect, Clip, Shape)>,
 
     pub paint_map: HashMap<Paint, Brush>,
 
@@ -54,7 +48,9 @@ impl CanvasBufferBuilder<'_> {
             }
 
             match cmd {
-                CanvasCommand::Clip { .. } => {}
+                CanvasCommand::Layer { .. } => {}
+
+                CanvasCommand::Pop => {}
 
                 CanvasCommand::Shape { .. } => {
                     if layer_builder.is_none() {

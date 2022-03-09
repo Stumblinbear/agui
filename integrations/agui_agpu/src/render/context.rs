@@ -5,17 +5,17 @@ use agui::canvas::texture::TextureId;
 use glyph_brush_draw_cache::DrawCache;
 
 pub struct RenderContext {
-    pub(crate) gpu: GpuHandle,
+    pub gpu: GpuHandle,
 
-    pub(crate) render_size: Buffer,
+    pub render_size: Buffer,
 
-    pub(crate) unknown_texture: Texture<agpu::D2>,
-    pub(crate) texture_sampler: Sampler,
+    pub unknown_texture: Texture<agpu::D2>,
+    pub texture_sampler: Sampler,
 
-    pub(crate) textures: Vec<Texture<agpu::D2>>,
+    pub textures: Vec<Texture<agpu::D2>>,
 
-    pub(crate) font_texture: Texture<agpu::D2>,
-    pub(crate) font_draw_cache: RefCell<DrawCache>,
+    pub font_texture: Texture<agpu::D2>,
+    pub font_draw_cache: RefCell<DrawCache>,
 }
 
 impl RenderContext {

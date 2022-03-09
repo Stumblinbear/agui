@@ -296,6 +296,7 @@ where
             ctx.on_draw(move |canvas| {
                 let bg_brush = canvas.new_brush(Paint {
                     color: input_state_style.background_color,
+                    ..Paint::default()
                 });
 
                 canvas.draw_rect(bg_brush);
@@ -303,6 +304,7 @@ where
                 if cursor_state == CursorState::Shown {
                     let cursor_brush = canvas.new_brush(Paint {
                         color: input_state_style.cursor_color,
+                        ..Paint::default()
                     });
 
                     if value.is_empty() {
@@ -345,12 +347,14 @@ where
                 if value.is_empty() {
                     let text_brush = canvas.new_brush(Paint {
                         color: input_state_style.placeholder_color,
+                        ..Paint::default()
                     });
 
                     canvas.draw_text(text_brush, font.clone(), placeholder.clone());
                 } else {
                     let text_brush = canvas.new_brush(Paint {
                         color: input_state_style.text_color,
+                        ..Paint::default()
                     });
 
                     canvas.draw_text(text_brush, font.clone(), Cow::Owned(value.clone().into()));

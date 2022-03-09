@@ -5,17 +5,19 @@ use crate::{
     unit::{Bounds, Rect, Shape},
 };
 
-use super::{clipping::Clip, paint::Brush, texture::TextureId};
+use super::{paint::Brush, texture::TextureId};
 
 #[derive(Debug, Clone, Hash)]
 #[non_exhaustive]
 pub enum CanvasCommand {
-    Clip {
+    Layer {
         rect: Rect,
-        clip: Clip,
+        brush: Brush,
 
         shape: Shape,
     },
+
+    Pop,
 
     Shape {
         rect: Rect,

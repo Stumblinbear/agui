@@ -8,12 +8,10 @@ use crate::{
 };
 
 use self::{
-    clipping::Clip,
     command::CanvasCommand,
     paint::{Brush, Paint},
 };
 
-pub mod clipping;
 pub mod command;
 pub mod paint;
 pub mod renderer;
@@ -76,15 +74,20 @@ impl Canvas {
         Brush::from(self.paint.len() - 1)
     }
 
-    /// Begins clipping. It will be the `rect` of the canvas.
-    pub fn start_clipping(&mut self, clip: Clip, shape: Shape) {
-        self.start_clipping_at(self.size.into(), clip, shape);
+    /// Starts a new layer with `shape`. It will be the `rect` of the canvas.
+    pub fn start_layer(&mut self, brush: Brush, shape: Shape) {
+        self.start_layer_at(self.size.into(), brush, shape);
     }
 
-    /// Begins clipping the defined `rect`.
-    pub fn start_clipping_at(&mut self, rect: Rect, clip: Clip, shape: Shape) {
+    /// Starts a new layer in the defined `rect` with `shape`.
+    pub fn start_layer_at(&mut self, rect: Rect, brush: Brush, shape: Shape) {
         self.commands
-            .push(CanvasCommand::Clip { rect, clip, shape });
+            .push(CanvasCommand::Layer { rect, brush, shape });
+    }
+
+    /// Pop the last layer of the canvas.
+    pub fn pop(&mut self) {
+        self.commands.push(CanvasCommand::Pop);
     }
 
     /// Draws a rectangle. It will be the `rect` of the canvas.

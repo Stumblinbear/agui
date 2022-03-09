@@ -102,7 +102,6 @@ fn example_main(
                             height: 100.0,
                         },
                     },
-                    clip: Clip::Hard.into(),
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         child: Text {

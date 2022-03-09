@@ -1,5 +1,5 @@
 use agui_core::{
-    canvas::{clipping::Clip, paint::Paint},
+    canvas::paint::Paint,
     unit::{Color, Layout},
     widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
@@ -40,7 +40,6 @@ enum ButtonState {
 pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
-    pub clip: Option<Clip>,
 
     pub on_pressed: Callback<()>,
 
@@ -84,7 +83,10 @@ impl WidgetBuilder for Button {
                     ButtonState::Pressed => style.pressed,
                 };
 
-                let brush = canvas.new_brush(Paint { color });
+                let brush = canvas.new_brush(Paint {
+                    color,
+                    ..Paint::default()
+                });
 
                 canvas.draw_rect(brush);
             });
