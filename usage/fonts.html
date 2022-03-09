@@ -137,26 +137,21 @@
                         <h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
 <p><code>agui</code> comes with a built-in font system. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
-</span><span class="boring">    let program = agpu::GpuProgram::builder(&quot;agui fonts&quot;)
-</span><span class="boring">        // The integration requires a few GPU features to be enabled
-</span><span class="boring">        .with_gpu_features(
-</span><span class="boring">                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-</span><span class="boring">                | Features::VERTEX_WRITABLE_STORAGE,
-</span><span class="boring">        )
-</span><span class="boring">        .build()?;
+</span><span class="boring">    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 </span><span class="boring">
-</span>    // Create a UI with the default render passes
-    let mut ui = UI::with_default(&amp;program);
-
-    // Import font bytes directly
+</span><span class="boring">
+</span>    // Import font bytes directly
     let font = ui.load_font_bytes(include_bytes!(&quot;./fonts/DejaVuSans.ttf&quot;));
 
     // Import a font file
     let font = ui.load_font_file(&quot;./fonts/DejaVuSans.ttf&quot;);
 <span class="boring">}
 </span></code></pre>
-<p>The function returns a <code>FontId</code> which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating <code>Text</code> widgets:</p>
-<pre><code class="language-rust noplaypen">Text::is(font, 32.0, &quot;Hello, world!&quot;.into())
+<p>The function returns a <code>Font</code> which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating <code>Text</code> widgets:</p>
+<pre><code class="language-rust noplaypen">Text {
+    font: deja_vu.styled().size(32.0),
+    text: &quot;Hello, world!&quot;
+}
 </code></pre>
 <h2 id="supported-font-formats"><a class="header" href="#supported-font-formats">Supported Font Formats</a></h2>
 <p>We use <code>glyph_brush</code> to handle laying out fonts/glyphs, which itself utilizes <code>ab_glyph</code>. Therefore, we support any font format they do. At the time of writing, <code>agui</code> only supports loading TTF fonts.</p>

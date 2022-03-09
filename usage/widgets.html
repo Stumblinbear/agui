@@ -140,19 +140,19 @@
 <p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="../widgets/primitives.html">Primitive Widget Reference</a>.</p>
 <h2 id="creating-a-widget"><a class="header" href="#creating-a-widget">Creating a Widget</a></h2>
 <p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetBuilder</code>. We're going to start simple, with a basic box on the screen:</p>
-<pre><code class="language-rust noplaypen">pub struct Button { }
+<pre><code class="language-rust noplaypen">pub struct MyWidget { }
 
-impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
+impl WidgetBuilder for MyWidget {
+    fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
         BuildResult::None
     }
 }
 </code></pre>
 <p>If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.</p>
-<pre><code class="language-rust noplaypen">impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
+<pre><code class="language-rust noplaypen">impl WidgetBuilder for MyWidget {
+    fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
         build! {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
@@ -161,8 +161,7 @@ impl WidgetBuilder for Button {
     }
 }
 </code></pre>
-<p>This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Drawable</code> is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to <code>Drawable</code>, your widget should render exactly the same no matter what integration it is used in.</p>
-<p>One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="./clipping.html">later section</a>.</p>
+<p>This should render a button on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Button</code> is one of our built-in widgets; its implementation is not important just yet, so don't worry about that for now. One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="./clipping.html">later section</a>.</p>
 
                     </main>
 

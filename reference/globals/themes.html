@@ -138,30 +138,21 @@
 <p>Having a standardized Theme system is necessary for an easy-to-use UI library. However, we don't use a single struct for styles, as this is wasteful and would not cover every use case. Instead, each widget should create a struct with style information, that derives the traits: <code>Default + Send + Sync</code>.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
 <p>Lets go over how the <code>Button</code> widget handles its styling, as an example:</p>
-<pre><code class="language-rust noplaypen">#[derive(Clone)]
+<pre><code class="language-rust noplaypen">#[derive(Debug, Clone)]
 pub struct ButtonStyle {
-    pub normal: DrawableStyle,
-    pub hover: DrawableStyle,
-    pub pressed: DrawableStyle,
+    pub normal: Color,
+    pub disabled: Color,
+    pub hover: Color,
+    pub pressed: Color,
 }
 
 impl Default for ButtonStyle {
     fn default() -&gt; Self {
         Self {
-            normal: DrawableStyle {
-                color: Color::White,
-                opacity: 1.0,
-            },
-
-            hover: DrawableStyle {
-                color: Color::LightGray,
-                opacity: 1.0,
-            },
-
-            pressed: DrawableStyle {
-                color: Color::DarkGray,
-                opacity: 1.0,
-            },
+            normal: Color::White,
+            disabled: Color::LightGray,
+            hover: Color::LightGray,
+            pressed: Color::DarkGray,
         }
     }
 }
@@ -170,7 +161,7 @@ impl Default for ButtonStyle {
 <pre><code class="language-rust noplaypen">use agui::widgets::state::theme::StyleExt;
 
 <span class="boring">#[functional_widget]
-</span>fn button(ctx: &amp;WidgetContext, style: Option&lt;ButtonStyle&gt;, child: WidgetRef) -&gt; BuildResult {
+</span>fn button(ctx: &amp;BuildContext, style: Option&lt;ButtonStyle&gt;, child: WidgetRef) -&gt; BuildResult {
     // `resolve` will perform the following steps to get the style:
     //   1. If the style is `Some`, return it
     //   2. Check for a widget that's providing a Theme, and get_or_default from that

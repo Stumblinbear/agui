@@ -144,7 +144,7 @@
 <pre><code class="language-rust noplaypen">use agui::widgets::plugins::provider::ProviderExt;
 
 <span class="boring">#[functional_widget]
-</span>fn provider_widget(ctx: &amp;WidgetContext, child: WidgetRef) -&gt; BuildResult {
+</span>fn provider_widget(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
     // The generic isn't required, here; it's just used for clarity.
     let some_number = ctx.use_state::&lt;usize, _&gt;(|| 0);
 
@@ -160,11 +160,11 @@
 <pre><code class="language-rust noplaypen">use agui::widgets::plugins::provider::ConsumerExt;
 
 <span class="boring">#[functional_widget]
-</span>fn provider_widget(ctx: &amp;WidgetContext, child: WidgetRef) -&gt; BuildResult {
+</span>fn provider_widget(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
     // This will be ignored by `ctx.consume` since it's not provided.
     let some_number = ctx.use_state::&lt;usize, _&gt;(|| 0);
 
-    // `ConsumerExt` gives an easy-to-use extension trait onto `WidgetContext`.
+    // `ConsumerExt` gives an easy-to-use extension trait onto `BuildContext`.
     if let Some(some_number) = ctx.consume::&lt;usize&gt;() {
         // Use `some_number`, here.
     }

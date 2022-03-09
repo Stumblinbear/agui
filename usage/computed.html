@@ -139,7 +139,7 @@
 <h2 id="motivation-and-usage"><a class="header" href="#motivation-and-usage">Motivation and Usage</a></h2>
 <p>Sometimes you'll want to listen to some state, but your widget will not always react or otherwise respond to that state change. In cases where this can be guaranteed (and deterministically tested against), we can use computed values to achieve this effect. To demonstrate them, we'll check if the user is currently hovering over the widget by utilizing the <code>HoverPlugin</code>:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+</span>fn hovering_widget(ctx: &amp;BuildContext) -&gt; BuildResult {
     let is_hovering = ctx.computed(|ctx| {
         // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
@@ -153,13 +153,13 @@
 
     build! {
         if is_hovering {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
             }
         }else{
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 32.0, height 64.0 }
                 }

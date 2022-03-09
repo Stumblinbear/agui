@@ -145,18 +145,16 @@
 <h1 id="motivation-and-usage"><a class="header" href="#motivation-and-usage">Motivation and Usage</a></h1>
 <p>Imagine a situation where you have a widget which only provides layout sizing to its children, and reacts to some global state to set that size. This is the exact situation for the <code>App</code> widget:</p>
 <pre><code class="language-rust noplaypen">#[functional_widget]
-fn app(ctx: &amp;WidgetContext, child: WidgetRef) -&gt; BuildResult {
-    // Fetch the `AppSettings` global, which contains app sizing information
-    let settings = ctx.use_global::&lt;AppSettings, _&gt;(AppSettings::default);
-
-    let settings = settings.read();
+fn app(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
+    // Fetch the `WindowSize` global, which contains app sizing information
+    let window_size = ctx.use_global(WindowSize::default);
 
     // Set the sizing of this widget, so children may take up the entirety of the app size
     ctx.set_layout(build! {
         Layout {
             sizing: Sizing::Axis {
-                width: Units::Pixels(settings.width),
-                height: Units::Pixels(settings.height),
+                width: Units::Pixels(window_size.width),
+                height: Units::Pixels(window_size.height),
             }
         }
     });

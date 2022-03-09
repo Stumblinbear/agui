@@ -139,29 +139,24 @@
 <h2 id="the-build-macro"><a class="header" href="#the-build-macro">The <code>build!</code> macro</a></h2>
 <p>This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code. It supports pretty much all of Rust syntax, so you can embed logic (such as <code>if</code> or <code>match</code> statements) within it as normal.</p>
 <pre><code class="language-rust noplaypen">// Before:
-fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
-    BuildResult::One(
+fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
+    BuildResult::Some(vec![
         Button {
-            child: Drawable {
-                layout: Layout {
-                    sizing: Sizing::Set { width: 64.0, height 32.0 },
-                    ..Layout::default()
-                }.into(),
-                ..Drawable::default()
-            },
+            layout: Layout {
+                sizing: Sizing::Set { width: 64.0, height 32.0 },
+                ..Layout::default()
+            }.into(),
             ..Button::default()
         }.into()
-    )
+    ])
 }
 
 // After:
-fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
     build!{
         Button {
-            child: Drawable {
-                layout: Layout {
-                    sizing: Sizing::Set { width: 64.0, height 32.0 }
-                }
+            layout: Layout {
+                sizing: Sizing::Set { width: 64.0, height 32.0 }
             }
         }
     }
@@ -172,7 +167,7 @@ fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
 <p>The vast majority of widgets are simple fields followed by a single <code>build()</code> function. This means we have room for simplification: why not just make our function our widget? Well alright then. Ask and ye shall receive.</p>
 <pre><code class="language-rust noplaypen">#[functional_widget]
 // The macro will turn `snake_case` into `PascalCase` for the widget name
-fn example_widget(ctx: &amp;WidgetContext, layout: Ref&lt;Layout&gt;, child: WidgetRef) -&gt; BuildResult {
+fn example_widget(ctx: &amp;BuildContext, layout: Ref&lt;Layout&gt;, child: WidgetRef) -&gt; BuildResult {
     ctx.set_layout(layout);
     
     build!{
@@ -182,7 +177,7 @@ fn example_widget(ctx: &amp;WidgetContext, layout: Ref&lt;Layout&gt;, child: Wid
     }
 }
 </code></pre>
-<p>See? Instead of establishing a struct called <code>ExampleWidget</code> with the fields of <code>layout</code> and <code>child</code>, we can just make a function and tag it with the macro. The <code>ctx: &amp;WidgetContext</code> parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement <code>Default + Clone</code> in some form or another, so that the widget may call the <code>example_widget</code> function without issue.</p>
+<p>See? Instead of establishing a struct called <code>ExampleWidget</code> with the fields of <code>layout</code> and <code>child</code>, we can just make a function and tag it with the macro. The <code>ctx: &amp;BuildContext</code> parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement <code>Default + Clone</code> in some form or another, so that the widget may call the <code>example_widget</code> function without issue.</p>
 
                     </main>
 

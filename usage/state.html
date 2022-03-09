@@ -136,12 +136,15 @@
                     <main>
                         <h1 id="state"><a class="header" href="#state">State</a></h1>
 <p>Widgets may contain their own, self contained state, which persists across rebuilds (usually—more on that in a minute). Whenever the state changes, the widget's <code>build()</code> function will be re-invoked, and its children will be rebuilt. This is your main tool for implementing a user interface that can react to user events. Lets write up a quick counter example to demonstrate this:</p>
-<pre><code class="language-rust noplaypen">// Requires the `HoverPlugin` for the `Button` to function properly, so
-// make sure you call `ui.init_plugin(HoveringPlugin::default);`
-
-<span class="boring">#[functional_widget]
-</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
+<pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
+</span>fn counter_widget(ctx: &amp;BuildContext, font: FontId) -&gt; BuildResult {
     let num = ctx.use_state(|| 0);
+
+    let on_pressed = ctx.use_callback(|ctx, ()| {
+        let mut num = ctx.get_state::&lt;i32&gt;();
+
+        *num += 1;
+    });
 
     build! {
         Column {
@@ -152,17 +155,16 @@
                         padding: Margin::All(10.0.into()),
                         child: Text::is(font, 32.0, &quot;A Button&quot;.into())
                     },
-                    on_pressed: Callback::from(move |()| {
-                        *num.write() += 1;
-                    })
+                    on_pressed
                 }
             ]
         }
     }
 }
 </code></pre>
-<p>Any time you use <code>num.write()</code>, it will cause any listening widgets to be rebuilt on the next update, so ensure you only call it when you <em>actually</em> change something. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
-<p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that above, instead of <code>use_state</code>, the value would have changed internally, but you wouldn't see any change to the UI.</p>
+<p>Any time you mutate state (for example, the <code>num</code>), it will cause any listening widgets to be rebuilt on the next update. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
+<p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that above, instead of <code>use_state</code>, the value would have changed internally, but you wouldn't see any change to the UI. On the same note, <code>get_state</code> fetches state without listening to it (much like <code>init_state</code>), but doesn't provide a default value: this means it may panic if you do not init the state, first.</p>
+<p>The <code>use_callback</code> function is used primarily to allow widgets to interact with each other. We create a callback and pass it into the button widget, letting us be notified when it is pressed. You may be wondering why we have to use <code>get_state</code>, and this is due to the guarantees Rust enforces. We must fetch the state from the widget in the callback, rather than cloning around pointers.</p>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
 <p>A global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]

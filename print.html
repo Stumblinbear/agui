@@ -170,29 +170,26 @@ agui = &quot;0.3&quot; # ensure this is the latest version
 <p>First, you need to select your integration. To get started quickly, we're going to run with <code>agui_agpu</code> since it's the most feature complete. <code>agpu</code> is an abstraction over <code>wgpu</code> to make it easier to use, so it's effectively a <code>wgpu</code> integration.</p>
 <p>The smallest program you can start up to render something can be found in <code>agui_agpu/examples/hello_world.rs</code>:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
-</span>    let program = agpu::GpuProgram::builder(&quot;agui: hello_world&quot;)
-        // The integration requires a few GPU features to be enabled
-        .with_gpu_features(
-                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | Features::VERTEX_WRITABLE_STORAGE,
-        )
-        .build()?;
+</span>    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 
-    // Create a UI with the default render passes
-    let mut ui = UI::with_default(&amp;program);
+    // Register some default behavior
+    ui.register_default_plugins();
+    ui.register_default_globals();
 
-    // Import a font so we can render text
-    let deja_vu_sans = ui.load_font_bytes(include_bytes!(&quot;./fonts/DejaVuSans.ttf&quot;));
+    let deja_vu = ui.load_font_bytes(include_bytes!(&quot;./fonts/DejaVuSans.ttf&quot;))?;
 
     // Set the root node of the UI
     ui.set_root(build! {
         App {
-            child: Text::is(deja_vu_sans, 32.0, &quot;Hello, world!&quot;.into())
+            child: Text {
+                font: deja_vu.styled(),
+                text: &quot;Hello, world!&quot;
+            }
         }
     });
 
     // Start the update loop
-    ui.run(program)
+    ui.run()
 <span class="boring">}
 </span></code></pre>
 <p>There's a little initial setup to create the GpuProgram and UI, most of what we care about is loading the font and <code>ui.set_root</code>. The <code>build!</code> macro will be <a href="usage/macros.html">explained soon</a>. How fonts work will be explained a bit futher in a <a href="usage/fonts.html">later section</a>.</p>
@@ -205,29 +202,24 @@ agui = &quot;0.3&quot; # ensure this is the latest version
 <h2 id="the-build-macro"><a class="header" href="#the-build-macro">The <code>build!</code> macro</a></h2>
 <p>This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code. It supports pretty much all of Rust syntax, so you can embed logic (such as <code>if</code> or <code>match</code> statements) within it as normal.</p>
 <pre><code class="language-rust noplaypen">// Before:
-fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
-    BuildResult::One(
+fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
+    BuildResult::Some(vec![
         Button {
-            child: Drawable {
-                layout: Layout {
-                    sizing: Sizing::Set { width: 64.0, height 32.0 },
-                    ..Layout::default()
-                }.into(),
-                ..Drawable::default()
-            },
+            layout: Layout {
+                sizing: Sizing::Set { width: 64.0, height 32.0 },
+                ..Layout::default()
+            }.into(),
             ..Button::default()
         }.into()
-    )
+    ])
 }
 
 // After:
-fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
     build!{
         Button {
-            child: Drawable {
-                layout: Layout {
-                    sizing: Sizing::Set { width: 64.0, height 32.0 }
-                }
+            layout: Layout {
+                sizing: Sizing::Set { width: 64.0, height 32.0 }
             }
         }
     }
@@ -238,7 +230,7 @@ fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
 <p>The vast majority of widgets are simple fields followed by a single <code>build()</code> function. This means we have room for simplification: why not just make our function our widget? Well alright then. Ask and ye shall receive.</p>
 <pre><code class="language-rust noplaypen">#[functional_widget]
 // The macro will turn `snake_case` into `PascalCase` for the widget name
-fn example_widget(ctx: &amp;WidgetContext, layout: Ref&lt;Layout&gt;, child: WidgetRef) -&gt; BuildResult {
+fn example_widget(ctx: &amp;BuildContext, layout: Ref&lt;Layout&gt;, child: WidgetRef) -&gt; BuildResult {
     ctx.set_layout(layout);
     
     build!{
@@ -248,26 +240,26 @@ fn example_widget(ctx: &amp;WidgetContext, layout: Ref&lt;Layout&gt;, child: Wid
     }
 }
 </code></pre>
-<p>See? Instead of establishing a struct called <code>ExampleWidget</code> with the fields of <code>layout</code> and <code>child</code>, we can just make a function and tag it with the macro. The <code>ctx: &amp;WidgetContext</code> parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement <code>Default + Clone</code> in some form or another, so that the widget may call the <code>example_widget</code> function without issue.</p>
+<p>See? Instead of establishing a struct called <code>ExampleWidget</code> with the fields of <code>layout</code> and <code>child</code>, we can just make a function and tag it with the macro. The <code>ctx: &amp;BuildContext</code> parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement <code>Default + Clone</code> in some form or another, so that the widget may call the <code>example_widget</code> function without issue.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="widgets"><a class="header" href="#widgets">Widgets</a></h1>
 <p>A widget is anything that <em>exists</em> in the UI tree. It could be a visual element, a management system, or just plain-ol-data. You can find a full list of them in the <a href="usage/../widgets/widgets.html">Widget Reference</a>.</p>
 <h2 id="primitives"><a class="header" href="#primitives">Primitives</a></h2>
 <p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="usage/../widgets/primitives.html">Primitive Widget Reference</a>.</p>
 <h2 id="creating-a-widget"><a class="header" href="#creating-a-widget">Creating a Widget</a></h2>
 <p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetBuilder</code>. We're going to start simple, with a basic box on the screen:</p>
-<pre><code class="language-rust noplaypen">pub struct Button { }
+<pre><code class="language-rust noplaypen">pub struct MyWidget { }
 
-impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
+impl WidgetBuilder for MyWidget {
+    fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
         BuildResult::None
     }
 }
 </code></pre>
 <p>If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.</p>
-<pre><code class="language-rust noplaypen">impl WidgetBuilder for Button {
-    fn build(&amp;self, ctx: &amp;mut WidgetContext) -&gt; BuildResult {
+<pre><code class="language-rust noplaypen">impl WidgetBuilder for MyWidget {
+    fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
         build! {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
@@ -276,8 +268,7 @@ impl WidgetBuilder for Button {
     }
 }
 </code></pre>
-<p>This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Drawable</code> is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to <code>Drawable</code>, your widget should render exactly the same no matter what integration it is used in.</p>
-<p>One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="usage/./clipping.html">later section</a>.</p>
+<p>This should render a button on screen that's 64x32 pixels. Pretty swick, if I do say so myself. <code>Button</code> is one of our built-in widgets; its implementation is not important just yet, so don't worry about that for now. One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a <a href="usage/./clipping.html">later section</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="layout"><a class="header" href="#layout">Layout</a></h1>
 <p><code>agui</code> leverages <a href="https://github.com/geom3trik/morphorm">morphorm</a> for its layout system, which itself is modeled after the <a href="https://subformapp.com/articles/why-not-flexbox/">subform layout system</a>. While we go into some detail here, it's recommended to do some research into those as well until this page is fleshed out a bit more.</p>
 <h2 id="why-subform-why-not-flexbox"><a class="header" href="#why-subform-why-not-flexbox">Why subform? Why not flexbox?</a></h2>
@@ -295,12 +286,15 @@ impl WidgetBuilder for Button {
 <p>There are some primitive widgets that make the layout system easier to grok. <code>Column</code>, <code>Row</code>, <code>Grid</code>, <code>Padding</code>, and <code>Spacing</code>, each of which simply abstract out the layout. While you could use <code>ctx.set_layout</code> for each widget yourself, it's recommended to use these widgets instead, as it makes your widgets simpler and more reusable.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="state"><a class="header" href="#state">State</a></h1>
 <p>Widgets may contain their own, self contained state, which persists across rebuilds (usually—more on that in a minute). Whenever the state changes, the widget's <code>build()</code> function will be re-invoked, and its children will be rebuilt. This is your main tool for implementing a user interface that can react to user events. Lets write up a quick counter example to demonstrate this:</p>
-<pre><code class="language-rust noplaypen">// Requires the `HoverPlugin` for the `Button` to function properly, so
-// make sure you call `ui.init_plugin(HoveringPlugin::default);`
-
-<span class="boring">#[functional_widget]
-</span>fn counter_widget(ctx: &amp;WidgetContext, font: FontId) -&gt; BuildResult {
+<pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
+</span>fn counter_widget(ctx: &amp;BuildContext, font: FontId) -&gt; BuildResult {
     let num = ctx.use_state(|| 0);
+
+    let on_pressed = ctx.use_callback(|ctx, ()| {
+        let mut num = ctx.get_state::&lt;i32&gt;();
+
+        *num += 1;
+    });
 
     build! {
         Column {
@@ -311,17 +305,16 @@ impl WidgetBuilder for Button {
                         padding: Margin::All(10.0.into()),
                         child: Text::is(font, 32.0, &quot;A Button&quot;.into())
                     },
-                    on_pressed: Callback::from(move |()| {
-                        *num.write() += 1;
-                    })
+                    on_pressed
                 }
             ]
         }
     }
 }
 </code></pre>
-<p>Any time you use <code>num.write()</code>, it will cause any listening widgets to be rebuilt on the next update, so ensure you only call it when you <em>actually</em> change something. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
-<p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that above, instead of <code>use_state</code>, the value would have changed internally, but you wouldn't see any change to the UI.</p>
+<p>Any time you mutate state (for example, the <code>num</code>), it will cause any listening widgets to be rebuilt on the next update. The first time <code>ctx.use_state(|| 0)</code> is used, the closure within the method is called to initialize the state. In this case, it will be initialized to zero. On subsequent rebuilds of the widget, the previous state that it was in will be persisted. However, this only applies if the parent of the widget is not rebuilt.</p>
+<p>If you want to create state, but not listen to changes to it, you can instead use <code>ctx.init_state</code>. This is useful for widgets that manage state that children respond to, but state that itself doesn't react to. If you were to use that above, instead of <code>use_state</code>, the value would have changed internally, but you wouldn't see any change to the UI. On the same note, <code>get_state</code> fetches state without listening to it (much like <code>init_state</code>), but doesn't provide a default value: this means it may panic if you do not init the state, first.</p>
+<p>The <code>use_callback</code> function is used primarily to allow widgets to interact with each other. We create a callback and pass it into the button widget, letting us be notified when it is pressed. You may be wondering why we have to use <code>get_state</code>, and this is due to the guarantees Rust enforces. We must fetch the state from the widget in the callback, rather than cloning around pointers.</p>
 <h2 id="globals"><a class="header" href="#globals">Globals</a></h2>
 <p>A global acts much the same way as state, but it exists once in your application and is shared amongst all widgets, no matter how deep they are in your tree.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
@@ -343,26 +336,21 @@ impl WidgetBuilder for Button {
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
 <p><code>agui</code> comes with a built-in font system. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
-</span><span class="boring">    let program = agpu::GpuProgram::builder(&quot;agui fonts&quot;)
-</span><span class="boring">        // The integration requires a few GPU features to be enabled
-</span><span class="boring">        .with_gpu_features(
-</span><span class="boring">                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-</span><span class="boring">                | Features::VERTEX_WRITABLE_STORAGE,
-</span><span class="boring">        )
-</span><span class="boring">        .build()?;
+</span><span class="boring">    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 </span><span class="boring">
-</span>    // Create a UI with the default render passes
-    let mut ui = UI::with_default(&amp;program);
-
-    // Import font bytes directly
+</span><span class="boring">
+</span>    // Import font bytes directly
     let font = ui.load_font_bytes(include_bytes!(&quot;./fonts/DejaVuSans.ttf&quot;));
 
     // Import a font file
     let font = ui.load_font_file(&quot;./fonts/DejaVuSans.ttf&quot;);
 <span class="boring">}
 </span></code></pre>
-<p>The function returns a <code>FontId</code> which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating <code>Text</code> widgets:</p>
-<pre><code class="language-rust noplaypen">Text::is(font, 32.0, &quot;Hello, world!&quot;.into())
+<p>The function returns a <code>Font</code> which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating <code>Text</code> widgets:</p>
+<pre><code class="language-rust noplaypen">Text {
+    font: deja_vu.styled().size(32.0),
+    text: &quot;Hello, world!&quot;
+}
 </code></pre>
 <h2 id="supported-font-formats"><a class="header" href="#supported-font-formats">Supported Font Formats</a></h2>
 <p>We use <code>glyph_brush</code> to handle laying out fonts/glyphs, which itself utilizes <code>ab_glyph</code>. Therefore, we support any font format they do. At the time of writing, <code>agui</code> only supports loading TTF fonts.</p>
@@ -402,18 +390,16 @@ This is not a cheap operation, so care should be taken to ensure this is only us
 <h1 id="motivation-and-usage-1"><a class="header" href="#motivation-and-usage-1">Motivation and Usage</a></h1>
 <p>Imagine a situation where you have a widget which only provides layout sizing to its children, and reacts to some global state to set that size. This is the exact situation for the <code>App</code> widget:</p>
 <pre><code class="language-rust noplaypen">#[functional_widget]
-fn app(ctx: &amp;WidgetContext, child: WidgetRef) -&gt; BuildResult {
-    // Fetch the `AppSettings` global, which contains app sizing information
-    let settings = ctx.use_global::&lt;AppSettings, _&gt;(AppSettings::default);
-
-    let settings = settings.read();
+fn app(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
+    // Fetch the `WindowSize` global, which contains app sizing information
+    let window_size = ctx.use_global(WindowSize::default);
 
     // Set the sizing of this widget, so children may take up the entirety of the app size
     ctx.set_layout(build! {
         Layout {
             sizing: Sizing::Axis {
-                width: Units::Pixels(settings.width),
-                height: Units::Pixels(settings.height),
+                width: Units::Pixels(window_size.width),
+                height: Units::Pixels(window_size.height),
             }
         }
     });
@@ -458,7 +444,7 @@ Key::Global(u64)
 <h2 id="motivation-and-usage-2"><a class="header" href="#motivation-and-usage-2">Motivation and Usage</a></h2>
 <p>Sometimes you'll want to listen to some state, but your widget will not always react or otherwise respond to that state change. In cases where this can be guaranteed (and deterministically tested against), we can use computed values to achieve this effect. To demonstrate them, we'll check if the user is currently hovering over the widget by utilizing the <code>HoverPlugin</code>:</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+</span>fn hovering_widget(ctx: &amp;BuildContext) -&gt; BuildResult {
     let is_hovering = ctx.computed(|ctx| {
         // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
@@ -472,13 +458,13 @@ Key::Global(u64)
 
     build! {
         if is_hovering {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
             }
         }else{
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 32.0, height 64.0 }
                 }
@@ -491,17 +477,17 @@ Key::Global(u64)
 <div style="break-before: page; page-break-before: always;"></div><h1 id="limiting-rebuilds"><a class="header" href="#limiting-rebuilds">Limiting Rebuilds</a></h1>
 <p>Rebuilds are at the heart of how <code>agui</code> works. Whenever state changes, the widgets in the tree that may change are updated. However, this is a very naïve system and much of the responsibility for limiting these rebuilds is up to the developer (you). We'll go over the problem, and devise a few solutions for it, however ultimately the decision is up to you.</p>
 <h2 id="builders"><a class="header" href="#builders">Builders</a></h2>
-<p>Builders are essentially closure-derived widgets. You can create these ad-hoc to limit the scope of rebuilds to a sub-tree of widgets, because they're essentially parent-widgets themselves with their own <code>WidgetContext</code>.</p>
+<p>Builders are essentially closure-derived widgets. You can create these ad-hoc to limit the scope of rebuilds to a sub-tree of widgets, because they're essentially parent-widgets themselves with their own <code>BuildContext</code>.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span>fn widget_with_builder(ctx: &amp;WidgetContext) -&gt; BuildResult {
+</span>fn widget_with_builder(ctx: &amp;BuildContext) -&gt; BuildResult {
     build! {
         Builder::new(move |ctx| {
-            // `ctx` is a new `WidgetContext` which will not affect the parent widget
+            // `ctx` is a new `BuildContext` which will not affect the parent widget
 
             let state = ctx.use_state(|| 0);
 
             build! {
-                Drawable {
+                Button {
                     layout: Layout {
                         sizing: Sizing::Set { width: 64.0, height 32.0 }
                     }
@@ -525,7 +511,7 @@ Key::Global(u64)
 <pre><code class="language-rust noplaypen">use agui::widgets::plugins::provider::ProviderExt;
 
 <span class="boring">#[functional_widget]
-</span>fn provider_widget(ctx: &amp;WidgetContext, child: WidgetRef) -&gt; BuildResult {
+</span>fn provider_widget(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
     // The generic isn't required, here; it's just used for clarity.
     let some_number = ctx.use_state::&lt;usize, _&gt;(|| 0);
 
@@ -541,11 +527,11 @@ Key::Global(u64)
 <pre><code class="language-rust noplaypen">use agui::widgets::plugins::provider::ConsumerExt;
 
 <span class="boring">#[functional_widget]
-</span>fn provider_widget(ctx: &amp;WidgetContext, child: WidgetRef) -&gt; BuildResult {
+</span>fn provider_widget(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
     // This will be ignored by `ctx.consume` since it's not provided.
     let some_number = ctx.use_state::&lt;usize, _&gt;(|| 0);
 
-    // `ConsumerExt` gives an easy-to-use extension trait onto `WidgetContext`.
+    // `ConsumerExt` gives an easy-to-use extension trait onto `BuildContext`.
     if let Some(some_number) = ctx.consume::&lt;usize&gt;() {
         // Use `some_number`, here.
     }
@@ -560,7 +546,7 @@ Key::Global(u64)
 <p>So, the <code>HoverPlugin</code> solves that problem. It consumes mouse positions and writes to the <code>Hovering</code> global only when the widget you're hovering over changes, saving CPU and reducing the errors that could occur if every widget was implementing this functionality themselves.</p>
 <p>To use it, it's highly recommended to listen to it within a computed value, so your widget is only rebuilt when its hover state changes.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+</span>fn hovering_widget(ctx: &amp;BuildContext) -&gt; BuildResult {
     let is_hovering = ctx.computed(|ctx| {
         // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
@@ -574,13 +560,13 @@ Key::Global(u64)
 
     build! {
         if is_hovering {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
             }
         }else{
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 32.0, height 64.0 }
                 }
@@ -608,18 +594,16 @@ Spacing::horizontal(Units) // Creates a widget with `Units` width.
 
 Spacing::vertical(Units) // Creates a widget with `Units` height.
 </code></pre>
-<h2 id="drawable"><a class="header" href="#drawable">Drawable</a></h2>
-<p>These lie at the heart of the rendering system. Every integration is required to implement this, and every widget is heavily encouraged to utilize this widget whenever drawing something on screen.</p>
 <h3 id="what-if-i-dont-want-to-use-it"><a class="header" href="#what-if-i-dont-want-to-use-it">What if I don't want to use it?</a></h3>
 <p>Well, then your life just got a lot more complicated. Widgets that don't wish to use <code>Drawable</code> must implement their own renderer in the integration they're using. See your integration's respective docs to see how to do this.</p>
 <h2 id="text"><a class="header" href="#text">Text</a></h2>
 <p>Just like <code>Drawable</code>, this is how you tell the renderer to draw Text in your interface. Its default functionality is slightly different from other widgets, so it's important to note here: by default, this widget will set its size to the width of the text as rendered. If you want it to take up less space, ensure you set its <code>sizing</code> field.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="widgets-1"><a class="header" href="#widgets-1">Widgets</a></h1>
-<p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/animations.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
+<p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/widgets.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="app"><a class="header" href="#app">App</a></h1>
-<p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/animations.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
+<p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/widgets/app.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="button"><a class="header" href="#button">Button</a></h1>
-<p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/animations.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
+<p>This part of the docs are currently <a href="https://github.com/Stumblinbear/agui/blob/master/docs/src/reference/widgets/button.md">unwritten</a>. If you wish to contribute, feel free to make a pull request.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="globals-2"><a class="header" href="#globals-2">Globals</a></h1>
 <p><code>agui</code> includes some default application globals to standardize some common functionality. This includes <code>Mouse</code>, <code>Keyboard</code>, <code>Theme</code>, among other things we'll go over in the next few sections.</p>
 <h2 id="who-implements-these"><a class="header" href="#who-implements-these">Who implements these?</a></h2>
@@ -632,30 +616,21 @@ Spacing::vertical(Units) // Creates a widget with `Units` height.
 <p>Having a standardized Theme system is necessary for an easy-to-use UI library. However, we don't use a single struct for styles, as this is wasteful and would not cover every use case. Instead, each widget should create a struct with style information, that derives the traits: <code>Default + Send + Sync</code>.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
 <p>Lets go over how the <code>Button</code> widget handles its styling, as an example:</p>
-<pre><code class="language-rust noplaypen">#[derive(Clone)]
+<pre><code class="language-rust noplaypen">#[derive(Debug, Clone)]
 pub struct ButtonStyle {
-    pub normal: DrawableStyle,
-    pub hover: DrawableStyle,
-    pub pressed: DrawableStyle,
+    pub normal: Color,
+    pub disabled: Color,
+    pub hover: Color,
+    pub pressed: Color,
 }
 
 impl Default for ButtonStyle {
     fn default() -&gt; Self {
         Self {
-            normal: DrawableStyle {
-                color: Color::White,
-                opacity: 1.0,
-            },
-
-            hover: DrawableStyle {
-                color: Color::LightGray,
-                opacity: 1.0,
-            },
-
-            pressed: DrawableStyle {
-                color: Color::DarkGray,
-                opacity: 1.0,
-            },
+            normal: Color::White,
+            disabled: Color::LightGray,
+            hover: Color::LightGray,
+            pressed: Color::DarkGray,
         }
     }
 }
@@ -664,7 +639,7 @@ impl Default for ButtonStyle {
 <pre><code class="language-rust noplaypen">use agui::widgets::state::theme::StyleExt;
 
 <span class="boring">#[functional_widget]
-</span>fn button(ctx: &amp;WidgetContext, style: Option&lt;ButtonStyle&gt;, child: WidgetRef) -&gt; BuildResult {
+</span>fn button(ctx: &amp;BuildContext, style: Option&lt;ButtonStyle&gt;, child: WidgetRef) -&gt; BuildResult {
     // `resolve` will perform the following steps to get the style:
     //   1. If the style is `Some`, return it
     //   2. Check for a widget that's providing a Theme, and get_or_default from that

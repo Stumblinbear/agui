@@ -141,7 +141,7 @@
 <p>So, the <code>HoverPlugin</code> solves that problem. It consumes mouse positions and writes to the <code>Hovering</code> global only when the widget you're hovering over changes, saving CPU and reducing the errors that could occur if every widget was implementing this functionality themselves.</p>
 <p>To use it, it's highly recommended to listen to it within a computed value, so your widget is only rebuilt when its hover state changes.</p>
 <pre><code class="language-rust noplaypen"><span class="boring">#[functional_widget]
-</span>fn hovering_widget(ctx: &amp;WidgetContext) -&gt; BuildResult {
+</span>fn hovering_widget(ctx: &amp;BuildContext) -&gt; BuildResult {
     let is_hovering = ctx.computed(|ctx| {
         // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::&lt;Hovering&gt;() {
@@ -155,13 +155,13 @@
 
     build! {
         if is_hovering {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
             }
         }else{
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 32.0, height 64.0 }
                 }
