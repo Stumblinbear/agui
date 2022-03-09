@@ -24,10 +24,6 @@ Spacing::horizontal(Units) // Creates a widget with `Units` width.
 Spacing::vertical(Units) // Creates a widget with `Units` height.
 ```
 
-## Drawable
-
-These lie at the heart of the rendering system. Every integration is required to implement this, and every widget is heavily encouraged to utilize this widget whenever drawing something on screen.
-
 ### What if I don't want to use it?
 
 Well, then your life just got a lot more complicated. Widgets that don't wish to use `Drawable` must implement their own renderer in the integration they're using. See your integration's respective docs to see how to do this.

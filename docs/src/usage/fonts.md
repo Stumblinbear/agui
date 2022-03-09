@@ -4,17 +4,9 @@
 
 ```rust,noplaypen
 # fn main() -> Result<(), agpu::BoxError> {
-#     let program = agpu::GpuProgram::builder("agui fonts")
-#         // The integration requires a few GPU features to be enabled
-#         .with_gpu_features(
-#                 Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-#                 | Features::VERTEX_WRITABLE_STORAGE,
-#         )
-#         .build()?;
+#     let mut ui = UIProgram::new("agui hello world")?;
 # 
-    // Create a UI with the default render passes
-    let mut ui = UI::with_default(&program);
-
+# 
     // Import font bytes directly
     let font = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 
@@ -23,10 +15,13 @@
 # }
 ```
 
-The function returns a `FontId` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
+The function returns a `Font` which is used to reference the font in your UI. This can be stored however you like, and is generally used when creating `Text` widgets:
 
 ```rust,noplaypen
-Text::is(font, 32.0, "Hello, world!".into())
+Text {
+    font: deja_vu.styled().size(32.0),
+    text: "Hello, world!"
+}
 ```
 
 ## Supported Font Formats

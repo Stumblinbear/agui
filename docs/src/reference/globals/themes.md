@@ -7,30 +7,21 @@ Having a standardized Theme system is necessary for an easy-to-use UI library. H
 Lets go over how the `Button` widget handles its styling, as an example:
 
 ```rust,noplaypen
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ButtonStyle {
-    pub normal: DrawableStyle,
-    pub hover: DrawableStyle,
-    pub pressed: DrawableStyle,
+    pub normal: Color,
+    pub disabled: Color,
+    pub hover: Color,
+    pub pressed: Color,
 }
 
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
-            normal: DrawableStyle {
-                color: Color::White,
-                opacity: 1.0,
-            },
-
-            hover: DrawableStyle {
-                color: Color::LightGray,
-                opacity: 1.0,
-            },
-
-            pressed: DrawableStyle {
-                color: Color::DarkGray,
-                opacity: 1.0,
-            },
+            normal: Color::White,
+            disabled: Color::LightGray,
+            hover: Color::LightGray,
+            pressed: Color::DarkGray,
         }
     }
 }
@@ -42,7 +33,7 @@ This houses all of the fields that the `Button` widget uses to determine how it 
 use agui::widgets::state::theme::StyleExt;
 
 # #[functional_widget]
-fn button(ctx: &WidgetContext, style: Option<ButtonStyle>, child: WidgetRef) -> BuildResult {
+fn button(ctx: &BuildContext, style: Option<ButtonStyle>, child: WidgetRef) -> BuildResult {
     // `resolve` will perform the following steps to get the style:
     //   1. If the style is `Some`, return it
     //   2. Check for a widget that's providing a Theme, and get_or_default from that

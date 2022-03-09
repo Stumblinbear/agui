@@ -6,21 +6,6 @@ use agui_macros::{build, Widget};
 
 use crate::state::window::WindowSize;
 
-#[derive(Debug)]
-pub struct AppSettings {
-    pub width: f32,
-    pub height: f32,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            width: 256.0,
-            height: 256.0,
-        }
-    }
-}
-
 #[derive(Default, Widget)]
 pub struct App {
     pub child: WidgetRef,

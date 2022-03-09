@@ -16,7 +16,7 @@ To provide some state, we just need to provide it somewhere in the widget tree:
 use agui::widgets::plugins::provider::ProviderExt;
 
 # #[functional_widget]
-fn provider_widget(ctx: &WidgetContext, child: WidgetRef) -> BuildResult {
+fn provider_widget(ctx: &BuildContext, child: WidgetRef) -> BuildResult {
     // The generic isn't required, here; it's just used for clarity.
     let some_number = ctx.use_state::<usize, _>(|| 0);
 
@@ -36,11 +36,11 @@ Consuming from a provided state is also extremely simple; the main difference in
 use agui::widgets::plugins::provider::ConsumerExt;
 
 # #[functional_widget]
-fn provider_widget(ctx: &WidgetContext, child: WidgetRef) -> BuildResult {
+fn provider_widget(ctx: &BuildContext, child: WidgetRef) -> BuildResult {
     // This will be ignored by `ctx.consume` since it's not provided.
     let some_number = ctx.use_state::<usize, _>(|| 0);
 
-    // `ConsumerExt` gives an easy-to-use extension trait onto `WidgetContext`.
+    // `ConsumerExt` gives an easy-to-use extension trait onto `BuildContext`.
     if let Some(some_number) = ctx.consume::<usize>() {
         // Use `some_number`, here.
     }

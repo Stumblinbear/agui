@@ -11,10 +11,10 @@ A widget is anything that *exists* in the UI tree. It could be a visual element,
 A widget consists of two things: its settings and a build function. In Rust, this is just a `struct` with an `impl WidgetBuilder`. We're going to start simple, with a basic box on the screen:
 
 ```rust,noplaypen
-pub struct Button { }
+pub struct MyWidget { }
 
-impl WidgetBuilder for Button {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+impl WidgetBuilder for MyWidget {
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         BuildResult::None
     }
 }
@@ -23,10 +23,10 @@ impl WidgetBuilder for Button {
 If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.
 
 ```rust,noplaypen
-impl WidgetBuilder for Button {
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+impl WidgetBuilder for MyWidget {
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         build! {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
@@ -36,6 +36,4 @@ impl WidgetBuilder for Button {
 }
 ```
 
-This should render a rectangle on screen that's 64x32 pixels. Pretty swick, if I do say so myself. `Drawable` is the most important primitive widget we have, as it's used to tell the renderer to actually draw something on screen. Without it, we have nothing. As long as you stick to `Drawable`, your widget should render exactly the same no matter what integration it is used in.
-
-One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a [later section](./clipping.md).
+This should render a button on screen that's 64x32 pixels. Pretty swick, if I do say so myself. `Button` is one of our built-in widgets; its implementation is not important just yet, so don't worry about that for now. One important thing to note is clipping is not enabled by default. We'll cover why that is and the implications of that in a [later section](./clipping.md).

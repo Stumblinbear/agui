@@ -8,29 +8,24 @@ This is a convenience macro. It's not technically required (in fact it's quite e
 
 ```rust,noplaypen
 // Before:
-fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
-    BuildResult::One(
+fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+    BuildResult::Some(vec![
         Button {
-            child: Drawable {
-                layout: Layout {
-                    sizing: Sizing::Set { width: 64.0, height 32.0 },
-                    ..Layout::default()
-                }.into(),
-                ..Drawable::default()
-            },
+            layout: Layout {
+                sizing: Sizing::Set { width: 64.0, height 32.0 },
+                ..Layout::default()
+            }.into(),
             ..Button::default()
         }.into()
-    )
+    ])
 }
 
 // After:
-fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut BuildContext) -> BuildResult {
     build!{
         Button {
-            child: Drawable {
-                layout: Layout {
-                    sizing: Sizing::Set { width: 64.0, height 32.0 }
-                }
+            layout: Layout {
+                sizing: Sizing::Set { width: 64.0, height 32.0 }
             }
         }
     }
@@ -46,7 +41,7 @@ The vast majority of widgets are simple fields followed by a single `build()` fu
 ```rust,noplaypen
 #[functional_widget]
 // The macro will turn `snake_case` into `PascalCase` for the widget name
-fn example_widget(ctx: &WidgetContext, layout: Ref<Layout>, child: WidgetRef) -> BuildResult {
+fn example_widget(ctx: &BuildContext, layout: Ref<Layout>, child: WidgetRef) -> BuildResult {
     ctx.set_layout(layout);
     
     build!{
@@ -57,4 +52,4 @@ fn example_widget(ctx: &WidgetContext, layout: Ref<Layout>, child: WidgetRef) ->
 }
 ```
 
-See? Instead of establishing a struct called `ExampleWidget` with the fields of `layout` and `child`, we can just make a function and tag it with the macro. The `ctx: &WidgetContext` parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement `Default + Clone` in some form or another, so that the widget may call the `example_widget` function without issue.
+See? Instead of establishing a struct called `ExampleWidget` with the fields of `layout` and `child`, we can just make a function and tag it with the macro. The `ctx: &BuildContext` parameter is required, and any following arguments are added as a struct field. Of course, all of this comes with assumptions and potential overhead. Any field used here must implement `Default + Clone` in some form or another, so that the widget may call the `example_widget` function without issue.

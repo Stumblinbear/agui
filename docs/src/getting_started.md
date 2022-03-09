@@ -17,29 +17,26 @@ The smallest program you can start up to render something can be found in `agui_
 
 ```rust,noplaypen
 # fn main() -> Result<(), agpu::BoxError> {
-    let program = agpu::GpuProgram::builder("agui: hello_world")
-        // The integration requires a few GPU features to be enabled
-        .with_gpu_features(
-                Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | Features::VERTEX_WRITABLE_STORAGE,
-        )
-        .build()?;
+    let mut ui = UIProgram::new("agui hello world")?;
 
-    // Create a UI with the default render passes
-    let mut ui = UI::with_default(&program);
+    // Register some default behavior
+    ui.register_default_plugins();
+    ui.register_default_globals();
 
-    // Import a font so we can render text
-    let deja_vu_sans = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
+    let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
     // Set the root node of the UI
     ui.set_root(build! {
         App {
-            child: Text::is(deja_vu_sans, 32.0, "Hello, world!".into())
+            child: Text {
+                font: deja_vu.styled(),
+                text: "Hello, world!"
+            }
         }
     });
 
     // Start the update loop
-    ui.run(program)
+    ui.run()
 # }
 ```
 

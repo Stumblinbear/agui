@@ -8,7 +8,7 @@ Sometimes you'll want to listen to some state, but your widget will not always r
 
 ```rust,noplaypen
 # #[functional_widget]
-fn hovering_widget(ctx: &WidgetContext) -> BuildResult {
+fn hovering_widget(ctx: &BuildContext) -> BuildResult {
     let is_hovering = ctx.computed(|ctx| {
         // We use `try_use_global` here, since we don't want to test for hovering if the plugin isn't loaded
         if let Some(hovering) = ctx.try_use_global::<Hovering>() {
@@ -22,13 +22,13 @@ fn hovering_widget(ctx: &WidgetContext) -> BuildResult {
 
     build! {
         if is_hovering {
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 64.0, height 32.0 }
                 }
             }
         }else{
-            Drawable {
+            Button {
                 layout: Layout {
                     sizing: Sizing::Set { width: 32.0, height 64.0 }
                 }

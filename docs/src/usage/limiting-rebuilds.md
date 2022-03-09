@@ -4,19 +4,19 @@ Rebuilds are at the heart of how `agui` works. Whenever state changes, the widge
 
 ## Builders
 
-Builders are essentially closure-derived widgets. You can create these ad-hoc to limit the scope of rebuilds to a sub-tree of widgets, because they're essentially parent-widgets themselves with their own `WidgetContext`.
+Builders are essentially closure-derived widgets. You can create these ad-hoc to limit the scope of rebuilds to a sub-tree of widgets, because they're essentially parent-widgets themselves with their own `BuildContext`.
 
 ```rust,noplaypen
 # #[functional_widget]
-fn widget_with_builder(ctx: &WidgetContext) -> BuildResult {
+fn widget_with_builder(ctx: &BuildContext) -> BuildResult {
     build! {
         Builder::new(move |ctx| {
-            // `ctx` is a new `WidgetContext` which will not affect the parent widget
+            // `ctx` is a new `BuildContext` which will not affect the parent widget
 
             let state = ctx.use_state(|| 0);
 
             build! {
-                Drawable {
+                Button {
                     layout: Layout {
                         sizing: Sizing::Set { width: 64.0, height 32.0 }
                     }

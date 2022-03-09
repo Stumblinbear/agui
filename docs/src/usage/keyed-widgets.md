@@ -15,18 +15,16 @@ Imagine a situation where you have a widget which only provides layout sizing to
 
 ```rust,noplaypen
 #[functional_widget]
-fn app(ctx: &WidgetContext, child: WidgetRef) -> BuildResult {
-    // Fetch the `AppSettings` global, which contains app sizing information
-    let settings = ctx.use_global::<AppSettings, _>(AppSettings::default);
-
-    let settings = settings.read();
+fn app(ctx: &BuildContext, child: WidgetRef) -> BuildResult {
+    // Fetch the `WindowSize` global, which contains app sizing information
+    let window_size = ctx.use_global(WindowSize::default);
 
     // Set the sizing of this widget, so children may take up the entirety of the app size
     ctx.set_layout(build! {
         Layout {
             sizing: Sizing::Axis {
-                width: Units::Pixels(settings.width),
-                height: Units::Pixels(settings.height),
+                width: Units::Pixels(window_size.width),
+                height: Units::Pixels(window_size.height),
             }
         }
     });
