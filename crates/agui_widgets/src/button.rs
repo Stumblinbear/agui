@@ -1,6 +1,6 @@
 use agui_core::{
     canvas::{clipping::Clip, paint::Paint},
-    unit::{Color, Layout, Ref},
+    unit::{Color, Layout},
     widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::Widget;
@@ -38,7 +38,7 @@ enum ButtonState {
 
 #[derive(Default, Widget)]
 pub struct Button {
-    pub layout: Ref<Layout>,
+    pub layout: Layout,
     pub style: Option<ButtonStyle>,
     pub clip: Option<Clip>,
 
@@ -49,7 +49,7 @@ pub struct Button {
 
 impl WidgetBuilder for Button {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
-        ctx.set_layout(Ref::clone(&self.layout));
+        ctx.set_layout(Layout::clone(&self.layout));
 
         ctx.use_effect({
             let on_pressed = self.on_pressed.clone();

@@ -4,7 +4,7 @@ use crate::{
     engine::{node::WidgetNode, notify::Notifier},
     state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
-    unit::{LayoutType, Rect, Ref, Size},
+    unit::{LayoutType, Rect, Size},
     widget::WidgetId,
 };
 
@@ -95,8 +95,8 @@ impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
 // Layout
 impl<'ui, 'ctx> CallbackContext<'ui, 'ctx> {
     /// Fetch the layout of a widget.
-    pub fn get_layout_type(&self) -> Ref<LayoutType> {
-        Ref::clone(&self.widget.layout_type)
+    pub fn get_layout_type(&self) -> LayoutType {
+        self.widget.layout_type
     }
 
     pub fn get_rect(&self) -> Option<Rect> {

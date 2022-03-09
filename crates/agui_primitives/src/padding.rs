@@ -21,7 +21,6 @@ impl WidgetBuilder for Padding {
                 
                 ..Layout::default()
             }
-            .into(),
         );
 
         (&self.child).into()

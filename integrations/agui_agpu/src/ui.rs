@@ -10,7 +10,7 @@ use agpu::{
     Event, GpuHandle, GpuProgram,
 };
 use agui::{
-    engine::{debug::print_tree, Engine},
+    engine::Engine,
     font::Font,
     unit::{Point, Size},
     widgets::state::{

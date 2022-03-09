@@ -485,43 +485,36 @@ impl<'ui> Engine<'ui> {
                 .get(widget_id)
                 .expect("tree has a root node, but it doesn't exist");
 
-            if let Some(layout) = node.layout.try_get() {
-                if let Some(Units::Pixels(px)) = layout.position.get_left() {
-                    if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
-                        root_changed = true;
+            if let Some(Units::Pixels(px)) = node.layout.position.get_left() {
+                if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
+                    root_changed = true;
 
-                        self.cache.set_posx(widget_id, px);
-                    }
+                    self.cache.set_posx(widget_id, px);
                 }
+            }
 
-                if let Some(Units::Pixels(px)) = layout.position.get_top() {
-                    if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
-                        root_changed = true;
+            if let Some(Units::Pixels(px)) = node.layout.position.get_top() {
+                if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
+                    root_changed = true;
 
-                        self.cache.set_posy(widget_id, px);
-                    }
+                    self.cache.set_posy(widget_id, px);
                 }
+            }
 
-                if let Units::Pixels(px) = layout.sizing.get_width() {
-                    if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
-                        root_changed = true;
+            if let Units::Pixels(px) = node.layout.sizing.get_width() {
+                if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
+                    root_changed = true;
 
-                        self.cache.set_width(widget_id, px);
-                    }
+                    self.cache.set_width(widget_id, px);
                 }
+            }
 
-                if let Units::Pixels(px) = layout.sizing.get_height() {
-                    if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
-                        root_changed = true;
+            if let Units::Pixels(px) = node.layout.sizing.get_height() {
+                if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
+                    root_changed = true;
 
-                        self.cache.set_height(widget_id, px);
-                    }
+                    self.cache.set_height(widget_id, px);
                 }
-            } else {
-                self.cache.set_posx(widget_id, 0.0);
-                self.cache.set_posy(widget_id, 0.0);
-                self.cache.set_width(widget_id, 0.0);
-                self.cache.set_height(widget_id, 0.0);
             }
         }
 

@@ -34,7 +34,6 @@ impl WidgetBuilder for Spacing {
                 sizing: self.0,
                 ..Layout::default()
             }
-            .into(),
         );
 
         BuildResult::None

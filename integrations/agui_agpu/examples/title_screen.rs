@@ -41,13 +41,10 @@ fn example_main(
     _color: Color,
     _child: WidgetRef,
 ) -> BuildResult {
-    ctx.set_layout(
-        Layout {
-            sizing: Sizing::Fill,
-            ..Layout::default()
-        }
-        .into(),
-    );
+    ctx.set_layout(Layout {
+        sizing: Sizing::Fill,
+        ..Layout::default()
+    });
 
     build! {
         Column {

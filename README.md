@@ -60,7 +60,7 @@ Currently, widgets are created using a `Widget` derive macro, and by implementin
 #[derive(Default, Widget)]
 pub struct MyWidget {
     // We can define parameters, here.
-    pub layout: Ref<Layout>,
+    pub layout: Layout,
 
     // WidgetRef is the convention for passing children. Vec<WidgetRef> should be used for passing variable amounts.
     pub child: WidgetRef,
@@ -68,12 +68,12 @@ pub struct MyWidget {
 
 impl WidgetBuilder for MyWidget {
     // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
-    fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         // `ctx.set_layout_type` is what we use to define this widget's layout type (row, column, grid).
-        ctx.set_layout_type(LayoutType::Row.into());
+        ctx.set_layout_type(LayoutType::Row);
         
         // `ctx.set_layout` is what we use to define this widget's layout parameters.
-        ctx.set_layout(Ref::clone(&self.layout));
+        ctx.set_layout(Layout::clone(&self.layout));
 
         build! {
             Button { }
@@ -89,7 +89,7 @@ The `build!` macro makes it significantly cleaner and easier to init new widgets
 ```rust
 // It allows us to turn this:
 
-fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut BuildContext) -> BuildResult {
     BuildResult::Some(
         Button {
             layout: Layout::default(),
@@ -105,7 +105,7 @@ fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
 
 use agui::macros::build;
 
-fn build(&self, ctx: &mut WidgetContext) -> BuildResult {
+fn build(&self, ctx: &mut BuildContext) -> BuildResult {
     build!{
         Button {
             child: Text {
@@ -124,7 +124,7 @@ Functional widgets are an additional quality-of-life magic way of creating new w
 
 ```rust
 #[functional_widget]
-fn example_widget(ctx: &WidgetContext, layout: Ref<Layout>, child: WidgetRef) -> BuildResult {
+fn example_widget(ctx: &BuildContext, layout: Layout, child: WidgetRef) -> BuildResult {
     ctx.set_layout(layout);
     
     build!{
@@ -137,7 +137,7 @@ fn example_widget(ctx: &WidgetContext, layout: Ref<Layout>, child: WidgetRef) ->
 }
 ```
 
-The `ctx: &WidgetContext` parameter is required, and any following arguments are added as a struct field.
+The `ctx: &BuildContext` parameter is required, and any following arguments are added as a struct field.
 
 ### How does it work?
 

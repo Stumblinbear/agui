@@ -15,13 +15,12 @@ impl WidgetBuilder for App {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         let window_size = ctx.use_global(WindowSize::default);
 
-        ctx.set_layout(build! {
-            Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Pixels(window_size.width),
-                    height: Units::Pixels(window_size.height),
-                }
-            }
+        ctx.set_layout(Layout {
+            sizing: Sizing::Axis {
+                width: Units::Pixels(window_size.width),
+                height: Units::Pixels(window_size.height),
+            },
+            ..Layout::default()
         });
 
         ctx.key(Key::single(), (&self.child).into()).into()

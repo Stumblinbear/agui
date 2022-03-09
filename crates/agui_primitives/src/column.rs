@@ -1,12 +1,12 @@
 use agui_core::{
-    unit::{Layout, LayoutType, Ref, Units},
-    widget::{BuildResult, WidgetBuilder, BuildContext, WidgetRef},
+    unit::{Layout, LayoutType, Units},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 use agui_macros::Widget;
 
 #[derive(Default, Widget)]
 pub struct Column {
-    pub layout: Ref<Layout>,
+    pub layout: Layout,
 
     pub spacing: Units,
 
@@ -15,14 +15,11 @@ pub struct Column {
 
 impl WidgetBuilder for Column {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
-        ctx.set_layout_type(
-            LayoutType::Column {
-                spacing: self.spacing,
-            }
-            .into(),
-        );
+        ctx.set_layout_type(LayoutType::Column {
+            spacing: self.spacing,
+        });
 
-        ctx.set_layout(Ref::clone(&self.layout));
+        ctx.set_layout(Layout::clone(&self.layout));
 
         (&self.children).into()
     }

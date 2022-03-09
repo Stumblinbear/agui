@@ -31,7 +31,6 @@ impl WidgetBuilder for Text {
                 },
                 ..Layout::default()
             }
-            .into(),
         );
 
         ctx.on_draw({

@@ -5,7 +5,7 @@ use crate::{
     engine::{node::WidgetNode, notify::Notifier},
     state::{map::StateMap, ListenerId, State, StateValue},
     tree::Tree,
-    unit::{Key, Layout, LayoutType, Rect, Ref, Size},
+    unit::{Key, Layout, LayoutType, Rect, Size},
     widget::{
         callback::{Callback, CallbackFn, CallbackId},
         computed::{ComputedFn, ComputedFunc},
@@ -235,17 +235,17 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
 // Layout
 impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Set the layout type of the widget.
-    pub fn set_layout_type(&mut self, layout_type: Ref<LayoutType>) {
+    pub fn set_layout_type(&mut self, layout_type: LayoutType) {
         self.widget.layout_type = layout_type;
     }
 
     /// Fetch the layout of the widget.
-    pub fn get_layout_type(&self) -> Ref<LayoutType> {
-        Ref::clone(&self.widget.layout_type)
+    pub fn get_layout_type(&self) -> LayoutType {
+        self.widget.layout_type
     }
 
     /// Set the layout of the widget.
-    pub fn set_layout(&mut self, layout: Ref<Layout>) {
+    pub fn set_layout(&mut self, layout: Layout) {
         self.widget.layout = layout;
     }
 

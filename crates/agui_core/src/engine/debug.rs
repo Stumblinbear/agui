@@ -1,12 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
-    sync::Arc,
 };
 
 use crate::{
     engine::Modify,
-    unit::{Layout, LayoutType, Ref},
     widget::{Widget, WidgetId},
 };
 
@@ -37,22 +35,7 @@ pub fn print_tree(engine: &Engine<'_>) {
             Some(widget_id),
             &node.widget.get(),
             WHITE,
-            &format!(
-                "{} {:?} {:?}",
-                if matches!(node.layout, Ref::None) {
-                    GRAY
-                } else {
-                    CYAN
-                },
-                node.layout_type
-                    .try_get()
-                    .unwrap_or_else(|| Arc::new(LayoutType::default())),
-                if matches!(node.layout, Ref::None) {
-                    Ref::new(Layout::default())
-                } else {
-                    Ref::clone(&node.layout)
-                }
-            ),
+            &format!("{} {:?} {:?}", GRAY, node.layout_type, node.layout),
         );
     }
 }
@@ -126,22 +109,7 @@ pub fn print_tree_modifications(engine: &Engine<'_>) {
             } else {
                 WHITE
             },
-            &format!(
-                "{} {:?} {:?}",
-                if matches!(node.layout, Ref::None) {
-                    GRAY
-                } else {
-                    CYAN
-                },
-                node.layout_type
-                    .try_get()
-                    .unwrap_or_else(|| Arc::new(LayoutType::default())),
-                if matches!(node.layout, Ref::None) {
-                    Ref::new(Layout::default())
-                } else {
-                    Ref::clone(&node.layout)
-                }
-            ),
+            &format!("{} {:?} {:?}", GRAY, node.layout_type, node.layout),
         );
 
         for to_spawn in spawns.get(&widget_id).unwrap_or(&Vec::new()) {

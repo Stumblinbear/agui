@@ -41,8 +41,8 @@ The vast majority of widgets are simple fields followed by a single `build()` fu
 ```rust,noplaypen
 #[functional_widget]
 // The macro will turn `snake_case` into `PascalCase` for the widget name
-fn example_widget(ctx: &BuildContext, layout: Ref<Layout>, child: WidgetRef) -> BuildResult {
-    ctx.set_layout(layout);
+fn example_widget(ctx: &BuildContext, layout: Layout, child: WidgetRef) -> BuildResult {
+    ctx.set_layout(Layout::clone(&layout));
     
     build!{
         Button {

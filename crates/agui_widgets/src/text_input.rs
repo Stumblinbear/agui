@@ -6,7 +6,7 @@ use std::{
 use agui_core::{
     canvas::paint::Paint,
     font::FontStyle,
-    unit::{Color, Layout, Point, Rect, Ref},
+    unit::{Color, Layout, Point, Rect},
     widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder},
 };
 use agui_macros::Widget;
@@ -103,7 +103,7 @@ pub struct TextInput<S>
 where
     S: EditableText + 'static,
 {
-    pub layout: Ref<Layout>,
+    pub layout: Layout,
 
     pub style: Option<TextInputStyle>,
 
@@ -117,7 +117,7 @@ where
 impl Default for TextInput<String> {
     fn default() -> Self {
         Self {
-            layout: Ref::None,
+            layout: Layout::default(),
 
             style: None,
 
@@ -135,7 +135,7 @@ where
     S: EditableText + 'static,
 {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
-        ctx.set_layout(Ref::clone(&self.layout));
+        ctx.set_layout(Layout::clone(&self.layout));
 
         ctx.init_state(|| self.value.clone());
 
