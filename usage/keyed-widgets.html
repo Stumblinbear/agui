@@ -150,13 +150,12 @@ fn app(ctx: &amp;BuildContext, child: WidgetRef) -&gt; BuildResult {
     let window_size = ctx.use_global(WindowSize::default);
 
     // Set the sizing of this widget, so children may take up the entirety of the app size
-    ctx.set_layout(build! {
-        Layout {
-            sizing: Sizing::Axis {
-                width: Units::Pixels(window_size.width),
-                height: Units::Pixels(window_size.height),
-            }
+    ctx.set_layout(Layout {
+        sizing: Sizing::Axis {
+            width: Units::Pixels(window_size.width),
+            height: Units::Pixels(window_size.height),
         }
+        ..Layout::default()
     });
 
     // Return the child

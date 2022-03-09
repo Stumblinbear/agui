@@ -167,8 +167,8 @@ fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
 <p>The vast majority of widgets are simple fields followed by a single <code>build()</code> function. This means we have room for simplification: why not just make our function our widget? Well alright then. Ask and ye shall receive.</p>
 <pre><code class="language-rust noplaypen">#[functional_widget]
 // The macro will turn `snake_case` into `PascalCase` for the widget name
-fn example_widget(ctx: &amp;BuildContext, layout: Ref&lt;Layout&gt;, child: WidgetRef) -&gt; BuildResult {
-    ctx.set_layout(layout);
+fn example_widget(ctx: &amp;BuildContext, layout: Layout, child: WidgetRef) -&gt; BuildResult {
+    ctx.set_layout(Layout::clone(&amp;layout));
     
     build!{
         Button {
