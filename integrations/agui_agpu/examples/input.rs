@@ -6,11 +6,8 @@ use agui::{
     unit::{Color, Key, Layout, Sizing, Units},
     widget::{BuildContext, BuildResult, WidgetRef},
     widgets::{
-        plugins::{
-            provider::{ConsumerExt, ProviderExt},
-            DefaultPluginsExt,
-        },
-        primitives::{Builder, Column, Text},
+        plugins::DefaultPluginsExt,
+        primitives::{Column, Text},
         state::DefaultGlobalsExt,
         App, TextInput,
     },
