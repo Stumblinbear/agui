@@ -1,7 +1,6 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    canvas::clipping::Clip,
     font::{Font, HorizontalAlign, VerticalAlign},
     macros::{build, functional_widget},
     unit::{Color, Layout, Margin, Sizing, Units},
