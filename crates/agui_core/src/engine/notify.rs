@@ -4,12 +4,12 @@ use fnv::FnvHashSet;
 use parking_lot::Mutex;
 
 use crate::{
-    state::{ListenerId, StateValue},
+    state::{ListenerId, Data},
     widget::callback::CallbackId,
 };
 
 pub type NotifyChanged = RefCell<FnvHashSet<ListenerId>>;
-pub type NotifyCallback = Arc<Mutex<Vec<(CallbackId, Box<dyn StateValue>)>>>;
+pub type NotifyCallback = Arc<Mutex<Vec<(CallbackId, Box<dyn Data>)>>>;
 
 #[derive(Default)]
 pub struct Notifier {

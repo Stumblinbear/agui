@@ -6,7 +6,7 @@ use std::{
 use agui_core::{
     engine::event::WidgetEvent,
     plugin::{EnginePlugin, PluginContext},
-    state::{State, StateValue},
+    state::{State, Data},
     widget::{BuildContext, WidgetContext, WidgetId},
 };
 
@@ -62,7 +62,7 @@ pub trait ProviderExt {
 
 impl<V> ProviderExt for State<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     /// Makes some local widget state available to any child widget.
     fn provide(&self, ctx: &mut BuildContext) {
@@ -89,14 +89,14 @@ where
 pub trait ConsumerExt {
     fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue + Clone;
+        V: Data + Clone;
 }
 
 impl ConsumerExt for BuildContext<'_, '_> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         let plugin = self.init_global(ProviderPluginState::default);
 
@@ -130,7 +130,7 @@ impl ConsumerExt for WidgetContext<'_, '_> {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         let plugin = self.init_global(ProviderPluginState::default);
 

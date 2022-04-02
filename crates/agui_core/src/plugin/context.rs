@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     engine::{node::WidgetNode, notify::Notifier},
     plugin::PluginId,
-    state::{map::StateMap, ListenerId, State, StateValue},
+    state::{map::StateMap, ListenerId, State, Data},
     tree::Tree,
     widget::WidgetId,
 };
@@ -36,7 +36,7 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.global.try_get::<V>(Some(self.get_listener()))
     }
@@ -44,7 +44,7 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.global.get_or(None, func)
@@ -53,7 +53,7 @@ impl<'ui, 'ctx> PluginContext<'ui, 'ctx> {
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
     pub fn use_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.global.get_or(Some(self.get_listener()), func)

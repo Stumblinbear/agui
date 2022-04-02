@@ -7,11 +7,11 @@ use crate::engine::notify::Notifier;
 
 use super::ListenerId;
 
-use super::{State, StateValue};
+use super::{State, Data};
 
 struct StateEntry {
-    value: Rc<dyn StateValue>,
-    updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
+    value: Rc<dyn Data>,
+    updated_value: Rc<RefCell<Option<Rc<dyn Data>>>>,
 }
 
 pub struct StateMap {
@@ -33,7 +33,7 @@ impl StateMap {
 
     pub fn try_get<V>(&mut self, listener_id: Option<ListenerId>) -> Option<State<V>>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         let type_id = TypeId::of::<V>();
 
@@ -62,7 +62,7 @@ impl StateMap {
     #[allow(clippy::missing_panics_doc)]
     pub fn get_or<V, F>(&mut self, listener_id: Option<ListenerId>, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.entries
@@ -78,7 +78,7 @@ impl StateMap {
 
     pub fn set<V>(&mut self, value: V)
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         let type_id = TypeId::of::<V>();
 

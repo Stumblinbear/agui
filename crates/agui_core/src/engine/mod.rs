@@ -11,7 +11,7 @@ use morphorm::Cache;
 use crate::{
     font::Font,
     plugin::{EnginePlugin, PluginContext, PluginId},
-    state::{map::StateMap, ListenerId, State, StateValue},
+    state::{map::StateMap, ListenerId, State, Data},
     tree::Tree,
     unit::{Key, Units},
     widget::{
@@ -184,14 +184,14 @@ impl<'ui> Engine<'ui> {
 
     pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.global.try_get(None)
     }
 
     pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.global.get_or(None, func)

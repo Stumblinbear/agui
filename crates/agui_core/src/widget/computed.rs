@@ -1,18 +1,18 @@
 use std::marker::PhantomData;
 
-use crate::{state::StateValue, widget::WidgetContext};
+use crate::{state::Data, widget::WidgetContext};
 
 pub trait ComputedFunc<'ui> {
     fn call(&mut self, ctx: &mut WidgetContext<'ui, '_>) -> bool;
 
-    fn get(&self) -> Box<dyn StateValue>;
+    fn get(&self) -> Box<dyn Data>;
 
     fn did_change(&self) -> bool;
 }
 
 pub struct ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Clone + StateValue,
+    V: Eq + PartialEq + Clone + Data,
     F: Fn(&mut WidgetContext<'ui, '_>) -> V,
 {
     phantom: PhantomData<&'ui V>,
@@ -25,7 +25,7 @@ where
 
 impl<'ui, V, F> ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Clone + StateValue,
+    V: Eq + PartialEq + Clone + Data,
     F: Fn(&mut WidgetContext<'ui, '_>) -> V,
 {
     pub fn new(func: F) -> Self {
@@ -42,7 +42,7 @@ where
 
 impl<'ui, V, F> ComputedFunc<'ui> for ComputedFn<'ui, V, F>
 where
-    V: Eq + PartialEq + Clone + StateValue,
+    V: Eq + PartialEq + Clone + Data,
     F: Fn(&mut WidgetContext<'ui, '_>) -> V,
 {
     fn call(&mut self, ctx: &mut WidgetContext<'ui, '_>) -> bool {
@@ -58,7 +58,7 @@ where
         self.did_change
     }
 
-    fn get(&self) -> Box<dyn StateValue> {
+    fn get(&self) -> Box<dyn Data> {
         Box::new(self.value.as_ref().unwrap().clone())
     }
 

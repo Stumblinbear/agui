@@ -2,7 +2,7 @@ use std::{any::TypeId, marker::PhantomData, rc::Rc, sync::Arc};
 
 use crate::{
     engine::notify::{Notifier, NotifyCallback},
-    state::StateValue,
+    state::Data,
 };
 
 use super::{CallbackContext, WidgetId};
@@ -13,7 +13,7 @@ pub struct CallbackId(pub(crate) WidgetId, pub(crate) TypeId);
 #[derive(Clone)]
 pub struct Callback<A>
 where
-    A: StateValue + Clone,
+    A: Data + Clone,
 {
     phantom: PhantomData<A>,
 
@@ -23,7 +23,7 @@ where
 
 impl<A> Default for Callback<A>
 where
-    A: StateValue + Clone,
+    A: Data + Clone,
 {
     fn default() -> Self {
         Self {
@@ -37,7 +37,7 @@ where
 
 impl<A> Callback<A>
 where
-    A: StateValue + Clone,
+    A: Data + Clone,
 {
     pub(crate) fn new(callback_id: CallbackId, notifier: Rc<Notifier>) -> Self {
         Self {
@@ -60,7 +60,7 @@ where
 }
 
 pub trait CallbackFunc<'ui> {
-    fn call(&self, ctx: &mut CallbackContext<'ui, '_>, args: Box<dyn StateValue>);
+    fn call(&self, ctx: &mut CallbackContext<'ui, '_>, args: Box<dyn Data>);
 }
 
 pub struct CallbackFn<'ui, F, A>
@@ -90,9 +90,9 @@ where
 impl<'ui, F, A> CallbackFunc<'ui> for CallbackFn<'ui, F, A>
 where
     F: Fn(&mut CallbackContext<'ui, '_>, &A),
-    A: StateValue + Clone,
+    A: Data + Clone,
 {
-    fn call(&self, ctx: &mut CallbackContext<'ui, '_>, args: Box<dyn StateValue>) {
+    fn call(&self, ctx: &mut CallbackContext<'ui, '_>, args: Box<dyn Data>) {
         let args = args
             .downcast_ref::<A>()
             .expect("failed to downcast callback args");

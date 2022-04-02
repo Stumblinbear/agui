@@ -3,7 +3,7 @@ use std::{any::TypeId, rc::Rc};
 use crate::{
     canvas::{renderer::RenderFn, Canvas},
     engine::{node::WidgetNode, notify::Notifier},
-    state::{map::StateMap, ListenerId, State, StateValue},
+    state::{map::StateMap, ListenerId, State, Data},
     tree::Tree,
     unit::{Key, Layout, LayoutType, Rect, Size},
     widget::{
@@ -48,7 +48,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Fetch a global value if it exists. The caller will be updated when the value is changed.
     pub fn try_use_global<V>(&mut self) -> Option<State<V>>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.global.try_get::<V>(Some(self.get_listener()))
     }
@@ -56,7 +56,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Initialize a global value if it's not set already. This does not cause the initializer to be updated when its value is changed.
     pub fn init_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.global.get_or(None, func)
@@ -65,7 +65,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Fetch a global value, or initialize it with `func`. The caller will be updated when the value is changed.
     pub fn use_global<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.global.get_or(Some(self.get_listener()), func)
@@ -74,7 +74,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Get a global value. This will panic if the global does not exist.
     pub fn get_global<V>(&mut self) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.global.try_get(None).expect("failed to get global")
     }
@@ -82,7 +82,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Set a global value. This does not cause the initializer to be updated when its value is changed.
     pub fn set_global<V>(&mut self, value: V)
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.global.set(value)
     }
@@ -93,7 +93,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Initializing a state does not cause the initializer to be updated when its value is changed.
     pub fn init_state<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.widget.state.get_or::<V, F>(None, func)
@@ -102,7 +102,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Fetch a local state value, or initialize it with `func` if it doesn't exist. The caller will be updated when the value is changed.
     pub fn use_state<V, F>(&mut self, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         self.widget
@@ -112,7 +112,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
 
     pub fn use_state_from<V, F>(&mut self, widget_id: WidgetId, func: F) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
         F: FnOnce() -> V,
     {
         let listener_id = self.get_listener();
@@ -128,7 +128,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Get the state of the widget. This will panic if the state does not exist.
     pub fn get_state<V>(&mut self) -> State<V>
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.widget
             .state
@@ -139,7 +139,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     /// Set the state of the widget. This does not cause the initializer to be updated when its value is changed.
     pub fn set_state<V>(&mut self, value: V)
     where
-        V: StateValue + Clone,
+        V: Data + Clone,
     {
         self.widget.state.set(value)
     }
@@ -178,7 +178,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
 impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn computed<V, F>(&mut self, func: F) -> V
     where
-        V: Eq + PartialEq + Clone + StateValue,
+        V: Eq + PartialEq + Clone + Data,
         F: Fn(&mut WidgetContext<'ui, '_>) -> V + 'ui + 'static,
     {
         let handler_id = HandlerId::of::<F>(HandlerType::Computed);
@@ -218,7 +218,7 @@ impl<'ui, 'ctx> BuildContext<'ui, 'ctx> {
     pub fn use_callback<F, A>(&mut self, func: F) -> Callback<A>
     where
         F: Fn(&mut CallbackContext<'ui, '_>, &A) + 'ui + 'static,
-        A: StateValue + Clone,
+        A: Data + Clone,
     {
         let callback_id = CallbackId(self.get_widget(), TypeId::of::<F>());
 

@@ -15,11 +15,11 @@ pub use listener::ListenerId;
 
 use crate::engine::notify::Notifier;
 
-pub trait StateValue: std::fmt::Debug + Downcast {}
+pub trait Data: std::fmt::Debug + Downcast {}
 
-impl<T> StateValue for T where T: std::fmt::Debug + 'static {}
+impl<T> Data for T where T: std::fmt::Debug + 'static {}
 
-impl_downcast!(StateValue);
+impl_downcast!(Data);
 
 enum StateRef<V> {
     Owned(Option<V>),
@@ -28,7 +28,7 @@ enum StateRef<V> {
 
 impl<V> StateRef<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     fn get(&self) -> &V {
         match &self {
@@ -41,25 +41,25 @@ where
 /// Holds the state of a value, with notify-on-write.
 pub struct State<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     notifier: Rc<Notifier>,
     listeners: Rc<RefCell<FnvHashSet<ListenerId>>>,
 
     value: StateRef<V>,
 
-    updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
+    updated_value: Rc<RefCell<Option<Rc<dyn Data>>>>,
 }
 
 impl<V> State<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     pub(crate) fn new(
         notifier: Rc<Notifier>,
         listeners: Rc<RefCell<FnvHashSet<ListenerId>>>,
         value: Rc<V>,
-        updated_value: Rc<RefCell<Option<Rc<dyn StateValue>>>>,
+        updated_value: Rc<RefCell<Option<Rc<dyn Data>>>>,
     ) -> Self {
         Self {
             notifier,
@@ -78,7 +78,7 @@ where
 
 impl<V> Deref for State<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     type Target = V;
 
@@ -89,7 +89,7 @@ where
 
 impl<V> DerefMut for State<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let StateRef::Reference(value) = &mut self.value {
@@ -106,7 +106,7 @@ where
 
 impl<V> Drop for State<V>
 where
-    V: StateValue + Clone,
+    V: Data + Clone,
 {
     fn drop(&mut self) {
         if let StateRef::Owned(value) = &mut self.value {
@@ -117,7 +117,7 @@ where
             }
 
             updated_value
-                .replace(Rc::new(value.take().expect("state is gone")) as Rc<dyn StateValue>);
+                .replace(Rc::new(value.take().expect("state is gone")) as Rc<dyn Data>);
 
             self.notifier.notify_many(self.listeners.borrow().iter());
         }
@@ -126,7 +126,7 @@ where
 
 impl<V> std::fmt::Display for State<V>
 where
-    V: StateValue + Clone + std::fmt::Display,
+    V: Data + Clone + std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.value.get(), f)
@@ -135,7 +135,7 @@ where
 
 impl<V> std::fmt::Debug for State<V>
 where
-    V: StateValue + Clone + std::fmt::Debug,
+    V: Data + Clone + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self.value.get(), f)
