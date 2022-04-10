@@ -79,6 +79,10 @@ where
     }
 
     pub fn key(&self, key: Key, widget: &Widget) -> Widget {
+        if widget.get_key().is_some() {
+            panic!("cannot key a widget that has already been keyed");
+        }
+
         widget.with_key(match key {
             Key::Local(_) => WidgetKey(Some(self.widget_id), key),
             Key::Global(_) => WidgetKey(None, key),

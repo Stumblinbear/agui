@@ -227,7 +227,7 @@ impl<G> Global<G>
 where
     G: Data + Default,
 {
-    pub fn get(&self) -> Ref<G> {
+    pub fn borrow(&self) -> Ref<G> {
         let borrowed = self.value.borrow();
 
         Ref::map(borrowed, |x| {
@@ -241,7 +241,7 @@ where
     G: Data + Default,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.get().fmt(f)
+        self.value.borrow().fmt(f)
     }
 }
 
@@ -276,7 +276,7 @@ mod tests {
             let global = ctx.get_global::<TestGlobal>();
 
             ctx.set_state(move |value| {
-                *value += global.get().0;
+                *value += global.borrow().0;
             });
 
             BuildResult::None
@@ -287,34 +287,34 @@ mod tests {
     pub fn writing_globals() {
         let mut engine = Engine::new();
 
-        engine.add_plugin(GlobalPlugin::default().into());
+        engine.add_plugin(GlobalPlugin::default());
 
         let global = engine.get_global::<TestGlobal>();
 
-        assert_eq!(global.get().0, 0, "should init to default");
+        assert_eq!(global.borrow().0, 0, "should init to default");
 
-        engine.set_root(TestWidgetWriter::default().into());
+        engine.set_root(TestWidgetWriter::default());
 
         engine.update();
 
-        assert_eq!(global.get().0, 1, "should have updated to 1");
+        assert_eq!(global.borrow().0, 1, "should have updated to 1");
     }
 
     #[test]
     pub fn reading_globals() {
         let mut engine = Engine::new();
 
-        engine.add_plugin(GlobalPlugin::default().into());
+        engine.add_plugin(GlobalPlugin::default());
 
         let global = engine.get_global::<TestGlobal>();
 
-        assert_eq!(global.get().0, 0, "should init to default");
+        assert_eq!(global.borrow().0, 0, "should init to default");
 
         engine.set_global::<TestGlobal, _>(|value| {
             value.0 = 1;
         });
 
-        engine.set_root(TestWidgetReader::default().into());
+        engine.set_root(TestWidgetReader::default());
 
         engine.update();
 
@@ -332,23 +332,20 @@ mod tests {
     pub fn reacting_to_globals() {
         let mut engine = Engine::new();
 
-        engine.add_plugin(GlobalPlugin::default().into());
+        engine.add_plugin(GlobalPlugin::default());
 
         let global = engine.get_global::<TestGlobal>();
 
-        assert_eq!(global.get().0, 0, "should init to default");
+        assert_eq!(global.borrow().0, 0, "should init to default");
 
-        engine.set_root(
-            Column {
-                children: vec![
-                    // Put the reader first so the writer will update the global
-                    TestWidgetReader::default().into(),
-                    TestWidgetWriter::default().into(),
-                ],
-                ..Default::default()
-            }
-            .into(),
-        );
+        engine.set_root(Column {
+            children: vec![
+                // Put the reader first so the writer will update the global
+                TestWidgetReader::default().into(),
+                TestWidgetWriter::default().into(),
+            ],
+            ..Default::default()
+        });
 
         engine.update();
 

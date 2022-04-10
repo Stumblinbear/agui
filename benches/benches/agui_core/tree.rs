@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use agui::{tree::Tree, widget::WidgetId};
+use agui::{engine::tree::Tree, widget::WidgetId};
 
 fn tree_ops(c: &mut Criterion) {
     c.bench_function("add to tree", |b| {

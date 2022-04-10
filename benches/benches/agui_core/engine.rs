@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use agui::{engine::Engine, widget::WidgetRef, widgets::primitives::Column};
+use agui::{engine::Engine, widgets::primitives::Column};
 
 fn engine_ops(c: &mut Criterion) {
     c.bench_function("add to engine", |b| {
@@ -12,7 +12,7 @@ fn engine_ops(c: &mut Criterion) {
                     column.children.push(Column::default().into());
                 }
 
-                (Engine::new(), WidgetRef::new(column))
+                (Engine::new(), column)
             },
             |(mut engine, widget)| {
                 engine.set_root(widget);
@@ -33,14 +33,14 @@ fn engine_ops(c: &mut Criterion) {
 
                 let mut engine = Engine::new();
 
-                engine.set_root(WidgetRef::new(column));
+                engine.set_root(column);
 
                 engine.update();
 
                 engine
             },
             |mut engine| {
-                engine.set_root(WidgetRef::None);
+                engine.remove_root();
 
                 engine.update();
             },

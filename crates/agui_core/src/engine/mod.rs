@@ -84,7 +84,7 @@ impl Engine {
     /// # Panics
     ///
     /// Will panic if you attempt to add a plugin a second time.
-    pub fn add_plugin<P>(&mut self, plugin: PluginNode<P>)
+    pub fn add_plugin<P>(&mut self, plugin: P)
     where
         P: EnginePlugin,
     {
@@ -93,6 +93,8 @@ impl Engine {
         if self.plugins.contains_key(&plugin_id) {
             panic!("plugin already initialized");
         }
+
+        let plugin: PluginNode<P> = plugin.into();
 
         self.plugins.insert(plugin_id, Plugin::new(plugin));
     }
@@ -136,18 +138,24 @@ impl Engine {
         self.tree.get_root()
     }
 
-    /// Queues the widget for addition into the tree
-    pub fn set_root<W>(&mut self, widget: WidgetNode<W>)
-    where
-        W: WidgetBuilder,
-    {
-        // Check if we already have a root node, and queue it for removal if so
+    /// Queues the root widget for removal from tree
+    pub fn remove_root(&mut self) {
         if let Some(root_id) = self.tree.get_root() {
             self.modifications.push(Modify::Destroy(root_id));
         }
+    }
+
+    /// Queues the widget for addition into the tree
+    pub fn set_root<W>(&mut self, widget: W)
+    where
+        W: WidgetBuilder,
+    {
+        self.remove_root();
+
+        let node: WidgetNode<W> = widget.into();
 
         self.modifications
-            .push(Modify::Spawn(None, Widget::new(None, widget)));
+            .push(Modify::Spawn(None, Widget::new(None, node)));
     }
 
     /// Check if a widget exists in the tree.
@@ -495,7 +503,7 @@ mod tests {
     pub fn adding_a_root_widget() {
         let mut engine = Engine::new();
 
-        engine.set_root(TestWidget::default().into());
+        engine.set_root(TestWidget::default());
 
         assert_eq!(engine.get_root(), None, "should not have added the widget");
 
