@@ -641,7 +641,7 @@ mod tests {
     use super::Tree;
 
     #[test]
-    fn test_hierarchy() {
+    fn hierarchy() {
         let mut tree: Tree<WidgetId, usize> = Tree::default();
 
         let root_id = tree.add(None, 0);
@@ -731,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn test_downward_iter() {
+    fn downward_iter() {
         let mut tree: Tree<WidgetId, usize> = Tree::default();
 
         let root_id = tree.add(None, 0);
@@ -825,7 +825,7 @@ mod tests {
     }
 
     #[test]
-    fn test_upward_iter() {
+    fn upward_iter() {
         let mut tree: Tree<WidgetId, usize> = Tree::default();
 
         let root_id = tree.add(None, 0);

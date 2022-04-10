@@ -55,20 +55,16 @@ mod tests {
     }
 
     #[test]
-    pub fn test_builds() {
+    pub fn widget_build_can_set_state() {
         let mut engine = Engine::new();
 
         engine.set_root(TestWidget::default().into());
 
-        assert_eq!(engine.get_root(), None, "should not have added the widget");
-
         engine.update();
-
-        let widget_id = engine.get_root().expect("failed to get root widget");
 
         assert_eq!(
             *engine
-                .get_widget::<TestWidget>(widget_id)
+                .get_widget::<TestWidget>(engine.get_root().unwrap())
                 .unwrap()
                 .get_state(),
             1,
@@ -79,7 +75,7 @@ mod tests {
 
         assert_eq!(
             *engine
-                .get_widget::<TestWidget>(widget_id)
+                .get_widget::<TestWidget>(engine.get_root().unwrap())
                 .unwrap()
                 .get_state(),
             1,

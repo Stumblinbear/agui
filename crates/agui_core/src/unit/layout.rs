@@ -473,7 +473,7 @@ mod tests {
     use super::Bounds;
 
     #[test]
-    fn test_normalize() {
+    fn normalize_bounds() {
         let bounds = Bounds {
             top: 0.1,
             right: 0.2,

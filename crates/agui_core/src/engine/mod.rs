@@ -492,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_root_add() {
+    pub fn adding_a_root_widget() {
         let mut engine = Engine::new();
 
         engine.set_root(TestWidget::default().into());
