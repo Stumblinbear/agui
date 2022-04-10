@@ -1,27 +1,21 @@
-use agui_core::{
-    unit::{Layout, Margin, Sizing},
-    widget::{BuildResult, WidgetBuilder, BuildContext, WidgetRef},
-};
-use agui_macros::Widget;
+use agui_core::prelude::*;
 
-#[derive(Default, Widget)]
+#[derive(Debug)]
 pub struct Padding {
     pub padding: Margin,
 
-    pub child: WidgetRef,
+    pub child: Widget,
 }
 
-impl WidgetBuilder for Padding {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
-        ctx.set_layout(
-            Layout {
-                sizing: Sizing::Fill,
-                
-                margin: self.padding,
-                
-                ..Layout::default()
-            }
-        );
+impl StatelessWidget for Padding {
+    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+        ctx.set_layout(Layout {
+            sizing: Sizing::Fill,
+
+            margin: self.padding,
+
+            ..Layout::default()
+        });
 
         (&self.child).into()
     }

@@ -1,20 +1,16 @@
-use agui_core::{
-    unit::{Layout, LayoutType, Units},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
-};
-use agui_macros::Widget;
+use agui_core::prelude::*;
 
-#[derive(Default, Widget)]
+#[derive(Debug, Default)]
 pub struct Column {
     pub layout: Layout,
 
     pub spacing: Units,
 
-    pub children: Vec<WidgetRef>,
+    pub children: Vec<Widget>,
 }
 
-impl WidgetBuilder for Column {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+impl StatelessWidget for Column {
+    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
         ctx.set_layout_type(LayoutType::Column {
             spacing: self.spacing,
         });

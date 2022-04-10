@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    font::FontStyle,
-    unit::{Bounds, Rect, Shape},
-};
+use crate::unit::{Bounds, FontStyle, Rect, Shape};
 
 use super::{paint::Brush, texture::TextureId};
 

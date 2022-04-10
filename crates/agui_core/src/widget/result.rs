@@ -1,4 +1,6 @@
-use super::{Widget, WidgetRef};
+use crate::engine::widget::WidgetBuilder;
+
+use super::Widget;
 
 /// Encapsulates the result of a widget `build()` method.
 #[non_exhaustive]
@@ -7,7 +9,7 @@ pub enum BuildResult {
     None,
 
     /// The widget contains children.
-    Some(Vec<WidgetRef>),
+    Some(Vec<Widget>),
 
     /// The widget has failed to build properly, and should construction should halt.
     ///
@@ -19,27 +21,39 @@ pub enum BuildResult {
 
 impl<W> From<W> for BuildResult
 where
-    W: Widget,
+    W: WidgetBuilder,
 {
     fn from(widget: W) -> Self {
-        Self::Some(vec![WidgetRef::new(widget)])
+        Self::Some(vec![Widget::from(widget)])
     }
 }
 
-impl From<WidgetRef> for BuildResult {
-    fn from(widget: WidgetRef) -> Self {
+impl From<Widget> for BuildResult {
+    fn from(widget: Widget) -> Self {
         Self::Some(vec![widget])
     }
 }
 
-impl From<&WidgetRef> for BuildResult {
-    fn from(widget: &WidgetRef) -> Self {
-        Self::Some(vec![WidgetRef::clone(widget)])
+impl From<&Widget> for BuildResult {
+    fn from(widget: &Widget) -> Self {
+        widget.clone().into()
     }
 }
 
-impl From<Vec<WidgetRef>> for BuildResult {
-    fn from(widgets: Vec<WidgetRef>) -> Self {
+impl From<Option<Widget>> for BuildResult {
+    fn from(widget: Option<Widget>) -> Self {
+        widget.map_or(Self::None, |widget| Self::Some(vec![widget]))
+    }
+}
+
+impl From<&Option<Widget>> for BuildResult {
+    fn from(widget: &Option<Widget>) -> Self {
+        widget.clone().into()
+    }
+}
+
+impl From<Vec<Widget>> for BuildResult {
+    fn from(widgets: Vec<Widget>) -> Self {
         if widgets.is_empty() {
             Self::None
         } else {
@@ -48,12 +62,8 @@ impl From<Vec<WidgetRef>> for BuildResult {
     }
 }
 
-impl From<&Vec<WidgetRef>> for BuildResult {
-    fn from(widgets: &Vec<WidgetRef>) -> Self {
-        if widgets.is_empty() {
-            Self::None
-        } else {
-            Self::Some(widgets.clone())
-        }
+impl From<&Vec<Widget>> for BuildResult {
+    fn from(widget: &Vec<Widget>) -> Self {
+        widget.clone().into()
     }
 }

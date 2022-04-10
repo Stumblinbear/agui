@@ -1,13 +1,13 @@
 use super::Canvas;
 
-pub struct RenderFn<'ui> {
-    func: Box<dyn Fn(&mut Canvas) + 'ui>,
+pub struct RenderFn {
+    func: Box<dyn Fn(&mut Canvas)>,
 }
 
-impl<'ui> RenderFn<'ui> {
+impl RenderFn {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&mut Canvas) + 'ui,
+        F: Fn(&mut Canvas) + 'static,
     {
         Self {
             func: Box::new(func),

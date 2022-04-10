@@ -35,7 +35,7 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
-    let num = ctx.use_state(|| 0);
+    let num = ctx.use_state::<i32>();
 
     let on_pressed = ctx.use_callback(|ctx, ()| {
         let mut num = ctx.get_state::<i32>();

@@ -3,13 +3,14 @@ use std::collections::HashSet;
 use agui_core::{
     engine::event::WidgetEvent,
     plugin::{EnginePlugin, PluginContext},
-    widget::{BuildContext, WidgetContext, WidgetId},
+    state::ContextState,
+    widget::{BuildContext, WidgetId},
 };
 
 use crate::state::mouse::Mouse;
 
 #[derive(Debug, Default, Clone)]
-pub struct HoveringPluginState {
+struct HoveringPluginState {
     pub widget_ids: HashSet<WidgetId>,
 }
 
@@ -28,7 +29,7 @@ impl EnginePlugin for HoveringPlugin {
     fn on_build(&self, _ctx: &mut PluginContext) {}
 
     fn on_layout(&self, ctx: &mut PluginContext) {
-        let mut hovering = ctx.init_global(HoveringPluginState::default);
+        let hovering = ctx.state(HoveringPluginState::default);
 
         if let Some(mouse) = ctx.try_use_global::<Mouse>() {
             match &mouse.pos {

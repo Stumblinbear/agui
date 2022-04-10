@@ -1,28 +1,22 @@
-use agui_core::{
-    unit::{Key, Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
-};
-use agui_macros::{build, Widget};
+use agui_core::prelude::*;
 
-use crate::state::window::WindowSize;
-
-#[derive(Default, Widget)]
+#[derive(Debug)]
 pub struct App {
-    pub child: WidgetRef,
+    pub child: Widget,
 }
 
-impl WidgetBuilder for App {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
-        let window_size = ctx.use_global(WindowSize::default);
+impl StatelessWidget for App {
+    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+        // let window_size = ctx.use_global::<WindowSize>();
 
-        ctx.set_layout(Layout {
-            sizing: Sizing::Axis {
-                width: Units::Pixels(window_size.width),
-                height: Units::Pixels(window_size.height),
-            },
-            ..Layout::default()
-        });
+        // ctx.set_layout(Layout {
+        //     sizing: Sizing::Axis {
+        //         width: Units::Pixels(window_size.width),
+        //         height: Units::Pixels(window_size.height),
+        //     },
+        //     ..Layout::default()
+        // });
 
-        ctx.key(Key::single(), (&self.child).into()).into()
+        ctx.key(Key::single(), &self.child).into()
     }
 }

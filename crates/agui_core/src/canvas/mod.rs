@@ -2,10 +2,7 @@ use std::borrow::Cow;
 
 use lyon::path::Path;
 
-use crate::{
-    font::FontStyle,
-    unit::{Rect, Shape, Size},
-};
+use crate::unit::{FontStyle, Rect, Shape, Size};
 
 use self::{
     command::CanvasCommand,

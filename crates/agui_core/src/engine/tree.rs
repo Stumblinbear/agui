@@ -30,7 +30,7 @@ where
     K: Key,
 {
     pub depth: usize,
-    pub value: Option<V>,
+    pub value: V,
 
     pub parent: Option<K>,
     pub children: Vec<K>,
@@ -43,7 +43,7 @@ where
     type Target = V;
 
     fn deref(&self) -> &Self::Target {
-        self.value.as_ref().expect("currently in use")
+        &self.value
     }
 }
 
@@ -52,7 +52,7 @@ where
     K: Key,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.value.as_mut().expect("currently in use")
+        &mut self.value
     }
 }
 
@@ -72,7 +72,7 @@ where
     pub fn add(&mut self, parent_id: Option<K>, value: V) -> K {
         let node_id = self.nodes.insert(TreeNode {
             depth: 0,
-            value: Some(value),
+            value,
             parent: parent_id,
             children: Vec::new(),
         });
@@ -181,18 +181,12 @@ where
         self.nodes.get(node_id)
     }
 
-    pub(crate) fn get_node_mut(&mut self, node_id: K) -> Option<&mut TreeNode<K, V>> {
-        self.nodes.get_mut(node_id)
-    }
-
     pub fn get(&self, node_id: K) -> Option<&V> {
-        self.nodes.get(node_id).and_then(|node| node.value.as_ref())
+        self.nodes.get(node_id).map(|node| &node.value)
     }
 
     pub(crate) fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.nodes
-            .get_mut(node_id)
-            .and_then(|node| node.value.as_mut())
+        self.nodes.get_mut(node_id).map(|node| &mut node.value)
     }
 
     pub fn iter(&self) -> DownwardIterator<K, V> {

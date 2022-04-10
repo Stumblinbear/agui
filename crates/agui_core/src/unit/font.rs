@@ -101,7 +101,7 @@ impl FontStyle {
     }
 
     pub fn get_glyphs(&self, mut rect: Rect, text: &str) -> Vec<SectionGlyph> {
-        if let Some(font) = self.font.get() {
+        self.font.get().map_or_else(Vec::default, |font| {
             let glyphs_layout = GlyphLayout::Wrap {
                 line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
                 h_align: match self.h_align {
@@ -144,9 +144,7 @@ impl FontStyle {
                     font_id: GlyphFontId(0),
                 }],
             )
-        } else {
-            Vec::default()
-        }
+        })
     }
 }
 

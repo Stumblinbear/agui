@@ -1,19 +1,14 @@
-use agui_core::{
-    canvas::paint::Paint,
-    unit::Shape,
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
-};
-use agui_macros::Widget;
+use agui_core::prelude::*;
 
-#[derive(Default, Widget)]
+#[derive(Debug, Default)]
 pub struct Clip {
     pub anti_alias: bool,
     pub shape: Shape,
-    pub child: WidgetRef,
+    pub child: Option<Widget>,
 }
 
-impl WidgetBuilder for Clip {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+impl StatelessWidget for Clip {
+    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
         let anti_alias = self.anti_alias;
         let shape = self.shape.clone();
 

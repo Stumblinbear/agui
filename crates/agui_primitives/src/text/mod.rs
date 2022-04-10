@@ -1,24 +1,18 @@
 use std::borrow::Cow;
 
-use agui_core::{
-    canvas::paint::Paint,
-    font::FontStyle,
-    unit::{Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, WidgetBuilder},
-};
-use agui_macros::Widget;
+use agui_core::prelude::*;
 
 pub mod edit;
 
-#[derive(Default, Widget)]
+#[derive(Debug, Default)]
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
     pub multiline: bool,
 }
 
-impl WidgetBuilder for Text {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+impl StatelessWidget for Text {
+    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: if self.multiline {
                 Sizing::Fill

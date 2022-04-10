@@ -1,80 +1,90 @@
 use std::{
+    cell::Ref,
     fs::File,
     io::{self, BufReader, Read},
     rc::Rc,
 };
 
+use downcast_rs::{impl_downcast, Downcast};
 use fnv::{FnvHashMap, FnvHashSet};
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
 
 use crate::{
-    font::Font,
-    plugin::{EnginePlugin, PluginContext, PluginId},
-    state::{map::StateMap, ListenerId, State, Data},
-    tree::Tree,
-    unit::{Key, Units},
-    widget::{
-        BuildContext, BuildResult, CallbackContext, HandlerType, Widget, WidgetContext, WidgetId,
-        WidgetRef,
-    },
+    plugin::{EnginePlugin, Plugin, PluginId},
+    unit::{Font, Units},
+    widget::{BuildResult, Widget, WidgetId, WidgetKey},
 };
 
 mod cache;
-pub mod debug;
 pub mod event;
-pub mod node;
 pub mod notify;
+pub mod plugin;
+pub mod tree;
+pub mod widget;
 
-use self::{cache::LayoutCache, event::WidgetEvent, node::WidgetNode, notify::Notifier};
+use self::{
+    cache::LayoutCache,
+    event::WidgetEvent,
+    notify::Notifier,
+    plugin::PluginNode,
+    tree::Tree,
+    widget::{WidgetBuilder, WidgetNode},
+};
+
+pub trait Data: std::fmt::Debug + Downcast {}
+
+impl<T> Data for T where T: std::fmt::Debug + Downcast {}
+
+impl_downcast!(Data);
 
 /// Handles the entirety of the agui lifecycle.
-pub struct Engine<'ui> {
-    plugins: FnvHashMap<PluginId, Box<dyn EnginePlugin>>,
-
-    fonts: Vec<FontArc>,
-
-    tree: Tree<WidgetId, WidgetNode<'ui>>,
-
-    global: StateMap,
-    cache: LayoutCache<WidgetId>,
+pub struct Engine {
+    plugins: FnvHashMap<PluginId, Plugin>,
+    tree: Tree<WidgetId, Widget>,
+    dirty: FnvHashSet<WidgetId>,
 
     notifier: Rc<Notifier>,
+
+    fonts: Vec<FontArc>,
+    cache: LayoutCache<WidgetId>,
 
     modifications: Vec<Modify>,
 }
 
-impl<'ui> Engine<'ui> {
+impl Engine {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let notifier = Rc::default();
 
         Self {
             plugins: FnvHashMap::default(),
-
-            fonts: Vec::default(),
-
             tree: Tree::default(),
-
-            global: StateMap::new(Rc::clone(&notifier)),
-            cache: LayoutCache::default(),
+            dirty: FnvHashSet::default(),
 
             notifier,
 
+            fonts: Vec::default(),
+            cache: LayoutCache::default(),
+
             modifications: Vec::default(),
         }
+    }
+
+    pub fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
+        &mut self.plugins
     }
 
     pub fn get_fonts(&self) -> &[FontArc] {
         &self.fonts
     }
 
-    /// Initializes an engine plugin.
+    /// Adds an engine plugin.
     ///
     /// # Panics
     ///
-    /// Will panic if you attempt to initialize a plugin a second time.
-    pub fn init_plugin<P>(&mut self, plugin: P)
+    /// Will panic if you attempt to add a plugin a second time.
+    pub fn add_plugin<P>(&mut self, plugin: PluginNode<P>)
     where
         P: EnginePlugin,
     {
@@ -84,9 +94,7 @@ impl<'ui> Engine<'ui> {
             panic!("plugin already initialized");
         }
 
-        self.plugins.insert(plugin_id, Box::new(plugin));
-
-        self.notifier.notify(plugin_id.into());
+        self.plugins.insert(plugin_id, Plugin::new(plugin));
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
@@ -119,7 +127,7 @@ impl<'ui> Engine<'ui> {
     }
 
     /// Get the widget build context.
-    pub fn get_tree(&self) -> &Tree<WidgetId, WidgetNode<'ui>> {
+    pub fn get_tree(&self) -> &Tree<WidgetId, Widget> {
         &self.tree
     }
 
@@ -129,15 +137,17 @@ impl<'ui> Engine<'ui> {
     }
 
     /// Queues the widget for addition into the tree
-    pub fn set_root(&mut self, widget: WidgetRef) {
+    pub fn set_root<W>(&mut self, widget: WidgetNode<W>)
+    where
+        W: WidgetBuilder,
+    {
         // Check if we already have a root node, and queue it for removal if so
         if let Some(root_id) = self.tree.get_root() {
             self.modifications.push(Modify::Destroy(root_id));
         }
 
-        if widget.is_valid() {
-            self.modifications.push(Modify::Spawn(None, widget));
-        }
+        self.modifications
+            .push(Modify::Spawn(None, Widget::new(None, widget)));
     }
 
     /// Check if a widget exists in the tree.
@@ -145,73 +155,22 @@ impl<'ui> Engine<'ui> {
         self.tree.contains(widget_id)
     }
 
-    /// Fetch a widget from the tree. Will be `None` if it doesn't exist.
-    pub fn try_get(&self, widget_id: WidgetId) -> Option<WidgetRef> {
-        self.tree
-            .get(widget_id)
-            .map(|node| WidgetRef::clone(&node.widget))
-    }
-
     /// Fetch a widget from the tree.
-    ///
-    /// # Panics
-    ///
-    /// This will panic if the widget is not found.
-    pub fn get(&self, widget_id: WidgetId) -> WidgetRef {
-        self.try_get(widget_id).expect("widget does not exist")
-    }
-
-    /// Fetch a widget as the specified type. If it doesn't exist, or it is not the requested type, this
-    /// will return `None`.
-    pub fn try_get_as<W>(&self, widget_id: WidgetId) -> Option<Rc<W>>
+    pub fn get_widget<W>(&self, widget_id: WidgetId) -> Option<Ref<WidgetNode<W>>>
     where
-        W: Widget,
+        W: WidgetBuilder,
     {
-        self.try_get(widget_id)?.try_downcast_ref()
-    }
-
-    /// Fetch a widget as the specified type.
-    ///
-    /// # Panics
-    ///
-    /// This will panic if the widget is not found. If the widget is not the requested type, it will panic.
-    pub fn get_as<W>(&self, widget_id: WidgetId) -> Rc<W>
-    where
-        W: Widget,
-    {
-        self.get(widget_id).downcast_ref()
-    }
-
-    pub fn try_use_global<V>(&mut self) -> Option<State<V>>
-    where
-        V: Data + Clone,
-    {
-        self.global.try_get(None)
-    }
-
-    pub fn init_global<V, F>(&mut self, func: F) -> State<V>
-    where
-        V: Data + Clone,
-        F: FnOnce() -> V,
-    {
-        self.global.get_or(None, func)
+        self.tree.get(widget_id).and_then(|widget| widget.get_as())
     }
 
     /// Update the UI tree.
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
         // Update all plugins, as they may cause changes to state
-        for (plugin_id, plugin) in &self.plugins {
-            plugin.on_update(&mut PluginContext {
-                plugin_id: *plugin_id,
-
-                tree: &self.tree,
-                global: &mut self.global,
-
-                notifier: Rc::clone(&self.notifier),
-            });
+        for plugin in self.plugins.values_mut() {
+            plugin.on_before_update(&self.tree, &mut self.dirty);
         }
 
-        if self.modifications.is_empty() && self.notifier.is_empty() {
+        if self.modifications.is_empty() && self.dirty.is_empty() {
             return None;
         }
 
@@ -229,14 +188,18 @@ impl<'ui> Engine<'ui> {
 
                 self.flush_callbacks();
 
-                if self.modifications.is_empty() {
+                for plugin in self.plugins.values_mut() {
+                    plugin.on_update(&self.tree, &mut self.dirty);
+                }
+
+                if self.modifications.is_empty() && self.dirty.is_empty() {
                     break;
                 }
             }
 
             widgets_layout.extend(self.flush_layout());
 
-            if self.modifications.is_empty() {
+            if self.modifications.is_empty() && self.dirty.is_empty() {
                 break;
             }
         }
@@ -246,7 +209,7 @@ impl<'ui> Engine<'ui> {
                 .into_iter()
                 .filter(|widget_id| self.contains(*widget_id))
                 .map(|widget_id| {
-                    let type_id = self.get(widget_id).get_type_id();
+                    let type_id = self.tree.get(widget_id).unwrap().get().get_type_id();
 
                     WidgetEvent::Layout { type_id, widget_id }
                 }),
@@ -254,6 +217,10 @@ impl<'ui> Engine<'ui> {
 
         if widget_events.is_empty() {
             return None;
+        }
+
+        for plugin in self.plugins.values_mut() {
+            plugin.on_events(&self.tree, &mut self.dirty, &widget_events);
         }
 
         Some(widget_events)
@@ -270,7 +237,9 @@ impl<'ui> Engine<'ui> {
         let mut removed_keyed = FnvHashMap::default();
 
         while !self.modifications.is_empty() {
-            match self.modifications.remove(0) {
+            let modification = self.modifications.remove(0);
+
+            match modification {
                 Modify::Spawn(parent_id, widget) => {
                     self.process_spawn(&mut widget_events, &mut removed_keyed, parent_id, widget);
                 }
@@ -281,13 +250,13 @@ impl<'ui> Engine<'ui> {
 
                 Modify::Destroy(widget_id) => {
                     // If we're about to remove a keyed widget, store it instead
-                    if let WidgetRef::Keyed { owner_id, key, .. } = self
+                    if let Some(key) = self
                         .tree
                         .get(widget_id)
                         .expect("cannot remove a widget that does not exist")
-                        .widget
+                        .get_key()
                     {
-                        removed_keyed.insert((owner_id, key), widget_id);
+                        removed_keyed.insert(key, widget_id);
                     } else {
                         self.process_destroy(&mut widget_events, widget_id);
                     }
@@ -300,123 +269,17 @@ impl<'ui> Engine<'ui> {
             self.process_destroy(&mut widget_events, widget_id);
         }
 
-        for (plugin_id, plugin) in &self.plugins {
-            plugin.on_events(
-                &mut PluginContext {
-                    plugin_id: *plugin_id,
-
-                    tree: &self.tree,
-                    global: &mut self.global,
-
-                    notifier: Rc::clone(&self.notifier),
-                },
-                &widget_events,
-            );
-        }
-
         widget_events
     }
 
     pub fn flush_changes(&mut self) {
-        let changed = {
-            self.notifier
-                .changed
-                .borrow_mut()
-                .drain()
-                .collect::<Vec<_>>()
-        };
+        let changed = self.dirty.drain().collect::<Vec<_>>();
 
         if changed.is_empty() {
             return;
         }
 
-        let mut dirty_widgets = FnvHashSet::default();
-
-        for listener_id in changed {
-            match listener_id {
-                ListenerId::Widget(widget_id) => {
-                    dirty_widgets.insert(widget_id);
-                }
-
-                ListenerId::Handler(widget_id, handler_id) => {
-                    let mut node = self
-                        .tree
-                        .get_node_mut(widget_id)
-                        .expect("invalid handler function widget")
-                        .value
-                        .take()
-                        .expect("widget is already in use");
-
-                    match handler_id.get_type() {
-                        HandlerType::Effect => {
-                            let effect_func = node
-                                .effect_funcs
-                                .remove(&handler_id)
-                                .expect("invalid effect function listener");
-
-                            effect_func.call(&mut WidgetContext {
-                                widget_id,
-                                handler_id,
-
-                                tree: &mut self.tree,
-                                global: &mut self.global,
-
-                                widget: &mut node,
-
-                                notifier: Rc::clone(&self.notifier),
-                            });
-
-                            node.effect_funcs.insert(handler_id, effect_func);
-                        }
-
-                        HandlerType::Computed => {
-                            let mut computed_func = node
-                                .computed_funcs
-                                .remove(&handler_id)
-                                .expect("invalid computed function listener");
-
-                            if computed_func.call(&mut WidgetContext {
-                                widget_id,
-                                handler_id,
-
-                                tree: &mut self.tree,
-                                global: &mut self.global,
-
-                                widget: &mut node,
-
-                                notifier: Rc::clone(&self.notifier),
-                            }) {
-                                dirty_widgets.insert(widget_id);
-                            }
-
-                            node.computed_funcs.insert(handler_id, computed_func);
-                        }
-                    }
-
-                    self.tree
-                        .get_node_mut(widget_id)
-                        .expect("widget destroyed while in use by computed function")
-                        .value
-                        .replace(node);
-                }
-
-                ListenerId::Plugin(plugin_id) => {
-                    self.plugins
-                        .get(&plugin_id)
-                        .expect("cannot update a plugin that does not exist")
-                        .on_build(&mut PluginContext {
-                            plugin_id,
-
-                            tree: &self.tree,
-                            global: &mut self.global,
-
-                            notifier: Rc::clone(&self.notifier),
-                        });
-                }
-            }
-        }
-
-        for widget_id in self.tree.filter_topmost(dirty_widgets.into_iter()) {
+        for widget_id in self.tree.filter_topmost(changed.into_iter()) {
             self.modifications.push(Modify::Rebuild(widget_id));
         }
     }
@@ -429,52 +292,19 @@ impl<'ui> Engine<'ui> {
         }
 
         for (callback_id, args) in callbacks {
-            let widget_id = callback_id.0;
-
-            let mut node = self
+            let widget = self
                 .tree
-                .get_node_mut(widget_id)
-                .expect("invalid callback function widget")
-                .value
-                .take()
-                .expect("widget is already in use");
+                .get(callback_id.0)
+                .expect("cannot call a callback on a widget that does not exist");
 
-            let callback_func = node
-                .callback_funcs
-                .remove(&callback_id)
-                .expect("invalid callback function listener");
+            let mut widget_impl = widget.get_mut();
 
-            callback_func.call(
-                &mut CallbackContext {
-                    widget_id,
-
-                    tree: &mut self.tree,
-                    global: &mut self.global,
-
-                    widget: &mut node,
-
-                    notifier: Rc::clone(&self.notifier),
-                },
-                args,
-            );
-
-            node.callback_funcs.insert(callback_id, callback_func);
-
-            self.tree
-                .get_node_mut(widget_id)
-                .expect("widget destroyed while in use by callback")
-                .value
-                .replace(node);
+            widget_impl.call(callback_id, args);
         }
     }
 
     pub fn flush_layout(&mut self) -> FnvHashSet<WidgetId> {
         morphorm::layout(&mut self.cache, &self.tree, &self.tree);
-
-        // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
-        let mut newly_changed = self.cache.take_changed();
-
-        newly_changed.retain(|widget_id| self.tree.contains(*widget_id));
 
         // Workaround for morphorm ignoring root sizing
         let mut root_changed = false;
@@ -483,40 +313,48 @@ impl<'ui> Engine<'ui> {
             let node = self
                 .tree
                 .get(widget_id)
-                .expect("tree has a root node, but it doesn't exist");
+                .expect("tree has a root node, but it doesn't exist")
+                .get();
 
-            if let Some(Units::Pixels(px)) = node.layout.position.get_left() {
-                if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
+            if let Some(layout) = node.get_layout() {
+                if let Some(Units::Pixels(px)) = layout.position.get_left() {
+                    if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
 
-                    self.cache.set_posx(widget_id, px);
+                        self.cache.set_posx(widget_id, px);
+                    }
                 }
-            }
 
-            if let Some(Units::Pixels(px)) = node.layout.position.get_top() {
-                if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
+                if let Some(Units::Pixels(px)) = layout.position.get_top() {
+                    if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
 
-                    self.cache.set_posy(widget_id, px);
+                        self.cache.set_posy(widget_id, px);
+                    }
                 }
-            }
 
-            if let Units::Pixels(px) = node.layout.sizing.get_width() {
-                if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
+                if let Units::Pixels(px) = layout.sizing.get_width() {
+                    if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
 
-                    self.cache.set_width(widget_id, px);
+                        self.cache.set_width(widget_id, px);
+                    }
                 }
-            }
 
-            if let Units::Pixels(px) = node.layout.sizing.get_height() {
-                if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
+                if let Units::Pixels(px) = layout.sizing.get_height() {
+                    if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
+                        root_changed = true;
 
-                    self.cache.set_height(widget_id, px);
+                        self.cache.set_height(widget_id, px);
+                    }
                 }
             }
         }
+
+        // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
+        let mut newly_changed = self.cache.take_changed();
+
+        newly_changed.retain(|widget_id| self.tree.contains(*widget_id));
 
         if root_changed {
             if let Some(widget_id) = self.tree.get_root() {
@@ -526,27 +364,17 @@ impl<'ui> Engine<'ui> {
 
         // Update the widget rects in the context
         for widget_id in &newly_changed {
-            let node = self
+            let mut widget = self
                 .tree
                 .get_mut(*widget_id)
-                .expect("newly changed widget does not exist in the tree");
+                .expect("newly changed widget does not exist in the tree")
+                .get_mut();
 
-            let rect = self.cache.get_rect(widget_id).copied();
-
-            if node.rect != rect {
-                node.rect = rect;
-            }
+            widget.set_rect(self.cache.get_rect(widget_id).copied());
         }
 
-        for (plugin_id, plugin) in &self.plugins {
-            plugin.on_layout(&mut PluginContext {
-                plugin_id: *plugin_id,
-
-                tree: &self.tree,
-                global: &mut self.global,
-
-                notifier: Rc::clone(&self.notifier),
-            });
+        for plugin in self.plugins.values_mut() {
+            plugin.on_layout(&self.tree, &mut self.dirty);
         }
 
         newly_changed
@@ -555,17 +383,17 @@ impl<'ui> Engine<'ui> {
     fn process_spawn(
         &mut self,
         widget_events: &mut Vec<WidgetEvent>,
-        removed_keyed: &mut FnvHashMap<(Option<WidgetId>, Key), WidgetId>,
+        removed_keyed: &mut FnvHashMap<WidgetKey, WidgetId>,
         parent_id: Option<WidgetId>,
-        widget: WidgetRef,
+        widget: Widget,
     ) {
         if parent_id.is_some() && !self.contains(parent_id.unwrap()) {
             panic!("cannot add a widget to a nonexistent parent")
         }
 
         // Check if it's a keyed widget
-        if let WidgetRef::Keyed { owner_id, key, .. } = widget {
-            if let Some(keyed_id) = removed_keyed.remove(&(owner_id, key)) {
+        if let Some(key) = widget.get_key() {
+            if let Some(keyed_id) = removed_keyed.remove(&key) {
                 // Reparent the (removed) keyed widget to the new widget
                 self.tree.reparent(parent_id, keyed_id);
 
@@ -573,12 +401,9 @@ impl<'ui> Engine<'ui> {
             }
         }
 
-        let type_id = widget.get_type_id();
+        let type_id = widget.get().get_type_id();
 
-        let widget_id = self.tree.add(
-            parent_id,
-            WidgetNode::new(Rc::clone(&self.notifier), widget),
-        );
+        let widget_id = self.tree.add(parent_id, widget);
 
         widget_events.push(WidgetEvent::Spawned { type_id, widget_id });
 
@@ -598,251 +423,88 @@ impl<'ui> Engine<'ui> {
             self.modifications.push(Modify::Destroy(*child_id));
         }
 
-        let tree_node = self
+        let widget = self
             .tree
-            .get_node_mut(widget_id)
+            .get(widget_id)
             .expect("widget destroyed before rebuild");
 
-        let mut node = tree_node.value.take().expect("widget is already in use");
+        {
+            let mut widget_impl = widget.get_mut();
 
-        widget_events.push(WidgetEvent::Rebuilt {
-            type_id: node.widget.get_type_id(),
-            widget_id,
-        });
-
-        let result = node.widget.try_get().map_or(BuildResult::None, |widget| {
-            widget.build(&mut BuildContext {
+            widget_events.push(WidgetEvent::Rebuilt {
+                type_id: widget_impl.get_type_id(),
                 widget_id,
-                widget: &mut node,
+            });
 
-                tree: &mut self.tree,
-                global: &mut self.global,
+            let result =
+                widget_impl.build(&mut self.plugins, &self.tree, &mut self.dirty, widget_id);
 
-                notifier: Rc::clone(&self.notifier),
-            })
-        });
-
-        match result {
-            BuildResult::None => {}
-            BuildResult::Some(children) => {
-                for child in children {
-                    if !child.is_valid() {
-                        continue;
+            match result {
+                BuildResult::None => {}
+                BuildResult::Some(children) => {
+                    for child in children {
+                        self.modifications
+                            .push(Modify::Spawn(Some(widget_id), child));
                     }
-
-                    self.modifications
-                        .push(Modify::Spawn(Some(widget_id), child));
                 }
-            }
-            BuildResult::Err(err) => panic!("build failed: {}", err),
-        };
-
-        self.tree
-            .get_node_mut(widget_id)
-            .expect("widget destroyed while in use")
-            .value
-            .replace(node);
+                BuildResult::Err(err) => panic!("build failed: {}", err),
+            };
+        }
     }
 
     fn process_destroy(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
         let tree_node = self.tree.remove(widget_id);
 
         widget_events.push(WidgetEvent::Destroyed {
-            type_id: tree_node.widget.get_type_id(),
+            type_id: tree_node.get().get_type_id(),
             widget_id,
         });
 
         self.cache.remove(&widget_id);
-
-        let mut listeners = vec![ListenerId::Widget(widget_id)];
-
-        listeners.extend(
-            tree_node
-                .effect_funcs
-                .keys()
-                .map(|handler_id| ListenerId::Handler(widget_id, *handler_id)),
-        );
-
-        listeners.extend(
-            tree_node
-                .computed_funcs
-                .keys()
-                .map(|handler_id| ListenerId::Handler(widget_id, *handler_id)),
-        );
-
-        self.remove_listeners(&listeners);
 
         // Add the child widgets to the removal queue
         for child_id in tree_node.children {
             self.modifications.push(Modify::Destroy(child_id));
         }
     }
-
-    fn remove_listeners(&mut self, listeners: &[ListenerId]) {
-        for listener_id in listeners {
-            self.global.remove_listeners(listener_id);
-
-            self.notifier.changed.borrow_mut().remove(listener_id);
-        }
-
-        for (_, node) in self.tree.iter_mut() {
-            for listener_id in listeners {
-                node.state.remove_listeners(listener_id);
-            }
-        }
-    }
 }
 
+#[derive(Debug)]
 enum Modify {
-    Spawn(Option<WidgetId>, WidgetRef),
+    Spawn(Option<WidgetId>, Widget),
     Rebuild(WidgetId),
     Destroy(WidgetId),
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use parking_lot::Mutex;
-
-    use crate::widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetRef, WidgetType};
+    use crate::widget::{BuildContext, BuildResult, StatelessWidget};
 
     use super::Engine;
 
-    #[derive(Debug, Default, Copy, Clone)]
-    struct TestGlobal(i32);
+    #[derive(Clone, Debug, Default)]
+    struct TestWidget {}
 
-    #[derive(Debug, Default)]
-    struct TestWidget {
-        computes: Arc<Mutex<usize>>,
-        builds: Mutex<usize>,
-        computed_value: Mutex<i32>,
-    }
-
-    impl Widget for TestWidget {}
-
-    impl WidgetType for TestWidget {
-        fn get_type_id(&self) -> std::any::TypeId {
-            std::any::TypeId::of::<Self>()
-        }
-
-        fn get_type_name(&self) -> &'static str {
-            "TestWidget"
-        }
-    }
-
-    impl WidgetBuilder for TestWidget {
-        fn build(&self, ctx: &mut BuildContext) -> BuildResult {
-            let computes = Arc::clone(&self.computes);
-
-            let computed_value = ctx.computed(move |ctx| {
-                *computes.lock() += 1;
-
-                let test_global = ctx.try_use_global::<TestGlobal>();
-
-                test_global.map_or_else(|| -1, |test_global| test_global.0)
-            });
-
-            *self.builds.lock() += 1;
-            *self.computed_value.lock() = computed_value;
-
+    impl StatelessWidget for TestWidget {
+        fn build(&self, _: &mut BuildContext<()>) -> BuildResult {
             BuildResult::None
         }
     }
 
     #[test]
-    pub fn test_builds() {
+    pub fn test_root_add() {
         let mut engine = Engine::new();
 
-        engine.set_root(WidgetRef::new(TestWidget::default()));
+        engine.set_root(TestWidget::default().into());
 
         assert_eq!(engine.get_root(), None, "should not have added the widget");
 
         engine.update();
 
-        let widget_id = engine.get_root().expect("failed to get root widget");
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).builds.lock(),
-            1,
-            "widget `builds` should have been 1"
-        );
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computed_value.lock(),
-            -1,
-            "widget `computed_value` should be -1"
-        );
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computes.lock(),
-            1,
-            "widget `computes` should have been been 1"
-        );
-
-        engine.update();
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).builds.lock(),
-            1,
-            "widget shouldn't have been updated"
-        );
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computes.lock(),
-            1,
-            "widget computed should not have been called"
-        );
-    }
-
-    #[test]
-    pub fn test_globals() {
-        let mut engine = Engine::new();
-
-        engine.init_global(TestGlobal::default);
-
-        engine.set_root(WidgetRef::new(TestWidget::default()));
-
-        assert_eq!(engine.get_root(), None, "should not have added the widget");
-
-        engine.update();
-
-        let widget_id = engine.get_root().expect("failed to get root widget");
-
-        // Compute function gets called twice, once for the default value and once to check if it needs
-        // to be updated, after it detects a change in TestGlobal
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computes.lock(),
-            1,
-            "widget `computes` should be 1"
-        );
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computed_value.lock(),
-            0,
-            "widget `test` should be 0"
-        );
-
-        engine.init_global(TestGlobal::default).0 = 5;
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computes.lock(),
-            1,
-            "widget computed should have been called 1 time"
-        );
-
-        engine.update();
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computes.lock(),
-            2,
-            "widget computed should have been called 2 times"
-        );
-
-        assert_eq!(
-            *engine.get_as::<TestWidget>(widget_id).computed_value.lock(),
-            5,
-            "widget `computed_value` should be 5"
+        assert_ne!(
+            engine.get_root(),
+            None,
+            "root widget should have been added"
         );
     }
 }

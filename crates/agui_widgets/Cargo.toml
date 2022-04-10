@@ -16,7 +16,7 @@ log = "0.4"
 bitflags = "1.3"
 
 downcast-rs = "1.2"
-parking_lot = "0.11"
+parking_lot = "0.12"
 
 agui_core = { path = "../agui_core", version = "0.3" }
 agui_macros = { path = "../agui_macros", version = "0.3", features = [ "internal" ]}

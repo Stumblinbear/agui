@@ -1,190 +1,346 @@
-use std::{any::TypeId, fmt::Debug, rc::Rc};
+use std::{
+    any::TypeId,
+    cell::{Ref, RefCell, RefMut},
+    fmt::Debug,
+    rc::Rc,
+};
 
-use downcast_rs::{impl_downcast, Downcast};
 use slotmap::new_key_type;
 
-use crate::unit::Key;
+use crate::{
+    engine::{
+        tree::Tree,
+        widget::{WidgetBuilder, WidgetImpl, WidgetNode},
+    },
+    unit::Key,
+};
 
-pub mod callback;
-pub mod computed;
 mod context;
-pub mod effect;
+mod node;
 mod result;
 
-pub use context::*;
-pub use result::BuildResult;
+pub use self::{
+    context::*,
+    node::{StatefulWidget, StatelessWidget},
+    result::BuildResult,
+};
 
 new_key_type! {
     pub struct WidgetId;
 }
 
-/// Makes internal type information available at runtime.
-pub trait WidgetType {
-    /// Return the `TypeId::of()` of the widget.
-    fn get_type_id(&self) -> TypeId;
+impl<'ui> morphorm::Node<'ui> for WidgetId {
+    type Data = Tree<Self, Widget>;
 
-    /// Return the name of the widget as a string. Generally this is the name of the struct.
-    fn get_type_name(&self) -> &'static str;
+    fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout_type())
+            .map(Into::into)
+    }
+
+    fn position_type(&self, store: &'_ Self::Data) -> Option<morphorm::PositionType> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.position.into())
+    }
+
+    fn width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.sizing.get_width().into())
+    }
+
+    fn height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.sizing.get_height().into())
+    }
+
+    fn min_width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.min_sizing.get_width().into())
+    }
+
+    fn min_height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.min_sizing.get_height().into())
+    }
+
+    fn max_width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.max_sizing.get_width().into())
+    }
+
+    fn max_height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.max_sizing.get_height().into())
+    }
+
+    fn top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .and_then(|layout| layout.position.get_top())
+            .map(Into::into)
+    }
+
+    fn right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .and_then(|layout| layout.position.get_right())
+            .map(Into::into)
+    }
+
+    fn bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .and_then(|layout| layout.position.get_bottom())
+            .map(Into::into)
+    }
+
+    fn left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .and_then(|layout| layout.position.get_left())
+            .map(Into::into)
+    }
+
+    fn min_top(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn max_top(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn min_right(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn max_right(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn min_bottom(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn max_bottom(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn min_left(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn max_left(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn child_top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.margin.get_top().into())
+    }
+
+    fn child_right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.margin.get_right().into())
+    }
+
+    fn child_bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.margin.get_bottom().into())
+    }
+
+    fn child_left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout())
+            .map(|layout| layout.margin.get_left().into())
+    }
+
+    fn row_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout_type())
+            .and_then(|layout_type| layout_type.get_column_spacing())
+            .map(Into::into)
+    }
+
+    fn col_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout_type())
+            .and_then(|layout_type| layout_type.get_row_spacing())
+            .map(Into::into)
+    }
+
+    fn grid_rows(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout_type())
+            .and_then(|layout_type| layout_type.get_rows())
+            .map(|val| val.into_iter().map(Into::into).collect())
+    }
+
+    fn grid_cols(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
+        store
+            .get(*self)
+            .map(Widget::get)
+            .and_then(|node| node.get_layout_type())
+            .and_then(|layout_type| layout_type.get_columns())
+            .map(|val| val.into_iter().map(Into::into).collect())
+    }
+
+    fn row_index(&self, _store: &'_ Self::Data) -> Option<usize> {
+        Some(0)
+    }
+
+    fn col_index(&self, _store: &'_ Self::Data) -> Option<usize> {
+        Some(0)
+    }
+
+    fn row_span(&self, _store: &'_ Self::Data) -> Option<usize> {
+        Some(1)
+    }
+
+    fn col_span(&self, _store: &'_ Self::Data) -> Option<usize> {
+        Some(1)
+    }
+
+    fn border_top(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn border_right(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn border_bottom(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
+
+    fn border_left(&self, _store: &'_ Self::Data) -> Option<morphorm::Units> {
+        Some(morphorm::Units::Auto)
+    }
 }
 
-/// Implements the widget's `build()` method.
-pub trait WidgetBuilder: Downcast {
-    /// Called whenever this widget is rebuilt.
-    ///
-    /// This method may be called when any parent is rebuilt, when its internal state changes, when
-    /// global state changes, when a computed value changes, or just because it feels like it. Hence,
-    /// it should not be relied on for any reason other than to return child widgets.
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct WidgetKey(Option<WidgetId>, Key);
+
+impl WidgetKey {
+    pub fn get_owner(&self) -> Option<WidgetId> {
+        self.0
+    }
+
+    pub fn get_key(&self) -> Key {
+        self.1
+    }
 }
 
-/// The combined Widget implementation, required to be used within the `WidgetBuilder`.
-pub trait Widget: WidgetType + WidgetBuilder {}
+#[derive(Clone)]
+pub struct Widget(Option<WidgetKey>, Rc<RefCell<dyn WidgetImpl>>);
 
-impl_downcast!(Widget);
+impl Widget {
+    pub(crate) fn new<W>(key: Option<WidgetKey>, widget: W) -> Self
+    where
+        W: WidgetImpl,
+    {
+        Self(key, Rc::new(RefCell::new(widget)))
+    }
 
-/// Holds a reference to a widget, or not.
-///
-/// This is generally used when a widget can accept children as a parameter. It can either be `Owned`,
-/// `Borrowed`, `None`, or `Keyed`. A `Keyed` widget is one that may retain its state across parental rebuilds.
-pub enum WidgetRef {
-    /// No widget.
-    None,
+    pub fn with_key(&self, key: WidgetKey) -> Self {
+        Self(Some(key), Rc::clone(&self.1))
+    }
 
-    /// A widget reference.
-    Ref(Rc<dyn Widget>),
+    pub fn get_key(&self) -> Option<WidgetKey> {
+        self.0
+    }
 
-    /// A keyed reference which may retain its state across parental rebuilds.
-    Keyed {
-        owner_id: Option<WidgetId>,
-        key: Key,
-        widget: Rc<dyn Widget>,
-    },
+    pub fn get(&self) -> Ref<dyn WidgetImpl> {
+        RefCell::borrow(&self.1)
+    }
+
+    pub fn get_mut(&self) -> RefMut<dyn WidgetImpl> {
+        RefCell::borrow_mut(&self.1)
+    }
+
+    pub fn get_as<W>(&self) -> Option<Ref<WidgetNode<W>>>
+    where
+        W: WidgetBuilder,
+    {
+        let widget = RefCell::borrow(&self.1);
+
+        if widget.get_type_id() == TypeId::of::<W>() {
+            Some(Ref::map(widget, |x| x.downcast_ref().unwrap()))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_as_mut<W>(&self) -> Option<RefMut<WidgetNode<W>>>
+    where
+        W: WidgetBuilder,
+    {
+        let widget = RefCell::borrow_mut(&self.1);
+
+        if widget.get_type_id() == TypeId::of::<W>() {
+            Some(RefMut::map(widget, |x| x.downcast_mut().unwrap()))
+        } else {
+            None
+        }
+    }
 }
 
-impl Debug for WidgetRef {
+impl std::fmt::Debug for Widget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::Ref(widget) => write!(f, "{}", widget.get_type_name()),
-            Self::Keyed { key, widget, .. } => {
-                write!(f, "Keyed {{ key: {:?}, {} }}", key, widget.get_type_name())
-            }
+        match self.0 {
+            Some(key) => f
+                .debug_struct("Widget")
+                .field("key", &key)
+                .field("widget", &self.get())
+                .finish(),
+            None => self.get().fmt(f),
         }
-    }
-}
-
-impl Default for WidgetRef {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-impl Clone for WidgetRef {
-    fn clone(&self) -> Self {
-        match self {
-            Self::None => Self::None,
-            Self::Ref(widget) => Self::Ref(Rc::clone(widget)),
-            Self::Keyed {
-                owner_id,
-                key,
-                widget,
-            } => Self::Keyed {
-                owner_id: *owner_id,
-                key: *key,
-                widget: Rc::clone(widget),
-            },
-        }
-    }
-}
-
-impl WidgetRef {
-    pub fn new<W>(widget: W) -> Self
-    where
-        W: Widget,
-    {
-        Self::Ref(Rc::new(widget))
-    }
-
-    /// Returns true if the widget is still allocated in memory.
-    pub fn is_valid(&self) -> bool {
-        match self {
-            Self::None => false,
-            Self::Ref(_) | Self::Keyed { .. } => true,
-        }
-    }
-
-    pub fn try_get(&self) -> Option<Rc<dyn Widget>> {
-        match self {
-            Self::None => None,
-            Self::Ref(widget) | Self::Keyed { widget, .. } => Some(Rc::clone(widget)),
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if the reference is None.
-    pub fn get(&self) -> Rc<dyn Widget> {
-        match self {
-            Self::None => panic!("widget ref points to nothing"),
-            Self::Ref(widget) | Self::Keyed { widget, .. } => Rc::clone(widget),
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if the reference is None.
-    pub fn get_type_id(&self) -> TypeId {
-        self.get().get_type_id()
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if the reference is None.
-    pub fn get_type_name(&self) -> &'static str {
-        self.get().get_type_name()
-    }
-
-    /// Returns none if the widget is not the `W` type, or if it is None.
-    pub fn try_downcast_ref<W>(&self) -> Option<Rc<W>>
-    where
-        W: Widget,
-    {
-        match self.try_get()?.downcast_rc::<W>() {
-            Ok(widget) => Some(widget),
-            Err(..) => None,
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Will panic if the widget cannot be downcast to the generic type, or if it is None.
-    pub fn downcast_ref<W>(&self) -> Rc<W>
-    where
-        W: Widget,
-    {
-        self.try_downcast_ref()
-            .expect("failed to downcast widget ref")
-    }
-}
-
-impl From<&Self> for WidgetRef {
-    fn from(widget: &Self) -> Self {
-        Self::clone(widget)
-    }
-}
-
-#[allow(clippy::from_over_into)]
-impl Into<Vec<Self>> for WidgetRef {
-    fn into(self) -> Vec<Self> {
-        vec![Self::clone(&self)]
-    }
-}
-
-impl<W> From<W> for WidgetRef
-where
-    W: Widget,
-{
-    fn from(widget: W) -> Self {
-        Self::new(widget)
     }
 }

@@ -1,14 +1,4 @@
-use agui_core::{
-    canvas::paint::Paint,
-    unit::{Color, Layout},
-    widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder, WidgetRef},
-};
-use agui_macros::Widget;
-
-use crate::{
-    plugins::hovering::HoveringExt,
-    state::mouse::{Mouse, MouseButtonState},
-};
+use agui_core::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct ButtonStyle {
@@ -29,68 +19,75 @@ impl Default for ButtonStyle {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum ButtonState {
-    Normal,
-    Disabled,
-    Pressed,
+#[derive(Debug, Default)]
+struct ButtonState {
+    pressed: bool,
+    disabled: bool,
 }
 
-#[derive(Default, Widget)]
+#[derive(Default)]
 pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
 
     pub on_pressed: Callback<()>,
 
-    pub child: WidgetRef,
+    pub child: Option<Widget>,
 }
 
-impl WidgetBuilder for Button {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+impl StatefulWidget for Button {
+    type State = ButtonState;
+
+    fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
-        ctx.use_effect({
-            let on_pressed = self.on_pressed.clone();
+        // let mouse = ctx.global::<Mouse>();
+        let state = ctx.new_state(ButtonState::default);
 
-            move |ctx| {
-                if let Some(mouse) = ctx.try_use_global::<Mouse>() {
-                    let mut state = ctx.init_state(|| ButtonState::Normal);
+        // ctx.use_state::<ButtonState>()
+        //     .try_use_global::<Mouse>()
+        //     .with(self.on_pressed.clone())
 
-                    if mouse.button.left == MouseButtonState::Pressed {
-                        if ctx.is_hovering() && *state != ButtonState::Pressed {
-                            state.set(ButtonState::Pressed);
-                        }
-                    } else if *state == ButtonState::Pressed {
-                        state.set(ButtonState::Normal);
+        ctx.effect(|ctx| {
+            let is_pressed = state.map(ctx, |state| state.pressed);
 
-                        if ctx.is_hovering() {
-                            on_pressed.emit(());
-                        }
-                    }
-                }
-            }
+            // let state_ref = state.as_ref(ctx);
+
+            // if mouse.button.left == MouseButtonState::Pressed {
+            //     if ctx.is_hovering() && *state != state.pressed {
+            //         state.set(ctx, |state| {
+            //             state.pressed = true;
+            //         });
+            //     }
+            // } else if *state == ButtonState::Pressed {
+            //     state.pressed = false;
+
+            //     if ctx.is_hovering() {
+            //         self.on_pressed.emit(());
+            //     }
+            // }
         });
 
-        {
-            let state = ctx.use_state(|| ButtonState::Normal);
-            let style = self.style.clone().unwrap_or_default();
+        // let state = ctx.use_state::<ButtonState>().get();
 
-            ctx.on_draw(move |canvas| {
-                let color = match *state {
-                    ButtonState::Normal => style.normal,
-                    ButtonState::Disabled => style.disabled,
-                    ButtonState::Pressed => style.pressed,
-                };
+        // ctx.on_draw({
+        //     let style = self.style.clone().unwrap_or_default();
 
-                let brush = canvas.new_brush(Paint {
-                    color,
-                    ..Paint::default()
-                });
+        //     move |canvas| {
+        //         let color = match *state {
+        //             ButtonState::Normal => style.normal,
+        //             ButtonState::Disabled => style.disabled,
+        //             ButtonState::Pressed => style.pressed,
+        //         };
 
-                canvas.draw_rect(brush);
-            });
-        }
+        //         let brush = canvas.new_brush(Paint {
+        //             color,
+        //             ..Paint::default()
+        //         });
+
+        //         canvas.draw_rect(brush);
+        //     }
+        // });
 
         (&self.child).into()
     }
