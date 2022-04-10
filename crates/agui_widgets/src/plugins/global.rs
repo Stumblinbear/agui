@@ -8,7 +8,7 @@ use std::{
 
 use agui_core::{
     engine::{event::WidgetEvent, Data, Engine},
-    plugin::{EnginePlugin, PluginContext, PluginId},
+    plugin::{EnginePlugin, PluginContext},
     prelude::BuildContext,
     widget::WidgetId,
 };
@@ -77,7 +77,7 @@ impl std::fmt::Debug for GlobalValue {
 }
 
 impl GlobalState {
-    pub fn get<G>(&mut self, listener: Option<WidgetId>) -> Global<G>
+    fn get<G>(&mut self, listener: Option<WidgetId>) -> Global<G>
     where
         G: Data + Default,
     {
@@ -104,7 +104,7 @@ impl GlobalState {
         }
     }
 
-    pub fn set<G, F>(&mut self, func: F)
+    fn set<G, F>(&mut self, func: F)
     where
         F: FnOnce(&mut G) + 'static,
         G: Data + Default,
@@ -145,11 +145,8 @@ impl GlobalPluginExt for Engine {
         G: Data + Default,
     {
         let mut plugin = self
-            .get_plugins()
-            .get_mut(&PluginId::of::<GlobalPlugin>())
-            .expect("global plugin not added")
-            .get_as_mut::<GlobalPlugin>()
-            .unwrap();
+            .get_plugin_mut::<GlobalPlugin>()
+            .expect("global plugin not added");
 
         let state = plugin.get_state_mut();
 
@@ -162,11 +159,8 @@ impl GlobalPluginExt for Engine {
         G: Data + Default,
     {
         let mut plugin = self
-            .get_plugins()
-            .get_mut(&PluginId::of::<GlobalPlugin>())
-            .expect("global plugin not added")
-            .get_as_mut::<GlobalPlugin>()
-            .unwrap();
+            .get_plugin_mut::<GlobalPlugin>()
+            .expect("global plugin not added");
 
         let state = plugin.get_state_mut();
 
@@ -185,11 +179,8 @@ where
         let widget_id = self.get_widget_id();
 
         let mut plugin = self
-            .get_plugins()
-            .get_mut(&PluginId::of::<GlobalPlugin>())
-            .expect("global plugin not added")
-            .get_as_mut::<GlobalPlugin>()
-            .unwrap();
+            .get_plugin_mut::<GlobalPlugin>()
+            .expect("global plugin not added");
 
         let state = plugin.get_state_mut();
 
@@ -202,11 +193,8 @@ where
         G: Data + Default,
     {
         let mut plugin = self
-            .get_plugins()
-            .get_mut(&PluginId::of::<GlobalPlugin>())
-            .expect("global plugin not added")
-            .get_as_mut::<GlobalPlugin>()
-            .unwrap();
+            .get_plugin_mut::<GlobalPlugin>()
+            .expect("global plugin not added");
 
         let state = plugin.get_state_mut();
 

@@ -6,7 +6,7 @@ use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
     canvas::{renderer::RenderFn, Canvas},
     engine::{tree::Tree, Data},
-    plugin::{Plugin, PluginId},
+    plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
     widget::WidgetId,
 };
@@ -39,6 +39,24 @@ where
 {
     pub fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
         self.plugins
+    }
+
+    pub fn get_plugin<P>(&self) -> Option<PluginRef<P>>
+    where
+        P: EnginePlugin,
+    {
+        self.plugins
+            .get(&PluginId::of::<P>())
+            .map(|p| p.get_as::<P>().unwrap())
+    }
+
+    pub fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
+    where
+        P: EnginePlugin,
+    {
+        self.plugins
+            .get_mut(&PluginId::of::<P>())
+            .map(|p| p.get_as_mut::<P>().unwrap())
     }
 
     pub fn get_tree(&self) -> &Tree<WidgetId, Widget> {

@@ -11,7 +11,7 @@ use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
 
 use crate::{
-    plugin::{EnginePlugin, Plugin, PluginId},
+    plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Font, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetKey},
 };
@@ -73,6 +73,24 @@ impl Engine {
 
     pub fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
         &mut self.plugins
+    }
+
+    pub fn get_plugin<P>(&self) -> Option<PluginRef<P>>
+    where
+        P: EnginePlugin,
+    {
+        self.plugins
+            .get(&PluginId::of::<P>())
+            .map(|p| p.get_as::<P>().unwrap())
+    }
+
+    pub fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
+    where
+        P: EnginePlugin,
+    {
+        self.plugins
+            .get_mut(&PluginId::of::<P>())
+            .map(|p| p.get_as_mut::<P>().unwrap())
     }
 
     pub fn get_fonts(&self) -> &[FontArc] {
