@@ -66,22 +66,22 @@ where
     fn call(&self, ctx: &mut CallbackContext<S>, args: Box<dyn Data>);
 }
 
-pub struct CallbackFn<F, S, A>
+pub struct CallbackFn<S, A, F>
 where
-    F: Fn(&mut CallbackContext<S>, &A),
     S: Data,
     A: 'static,
+    F: Fn(&mut CallbackContext<S>, &A),
 {
-    phantom: PhantomData<(F, S, A)>,
+    phantom: PhantomData<(S, A, F)>,
 
     func: F,
 }
 
-impl<F, S, A> CallbackFn<F, S, A>
+impl<S, A, F> CallbackFn<S, A, F>
 where
-    F: Fn(&mut CallbackContext<S>, &A),
     S: Data,
     A: 'static,
+    F: Fn(&mut CallbackContext<S>, &A),
 {
     pub fn new(func: F) -> Self {
         Self {
@@ -92,11 +92,11 @@ where
     }
 }
 
-impl<F, S, A> CallbackFunc<S> for CallbackFn<F, S, A>
+impl<S, A, F> CallbackFunc<S> for CallbackFn<S, A, F>
 where
-    F: Fn(&mut CallbackContext<S>, &A),
     S: Data,
     A: Data,
+    F: Fn(&mut CallbackContext<S>, &A),
 {
     fn call(&self, ctx: &mut CallbackContext<S>, args: Box<dyn Data>) {
         let args = args

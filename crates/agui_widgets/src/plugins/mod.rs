@@ -1,5 +1,6 @@
 use agui_core::engine::Engine;
 
+pub mod event;
 pub mod global;
 // pub mod hovering;
 // pub mod provider;

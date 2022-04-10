@@ -128,10 +128,10 @@ where
         self.state
     }
 
-    pub fn callback<F, A>(&mut self, func: F) -> Callback<A>
+    pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
+        A: Data,
         F: Fn(&mut CallbackContext<S>, &A) + 'static,
-        A: Data + Clone,
     {
         let callback_id = CallbackId(self.widget_id, TypeId::of::<F>());
 
