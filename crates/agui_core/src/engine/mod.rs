@@ -486,16 +486,18 @@ enum Modify {
 
 #[cfg(test)]
 mod tests {
-    use crate::widget::{BuildContext, BuildResult, StatelessWidget};
+    use crate::widget::{BuildContext, BuildResult, StatelessWidget, Widget};
 
     use super::Engine;
 
     #[derive(Clone, Debug, Default)]
-    struct TestWidget {}
+    struct TestWidget {
+        pub children: Vec<Widget>,
+    }
 
     impl StatelessWidget for TestWidget {
         fn build(&self, _: &mut BuildContext<()>) -> BuildResult {
-            BuildResult::None
+            (&self.children).into()
         }
     }
 
@@ -513,6 +515,76 @@ mod tests {
             engine.get_root(),
             None,
             "root widget should have been added"
+        );
+    }
+
+    #[test]
+    pub fn removing_a_root_widget() {
+        let mut engine = Engine::new();
+
+        engine.set_root(TestWidget::default());
+
+        assert_eq!(engine.get_root(), None, "should not have added the widget");
+
+        engine.update();
+
+        assert_ne!(
+            engine.get_root(),
+            None,
+            "root widget should have been added"
+        );
+
+        engine.remove_root();
+
+        engine.update();
+
+        assert_eq!(
+            engine.get_root(),
+            None,
+            "root widget should have been removed"
+        );
+    }
+
+    #[test]
+    pub fn removing_root_removes_children() {
+        let mut engine = Engine::new();
+
+        let mut widget = TestWidget::default();
+
+        for _ in 0..1000 {
+            widget.children.push(TestWidget::default().into());
+        }
+
+        engine.set_root(widget);
+
+        engine.update();
+
+        assert_ne!(
+            engine.get_root(),
+            None,
+            "root widget should have been added"
+        );
+
+        assert_eq!(
+            engine.get_tree().len(),
+            1001,
+            "children should have been added"
+        );
+
+        engine.remove_root();
+
+        engine.update();
+
+        assert_eq!(
+            engine.get_root(),
+            None,
+            "root widget should have been removed"
+        );
+
+        assert_eq!(
+            engine.get_tree().len(),
+            0,
+            "all children should have been removed"
         );
     }
 }
