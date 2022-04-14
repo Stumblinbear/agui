@@ -45,7 +45,7 @@ pub trait WidgetBuilder: std::fmt::Debug + Downcast {
 }
 
 #[derive(Default)]
-pub struct WidgetNode<W>
+pub struct WidgetElement<W>
 where
     W: WidgetBuilder,
 {
@@ -61,7 +61,7 @@ where
     rect: Option<Rect>,
 }
 
-impl<W> WidgetNode<W>
+impl<W> WidgetElement<W>
 where
     W: WidgetBuilder,
 {
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<W> WidgetNode<W>
+impl<W> WidgetElement<W>
 where
     W: WidgetBuilder,
 {
@@ -94,7 +94,7 @@ where
     }
 }
 
-impl<W> WidgetImpl for WidgetNode<W>
+impl<W> WidgetImpl for WidgetElement<W>
 where
     W: WidgetBuilder,
 {
@@ -163,7 +163,7 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for WidgetNode<W>
+impl<W> std::fmt::Debug for WidgetElement<W>
 where
     W: WidgetBuilder,
 {
@@ -175,7 +175,7 @@ where
     }
 }
 
-impl<W> From<W> for WidgetNode<W>
+impl<W> From<W> for WidgetElement<W>
 where
     W: WidgetBuilder,
 {
@@ -189,6 +189,6 @@ where
     W: WidgetBuilder,
 {
     fn from(widget: W) -> Self {
-        Self::new(None, WidgetNode::from(widget))
+        Self::new(None, WidgetElement::from(widget))
     }
 }

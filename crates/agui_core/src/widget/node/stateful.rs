@@ -56,9 +56,7 @@ mod tests {
 
     #[test]
     pub fn widget_build_can_set_state() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestWidget::default());
+        let mut engine = Engine::with_root(TestWidget::default());
 
         engine.update();
 

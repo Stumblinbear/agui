@@ -30,7 +30,7 @@ pub trait PluginImpl: std::fmt::Debug + Downcast {
 impl_downcast!(PluginImpl);
 
 #[derive(Default)]
-pub struct PluginNode<P>
+pub struct PluginElement<P>
 where
     P: EnginePlugin,
 {
@@ -38,7 +38,7 @@ where
     state: P::State,
 }
 
-impl<P> PluginNode<P>
+impl<P> PluginElement<P>
 where
     P: EnginePlugin,
 {
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<P> PluginNode<P>
+impl<P> PluginElement<P>
 where
     P: EnginePlugin,
 {
@@ -67,7 +67,7 @@ where
     }
 }
 
-impl<P> PluginImpl for PluginNode<P>
+impl<P> PluginImpl for PluginElement<P>
 where
     P: EnginePlugin,
 {
@@ -109,7 +109,7 @@ where
     }
 }
 
-impl<P> std::fmt::Debug for PluginNode<P>
+impl<P> std::fmt::Debug for PluginElement<P>
 where
     P: EnginePlugin,
 {
@@ -121,7 +121,7 @@ where
     }
 }
 
-impl<P> From<P> for PluginNode<P>
+impl<P> From<P> for PluginElement<P>
 where
     P: EnginePlugin,
 {

@@ -36,7 +36,7 @@ impl EnginePlugin for HoveringPlugin {
                 Some(pos) => {
                     let hovering_ids = ctx
                         .get_tree()
-                        .iter()
+                        .iter_down(None)
                         .filter(|widget_id| {
                             match ctx.get_tree().get(*widget_id).and_then(|node| node.rect) {
                                 Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),

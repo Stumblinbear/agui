@@ -20,6 +20,7 @@ mod cache;
 pub mod event;
 pub mod notify;
 pub mod plugin;
+pub mod query;
 pub mod tree;
 pub mod widget;
 
@@ -27,9 +28,10 @@ use self::{
     cache::LayoutCache,
     event::WidgetEvent,
     notify::Notifier,
-    plugin::PluginNode,
+    plugin::PluginElement,
+    query::EngineQuery,
     tree::Tree,
-    widget::{WidgetBuilder, WidgetNode},
+    widget::{WidgetBuilder, WidgetElement},
 };
 
 pub trait Data: std::fmt::Debug + Downcast {}
@@ -39,6 +41,7 @@ impl<T> Data for T where T: std::fmt::Debug + Downcast {}
 impl_downcast!(Data);
 
 /// Handles the entirety of the agui lifecycle.
+#[derive(Default)]
 pub struct Engine {
     plugins: FnvHashMap<PluginId, Plugin>,
     tree: Tree<WidgetId, Widget>,
@@ -55,20 +58,18 @@ pub struct Engine {
 impl Engine {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let notifier = Rc::default();
+        Self::default()
+    }
 
-        Self {
-            plugins: FnvHashMap::default(),
-            tree: Tree::default(),
-            dirty: FnvHashSet::default(),
+    pub fn with_root<W>(widget: W) -> Self
+    where
+        W: WidgetBuilder,
+    {
+        let mut engine = Self::new();
 
-            notifier,
+        engine.set_root(widget);
 
-            fonts: Vec::default(),
-            cache: LayoutCache::default(),
-
-            modifications: Vec::default(),
-        }
+        engine
     }
 
     pub fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
@@ -112,7 +113,7 @@ impl Engine {
             panic!("plugin already initialized");
         }
 
-        let plugin: PluginNode<P> = plugin.into();
+        let plugin: PluginElement<P> = plugin.into();
 
         self.plugins.insert(plugin_id, Plugin::new(plugin));
     }
@@ -170,7 +171,7 @@ impl Engine {
     {
         self.remove_root();
 
-        let node: WidgetNode<W> = widget.into();
+        let node: WidgetElement<W> = widget.into();
 
         self.modifications
             .push(Modify::Spawn(None, Widget::new(None, node)));
@@ -181,8 +182,12 @@ impl Engine {
         self.tree.contains(widget_id)
     }
 
+    pub fn query(&self) -> EngineQuery {
+        EngineQuery::new(self)
+    }
+
     /// Fetch a widget from the tree.
-    pub fn get_widget<W>(&self, widget_id: WidgetId) -> Option<Ref<WidgetNode<W>>>
+    pub fn get_widget<W>(&self, widget_id: WidgetId) -> Option<Ref<WidgetElement<W>>>
     where
         W: WidgetBuilder,
     {

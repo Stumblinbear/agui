@@ -25,7 +25,7 @@ pub fn print_tree(engine: &Engine<'_>) {
 
     let tree = engine.get_tree();
 
-    for widget_id in tree.iter() {
+    for widget_id in tree.iter_down(None) {
         let node = tree.get_node(widget_id).expect("broken tree");
 
         let depth = node.depth;
@@ -85,7 +85,7 @@ pub fn print_tree_modifications(engine: &Engine<'_>) {
         return;
     }
 
-    for widget_id in tree.iter() {
+    for widget_id in tree.iter_down(None) {
         let node = tree.get_node(widget_id).expect("broken tree");
 
         let depth = node.depth;

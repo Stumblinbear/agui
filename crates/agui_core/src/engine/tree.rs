@@ -1,7 +1,10 @@
 use std::ops::{Deref, DerefMut};
 
 use morphorm::Hierarchy;
-use slotmap::{hop::IterMut, HopSlotMap, Key};
+use slotmap::{
+    hop::{Iter, IterMut},
+    HopSlotMap, Key,
+};
 
 #[derive(Debug)]
 pub struct Tree<K, V>
@@ -197,22 +200,18 @@ where
         self.nodes.len()
     }
 
-    pub fn iter(&self) -> DownwardIterator<K, V> {
-        DownwardIterator {
-            tree: self,
-            node_id: self.root,
-            first: true,
-        }
+    pub fn iter(&self) -> Iter<K, TreeNode<K, V>> {
+        self.nodes.iter()
     }
 
     pub fn iter_mut(&mut self) -> IterMut<K, TreeNode<K, V>> {
         self.nodes.iter_mut()
     }
 
-    pub fn iter_from(&self, node_id: K) -> DownwardIterator<K, V> {
+    pub fn iter_down(&self, node_id: Option<K>) -> DownwardIterator<K, V> {
         DownwardIterator {
             tree: self,
-            node_id: Some(node_id),
+            node_id: node_id.or(self.root),
             first: true,
         }
     }
@@ -258,7 +257,7 @@ where
             return false;
         }
 
-        for node_id in self.iter_from(node_id) {
+        for node_id in self.iter_down(Some(node_id)) {
             let node = self.nodes.get(node_id).expect("tree broken");
 
             // If we reach a depth lower than the child, bail, because the child won't be found. We do
@@ -593,7 +592,7 @@ where
     }
 
     fn down_iter(&'a self) -> Self::DownIter {
-        self.iter()
+        self.iter_down(None)
     }
 
     fn child_iter(&'a self, node_id: Self::Item) -> Self::ChildIter {
@@ -755,7 +754,7 @@ mod tests {
         let child_3 = tree.add(Some(root_id), 7);
         let child_3_1 = tree.add(Some(child_3), 8);
 
-        let mut iter = tree.iter();
+        let mut iter = tree.iter_down(None);
 
         assert_eq!(
             iter.next(),
@@ -813,7 +812,7 @@ mod tests {
             "downward iterator should have returned None"
         );
 
-        let mut iter = tree.iter_from(child_3);
+        let mut iter = tree.iter_down(Some(child_3));
 
         assert_eq!(
             iter.next(),

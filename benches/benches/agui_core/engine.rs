@@ -31,9 +31,7 @@ fn engine_ops(c: &mut Criterion) {
                     column.children.push(Column::default().into());
                 }
 
-                let mut engine = Engine::new();
-
-                engine.set_root(column);
+                let mut engine = Engine::with_root(column);
 
                 engine.update();
 

@@ -8,7 +8,7 @@ use downcast_rs::Downcast;
 
 use crate::engine::{
     event::WidgetEvent,
-    plugin::{PluginImpl, PluginNode},
+    plugin::{PluginImpl, PluginElement},
     Data,
 };
 
@@ -130,11 +130,11 @@ impl<'b, P> Deref for PluginRef<'b, P>
 where
     P: EnginePlugin,
 {
-    type Target = PluginNode<P>;
+    type Target = PluginElement<P>;
 
     fn deref(&self) -> &Self::Target {
         self.plugin
-            .downcast_ref::<PluginNode<P>>()
+            .downcast_ref::<PluginElement<P>>()
             .expect("invalid PluginRef created")
     }
 }
@@ -152,11 +152,11 @@ impl<'b, P> Deref for PluginMut<'b, P>
 where
     P: EnginePlugin,
 {
-    type Target = PluginNode<P>;
+    type Target = PluginElement<P>;
 
     fn deref(&self) -> &Self::Target {
         self.plugin
-            .downcast_ref::<PluginNode<P>>()
+            .downcast_ref::<PluginElement<P>>()
             .expect("invalid PluginRef created")
     }
 }
@@ -167,7 +167,7 @@ where
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.plugin
-            .downcast_mut::<PluginNode<P>>()
+            .downcast_mut::<PluginElement<P>>()
             .expect("invalid PluginRef created")
     }
 }

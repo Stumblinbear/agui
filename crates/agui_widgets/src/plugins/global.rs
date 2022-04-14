@@ -235,7 +235,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{engine::Engine, prelude::*};
+    use agui_core::{
+        engine::{query::WidgetQueryExt, Engine},
+        prelude::*,
+    };
     use agui_primitives::Column;
 
     use super::{GlobalPlugin, GlobalPluginExt};
@@ -273,15 +276,13 @@ mod tests {
 
     #[test]
     pub fn writing_globals() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::with_root(TestWidgetWriter::default());
 
         engine.add_plugin(GlobalPlugin::default());
 
         let global = engine.get_global::<TestGlobal>();
 
         assert_eq!(global.borrow().0, 0, "should init to default");
-
-        engine.set_root(TestWidgetWriter::default());
 
         engine.update();
 
@@ -290,7 +291,7 @@ mod tests {
 
     #[test]
     pub fn reading_globals() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::with_root(TestWidgetReader::default());
 
         engine.add_plugin(GlobalPlugin::default());
 
@@ -302,13 +303,13 @@ mod tests {
             value.0 = 1;
         });
 
-        engine.set_root(TestWidgetReader::default());
-
         engine.update();
 
         assert_eq!(
             *engine
-                .get_widget::<TestWidgetReader>(engine.get_root().unwrap())
+                .query()
+                .by_type::<TestWidgetReader>()
+                .next()
                 .unwrap()
                 .get_state(),
             1,
@@ -318,15 +319,7 @@ mod tests {
 
     #[test]
     pub fn reacting_to_globals() {
-        let mut engine = Engine::new();
-
-        engine.add_plugin(GlobalPlugin::default());
-
-        let global = engine.get_global::<TestGlobal>();
-
-        assert_eq!(global.borrow().0, 0, "should init to default");
-
-        engine.set_root(Column {
+        let mut engine = Engine::with_root(Column {
             children: vec![
                 // Put the reader first so the writer will update the global
                 TestWidgetReader::default().into(),
@@ -335,17 +328,19 @@ mod tests {
             ..Default::default()
         });
 
+        engine.add_plugin(GlobalPlugin::default());
+
+        let global = engine.get_global::<TestGlobal>();
+
+        assert_eq!(global.borrow().0, 0, "should init to default");
+
         engine.update();
 
         assert_eq!(
             *engine
-                .get_widget::<Column>(engine.get_root().unwrap())
-                .unwrap()
-                .get_widget()
-                .children
-                .get(0)
-                .unwrap()
-                .get_as::<TestWidgetReader>()
+                .query()
+                .by_type::<TestWidgetReader>()
+                .next()
                 .unwrap()
                 .get_state(),
             1,

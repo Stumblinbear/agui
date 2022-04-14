@@ -10,7 +10,7 @@ use slotmap::new_key_type;
 use crate::{
     engine::{
         tree::Tree,
-        widget::{WidgetBuilder, WidgetImpl, WidgetNode},
+        widget::{WidgetBuilder, WidgetImpl, WidgetElement},
     },
     unit::Key,
 };
@@ -279,7 +279,7 @@ impl WidgetKey {
 }
 
 #[derive(Clone)]
-pub struct Widget(Option<WidgetKey>, Rc<RefCell<dyn WidgetImpl>>);
+pub struct Widget(Option<WidgetKey>, pub(crate) Rc<RefCell<dyn WidgetImpl>>);
 
 impl Widget {
     pub(crate) fn new<W>(key: Option<WidgetKey>, widget: W) -> Self
@@ -297,6 +297,10 @@ impl Widget {
         self.0
     }
 
+    pub fn get_type_id(&self) -> TypeId {
+        self.1.borrow().get_type_id()
+    }
+
     pub fn get(&self) -> Ref<dyn WidgetImpl> {
         RefCell::borrow(&self.1)
     }
@@ -305,7 +309,7 @@ impl Widget {
         RefCell::borrow_mut(&self.1)
     }
 
-    pub fn get_as<W>(&self) -> Option<Ref<WidgetNode<W>>>
+    pub fn get_as<W>(&self) -> Option<Ref<WidgetElement<W>>>
     where
         W: WidgetBuilder,
     {
@@ -318,7 +322,7 @@ impl Widget {
         }
     }
 
-    pub fn get_as_mut<W>(&self) -> Option<RefMut<WidgetNode<W>>>
+    pub fn get_as_mut<W>(&self) -> Option<RefMut<WidgetElement<W>>>
     where
         W: WidgetBuilder,
     {

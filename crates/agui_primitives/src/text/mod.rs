@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use agui_core::prelude::*;
 
 pub mod edit;
+pub mod query;
 
 #[derive(Debug, Default)]
 pub struct Text {

@@ -61,7 +61,7 @@ fn tree_iter_down(c: &mut Criterion) {
             },
             |tree| {
                 for _ in 0..1000 {
-                    let mut walker = tree.iter();
+                    let mut walker = tree.iter_down(None);
 
                     while black_box(walker.next().is_some()) {}
                 }
