@@ -182,6 +182,10 @@ impl Engine {
         self.tree.contains(widget_id)
     }
 
+    /// Query widgets from the tree.
+    ///
+    /// This essentially iterates the widget tree's element Vec, and as such does not guarantee
+    /// the order in which widgets will be returned.
     pub fn query(&self) -> EngineQuery {
         EngineQuery::new(self)
     }
