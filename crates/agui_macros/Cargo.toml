@@ -20,7 +20,7 @@ internal = []
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-darling = "0.13"
+darling = "0.14"
 syn = {version = "1.0", default-features = false, features = [
   "full",
   "parsing",
