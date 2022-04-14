@@ -235,6 +235,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::any::TypeId;
+
     use agui_core::{
         engine::{query::WidgetQueryExt, Engine},
         prelude::*,
@@ -272,6 +274,52 @@ mod tests {
 
             BuildResult::None
         }
+    }
+
+    #[test]
+    pub fn tracks_listeners() {
+        let mut engine = Engine::with_root(TestWidgetReader::default());
+
+        engine.add_plugin(GlobalPlugin::default());
+
+        engine.update();
+
+        let plugin = engine.get_plugin::<GlobalPlugin>().unwrap();
+        let listening = &plugin.get_state().listening;
+        let listeners = &plugin
+            .get_state()
+            .globals
+            .get(&TypeId::of::<TestGlobal>())
+            .unwrap()
+            .listeners;
+
+        assert!(!listening.is_empty(), "should have tracked the widget");
+        assert!(!listeners.is_empty(), "should have tracked the listener");
+    }
+
+    #[test]
+    pub fn does_not_leak_memory() {
+        let mut engine = Engine::with_root(TestWidgetReader::default());
+
+        engine.add_plugin(GlobalPlugin::default());
+
+        engine.update();
+
+        engine.set_root(TestWidgetReader::default());
+
+        engine.update();
+
+        let plugin = engine.get_plugin::<GlobalPlugin>().unwrap();
+        let listening = &plugin.get_state().listening;
+        let listeners = &plugin
+            .get_state()
+            .globals
+            .get(&TypeId::of::<TestGlobal>())
+            .unwrap()
+            .listeners;
+
+        assert!(!listening.is_empty(), "only one widget should be tracked");
+        assert!(!listeners.is_empty(), "only one widget should be listening");
     }
 
     #[test]

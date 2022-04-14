@@ -8,21 +8,37 @@ use crate::{
     widget::{Widget, WidgetId},
 };
 
-use super::{event::WidgetEvent, tree::Tree};
+use super::{event::WidgetEvent, tree::Tree, NotifyCallback};
 
 pub trait PluginImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
 
-    fn on_before_update(&mut self, tree: &Tree<WidgetId, Widget>, dirty: &mut FnvHashSet<WidgetId>);
+    fn on_before_update(
+        &mut self,
+        tree: &Tree<WidgetId, Widget>,
+        dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
+    );
 
-    fn on_update(&mut self, tree: &Tree<WidgetId, Widget>, dirty: &mut FnvHashSet<WidgetId>);
+    fn on_update(
+        &mut self,
+        tree: &Tree<WidgetId, Widget>,
+        dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
+    );
 
-    fn on_layout(&mut self, tree: &Tree<WidgetId, Widget>, dirty: &mut FnvHashSet<WidgetId>);
+    fn on_layout(
+        &mut self,
+        tree: &Tree<WidgetId, Widget>,
+        dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
+    );
 
     fn on_events(
         &mut self,
         tree: &Tree<WidgetId, Widget>,
         dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
         events: &[WidgetEvent],
     );
 }
@@ -79,20 +95,43 @@ where
         &mut self,
         tree: &Tree<WidgetId, Widget>,
         dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
     ) {
-        let mut ctx = PluginContext { tree, dirty };
+        let mut ctx = PluginContext {
+            tree,
+            dirty,
+            notifier,
+        };
 
         self.plugin.on_before_update(&mut ctx, &mut self.state);
     }
 
-    fn on_update(&mut self, tree: &Tree<WidgetId, Widget>, dirty: &mut FnvHashSet<WidgetId>) {
-        let mut ctx = PluginContext { tree, dirty };
+    fn on_update(
+        &mut self,
+        tree: &Tree<WidgetId, Widget>,
+        dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
+    ) {
+        let mut ctx = PluginContext {
+            tree,
+            dirty,
+            notifier,
+        };
 
         self.plugin.on_update(&mut ctx, &mut self.state);
     }
 
-    fn on_layout(&mut self, tree: &Tree<WidgetId, Widget>, dirty: &mut FnvHashSet<WidgetId>) {
-        let mut ctx = PluginContext { tree, dirty };
+    fn on_layout(
+        &mut self,
+        tree: &Tree<WidgetId, Widget>,
+        dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
+    ) {
+        let mut ctx = PluginContext {
+            tree,
+            dirty,
+            notifier,
+        };
 
         self.plugin.on_layout(&mut ctx, &mut self.state);
     }
@@ -101,9 +140,14 @@ where
         &mut self,
         tree: &Tree<WidgetId, Widget>,
         dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
         events: &[WidgetEvent],
     ) {
-        let mut ctx = PluginContext { tree, dirty };
+        let mut ctx = PluginContext {
+            tree,
+            dirty,
+            notifier,
+        };
 
         self.plugin.on_events(&mut ctx, &mut self.state, events);
     }

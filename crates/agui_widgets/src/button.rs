@@ -20,12 +20,12 @@ impl Default for ButtonStyle {
 }
 
 #[derive(Debug, Default)]
-struct ButtonState {
+pub struct ButtonState {
     pressed: bool,
     disabled: bool,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
@@ -42,14 +42,14 @@ impl StatefulWidget for Button {
         ctx.set_layout(Layout::clone(&self.layout));
 
         // let mouse = ctx.global::<Mouse>();
-        let state = ctx.new_state(ButtonState::default);
+        // let state = ctx.new_state(ButtonState::default);
 
         // ctx.use_state::<ButtonState>()
         //     .try_use_global::<Mouse>()
         //     .with(self.on_pressed.clone())
 
-        ctx.effect(|ctx| {
-            let is_pressed = state.map(ctx, |state| state.pressed);
+        // ctx.effect(|ctx| {
+        //     let is_pressed = state.map(ctx, |state| state.pressed);
 
             // let state_ref = state.as_ref(ctx);
 
@@ -66,7 +66,7 @@ impl StatefulWidget for Button {
             //         self.on_pressed.emit(());
             //     }
             // }
-        });
+        // });
 
         // let state = ctx.use_state::<ButtonState>().get();
 

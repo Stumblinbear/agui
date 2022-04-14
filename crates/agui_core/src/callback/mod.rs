@@ -1,7 +1,7 @@
-use std::{any::TypeId, marker::PhantomData};
+use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    engine::{notify::NotifyCallback, Data},
+    engine::{Data, NotifyCallback},
     widget::WidgetId,
 };
 
@@ -10,7 +10,13 @@ mod context;
 pub use context::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct CallbackId(pub WidgetId, pub TypeId);
+pub struct CallbackId(WidgetId, TypeId);
+
+impl CallbackId {
+    pub fn get_widget_id(&self) -> WidgetId {
+        self.0
+    }
+}
 
 #[derive(Clone)]
 pub struct Callback<A>
@@ -20,7 +26,7 @@ where
     phantom: PhantomData<A>,
 
     callback_id: Option<CallbackId>,
-    notifier_callbacks: Option<NotifyCallback>,
+    notifier: Option<NotifyCallback>,
 }
 
 impl<A> Default for Callback<A>
@@ -32,8 +38,17 @@ where
             phantom: PhantomData,
 
             callback_id: None,
-            notifier_callbacks: None,
+            notifier: None,
         }
+    }
+}
+
+impl<A> std::fmt::Debug for Callback<A>
+where
+    A: Data,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.callback_id.fmt(f)
     }
 }
 
@@ -41,19 +56,27 @@ impl<A> Callback<A>
 where
     A: Data,
 {
-    pub(crate) fn new(callback_id: CallbackId) -> Self {
+    pub(crate) fn new<F, S>(notifier: NotifyCallback, widget_id: WidgetId) -> Self
+    where
+        S: Data,
+        F: Fn(&mut CallbackContext<S>, &A) + 'static,
+    {
         Self {
             phantom: PhantomData,
 
-            callback_id: Some(callback_id),
-            notifier_callbacks: None,
+            callback_id: Some(CallbackId(widget_id, TypeId::of::<F>())),
+            notifier: Some(notifier),
         }
+    }
+
+    pub fn get_id(&self) -> Option<CallbackId> {
+        self.callback_id
     }
 
     pub fn emit(&self, args: A) {
         if let Some(callback_id) = self.callback_id {
-            if let Some(notifier) = &self.notifier_callbacks {
-                notifier.lock().push((callback_id, Box::new(args)));
+            if let Some(notifier) = &self.notifier {
+                notifier.lock().push((callback_id, Rc::new(args)));
             }
         }
     }
@@ -63,7 +86,7 @@ pub trait CallbackFunc<S>
 where
     S: Data,
 {
-    fn call(&self, ctx: &mut CallbackContext<S>, args: Box<dyn Data>);
+    fn call(&self, ctx: &mut CallbackContext<S>, args: Rc<dyn Data>);
 }
 
 pub struct CallbackFn<S, A, F>
@@ -98,7 +121,7 @@ where
     A: Data,
     F: Fn(&mut CallbackContext<S>, &A),
 {
-    fn call(&self, ctx: &mut CallbackContext<S>, args: Box<dyn Data>) {
+    fn call(&self, ctx: &mut CallbackContext<S>, args: Rc<dyn Data>) {
         let args = args
             .downcast_ref::<A>()
             .expect("failed to downcast callback args");

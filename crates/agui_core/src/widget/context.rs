@@ -1,11 +1,11 @@
-use std::any::TypeId;
+use std::{rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
     canvas::{renderer::RenderFn, Canvas},
-    engine::{tree::Tree, Data},
+    engine::{tree::Tree, Data, NotifyCallback},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
     widget::WidgetId,
@@ -20,6 +20,7 @@ where
     pub(crate) plugins: &'ctx mut FnvHashMap<PluginId, Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
+    pub(crate) notifier: NotifyCallback,
 
     pub(crate) widget_id: WidgetId,
     pub(crate) state: &'ctx mut S,
@@ -109,7 +110,7 @@ where
 
     pub fn set_state<F>(&mut self, func: F)
     where
-        F: FnOnce(&mut S) + 'static,
+        F: FnOnce(&mut S),
     {
         func(self.state);
     }
@@ -133,13 +134,26 @@ where
         A: Data,
         F: Fn(&mut CallbackContext<S>, &A) + 'static,
     {
-        let callback_id = CallbackId(self.widget_id, TypeId::of::<F>());
-
-        let callback = Callback::new(callback_id);
+        let callback = Callback::new::<F, S>(Arc::clone(&self.notifier), self.widget_id);
 
         self.callbacks
-            .insert(callback_id, Box::new(CallbackFn::new(func)));
+            .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
 
         callback
+    }
+
+    pub fn notify<A>(&mut self, callback_id: CallbackId, args: A)
+    where
+        A: Data,
+    {
+        self.notifier.lock().push((callback_id, Rc::new(args)));
+    }
+
+    /// # Safety
+    ///
+    /// You must ensure the callback is expecting the type of the `args` passed in. If the type
+    /// is different, it will panic.
+    pub unsafe fn notify_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
+        self.notifier.lock().push((callback_id, args));
     }
 }

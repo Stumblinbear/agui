@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::{any::TypeId, rc::Rc};
 
 use downcast_rs::{impl_downcast, Downcast};
 use fnv::{FnvHashMap, FnvHashSet};
@@ -11,7 +11,7 @@ use crate::{
     widget::{BuildContext, BuildResult, Widget, WidgetId},
 };
 
-use super::{tree::Tree, Data};
+use super::{tree::Tree, Data, NotifyCallback};
 
 pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
@@ -26,10 +26,16 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
         plugins: &mut FnvHashMap<PluginId, Plugin>,
         tree: &Tree<WidgetId, Widget>,
         dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
         widget_id: WidgetId,
     ) -> BuildResult;
 
-    fn call(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) -> bool;
+    fn call(
+        &mut self,
+        notifier: NotifyCallback,
+        callback_id: CallbackId,
+        arg: Rc<dyn Data>,
+    ) -> bool;
 }
 
 impl_downcast!(WidgetImpl);
@@ -119,12 +125,14 @@ where
         plugins: &mut FnvHashMap<PluginId, Plugin>,
         tree: &Tree<WidgetId, Widget>,
         dirty: &mut FnvHashSet<WidgetId>,
+        notifier: NotifyCallback,
         widget_id: WidgetId,
     ) -> BuildResult {
         let mut ctx = BuildContext {
             plugins,
             tree,
             dirty,
+            notifier,
 
             widget_id,
             state: &mut self.state,
@@ -148,7 +156,12 @@ where
         result
     }
 
-    fn call(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) -> bool {
+    fn call(
+        &mut self,
+        notifier: NotifyCallback,
+        callback_id: CallbackId,
+        arg: Rc<dyn Data>,
+    ) -> bool {
         let mut ctx = CallbackContext {
             state: &mut self.state,
             changed: false,

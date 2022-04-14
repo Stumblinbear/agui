@@ -27,7 +27,7 @@ where
 {
     pub fn set_state<F>(&mut self, func: F)
     where
-        F: FnOnce(&mut S) + 'static,
+        F: FnOnce(&mut S),
     {
         self.changed = true;
 

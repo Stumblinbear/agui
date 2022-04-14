@@ -3,14 +3,17 @@ use std::{
     fs::File,
     io::{self, BufReader, Read},
     rc::Rc,
+    sync::Arc,
 };
 
 use downcast_rs::{impl_downcast, Downcast};
 use fnv::{FnvHashMap, FnvHashSet};
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
+use parking_lot::Mutex;
 
 use crate::{
+    callback::CallbackId,
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Font, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetKey},
@@ -18,7 +21,6 @@ use crate::{
 
 mod cache;
 pub mod event;
-pub mod notify;
 pub mod plugin;
 pub mod query;
 pub mod tree;
@@ -27,7 +29,6 @@ pub mod widget;
 use self::{
     cache::LayoutCache,
     event::WidgetEvent,
-    notify::Notifier,
     plugin::PluginElement,
     query::EngineQuery,
     tree::Tree,
@@ -40,14 +41,15 @@ impl<T> Data for T where T: std::fmt::Debug + Downcast {}
 
 impl_downcast!(Data);
 
+pub type NotifyCallback = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
+
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
 pub struct Engine {
     plugins: FnvHashMap<PluginId, Plugin>,
     tree: Tree<WidgetId, Widget>,
     dirty: FnvHashSet<WidgetId>,
-
-    notifier: Rc<Notifier>,
+    callbacks: NotifyCallback,
 
     fonts: Vec<FontArc>,
     cache: LayoutCache<WidgetId>,
@@ -202,10 +204,13 @@ impl Engine {
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
         // Update all plugins, as they may cause changes to state
         for plugin in self.plugins.values_mut() {
-            plugin.on_before_update(&self.tree, &mut self.dirty);
+            plugin.on_before_update(&self.tree, &mut self.dirty, Arc::clone(&self.callbacks));
         }
 
-        if self.modifications.is_empty() && self.dirty.is_empty() {
+        if self.modifications.is_empty()
+            && self.dirty.is_empty()
+            && self.callbacks.lock().is_empty()
+        {
             return None;
         }
 
@@ -224,17 +229,23 @@ impl Engine {
                 self.flush_callbacks();
 
                 for plugin in self.plugins.values_mut() {
-                    plugin.on_update(&self.tree, &mut self.dirty);
+                    plugin.on_update(&self.tree, &mut self.dirty, Arc::clone(&self.callbacks));
                 }
 
-                if self.modifications.is_empty() && self.dirty.is_empty() {
+                if self.modifications.is_empty()
+                    && self.dirty.is_empty()
+                    && self.callbacks.lock().is_empty()
+                {
                     break;
                 }
             }
 
             widgets_layout.extend(self.flush_layout());
 
-            if self.modifications.is_empty() && self.dirty.is_empty() {
+            if self.modifications.is_empty()
+                && self.dirty.is_empty()
+                && self.callbacks.lock().is_empty()
+            {
                 break;
             }
         }
@@ -255,7 +266,12 @@ impl Engine {
         }
 
         for plugin in self.plugins.values_mut() {
-            plugin.on_events(&self.tree, &mut self.dirty, &widget_events);
+            plugin.on_events(
+                &self.tree,
+                &mut self.dirty,
+                Arc::clone(&self.callbacks),
+                &widget_events,
+            );
         }
 
         Some(widget_events)
@@ -320,7 +336,7 @@ impl Engine {
     }
 
     pub fn flush_callbacks(&mut self) {
-        let callbacks = { self.notifier.callbacks.lock().drain(..).collect::<Vec<_>>() };
+        let callbacks = { self.callbacks.lock().drain(..).collect::<Vec<_>>() };
 
         if callbacks.is_empty() {
             return;
@@ -329,12 +345,12 @@ impl Engine {
         for (callback_id, args) in callbacks {
             let widget = self
                 .tree
-                .get(callback_id.0)
+                .get(callback_id.get_widget_id())
                 .expect("cannot call a callback on a widget that does not exist");
 
             let mut widget_impl = widget.get_mut();
 
-            widget_impl.call(callback_id, args);
+            widget_impl.call(Arc::clone(&self.callbacks), callback_id, args);
         }
     }
 
@@ -409,7 +425,7 @@ impl Engine {
         }
 
         for plugin in self.plugins.values_mut() {
-            plugin.on_layout(&self.tree, &mut self.dirty);
+            plugin.on_layout(&self.tree, &mut self.dirty, Arc::clone(&self.callbacks));
         }
 
         newly_changed
@@ -471,8 +487,13 @@ impl Engine {
                 widget_id,
             });
 
-            let result =
-                widget_impl.build(&mut self.plugins, &self.tree, &mut self.dirty, widget_id);
+            let result = widget_impl.build(
+                &mut self.plugins,
+                &self.tree,
+                &mut self.dirty,
+                Arc::clone(&self.callbacks),
+                widget_id,
+            );
 
             match result {
                 BuildResult::None => {}
