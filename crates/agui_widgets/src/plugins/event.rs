@@ -243,6 +243,16 @@ mod tests {
         let queue = &plugin.get_state().queue;
 
         assert!(!queue.is_empty(), "should have queued the event");
+
+        engine.update();
+
+        let plugin = engine.get_plugin::<EventPlugin>().unwrap();
+        let queue = &plugin.get_state().queue;
+
+        assert!(
+            queue.is_empty(),
+            "should have remove the event from the queue"
+        );
     }
 
     #[test]
