@@ -19,7 +19,10 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn get_layout_type(&self) -> Option<LayoutType>;
     fn get_layout(&self) -> Option<Layout>;
 
+    fn get_renderer(&self) -> Option<&RenderFn>;
+
     fn set_rect(&mut self, rect: Option<Rect>);
+    fn get_rect(&self) -> Option<Rect>;
 
     fn build(
         &mut self,
@@ -116,8 +119,16 @@ where
         Some(self.layout)
     }
 
+    fn get_renderer(&self) -> Option<&RenderFn> {
+        self.renderer.as_ref()
+    }
+
     fn set_rect(&mut self, rect: Option<Rect>) {
         self.rect = rect;
+    }
+
+    fn get_rect(&self) -> Option<Rect> {
+        self.rect
     }
 
     fn build(
@@ -181,7 +192,7 @@ where
     W: WidgetBuilder,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Widget")
+        f.debug_struct("WidgetElement")
             .field("widget", &self.widget)
             .field("state", &self.state)
             .finish()

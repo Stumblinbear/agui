@@ -10,7 +10,7 @@ use slotmap::new_key_type;
 use crate::{
     engine::{
         tree::Tree,
-        widget::{WidgetBuilder, WidgetImpl, WidgetElement},
+        widget::{WidgetBuilder, WidgetElement, WidgetImpl},
     },
     unit::Key,
 };
@@ -35,7 +35,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout_type())
             .map(Into::into)
     }
@@ -43,7 +43,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn position_type(&self, store: &'_ Self::Data) -> Option<morphorm::PositionType> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.position.into())
     }
@@ -51,7 +51,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.sizing.get_width().into())
     }
@@ -59,7 +59,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.sizing.get_height().into())
     }
@@ -67,7 +67,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn min_width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.min_sizing.get_width().into())
     }
@@ -75,7 +75,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn min_height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.min_sizing.get_height().into())
     }
@@ -83,7 +83,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn max_width(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.max_sizing.get_width().into())
     }
@@ -91,7 +91,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn max_height(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.max_sizing.get_height().into())
     }
@@ -99,7 +99,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .and_then(|layout| layout.position.get_top())
             .map(Into::into)
@@ -108,7 +108,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .and_then(|layout| layout.position.get_right())
             .map(Into::into)
@@ -117,7 +117,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .and_then(|layout| layout.position.get_bottom())
             .map(Into::into)
@@ -126,7 +126,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .and_then(|layout| layout.position.get_left())
             .map(Into::into)
@@ -167,7 +167,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn child_top(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.margin.get_top().into())
     }
@@ -175,7 +175,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn child_right(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.margin.get_right().into())
     }
@@ -183,7 +183,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn child_bottom(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.margin.get_bottom().into())
     }
@@ -191,7 +191,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn child_left(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout())
             .map(|layout| layout.margin.get_left().into())
     }
@@ -199,7 +199,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn row_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout_type())
             .and_then(|layout_type| layout_type.get_column_spacing())
             .map(Into::into)
@@ -208,7 +208,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn col_between(&self, store: &'_ Self::Data) -> Option<morphorm::Units> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout_type())
             .and_then(|layout_type| layout_type.get_row_spacing())
             .map(Into::into)
@@ -217,7 +217,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn grid_rows(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout_type())
             .and_then(|layout_type| layout_type.get_rows())
             .map(|val| val.into_iter().map(Into::into).collect())
@@ -226,7 +226,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     fn grid_cols(&self, store: &'_ Self::Data) -> Option<Vec<morphorm::Units>> {
         store
             .get(*self)
-            .map(Widget::get)
+            .and_then(Widget::get)
             .and_then(|node| node.get_layout_type())
             .and_then(|layout_type| layout_type.get_columns())
             .map(|val| val.into_iter().map(Into::into).collect())
@@ -278,73 +278,115 @@ impl WidgetKey {
     }
 }
 
+// #[derive(Default, Clone)]
+// pub struct ChildWidget(Option<Widget>);
+
+// impl Deref for ChildWidget {
+//     type Target = Option<Widget>;
+
+//     fn deref(&self) -> &Self::Target {
+//         &self.0
+//     }
+// }
+
+// impl std::fmt::Debug for ChildWidget {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match &self.0 {
+//             Some(widget) => widget.fmt(f),
+//             None => write!(f, "None"),
+//         }
+//     }
+// }
+
 #[derive(Clone)]
-pub struct Widget(Option<WidgetKey>, pub(crate) Rc<RefCell<dyn WidgetImpl>>);
+pub enum Widget {
+    None,
+
+    Some {
+        key: Option<WidgetKey>,
+        inner: Rc<RefCell<dyn WidgetImpl>>,
+    },
+}
+
+impl Default for Widget {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 impl Widget {
     pub(crate) fn new<W>(key: Option<WidgetKey>, widget: W) -> Self
     where
         W: WidgetImpl,
     {
-        Self(key, Rc::new(RefCell::new(widget)))
-    }
-
-    pub fn with_key(&self, key: WidgetKey) -> Self {
-        Self(Some(key), Rc::clone(&self.1))
+        Self::Some {
+            key,
+            inner: Rc::new(RefCell::new(widget)),
+        }
     }
 
     pub fn get_key(&self) -> Option<WidgetKey> {
-        self.0
+        if let Widget::Some { key, .. } = self {
+            return *key;
+        }
+
+        None
     }
 
-    pub fn get_type_id(&self) -> TypeId {
-        self.1.borrow().get_type_id()
+    pub fn get(&self) -> Option<Ref<dyn WidgetImpl>> {
+        match self {
+            Widget::None => None,
+            Widget::Some { inner, .. } => Some(inner.borrow()),
+        }
     }
 
-    pub fn get(&self) -> Ref<dyn WidgetImpl> {
-        RefCell::borrow(&self.1)
-    }
-
-    pub fn get_mut(&self) -> RefMut<dyn WidgetImpl> {
-        RefCell::borrow_mut(&self.1)
+    pub fn get_mut(&self) -> Option<RefMut<dyn WidgetImpl>> {
+        match self {
+            Widget::None => None,
+            Widget::Some { inner, .. } => Some(inner.borrow_mut()),
+        }
     }
 
     pub fn get_as<W>(&self) -> Option<Ref<WidgetElement<W>>>
     where
         W: WidgetBuilder,
     {
-        let widget = RefCell::borrow(&self.1);
+        if let Widget::Some { inner, .. } = self {
+            let widget = RefCell::borrow(inner);
 
-        if widget.get_type_id() == TypeId::of::<W>() {
-            Some(Ref::map(widget, |x| x.downcast_ref().unwrap()))
-        } else {
-            None
+            if widget.get_type_id() == TypeId::of::<W>() {
+                return Some(Ref::map(widget, |x| x.downcast_ref().unwrap()));
+            }
         }
+
+        None
     }
 
     pub fn get_as_mut<W>(&self) -> Option<RefMut<WidgetElement<W>>>
     where
         W: WidgetBuilder,
     {
-        let widget = RefCell::borrow_mut(&self.1);
+        if let Widget::Some { inner, .. } = self {
+            let widget = RefCell::borrow_mut(inner);
 
-        if widget.get_type_id() == TypeId::of::<W>() {
-            Some(RefMut::map(widget, |x| x.downcast_mut().unwrap()))
-        } else {
-            None
+            if widget.get_type_id() == TypeId::of::<W>() {
+                return Some(RefMut::map(widget, |x| x.downcast_mut().unwrap()));
+            }
         }
+
+        None
     }
 }
 
 impl std::fmt::Debug for Widget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            Some(key) => f
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Some { key, inner } => f
                 .debug_struct("Widget")
                 .field("key", &key)
-                .field("widget", &self.get())
+                .field("inner", &inner.borrow())
                 .finish(),
-            None => self.get().fmt(f),
         }
     }
 }

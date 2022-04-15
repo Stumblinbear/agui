@@ -7,7 +7,7 @@ use crate::ui::UI;
 pub struct UIProgram {
     program: GpuProgram,
 
-    ui: UI<'static>,
+    ui: UI,
 }
 
 impl UIProgram {
@@ -33,7 +33,7 @@ impl UIProgram {
 }
 
 impl Deref for UIProgram {
-    type Target = UI<'static>;
+    type Target = UI;
 
     fn deref(&self) -> &Self::Target {
         &self.ui

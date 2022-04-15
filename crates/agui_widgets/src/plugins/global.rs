@@ -144,13 +144,15 @@ impl GlobalPluginExt for Engine {
     where
         G: Data + Default,
     {
-        let mut plugin = self
-            .get_plugin_mut::<GlobalPlugin>()
-            .expect("global plugin not added");
+        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+            plugin.get_state_mut().get(None)
+        } else {
+            Global {
+                phantom: PhantomData,
 
-        let state = plugin.get_state_mut();
-
-        state.get(None)
+                value: Rc::new(RefCell::new(Box::new(G::default()))),
+            }
+        }
     }
 
     fn set_global<G, F>(&mut self, func: F)
@@ -158,13 +160,9 @@ impl GlobalPluginExt for Engine {
         F: FnOnce(&mut G) + 'static,
         G: Data + Default,
     {
-        let mut plugin = self
-            .get_plugin_mut::<GlobalPlugin>()
-            .expect("global plugin not added");
-
-        let state = plugin.get_state_mut();
-
-        state.set(func)
+        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+            plugin.get_state_mut().set(func)
+        }
     }
 }
 
@@ -178,13 +176,15 @@ where
     {
         let widget_id = self.get_widget_id();
 
-        let mut plugin = self
-            .get_plugin_mut::<GlobalPlugin>()
-            .expect("global plugin not added");
+        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+            plugin.get_state_mut().get(Some(widget_id))
+        } else {
+            Global {
+                phantom: PhantomData,
 
-        let state = plugin.get_state_mut();
-
-        state.get(Some(widget_id))
+                value: Rc::new(RefCell::new(Box::new(G::default()))),
+            }
+        }
     }
 
     fn set_global<G, F>(&mut self, func: F)
@@ -192,13 +192,9 @@ where
         F: FnOnce(&mut G) + 'static,
         G: Data + Default,
     {
-        let mut plugin = self
-            .get_plugin_mut::<GlobalPlugin>()
-            .expect("global plugin not added");
-
-        let state = plugin.get_state_mut();
-
-        state.set(func)
+        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+            plugin.get_state_mut().set(func)
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 use agui_core::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Padding {
     pub padding: Margin,
 

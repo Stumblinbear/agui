@@ -1,14 +1,11 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    font::FontStyle,
     macros::{build, functional_widget},
-    unit::{Layout, Margin, Sizing},
-    widget::{BuildContext, BuildResult},
+    prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
         primitives::{Column, Padding, Text},
-        state::DefaultGlobalsExt,
         App, Button,
     },
 };
@@ -18,35 +15,33 @@ fn main() -> Result<(), agpu::BoxError> {
     let mut ui = UIProgram::new("agui counter")?;
 
     ui.register_default_plugins();
-    ui.register_default_globals();
+    // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build! {
-        App {
-            child: CounterWidget {
-                font: deja_vu.styled()
+    ui.set_root(App {
+        child: build! {
+            CounterWidget {
+                font: deja_vu.styled(),
             }
-        }
+        },
     });
 
     ui.run()
 }
 
 #[functional_widget]
-fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
-    let num = ctx.use_state::<i32>();
-
-    let on_pressed = ctx.use_callback(|ctx, ()| {
-        let mut num = ctx.get_state::<i32>();
-
-        *num += 1;
+fn counter_widget(ctx: &mut BuildContext<i32>, font: FontStyle) -> BuildResult {
+    let on_pressed = ctx.callback(|ctx, ()| {
+        ctx.set_state(|state| {
+            *state += 1;
+        })
     });
 
     build! {
         Column {
             children: [
-                Text { font: font.clone(), text: format!("clicked: {} times", num).into() },
+                Text { font: font.clone(), text: format!("clicked: {} times", ctx.get_state()).into() },
                 Button {
                     layout: Layout {
                         sizing: Sizing::Axis {

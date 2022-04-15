@@ -10,7 +10,7 @@ fn main() -> Result<(), agpu::BoxError> {
     let mut ui = UIProgram::new("agui hello world")?;
 
     ui.register_default_plugins();
-    ui.register_default_globals();
+    // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 

@@ -1,5 +1,7 @@
 use agui_core::prelude::*;
 
+use crate::{plugins::event::EventPluginContextExt, state::mouse::MouseButton};
+
 #[derive(Debug, Clone)]
 pub struct ButtonStyle {
     pub normal: Color,
@@ -32,7 +34,7 @@ pub struct Button {
 
     pub on_pressed: Callback<()>,
 
-    pub child: Option<Widget>,
+    pub child: Widget,
 }
 
 impl StatefulWidget for Button {
@@ -40,6 +42,10 @@ impl StatefulWidget for Button {
 
     fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
+
+        ctx.listen_to::<MouseButton, _>(|ctx, event| {
+            
+        });
 
         // let mouse = ctx.global::<Mouse>();
         // let state = ctx.new_state(ButtonState::default);
@@ -51,21 +57,21 @@ impl StatefulWidget for Button {
         // ctx.effect(|ctx| {
         //     let is_pressed = state.map(ctx, |state| state.pressed);
 
-            // let state_ref = state.as_ref(ctx);
+        // let state_ref = state.as_ref(ctx);
 
-            // if mouse.button.left == MouseButtonState::Pressed {
-            //     if ctx.is_hovering() && *state != state.pressed {
-            //         state.set(ctx, |state| {
-            //             state.pressed = true;
-            //         });
-            //     }
-            // } else if *state == ButtonState::Pressed {
-            //     state.pressed = false;
+        // if mouse.button.left == MouseButtonState::Pressed {
+        //     if ctx.is_hovering() && *state != state.pressed {
+        //         state.set(ctx, |state| {
+        //             state.pressed = true;
+        //         });
+        //     }
+        // } else if *state == ButtonState::Pressed {
+        //     state.pressed = false;
 
-            //     if ctx.is_hovering() {
-            //         self.on_pressed.emit(());
-            //     }
-            // }
+        //     if ctx.is_hovering() {
+        //         self.on_pressed.emit(());
+        //     }
+        // }
         // });
 
         // let state = ctx.use_state::<ButtonState>().get();

@@ -118,13 +118,9 @@ impl EventPluginEngineExt for Engine {
     where
         E: Data,
     {
-        let mut plugin = self
-            .get_plugin_mut::<EventPlugin>()
-            .expect("event plugin not added");
-
-        let state = plugin.get_state_mut();
-
-        state.fire_event(event)
+        if let Some(mut plugin) = self.get_plugin_mut::<EventPlugin>() {
+            plugin.get_state_mut().fire_event(event)
+        }
     }
 }
 
@@ -139,26 +135,18 @@ where
     {
         let callback_id = self.callback(func).get_id().unwrap();
 
-        let mut plugin = self
-            .get_plugin_mut::<EventPlugin>()
-            .expect("event plugin not added");
-
-        let state = plugin.get_state_mut();
-
-        state.listen_to::<E>(callback_id)
+        if let Some(mut plugin) = self.get_plugin_mut::<EventPlugin>() {
+            plugin.get_state_mut().listen_to::<E>(callback_id)
+        }
     }
 
     fn fire_event<E>(&mut self, event: E)
     where
         E: Data,
     {
-        let mut plugin = self
-            .get_plugin_mut::<EventPlugin>()
-            .expect("event plugin not added");
-
-        let state = plugin.get_state_mut();
-
-        state.fire_event(event)
+        if let Some(mut plugin) = self.get_plugin_mut::<EventPlugin>() {
+            plugin.get_state_mut().fire_event(event)
+        }
     }
 }
 

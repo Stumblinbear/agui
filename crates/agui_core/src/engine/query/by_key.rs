@@ -21,9 +21,9 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find(|widget| match widget.get_key() {
-            Some(widget_key) => widget_key.get_key() == self.key,
-            None => false,
+        self.iter.find(|widget| match widget {
+            Widget::None => false,
+            Widget::Some { key, .. } => key.filter(|key| key.get_key() == self.key).is_some(),
         })
     }
 

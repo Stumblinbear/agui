@@ -3,7 +3,7 @@ use morphorm::PositionType;
 use super::{Units, MARGIN_OF_ERROR};
 
 /// Holds layout parameters to dictate how the element should be displayed.
-#[derive(Debug, Default, Copy, Clone, Hash)]
+#[derive(Debug, Default, Hash, Copy, Clone)]
 pub struct Layout {
     pub position: Position,
     pub min_sizing: Sizing,
@@ -14,7 +14,7 @@ pub struct Layout {
 }
 
 /// Indicates to the layout system how the children of a widget should be laid out.
-#[derive(Debug, Copy, Clone, Hash)]
+#[derive(Debug, Hash, Clone, Copy)]
 #[non_exhaustive]
 pub enum LayoutType {
     /// Widgets should be laid out side-by-side.
@@ -95,7 +95,7 @@ impl LayoutType {
 }
 
 /// Sets the margin around the element.
-#[derive(Debug, Copy, Clone, Hash)]
+#[derive(Debug, Hash, Clone, Copy)]
 #[non_exhaustive]
 pub enum Margin {
     /// No margin.
@@ -190,7 +190,7 @@ impl Margin {
 }
 
 /// Sets the positioning of an element.
-#[derive(Debug, Copy, Clone, Hash)]
+#[derive(Debug, Hash, Clone, Copy)]
 #[non_exhaustive]
 pub enum Position {
     /// Position unchanged.
@@ -264,7 +264,7 @@ impl Position {
 }
 
 /// The sizing of the element.
-#[derive(Debug, Copy, Clone, Hash)]
+#[derive(Debug, Hash, Clone, Copy)]
 #[non_exhaustive]
 pub enum Sizing {
     /// Element size automatically set based another factors.
@@ -344,7 +344,7 @@ impl std::hash::Hash for Size {
 }
 
 /// Holds exact position and size values.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,

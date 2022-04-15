@@ -102,10 +102,19 @@ where
             panic!("cannot key a widget that has already been keyed");
         }
 
-        widget.with_key(match key {
-            Key::Local(_) => WidgetKey(Some(self.widget_id), key),
-            Key::Global(_) => WidgetKey(None, key),
-        })
+        let mut widget = widget.clone();
+
+        if let Widget::Some {
+            key: widget_key, ..
+        } = &mut widget
+        {
+            *widget_key = Some(match key {
+                Key::Local(_) => WidgetKey(Some(self.widget_id), key),
+                Key::Global(_) => WidgetKey(None, key),
+            });
+        }
+
+        widget
     }
 
     pub fn set_state<F>(&mut self, func: F)

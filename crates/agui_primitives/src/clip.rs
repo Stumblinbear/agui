@@ -4,7 +4,7 @@ use agui_core::prelude::*;
 pub struct Clip {
     pub anti_alias: bool,
     pub shape: Shape,
-    pub child: Option<Widget>,
+    pub child: Widget,
 }
 
 impl StatelessWidget for Clip {

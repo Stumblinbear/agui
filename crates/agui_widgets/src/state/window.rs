@@ -2,8 +2,8 @@ use std::ops::{Deref, DerefMut};
 
 use agui_core::unit::{Point, Size};
 
-#[derive(Debug, Default, Clone)]
-pub struct WindowFocus(bool);
+#[derive(Debug, Default, Hash, PartialEq, Eq, Clone, Copy)]
+pub struct WindowFocus(pub bool);
 
 impl Deref for WindowFocus {
     type Target = bool;
@@ -19,36 +19,32 @@ impl DerefMut for WindowFocus {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct WindowPosition(Point);
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub struct WindowPosition {
+    pub x: f32,
+    pub y: f32,
+}
 
-impl Deref for WindowPosition {
-    type Target = Point;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl From<Point> for WindowPosition {
+    fn from(point: Point) -> Self {
+        Self {
+            x: point.x,
+            y: point.y,
+        }
     }
 }
 
-impl DerefMut for WindowPosition {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub struct WindowSize {
+    pub width: f32,
+    pub height: f32,
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct WindowSize(Size);
-
-impl Deref for WindowSize {
-    type Target = Size;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for WindowSize {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl From<Size> for WindowSize {
+    fn from(size: Size) -> Self {
+        Self {
+            width: size.width,
+            height: size.height,
+        }
     }
 }

@@ -4,45 +4,48 @@ use std::{
 };
 
 use agpu::{
-    winit::winit::event::{
-        ElementState, Event as WinitEvent, MouseButton, MouseScrollDelta, WindowEvent,
+    winit::winit::{
+        self,
+        dpi::PhysicalPosition,
+        event::{ElementState, Event as WinitEvent, MouseScrollDelta, WindowEvent},
     },
     Event, GpuHandle, GpuProgram,
 };
 use agui::{
     engine::Engine,
-    font::Font,
-    unit::{Point, Size},
-    widgets::state::{
-        keyboard::{KeyCode, KeyState, Keyboard, KeyboardInput},
-        mouse::{Mouse, MouseButtonState, Scroll},
-        window::{WindowFocus, WindowPosition, WindowSize},
+    unit::{Font, Point, Size},
+    widgets::{
+        plugins::{event::EventPluginEngineExt, global::GlobalPluginExt},
+        state::{
+            mouse::{self, Mouse, MouseButton, MouseButtonState, MouseButtons, MousePos, Scroll},
+            window::{WindowFocus, WindowPosition, WindowSize},
+        },
     },
 };
 use glyph_brush_draw_cache::ab_glyph::InvalidFont;
 
 use crate::render::RenderEngine;
 
-pub struct UI<'ui> {
-    engine: Engine<'ui>,
+pub struct UI {
+    engine: Engine,
     renderer: RenderEngine,
 }
 
-impl<'ui> Deref for UI<'ui> {
-    type Target = Engine<'ui>;
+impl Deref for UI {
+    type Target = Engine;
 
     fn deref(&self) -> &Self::Target {
         &self.engine
     }
 }
 
-impl<'ui> DerefMut for UI<'ui> {
+impl DerefMut for UI {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.engine
     }
 }
 
-impl<'ui> UI<'ui> {
+impl UI {
     pub fn from_program(program: &GpuProgram) -> Self {
         let surface = program.viewport.sc_desc.borrow();
 
@@ -96,96 +99,94 @@ impl<'ui> UI<'ui> {
                         height: size.height as f32,
                     });
 
-                    if let Some(mut state) = self.try_use_global::<WindowSize>() {
-                        state.width = size.width as f32;
-                        state.height = size.height as f32;
-                    }
+                    let window_size = WindowSize {
+                        width: size.width as f32,
+                        height: size.height as f32,
+                    };
+
+                    self.fire_event(window_size);
+                    self.set_global::<WindowSize, _>(move |state| *state = window_size);
                 }
 
                 WindowEvent::Moved(pos) => {
-                    if let Some(mut state) = self.try_use_global::<WindowPosition>() {
-                        state.x = pos.x as f32;
-                        state.y = pos.y as f32;
-                    }
+                    let window_pos = WindowPosition {
+                        x: pos.x as f32,
+                        y: pos.y as f32,
+                    };
+
+                    self.fire_event(window_pos);
+                    self.set_global::<WindowPosition, _>(move |state| *state = window_pos);
                 }
 
-                WindowEvent::ReceivedCharacter(c) => {
-                    if let Some(mut state) = self.try_use_global::<Keyboard>() {
-                        state.input = Some(c);
-                    }
+                // WindowEvent::ReceivedCharacter(c) => {
+                //     if let Some(mut state) = self.try_use_global::<Keyboard>() {
+                //         state.input = Some(c);
+                //     }
 
-                    if let Some(mut state) = self.try_use_global::<KeyboardInput>() {
-                        **state = c;
-                    }
-                }
-
+                //     if let Some(mut state) = self.try_use_global::<KeyboardInput>() {
+                //         **state = c;
+                //     }
+                // }
                 WindowEvent::Focused(focused) => {
-                    if let Some(mut state) = self.try_use_global::<WindowFocus>() {
-                        **state = focused;
-                    }
+                    let window_focused = WindowFocus(focused);
+
+                    self.fire_event(window_focused);
+                    self.set_global::<WindowFocus, _>(move |state| *state = window_focused);
                 }
 
-                WindowEvent::KeyboardInput { input, .. } => {
-                    if let Some(mut state) = self.try_use_global::<Keyboard>() {
-                        state.input = None;
+                // WindowEvent::KeyboardInput { input, .. } => {
+                //     if let Some(mut state) = self.try_use_global::<Keyboard>() {
+                //         state.input = None;
 
-                        if let Some(key) = input.virtual_keycode {
-                            let key: KeyCode = unsafe { mem::transmute(key as u32) };
+                //         if let Some(key) = input.virtual_keycode {
+                //             let key: KeyCode = unsafe { mem::transmute(key as u32) };
 
-                            match input.state {
-                                ElementState::Pressed => {
-                                    state.keys.insert(key, KeyState::Pressed);
-                                }
-                                ElementState::Released => {
-                                    state.keys.insert(key, KeyState::Released);
-                                }
-                            }
-                        }
-                    }
-                }
+                //             match input.state {
+                //                 ElementState::Pressed => {
+                //                     state.keys.insert(key, KeyState::Pressed);
+                //                 }
+                //                 ElementState::Released => {
+                //                     state.keys.insert(key, KeyState::Released);
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
 
-                WindowEvent::ModifiersChanged(modifiers) => {
-                    if let Some(mut state) = self.try_use_global::<Keyboard>() {
-                        state.modifiers = unsafe { mem::transmute(modifiers) };
-                    }
-                }
+                // WindowEvent::ModifiersChanged(modifiers) => {
+                //     if let Some(mut state) = self.try_use_global::<Keyboard>() {
+                //         state.modifiers = unsafe { mem::transmute(modifiers) };
+                //     }
+                // }
+                WindowEvent::CursorMoved { position: pos, .. } => {
+                    let mouse_pos = MousePos(Some(Point {
+                        x: pos.x as f32,
+                        y: pos.y as f32,
+                    }));
 
-                WindowEvent::CursorMoved { position, .. } => {
-                    if let Some(mut state) = self.try_use_global::<Mouse>() {
-                        match state.pos {
-                            Some(ref mut pos) => {
-                                pos.x = position.x as f32;
-                                pos.y = position.y as f32;
-                            }
-                            None => {
-                                state.pos = Some(Point {
-                                    x: position.x as f32,
-                                    y: position.y as f32,
-                                });
-                            }
-                        }
-                    }
+                    self.fire_event(mouse_pos);
+                    self.set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                 }
 
                 WindowEvent::CursorLeft { .. } => {
-                    if let Some(mut state) = self.try_use_global::<Mouse>() {
-                        state.pos = None;
-                    }
+                    let mouse_pos = MousePos(None);
+
+                    self.fire_event(mouse_pos);
+                    self.set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                 }
 
                 WindowEvent::MouseWheel { delta, .. } => {
-                    if let Some(mut state) = self.try_use_global::<Scroll>() {
-                        match delta {
-                            MouseScrollDelta::LineDelta(x, y) => {
-                                state.delta.x = x;
-                                state.delta.y = y;
-                            }
-                            MouseScrollDelta::PixelDelta(position) => {
-                                state.delta.x = position.x as f32;
-                                state.delta.y = position.y as f32;
-                            }
-                        }
-                    }
+                    let scroll = Scroll(match delta {
+                        MouseScrollDelta::LineDelta(x, y) => Point { x, y },
+
+                        MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => Point {
+                            x: x as f32,
+                            y: y as f32,
+                        },
+                    });
+
+                    self.fire_event(scroll);
+                    self.set_global::<Scroll, _>(move |state| *state = scroll);
                 }
 
                 WindowEvent::MouseInput {
@@ -193,29 +194,35 @@ impl<'ui> UI<'ui> {
                     state: value,
                     ..
                 } => {
-                    if let Some(mut state) = self.try_use_global::<Mouse>() {
-                        let button = match button {
-                            MouseButton::Left => &mut state.button.left,
-                            MouseButton::Middle => &mut state.button.middle,
-                            MouseButton::Right => &mut state.button.right,
-                            MouseButton::Other(_) => {
-                                return;
-                            }
-                        };
+                    let button_state = match value {
+                        ElementState::Pressed => MouseButtonState::Pressed,
+                        ElementState::Released => MouseButtonState::Released,
+                    };
 
-                        match value {
-                            ElementState::Pressed => {
-                                if *button == MouseButtonState::Released {
-                                    *button = MouseButtonState::Pressed;
-                                } else {
-                                    *button = MouseButtonState::Held;
-                                }
-                            }
-                            ElementState::Released => {
-                                *button = MouseButtonState::Released;
-                            }
-                        };
-                    }
+                    self.fire_event(match button {
+                        winit::event::MouseButton::Left => MouseButton::Left(button_state),
+                        winit::event::MouseButton::Right => MouseButton::Right(button_state),
+                        winit::event::MouseButton::Middle => MouseButton::Middle(button_state),
+                        winit::event::MouseButton::Other(i) => MouseButton::Other(i, button_state),
+                    });
+
+                    self.set_global::<MouseButtons, _>(move |state| match button {
+                        winit::event::MouseButton::Left => state.left = button_state,
+                        winit::event::MouseButton::Right => state.right = button_state,
+                        winit::event::MouseButton::Middle => state.middle = button_state,
+                        winit::event::MouseButton::Other(i) => {
+                            state.other.insert(i, button_state);
+                        }
+                    });
+
+                    self.set_global::<Mouse, _>(move |state| match button {
+                        winit::event::MouseButton::Left => state.button.left = button_state,
+                        winit::event::MouseButton::Right => state.button.right = button_state,
+                        winit::event::MouseButton::Middle => state.button.middle = button_state,
+                        winit::event::MouseButton::Other(i) => {
+                            state.button.other.insert(i, button_state);
+                        }
+                    });
                 }
 
                 _ => {}

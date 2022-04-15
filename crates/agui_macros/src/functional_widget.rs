@@ -1,10 +1,11 @@
+use core::panic;
+
 use heck::ToUpperCamelCase;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
-use quote::quote;
 use syn::{
     parse2, parse_quote,
     visit::{visit_item_fn, Visit},
-    ItemFn, Pat, PatIdent, ReturnType, Type,
+    GenericArgument, ItemFn, Pat, PatIdent, PathArguments, ReturnType, Type,
 };
 
 #[derive(Default)]
@@ -13,6 +14,8 @@ struct FunctionVisitor {
 
     ident: Option<String>,
     args: Vec<(PatIdent, Type)>,
+    state: Option<Type>,
+    ctx_path_args: Option<PathArguments>,
 }
 
 impl FunctionVisitor {}
@@ -70,6 +73,14 @@ impl Visit<'_> for FunctionVisitor {
                     if segment.ident != "BuildContext" {
                         panic!("first argument must be &mut BuildContext");
                     }
+
+                    self.ctx_path_args = Some(segment.arguments.clone());
+
+                    if let PathArguments::AngleBracketed(generic) = &segment.arguments {
+                        if let GenericArgument::Type(ty) = generic.args.first().unwrap() {
+                            self.state = Some(ty.clone());
+                        }
+                    }
                 } else {
                     panic!("first argument must be &mut BuildContext");
                 }
@@ -114,37 +125,31 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
         });
     }
 
-    #[cfg(feature = "internal")]
-    let agui_core = quote! { agui };
-    #[cfg(not(feature = "internal"))]
-    let agui_core = quote! { agui };
+    let state = visitor.state;
+    let ctx_path_args = match visitor.ctx_path_args {
+        Some(args) => quote::quote! { #args },
+        None => quote::quote! {},
+    };
 
-    let type_name = ident.to_string();
+    #[cfg(feature = "internal")]
+    let agui_core = quote::quote! { agui };
+    #[cfg(not(feature = "internal"))]
+    let agui_core = quote::quote! { agui };
 
     parse_quote! {
         #item
 
-        #[derive(Default)]
+        #[derive(Debug, Default)]
         pub struct #ident {
             #fields
         }
 
-        impl #agui_core::widget::WidgetType for #ident {
-            fn get_type_id(&self) -> std::any::TypeId {
-                std::any::TypeId::of::<Self>()
-            }
+        impl #agui_core::widget::StatefulWidget for #ident {
+            type State = #state;
 
-            fn get_type_name(&self) -> &'static str {
-                #type_name
-            }
-        }
-
-        impl #agui_core::widget::WidgetBuilder for #ident {
-            fn build(&self, ctx: &mut #agui_core::widget::BuildContext) -> #agui_core::widget::BuildResult {
+            fn build(&self, ctx: &mut #agui_core::widget::BuildContext #ctx_path_args) -> #agui_core::widget::BuildResult {
                 #fn_ident(#args)
             }
         }
-
-        impl #agui_core::widget::Widget for #ident { }
     }
 }

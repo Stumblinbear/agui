@@ -193,7 +193,7 @@ impl RenderEngine {
             .write_unchecked(&[size.width, size.height]);
     }
 
-    pub fn redraw(&mut self, engine: &Engine<'_>) {
+    pub fn redraw(&mut self, engine: &Engine) {
         let now = Instant::now();
 
         if let Some(root_id) = engine.get_tree().get_root() {
@@ -205,25 +205,27 @@ impl RenderEngine {
         println!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    pub fn redraw_node(&mut self, engine: &Engine<'_>, node_id: WidgetId) {
+    pub fn redraw_node(&mut self, engine: &Engine, widget_id: WidgetId) {
         let mut nodes: Vec<RenderNode> = Vec::default();
 
         let fonts = engine.get_fonts();
 
         let tree = engine.get_tree();
 
-        tree.iter_from(node_id)
+        tree.iter_down(Some(widget_id))
             .map(|widget_id| {
                 tree.get_node(widget_id)
                     .expect("tree node missing during redraw")
             })
             .for_each(|node| {
-                let render_func = match node.renderer.as_ref() {
+                let widget = node.get().unwrap();
+
+                let render_func = match widget.get_renderer() {
                     Some(render_func) => render_func,
                     None => return,
                 };
 
-                let rect = match node.rect {
+                let rect = match widget.get_rect() {
                     Some(rect) => rect,
                     None => return,
                 };

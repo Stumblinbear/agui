@@ -30,7 +30,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        engine::Engine,
+        engine::{query::WidgetQueryExt, Engine},
         widget::{BuildContext, BuildResult},
     };
 
@@ -62,7 +62,9 @@ mod tests {
 
         assert_eq!(
             *engine
-                .get_widget::<TestWidget>(engine.get_root().unwrap())
+                .query()
+                .by_type::<TestWidget>()
+                .next()
                 .unwrap()
                 .get_state(),
             1,
@@ -73,7 +75,9 @@ mod tests {
 
         assert_eq!(
             *engine
-                .get_widget::<TestWidget>(engine.get_root().unwrap())
+                .query()
+                .by_type::<TestWidget>()
+                .next()
                 .unwrap()
                 .get_state(),
             1,

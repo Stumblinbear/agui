@@ -192,14 +192,6 @@ impl Engine {
         EngineQuery::new(self)
     }
 
-    /// Fetch a widget from the tree.
-    pub fn get_widget<W>(&self, widget_id: WidgetId) -> Option<Ref<WidgetElement<W>>>
-    where
-        W: WidgetBuilder,
-    {
-        self.tree.get(widget_id).and_then(|widget| widget.get_as())
-    }
-
     /// Update the UI tree.
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
         // Update all plugins, as they may cause changes to state
@@ -255,7 +247,13 @@ impl Engine {
                 .into_iter()
                 .filter(|widget_id| self.contains(*widget_id))
                 .map(|widget_id| {
-                    let type_id = self.tree.get(widget_id).unwrap().get().get_type_id();
+                    let type_id = self
+                        .tree
+                        .get(widget_id)
+                        .unwrap()
+                        .get()
+                        .unwrap()
+                        .get_type_id();
 
                     WidgetEvent::Layout { type_id, widget_id }
                 }),
@@ -343,12 +341,11 @@ impl Engine {
         }
 
         for (callback_id, args) in callbacks {
-            let widget = self
+            let mut widget_impl = self
                 .tree
                 .get(callback_id.get_widget_id())
+                .and_then(|node| node.get_mut())
                 .expect("cannot call a callback on a widget that does not exist");
-
-            let mut widget_impl = widget.get_mut();
 
             widget_impl.call(Arc::clone(&self.callbacks), callback_id, args);
         }
@@ -361,13 +358,13 @@ impl Engine {
         let mut root_changed = false;
 
         if let Some(widget_id) = self.tree.get_root() {
-            let node = self
+            let widget = self
                 .tree
                 .get(widget_id)
-                .expect("tree has a root node, but it doesn't exist")
-                .get();
+                .and_then(|widget| widget.get_mut())
+                .expect("tree has a root node, but it doesn't exist");
 
-            if let Some(layout) = node.get_layout() {
+            if let Some(layout) = widget.get_layout() {
                 if let Some(Units::Pixels(px)) = layout.position.get_left() {
                     if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
                         root_changed = true;
@@ -418,8 +415,8 @@ impl Engine {
             let mut widget = self
                 .tree
                 .get_mut(*widget_id)
-                .expect("newly changed widget does not exist in the tree")
-                .get_mut();
+                .and_then(|widget| widget.get_mut())
+                .expect("newly changed widget does not exist in the tree");
 
             widget.set_rect(self.cache.get_rect(widget_id).copied());
         }
@@ -452,7 +449,10 @@ impl Engine {
             }
         }
 
-        let type_id = widget.get().get_type_id();
+        let type_id = widget
+            .get()
+            .expect("cannot add Widget::None to the tree")
+            .get_type_id();
 
         let widget_id = self.tree.add(parent_id, widget);
 
@@ -474,45 +474,45 @@ impl Engine {
             self.modifications.push(Modify::Destroy(*child_id));
         }
 
-        let widget = self
+        let mut widget = self
             .tree
             .get(widget_id)
+            .and_then(|widget| widget.get_mut())
             .expect("widget destroyed before rebuild");
 
-        {
-            let mut widget_impl = widget.get_mut();
+        widget_events.push(WidgetEvent::Rebuilt {
+            type_id: widget.get_type_id(),
+            widget_id,
+        });
 
-            widget_events.push(WidgetEvent::Rebuilt {
-                type_id: widget_impl.get_type_id(),
-                widget_id,
-            });
+        let result = widget.build(
+            &mut self.plugins,
+            &self.tree,
+            &mut self.dirty,
+            Arc::clone(&self.callbacks),
+            widget_id,
+        );
 
-            let result = widget_impl.build(
-                &mut self.plugins,
-                &self.tree,
-                &mut self.dirty,
-                Arc::clone(&self.callbacks),
-                widget_id,
-            );
-
-            match result {
-                BuildResult::None => {}
-                BuildResult::Some(children) => {
-                    for child in children {
-                        self.modifications
-                            .push(Modify::Spawn(Some(widget_id), child));
-                    }
+        match result {
+            BuildResult::None => {}
+            BuildResult::Some(children) => {
+                for child in children {
+                    self.modifications
+                        .push(Modify::Spawn(Some(widget_id), child));
                 }
-                BuildResult::Err(err) => panic!("build failed: {}", err),
-            };
-        }
+            }
+            BuildResult::Err(err) => panic!("build failed: {}", err),
+        };
     }
 
     fn process_destroy(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
         let tree_node = self.tree.remove(widget_id);
 
         widget_events.push(WidgetEvent::Destroyed {
-            type_id: tree_node.get().get_type_id(),
+            type_id: tree_node
+                .get()
+                .expect("cannot destroy a Widget::None")
+                .get_type_id(),
             widget_id,
         });
 

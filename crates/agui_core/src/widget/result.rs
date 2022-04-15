@@ -40,18 +40,6 @@ impl From<&Widget> for BuildResult {
     }
 }
 
-impl From<Option<Widget>> for BuildResult {
-    fn from(widget: Option<Widget>) -> Self {
-        widget.map_or(Self::None, |widget| Self::Some(vec![widget]))
-    }
-}
-
-impl From<&Option<Widget>> for BuildResult {
-    fn from(widget: &Option<Widget>) -> Self {
-        widget.clone().into()
-    }
-}
-
 impl From<Vec<Widget>> for BuildResult {
     fn from(widgets: Vec<Widget>) -> Self {
         if widgets.is_empty() {
