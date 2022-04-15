@@ -205,7 +205,7 @@ mod tests {
 
         engine.update();
 
-        engine.set_root(TestListener::default());
+        engine.set_root(TestListener::default().into());
 
         engine.update();
 

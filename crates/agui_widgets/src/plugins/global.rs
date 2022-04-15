@@ -301,7 +301,7 @@ mod tests {
 
         engine.update();
 
-        engine.set_root(TestWidgetReader::default());
+        engine.set_root(TestWidgetReader::default().into());
 
         engine.update();
 

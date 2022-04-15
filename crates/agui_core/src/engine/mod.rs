@@ -69,7 +69,7 @@ impl Engine {
     {
         let mut engine = Self::new();
 
-        engine.set_root(widget);
+        engine.set_root(widget.into());
 
         engine
     }
@@ -167,16 +167,14 @@ impl Engine {
     }
 
     /// Queues the widget for addition into the tree
-    pub fn set_root<W>(&mut self, widget: W)
+    pub fn set_root<W>(&mut self, widget: WidgetElement<W>)
     where
         W: WidgetBuilder,
     {
         self.remove_root();
 
-        let node: WidgetElement<W> = widget.into();
-
         self.modifications
-            .push(Modify::Spawn(None, Widget::new(None, node)));
+            .push(Modify::Spawn(None, Widget::new(None, widget)));
     }
 
     /// Check if a widget exists in the tree.
@@ -553,7 +551,7 @@ mod tests {
     pub fn adding_a_root_widget() {
         let mut engine = Engine::new();
 
-        engine.set_root(TestWidget::default());
+        engine.set_root(TestWidget::default().into());
 
         assert_eq!(engine.get_root(), None, "should not have added the widget");
 
@@ -570,7 +568,7 @@ mod tests {
     pub fn removing_a_root_widget() {
         let mut engine = Engine::new();
 
-        engine.set_root(TestWidget::default());
+        engine.set_root(TestWidget::default().into());
 
         assert_eq!(engine.get_root(), None, "should not have added the widget");
 
@@ -603,7 +601,7 @@ mod tests {
             widget.children.push(TestWidget::default().into());
         }
 
-        engine.set_root(widget);
+        engine.set_root(widget.into());
 
         engine.update();
 

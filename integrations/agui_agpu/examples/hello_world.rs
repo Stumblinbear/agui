@@ -2,7 +2,7 @@
 
 use agui::{
     macros::build,
-    widgets::{plugins::DefaultPluginsExt, primitives::Text, state::DefaultGlobalsExt, App},
+    widgets::{plugins::DefaultPluginsExt, primitives::Text, App},
 };
 use agui_agpu::UIProgram;
 

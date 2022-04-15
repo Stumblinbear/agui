@@ -19,12 +19,12 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(App {
-        child: build! {
-            CounterWidget {
+    ui.set_root(build! {
+        App {
+            child: CounterWidget {
                 font: deja_vu.styled(),
             }
-        },
+        }
     });
 
     ui.run()
