@@ -32,7 +32,7 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn counter_widget(ctx: &mut BuildContext<i32>, font: FontStyle) -> BuildResult {
-    let on_pressed = ctx.callback(|ctx, ()| {
+    let on_pressed = ctx.callback::<bool, _>(|ctx, pressed| {
         ctx.set_state(|state| {
             *state += 1;
         })

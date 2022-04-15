@@ -1,46 +1,19 @@
-use std::any::TypeId;
+use std::any::{type_name, TypeId};
 
 use downcast_rs::{impl_downcast, Downcast};
-use fnv::FnvHashSet;
 
-use crate::{
-    plugin::{EnginePlugin, PluginContext},
-    widget::{Widget, WidgetId},
-};
+use crate::plugin::{EnginePlugin, PluginContext};
 
-use super::{event::WidgetEvent, tree::Tree, NotifyCallback};
+use super::{context::EngineContext, event::WidgetEvent};
 
 pub trait PluginImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
+    fn get_type_name(&self) -> &'static str;
 
-    fn on_before_update(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-    );
-
-    fn on_update(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-    );
-
-    fn on_layout(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-    );
-
-    fn on_events(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-        events: &[WidgetEvent],
-    );
+    fn on_before_update(&mut self, ctx: EngineContext);
+    fn on_update(&mut self, ctx: EngineContext);
+    fn on_layout(&mut self, ctx: EngineContext);
+    fn on_events(&mut self, ctx: EngineContext, events: &[WidgetEvent]);
 }
 
 impl_downcast!(PluginImpl);
@@ -91,62 +64,45 @@ where
         TypeId::of::<P>()
     }
 
-    fn on_before_update(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-    ) {
+    fn get_type_name(&self) -> &'static str {
+        type_name::<P>()
+    }
+
+    fn on_before_update(&mut self, ctx: EngineContext) {
         let mut ctx = PluginContext {
-            tree,
-            dirty,
-            notifier,
+            tree: ctx.tree,
+            dirty: ctx.dirty,
+            notifier: ctx.notifier,
         };
 
         self.plugin.on_before_update(&mut ctx, &mut self.state);
     }
 
-    fn on_update(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-    ) {
+    fn on_update(&mut self, ctx: EngineContext) {
         let mut ctx = PluginContext {
-            tree,
-            dirty,
-            notifier,
+            tree: ctx.tree,
+            dirty: ctx.dirty,
+            notifier: ctx.notifier,
         };
 
         self.plugin.on_update(&mut ctx, &mut self.state);
     }
 
-    fn on_layout(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-    ) {
+    fn on_layout(&mut self, ctx: EngineContext) {
         let mut ctx = PluginContext {
-            tree,
-            dirty,
-            notifier,
+            tree: ctx.tree,
+            dirty: ctx.dirty,
+            notifier: ctx.notifier,
         };
 
         self.plugin.on_layout(&mut ctx, &mut self.state);
     }
 
-    fn on_events(
-        &mut self,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-        events: &[WidgetEvent],
-    ) {
+    fn on_events(&mut self, ctx: EngineContext, events: &[WidgetEvent]) {
         let mut ctx = PluginContext {
-            tree,
-            dirty,
-            notifier,
+            tree: ctx.tree,
+            dirty: ctx.dirty,
+            notifier: ctx.notifier,
         };
 
         self.plugin.on_events(&mut ctx, &mut self.state, events);

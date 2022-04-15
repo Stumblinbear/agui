@@ -131,9 +131,9 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
         None => quote::quote! {},
     };
 
-    #[cfg(feature = "internal")]
-    let agui_core = quote::quote! { agui };
-    #[cfg(not(feature = "internal"))]
+    // #[cfg(feature = "internal")]
+    // let agui_core = quote::quote! { agui_core };
+    // #[cfg(not(feature = "internal"))]
     let agui_core = quote::quote! { agui };
 
     parse_quote! {

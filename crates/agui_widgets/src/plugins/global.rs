@@ -7,9 +7,10 @@ use std::{
 };
 
 use agui_core::{
+    callback::CallbackContext,
     engine::{event::WidgetEvent, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
-    prelude::BuildContext,
+    prelude::{BuildContext, Context},
     widget::WidgetId,
 };
 
@@ -198,9 +199,39 @@ where
     }
 }
 
+impl<'ctx, S> GlobalPluginExt for CallbackContext<'ctx, S>
+where
+    S: Data,
+{
+    fn get_global<G>(&mut self) -> Global<G>
+    where
+        G: Data + Default,
+    {
+        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+            plugin.get_state_mut().get(None)
+        } else {
+            Global {
+                phantom: PhantomData,
+
+                value: Rc::new(RefCell::new(Box::new(G::default()))),
+            }
+        }
+    }
+
+    fn set_global<G, F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut G) + 'static,
+        G: Data + Default,
+    {
+        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+            plugin.get_state_mut().set(func)
+        }
+    }
+}
+
 pub struct Global<G>
 where
-    G: Data + Default,
+    G: Data,
 {
     phantom: PhantomData<G>,
 
@@ -209,7 +240,7 @@ where
 
 impl<G> Global<G>
 where
-    G: Data + Default,
+    G: Data,
 {
     pub fn borrow(&self) -> Ref<G> {
         let borrowed = self.value.borrow();

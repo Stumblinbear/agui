@@ -19,5 +19,5 @@ downcast-rs = "1.2"
 parking_lot = "0.12"
 
 agui_core = { path = "../agui_core", version = "0.3" }
-agui_macros = { path = "../agui_macros", version = "0.3", features = [ "internal" ]}
+agui_macros = { path = "../agui_macros", version = "0.3" }
 agui_primitives = { path = "../agui_primitives", version = "0.3" }

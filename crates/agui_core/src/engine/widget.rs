@@ -1,20 +1,23 @@
-use std::{any::TypeId, rc::Rc};
+use std::{
+    any::{type_name, TypeId},
+    rc::Rc,
+};
 
 use downcast_rs::{impl_downcast, Downcast};
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     canvas::renderer::RenderFn,
-    plugin::{Plugin, PluginId},
     unit::{Layout, LayoutType, Rect},
     widget::{BuildContext, BuildResult, Widget, WidgetId},
 };
 
-use super::{tree::Tree, Data, NotifyCallback};
+use super::{context::EngineContext, Data};
 
 pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
+    fn get_type_name(&self) -> &'static str;
 
     fn get_layout_type(&self) -> Option<LayoutType>;
     fn get_layout(&self) -> Option<Layout>;
@@ -24,21 +27,9 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn set_rect(&mut self, rect: Option<Rect>);
     fn get_rect(&self) -> Option<Rect>;
 
-    fn build(
-        &mut self,
-        plugins: &mut FnvHashMap<PluginId, Plugin>,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-        widget_id: WidgetId,
-    ) -> BuildResult;
+    fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult;
 
-    fn call(
-        &mut self,
-        notifier: NotifyCallback,
-        callback_id: CallbackId,
-        arg: Rc<dyn Data>,
-    ) -> bool;
+    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool;
 }
 
 impl_downcast!(WidgetImpl);
@@ -111,6 +102,10 @@ where
         TypeId::of::<W>()
     }
 
+    fn get_type_name(&self) -> &'static str {
+        type_name::<W>()
+    }
+
     fn get_layout_type(&self) -> Option<LayoutType> {
         Some(self.layout_type)
     }
@@ -131,26 +126,19 @@ where
         self.rect
     }
 
-    fn build(
-        &mut self,
-        plugins: &mut FnvHashMap<PluginId, Plugin>,
-        tree: &Tree<WidgetId, Widget>,
-        dirty: &mut FnvHashSet<WidgetId>,
-        notifier: NotifyCallback,
-        widget_id: WidgetId,
-    ) -> BuildResult {
+    fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult {
         let mut ctx = BuildContext {
-            plugins,
-            tree,
-            dirty,
-            notifier,
+            plugins: ctx.plugins.unwrap(),
+            tree: ctx.tree,
+            dirty: ctx.dirty,
+            notifier: ctx.notifier,
 
             widget_id,
             state: &mut self.state,
 
             layout_type: LayoutType::default(),
             layout: Layout::default(),
-            rect: None,
+            rect: self.rect,
 
             renderer: None,
             callbacks: FnvHashMap::default(),
@@ -167,14 +155,17 @@ where
         result
     }
 
-    fn call(
-        &mut self,
-        notifier: NotifyCallback,
-        callback_id: CallbackId,
-        arg: Rc<dyn Data>,
-    ) -> bool {
+    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool {
         let mut ctx = CallbackContext {
+            plugins: ctx.plugins.unwrap(),
+            tree: ctx.tree,
+            dirty: ctx.dirty,
+            notifier: ctx.notifier,
+
             state: &mut self.state,
+
+            rect: self.rect,
+
             changed: false,
         };
 

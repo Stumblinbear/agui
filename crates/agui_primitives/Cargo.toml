@@ -13,6 +13,6 @@ readme = "README.md"
 
 [dependencies]
 agui_core = { path = "../agui_core", version = "0.3" }
-agui_macros = { path = "../agui_macros", version = "0.3", features = [ "internal" ]}
+agui_macros = { path = "../agui_macros", version = "0.3" }
 
 unicode-segmentation = "1.9"

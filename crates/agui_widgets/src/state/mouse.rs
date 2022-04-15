@@ -53,7 +53,6 @@ pub struct MouseButtons {
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum MouseButtonState {
     Pressed,
-    Held,
     Released,
 }
 

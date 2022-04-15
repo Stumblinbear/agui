@@ -17,7 +17,7 @@ use agui::{
     widgets::{
         plugins::{event::EventPluginEngineExt, global::GlobalPluginExt},
         state::{
-            mouse::{self, Mouse, MouseButton, MouseButtonState, MouseButtons, MousePos, Scroll},
+            mouse::{Mouse, MouseButton, MouseButtonState, MouseButtons, MousePos, Scroll},
             window::{WindowFocus, WindowPosition, WindowSize},
         },
     },
@@ -165,6 +165,7 @@ impl UI {
                     }));
 
                     self.fire_event(mouse_pos);
+                    self.set_global::<MousePos, _>(move |state| *state = mouse_pos);
                     self.set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                 }
 
@@ -172,6 +173,7 @@ impl UI {
                     let mouse_pos = MousePos(None);
 
                     self.fire_event(mouse_pos);
+                    self.set_global::<MousePos, _>(move |state| *state = mouse_pos);
                     self.set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                 }
 

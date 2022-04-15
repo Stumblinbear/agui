@@ -8,7 +8,7 @@ use agui_core::{
     callback::{CallbackContext, CallbackId},
     engine::{event::WidgetEvent, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
-    prelude::BuildContext,
+    prelude::{BuildContext, Context},
     widget::WidgetId,
 };
 

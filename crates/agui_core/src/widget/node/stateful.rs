@@ -30,7 +30,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        engine::{query::WidgetQueryExt, Engine},
+        engine::{context::Context, query::WidgetQueryExt, Engine},
         widget::{BuildContext, BuildResult},
     };
 

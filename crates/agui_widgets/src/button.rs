@@ -1,12 +1,12 @@
 use agui_core::prelude::*;
 
-use crate::{plugins::event::EventPluginContextExt, state::mouse::MouseButton};
+use crate::GestureDetector;
 
 #[derive(Debug, Clone)]
 pub struct ButtonStyle {
     pub normal: Color,
     pub disabled: Color,
-    pub hover: Color,
+    pub hovered: Color,
     pub pressed: Color,
 }
 
@@ -15,7 +15,7 @@ impl Default for ButtonStyle {
         Self {
             normal: Color::White,
             disabled: Color::LightGray,
-            hover: Color::LightGray,
+            hovered: Color::LightGray,
             pressed: Color::DarkGray,
         }
     }
@@ -24,6 +24,7 @@ impl Default for ButtonStyle {
 #[derive(Debug, Default)]
 pub struct ButtonState {
     pressed: bool,
+    hovered: bool,
     disabled: bool,
 }
 
@@ -32,7 +33,7 @@ pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
 
-    pub on_pressed: Callback<()>,
+    pub on_pressed: Callback<bool>,
 
     pub child: Widget,
 }
@@ -43,58 +44,48 @@ impl StatefulWidget for Button {
     fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
-        ctx.listen_to::<MouseButton, _>(|ctx, event| {
-            
+        println!("redraw");
+
+        let color = {
+            let state = ctx.get_state();
+
+            let style = self.style.clone().unwrap_or_default();
+
+            println!("{:?}", state);
+
+            if state.disabled {
+                style.disabled
+            } else if state.pressed {
+                style.pressed
+            } else if state.hovered {
+                style.hovered
+            } else {
+                style.normal
+            }
+        };
+
+        ctx.on_draw(move |canvas| {
+            let brush = canvas.new_brush(Paint {
+                color,
+                ..Paint::default()
+            });
+
+            canvas.draw_rect(brush);
         });
 
-        // let mouse = ctx.global::<Mouse>();
-        // let state = ctx.new_state(ButtonState::default);
+        let on_hover = ctx.callback::<bool, _>(|ctx, arg| {
+            if ctx.get_state().hovered != *arg {
+                ctx.set_state(|state| {
+                    state.hovered = *arg;
+                })
+            }
+        });
 
-        // ctx.use_state::<ButtonState>()
-        //     .try_use_global::<Mouse>()
-        //     .with(self.on_pressed.clone())
-
-        // ctx.effect(|ctx| {
-        //     let is_pressed = state.map(ctx, |state| state.pressed);
-
-        // let state_ref = state.as_ref(ctx);
-
-        // if mouse.button.left == MouseButtonState::Pressed {
-        //     if ctx.is_hovering() && *state != state.pressed {
-        //         state.set(ctx, |state| {
-        //             state.pressed = true;
-        //         });
-        //     }
-        // } else if *state == ButtonState::Pressed {
-        //     state.pressed = false;
-
-        //     if ctx.is_hovering() {
-        //         self.on_pressed.emit(());
-        //     }
-        // }
-        // });
-
-        // let state = ctx.use_state::<ButtonState>().get();
-
-        // ctx.on_draw({
-        //     let style = self.style.clone().unwrap_or_default();
-
-        //     move |canvas| {
-        //         let color = match *state {
-        //             ButtonState::Normal => style.normal,
-        //             ButtonState::Disabled => style.disabled,
-        //             ButtonState::Pressed => style.pressed,
-        //         };
-
-        //         let brush = canvas.new_brush(Paint {
-        //             color,
-        //             ..Paint::default()
-        //         });
-
-        //         canvas.draw_rect(brush);
-        //     }
-        // });
-
-        (&self.child).into()
+        GestureDetector {
+            on_hover,
+            on_pressed: self.on_pressed.clone(),
+            child: self.child.clone(),
+        }
+        .into()
     }
 }
