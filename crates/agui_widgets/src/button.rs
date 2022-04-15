@@ -44,14 +44,10 @@ impl StatefulWidget for Button {
     fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
-        println!("redraw");
-
         let color = {
             let state = ctx.get_state();
 
             let style = self.style.clone().unwrap_or_default();
-
-            println!("{:?}", state);
 
             if state.disabled {
                 style.disabled

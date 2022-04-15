@@ -75,8 +75,6 @@ impl StatefulWidget for GestureDetector {
                     false
                 };
 
-                println!("{:?}", pos);
-
                 let state = ctx.get_state_mut();
 
                 if is_hovering {
