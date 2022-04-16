@@ -15,7 +15,7 @@ fn engine_ops(c: &mut Criterion) {
                 (Engine::new(), column)
             },
             |(mut engine, widget)| {
-                engine.set_root(widget);
+                engine.set_root(widget.into());
 
                 engine.update();
             },

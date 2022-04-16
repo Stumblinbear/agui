@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 
 use crate::{
     callback::CallbackId,
-    engine::widget::WidgetImpl,
+    engine::{plugin::PluginImpl, widget::WidgetImpl},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Font, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetKey},
@@ -113,11 +113,18 @@ impl Engine {
     {
         let plugin_id = PluginId::of::<P>();
 
+        let plugin: PluginElement<P> = plugin.into();
+
         if self.plugins.contains_key(&plugin_id) {
-            panic!("plugin already initialized");
+            tracing::warn!(
+                plugin = plugin.get_type_name(),
+                "plugin already added, ignoring"
+            );
+
+            return;
         }
 
-        let plugin: PluginElement<P> = plugin.into();
+        tracing::info!(plugin = plugin.get_type_name(), "adding plugin to engine");
 
         self.plugins.insert(plugin_id, Plugin::new(plugin));
     }
@@ -222,7 +229,7 @@ impl Engine {
             return None;
         }
 
-        let span = tracing::trace_span!("update");
+        let span = tracing::debug_span!("update");
         let _enter = span.enter();
 
         let mut widget_events = Vec::new();
@@ -309,7 +316,7 @@ impl Engine {
             return widget_events;
         }
 
-        let span = tracing::trace_span!("flush_modifications");
+        let span = tracing::debug_span!("flush_modifications");
         let _enter = span.enter();
 
         // Apply any queued modifications
@@ -358,7 +365,7 @@ impl Engine {
             return;
         }
 
-        let span = tracing::trace_span!("flush_changes");
+        let span = tracing::debug_span!("flush_changes");
         let _enter = span.enter();
 
         for widget_id in self.tree.filter_topmost(changed.into_iter()) {
@@ -385,7 +392,7 @@ impl Engine {
             return;
         }
 
-        let span = tracing::trace_span!("flush_callbacks");
+        let span = tracing::debug_span!("flush_callbacks");
         let _enter = span.enter();
 
         for (callback_id, args) in callbacks {
@@ -422,7 +429,7 @@ impl Engine {
     }
 
     pub fn flush_layout(&mut self) -> FnvHashSet<WidgetId> {
-        let span = tracing::trace_span!("flush_layout");
+        let span = tracing::debug_span!("flush_layout");
         let _enter = span.enter();
 
         morphorm::layout(&mut self.cache, &self.tree, &self.tree);
@@ -515,7 +522,7 @@ impl Engine {
         parent_id: Option<WidgetId>,
         widget: Widget,
     ) {
-        let span = tracing::trace_span!("process_spawn");
+        let span = tracing::debug_span!("process_spawn");
         let _enter = span.enter();
 
         if parent_id.is_some() && !self.contains(parent_id.unwrap()) {
@@ -565,7 +572,7 @@ impl Engine {
     }
 
     fn process_rebuild(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let span = tracing::trace_span!("process_rebuild");
+        let span = tracing::debug_span!("process_rebuild");
         let _enter = span.enter();
 
         let node = self
@@ -622,10 +629,13 @@ impl Engine {
     }
 
     fn process_destroy(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let span = tracing::trace_span!("process_destroy");
+        let span = tracing::debug_span!("process_destroy");
         let _enter = span.enter();
 
-        let node = self.tree.remove(widget_id);
+        let node = self
+            .tree
+            .remove(widget_id)
+            .expect("cannot destroy a widget that doesn't exist");
 
         let widget = node.get().expect("cannot destroy a Widget::None");
 

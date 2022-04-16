@@ -65,7 +65,7 @@ where
     }
 
     fn get_type_name(&self) -> &'static str {
-        type_name::<P>()
+        type_name::<P>().rsplit("::").next().unwrap()
     }
 
     fn on_before_update(&mut self, ctx: EngineContext) {

@@ -85,57 +85,52 @@ where
         node_id
     }
 
-    pub fn remove(&mut self, node_id: K) -> TreeNode<K, V> {
-        let node = self
-            .nodes
-            .remove(node_id)
-            .expect("cannot remove a widget that isn't in the tree");
-
-        if let Some(parent_id) = node.parent {
-            if let Some(parent) = self.nodes.get_mut(parent_id) {
-                // Remove the child from its parent
-                parent.children.remove(
-                    parent
-                        .children
-                        .iter()
-                        .position(|child_id| node_id == *child_id)
-                        .expect("unable to find child in removed node's parent"),
-                );
+    pub fn remove(&mut self, node_id: K) -> Option<TreeNode<K, V>> {
+        if let Some(node) = self.nodes.remove(node_id) {
+            if let Some(parent_id) = node.parent {
+                if let Some(parent) = self.nodes.get_mut(parent_id) {
+                    // Remove the child from its parent
+                    parent.children.remove(
+                        parent
+                            .children
+                            .iter()
+                            .position(|child_id| node_id == *child_id)
+                            .expect("unable to find child in removed node's parent"),
+                    );
+                }
+            } else {
+                // If the node has no parent, then we can assume it was the root
+                self.root = None;
             }
+
+            // We can't remove the children here, since the engine needs to have access to them.
+
+            Some(node)
         } else {
-            // If the node has no parent, then we can assume it was the root
-            self.root = None;
+            None
         }
-
-        // We can't remove the children here, since the engine needs to have access to them.
-
-        node
     }
 
     pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
-        let old_parent_id = self
-            .nodes
-            .get(node_id)
-            .expect("cannot reparent a node that isn't in the tree")
-            .parent;
-
-        if let Some(parent_id) = old_parent_id {
-            if let Some(parent) = self.nodes.get_mut(parent_id) {
-                // Remove the child from its parent
-                parent.children.remove(
-                    parent
-                        .children
-                        .iter()
-                        .position(|child_id| node_id == *child_id)
-                        .expect("unable to find child in removed node's parent"),
-                );
+        if let Some(node) = self.nodes.get(node_id) {
+            if let Some(parent_id) = node.parent {
+                if let Some(parent) = self.nodes.get_mut(parent_id) {
+                    // Remove the child from its parent
+                    parent.children.remove(
+                        parent
+                            .children
+                            .iter()
+                            .position(|child_id| node_id == *child_id)
+                            .expect("unable to find child in removed node's parent"),
+                    );
+                }
+            } else {
+                // If the node has no parent, then we can assume it was the root
+                self.root = None;
             }
-        } else {
-            // If the node has no parent, then we can assume it was the root
-            self.root = None;
-        }
 
-        self.propagate_node(new_parent_id, node_id);
+            self.propagate_node(new_parent_id, node_id);
+        }
     }
 
     fn propagate_node(&mut self, parent_id: Option<K>, node_id: K) {

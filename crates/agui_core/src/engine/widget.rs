@@ -169,10 +169,14 @@ where
             changed: false,
         };
 
-        self.callbacks
-            .get(&callback_id)
-            .expect("callback not found")
-            .call(&mut ctx, arg);
+        if let Some(callback) = self.callbacks.get(&callback_id) {
+            callback.call(&mut ctx, arg);
+        } else {
+            tracing::warn!(
+                callback_id = format!("{:?}", callback_id).as_str(),
+                "callback not found"
+            );
+        }
 
         ctx.changed
     }

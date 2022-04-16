@@ -69,7 +69,11 @@ impl CanvasBufferBuilder<'_> {
                     }
                 }
 
-                cmd => panic!("unknown command: {:?}", cmd),
+                cmd => {
+                    tracing::error!("unknown command: {:?}", cmd);
+
+                    continue;
+                }
             }
 
             layer_builder.as_mut().unwrap().process(cmd);

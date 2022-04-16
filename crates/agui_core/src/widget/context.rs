@@ -153,7 +153,12 @@ where
 
     pub fn key(&self, key: Key, mut widget: Widget) -> Widget {
         if widget.get_key().is_some() {
-            panic!("cannot key a widget that has already been keyed");
+            tracing::warn!(
+                key = format!("{:?}", key).as_str(),
+                "cannot key a widget that has already been keyed, ignoring"
+            );
+
+            return widget;
         }
 
         if let Widget::Some {
