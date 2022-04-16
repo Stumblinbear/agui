@@ -103,7 +103,7 @@ where
     }
 
     fn get_type_name(&self) -> &'static str {
-        type_name::<W>()
+        type_name::<W>().rsplit("::").next().unwrap()
     }
 
     fn get_layout_type(&self) -> Option<LayoutType> {

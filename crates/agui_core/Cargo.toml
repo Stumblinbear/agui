@@ -19,6 +19,7 @@ fnv = "1.0"
 downcast-rs = "1.2"
 parking_lot = "0.12"
 slotmap = "1.0"
+tracing = "0.1"
 
 morphorm = "0.3"
 

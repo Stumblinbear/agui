@@ -202,7 +202,7 @@ impl RenderEngine {
             self.nodes.clear();
         }
 
-        println!("redrew in: {:?}", Instant::now().duration_since(now));
+        tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
     pub fn redraw_node(&mut self, engine: &Engine, widget_id: WidgetId) {

@@ -15,6 +15,9 @@ impl RenderFn {
     }
 
     pub fn call(&self, canvas: &mut Canvas) {
+        let span = tracing::trace_span!("render_fn");
+        let _enter = span.enter();
+
         (self.func)(canvas);
     }
 }

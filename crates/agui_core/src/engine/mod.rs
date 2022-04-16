@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 
 use crate::{
     callback::CallbackId,
+    engine::widget::WidgetImpl,
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Font, Units},
     widget::{BuildResult, Widget, WidgetId, WidgetKey},
@@ -163,6 +164,17 @@ impl Engine {
     /// Queues the root widget for removal from tree
     pub fn remove_root(&mut self) {
         if let Some(root_id) = self.tree.get_root() {
+            tracing::info!(
+                widget = self
+                    .tree
+                    .get(root_id)
+                    .unwrap()
+                    .get()
+                    .unwrap()
+                    .get_type_name(),
+                "removing root widget"
+            );
+
             self.modifications.push(Modify::Destroy(root_id));
         }
     }
@@ -173,6 +185,8 @@ impl Engine {
         W: WidgetBuilder,
     {
         self.remove_root();
+
+        tracing::info!(widget = widget.get_type_name(), "root widget set");
 
         self.modifications
             .push(Modify::Spawn(None, Widget::new(None, widget)));
@@ -207,6 +221,9 @@ impl Engine {
         {
             return None;
         }
+
+        let span = tracing::trace_span!("update");
+        let _enter = span.enter();
 
         let mut widget_events = Vec::new();
 
@@ -292,6 +309,9 @@ impl Engine {
             return widget_events;
         }
 
+        let span = tracing::trace_span!("flush_modifications");
+        let _enter = span.enter();
+
         // Apply any queued modifications
         let mut removed_keyed = FnvHashMap::default();
 
@@ -338,7 +358,22 @@ impl Engine {
             return;
         }
 
+        let span = tracing::trace_span!("flush_changes");
+        let _enter = span.enter();
+
         for widget_id in self.tree.filter_topmost(changed.into_iter()) {
+            tracing::trace!(
+                id = format!("{:?}", widget_id).as_str(),
+                widget = self
+                    .tree
+                    .get(widget_id)
+                    .unwrap()
+                    .get()
+                    .unwrap()
+                    .get_type_name(),
+                "queueing widget for rebuild"
+            );
+
             self.modifications.push(Modify::Rebuild(widget_id));
         }
     }
@@ -350,14 +385,17 @@ impl Engine {
             return;
         }
 
+        let span = tracing::trace_span!("flush_callbacks");
+        let _enter = span.enter();
+
         for (callback_id, args) in callbacks {
-            let mut widget_impl = self
+            let mut widget = self
                 .tree
                 .get(callback_id.get_widget_id())
                 .and_then(|node| node.get_mut())
                 .expect("cannot call a callback on a widget that does not exist");
 
-            let changed = widget_impl.call(
+            let changed = widget.call(
                 EngineContext {
                     plugins: Some(&mut self.plugins),
                     tree: &self.tree,
@@ -369,6 +407,14 @@ impl Engine {
             );
 
             if changed {
+                let widget_id = callback_id.get_widget_id();
+
+                tracing::debug!(
+                    id = format!("{:?}", widget_id).as_str(),
+                    widget = widget.get_type_name(),
+                    "widget updated, queueing for rebuild"
+                );
+
                 self.modifications
                     .push(Modify::Rebuild(callback_id.get_widget_id()));
             }
@@ -376,6 +422,9 @@ impl Engine {
     }
 
     pub fn flush_layout(&mut self) -> FnvHashSet<WidgetId> {
+        let span = tracing::trace_span!("flush_layout");
+        let _enter = span.enter();
+
         morphorm::layout(&mut self.cache, &self.tree, &self.tree);
 
         // Workaround for morphorm ignoring root sizing
@@ -429,6 +478,8 @@ impl Engine {
         newly_changed.retain(|widget_id| self.tree.contains(*widget_id));
 
         if root_changed {
+            tracing::trace!("root layout updated, applying morphorm fix");
+
             if let Some(widget_id) = self.tree.get_root() {
                 newly_changed.insert(widget_id);
             }
@@ -464,19 +515,40 @@ impl Engine {
         parent_id: Option<WidgetId>,
         widget: Widget,
     ) {
+        let span = tracing::trace_span!("process_spawn");
+        let _enter = span.enter();
+
         if parent_id.is_some() && !self.contains(parent_id.unwrap()) {
-            panic!("cannot add a widget to a nonexistent parent")
+            tracing::error!(
+                parent_id = format!("{:?}", parent_id).as_str(),
+                widget = widget.get().unwrap().get_type_name(),
+                "cannot add a widget to a nonexistent parent"
+            );
+
+            return;
         }
 
         // Check if it's a keyed widget
         if let Some(key) = widget.get_key() {
             if let Some(keyed_id) = removed_keyed.remove(&key) {
+                tracing::trace!(
+                    parent_id = format!("{:?}", parent_id).as_str(),
+                    widget = widget.get().unwrap().get_type_name(),
+                    "reparenting keyed widget"
+                );
+
                 // Reparent the (removed) keyed widget to the new widget
                 self.tree.reparent(parent_id, keyed_id);
 
                 return;
             }
         }
+
+        tracing::trace!(
+            parent_id = format!("{:?}", parent_id).as_str(),
+            widget = widget.get().unwrap().get_type_name(),
+            "spawning widget"
+        );
 
         let type_id = widget
             .get()
@@ -493,21 +565,29 @@ impl Engine {
     }
 
     fn process_rebuild(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        // Queue the children for removal
-        for child_id in &self
+        let span = tracing::trace_span!("process_rebuild");
+        let _enter = span.enter();
+
+        let node = self
             .tree
             .get_node(widget_id)
-            .expect("cannot destroy a widget that doesn't exist")
-            .children
-        {
+            .expect("cannot destroy a widget that doesn't exist");
+
+        if !node.children.is_empty() {
+            tracing::trace!(
+                id = format!("{:?}", widget_id).as_str(),
+                widget = node.get().unwrap().get_type_name(),
+                len = node.children.len(),
+                "queueing destruction of children"
+            );
+        }
+
+        // Queue the children for removal
+        for child_id in &node.children {
             self.modifications.push(Modify::Destroy(*child_id));
         }
 
-        let mut widget = self
-            .tree
-            .get(widget_id)
-            .and_then(|widget| widget.get_mut())
-            .expect("widget destroyed before rebuild");
+        let mut widget = node.get_mut().expect("widget destroyed before rebuild");
 
         widget_events.push(WidgetEvent::Rebuilt {
             type_id: widget.get_type_id(),
@@ -532,26 +612,42 @@ impl Engine {
                         .push(Modify::Spawn(Some(widget_id), child));
                 }
             }
-            BuildResult::Err(err) => panic!("build failed: {}", err),
+            BuildResult::Err(err) => {
+                // TODO: error widget?
+                // tracing::error!("build failed: {}", err);
+
+                panic!("build failed: {}", err);
+            }
         };
     }
 
     fn process_destroy(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        let tree_node = self.tree.remove(widget_id);
+        let span = tracing::trace_span!("process_destroy");
+        let _enter = span.enter();
+
+        let node = self.tree.remove(widget_id);
+
+        let widget = node.get().expect("cannot destroy a Widget::None");
 
         widget_events.push(WidgetEvent::Destroyed {
-            type_id: tree_node
-                .get()
-                .expect("cannot destroy a Widget::None")
-                .get_type_id(),
+            type_id: widget.get_type_id(),
             widget_id,
         });
 
         self.cache.remove(&widget_id);
 
+        if !node.children.is_empty() {
+            tracing::trace!(
+                id = format!("{:?}", widget_id).as_str(),
+                widget = widget.get_type_name(),
+                len = node.children.len(),
+                "queueing destruction of children"
+            );
+        }
+
         // Add the child widgets to the removal queue
-        for child_id in tree_node.children {
-            self.modifications.push(Modify::Destroy(child_id));
+        for child_id in &node.children {
+            self.modifications.push(Modify::Destroy(*child_id));
         }
     }
 }

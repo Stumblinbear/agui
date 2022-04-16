@@ -78,12 +78,16 @@ impl Canvas {
 
     /// Starts a new layer in the defined `rect` with `shape`.
     pub fn start_layer_at(&mut self, rect: Rect, brush: Brush, shape: Shape) {
+        tracing::trace!("starting new layer");
+
         self.commands
             .push(CanvasCommand::Layer { rect, brush, shape });
     }
 
     /// Pop the last layer of the canvas.
     pub fn pop(&mut self) {
+        tracing::trace!("popped layer");
+
         self.commands.push(CanvasCommand::Pop);
     }
 
@@ -94,6 +98,8 @@ impl Canvas {
 
     /// Draws a rectangle in the defined `rect`.
     pub fn draw_rect_at(&mut self, rect: Rect, brush: Brush) {
+        tracing::trace!("drawing rect");
+
         self.commands.push(CanvasCommand::Shape {
             rect,
             brush,
@@ -131,6 +137,8 @@ impl Canvas {
         bottom_right: f32,
         bottom_left: f32,
     ) {
+        tracing::trace!("drawing rounded rect");
+
         self.commands.push(CanvasCommand::Shape {
             brush,
             rect,
@@ -151,6 +159,8 @@ impl Canvas {
 
     /// Draws a path in the defined `rect`.
     pub fn draw_path_at(&mut self, rect: Rect, brush: Brush, path: Path) {
+        tracing::trace!("drawing path");
+
         self.commands.push(CanvasCommand::Shape {
             rect,
             brush,
@@ -172,6 +182,8 @@ impl Canvas {
         font: FontStyle,
         text: Cow<'static, str>,
     ) {
+        tracing::trace!("drawing text");
+
         self.commands.push(CanvasCommand::Text {
             rect,
             brush,
