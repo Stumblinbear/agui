@@ -73,6 +73,14 @@ where
         self.callback_id
     }
 
+    pub fn is_some(&self) -> bool {
+        matches!(self.callback_id, Some(_))
+    }
+
+    pub fn is_none(&self) -> bool {
+        !self.is_some()
+    }
+
     pub fn emit(&self, args: A) {
         if let Some(callback_id) = self.callback_id {
             if let Some(notifier) = &self.notifier {

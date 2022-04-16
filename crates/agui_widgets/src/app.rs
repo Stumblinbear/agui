@@ -21,6 +21,6 @@ impl StatelessWidget for App {
             ..Layout::default()
         });
 
-        ctx.key(Key::single(), &self.child).into()
+        ctx.key(Key::single(), self.child.clone()).into()
     }
 }

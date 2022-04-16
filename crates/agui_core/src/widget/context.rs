@@ -151,12 +151,10 @@ where
         callback
     }
 
-    pub fn key(&self, key: Key, widget: &Widget) -> Widget {
+    pub fn key(&self, key: Key, mut widget: Widget) -> Widget {
         if widget.get_key().is_some() {
             panic!("cannot key a widget that has already been keyed");
         }
-
-        let mut widget = widget.clone();
 
         if let Widget::Some {
             key: widget_key, ..

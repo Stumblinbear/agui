@@ -32,7 +32,7 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn counter_widget(ctx: &mut BuildContext<i32>, font: FontStyle) -> BuildResult {
-    let on_pressed = ctx.callback::<bool, _>(|ctx, pressed| {
+    let on_pressed = ctx.callback(|ctx, ()| {
         ctx.set_state(|state| {
             *state += 1;
         })
@@ -42,7 +42,7 @@ fn counter_widget(ctx: &mut BuildContext<i32>, font: FontStyle) -> BuildResult {
         Column {
             children: [
                 Text { font: font.clone(), text: format!("clicked: {} times", ctx.get_state()).into() },
-                Button {
+                ctx.key(Key::single(), Button {
                     layout: Layout {
                         sizing: Sizing::Axis {
                             width: 256.0,
@@ -54,7 +54,7 @@ fn counter_widget(ctx: &mut BuildContext<i32>, font: FontStyle) -> BuildResult {
                         child: Text { font, text: "A Button" }
                     },
                     on_pressed
-                }
+                }.into())
             ]
         }
     }

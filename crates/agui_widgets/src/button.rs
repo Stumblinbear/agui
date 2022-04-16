@@ -33,7 +33,7 @@ pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
 
-    pub on_pressed: Callback<bool>,
+    pub on_pressed: Callback<()>,
 
     pub child: Widget,
 }
@@ -77,11 +77,31 @@ impl StatefulWidget for Button {
             }
         });
 
-        GestureDetector {
-            on_hover,
-            on_pressed: self.on_pressed.clone(),
-            child: self.child.clone(),
-        }
+        let on_pressed = ctx.callback::<bool, _>({
+            let on_pressed = self.on_pressed.clone();
+
+            move |ctx, arg| {
+                let state = ctx.get_state_mut();
+
+                if state.pressed && !arg {
+                    on_pressed.emit(());
+                }
+
+                ctx.set_state(|state| {
+                    state.pressed = *arg;
+                })
+            }
+        });
+
+        ctx.key(
+            Key::single(),
+            GestureDetector {
+                on_hover,
+                on_pressed,
+                child: self.child.clone(),
+            }
+            .into(),
+        )
         .into()
     }
 }
