@@ -1,7 +1,5 @@
 extern crate proc_macro;
 
-use core::panic;
-
 use functional_widget::parse_functional_widget;
 use proc_macro::TokenStream;
 

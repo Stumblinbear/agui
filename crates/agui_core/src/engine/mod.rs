@@ -117,14 +117,17 @@ impl Engine {
 
         if self.plugins.contains_key(&plugin_id) {
             tracing::warn!(
-                plugin = plugin.get_type_name(),
+                plugin = plugin.get_display_name().as_str(),
                 "plugin already added, ignoring"
             );
 
             return;
         }
 
-        tracing::info!(plugin = plugin.get_type_name(), "adding plugin to engine");
+        tracing::info!(
+            plugin = plugin.get_display_name().as_str(),
+            "adding plugin to engine"
+        );
 
         self.plugins.insert(plugin_id, Plugin::new(plugin));
     }
@@ -178,7 +181,8 @@ impl Engine {
                     .unwrap()
                     .get()
                     .unwrap()
-                    .get_type_name(),
+                    .get_display_name()
+                    .as_str(),
                 "removing root widget"
             );
 
@@ -193,7 +197,10 @@ impl Engine {
     {
         self.remove_root();
 
-        tracing::info!(widget = widget.get_type_name(), "root widget set");
+        tracing::info!(
+            widget = widget.get_display_name().as_str(),
+            "root widget set"
+        );
 
         self.modifications
             .push(Modify::Spawn(None, Widget::new(None, widget)));
@@ -377,7 +384,8 @@ impl Engine {
                     .unwrap()
                     .get()
                     .unwrap()
-                    .get_type_name(),
+                    .get_display_name()
+                    .as_str(),
                 "queueing widget for rebuild"
             );
 
@@ -418,7 +426,7 @@ impl Engine {
 
                 tracing::debug!(
                     id = format!("{:?}", widget_id).as_str(),
-                    widget = widget.get_type_name(),
+                    widget = widget.get_display_name().as_str(),
                     "widget updated, queueing for rebuild"
                 );
 
@@ -528,7 +536,7 @@ impl Engine {
         if parent_id.is_some() && !self.contains(parent_id.unwrap()) {
             tracing::error!(
                 parent_id = format!("{:?}", parent_id).as_str(),
-                widget = widget.get().unwrap().get_type_name(),
+                widget = widget.get().unwrap().get_display_name().as_str(),
                 "cannot add a widget to a nonexistent parent"
             );
 
@@ -540,7 +548,7 @@ impl Engine {
             if let Some(keyed_id) = removed_keyed.remove(&key) {
                 tracing::trace!(
                     parent_id = format!("{:?}", parent_id).as_str(),
-                    widget = widget.get().unwrap().get_type_name(),
+                    widget = widget.get().unwrap().get_display_name().as_str(),
                     "reparenting keyed widget"
                 );
 
@@ -553,7 +561,7 @@ impl Engine {
 
         tracing::trace!(
             parent_id = format!("{:?}", parent_id).as_str(),
-            widget = widget.get().unwrap().get_type_name(),
+            widget = widget.get().unwrap().get_display_name().as_str(),
             "spawning widget"
         );
 
@@ -583,7 +591,7 @@ impl Engine {
         if !node.children.is_empty() {
             tracing::trace!(
                 id = format!("{:?}", widget_id).as_str(),
-                widget = node.get().unwrap().get_type_name(),
+                widget = node.get().unwrap().get_display_name().as_str(),
                 len = node.children.len(),
                 "queueing destruction of children"
             );
@@ -615,8 +623,10 @@ impl Engine {
             BuildResult::None => {}
             BuildResult::Some(children) => {
                 for child in children {
-                    self.modifications
-                        .push(Modify::Spawn(Some(widget_id), child));
+                    if !child.is_empty() {
+                        self.modifications
+                            .push(Modify::Spawn(Some(widget_id), child));
+                    }
                 }
             }
             BuildResult::Err(err) => {
@@ -649,7 +659,7 @@ impl Engine {
         if !node.children.is_empty() {
             tracing::trace!(
                 id = format!("{:?}", widget_id).as_str(),
-                widget = widget.get_type_name(),
+                widget = widget.get_display_name().as_str(),
                 len = node.children.len(),
                 "queueing destruction of children"
             );

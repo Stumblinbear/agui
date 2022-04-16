@@ -20,10 +20,10 @@ where
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) notifier: NotifyCallback,
 
-    pub(crate) widget: &'ctx W,
-    pub(crate) state: &'ctx mut W::State,
+    pub widget: &'ctx W,
+    pub state: &'ctx mut W::State,
 
-    pub(crate) rect: Option<Rect>,
+    pub rect: Option<Rect>,
 
     pub(crate) changed: bool,
 }

@@ -7,7 +7,6 @@ use std::{
 pub struct Keyboard {
     pub keys: HashMap<KeyCode, KeyState>,
     pub modifiers: Modifiers,
-    pub input: Option<char>,
 }
 
 impl Keyboard {
@@ -24,10 +23,13 @@ impl Keyboard {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct KeyboardInput(char);
+#[derive(Debug, Clone)]
+pub struct KeyboardInput(pub KeyCode, pub KeyState);
 
-impl Deref for KeyboardInput {
+#[derive(Debug, Clone)]
+pub struct KeyboardCharacter(pub char);
+
+impl Deref for KeyboardCharacter {
     type Target = char;
 
     fn deref(&self) -> &Self::Target {
@@ -35,7 +37,7 @@ impl Deref for KeyboardInput {
     }
 }
 
-impl DerefMut for KeyboardInput {
+impl DerefMut for KeyboardCharacter {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

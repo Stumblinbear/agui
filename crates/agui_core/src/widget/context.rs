@@ -23,13 +23,13 @@ where
     pub(crate) notifier: NotifyCallback,
 
     pub(crate) widget_id: WidgetId,
-    pub(crate) widget: &'ctx W,
-    pub(crate) state: &'ctx mut W::State,
+    pub widget: &'ctx W,
+    pub state: &'ctx mut W::State,
 
-    pub(crate) layout_type: LayoutType,
-    pub(crate) layout: Layout,
+    pub layout_type: LayoutType,
+    pub layout: Layout,
 
-    pub(crate) rect: Option<Rect>,
+    pub rect: Option<Rect>,
 
     pub(crate) renderer: Option<RenderFn<W>>,
     pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,

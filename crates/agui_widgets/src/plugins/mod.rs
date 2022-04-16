@@ -4,7 +4,7 @@ pub mod event;
 pub mod global;
 // pub mod hovering;
 // pub mod provider;
-// pub mod timeout;
+pub mod timeout;
 
 pub trait DefaultPluginsExt {
     fn register_default_plugins(&mut self);
@@ -15,6 +15,6 @@ impl DefaultPluginsExt for Engine {
         self.add_plugin(global::GlobalPlugin);
         self.add_plugin(event::EventPlugin);
         // self.add_plugin(hovering::HoveringPlugin);
-        // self.add_plugin(timeout::TimeoutPlugin);
+        self.add_plugin(timeout::TimeoutPlugin::default());
     }
 }

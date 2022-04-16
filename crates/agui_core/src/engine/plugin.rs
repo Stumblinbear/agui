@@ -8,7 +8,7 @@ use super::{context::EngineContext, event::WidgetEvent};
 
 pub trait PluginImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
-    fn get_type_name(&self) -> &'static str;
+    fn get_display_name(&self) -> String;
 
     fn on_before_update(&mut self, ctx: EngineContext);
     fn on_update(&mut self, ctx: EngineContext);
@@ -64,11 +64,34 @@ where
         TypeId::of::<P>()
     }
 
-    fn get_type_name(&self) -> &'static str {
-        type_name::<P>().rsplit("::").next().unwrap()
+    fn get_display_name(&self) -> String {
+        let type_name = type_name::<P>();
+
+        if !type_name.contains('<') {
+            String::from(type_name.rsplit("::").next().unwrap())
+        } else {
+            let mut name = String::new();
+
+            let mut remaining = String::from(type_name);
+
+            while let Some((part, rest)) = remaining.split_once("<") {
+                name.push_str(part.rsplit("::").next().unwrap());
+
+                name.push('<');
+
+                remaining = String::from(rest);
+            }
+
+            name.push_str(remaining.rsplit("::").next().unwrap());
+
+            name
+        }
     }
 
     fn on_before_update(&mut self, ctx: EngineContext) {
+        let span = tracing::error_span!("on_before_update");
+        let _enter = span.enter();
+
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
@@ -79,6 +102,9 @@ where
     }
 
     fn on_update(&mut self, ctx: EngineContext) {
+        let span = tracing::error_span!("on_update");
+        let _enter = span.enter();
+
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
@@ -89,6 +115,9 @@ where
     }
 
     fn on_layout(&mut self, ctx: EngineContext) {
+        let span = tracing::error_span!("on_layout");
+        let _enter = span.enter();
+
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
@@ -99,6 +128,9 @@ where
     }
 
     fn on_events(&mut self, ctx: EngineContext, events: &[WidgetEvent]) {
+        let span = tracing::error_span!("on_events");
+        let _enter = span.enter();
+
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,

@@ -21,11 +21,11 @@ impl EnginePlugin for GlobalPlugin {
     type State = GlobalState;
 
     // Check if any changes occurred outside of the main engine loop.
-    fn on_before_update(&self, ctx: &mut PluginContext, state: &mut GlobalState) {
+    fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         self.on_update(ctx, state);
     }
 
-    fn on_update(&self, ctx: &mut PluginContext, state: &mut GlobalState) {
+    fn on_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         for type_id in state.changed.drain() {
             let global = state.globals.get(&type_id).unwrap();
 
@@ -35,7 +35,7 @@ impl EnginePlugin for GlobalPlugin {
         }
     }
 
-    fn on_events(&self, _: &mut PluginContext, state: &mut GlobalState, events: &[WidgetEvent]) {
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
                 // If the widget is listening to something, remove it from the respective listeners
@@ -78,18 +78,30 @@ impl std::fmt::Debug for GlobalValue {
 }
 
 impl GlobalState {
-    fn get<G>(&mut self, listener: Option<WidgetId>) -> Global<G>
+    fn get<G>(&mut self, widget_id: Option<WidgetId>) -> Global<G>
     where
         G: Data + Default,
     {
         let type_id = TypeId::of::<G>();
 
-        let global = self.globals.entry(type_id).or_insert_with(|| GlobalValue {
-            value: Rc::new(RefCell::new(G::default())),
-            listeners: HashSet::new(),
+        let global = self.globals.entry(type_id).or_insert_with(|| {
+            let value = G::default();
+
+            tracing::debug!(
+                id = widget_id
+                    .map_or(String::from(""), |widget_id| format!("{:?}", widget_id))
+                    .as_str(),
+                value = format!("{:?}", value).as_str(),
+                "created new global"
+            );
+
+            GlobalValue {
+                value: Rc::new(RefCell::new(value)),
+                listeners: HashSet::new(),
+            }
         });
 
-        if let Some(widget_id) = listener {
+        if let Some(widget_id) = widget_id {
             self.listening
                 .entry(widget_id)
                 .or_insert_with(HashSet::new)

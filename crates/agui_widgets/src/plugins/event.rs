@@ -19,11 +19,11 @@ impl EnginePlugin for EventPlugin {
     type State = EventState;
 
     // Check if any changes occurred outside of the main engine loop.
-    fn on_before_update(&self, ctx: &mut PluginContext, state: &mut EventState) {
+    fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         self.on_update(ctx, state);
     }
 
-    fn on_update(&self, ctx: &mut PluginContext, state: &mut EventState) {
+    fn on_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         for event in state.queue.drain(..) {
             let type_id = event.type_id();
 
@@ -35,7 +35,7 @@ impl EnginePlugin for EventPlugin {
         }
     }
 
-    fn on_events(&self, _: &mut PluginContext, state: &mut EventState, events: &[WidgetEvent]) {
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
                 // If the widget is listening to something, remove it from the respective listeners

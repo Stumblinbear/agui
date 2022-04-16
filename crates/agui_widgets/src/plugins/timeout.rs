@@ -1,63 +1,53 @@
 use std::{
     collections::HashMap,
     ops::Add,
+    rc::Rc,
     time::{Duration, Instant},
 };
 
 use agui_core::{
-    engine::event::WidgetEvent,
+    callback::{CallbackContext, CallbackId},
+    engine::{event::WidgetEvent, widget::WidgetBuilder},
     plugin::{EnginePlugin, PluginContext},
-    state::ListenerId,
-    widget::{BuildContext, WidgetContext, WidgetId},
+    prelude::{BuildContext, Context},
+    widget::WidgetId,
 };
 
-#[derive(Debug, Default, Clone)]
-struct TimeoutPluginState {
-    widgets: HashMap<WidgetId, HashMap<ListenerId, Instant>>,
+#[derive(Debug, Default)]
+pub struct TimeoutPlugin {
+    dummy: Rc<()>,
 }
-
-impl TimeoutPluginState {
-    pub fn create_timeout(&mut self, listener_id: ListenerId, duration: Duration) {
-        let entry = self
-            .widgets
-            .entry(
-                listener_id
-                    .widget_id()
-                    .expect("cannot use timers outside of a widget context"),
-            )
-            .or_insert_with(HashMap::default)
-            .entry(listener_id);
-
-        let target_instant = Instant::now().add(duration);
-
-        entry
-            .and_modify(|instant| {
-                *instant = (*instant).min(target_instant);
-            })
-            .or_insert(target_instant);
-    }
-}
-
-#[derive(Default)]
-pub struct TimeoutPlugin;
 
 impl EnginePlugin for TimeoutPlugin {
-    fn on_update(&self, ctx: &mut PluginContext) {
-        let mut plugin = ctx.init_global(TimeoutPluginState::default);
+    type State = TimeoutPluginState;
 
+    fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
+        self.on_update(ctx, state);
+    }
+
+    fn on_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         let now = Instant::now();
 
         let mut updated_timeouts = HashMap::new();
 
-        for (widget_id, timeouts) in &plugin.widgets {
+        for (widget_id, timeouts) in &state.widgets {
             let mut updated = Vec::new();
 
-            for (listener_id, instant) in timeouts.iter() {
-                // Loop until we find the first timeout that hasn't been met
-                if now > *instant {
-                    ctx.mark_dirty(*listener_id);
+            // for (callback_id, instant) in timeouts.drain_filter(|k, instant| now > *instant) {
+            //     unsafe { ctx.notify_unsafe(callback_id, Rc::clone(&self.dummy) as _) };
+            // }
 
-                    updated.push(*listener_id);
+            for (callback_id, instant) in timeouts.iter() {
+                if now > *instant {
+                    tracing::debug!(
+                        id = format!("{:?}", callback_id.get_widget_id()).as_str(),
+                        callback = format!("{:?}", callback_id.get_type_id()).as_str(),
+                        "timeout expired"
+                    );
+
+                    unsafe { ctx.notify_unsafe(*callback_id, Rc::clone(&self.dummy) as _) };
+
+                    updated.push(*callback_id);
                 }
             }
 
@@ -69,45 +59,54 @@ impl EnginePlugin for TimeoutPlugin {
         if !updated_timeouts.is_empty() {
             for (widget_id, updated) in updated_timeouts {
                 for pair in updated {
-                    plugin.widgets.get_mut(&widget_id).unwrap().remove(&pair);
+                    state.widgets.get_mut(&widget_id).unwrap().remove(&pair);
                 }
             }
         }
     }
 
-    fn on_build(&self, _ctx: &mut PluginContext) {}
-
-    fn on_layout(&self, _ctx: &mut PluginContext) {}
-
-    fn on_events(&self, ctx: &mut PluginContext, events: &[WidgetEvent]) {
-        let mut plugin = ctx.init_global(TimeoutPluginState::default);
-
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
         for event in events {
             if let WidgetEvent::Destroyed { widget_id, .. } = event {
-                if plugin.widgets.contains_key(widget_id) {
-                    plugin.widgets.remove(widget_id);
-                }
+                state.widgets.remove(widget_id);
             }
         }
     }
 }
 
-pub trait TimeoutExt {
-    fn use_timeout(&mut self, duration: Duration);
+#[derive(Debug, Default, Clone)]
+pub struct TimeoutPluginState {
+    widgets: HashMap<WidgetId, HashMap<CallbackId, Instant>>,
 }
 
-impl<'ui, 'ctx> TimeoutExt for BuildContext<'ui, 'ctx> {
-    /// Marks the caller for updating when `duration` elapses.
-    fn use_timeout(&mut self, duration: Duration) {
-        self.init_global(TimeoutPluginState::default)
-            .create_timeout(self.get_listener(), duration);
-    }
+pub trait TimeoutPluginExt<W>
+where
+    W: WidgetBuilder,
+{
+    fn set_timeout<F>(&mut self, duration: Duration, func: F)
+    where
+        F: Fn(&mut CallbackContext<W>, &()) + 'static;
 }
 
-impl<'ui, 'ctx> TimeoutExt for WidgetContext<'ui, 'ctx> {
+impl<'ctx, W> TimeoutPluginExt<W> for BuildContext<'ctx, W>
+where
+    W: WidgetBuilder,
+{
     /// Marks the caller for updating when `duration` elapses.
-    fn use_timeout(&mut self, duration: Duration) {
-        self.init_global(TimeoutPluginState::default)
-            .create_timeout(self.get_listener(), duration);
+    fn set_timeout<F>(&mut self, duration: Duration, func: F)
+    where
+        F: Fn(&mut CallbackContext<W>, &()) + 'static,
+    {
+        let callback_id = self.callback(func).get_id().unwrap();
+
+        if let Some(mut plugin) = self.get_plugin_mut::<TimeoutPlugin>() {
+            let state = plugin.get_state_mut();
+
+            state
+                .widgets
+                .entry(callback_id.get_widget_id())
+                .or_insert_with(HashMap::default)
+                .insert(callback_id, Instant::now().add(duration));
+        }
     }
 }

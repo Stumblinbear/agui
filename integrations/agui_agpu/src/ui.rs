@@ -17,6 +17,7 @@ use agui::{
     widgets::{
         plugins::{event::EventPluginEngineExt, global::GlobalPluginExt},
         state::{
+            keyboard::{KeyCode, KeyState, Keyboard, KeyboardCharacter, KeyboardInput},
             mouse::{Mouse, MouseButton, MouseButtonState, MouseButtons, MousePos, Scroll},
             window::{WindowFocus, WindowPosition, WindowSize},
         },
@@ -118,15 +119,6 @@ impl UI {
                     self.set_global::<WindowPosition, _>(move |state| *state = window_pos);
                 }
 
-                // WindowEvent::ReceivedCharacter(c) => {
-                //     if let Some(mut state) = self.try_use_global::<Keyboard>() {
-                //         state.input = Some(c);
-                //     }
-
-                //     if let Some(mut state) = self.try_use_global::<KeyboardInput>() {
-                //         **state = c;
-                //     }
-                // }
                 WindowEvent::Focused(focused) => {
                     let window_focused = WindowFocus(focused);
 
@@ -134,30 +126,6 @@ impl UI {
                     self.set_global::<WindowFocus, _>(move |state| *state = window_focused);
                 }
 
-                // WindowEvent::KeyboardInput { input, .. } => {
-                //     if let Some(mut state) = self.try_use_global::<Keyboard>() {
-                //         state.input = None;
-
-                //         if let Some(key) = input.virtual_keycode {
-                //             let key: KeyCode = unsafe { mem::transmute(key as u32) };
-
-                //             match input.state {
-                //                 ElementState::Pressed => {
-                //                     state.keys.insert(key, KeyState::Pressed);
-                //                 }
-                //                 ElementState::Released => {
-                //                     state.keys.insert(key, KeyState::Released);
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
-
-                // WindowEvent::ModifiersChanged(modifiers) => {
-                //     if let Some(mut state) = self.try_use_global::<Keyboard>() {
-                //         state.modifiers = unsafe { mem::transmute(modifiers) };
-                //     }
-                // }
                 WindowEvent::CursorMoved { position: pos, .. } => {
                     let mouse_pos = MousePos(Some(Point {
                         x: pos.x as f32,
@@ -224,6 +192,33 @@ impl UI {
                         winit::event::MouseButton::Other(i) => {
                             state.button.other.insert(i, button_state);
                         }
+                    });
+                }
+
+                WindowEvent::ReceivedCharacter(c) => {
+                    self.fire_event(KeyboardCharacter(c));
+                }
+
+                WindowEvent::KeyboardInput { input, .. } => {
+                    if let Some(key) = input.virtual_keycode {
+                        let key: KeyCode = unsafe { mem::transmute(key as u32) };
+
+                        let key_state = match input.state {
+                            ElementState::Pressed => KeyState::Pressed,
+                            ElementState::Released => KeyState::Released,
+                        };
+
+                        self.fire_event(KeyboardInput(key, key_state));
+
+                        self.set_global::<Keyboard, _>(move |state| {
+                            state.keys.insert(key, key_state);
+                        });
+                    }
+                }
+
+                WindowEvent::ModifiersChanged(modifiers) => {
+                    self.set_global::<Keyboard, _>(move |state| {
+                        state.modifiers = unsafe { mem::transmute(modifiers) };
                     });
                 }
 

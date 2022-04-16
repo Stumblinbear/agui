@@ -6,8 +6,8 @@ pub struct RenderContext<'ctx, W>
 where
     W: WidgetBuilder,
 {
-    pub(crate) widget: &'ctx W,
-    pub(crate) state: &'ctx W::State,
+    pub widget: &'ctx W,
+    pub state: &'ctx W::State,
 }
 
 impl<W> Deref for RenderContext<'_, W>
@@ -25,6 +25,10 @@ impl<W> RenderContext<'_, W>
 where
     W: WidgetBuilder,
 {
+    pub fn get_widget(&self) -> &W {
+        self.widget
+    }
+
     pub fn get_state(&self) -> &W::State {
         self.state
     }

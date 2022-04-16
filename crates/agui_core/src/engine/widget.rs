@@ -17,7 +17,7 @@ use super::{context::EngineContext, Data};
 
 pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
-    fn get_type_name(&self) -> &'static str;
+    fn get_display_name(&self) -> String;
 
     fn get_layout_type(&self) -> Option<LayoutType>;
     fn get_layout(&self) -> Option<Layout>;
@@ -102,8 +102,28 @@ where
         TypeId::of::<W>()
     }
 
-    fn get_type_name(&self) -> &'static str {
-        type_name::<W>().rsplit("::").next().unwrap()
+    fn get_display_name(&self) -> String {
+        let type_name = type_name::<W>();
+
+        if !type_name.contains('<') {
+            String::from(type_name.rsplit("::").next().unwrap())
+        } else {
+            let mut name = String::new();
+
+            let mut remaining = String::from(type_name);
+
+            while let Some((part, rest)) = remaining.split_once("<") {
+                name.push_str(part.rsplit("::").next().unwrap());
+
+                name.push('<');
+
+                remaining = String::from(rest);
+            }
+
+            name.push_str(remaining.rsplit("::").next().unwrap());
+
+            name
+        }
     }
 
     fn get_layout_type(&self) -> Option<LayoutType> {
@@ -123,6 +143,9 @@ where
     }
 
     fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult {
+        let span = tracing::error_span!("build");
+        let _enter = span.enter();
+
         let mut ctx = BuildContext {
             plugins: ctx.plugins.unwrap(),
             tree: ctx.tree,
@@ -153,6 +176,9 @@ where
     }
 
     fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool {
+        let span = tracing::error_span!("callback");
+        let _enter = span.enter();
+
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
                 plugins: ctx.plugins.unwrap(),
@@ -182,6 +208,9 @@ where
     }
 
     fn render(&self, canvas: &mut Canvas) {
+        let span = tracing::error_span!("on_draw");
+        let _enter = span.enter();
+
         if let Some(renderer) = &self.renderer {
             let ctx = RenderContext {
                 widget: &self.widget,

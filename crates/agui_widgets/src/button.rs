@@ -1,4 +1,5 @@
 use agui_core::prelude::*;
+use agui_macros::build;
 
 use crate::GestureDetector;
 
@@ -44,23 +45,19 @@ impl StatefulWidget for Button {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
-        let color = {
-            let state = ctx.get_state();
+        ctx.on_draw(move |ctx, canvas| {
+            let style = ctx.style.clone().unwrap_or_default();
 
-            let style = self.style.clone().unwrap_or_default();
-
-            if state.disabled {
+            let color = if ctx.state.disabled {
                 style.disabled
-            } else if state.pressed {
+            } else if ctx.state.pressed {
                 style.pressed
-            } else if state.hovered {
+            } else if ctx.state.hovered {
                 style.hovered
             } else {
                 style.normal
-            }
-        };
+            };
 
-        ctx.on_draw(move |ctx, canvas| {
             let brush = canvas.new_brush(Paint {
                 color,
                 ..Paint::default()
@@ -70,7 +67,7 @@ impl StatefulWidget for Button {
         });
 
         let on_hover = ctx.callback::<bool, _>(|ctx, arg| {
-            if ctx.get_state().hovered != *arg {
+            if ctx.state.hovered != *arg {
                 ctx.set_state(|state| {
                     state.hovered = *arg;
                 })
@@ -81,9 +78,7 @@ impl StatefulWidget for Button {
             let on_pressed = self.on_pressed.clone();
 
             move |ctx, arg| {
-                let state = ctx.get_state_mut();
-
-                if state.pressed && !arg {
+                if ctx.state.pressed && !arg {
                     on_pressed.emit(());
                 }
 
@@ -93,15 +88,15 @@ impl StatefulWidget for Button {
             }
         });
 
-        ctx.key(
-            Key::single(),
-            GestureDetector {
-                on_hover,
-                on_pressed,
-                child: self.child.clone(),
-            }
-            .into(),
-        )
-        .into()
+        build! {
+            ctx.key(
+                Key::single(),
+                GestureDetector {
+                    on_hover,
+                    on_pressed,
+                    child: self.child.clone(),
+                }.into(),
+            )
+        }
     }
 }

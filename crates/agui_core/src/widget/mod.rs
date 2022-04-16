@@ -339,6 +339,10 @@ impl Widget {
         None
     }
 
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Widget::None)
+    }
+
     pub fn get(&self) -> Option<Ref<dyn WidgetImpl>> {
         match self {
             Widget::None => None,

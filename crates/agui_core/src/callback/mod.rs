@@ -16,6 +16,10 @@ impl CallbackId {
     pub fn get_widget_id(&self) -> WidgetId {
         self.0
     }
+
+    pub fn get_type_id(&self) -> TypeId {
+        self.1
+    }
 }
 
 #[derive(Clone)]
