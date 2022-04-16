@@ -1,24 +1,35 @@
 #![allow(clippy::needless_update)]
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 use agui::{
-    font::{Font, HorizontalAlign, VerticalAlign},
     macros::{build, functional_widget},
-    unit::{Color, Layout, Margin, Sizing, Units},
-    widget::{BuildContext, BuildResult, WidgetRef},
+    prelude::*,
     widgets::{
-        plugins::{provider::ProviderExt, DefaultPluginsExt},
+        plugins::DefaultPluginsExt,
         primitives::{Builder, Column, Padding, Spacing, Text},
-        state::{theme::Theme, DefaultGlobalsExt},
-        App, Button, ButtonStyle,
+        App, Button,
     },
 };
 use agui_agpu::UIProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
+    let filter = EnvFilter::from_default_env()
+        .add_directive(LevelFilter::ERROR.into())
+        .add_directive(format!("agui={}", LevelFilter::DEBUG).parse().unwrap());
+
+    tracing_subscriber::fmt()
+        .with_timer(tracing_subscriber::fmt::time::time())
+        .with_level(true)
+        .with_thread_names(false)
+        .with_target(true)
+        .with_env_filter(filter)
+        .init();
+
     let mut ui = UIProgram::new("agui title screen")?;
 
     ui.register_default_plugins();
-    ui.register_default_globals();
+    // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
@@ -35,10 +46,10 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn example_main(
-    ctx: &mut BuildContext,
+    ctx: &mut BuildContext<()>,
     font: Font,
     _color: Color,
-    _child: WidgetRef,
+    _child: Widget,
 ) -> BuildResult {
     ctx.set_layout(Layout {
         sizing: Sizing::Fill,
@@ -56,7 +67,10 @@ fn example_main(
             },
             spacing: Units::Pixels(16.0),
             children: [
-                // Text::is(font, 64.0, "A Title".into()).color(Color::White),
+                Text {
+                    font: font.styled().h_align(HorizontalAlign::Center).size(64.0).color(Color::White),
+                    text: "A Title".into()
+                },
                 Spacing::vertical(32.0.into()),
                 Button {
                     layout: Layout {
@@ -72,7 +86,7 @@ fn example_main(
                             text: "A Button"
                         }
                     },
-                    on_pressed: ctx.use_callback(|_ctx, ()| {
+                    on_pressed: ctx.callback(|_ctx, ()| {
                         println!("Pressed 1");
                     })
                 },
@@ -90,7 +104,7 @@ fn example_main(
                             text: "Another Button"
                         }
                     },
-                    on_pressed: ctx.use_callback(|_ctx, ()| {
+                    on_pressed: ctx.callback(|_ctx, ()| {
                         println!("Pressed 2");
                     })
                 },
@@ -108,24 +122,24 @@ fn example_main(
                             text: "Also a Button"
                         }
                     },
-                    on_pressed: ctx.use_callback(|_ctx, ()| {
+                    on_pressed: ctx.callback(|_ctx, ()| {
                         println!("Pressed 3");
                     })
                 },
                 Builder::new(move |ctx| {
-                    let theme = ctx.init_state(|| {
-                        let mut theme = Theme::new();
+                    // let theme = ctx.init_state(|| {
+                    //     let mut theme = Theme::new();
 
-                        theme.set(ButtonStyle {
-                            normal: Color::Red,
-                            hover: Color::Green,
-                            pressed: Color::Blue,
-                        });
+                    //     theme.set(ButtonStyle {
+                    //         normal: Color::Red,
+                    //         hover: Color::Green,
+                    //         pressed: Color::Blue,
+                    //     });
 
-                        theme
-                    });
+                    //     theme
+                    // });
 
-                    theme.provide(ctx);
+                    // theme.provide(ctx);
 
                     build! {
                         Button {
@@ -142,7 +156,7 @@ fn example_main(
                                     text: "Beuton"
                                 }
                             },
-                            on_pressed: ctx.use_callback(|_ctx, ()| {
+                            on_pressed: ctx.callback(|_ctx, ()| {
                                 println!("Pressed 4");
                             })
                         }

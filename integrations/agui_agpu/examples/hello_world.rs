@@ -1,12 +1,13 @@
 #![allow(clippy::needless_update)]
 
+use tracing::metadata::LevelFilter;
+use tracing_subscriber::EnvFilter;
+
 use agui::{
     macros::build,
     widgets::{plugins::DefaultPluginsExt, primitives::Text, App},
 };
 use agui_agpu::UIProgram;
-use tracing::metadata::LevelFilter;
-use tracing_subscriber::EnvFilter;
 
 fn main() -> Result<(), agpu::BoxError> {
     let filter = EnvFilter::from_default_env()
