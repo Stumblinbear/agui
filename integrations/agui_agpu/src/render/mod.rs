@@ -220,11 +220,6 @@ impl RenderEngine {
             .for_each(|node| {
                 let widget = node.get().unwrap();
 
-                let render_func = match widget.get_renderer() {
-                    Some(render_func) => render_func,
-                    None => return,
-                };
-
                 let rect = match widget.get_rect() {
                     Some(rect) => rect,
                     None => return,
@@ -232,7 +227,7 @@ impl RenderEngine {
 
                 let mut canvas = Canvas::new(rect.into());
 
-                render_func.call(&mut canvas);
+                widget.render(&mut canvas);
 
                 // If the canvas added no commands, bail
                 if canvas.is_empty() {

@@ -22,7 +22,7 @@ pub struct GestureState {
 impl StatefulWidget for GestureDetector {
     type State = GestureState;
 
-    fn build(&self, ctx: &mut BuildContext<GestureState>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: Sizing::Fill,
             ..Default::default()

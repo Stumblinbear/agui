@@ -3,36 +3,29 @@ use agui_core::{
     widget::StatelessWidget,
 };
 
-pub struct Builder<F>
-where
-    F: Fn(&mut BuildContext<()>) -> BuildResult + 'static,
-{
-    func: F,
+pub struct Builder {
+    func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult + 'static>,
 }
 
-impl<F> std::fmt::Debug for Builder<F>
-where
-    F: Fn(&mut BuildContext<()>) -> BuildResult + 'static,
-{
+impl std::fmt::Debug for Builder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Builder").finish()
     }
 }
 
-impl<F> Builder<F>
-where
-    F: Fn(&mut BuildContext<()>) -> BuildResult + 'static,
-{
-    pub fn new(func: F) -> Self {
-        Self { func }
+impl Builder {
+    pub fn new<F>(func: F) -> Self
+    where
+        F: Fn(&mut BuildContext<Self>) -> BuildResult + 'static,
+    {
+        Self {
+            func: Box::new(func),
+        }
     }
 }
 
-impl<F> StatelessWidget for Builder<F>
-where
-    F: Fn(&mut BuildContext<()>) -> BuildResult + 'static,
-{
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+impl StatelessWidget for Builder {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         (self.func)(ctx)
     }
 }

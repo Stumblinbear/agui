@@ -3,7 +3,7 @@ use std::{ops::Deref, rc::Rc};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    engine::{context::Context, tree::Tree, Data, NotifyCallback},
+    engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, NotifyCallback},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Rect, Size},
     widget::{Widget, WidgetId},
@@ -11,36 +11,37 @@ use crate::{
 
 use super::CallbackId;
 
-pub struct CallbackContext<'ctx, S>
+pub struct CallbackContext<'ctx, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut FnvHashMap<PluginId, Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) notifier: NotifyCallback,
 
-    pub(crate) state: &'ctx mut S,
+    pub(crate) widget: &'ctx W,
+    pub(crate) state: &'ctx mut W::State,
 
     pub(crate) rect: Option<Rect>,
 
     pub(crate) changed: bool,
 }
 
-impl<S> Deref for CallbackContext<'_, S>
+impl<W> Deref for CallbackContext<'_, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
-    type Target = S;
+    type Target = W;
 
     fn deref(&self) -> &Self::Target {
-        self.state
+        self.widget
     }
 }
 
-impl<S> Context<S> for CallbackContext<'_, S>
+impl<W> Context<W> for CallbackContext<'_, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
         self.plugins
@@ -72,37 +73,6 @@ where
         self.dirty.insert(widget_id);
     }
 
-    fn get_rect(&self) -> Option<Rect> {
-        self.rect
-    }
-
-    fn get_size(&self) -> Option<Size> {
-        self.rect.map(|rect| rect.into())
-    }
-
-    fn set_state<F>(&mut self, func: F)
-    where
-        F: FnOnce(&mut S),
-    {
-        self.changed = true;
-
-        func(self.state);
-    }
-
-    fn get_state(&self) -> &S
-    where
-        S: Data,
-    {
-        self.state
-    }
-
-    fn get_state_mut(&mut self) -> &mut S
-    where
-        S: Data,
-    {
-        self.state
-    }
-
     fn notify<A>(&mut self, callback_id: CallbackId, args: A)
     where
         A: Data,
@@ -116,5 +86,34 @@ where
     /// is different, it will panic.
     unsafe fn notify_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
         self.notifier.lock().push((callback_id, args));
+    }
+
+    fn get_widget(&self) -> &W {
+        self.widget
+    }
+
+    fn set_state<F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut W::State),
+    {
+        self.changed = true;
+
+        func(self.state);
+    }
+
+    fn get_state(&self) -> &W::State {
+        self.state
+    }
+
+    fn get_state_mut(&mut self) -> &mut W::State {
+        self.state
+    }
+
+    fn get_rect(&self) -> Option<Rect> {
+        self.rect
+    }
+
+    fn get_size(&self) -> Option<Size> {
+        self.rect.map(|rect| rect.into())
     }
 }

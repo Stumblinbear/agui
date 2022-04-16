@@ -5,7 +5,7 @@ use std::{
 
 use agui_core::unit::Point;
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct MousePos(pub Option<Point>);
 
 impl Deref for MousePos {

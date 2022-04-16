@@ -4,8 +4,11 @@ use heck::ToUpperCamelCase;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use syn::{
     parse2, parse_quote,
-    visit::{visit_item_fn, Visit},
-    GenericArgument, ItemFn, Pat, PatIdent, PathArguments, ReturnType, Type,
+    punctuated::Punctuated,
+    token::{Gt, Lt},
+    visit_mut::{visit_item_fn_mut, VisitMut},
+    AngleBracketedGenericArguments, GenericArgument, ItemFn, Pat, PatIdent, Path, PathArguments,
+    PathSegment, ReturnType, Type, TypePath,
 };
 
 #[derive(Default)]
@@ -14,15 +17,13 @@ struct FunctionVisitor {
 
     ident: Option<String>,
     args: Vec<(PatIdent, Type)>,
-    state: Option<Type>,
-    ctx_path_args: Option<PathArguments>,
 }
 
 impl FunctionVisitor {}
 
-impl Visit<'_> for FunctionVisitor {
-    fn visit_item_fn(&mut self, func: &'_ ItemFn) {
-        visit_item_fn(self, func);
+impl VisitMut for FunctionVisitor {
+    fn visit_item_fn_mut(&mut self, func: &mut ItemFn) {
+        visit_item_fn_mut(self, func);
 
         if func.sig.variadic.is_some() {
             panic!("functional widgets do not support variadic arguments");
@@ -41,12 +42,59 @@ impl Visit<'_> for FunctionVisitor {
         self.fn_ident = Some(func.sig.ident.clone());
         self.ident = Some(func.sig.ident.to_string().to_upper_camel_case());
 
-        for input in &func.sig.inputs {
+        for input in &mut func.sig.inputs {
             match input {
                 syn::FnArg::Receiver(_) => {
                     panic!("functional widgets do not support self");
                 }
                 syn::FnArg::Typed(arg) => {
+                    if self.args.is_empty() {
+                        if let Type::Reference(ty) = arg.ty.as_mut() {
+                            if ty.mutability.is_none() {
+                                panic!("first argument must be &mut BuildContext");
+                            }
+
+                            if let Type::Path(ty_path) = ty.elem.as_mut() {
+                                let segment = ty_path.path.segments.last_mut().unwrap();
+
+                                if segment.ident != "BuildContext" || !segment.arguments.is_empty()
+                                {
+                                    panic!("first argument must be &mut BuildContext");
+                                }
+
+                                let mut self_path = Punctuated::default();
+
+                                self_path.push_value(PathSegment {
+                                    ident: Ident::new(
+                                        self.ident.as_ref().unwrap(),
+                                        Span::call_site(),
+                                    ),
+                                    arguments: PathArguments::None,
+                                });
+
+                                let mut args = Punctuated::default();
+
+                                args.push_value(GenericArgument::Type(Type::Path(TypePath {
+                                    qself: None,
+                                    path: Path {
+                                        leading_colon: None,
+                                        segments: self_path,
+                                    },
+                                })));
+
+                                segment.arguments =
+                                    PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                                        colon2_token: None,
+                                        lt_token: Lt::default(),
+                                        args,
+                                        gt_token: Gt::default(),
+                                    });
+                            } else {
+                                panic!("first argument must be &mut BuildContext");
+                            }
+                        }
+                    }
+
                     let pat = &*arg.pat;
                     let ty = &*arg.ty;
 
@@ -59,47 +107,31 @@ impl Visit<'_> for FunctionVisitor {
             }
         }
 
-        if !self.args.is_empty() {
-            let (_, ty) = self.args.remove(0);
-
-            if let Type::Reference(ty) = ty {
-                if ty.mutability.is_none() {
-                    panic!("first argument must be &mut BuildContext");
-                }
-
-                if let Type::Path(ty_path) = &*ty.elem {
-                    let segment = ty_path.path.segments.last().unwrap();
-
-                    if segment.ident != "BuildContext" {
-                        panic!("first argument must be &mut BuildContext");
-                    }
-
-                    self.ctx_path_args = Some(segment.arguments.clone());
-
-                    if let PathArguments::AngleBracketed(generic) = &segment.arguments {
-                        if let GenericArgument::Type(ty) = generic.args.first().unwrap() {
-                            self.state = Some(ty.clone());
-                        }
-                    }
-                } else {
-                    panic!("first argument must be &mut BuildContext");
-                }
-            }
-        } else {
+        if self.args.is_empty() {
             panic!("first argument must be &mut BuildContext");
         }
     }
 }
 
-pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -> TokenStream2 {
-    let item = match parse2(item) {
+pub(crate) fn parse_functional_widget(args: TokenStream2, item: TokenStream2) -> TokenStream2 {
+    let state: Option<Ident> = match parse2(args) {
+        Ok(item) => item,
+        Err(err) => return err.into_compile_error(),
+    };
+
+    let state = match state {
+        Some(state) => quote::quote! { #state },
+        None => quote::quote! { () },
+    };
+
+    let mut item = match parse2(item) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error(),
     };
 
     let mut visitor = FunctionVisitor::default();
 
-    visitor.visit_item_fn(&item);
+    visitor.visit_item_fn_mut(&mut item);
 
     let fn_ident = visitor
         .fn_ident
@@ -115,6 +147,8 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
     let mut fields = quote::quote! {};
     let mut args = quote::quote! { ctx };
 
+    visitor.args.remove(0);
+
     for (ident, ty) in &visitor.args {
         fields.extend(quote::quote! {
             pub #ident: #ty,
@@ -124,12 +158,6 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
             , self.#ident.clone()
         });
     }
-
-    let state = visitor.state;
-    let ctx_path_args = match visitor.ctx_path_args {
-        Some(args) => quote::quote! { #args },
-        None => quote::quote! {},
-    };
 
     // #[cfg(feature = "internal")]
     // let agui_core = quote::quote! { agui_core };
@@ -147,7 +175,7 @@ pub(crate) fn parse_functional_widget(_args: TokenStream2, item: TokenStream2) -
         impl #agui_core::widget::StatefulWidget for #ident {
             type State = #state;
 
-            fn build(&self, ctx: &mut #agui_core::widget::BuildContext #ctx_path_args) -> #agui_core::widget::BuildResult {
+            fn build(&self, ctx: &mut #agui_core::widget::BuildContext<Self>) -> #agui_core::widget::BuildResult {
                 #fn_ident(#args)
             }
         }

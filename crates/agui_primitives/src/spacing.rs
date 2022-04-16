@@ -24,7 +24,7 @@ impl Spacing {
 }
 
 impl StatelessWidget for Spacing {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: self.0,
             ..Layout::default()

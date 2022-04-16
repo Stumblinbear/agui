@@ -101,6 +101,10 @@ impl FontStyle {
     }
 
     pub fn get_glyphs(&self, mut rect: Rect, text: &str) -> Vec<SectionGlyph> {
+        if text.is_empty() {
+            return vec![];
+        }
+
         self.font.get().map_or_else(Vec::default, |font| {
             let glyphs_layout = GlyphLayout::Wrap {
                 line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,

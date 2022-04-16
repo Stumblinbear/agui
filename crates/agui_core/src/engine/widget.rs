@@ -8,7 +8,7 @@ use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    canvas::renderer::RenderFn,
+    canvas::{context::RenderContext, renderer::RenderFn, Canvas},
     unit::{Layout, LayoutType, Rect},
     widget::{BuildContext, BuildResult, Widget, WidgetId},
 };
@@ -22,26 +22,26 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn get_layout_type(&self) -> Option<LayoutType>;
     fn get_layout(&self) -> Option<Layout>;
 
-    fn get_renderer(&self) -> Option<&RenderFn>;
-
     fn set_rect(&mut self, rect: Option<Rect>);
     fn get_rect(&self) -> Option<Rect>;
 
     fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult;
 
     fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool;
+
+    fn render(&self, canvas: &mut Canvas);
 }
 
 impl_downcast!(WidgetImpl);
 
 /// Implements the widget's `build()` method.
-pub trait WidgetBuilder: std::fmt::Debug + Downcast {
+pub trait WidgetBuilder: std::fmt::Debug + Downcast + Sized {
     type State: Data + Default;
 
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
-    fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult;
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult;
 }
 
 #[derive(Default)]
@@ -55,8 +55,8 @@ where
     layout_type: LayoutType,
     layout: Layout,
 
-    renderer: Option<RenderFn>,
-    callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W::State>>>,
+    renderer: Option<RenderFn<W>>,
+    callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 
     rect: Option<Rect>,
 }
@@ -114,10 +114,6 @@ where
         Some(self.layout)
     }
 
-    fn get_renderer(&self) -> Option<&RenderFn> {
-        self.renderer.as_ref()
-    }
-
     fn set_rect(&mut self, rect: Option<Rect>) {
         self.rect = rect;
     }
@@ -134,6 +130,7 @@ where
             notifier: ctx.notifier,
 
             widget_id,
+            widget: &self.widget,
             state: &mut self.state,
 
             layout_type: LayoutType::default(),
@@ -156,29 +153,43 @@ where
     }
 
     fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool {
-        let mut ctx = CallbackContext {
-            plugins: ctx.plugins.unwrap(),
-            tree: ctx.tree,
-            dirty: ctx.dirty,
-            notifier: ctx.notifier,
-
-            state: &mut self.state,
-
-            rect: self.rect,
-
-            changed: false,
-        };
-
         if let Some(callback) = self.callbacks.get(&callback_id) {
+            let mut ctx = CallbackContext {
+                plugins: ctx.plugins.unwrap(),
+                tree: ctx.tree,
+                dirty: ctx.dirty,
+                notifier: ctx.notifier,
+
+                widget: &self.widget,
+                state: &mut self.state,
+
+                rect: self.rect,
+
+                changed: false,
+            };
+
             callback.call(&mut ctx, arg);
+
+            ctx.changed
         } else {
             tracing::warn!(
                 callback_id = format!("{:?}", callback_id).as_str(),
                 "callback not found"
             );
-        }
 
-        ctx.changed
+            false
+        }
+    }
+
+    fn render(&self, canvas: &mut Canvas) {
+        if let Some(renderer) = &self.renderer {
+            let ctx = RenderContext {
+                widget: &self.widget,
+                state: &self.state,
+            };
+
+            renderer.call(&ctx, canvas);
+        }
     }
 }
 

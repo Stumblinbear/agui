@@ -4,8 +4,8 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
-    canvas::{renderer::RenderFn, Canvas},
-    engine::{context::Context, tree::Tree, Data, NotifyCallback},
+    canvas::{context::RenderContext, renderer::RenderFn, Canvas},
+    engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, NotifyCallback},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
     widget::WidgetId,
@@ -13,9 +13,9 @@ use crate::{
 
 use super::{Widget, WidgetKey};
 
-pub struct BuildContext<'ctx, S>
+pub struct BuildContext<'ctx, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut FnvHashMap<PluginId, Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
@@ -23,20 +23,21 @@ where
     pub(crate) notifier: NotifyCallback,
 
     pub(crate) widget_id: WidgetId,
-    pub(crate) state: &'ctx mut S,
+    pub(crate) widget: &'ctx W,
+    pub(crate) state: &'ctx mut W::State,
 
     pub(crate) layout_type: LayoutType,
     pub(crate) layout: Layout,
 
     pub(crate) rect: Option<Rect>,
 
-    pub(crate) renderer: Option<RenderFn>,
-    pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<S>>>,
+    pub(crate) renderer: Option<RenderFn<W>>,
+    pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
-impl<S> Context<S> for BuildContext<'_, S>
+impl<W> Context<W> for BuildContext<'_, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
         self.plugins
@@ -68,35 +69,6 @@ where
         self.dirty.insert(widget_id);
     }
 
-    fn get_rect(&self) -> Option<Rect> {
-        self.rect
-    }
-
-    fn get_size(&self) -> Option<Size> {
-        self.rect.map(|rect| rect.into())
-    }
-
-    fn set_state<F>(&mut self, func: F)
-    where
-        F: FnOnce(&mut S),
-    {
-        func(self.state);
-    }
-
-    fn get_state(&self) -> &S
-    where
-        S: Data,
-    {
-        self.state
-    }
-
-    fn get_state_mut(&mut self) -> &mut S
-    where
-        S: Data,
-    {
-        self.state
-    }
-
     fn notify<A>(&mut self, callback_id: CallbackId, args: A)
     where
         A: Data,
@@ -111,11 +83,38 @@ where
     unsafe fn notify_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
         self.notifier.lock().push((callback_id, args));
     }
+
+    fn get_widget(&self) -> &W {
+        self.widget
+    }
+
+    fn set_state<F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut W::State),
+    {
+        func(self.state);
+    }
+
+    fn get_state(&self) -> &W::State {
+        self.state
+    }
+
+    fn get_state_mut(&mut self) -> &mut W::State {
+        self.state
+    }
+
+    fn get_rect(&self) -> Option<Rect> {
+        self.rect
+    }
+
+    fn get_size(&self) -> Option<Size> {
+        self.rect.map(|rect| rect.into())
+    }
 }
 
-impl<S> BuildContext<'_, S>
+impl<W> BuildContext<'_, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     pub fn get_widget_id(&self) -> WidgetId {
         self.widget_id
@@ -133,7 +132,7 @@ where
 
     pub fn on_draw<F>(&mut self, func: F)
     where
-        F: Fn(&mut Canvas) + 'static,
+        F: Fn(&RenderContext<W>, &mut Canvas) + 'static,
     {
         self.renderer = Some(RenderFn::new(func));
     }
@@ -141,9 +140,9 @@ where
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: Data,
-        F: Fn(&mut CallbackContext<S>, &A) + 'static,
+        F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        let callback = Callback::new::<F, S>(Arc::clone(&self.notifier), self.widget_id);
+        let callback = Callback::new::<F, W>(Arc::clone(&self.notifier), self.widget_id);
 
         self.callbacks
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));

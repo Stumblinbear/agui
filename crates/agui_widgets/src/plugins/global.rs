@@ -8,7 +8,7 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    engine::{event::WidgetEvent, Data, Engine},
+    engine::{event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
     prelude::{BuildContext, Context},
     widget::WidgetId,
@@ -167,9 +167,9 @@ impl GlobalPluginExt for Engine {
     }
 }
 
-impl<'ctx, S> GlobalPluginExt for BuildContext<'ctx, S>
+impl<'ctx, W> GlobalPluginExt for BuildContext<'ctx, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -199,9 +199,9 @@ where
     }
 }
 
-impl<'ctx, S> GlobalPluginExt for CallbackContext<'ctx, S>
+impl<'ctx, W> GlobalPluginExt for CallbackContext<'ctx, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -272,14 +272,14 @@ mod tests {
 
     use super::{GlobalPlugin, GlobalPluginExt};
 
-    #[derive(Debug, Default, Copy, Clone)]
+    #[derive(Debug, Default, Clone, Copy)]
     struct TestGlobal(u32);
 
     #[derive(Clone, Debug, Default)]
     struct TestWidgetWriter {}
 
     impl StatelessWidget for TestWidgetWriter {
-        fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             ctx.set_global::<TestGlobal, _>(|value| value.0 += 1);
 
             BuildResult::None
@@ -292,7 +292,7 @@ mod tests {
     impl StatefulWidget for TestWidgetReader {
         type State = u32;
 
-        fn build(&self, ctx: &mut BuildContext<u32>) -> BuildResult {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             let global = ctx.get_global::<TestGlobal>();
 
             ctx.set_state(move |value| {

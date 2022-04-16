@@ -8,7 +8,7 @@ pub struct App {
 }
 
 impl StatelessWidget for App {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         let window_size = ctx.get_global::<WindowSize>();
 
         let window_size = window_size.borrow();

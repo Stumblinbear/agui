@@ -1,25 +1,7 @@
-use std::{
-    borrow::Cow,
-    time::{Duration, Instant},
-};
+use std::borrow::Cow;
 
-use agui_core::{
-    canvas::paint::Paint,
-    font::FontStyle,
-    unit::{Color, Layout, Point, Rect},
-    widget::{callback::Callback, BuildContext, BuildResult, WidgetBuilder}, prelude::StatefulWidget,
-};
-use agui_macros::Widget;
+use agui_core::prelude::*;
 use agui_primitives::edit::EditableText;
-
-use crate::{
-    plugins::{hovering::HoveringExt, timeout::TimeoutExt},
-    state::{
-        keyboard::{KeyCode, Keyboard},
-        mouse::{Mouse, MouseButtonState},
-        theme::StyleExt,
-    },
-};
 
 const CURSOR_BLINK_SECS: f32 = 0.5;
 
@@ -78,34 +60,36 @@ impl Default for TextInputStyle {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum TextInputState {
-    Normal,
-    Disabled,
-    Hover,
-    Focused,
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TextInputState<S>
+where
+    S: EditableText + 'static,
+{
+    disabled: bool,
+    hovered: bool,
+    focused: bool,
+
+    cursor: Cursor,
+
+    value: S,
 }
 
-impl Default for TextInputState {
-    fn default() -> Self {
-        Self::Normal
-    }
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Cursor {
+    shown: bool,
+
+    string_index: usize,
+    glyph_index: usize,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum CursorState {
-    Shown,
-    Hidden,
-}
-
-#[derive(Default)]
+#[derive(Debug)]
 pub struct TextInput<S>
 where
     S: EditableText + 'static,
 {
     pub layout: Layout,
 
-    pub style: Option<TextInputStyle>,
+    pub style: TextInputStyle,
 
     pub font: FontStyle,
     pub placeholder: Cow<'static, str>,
@@ -119,7 +103,7 @@ impl Default for TextInput<String> {
         Self {
             layout: Layout::default(),
 
-            style: None,
+            style: TextInputStyle::default(),
 
             font: FontStyle::default(),
             placeholder: "".into(),
@@ -132,312 +116,314 @@ impl Default for TextInput<String> {
 
 impl<S> StatefulWidget for TextInput<S>
 where
-    S: EditableText + 'static,
+    S: EditableText + Default + 'static,
 {
-    type State = TextInputState;
-    
-    fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult {
+    type State = TextInputState<S>;
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
-        let mouse = ctx.global::<Mouse>();
-        let keyboard = ctx.global::<Keyboard>();
+        // let mouse = ctx.global::<Mouse>();
+        // let keyboard = ctx.global::<Keyboard>();
 
-        let input_value = ctx.state::<S>().or(|| self.value.clone());
-        let input_state = ctx.state::<(TextInputState, TextInputState)>();
-        let cursor = ctx.state::<Cursor>();
+        // let input_value = ctx.state::<S>().or(|| self.value.clone());
+        // let input_state = ctx.state::<(TextInputState, TextInputState)>();
+        // let cursor = ctx.state::<Cursor>();
 
-        (input_state, mouse)
-            .stream()
-            .map(|ctx, (input_state, mouse)| {
-                if mouse.button.left == MouseButtonState::Pressed {
-                    return if ctx.is_hovering() {
-                        TextInputState::Focused
-                    } else {
-                        TextInputState::Normal
-                    };
-                }
+        // (input_state, mouse)
+        //     .stream()
+        //     .map(|ctx, (input_state, mouse)| {
+        //         if mouse.button.left == MouseButtonState::Pressed {
+        //             return if ctx.is_hovering() {
+        //                 TextInputState::Focused
+        //             } else {
+        //                 TextInputState::Normal
+        //             };
+        //         }
 
-                if *input_state == TextInputState::Focused {
-                    return TextInputState::Focused;
-                } else if ctx.is_hovering() {
-                    return TextInputState::Hover;
-                }
+        //         if *input_state == TextInputState::Focused {
+        //             return TextInputState::Focused;
+        //         } else if ctx.is_hovering() {
+        //             return TextInputState::Hover;
+        //         }
 
-                TextInputState::Normal
-            })
-            .get();
-        
-        let value = (input_state, keyboard, cursor, input_value)
-            .stream()
-            .filter(|ctx, (input_state)| input_state == TextInputState::Focused)
-            .map(|ctx, _| {
-                if let Some(input) = keyboard.input {
-                    match input {
-                        // Backspace character
-                        '\u{8}' => {
-                            let grapheme_idx =
-                                input_value.prev_grapheme_offset(cursor.string_index);
+        //         TextInputState::Normal
+        //     })
+        //     .get();
 
-                            if let Some(idx) = grapheme_idx {
-                                input_value.remove(idx..(cursor.string_index));
+        // let value = (input_state, keyboard, cursor, input_value)
+        //     .stream()
+        //     .filter(|ctx, (input_state)| input_state == TextInputState::Focused)
+        //     .map(|ctx, _| {
+        //         if let Some(input) = keyboard.input {
+        //             match input {
+        //                 // Backspace character
+        //                 '\u{8}' => {
+        //                     let grapheme_idx =
+        //                         input_value.prev_grapheme_offset(cursor.string_index);
 
-                                cursor.set(Cursor {
-                                    string_index: idx,
-                                    glyph_index: cursor.glyph_index - 1,
-                                });
-                            }
-                        }
+        //                     if let Some(idx) = grapheme_idx {
+        //                         input_value.remove(idx..(cursor.string_index));
 
-                        // Delete character
-                        '\u{7f}' => {
-                            let grapheme_idx =
-                                input_value.next_grapheme_offset(cursor.string_index);
+        //                         cursor.set(Cursor {
+        //                             string_index: idx,
+        //                             glyph_index: cursor.glyph_index - 1,
+        //                         });
+        //                     }
+        //                 }
 
-                            if let Some(idx) = grapheme_idx {
-                                input_value.remove((cursor.string_index)..idx);
-                            }
-                        }
+        //                 // Delete character
+        //                 '\u{7f}' => {
+        //                     let grapheme_idx =
+        //                         input_value.next_grapheme_offset(cursor.string_index);
 
-                        ch => {
-                            input_value.insert(cursor.string_index, ch);
+        //                     if let Some(idx) = grapheme_idx {
+        //                         input_value.remove((cursor.string_index)..idx);
+        //                     }
+        //                 }
 
-                            let grapheme_idx =
-                                input_value.next_grapheme_offset(cursor.string_index);
+        //                 ch => {
+        //                     input_value.insert(cursor.string_index, ch);
 
-                            if let Some(idx) = grapheme_idx {
-                                cursor.set(Cursor {
-                                    string_index: idx,
-                                    glyph_index: cursor.glyph_index + 1,
-                                });
-                            }
-                        }
-                    }
+        //                     let grapheme_idx =
+        //                         input_value.next_grapheme_offset(cursor.string_index);
 
-                    on_value.emit(input_value.clone());
-                } else if keyboard.is_pressed(&KeyCode::Right) {
-                    let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
+        //                     if let Some(idx) = grapheme_idx {
+        //                         cursor.set(Cursor {
+        //                             string_index: idx,
+        //                             glyph_index: cursor.glyph_index + 1,
+        //                         });
+        //                     }
+        //                 }
+        //             }
 
-                    if let Some(idx) = grapheme_idx {
-                        cursor.set(Cursor {
-                            string_index: idx,
-                            glyph_index: cursor.glyph_index + 1,
-                        });
-                    }
-                } else if keyboard.is_pressed(&KeyCode::Left) {
-                    let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
+        //             on_value.emit(input_value.clone());
+        //         } else if keyboard.is_pressed(&KeyCode::Right) {
+        //             let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
 
-                    if let Some(idx) = grapheme_idx {
-                        cursor.set(Cursor {
-                            string_index: idx,
-                            glyph_index: cursor.glyph_index - 1,
-                        });
-                    }
-                }
+        //             if let Some(idx) = grapheme_idx {
+        //                 cursor.set(Cursor {
+        //                     string_index: idx,
+        //                     glyph_index: cursor.glyph_index + 1,
+        //                 });
+        //             }
+        //         } else if keyboard.is_pressed(&KeyCode::Left) {
+        //             let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
 
-                ctx.set_state(Instant::now());
-            })
-            
+        //             if let Some(idx) = grapheme_idx {
+        //                 cursor.set(Cursor {
+        //                     string_index: idx,
+        //                     glyph_index: cursor.glyph_index - 1,
+        //                 });
+        //             }
+        //         }
 
-        let value = {
-            let on_value = self.on_value.clone();
+        //         ctx.set_state(Instant::now());
+        //     })
 
-            ctx.computed(move |ctx| {
-                let input_state = ctx.init_state(TextInputState::default);
-                let keyboard = ctx.use_global(Keyboard::default);
+        // let value = {
+        //     let on_value = self.on_value.clone();
 
-                let mut input_value = ctx.init_state::<S, _>(|| panic!("value not initialized"));
-                let mut cursor = ctx.init_state(Cursor::default);
+        //     ctx.computed(move |ctx| {
+        //         let input_state = ctx.init_state(TextInputState::default);
+        //         let keyboard = ctx.use_global(Keyboard::default);
 
-                if *input_state == TextInputState::Focused {
-                    if let Some(input) = keyboard.input {
-                        match input {
-                            // Backspace character
-                            '\u{8}' => {
-                                let grapheme_idx =
-                                    input_value.prev_grapheme_offset(cursor.string_index);
+        //         let mut input_value = ctx.init_state::<S, _>(|| panic!("value not initialized"));
+        //         let mut cursor = ctx.init_state(Cursor::default);
 
-                                if let Some(idx) = grapheme_idx {
-                                    input_value.remove(idx..(cursor.string_index));
+        //         if *input_state == TextInputState::Focused {
+        //             if let Some(input) = keyboard.input {
+        //                 match input {
+        //                     // Backspace character
+        //                     '\u{8}' => {
+        //                         let grapheme_idx =
+        //                             input_value.prev_grapheme_offset(cursor.string_index);
 
-                                    cursor.set(Cursor {
-                                        string_index: idx,
-                                        glyph_index: cursor.glyph_index - 1,
-                                    });
-                                }
-                            }
+        //                         if let Some(idx) = grapheme_idx {
+        //                             input_value.remove(idx..(cursor.string_index));
 
-                            // Delete character
-                            '\u{7f}' => {
-                                let grapheme_idx =
-                                    input_value.next_grapheme_offset(cursor.string_index);
+        //                             cursor.set(Cursor {
+        //                                 string_index: idx,
+        //                                 glyph_index: cursor.glyph_index - 1,
+        //                             });
+        //                         }
+        //                     }
 
-                                if let Some(idx) = grapheme_idx {
-                                    input_value.remove((cursor.string_index)..idx);
-                                }
-                            }
+        //                     // Delete character
+        //                     '\u{7f}' => {
+        //                         let grapheme_idx =
+        //                             input_value.next_grapheme_offset(cursor.string_index);
 
-                            ch => {
-                                input_value.insert(cursor.string_index, ch);
+        //                         if let Some(idx) = grapheme_idx {
+        //                             input_value.remove((cursor.string_index)..idx);
+        //                         }
+        //                     }
 
-                                let grapheme_idx =
-                                    input_value.next_grapheme_offset(cursor.string_index);
+        //                     ch => {
+        //                         input_value.insert(cursor.string_index, ch);
 
-                                if let Some(idx) = grapheme_idx {
-                                    cursor.set(Cursor {
-                                        string_index: idx,
-                                        glyph_index: cursor.glyph_index + 1,
-                                    });
-                                }
-                            }
-                        }
+        //                         let grapheme_idx =
+        //                             input_value.next_grapheme_offset(cursor.string_index);
 
-                        on_value.emit(input_value.clone());
-                    } else if keyboard.is_pressed(&KeyCode::Right) {
-                        let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
+        //                         if let Some(idx) = grapheme_idx {
+        //                             cursor.set(Cursor {
+        //                                 string_index: idx,
+        //                                 glyph_index: cursor.glyph_index + 1,
+        //                             });
+        //                         }
+        //                     }
+        //                 }
 
-                        if let Some(idx) = grapheme_idx {
-                            cursor.set(Cursor {
-                                string_index: idx,
-                                glyph_index: cursor.glyph_index + 1,
-                            });
-                        }
-                    } else if keyboard.is_pressed(&KeyCode::Left) {
-                        let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
+        //                 on_value.emit(input_value.clone());
+        //             } else if keyboard.is_pressed(&KeyCode::Right) {
+        //                 let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
 
-                        if let Some(idx) = grapheme_idx {
-                            cursor.set(Cursor {
-                                string_index: idx,
-                                glyph_index: cursor.glyph_index - 1,
-                            });
-                        }
-                    }
+        //                 if let Some(idx) = grapheme_idx {
+        //                     cursor.set(Cursor {
+        //                         string_index: idx,
+        //                         glyph_index: cursor.glyph_index + 1,
+        //                     });
+        //                 }
+        //             } else if keyboard.is_pressed(&KeyCode::Left) {
+        //                 let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
 
-                    ctx.set_state(Instant::now());
-                }
+        //                 if let Some(idx) = grapheme_idx {
+        //                     cursor.set(Cursor {
+        //                         string_index: idx,
+        //                         glyph_index: cursor.glyph_index - 1,
+        //                     });
+        //                 }
+        //             }
 
-                input_value.clone()
-            })
-        };
+        //             ctx.set_state(Instant::now());
+        //         }
 
-        let cursor_state = ctx.computed(|ctx| {
-            // Keep track of time so we can blink blonk the cursor
-            let instant = ctx.use_state(Instant::now);
+        //         input_value.clone()
+        //     })
+        // };
 
-            // Request an update in x seconds
-            ctx.use_timeout(Duration::from_secs_f32(CURSOR_BLINK_SECS));
+        // let cursor_state = ctx.computed(|ctx| {
+        //     // Keep track of time so we can blink blonk the cursor
+        //     let instant = ctx.use_state(Instant::now);
 
-            let input_state = ctx.init_state(TextInputState::default);
+        //     // Request an update in x seconds
+        //     ctx.use_timeout(Duration::from_secs_f32(CURSOR_BLINK_SECS));
 
-            if *input_state != TextInputState::Focused {
-                return CursorState::Hidden;
-            }
+        //     let input_state = ctx.init_state(TextInputState::default);
 
-            // Alternate between shown and hidden
-            if instant.elapsed().as_secs_f32() % (CURSOR_BLINK_SECS * 2.0) > CURSOR_BLINK_SECS {
-                CursorState::Hidden
+        //     if *input_state != TextInputState::Focused {
+        //         return CursorState::Hidden;
+        //     }
+
+        //     // Alternate between shown and hidden
+        //     if instant.elapsed().as_secs_f32() % (CURSOR_BLINK_SECS * 2.0) > CURSOR_BLINK_SECS {
+        //         CursorState::Hidden
+        //     } else {
+        //         CursorState::Shown
+        //     }
+        // });
+
+        // let style: TextInputStyle = self.style.resolve(ctx);
+
+        // let input_state_style = match input_state {
+        //     TextInputState::Normal => style.normal,
+        //     TextInputState::Disabled => style.disabled,
+        //     TextInputState::Hover => style.hover,
+        //     TextInputState::Focused => style.focused,
+        // };
+
+        // let glyphs = if value.is_empty() {
+        //     Vec::default()
+        // } else if let Some(size) = ctx.get_size() {
+        //     self.font.get_glyphs(size.into(), value.as_str())
+        // } else {
+        //     Vec::default()
+        // };
+
+        ctx.on_draw(|ctx, canvas| {
+            let state = ctx.get_state();
+
+            let input_state_style = if state.disabled {
+                &ctx.style.disabled
+            } else if state.hovered {
+                &ctx.style.hover
+            } else if state.focused {
+                &ctx.style.focused
             } else {
-                CursorState::Shown
-            }
-        });
+                &ctx.style.normal
+            };
 
-        let style: TextInputStyle = self.style.resolve(ctx);
+            let bg_brush = canvas.new_brush(Paint {
+                color: input_state_style.background_color,
+                ..Paint::default()
+            });
 
-        let input_state_style = match input_state {
-            TextInputState::Normal => style.normal,
-            TextInputState::Disabled => style.disabled,
-            TextInputState::Hover => style.hover,
-            TextInputState::Focused => style.focused,
-        };
+            canvas.draw_rect(bg_brush);
 
-        let glyphs = if value.is_empty() {
-            Vec::default()
-        } else if let Some(size) = ctx.get_size() {
-            self.font.get_glyphs(size.into(), value.as_str())
-        } else {
-            Vec::default()
-        };
-
-        {
-            let font = self.font.clone();
-            let placeholder = self.placeholder.clone();
-
-            let cursor = ctx.use_state(Cursor::default);
-
-            ctx.on_draw(move |canvas| {
-                let bg_brush = canvas.new_brush(Paint {
-                    color: input_state_style.background_color,
+            if state.cursor.shown {
+                let cursor_brush = canvas.new_brush(Paint {
+                    color: input_state_style.cursor_color,
                     ..Paint::default()
                 });
 
-                canvas.draw_rect(bg_brush);
-
-                if cursor_state == CursorState::Shown {
-                    let cursor_brush = canvas.new_brush(Paint {
-                        color: input_state_style.cursor_color,
-                        ..Paint::default()
-                    });
-
-                    if value.is_empty() {
-                        canvas.draw_rect_at(
-                            Rect {
-                                x: 0.0,
-                                y: 0.0,
-                                width: 4.0,
-                                height: font.size,
-                            },
-                            cursor_brush,
-                        );
-                    } else {
-                        let pos = if let Some(g) = glyphs.get(cursor.glyph_index) {
-                            Point {
-                                x: g.glyph.position.x,
-                                y: g.glyph.position.y,
-                            }
-                        } else if let Some(g) = glyphs.last() {
-                            Point {
-                                x: g.glyph.position.x + font.h_advance(g.glyph.id),
-                                y: g.glyph.position.y,
-                            }
-                        } else {
-                            Point { x: 0.0, y: 0.0 }
-                        };
-
-                        canvas.draw_rect_at(
-                            Rect {
-                                x: pos.x,
-                                y: 0.0,
-                                width: 4.0,
-                                height: font.size,
-                            },
-                            cursor_brush,
-                        );
-                    }
-                }
-
-                if value.is_empty() {
-                    let text_brush = canvas.new_brush(Paint {
-                        color: input_state_style.placeholder_color,
-                        ..Paint::default()
-                    });
-
-                    canvas.draw_text(text_brush, font.clone(), placeholder.clone());
+                if state.value.is_empty() {
+                    canvas.draw_rect_at(
+                        Rect {
+                            x: 0.0,
+                            y: 0.0,
+                            width: 4.0,
+                            height: ctx.font.size,
+                        },
+                        cursor_brush,
+                    );
                 } else {
-                    let text_brush = canvas.new_brush(Paint {
-                        color: input_state_style.text_color,
-                        ..Paint::default()
-                    });
+                    let glyphs = ctx
+                        .font
+                        .get_glyphs(canvas.get_size().into(), state.value.as_str());
 
-                    canvas.draw_text(text_brush, font.clone(), Cow::Owned(value.clone().into()));
+                    let pos = if let Some(g) = glyphs.get(state.cursor.glyph_index) {
+                        Point {
+                            x: g.glyph.position.x,
+                            y: g.glyph.position.y,
+                        }
+                    } else if let Some(g) = glyphs.last() {
+                        Point {
+                            x: g.glyph.position.x + ctx.font.h_advance(g.glyph.id),
+                            y: g.glyph.position.y,
+                        }
+                    } else {
+                        Point { x: 0.0, y: 0.0 }
+                    };
+
+                    canvas.draw_rect_at(
+                        Rect {
+                            x: pos.x,
+                            y: 0.0,
+                            width: 4.0,
+                            height: ctx.font.size,
+                        },
+                        cursor_brush,
+                    );
                 }
-            });
-        }
+            }
+
+            if state.value.is_empty() {
+                let text_brush = canvas.new_brush(Paint {
+                    color: input_state_style.placeholder_color,
+                    ..Paint::default()
+                });
+
+                canvas.draw_text(text_brush, ctx.font.clone(), ctx.placeholder.clone());
+            } else {
+                let text_brush = canvas.new_brush(Paint {
+                    color: input_state_style.text_color,
+                    ..Paint::default()
+                });
+
+                canvas.draw_text(text_brush, ctx.font.clone(), Cow::Owned(state.value.clone().into()));
+            }
+        });
 
         BuildResult::None
     }
-}
-
-#[derive(Debug, Default, Copy, Clone)]
-struct Cursor {
-    string_index: usize,
-    glyph_index: usize,
 }

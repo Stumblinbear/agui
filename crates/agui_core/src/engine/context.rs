@@ -9,7 +9,7 @@ use crate::{
     widget::{Widget, WidgetId},
 };
 
-use super::{tree::Tree, Data, NotifyCallback};
+use super::{tree::Tree, widget::WidgetBuilder, Data, NotifyCallback};
 
 pub struct EngineContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut FnvHashMap<PluginId, Plugin>>,
@@ -18,9 +18,9 @@ pub struct EngineContext<'ctx> {
     pub(crate) notifier: NotifyCallback,
 }
 
-pub trait Context<S>
+pub trait Context<W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin>;
 
@@ -42,17 +42,15 @@ where
         self.get_rect().map(|rect| rect.into())
     }
 
+    fn get_widget(&self) -> &W;
+
     fn set_state<F>(&mut self, func: F)
     where
-        F: FnOnce(&mut S);
+        F: FnOnce(&mut W::State);
 
-    fn get_state(&self) -> &S
-    where
-        S: Data;
+    fn get_state(&self) -> &W::State;
 
-    fn get_state_mut(&mut self) -> &mut S
-    where
-        S: Data;
+    fn get_state_mut(&mut self) -> &mut W::State;
 
     fn notify<A>(&mut self, callback_id: CallbackId, args: A)
     where

@@ -41,7 +41,7 @@ pub struct Button {
 impl StatefulWidget for Button {
     type State = ButtonState;
 
-    fn build(&self, ctx: &mut BuildContext<Self::State>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
         let color = {
@@ -60,7 +60,7 @@ impl StatefulWidget for Button {
             }
         };
 
-        ctx.on_draw(move |canvas| {
+        ctx.on_draw(move |ctx, canvas| {
             let brush = canvas.new_brush(Paint {
                 color,
                 ..Paint::default()

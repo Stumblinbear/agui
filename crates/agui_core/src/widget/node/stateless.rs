@@ -5,8 +5,8 @@ use crate::widget::{BuildContext, BuildResult};
 use super::StatefulWidget;
 
 /// Implements the widget's `build()` method.
-pub trait StatelessWidget: std::fmt::Debug + Downcast {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult;
+pub trait StatelessWidget: std::fmt::Debug + Downcast + Sized {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult;
 }
 
 impl<W> StatefulWidget for W
@@ -15,7 +15,7 @@ where
 {
     type State = ();
 
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         self.build(ctx)
     }
 }

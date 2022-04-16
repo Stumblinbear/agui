@@ -46,7 +46,7 @@ fn main() -> Result<(), agpu::BoxError> {
 
 #[functional_widget]
 fn example_main(
-    ctx: &mut BuildContext<()>,
+    ctx: &mut BuildContext,
     font: Font,
     _color: Color,
     _child: Widget,

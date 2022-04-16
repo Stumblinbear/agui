@@ -3,7 +3,7 @@
 /// as many monitors can render many more colors than that margin would allow.
 const EQ_MARGIN_OF_ERROR: f32 = 0.001;
 
-#[derive(Debug, Copy, Clone, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialOrd)]
 pub enum Color {
     Black,
     DarkGray,

@@ -3,7 +3,7 @@ use std::any::TypeId;
 use crate::widget::WidgetId;
 
 /// Used to indicate a change to widgets in the tree.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum WidgetEvent {
     /// A widget has been spawned.

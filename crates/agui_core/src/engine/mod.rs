@@ -681,7 +681,7 @@ mod tests {
     }
 
     impl StatelessWidget for TestWidget {
-        fn build(&self, _: &mut BuildContext<()>) -> BuildResult {
+        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
             (&self.children).into()
         }
     }

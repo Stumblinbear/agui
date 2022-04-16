@@ -8,7 +8,7 @@ pub struct Padding {
 }
 
 impl StatelessWidget for Padding {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: Sizing::Fill,
 

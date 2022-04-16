@@ -13,7 +13,7 @@ pub struct Text {
 }
 
 impl StatelessWidget for Text {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: if self.multiline {
                 Sizing::Fill
@@ -26,18 +26,13 @@ impl StatelessWidget for Text {
             ..Layout::default()
         });
 
-        ctx.on_draw({
-            let font = self.font.clone();
-            let text = self.text.clone();
+        ctx.on_draw(|ctx, canvas| {
+            let brush = canvas.new_brush(Paint {
+                color: ctx.font.color,
+                ..Paint::default()
+            });
 
-            move |canvas| {
-                let brush = canvas.new_brush(Paint {
-                    color: font.color,
-                    ..Paint::default()
-                });
-
-                canvas.draw_text(brush, font.clone(), Cow::clone(&text));
-            }
+            canvas.draw_text(brush, ctx.font.clone(), Cow::clone(&ctx.text));
         });
 
         BuildResult::None

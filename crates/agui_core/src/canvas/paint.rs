@@ -7,7 +7,7 @@ pub struct Paint {
     pub color: Color,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Brush(usize);
 
 impl Brush {

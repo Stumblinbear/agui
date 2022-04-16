@@ -10,6 +10,7 @@ use self::{
 };
 
 pub mod command;
+pub mod context;
 pub mod paint;
 pub mod renderer;
 pub mod texture;

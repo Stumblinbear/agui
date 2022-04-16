@@ -10,7 +10,7 @@ pub struct Row {
 }
 
 impl StatelessWidget for Row {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout_type(LayoutType::Row {
             spacing: self.spacing,
         });

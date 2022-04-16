@@ -10,7 +10,7 @@ pub struct Column {
 }
 
 impl StatelessWidget for Column {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout_type(LayoutType::Column {
             spacing: self.spacing,
         });

@@ -1,14 +1,13 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    font::Font,
     macros::{build, functional_widget},
+    prelude::*,
     unit::{Color, Key, Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, WidgetRef},
+    widget::{BuildContext, BuildResult, Widget},
     widgets::{
         plugins::DefaultPluginsExt,
         primitives::{Column, Text},
-        state::DefaultGlobalsExt,
         App, TextInput,
     },
 };
@@ -18,7 +17,7 @@ fn main() -> Result<(), agpu::BoxError> {
     let mut ui = UIProgram::new("agui input")?;
 
     ui.register_default_plugins();
-    ui.register_default_globals();
+    // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
@@ -33,22 +32,15 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.run()
 }
 
-#[functional_widget]
-fn example_main(
-    ctx: &mut BuildContext,
-    font: Font,
-    _color: Color,
-    _child: WidgetRef,
-) -> BuildResult {
+#[functional_widget(String)]
+fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widget) -> BuildResult {
     ctx.set_layout(Layout {
         sizing: Sizing::Fill,
         ..Layout::default()
     });
 
-    let value = ctx.use_state(|| "".to_owned());
-
-    let on_value = ctx.use_callback(|ctx, input: &String| {
-        ctx.set_state(input.clone());
+    let on_value = ctx.callback::<String, _>(|ctx, input: &String| {
+        ctx.set_state(|state| *state = input.clone());
     });
 
     build! {
@@ -73,9 +65,10 @@ fn example_main(
 
                     on_value
                 }.into()),
+
                 Text {
                     font: font.styled().color(Color::White),
-                    text: value.clone().into(),
+                    text: ctx.get_state().clone(),
                 },
             ]
         }

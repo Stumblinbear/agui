@@ -6,7 +6,7 @@ use std::{
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    engine::{event::WidgetEvent, Data, Engine},
+    engine::{event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
     prelude::{BuildContext, Context},
     widget::WidgetId,
@@ -99,14 +99,14 @@ pub trait EventPluginEngineExt {
         E: Data;
 }
 
-pub trait EventPluginContextExt<S>
+pub trait EventPluginContextExt<W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
         E: Data,
-        F: Fn(&mut CallbackContext<S>, &E) + 'static;
+        F: Fn(&mut CallbackContext<W>, &E) + 'static;
 
     fn fire_event<E>(&mut self, event: E)
     where
@@ -124,14 +124,14 @@ impl EventPluginEngineExt for Engine {
     }
 }
 
-impl<'ctx, S> EventPluginContextExt<S> for BuildContext<'ctx, S>
+impl<'ctx, W> EventPluginContextExt<W> for BuildContext<'ctx, W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
         E: Data,
-        F: Fn(&mut CallbackContext<S>, &E) + 'static,
+        F: Fn(&mut CallbackContext<W>, &E) + 'static,
     {
         let callback_id = self.callback(func).get_id().unwrap();
 
@@ -170,7 +170,7 @@ mod tests {
     impl StatefulWidget for TestListener {
         type State = u32;
 
-        fn build(&self, ctx: &mut BuildContext<u32>) -> BuildResult {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             ctx.listen_to::<u32, _>(|ctx, event| {
                 ctx.set_state(|state| {
                     *state = *event;

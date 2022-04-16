@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    engine::{Data, NotifyCallback},
+    engine::{widget::WidgetBuilder, Data, NotifyCallback},
     widget::WidgetId,
 };
 
@@ -9,7 +9,7 @@ mod context;
 
 pub use context::*;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CallbackId(WidgetId, TypeId);
 
 impl CallbackId {
@@ -90,29 +90,29 @@ where
     }
 }
 
-pub trait CallbackFunc<S>
+pub trait CallbackFunc<W>
 where
-    S: Data,
+    W: WidgetBuilder,
 {
-    fn call(&self, ctx: &mut CallbackContext<S>, args: Rc<dyn Data>);
+    fn call(&self, ctx: &mut CallbackContext<W>, args: Rc<dyn Data>);
 }
 
-pub struct CallbackFn<S, A, F>
+pub struct CallbackFn<W, A, F>
 where
-    S: Data,
+    W: WidgetBuilder,
     A: 'static,
-    F: Fn(&mut CallbackContext<S>, &A),
+    F: Fn(&mut CallbackContext<W>, &A),
 {
-    phantom: PhantomData<(S, A, F)>,
+    phantom: PhantomData<(W, A, F)>,
 
     func: F,
 }
 
-impl<S, A, F> CallbackFn<S, A, F>
+impl<W, A, F> CallbackFn<W, A, F>
 where
-    S: Data,
+    W: WidgetBuilder,
     A: 'static,
-    F: Fn(&mut CallbackContext<S>, &A),
+    F: Fn(&mut CallbackContext<W>, &A),
 {
     pub fn new(func: F) -> Self {
         Self {
@@ -123,13 +123,13 @@ where
     }
 }
 
-impl<S, A, F> CallbackFunc<S> for CallbackFn<S, A, F>
+impl<W, A, F> CallbackFunc<W> for CallbackFn<W, A, F>
 where
-    S: Data,
+    W: WidgetBuilder,
     A: Data,
-    F: Fn(&mut CallbackContext<S>, &A),
+    F: Fn(&mut CallbackContext<W>, &A),
 {
-    fn call(&self, ctx: &mut CallbackContext<S>, args: Rc<dyn Data>) {
+    fn call(&self, ctx: &mut CallbackContext<W>, args: Rc<dyn Data>) {
         let args = args
             .downcast_ref::<A>()
             .expect("failed to downcast callback args");

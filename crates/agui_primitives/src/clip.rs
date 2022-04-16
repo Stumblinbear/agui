@@ -8,17 +8,14 @@ pub struct Clip {
 }
 
 impl StatelessWidget for Clip {
-    fn build(&self, ctx: &mut BuildContext<()>) -> BuildResult {
-        let anti_alias = self.anti_alias;
-        let shape = self.shape.clone();
-
-        ctx.on_draw(move |canvas| {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        ctx.on_draw(|ctx, canvas| {
             let brush = canvas.new_brush(Paint {
-                anti_alias,
+                anti_alias: ctx.anti_alias,
                 ..Paint::default()
             });
 
-            canvas.start_layer(brush, shape.clone());
+            canvas.start_layer(brush, ctx.shape.clone());
         });
 
         (&self.child).into()

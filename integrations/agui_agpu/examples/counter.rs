@@ -31,12 +31,12 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.register_default_plugins();
     // ui.register_default_globals();
 
-    let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
+    // let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
     ui.set_root(build! {
         App {
             child: CounterWidget {
-                font: deja_vu.styled(),
+                // font: deja_vu.styled(),
             }
         }
     });
@@ -44,8 +44,8 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.run()
 }
 
-#[functional_widget]
-fn counter_widget(ctx: &mut BuildContext<i32>, font: FontStyle) -> BuildResult {
+#[functional_widget(i32)]
+fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
     let on_pressed = ctx.callback(|ctx, ()| {
         ctx.set_state(|state| {
             *state += 1;

@@ -271,7 +271,7 @@ impl<'ui> morphorm::Node<'ui> for WidgetId {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WidgetKey(Option<WidgetId>, Key);
 
 impl WidgetKey {
