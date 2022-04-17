@@ -29,12 +29,6 @@ new_key_type! {
     pub struct WidgetId;
 }
 
-impl std::fmt::Display for WidgetId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
 impl<'ui> morphorm::Node<'ui> for WidgetId {
     type Data = Tree<Self, Widget>;
 

@@ -16,6 +16,7 @@ use crate::{
     engine::{plugin::PluginImpl, widget::WidgetImpl},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Font, Units},
+    util::map::PluginMap,
     widget::{BuildResult, Widget, WidgetId, WidgetKey},
 };
 
@@ -48,7 +49,7 @@ pub type NotifyCallback = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
 pub struct Engine {
-    plugins: FnvHashMap<PluginId, Plugin>,
+    plugins: PluginMap<Plugin>,
     tree: Tree<WidgetId, Widget>,
     dirty: FnvHashSet<WidgetId>,
     notifier: NotifyCallback,
@@ -76,7 +77,7 @@ impl Engine {
         engine
     }
 
-    pub fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
+    pub fn get_plugins(&mut self) -> &mut PluginMap<Plugin> {
         &mut self.plugins
     }
 

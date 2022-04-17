@@ -62,9 +62,11 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
             layout: Layout {
                 sizing: Sizing::Axis {
                     width: Units::Stretch(1.0),
-                    height: Units::Pixels(32.0),
-                }
+                    height: Units::Stretch(1.0)
+                },
+                margin: Margin::center()
             },
+            spacing: Units::Pixels(8.0),
             children: [
                 ctx.key(Key::single(), TextInput {
                     layout: Layout {

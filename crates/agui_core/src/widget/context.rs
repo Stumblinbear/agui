@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::rc::Rc;
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -8,6 +8,7 @@ use crate::{
     engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, NotifyCallback},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
+    util::map::PluginMap,
     widget::WidgetId,
 };
 
@@ -17,7 +18,7 @@ pub struct BuildContext<'ctx, W>
 where
     W: WidgetBuilder,
 {
-    pub(crate) plugins: &'ctx mut FnvHashMap<PluginId, Plugin>,
+    pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) notifier: NotifyCallback,
@@ -39,7 +40,7 @@ impl<W> Context<W> for BuildContext<'_, W>
 where
     W: WidgetBuilder,
 {
-    fn get_plugins(&mut self) -> &mut FnvHashMap<PluginId, Plugin> {
+    fn get_plugins(&mut self) -> &mut PluginMap<Plugin> {
         self.plugins
     }
 
@@ -69,30 +70,16 @@ where
         self.dirty.insert(widget_id);
     }
 
-    fn notify<A>(&mut self, callback_id: CallbackId, args: A)
-    where
-        A: Data,
-    {
-        self.notifier.lock().push((callback_id, Rc::new(args)));
+    fn get_rect(&self) -> Option<Rect> {
+        self.rect
     }
 
-    /// # Safety
-    ///
-    /// You must ensure the callback is expecting the type of the `args` passed in. If the type
-    /// is different, it will panic.
-    unsafe fn notify_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.notifier.lock().push((callback_id, args));
+    fn get_size(&self) -> Option<Size> {
+        self.rect.map(|rect| rect.into())
     }
 
     fn get_widget(&self) -> &W {
         self.widget
-    }
-
-    fn set_state<F>(&mut self, func: F)
-    where
-        F: FnOnce(&mut W::State),
-    {
-        func(self.state);
     }
 
     fn get_state(&self) -> &W::State {
@@ -103,12 +90,28 @@ where
         self.state
     }
 
-    fn get_rect(&self) -> Option<Rect> {
-        self.rect
+    fn set_state<F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut W::State),
+    {
+        func(self.state);
     }
 
-    fn get_size(&self) -> Option<Size> {
-        self.rect.map(|rect| rect.into())
+    fn emit<A>(&mut self, callback: Callback<A>, args: A)
+    where
+        A: Data,
+    {
+        if let Some(callback_id) = callback.get_id() {
+            self.notifier.lock().push((callback_id, Rc::new(args)));
+        }
+    }
+
+    /// # Safety
+    ///
+    /// You must ensure the callback is expecting the type of the `args` passed in. If the type
+    /// is different, it will panic.
+    unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
+        self.notifier.lock().push((callback_id, args));
     }
 }
 
@@ -142,7 +145,7 @@ where
         A: Data,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        let callback = Callback::new::<F, W>(Arc::clone(&self.notifier), self.widget_id);
+        let callback = Callback::new::<F, W>(self.widget_id);
 
         self.callbacks
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));

@@ -1,7 +1,7 @@
 use std::{
     any::TypeId,
     cell::{Ref, RefCell, RefMut},
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     marker::PhantomData,
     rc::Rc,
 };
@@ -10,6 +10,7 @@ use agui_core::{
     engine::{event::WidgetEvent, widget::WidgetBuilder, Data},
     plugin::{EnginePlugin, PluginContext},
     prelude::{BuildContext, Context},
+    util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
     widget::WidgetId,
 };
 
@@ -76,10 +77,10 @@ impl EnginePlugin for ProviderPlugin {
 
 #[derive(Debug, Default)]
 pub struct ProviderPluginState {
-    providers: HashMap<WidgetId, HashMap<TypeId, ProvidedValue>>,
-    provided: HashMap<TypeId, HashSet<WidgetId>>,
+    providers: WidgetMap<TypeMap<ProvidedValue>>,
+    provided: TypeMap<WidgetSet>,
 
-    listening: HashMap<WidgetId, HashMap<WidgetId, HashSet<TypeId>>>,
+    listening: WidgetMap<WidgetMap<TypeSet>>,
 
     changed: Rc<RefCell<HashSet<(WidgetId, TypeId)>>>,
 }
@@ -109,7 +110,7 @@ impl ProviderPluginState {
         let provided = self
             .providers
             .entry(widget_id)
-            .or_insert_with(HashMap::default)
+            .or_insert_with(TypeMap::default)
             .entry(type_id)
             .or_insert_with(|| {
                 let value = func();
@@ -122,13 +123,13 @@ impl ProviderPluginState {
 
                 ProvidedValue {
                     value: Rc::new(RefCell::new(value)),
-                    listeners: HashSet::new(),
+                    listeners: HashSet::default(),
                 }
             });
 
         self.provided
             .entry(type_id)
-            .or_insert_with(HashSet::default)
+            .or_insert_with(WidgetSet::default)
             .insert(widget_id);
 
         Provided {
@@ -157,9 +158,9 @@ impl ProviderPluginState {
 
             self.listening
                 .entry(widget_id)
-                .or_insert_with(HashMap::default)
+                .or_insert_with(WidgetMap::default)
                 .entry(owner_id)
-                .or_insert_with(HashSet::default)
+                .or_insert_with(TypeSet::default)
                 .insert(type_id);
 
             Some(Provided {
@@ -205,7 +206,7 @@ where
 
                 value: Rc::new(RefCell::new(Box::new(func()))),
 
-                changed: Rc::new(RefCell::new(HashSet::new())),
+                changed: Rc::new(RefCell::new(HashSet::default())),
             }
         }
     }

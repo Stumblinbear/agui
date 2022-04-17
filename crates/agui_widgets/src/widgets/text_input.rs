@@ -202,16 +202,17 @@ where
         });
 
         ctx.listen_to::<KeyboardCharacter, _>(|ctx, KeyboardCharacter(input)| {
-            let input_value = &mut ctx.state.value;
             let cursor = &ctx.state.cursor;
 
             match input {
                 // Backspace character
                 '\u{8}' => {
-                    let grapheme_idx = input_value.prev_grapheme_offset(cursor.string_index);
+                    let grapheme_idx = ctx.state.value.prev_grapheme_offset(cursor.string_index);
 
                     if let Some(idx) = grapheme_idx {
-                        input_value.remove(idx..(cursor.string_index));
+                        ctx.state.value.remove(idx..(cursor.string_index));
+
+                        ctx.emit(ctx.on_value, ctx.state.value.clone());
 
                         ctx.set_state(|state| {
                             state.cursor.string_index = idx;
@@ -225,10 +226,12 @@ where
 
                 // Delete character
                 '\u{7f}' => {
-                    let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
+                    let grapheme_idx = ctx.state.value.next_grapheme_offset(cursor.string_index);
 
                     if let Some(idx) = grapheme_idx {
-                        input_value.remove((cursor.string_index)..idx);
+                        ctx.state.value.remove((cursor.string_index)..idx);
+
+                        ctx.emit(ctx.on_value, ctx.state.value.clone());
 
                         ctx.set_state(|state| {
                             state.cursor.shown = true;
@@ -238,11 +241,13 @@ where
                 }
 
                 ch => {
-                    input_value.insert(cursor.string_index, *ch);
+                    ctx.state.value.insert(cursor.string_index, *ch);
 
-                    let grapheme_idx = input_value.next_grapheme_offset(cursor.string_index);
+                    let grapheme_idx = ctx.state.value.next_grapheme_offset(cursor.string_index);
 
                     if let Some(idx) = grapheme_idx {
+                        ctx.emit(ctx.on_value, ctx.state.value.clone());
+
                         ctx.set_state(|state| {
                             state.cursor.string_index = idx;
                             state.cursor.glyph_index += 1;

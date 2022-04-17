@@ -43,7 +43,7 @@ impl StatefulWidget for GestureDetector {
                             if !ctx.state.hovering {
                                 ctx.state.hovering = true;
 
-                                ctx.on_hover.emit(true);
+                                ctx.emit(ctx.on_hover, true);
                             }
 
                             return;
@@ -54,7 +54,7 @@ impl StatefulWidget for GestureDetector {
                 if ctx.state.hovering {
                     ctx.state.hovering = false;
 
-                    ctx.on_hover.emit(false);
+                    ctx.emit(ctx.on_hover, false);
                 }
             });
         }
@@ -80,14 +80,14 @@ impl StatefulWidget for GestureDetector {
                             MouseButtonState::Pressed => {
                                 ctx.state.pressed = true;
 
-                                ctx.on_pressed.emit(true);
+                                ctx.emit(ctx.on_pressed, true);
                             }
 
                             MouseButtonState::Released => {
                                 if ctx.state.pressed {
                                     ctx.state.pressed = false;
 
-                                    ctx.on_pressed.emit(false);
+                                    ctx.emit(ctx.on_pressed, false);
                                 }
                             }
                         }
@@ -115,11 +115,11 @@ impl StatefulWidget for GestureDetector {
                     if is_hovering {
                         ctx.state.focused = true;
 
-                        ctx.on_focus.emit(true);
+                        ctx.emit(ctx.on_focus, true);
                     } else if ctx.state.focused {
                         ctx.state.focused = false;
 
-                        ctx.on_focus.emit(false);
+                        ctx.emit(ctx.on_focus, false);
                     }
                 }
             });

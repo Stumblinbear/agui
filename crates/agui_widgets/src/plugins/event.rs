@@ -1,15 +1,11 @@
-use std::{
-    any::TypeId,
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
     engine::{event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
     prelude::{BuildContext, Context},
-    widget::WidgetId,
+    util::map::{TypeMap, TypeSet, WidgetMap},
 };
 
 #[derive(Debug, Default)]
@@ -55,8 +51,8 @@ impl EnginePlugin for EventPlugin {
 
 #[derive(Debug, Default)]
 pub struct EventState {
-    listening: HashMap<WidgetId, HashSet<TypeId>>,
-    callbacks: HashMap<TypeId, HashSet<CallbackId>>,
+    listening: WidgetMap<TypeSet>,
+    callbacks: TypeMap<HashSet<CallbackId>>,
 
     queue: Vec<Rc<dyn Data>>,
 }
@@ -70,12 +66,12 @@ impl EventState {
 
         self.listening
             .entry(callback_id.get_widget_id())
-            .or_insert_with(HashSet::new)
+            .or_insert_with(TypeSet::default)
             .insert(type_id);
 
         self.callbacks
             .entry(type_id)
-            .or_insert_with(HashSet::new)
+            .or_insert_with(HashSet::default)
             .insert(callback_id);
     }
 

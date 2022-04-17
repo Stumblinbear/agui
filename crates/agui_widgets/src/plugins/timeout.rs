@@ -41,8 +41,7 @@ impl EnginePlugin for TimeoutPlugin {
             for (callback_id, instant) in timeouts.iter() {
                 if now > *instant {
                     tracing::debug!(
-                        id = format!("{:?}", callback_id.get_widget_id()).as_str(),
-                        callback = format!("{:?}", callback_id.get_type_id()).as_str(),
+                        callback = format!("{:?}", callback_id).as_str(),
                         "timeout expired"
                     );
 

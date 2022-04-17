@@ -1,19 +1,10 @@
 use std::{any::TypeId, collections::BTreeMap, rc::Rc};
 
-use agui_core::widget::BuildContext;
-use downcast_rs::{impl_downcast, Downcast};
-
-use crate::plugins::provider::ConsumerExt;
-
-pub trait Style: std::fmt::Debug + Downcast {}
-
-impl<T> Style for T where T: std::fmt::Debug + Downcast {}
-
-impl_downcast!(Style);
+use agui_core::{engine::Data, widget::BuildContext};
 
 #[derive(Debug, Default, Clone)]
 pub struct Theme {
-    styles: BTreeMap<TypeId, Rc<dyn Style>>,
+    styles: BTreeMap<TypeId, Rc<dyn Data>>,
 }
 
 impl Theme {
@@ -23,14 +14,14 @@ impl Theme {
 
     pub fn set<S>(&mut self, style: S)
     where
-        S: Style,
+        S: Data,
     {
         self.styles.insert(TypeId::of::<S>(), Rc::new(style));
     }
 
     pub fn get<S>(&self) -> Option<S>
     where
-        S: Style + Clone,
+        S: Data + Clone,
     {
         let style_id = TypeId::of::<S>();
 
@@ -45,14 +36,14 @@ impl Theme {
 
     pub fn get_or_init<S>(&self) -> S
     where
-        S: Style + Clone + Default,
+        S: Data + Clone + Default,
     {
         self.get::<S>().unwrap_or_default()
     }
 
     pub fn resolve<S>(ctx: &mut BuildContext, style: Option<&S>) -> S
     where
-        S: Style + Clone + Default,
+        S: Data + Clone + Default,
     {
         if let Some(style) = style {
             style.clone()
@@ -67,14 +58,14 @@ impl Theme {
 
 pub trait StyleExt<S>
 where
-    S: Style + Clone + Default,
+    S: Data + Clone + Default,
 {
     fn resolve(&self, ctx: &mut BuildContext) -> S;
 }
 
 impl<S> StyleExt<S> for S
 where
-    S: Style + Clone + Default,
+    S: Data + Clone + Default,
 {
     fn resolve(&self, ctx: &mut BuildContext) -> S {
         Theme::resolve(ctx, Some(self))
@@ -83,7 +74,7 @@ where
 
 impl<S> StyleExt<S> for Option<S>
 where
-    S: Style + Clone + Default,
+    S: Data + Clone + Default,
 {
     fn resolve(&self, ctx: &mut BuildContext) -> S {
         Theme::resolve(ctx, self.as_ref())
@@ -92,7 +83,7 @@ where
 
 impl<S> StyleExt<S> for Option<&S>
 where
-    S: Style + Clone + Default,
+    S: Data + Clone + Default,
 {
     fn resolve(&self, ctx: &mut BuildContext) -> S {
         Theme::resolve(ctx, *self)

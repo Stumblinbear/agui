@@ -16,6 +16,7 @@ bitflags = "1.3"
 
 downcast-rs = "1.2"
 parking_lot = "0.12"
+anymap = "0.12"
 tracing = "0.1"
 
 agui_core = { path = "../agui_core", version = "0.3" }

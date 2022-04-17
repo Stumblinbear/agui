@@ -1,7 +1,7 @@
 use std::{
     any::TypeId,
     cell::{Ref, RefCell},
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     marker::PhantomData,
     rc::Rc,
 };
@@ -11,6 +11,7 @@ use agui_core::{
     engine::{event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
     prelude::{BuildContext, Context},
+    util::map::{TypeMap, TypeSet, WidgetMap},
     widget::WidgetId,
 };
 
@@ -56,11 +57,11 @@ impl EnginePlugin for GlobalPlugin {
 
 #[derive(Debug, Default)]
 pub struct GlobalPluginState {
-    globals: HashMap<TypeId, GlobalValue>,
+    globals: TypeMap<GlobalValue>,
 
-    listening: HashMap<WidgetId, HashSet<TypeId>>,
+    listening: WidgetMap<TypeSet>,
 
-    changed: HashSet<TypeId>,
+    changed: TypeSet,
 }
 
 pub struct GlobalValue {
@@ -97,14 +98,14 @@ impl GlobalPluginState {
 
             GlobalValue {
                 value: Rc::new(RefCell::new(value)),
-                listeners: HashSet::new(),
+                listeners: HashSet::default(),
             }
         });
 
         if let Some(widget_id) = widget_id {
             self.listening
                 .entry(widget_id)
-                .or_insert_with(HashSet::new)
+                .or_insert_with(TypeSet::default)
                 .insert(type_id);
 
             global.listeners.insert(widget_id);
@@ -126,7 +127,7 @@ impl GlobalPluginState {
 
         let global = self.globals.entry(type_id).or_insert_with(|| GlobalValue {
             value: Rc::new(RefCell::new(G::default())),
-            listeners: HashSet::new(),
+            listeners: HashSet::default(),
         });
 
         self.changed.insert(TypeId::of::<G>());

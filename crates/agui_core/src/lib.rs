@@ -14,6 +14,7 @@ pub mod canvas;
 pub mod engine;
 pub mod plugin;
 pub mod unit;
+pub mod util;
 pub mod widget;
 
 pub mod prelude {

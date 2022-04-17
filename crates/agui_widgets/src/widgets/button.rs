@@ -79,7 +79,7 @@ impl StatefulWidget for Button {
 
             move |ctx, arg| {
                 if ctx.state.pressed && !arg {
-                    on_pressed.emit(());
+                    ctx.emit(on_pressed, ());
                 }
 
                 ctx.set_state(|state| {

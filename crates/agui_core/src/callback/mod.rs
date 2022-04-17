@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    engine::{widget::WidgetBuilder, Data, NotifyCallback},
+    engine::{widget::WidgetBuilder, Data},
     widget::WidgetId,
 };
 
@@ -10,49 +10,42 @@ mod context;
 pub use context::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct CallbackId(WidgetId, TypeId);
+pub struct CallbackId {
+    widget_id: WidgetId,
+    type_id: TypeId,
+}
 
 impl CallbackId {
     pub fn get_widget_id(&self) -> WidgetId {
-        self.0
+        self.widget_id
     }
 
     pub fn get_type_id(&self) -> TypeId {
-        self.1
+        self.type_id
     }
 }
 
-#[derive(Clone)]
-pub struct Callback<A>
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Callback<A>
 where
     A: Data,
 {
-    phantom: PhantomData<A>,
+    None,
+    Some {
+        phantom: PhantomData<A>,
 
-    callback_id: Option<CallbackId>,
-    notifier: Option<NotifyCallback>,
+        id: CallbackId,
+    },
 }
+
+impl<A> Copy for Callback<A> where A: Data + Clone {}
 
 impl<A> Default for Callback<A>
 where
     A: Data,
 {
     fn default() -> Self {
-        Self {
-            phantom: PhantomData,
-
-            callback_id: None,
-            notifier: None,
-        }
-    }
-}
-
-impl<A> std::fmt::Debug for Callback<A>
-where
-    A: Data,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.callback_id.fmt(f)
+        Self::None
     }
 }
 
@@ -60,37 +53,34 @@ impl<A> Callback<A>
 where
     A: Data,
 {
-    pub(crate) fn new<F, S>(notifier: NotifyCallback, widget_id: WidgetId) -> Self
+    pub(crate) fn new<F, S>(widget_id: WidgetId) -> Self
     where
         S: Data,
         F: Fn(&mut CallbackContext<S>, &A) + 'static,
     {
-        Self {
+        Self::Some {
             phantom: PhantomData,
 
-            callback_id: Some(CallbackId(widget_id, TypeId::of::<F>())),
-            notifier: Some(notifier),
+            id: CallbackId {
+                widget_id,
+                type_id: TypeId::of::<F>(),
+            },
         }
     }
 
     pub fn get_id(&self) -> Option<CallbackId> {
-        self.callback_id
+        match self {
+            Self::None => None,
+            Self::Some { id, .. } => Some(*id),
+        }
     }
 
     pub fn is_some(&self) -> bool {
-        matches!(self.callback_id, Some(_))
+        matches!(self, Callback::Some { .. })
     }
 
     pub fn is_none(&self) -> bool {
         !self.is_some()
-    }
-
-    pub fn emit(&self, args: A) {
-        if let Some(callback_id) = self.callback_id {
-            if let Some(notifier) = &self.notifier {
-                notifier.lock().push((callback_id, Rc::new(args)));
-            }
-        }
     }
 }
 
