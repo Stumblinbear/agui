@@ -1,6 +1,6 @@
 use std::cell::Ref;
 
-use agui_core::{engine::widget::WidgetElement, prelude::Widget};
+use agui_core::{engine::widget::WidgetElement, widget::Widget};
 
 use crate::Text;
 

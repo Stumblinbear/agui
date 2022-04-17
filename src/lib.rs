@@ -15,3 +15,16 @@ pub mod widgets {
 pub mod macros {
     pub use agui_macros::*;
 }
+
+pub mod prelude {
+    pub use agui_core::{
+        callback::Callback,
+        canvas::{
+            paint::{Brush, Paint},
+            Canvas,
+        },
+        engine::{context::Context, query::*},
+        unit::*,
+        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
+    };
+}

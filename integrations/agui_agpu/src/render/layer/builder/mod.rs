@@ -1,25 +1,16 @@
-use agui::canvas::{command::CanvasCommand, texture::TextureId};
+use agui::canvas::command::CanvasCommand;
 
 use crate::render::context::RenderContext;
 
 pub mod shape;
 pub mod text;
 
-use super::{BrushData, Layer};
+use super::{BrushData, DrawCall};
 
-#[derive(PartialEq)]
-pub enum LayerType {
-    Shape,
-    Texture(TextureId),
-    Text,
-}
-
-pub trait LayerBuilder<'builder> {
-    fn get_type(&self) -> LayerType;
-
+pub trait DrawCallBuilder<'builder> {
     fn can_process(&self, cmd: &CanvasCommand) -> bool;
 
     fn process(&mut self, cmd: CanvasCommand);
 
-    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<Layer>;
+    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<DrawCall>;
 }

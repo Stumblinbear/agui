@@ -82,7 +82,7 @@ impl Canvas {
         tracing::trace!("starting new layer");
 
         self.commands
-            .push(CanvasCommand::Layer { rect, brush, shape });
+            .push(CanvasCommand::Layer { rect, shape, brush });
     }
 
     /// Pop the last layer of the canvas.
@@ -103,9 +103,9 @@ impl Canvas {
 
         self.commands.push(CanvasCommand::Shape {
             rect,
-            brush,
-
             shape: Shape::Rect,
+
+            brush,
         });
     }
 

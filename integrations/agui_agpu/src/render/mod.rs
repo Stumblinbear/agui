@@ -248,20 +248,24 @@ impl RenderEngine {
                     let mut builder = CanvasBufferBuilder {
                         fonts,
 
-                        paint_map: HashMap::default(),
+                        paints: Vec::default(),
+
                         commands: Vec::default(),
                     };
+
+                    let mut paint_map = HashMap::new();
 
                     while let Some(mut cmd) = canvas.consume() {
                         if let Some(brush) = cmd.get_brush() {
                             let paint = canvas.get_paint(brush);
 
-                            if let Some(new_brush) = builder.paint_map.get(paint) {
+                            if let Some(new_brush) = paint_map.get(paint) {
                                 cmd.set_brush(*new_brush);
                             } else {
-                                let new_brush = Brush::from(builder.paint_map.len());
+                                let new_brush = Brush::from(paint_map.len());
 
-                                builder.paint_map.insert(paint.clone(), new_brush);
+                                paint_map.insert(paint.clone(), new_brush);
+                                builder.paints.push(paint.clone());
 
                                 cmd.set_brush(new_brush);
                             }
@@ -309,10 +313,12 @@ impl RenderEngine {
             r.set_vertex_buffer(0, node.pos.slice(..));
 
             for layer in &node.canvas_buffer.layers {
-                r.set_bind_group(0, &layer.bind_group, &[]);
+                for draw_call in &layer.draw_calls {
+                    r.set_bind_group(0, &draw_call.bind_group, &[]);
 
-                r.set_vertex_buffer(1, layer.vertex_data.slice(..))
-                    .draw(0..layer.count, 0..1);
+                    r.set_vertex_buffer(1, draw_call.vertex_data.slice(..))
+                        .draw(0..draw_call.count, 0..1);
+                }
             }
         }
     }

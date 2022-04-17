@@ -16,16 +16,3 @@ pub mod plugin;
 pub mod unit;
 pub mod util;
 pub mod widget;
-
-pub mod prelude {
-    pub use crate::{
-        callback::Callback,
-        canvas::{
-            paint::{Brush, Paint},
-            Canvas,
-        },
-        engine::{context::Context, query::*},
-        unit::*,
-        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
-    };
-}

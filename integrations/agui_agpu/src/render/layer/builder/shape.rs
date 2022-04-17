@@ -1,25 +1,29 @@
-use agui::canvas::command::CanvasCommand;
+use agui::canvas::{command::CanvasCommand, texture::TextureId};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
 
 use crate::render::{
     context::RenderContext,
-    layer::{BrushData, Layer, LayerDrawOptions, LayerDrawType, PositionData, VertexData},
+    layer::{BrushData, DrawCall, LayerDrawOptions, LayerDrawType, PositionData, VertexData},
 };
 
-use super::{LayerBuilder, LayerType};
+use super::DrawCallBuilder;
 
-pub struct ShapeLayerBuilder {
+pub struct LayerShapeBuilder {
+    texture_id: TextureId,
+
     vertex_data: Vec<VertexData>,
 
     geometry: VertexBuffers<PositionData, u32>,
     tessellator: FillTessellator,
 }
 
-impl Default for ShapeLayerBuilder {
-    fn default() -> Self {
+impl LayerShapeBuilder {
+    pub fn new(texture_id: TextureId) -> Self {
         Self {
+            texture_id,
+
             vertex_data: Vec::default(),
 
             geometry: VertexBuffers::new(),
@@ -28,13 +32,15 @@ impl Default for ShapeLayerBuilder {
     }
 }
 
-impl LayerBuilder<'_> for ShapeLayerBuilder {
-    fn get_type(&self) -> LayerType {
-        LayerType::Shape
-    }
-
+impl DrawCallBuilder<'_> for LayerShapeBuilder {
     fn can_process(&self, cmd: &CanvasCommand) -> bool {
-        matches!(cmd, CanvasCommand::Shape { .. })
+        match cmd {
+            CanvasCommand::Shape { .. } => true,
+
+            CanvasCommand::Texture { texture_id, .. } => self.texture_id == *texture_id,
+
+            _ => false,
+        }
     }
 
     fn process(&mut self, cmd: CanvasCommand) {
@@ -63,12 +69,12 @@ impl LayerBuilder<'_> for ShapeLayerBuilder {
         }
     }
 
-    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<Layer> {
+    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<DrawCall> {
         if self.vertex_data.is_empty() {
             return None;
         }
 
-        Some(Layer {
+        Some(DrawCall {
             count: self.vertex_data.len() as u32,
 
             vertex_data: ctx
@@ -105,7 +111,10 @@ impl LayerBuilder<'_> for ShapeLayerBuilder {
                     .create(&self.geometry.vertices)
                     .bind_storage_readonly()
                     .in_vertex(),
-                ctx.unknown_texture.bind_texture().in_fragment(),
+                match self.texture_id.idx() {
+                    Some(idx) => ctx.textures.get(idx).unwrap().bind_texture().in_fragment(),
+                    None => ctx.unknown_texture.bind_texture().in_fragment(),
+                },
                 ctx.texture_sampler.bind().in_fragment(),
             ]),
         })

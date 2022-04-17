@@ -10,7 +10,7 @@ use agui::{
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
-        primitives::{Column, Spacing, Text},
+        primitives::{Column, Text},
         App,
     },
 };

@@ -4,23 +4,19 @@ use glyph_brush_layout::SectionGlyph;
 
 use crate::render::{
     context::RenderContext,
-    layer::{BrushData, Layer, LayerDrawOptions, LayerDrawType, PositionData, VertexData},
+    layer::{BrushData, DrawCall, LayerDrawOptions, LayerDrawType, PositionData, VertexData},
 };
 
-use super::{LayerBuilder, LayerType};
+use super::DrawCallBuilder;
 
 #[derive(Default)]
-pub struct TextLayerBuilder<'builder> {
+pub struct TextDrawCallBuilder<'builder> {
     pub fonts: &'builder [FontArc],
 
     pub glyphs: Vec<(Brush, SectionGlyph)>,
 }
 
-impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
-    fn get_type(&self) -> LayerType {
-        LayerType::Text
-    }
-
+impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
     fn can_process(&self, cmd: &CanvasCommand) -> bool {
         matches!(cmd, CanvasCommand::Text { .. })
     }
@@ -44,7 +40,7 @@ impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
         }
     }
 
-    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<Layer> {
+    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<DrawCall> {
         if self.glyphs.is_empty() {
             return None;
         }
@@ -127,7 +123,7 @@ impl<'builder> LayerBuilder<'builder> for TextLayerBuilder<'builder> {
                 }
             }
 
-            Some(Layer {
+            Some(DrawCall {
                 count: vertex_data.len() as u32,
 
                 vertex_data: ctx

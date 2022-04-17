@@ -1,4 +1,8 @@
-use agui_core::prelude::*;
+use agui_core::{
+    canvas::paint::Paint,
+    unit::Shape,
+    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+};
 
 #[derive(Debug, Default)]
 pub struct Clip {

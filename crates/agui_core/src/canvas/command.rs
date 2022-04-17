@@ -9,36 +9,36 @@ use super::{paint::Brush, texture::TextureId};
 pub enum CanvasCommand {
     Layer {
         rect: Rect,
-        brush: Brush,
-
         shape: Shape,
+
+        brush: Brush,
     },
 
     Pop,
 
     Shape {
         rect: Rect,
-        brush: Brush,
-
         shape: Shape,
+
+        brush: Brush,
     },
 
     Texture {
         rect: Rect,
-        brush: Brush,
-
         shape: Shape,
 
-        texture: TextureId,
+        brush: Brush,
+
+        texture_id: TextureId,
         tex_bounds: Bounds,
     },
 
     Text {
         rect: Rect,
+
         brush: Brush,
 
         font: FontStyle,
-
         text: Cow<'static, str>,
     },
 }

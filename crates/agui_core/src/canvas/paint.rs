@@ -3,8 +3,8 @@ use crate::unit::{BlendMode, Color};
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct Paint {
     pub anti_alias: bool,
-    pub blend_mode: BlendMode,
     pub color: Color,
+    pub blend_mode: BlendMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

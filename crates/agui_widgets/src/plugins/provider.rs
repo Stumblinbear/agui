@@ -7,11 +7,10 @@ use std::{
 };
 
 use agui_core::{
-    engine::{event::WidgetEvent, widget::WidgetBuilder, Data},
+    engine::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data},
     plugin::{EnginePlugin, PluginContext},
-    prelude::{BuildContext, Context},
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
-    widget::WidgetId,
+    widget::{BuildContext, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -314,7 +313,11 @@ where
 mod tests {
     use std::any::TypeId;
 
-    use agui_core::{engine::Engine, prelude::*};
+    use agui_core::{
+        engine::{context::Context, query::WidgetQueryExt, Engine},
+        unit::Key,
+        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
+    };
 
     use crate::plugins::{
         global::{GlobalPlugin, GlobalPluginExt},

@@ -2,10 +2,10 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    engine::{event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
+    engine::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
     plugin::{EnginePlugin, PluginContext},
-    prelude::{BuildContext, Context},
     util::map::{TypeMap, TypeSet, WidgetMap},
+    widget::BuildContext,
 };
 
 #[derive(Debug, Default)]
@@ -151,8 +151,8 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        engine::{query::WidgetQueryExt, Engine},
-        prelude::*,
+        engine::{context::Context, query::WidgetQueryExt, Engine},
+        widget::{BuildContext, BuildResult, StatefulWidget},
     };
     use agui_primitives::Column;
 

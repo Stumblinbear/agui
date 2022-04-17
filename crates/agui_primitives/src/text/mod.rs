@@ -1,6 +1,10 @@
 use std::borrow::Cow;
 
-use agui_core::prelude::*;
+use agui_core::{
+    canvas::paint::Paint,
+    unit::{FontStyle, Layout, Sizing},
+    widget::{BuildContext, BuildResult, StatelessWidget},
+};
 
 pub mod edit;
 pub mod query;

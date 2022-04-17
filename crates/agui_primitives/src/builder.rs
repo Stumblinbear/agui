@@ -1,7 +1,4 @@
-use agui_core::{
-    prelude::{BuildContext, BuildResult},
-    widget::StatelessWidget,
-};
+use agui_core::widget::{BuildContext, BuildResult, StatelessWidget};
 
 pub struct Builder {
     func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult + 'static>,

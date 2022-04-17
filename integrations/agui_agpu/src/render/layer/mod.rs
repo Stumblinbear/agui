@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use agpu::{BindGroup, Buffer};
+use agui::prelude::{BlendMode, Rect, Shape};
 
 pub mod builder;
 pub mod canvas;
@@ -11,11 +12,21 @@ pub struct RenderNode {
     pub canvas_buffer: Rc<CanvasBuffer>,
 }
 
+#[derive(Default)]
 pub struct CanvasBuffer {
     pub layers: Vec<Layer>,
 }
 
+#[derive(Default)]
 pub struct Layer {
+    pub rect: Rect,
+    pub shape: Shape,
+    pub blend_mode: BlendMode,
+
+    pub draw_calls: Vec<DrawCall>,
+}
+
+pub struct DrawCall {
     pub count: u32,
     pub vertex_data: Buffer,
     pub bind_group: BindGroup,
