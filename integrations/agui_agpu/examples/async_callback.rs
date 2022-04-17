@@ -61,8 +61,6 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         let num = *ctx.state;
 
         move || {
-            println!("Emitting callback");
-
             thread::sleep(Duration::from_millis(1000));
 
             callback.call(num + 1);
