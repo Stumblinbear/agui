@@ -101,68 +101,42 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         callback.call(system);
     });
 
-    Column {
-        layout: Layout {
-            sizing: Sizing::Axis {
-                width: Units::Stretch(1.0),
-                height: Units::Auto,
-            },
-            ..Default::default()
-        },
-        children: match ctx.state {
-            None => build! {
-                [
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: "Collecting system info...".into(),
-                    }
-                ]
-            },
+    let lines = match ctx.state {
+        None => vec!["Collecting system info...".into()],
 
-            Some(sys) => build! {
-                [
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("System name: {}", sys.name).into(),
-                    },
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("System kernel version: {}", sys.kernel_version).into(),
-                    },
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("System OS version: {}", sys.os_version).into(),
-                    },
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("System host name: {}", sys.host_name).into(),
-                    },
-                    Spacing::vertical(16.0.into()),
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("NB processors: {}", sys.processors).into(),
-                    },
-                    Spacing::vertical(16.0.into()),
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("Total Memory: {} KB", sys.total_memory).into(),
-                    },
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("Used Memory: {} KB", sys.used_memory).into(),
-                    },
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("Total Swap: {} KB", sys.total_swap).into(),
-                    },
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: format!("Used Swap: {} KB", sys.used_swap).into(),
-                    },
-                ]
+        Some(sys) => vec![
+            format!("System name: {}", sys.name),
+            format!("System kernel version: {}", sys.kernel_version),
+            format!("System OS version: {}", sys.os_version),
+            format!("System host name: {}", sys.host_name),
+            "".into(),
+            format!("NB processors: {}", sys.processors),
+            "".into(),
+            format!("Total Memory: {} KB", sys.total_memory),
+            format!("Used Memory: {} KB", sys.used_memory),
+            format!("Total Swap: {} KB", sys.total_swap),
+            format!("Used Swap: {} KB", sys.used_swap),
+        ],
+    };
+
+    build! {
+        Column {
+            layout: Layout {
+                sizing: Sizing::Axis {
+                    width: Units::Stretch(1.0),
+                    height: Units::Auto,
+                },
             },
-        },
-        ..Default::default()
+            children: lines
+                .into_iter()
+                .map(|entry| {
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: entry.into(),
+                    }
+                    .into()
+                })
+                .collect::<Vec<_>>(),
+        }
     }
-    .into()
 }
