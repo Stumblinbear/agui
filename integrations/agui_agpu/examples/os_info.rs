@@ -101,73 +101,68 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         callback.call(system);
     });
 
-    let children: Vec<Widget> = match ctx.state {
-        None => vec![Text {
-            font: font.styled().color(Color::White),
-            text: "Collecting system info...".into(),
-        }
-        .into()],
-
-        Some(sys) => vec![
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("System name: {}", sys.name).into(),
-            }
-            .into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("System kernel version: {}", sys.kernel_version).into(),
-            }
-            .into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("System OS version: {}", sys.os_version).into(),
-            }
-            .into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("System host name: {}", sys.host_name).into(),
-            }
-            .into(),
-            Spacing::vertical(16.0.into()).into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("NB processors: {}", sys.processors).into(),
-            }
-            .into(),
-            Spacing::vertical(16.0.into()).into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("Total Memory: {} KB", sys.total_memory).into(),
-            }
-            .into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("Used Memory: {} KB", sys.used_memory).into(),
-            }
-            .into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("Total Swap: {} KB", sys.total_swap).into(),
-            }
-            .into(),
-            Text {
-                font: font.styled().color(Color::White),
-                text: format!("Used Swap: {} KB", sys.used_swap).into(),
-            }
-            .into(),
-        ],
-    };
-
-    build! {
-        Column {
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Stretch(1.0),
-                    height: Units::Auto
-                },
+    Column {
+        layout: Layout {
+            sizing: Sizing::Axis {
+                width: Units::Stretch(1.0),
+                height: Units::Auto,
             },
-            children
-        }
+            ..Default::default()
+        },
+        children: match ctx.state {
+            None => build! {
+                [
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: "Collecting system info...".into(),
+                    }
+                ]
+            },
+
+            Some(sys) => build! {
+                [
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("System name: {}", sys.name).into(),
+                    },
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("System kernel version: {}", sys.kernel_version).into(),
+                    },
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("System OS version: {}", sys.os_version).into(),
+                    },
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("System host name: {}", sys.host_name).into(),
+                    },
+                    Spacing::vertical(16.0.into()),
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("NB processors: {}", sys.processors).into(),
+                    },
+                    Spacing::vertical(16.0.into()),
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("Total Memory: {} KB", sys.total_memory).into(),
+                    },
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("Used Memory: {} KB", sys.used_memory).into(),
+                    },
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("Total Swap: {} KB", sys.total_swap).into(),
+                    },
+                    Text {
+                        font: font.styled().color(Color::White),
+                        text: format!("Used Swap: {} KB", sys.used_swap).into(),
+                    },
+                ]
+            },
+        },
+        ..Default::default()
     }
+    .into()
 }

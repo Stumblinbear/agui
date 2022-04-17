@@ -119,7 +119,7 @@ pub(crate) fn build_impl(item: TokenStream2) -> TokenStream2 {
 
         expr = Expr::Block(parse_quote! {
             {
-                let mut vec: Vec<agui_core::widget::WidgetRef> = Vec::with_capacity(#count);
+                let mut vec: Vec<agui::widget::Widget> = Vec::with_capacity(#count);
 
                 #inner
 
