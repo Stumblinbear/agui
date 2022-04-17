@@ -18,7 +18,7 @@ use agui_core::{
 pub struct GlobalPlugin;
 
 impl EnginePlugin for GlobalPlugin {
-    type State = GlobalState;
+    type State = GlobalPluginState;
 
     // Check if any changes occurred outside of the main engine loop.
     fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
@@ -55,7 +55,7 @@ impl EnginePlugin for GlobalPlugin {
 }
 
 #[derive(Debug, Default)]
-pub struct GlobalState {
+pub struct GlobalPluginState {
     globals: HashMap<TypeId, GlobalValue>,
 
     listening: HashMap<WidgetId, HashSet<TypeId>>,
@@ -77,7 +77,7 @@ impl std::fmt::Debug for GlobalValue {
     }
 }
 
-impl GlobalState {
+impl GlobalPluginState {
     fn get<G>(&mut self, widget_id: Option<WidgetId>) -> Global<G>
     where
         G: Data + Default,
@@ -160,6 +160,8 @@ impl GlobalPluginExt for Engine {
         if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().get(None)
         } else {
+            tracing::warn!("GlobalPlugin not added");
+
             Global {
                 phantom: PhantomData,
 
@@ -175,6 +177,8 @@ impl GlobalPluginExt for Engine {
     {
         if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().set(func)
+        } else {
+            tracing::warn!("GlobalPlugin not added");
         }
     }
 }
@@ -192,6 +196,8 @@ where
         if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().get(Some(widget_id))
         } else {
+            tracing::warn!("GlobalPlugin not added");
+
             Global {
                 phantom: PhantomData,
 
@@ -207,6 +213,8 @@ where
     {
         if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().set(func)
+        } else {
+            tracing::warn!("GlobalPlugin not added")
         }
     }
 }

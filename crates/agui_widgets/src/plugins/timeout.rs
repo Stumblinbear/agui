@@ -21,6 +21,7 @@ pub struct TimeoutPlugin {
 impl EnginePlugin for TimeoutPlugin {
     type State = TimeoutPluginState;
 
+    /// Check if any timeouts have completed before the next update.
     fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         self.on_update(ctx, state);
     }
