@@ -9,20 +9,12 @@ pub mod query;
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
-    pub multiline: bool,
 }
 
 impl StatelessWidget for Text {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
-            sizing: if self.multiline {
-                Sizing::Fill
-            } else {
-                Sizing::Axis {
-                    width: Units::Stretch(1.0),
-                    height: Units::Pixels(self.font.size),
-                }
-            },
+            sizing: Sizing::Fill,
             ..Layout::default()
         });
 
