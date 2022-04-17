@@ -54,6 +54,13 @@ pub struct SystemInfo {
 
     total_swap: u64,
     used_swap: u64,
+
+    name: String,
+    kernel_version: String,
+    os_version: String,
+    host_name: String,
+
+    processors: usize,
 }
 
 type OptSystem = Option<SystemInfo>;
@@ -65,55 +72,70 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         ..Layout::default()
     });
 
-    if ctx.state.is_none() {
-        let callback = ctx.callback::<System, _>(|ctx, system| {
-            ctx.set_state(|state| {
-                state.replace(SystemInfo {
-                    total_memory: system.total_memory(),
-                    used_memory: system.used_memory(),
+    let callback = ctx.callback::<System, _>(|ctx, system| {
+        ctx.set_state(|state| {
+            state.replace(SystemInfo {
+                total_memory: system.total_memory(),
+                used_memory: system.used_memory(),
 
-                    total_swap: system.total_swap(),
-                    used_swap: system.used_swap(),
-                });
+                total_swap: system.total_swap(),
+                used_swap: system.used_swap(),
+
+                name: system.name().unwrap_or_else(|| "---".into()),
+                kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
+                os_version: system.os_version().unwrap_or_else(|| "---".into()),
+                host_name: system.host_name().unwrap_or_else(|| "---".into()),
+
+                processors: system.processors().len(),
             });
         });
+    });
 
-        thread::spawn(move || {
-            println!("Delaying...");
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(1000));
 
-            thread::sleep(Duration::from_millis(2000));
+        let mut system = System::new_all();
 
-            println!("Collecting system information...");
+        system.refresh_all();
 
-            let mut system = System::new_all();
+        callback.call(system);
+    });
 
-            system.refresh_all();
-
-            println!("Emitting callback");
-
-            callback.call(system);
-        });
-    }
-
-    let mut children: Vec<Widget> = vec![
-        Text {
-            font: font.styled().size(38.0).color(Color::White),
-            text: "System Info".into(),
+    let children: Vec<Widget> = match ctx.state {
+        None => vec![Text {
+            font: font.styled().color(Color::White),
+            text: "Collecting system info...".into(),
         }
-        .into(),
-        Spacing::vertical(16.0.into()).into(),
-    ];
+        .into()],
 
-    match ctx.state {
-        None => children.push(
+        Some(sys) => vec![
             Text {
                 font: font.styled().color(Color::White),
-                text: "Collecting system info...".into(),
+                text: format!("System name: {}", sys.name).into(),
             }
             .into(),
-        ),
-
-        Some(sys) => children.extend(vec![
+            Text {
+                font: font.styled().color(Color::White),
+                text: format!("System kernel version: {}", sys.kernel_version).into(),
+            }
+            .into(),
+            Text {
+                font: font.styled().color(Color::White),
+                text: format!("System OS version: {}", sys.os_version).into(),
+            }
+            .into(),
+            Text {
+                font: font.styled().color(Color::White),
+                text: format!("System host name: {}", sys.host_name).into(),
+            }
+            .into(),
+            Spacing::vertical(16.0.into()).into(),
+            Text {
+                font: font.styled().color(Color::White),
+                text: format!("NB processors: {}", sys.processors).into(),
+            }
+            .into(),
+            Spacing::vertical(16.0.into()).into(),
             Text {
                 font: font.styled().color(Color::White),
                 text: format!("Total Memory: {} KB", sys.total_memory).into(),
@@ -134,8 +156,8 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
                 text: format!("Used Swap: {} KB", sys.used_swap).into(),
             }
             .into(),
-        ]),
-    }
+        ],
+    };
 
     build! {
         Column {
