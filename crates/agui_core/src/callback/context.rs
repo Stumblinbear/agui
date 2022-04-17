@@ -1,7 +1,7 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
-    engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, NotifyCallback},
+    engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, EmitCallbacks},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Rect, Size},
     util::map::{PluginMap, WidgetSet},
@@ -17,7 +17,8 @@ where
     pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut WidgetSet,
-    pub(crate) notifier: NotifyCallback,
+
+    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
 
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
@@ -106,7 +107,7 @@ where
         A: Data,
     {
         if let Some(callback_id) = callback.get_id() {
-            self.notifier.lock().push((callback_id, Rc::new(args)));
+            self.emit_callbacks.push((callback_id, Rc::new(args)));
         }
     }
 
@@ -115,6 +116,6 @@ where
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
     unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.notifier.lock().push((callback_id, args));
+        self.emit_callbacks.push((callback_id, args));
     }
 }

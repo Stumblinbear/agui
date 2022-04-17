@@ -1,11 +1,13 @@
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
+    callback::{ArcCallback, Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
     canvas::{context::RenderContext, renderer::RenderFn, Canvas},
-    engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, NotifyCallback},
+    engine::{
+        context::Context, tree::Tree, widget::WidgetBuilder, ArcEmitCallbacks, Data, EmitCallbacks,
+    },
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
     util::map::PluginMap,
@@ -21,7 +23,9 @@ where
     pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
-    pub(crate) notifier: NotifyCallback,
+
+    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
+    pub(crate) arc_emit_callbacks: ArcEmitCallbacks,
 
     pub(crate) widget_id: WidgetId,
     pub widget: &'ctx W,
@@ -102,7 +106,7 @@ where
         A: Data,
     {
         if let Some(callback_id) = callback.get_id() {
-            self.notifier.lock().push((callback_id, Rc::new(args)));
+            self.emit_callbacks.push((callback_id, Rc::new(args)));
         }
     }
 
@@ -111,7 +115,7 @@ where
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
     unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.notifier.lock().push((callback_id, args));
+        self.emit_callbacks.push((callback_id, args));
     }
 }
 
@@ -151,6 +155,19 @@ where
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
 
         callback
+    }
+
+    pub fn arc_callback<A, F>(&mut self, func: F) -> ArcCallback<A>
+    where
+        A: Data + Send,
+        F: Fn(&mut CallbackContext<W>, &A) + 'static,
+    {
+        let callback = Callback::new::<F, W>(self.widget_id);
+
+        self.callbacks
+            .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
+
+        callback.as_arc(Arc::clone(&self.arc_emit_callbacks))
     }
 
     pub fn key(&self, key: Key, mut widget: Widget) -> Widget {

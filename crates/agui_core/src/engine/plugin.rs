@@ -95,7 +95,9 @@ where
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
-            notifier: ctx.notifier,
+
+            emit_callbacks: ctx.emit_callbacks,
+            arc_emit_callbacks: ctx.arc_emit_callbacks,
         };
 
         self.plugin.on_before_update(&mut ctx, &mut self.state);
@@ -108,7 +110,9 @@ where
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
-            notifier: ctx.notifier,
+
+            emit_callbacks: ctx.emit_callbacks,
+            arc_emit_callbacks: ctx.arc_emit_callbacks,
         };
 
         self.plugin.on_update(&mut ctx, &mut self.state);
@@ -121,7 +125,9 @@ where
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
-            notifier: ctx.notifier,
+
+            emit_callbacks: ctx.emit_callbacks,
+            arc_emit_callbacks: ctx.arc_emit_callbacks,
         };
 
         self.plugin.on_layout(&mut ctx, &mut self.state);
@@ -134,7 +140,9 @@ where
         let mut ctx = PluginContext {
             tree: ctx.tree,
             dirty: ctx.dirty,
-            notifier: ctx.notifier,
+
+            emit_callbacks: ctx.emit_callbacks,
+            arc_emit_callbacks: ctx.arc_emit_callbacks,
         };
 
         self.plugin.on_events(&mut ctx, &mut self.state, events);

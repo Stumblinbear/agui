@@ -27,6 +27,7 @@ pub enum LayoutType {
     Grid {
         rows: usize,
         row_spacing: Units,
+
         columns: usize,
         column_spacing: Units,
     },
@@ -54,13 +55,7 @@ impl LayoutType {
     pub fn get_rows(&self) -> Option<Vec<Units>> {
         match self {
             LayoutType::Row { .. } | LayoutType::Column { .. } => None,
-            LayoutType::Grid { rows, .. } => {
-                let mut vec = Vec::with_capacity(*rows);
-
-                vec.fill_with(|| Units::Auto);
-
-                Some(vec)
-            }
+            LayoutType::Grid { rows, .. } => Some(vec![Units::Auto; *rows]),
         }
     }
 
@@ -75,13 +70,7 @@ impl LayoutType {
     pub fn get_columns(&self) -> Option<Vec<Units>> {
         match self {
             LayoutType::Row { .. } | LayoutType::Column { .. } => None,
-            LayoutType::Grid { columns, .. } => {
-                let mut vec = Vec::with_capacity(*columns);
-
-                vec.fill_with(|| Units::Auto);
-
-                Some(vec)
-            }
+            LayoutType::Grid { columns, .. } => Some(vec![Units::Auto; *columns]),
         }
     }
 

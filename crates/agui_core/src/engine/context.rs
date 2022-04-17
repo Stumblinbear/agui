@@ -10,13 +10,15 @@ use crate::{
     widget::{Widget, WidgetId},
 };
 
-use super::{tree::Tree, widget::WidgetBuilder, Data, NotifyCallback};
+use super::{tree::Tree, widget::WidgetBuilder, ArcEmitCallbacks, Data, EmitCallbacks};
 
 pub struct EngineContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut PluginMap<Plugin>>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
-    pub(crate) notifier: NotifyCallback,
+
+    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
+    pub(crate) arc_emit_callbacks: ArcEmitCallbacks,
 }
 
 pub trait Context<W>

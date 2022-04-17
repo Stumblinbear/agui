@@ -1,7 +1,4 @@
-use std::{
-    any::{type_name, TypeId},
-    rc::Rc,
-};
+use std::any::{type_name, TypeId};
 
 use downcast_rs::{impl_downcast, Downcast};
 use fnv::FnvHashMap;
@@ -27,7 +24,7 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
 
     fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult;
 
-    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool;
+    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
 
     fn render(&self, canvas: &mut Canvas);
 }
@@ -150,7 +147,9 @@ where
             plugins: ctx.plugins.unwrap(),
             tree: ctx.tree,
             dirty: ctx.dirty,
-            notifier: ctx.notifier,
+
+            emit_callbacks: ctx.emit_callbacks,
+            arc_emit_callbacks: ctx.arc_emit_callbacks,
 
             widget_id,
             widget: &self.widget,
@@ -175,7 +174,7 @@ where
         result
     }
 
-    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: Rc<dyn Data>) -> bool {
+    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: &dyn Data) -> bool {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();
 
@@ -184,7 +183,8 @@ where
                 plugins: ctx.plugins.unwrap(),
                 tree: ctx.tree,
                 dirty: ctx.dirty,
-                notifier: ctx.notifier,
+
+                emit_callbacks: ctx.emit_callbacks,
 
                 widget: &self.widget,
                 state: &mut self.state,

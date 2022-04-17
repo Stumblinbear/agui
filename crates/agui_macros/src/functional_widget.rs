@@ -1,7 +1,7 @@
 use core::panic;
 
 use heck::ToUpperCamelCase;
-use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2, TokenTree};
 use syn::{
     parse2, parse_quote,
     punctuated::Punctuated,
@@ -114,7 +114,7 @@ impl VisitMut for FunctionVisitor {
 }
 
 pub(crate) fn parse_functional_widget(args: TokenStream2, item: TokenStream2) -> TokenStream2 {
-    let state: Option<Ident> = match parse2(args) {
+    let state: Option<TokenTree> = match parse2(args) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error(),
     };
