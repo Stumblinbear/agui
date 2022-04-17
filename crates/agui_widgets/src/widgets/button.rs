@@ -74,18 +74,14 @@ impl StatefulWidget for Button {
             }
         });
 
-        let on_pressed = ctx.callback::<bool, _>({
-            let on_pressed = self.on_pressed.clone();
-
-            move |ctx, arg| {
-                if ctx.state.pressed && !arg {
-                    ctx.emit(on_pressed, ());
-                }
-
-                ctx.set_state(|state| {
-                    state.pressed = *arg;
-                })
+        let on_pressed = ctx.callback::<bool, _>(|ctx, arg| {
+            if ctx.state.pressed && !arg {
+                ctx.emit(ctx.on_pressed, ());
             }
+
+            ctx.set_state(|state| {
+                state.pressed = *arg;
+            })
         });
 
         build! {
