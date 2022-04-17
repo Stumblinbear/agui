@@ -1,5 +1,5 @@
 #![allow(clippy::needless_update)]
-use std::{sync::Arc, thread, time::Duration};
+use std::{thread, time::Duration};
 
 use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
@@ -10,7 +10,7 @@ use agui::{
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
-        primitives::{Column, Row, Spacing, Text},
+        primitives::{Column, Spacing, Text},
         App,
     },
 };
@@ -66,7 +66,7 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
     });
 
     if ctx.state.is_none() {
-        let callback = ctx.arc_callback::<System, _>(|ctx, system| {
+        let callback = ctx.callback::<System, _>(|ctx, system| {
             ctx.set_state(|state| {
                 state.replace(SystemInfo {
                     total_memory: system.total_memory(),
@@ -91,7 +91,7 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
 
             println!("Emitting callback");
 
-            callback.emit(system);
+            callback.call(system);
         });
     }
 

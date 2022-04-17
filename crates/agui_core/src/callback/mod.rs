@@ -1,7 +1,7 @@
-use std::{any::TypeId, marker::PhantomData, sync::Arc};
+use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    engine::{widget::WidgetBuilder, ArcEmitCallbacks, Data},
+    engine::{widget::WidgetBuilder, CallbackQueue, Data},
     widget::WidgetId,
 };
 
@@ -27,118 +27,68 @@ impl CallbackId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Callback<A>
+#[derive(Debug, Default, Clone)]
+pub struct Callback<A>
 where
     A: Data,
 {
-    None,
-    Some {
-        phantom: PhantomData<A>,
+    phantom: PhantomData<A>,
 
-        id: CallbackId,
-    },
+    id: Option<CallbackId>,
+
+    callback_queue: Option<CallbackQueue>,
 }
 
-impl<A> Copy for Callback<A> where A: Data + Clone {}
-
-impl<A> Default for Callback<A>
-where
-    A: Data,
-{
-    fn default() -> Self {
-        Self::None
-    }
-}
+#[allow(clippy::non_send_fields_in_send_ty)]
+unsafe impl<A> Send for Callback<A> where A: Data {}
+unsafe impl<A> Sync for Callback<A> where A: Data {}
 
 impl<A> Callback<A>
 where
     A: Data,
 {
-    pub(crate) fn new<F, W>(widget_id: WidgetId) -> Self
+    pub(crate) fn new<F, W>(widget_id: WidgetId, callback_queue: CallbackQueue) -> Self
     where
         W: WidgetBuilder,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        Self::Some {
+        Self {
             phantom: PhantomData,
 
-            id: CallbackId {
+            id: Some(CallbackId {
                 widget_id,
                 type_id: TypeId::of::<F>(),
-            },
+            }),
+
+            callback_queue: Some(callback_queue),
         }
     }
 
     pub fn get_id(&self) -> Option<CallbackId> {
-        match self {
-            Self::None => None,
-            Self::Some { id, .. } => Some(*id),
-        }
+        self.id
     }
 
     pub fn is_some(&self) -> bool {
-        matches!(self, Callback::Some { .. })
+        self.id.is_some()
     }
 
     pub fn is_none(&self) -> bool {
-        !self.is_some()
+        self.id.is_none()
     }
 
-    pub(crate) fn as_arc(&self, arc_emit_callbacks: ArcEmitCallbacks) -> ArcCallback<A> {
-        ArcCallback {
-            phantom: PhantomData,
-
-            id: self.get_id().unwrap(),
-            arc_emit_callbacks,
+    pub fn call(&self, args: A) {
+        unsafe {
+            self.call_unsafe(Rc::new(args));
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ArcCallback<A>
-where
-    A: Data,
-{
-    pub phantom: PhantomData<A>,
-
-    pub id: CallbackId,
-
-    pub(crate) arc_emit_callbacks: ArcEmitCallbacks,
-}
-
-impl<A> ArcCallback<A>
-where
-    A: Data,
-{
-    pub fn emit(&self, args: A) {
-        self.arc_emit_callbacks
-            .lock()
-            .push((self.id, Arc::new(args)));
     }
 
     /// # Safety
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn emit_unsafe(&self, args: Arc<dyn Data>) {
-        self.arc_emit_callbacks.lock().push((self.id, args));
-    }
-}
-
-#[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl<A> Send for ArcCallback<A> where A: Data {}
-unsafe impl<A> Sync for ArcCallback<A> where A: Data {}
-
-impl<A> From<ArcCallback<A>> for Callback<A>
-where
-    A: Data,
-{
-    fn from(callback: ArcCallback<A>) -> Self {
-        Self::Some {
-            phantom: PhantomData,
-
-            id: callback.id,
+    pub unsafe fn call_unsafe(&self, args: Rc<dyn Data>) {
+        if let Some(callback_queue) = &self.callback_queue {
+            callback_queue.lock().push((self.id.unwrap(), args));
         }
     }
 }

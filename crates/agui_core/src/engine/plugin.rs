@@ -96,8 +96,7 @@ where
             tree: ctx.tree,
             dirty: ctx.dirty,
 
-            emit_callbacks: ctx.emit_callbacks,
-            arc_emit_callbacks: ctx.arc_emit_callbacks,
+            callback_queue: ctx.callback_queue,
         };
 
         self.plugin.on_before_update(&mut ctx, &mut self.state);
@@ -111,8 +110,7 @@ where
             tree: ctx.tree,
             dirty: ctx.dirty,
 
-            emit_callbacks: ctx.emit_callbacks,
-            arc_emit_callbacks: ctx.arc_emit_callbacks,
+            callback_queue: ctx.callback_queue,
         };
 
         self.plugin.on_update(&mut ctx, &mut self.state);
@@ -126,8 +124,7 @@ where
             tree: ctx.tree,
             dirty: ctx.dirty,
 
-            emit_callbacks: ctx.emit_callbacks,
-            arc_emit_callbacks: ctx.arc_emit_callbacks,
+            callback_queue: ctx.callback_queue,
         };
 
         self.plugin.on_layout(&mut ctx, &mut self.state);
@@ -141,8 +138,7 @@ where
             tree: ctx.tree,
             dirty: ctx.dirty,
 
-            emit_callbacks: ctx.emit_callbacks,
-            arc_emit_callbacks: ctx.arc_emit_callbacks,
+            callback_queue: ctx.callback_queue,
         };
 
         self.plugin.on_events(&mut ctx, &mut self.state, events);

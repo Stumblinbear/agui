@@ -1,7 +1,7 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
-    engine::{context::Context, tree::Tree, widget::WidgetBuilder, Data, EmitCallbacks},
+    engine::{context::Context, tree::Tree, widget::WidgetBuilder, CallbackQueue, Data},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Rect, Size},
     util::map::{PluginMap, WidgetSet},
@@ -17,8 +17,7 @@ where
     pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut WidgetSet,
-
-    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
+    pub(crate) callback_queue: CallbackQueue,
 
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
@@ -102,12 +101,14 @@ where
         func(self.state);
     }
 
-    fn emit<A>(&mut self, callback: Callback<A>, args: A)
+    fn call<A>(&mut self, callback: Callback<A>, args: A)
     where
         A: Data,
     {
         if let Some(callback_id) = callback.get_id() {
-            self.emit_callbacks.push((callback_id, Rc::new(args)));
+            self.callback_queue
+                .lock()
+                .push((callback_id, Rc::new(args)));
         }
     }
 
@@ -115,7 +116,7 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.emit_callbacks.push((callback_id, args));
+    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
+        self.callback_queue.lock().push((callback_id, args));
     }
 }

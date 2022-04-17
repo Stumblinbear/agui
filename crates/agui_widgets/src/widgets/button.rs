@@ -76,7 +76,7 @@ impl StatefulWidget for Button {
 
         let on_pressed = ctx.callback::<bool, _>(|ctx, arg| {
             if ctx.state.pressed && !arg {
-                ctx.emit(ctx.on_pressed, ());
+                ctx.on_pressed.call(());
             }
 
             ctx.set_state(|state| {

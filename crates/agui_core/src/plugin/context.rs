@@ -3,17 +3,15 @@ use std::rc::Rc;
 use fnv::FnvHashSet;
 
 use crate::{
-    callback::CallbackId,
-    engine::{tree::Tree, ArcEmitCallbacks, Data, EmitCallbacks},
+    callback::{Callback, CallbackId},
+    engine::{tree::Tree, CallbackQueue, Data},
     widget::{Widget, WidgetId},
 };
 
 pub struct PluginContext<'ctx> {
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
-
-    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
-    pub(crate) arc_emit_callbacks: ArcEmitCallbacks,
+    pub(crate) callback_queue: CallbackQueue,
 }
 
 impl PluginContext<'_> {
@@ -25,18 +23,22 @@ impl PluginContext<'_> {
         self.dirty.insert(widget_id);
     }
 
-    pub fn emit<A>(&mut self, callback_id: CallbackId, args: A)
+    pub fn call<A>(&mut self, callback: Callback<A>, args: A)
     where
         A: Data,
     {
-        self.emit_callbacks.push((callback_id, Rc::new(args)));
+        if let Some(callback_id) = callback.get_id() {
+            self.callback_queue
+                .lock()
+                .push((callback_id, Rc::new(args)));
+        }
     }
 
     /// # Safety
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.emit_callbacks.push((callback_id, args));
+    pub unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
+        self.callback_queue.lock().push((callback_id, args));
     }
 }

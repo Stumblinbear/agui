@@ -25,7 +25,7 @@ impl EnginePlugin for EventPlugin {
 
             if let Some(callbacks) = state.callbacks.get(&type_id) {
                 for callback_id in callbacks {
-                    unsafe { ctx.emit_unsafe(*callback_id, Rc::clone(&event)) }
+                    unsafe { ctx.call_unsafe(*callback_id, Rc::clone(&event)) }
                 }
             }
         }

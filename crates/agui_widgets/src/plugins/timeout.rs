@@ -45,7 +45,7 @@ impl EnginePlugin for TimeoutPlugin {
                         "timeout expired"
                     );
 
-                    unsafe { ctx.emit_unsafe(*callback_id, Rc::clone(&self.dummy) as _) };
+                    unsafe { ctx.call_unsafe(*callback_id, Rc::clone(&self.dummy) as _) };
 
                     updated.push(*callback_id);
                 }

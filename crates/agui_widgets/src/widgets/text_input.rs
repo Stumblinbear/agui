@@ -212,7 +212,7 @@ where
                     if let Some(idx) = grapheme_idx {
                         ctx.state.value.remove(idx..(cursor.string_index));
 
-                        ctx.emit(ctx.on_value, ctx.state.value.clone());
+                        ctx.on_value.call(ctx.state.value.clone());
 
                         ctx.set_state(|state| {
                             state.cursor.string_index = idx;
@@ -231,7 +231,7 @@ where
                     if let Some(idx) = grapheme_idx {
                         ctx.state.value.remove((cursor.string_index)..idx);
 
-                        ctx.emit(ctx.on_value, ctx.state.value.clone());
+                        ctx.on_value.call(ctx.state.value.clone());
 
                         ctx.set_state(|state| {
                             state.cursor.shown = true;
@@ -246,7 +246,7 @@ where
                     let grapheme_idx = ctx.state.value.next_grapheme_offset(cursor.string_index);
 
                     if let Some(idx) = grapheme_idx {
-                        ctx.emit(ctx.on_value, ctx.state.value.clone());
+                        ctx.on_value.call(ctx.state.value.clone());
 
                         ctx.set_state(|state| {
                             state.cursor.string_index = idx;

@@ -53,7 +53,7 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         ..Layout::default()
     });
 
-    let callback = ctx.arc_callback::<usize, _>(|ctx, num| {
+    let callback = ctx.callback::<usize, _>(|ctx, num| {
         ctx.set_state(|state| *state = *num);
     });
 
@@ -65,7 +65,7 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
 
             thread::sleep(Duration::from_millis(1000));
 
-            callback.emit(num + 1);
+            callback.call(num + 1);
         }
     });
 

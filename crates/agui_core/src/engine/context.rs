@@ -10,15 +10,13 @@ use crate::{
     widget::{Widget, WidgetId},
 };
 
-use super::{tree::Tree, widget::WidgetBuilder, ArcEmitCallbacks, Data, EmitCallbacks};
+use super::{tree::Tree, widget::WidgetBuilder, CallbackQueue, Data};
 
 pub struct EngineContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut PluginMap<Plugin>>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
-
-    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
-    pub(crate) arc_emit_callbacks: ArcEmitCallbacks,
+    pub(crate) callback_queue: CallbackQueue,
 }
 
 pub trait Context<W>
@@ -55,7 +53,7 @@ where
     where
         F: FnOnce(&mut W::State);
 
-    fn emit<A>(&mut self, callback: Callback<A>, args: A)
+    fn call<A>(&mut self, callback: Callback<A>, args: A)
     where
         A: Data;
 
@@ -63,5 +61,5 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>);
+    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>);
 }

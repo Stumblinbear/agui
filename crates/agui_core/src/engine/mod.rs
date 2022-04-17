@@ -44,8 +44,7 @@ impl<T> Data for T where T: std::fmt::Debug + Downcast {}
 
 impl_downcast!(Data);
 
-pub type EmitCallbacks = Vec<(CallbackId, Rc<dyn Data>)>;
-pub type ArcEmitCallbacks = Arc<Mutex<Vec<(CallbackId, Arc<dyn Data>)>>>;
+pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
@@ -53,9 +52,7 @@ pub struct Engine {
     plugins: PluginMap<Plugin>,
     tree: Tree<WidgetId, Widget>,
     dirty: FnvHashSet<WidgetId>,
-
-    emit_callbacks: EmitCallbacks,
-    arc_emit_callbacks: ArcEmitCallbacks,
+    callback_queue: CallbackQueue,
 
     fonts: Vec<FontArc>,
     cache: LayoutCache<WidgetId>,
@@ -226,8 +223,7 @@ impl Engine {
     pub fn has_changes(&self) -> bool {
         !self.modifications.is_empty()
             || !self.dirty.is_empty()
-            || !self.emit_callbacks.is_empty()
-            || !self.arc_emit_callbacks.lock().is_empty()
+            || !self.callback_queue.lock().is_empty()
     }
 
     /// Update the UI tree.
@@ -238,9 +234,7 @@ impl Engine {
                 plugins: None,
                 tree: &self.tree,
                 dirty: &mut self.dirty,
-
-                emit_callbacks: &mut self.emit_callbacks,
-                arc_emit_callbacks: Arc::clone(&self.arc_emit_callbacks),
+                callback_queue: Arc::clone(&self.callback_queue),
             });
         }
 
@@ -270,9 +264,7 @@ impl Engine {
                         plugins: None,
                         tree: &self.tree,
                         dirty: &mut self.dirty,
-
-                        emit_callbacks: &mut self.emit_callbacks,
-                        arc_emit_callbacks: Arc::clone(&self.arc_emit_callbacks),
+                        callback_queue: Arc::clone(&self.callback_queue),
                     });
                 }
 
@@ -315,9 +307,7 @@ impl Engine {
                     plugins: None,
                     tree: &self.tree,
                     dirty: &mut self.dirty,
-
-                    emit_callbacks: &mut self.emit_callbacks,
-                    arc_emit_callbacks: Arc::clone(&self.arc_emit_callbacks),
+                    callback_queue: Arc::clone(&self.callback_queue),
                 },
                 &widget_events,
             );
@@ -407,51 +397,41 @@ impl Engine {
         let span = tracing::debug_span!("flush_callbacks");
         let _enter = span.enter();
 
-        for (callback_id, args) in self.emit_callbacks.drain(..).collect::<Vec<_>>() {
-            self.flush_callback(callback_id, args.as_ref());
-        }
-
         // It's possible that without these braces, the lock is held until the end of the function, possibly
         // leading to deadlocks.
         #[allow(unused_braces)]
-        let callbacks = { self.arc_emit_callbacks.lock().drain(..).collect::<Vec<_>>() };
+        let callbacks = { self.callback_queue.lock().drain(..).collect::<Vec<_>>() };
 
         for (callback_id, args) in callbacks {
-            self.flush_callback(callback_id, args.as_ref());
-        }
-    }
+            let mut widget = self
+                .tree
+                .get(callback_id.get_widget_id())
+                .and_then(|node| node.get_mut())
+                .expect("cannot call a callback on a widget that does not exist");
 
-    fn flush_callback(&mut self, callback_id: CallbackId, data: &dyn Data) {
-        let mut widget = self
-            .tree
-            .get(callback_id.get_widget_id())
-            .and_then(|node| node.get_mut())
-            .expect("cannot call a callback on a widget that does not exist");
-
-        let changed = widget.call(
-            EngineContext {
-                plugins: Some(&mut self.plugins),
-                tree: &self.tree,
-                dirty: &mut self.dirty,
-
-                emit_callbacks: &mut self.emit_callbacks,
-                arc_emit_callbacks: Arc::clone(&self.arc_emit_callbacks),
-            },
-            callback_id,
-            data,
-        );
-
-        if changed {
-            let widget_id = callback_id.get_widget_id();
-
-            tracing::debug!(
-                id = format!("{:?}", widget_id).as_str(),
-                widget = widget.get_display_name().as_str(),
-                "widget updated, queueing for rebuild"
+            let changed = widget.call(
+                EngineContext {
+                    plugins: Some(&mut self.plugins),
+                    tree: &self.tree,
+                    dirty: &mut self.dirty,
+                    callback_queue: Arc::clone(&self.callback_queue),
+                },
+                callback_id,
+                args.as_ref(),
             );
 
-            self.modifications
-                .push(Modify::Rebuild(callback_id.get_widget_id()));
+            if changed {
+                let widget_id = callback_id.get_widget_id();
+
+                tracing::debug!(
+                    id = format!("{:?}", widget_id).as_str(),
+                    widget = widget.get_display_name().as_str(),
+                    "widget updated, queueing for rebuild"
+                );
+
+                self.modifications
+                    .push(Modify::Rebuild(callback_id.get_widget_id()));
+            }
         }
     }
 
@@ -535,9 +515,7 @@ impl Engine {
                 plugins: None,
                 tree: &self.tree,
                 dirty: &mut self.dirty,
-
-                emit_callbacks: &mut self.emit_callbacks,
-                arc_emit_callbacks: Arc::clone(&self.arc_emit_callbacks),
+                callback_queue: Arc::clone(&self.callback_queue),
             });
         }
 
@@ -635,9 +613,7 @@ impl Engine {
                 plugins: Some(&mut self.plugins),
                 tree: &self.tree,
                 dirty: &mut self.dirty,
-
-                emit_callbacks: &mut self.emit_callbacks,
-                arc_emit_callbacks: Arc::clone(&self.arc_emit_callbacks),
+                callback_queue: Arc::clone(&self.callback_queue),
             },
             widget_id,
         );

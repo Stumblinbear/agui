@@ -147,9 +147,7 @@ where
             plugins: ctx.plugins.unwrap(),
             tree: ctx.tree,
             dirty: ctx.dirty,
-
-            emit_callbacks: ctx.emit_callbacks,
-            arc_emit_callbacks: ctx.arc_emit_callbacks,
+            callback_queue: ctx.callback_queue,
 
             widget_id,
             widget: &self.widget,
@@ -183,8 +181,7 @@ where
                 plugins: ctx.plugins.unwrap(),
                 tree: ctx.tree,
                 dirty: ctx.dirty,
-
-                emit_callbacks: ctx.emit_callbacks,
+                callback_queue: ctx.callback_queue,
 
                 widget: &self.widget,
                 state: &mut self.state,

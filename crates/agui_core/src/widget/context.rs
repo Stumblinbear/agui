@@ -3,11 +3,9 @@ use std::{rc::Rc, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::{ArcCallback, Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
+    callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
     canvas::{context::RenderContext, renderer::RenderFn, Canvas},
-    engine::{
-        context::Context, tree::Tree, widget::WidgetBuilder, ArcEmitCallbacks, Data, EmitCallbacks,
-    },
+    engine::{context::Context, tree::Tree, widget::WidgetBuilder, CallbackQueue, Data},
     plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
     util::map::PluginMap,
@@ -23,9 +21,7 @@ where
     pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
-
-    pub(crate) emit_callbacks: &'ctx mut EmitCallbacks,
-    pub(crate) arc_emit_callbacks: ArcEmitCallbacks,
+    pub(crate) callback_queue: CallbackQueue,
 
     pub(crate) widget_id: WidgetId,
     pub widget: &'ctx W,
@@ -101,12 +97,14 @@ where
         func(self.state);
     }
 
-    fn emit<A>(&mut self, callback: Callback<A>, args: A)
+    fn call<A>(&mut self, callback: Callback<A>, args: A)
     where
         A: Data,
     {
         if let Some(callback_id) = callback.get_id() {
-            self.emit_callbacks.push((callback_id, Rc::new(args)));
+            self.callback_queue
+                .lock()
+                .push((callback_id, Rc::new(args)));
         }
     }
 
@@ -114,8 +112,8 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    unsafe fn emit_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.emit_callbacks.push((callback_id, args));
+    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
+        self.callback_queue.lock().push((callback_id, args));
     }
 }
 
@@ -149,25 +147,12 @@ where
         A: Data,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        let callback = Callback::new::<F, W>(self.widget_id);
+        let callback = Callback::new::<F, W>(self.widget_id, Arc::clone(&self.callback_queue));
 
         self.callbacks
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
 
         callback
-    }
-
-    pub fn arc_callback<A, F>(&mut self, func: F) -> ArcCallback<A>
-    where
-        A: Data + Send,
-        F: Fn(&mut CallbackContext<W>, &A) + 'static,
-    {
-        let callback = Callback::new::<F, W>(self.widget_id);
-
-        self.callbacks
-            .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
-
-        callback.as_arc(Arc::clone(&self.arc_emit_callbacks))
     }
 
     pub fn key(&self, key: Key, mut widget: Widget) -> Widget {
