@@ -278,26 +278,6 @@ impl WidgetKey {
     }
 }
 
-// #[derive(Default, Clone)]
-// pub struct ChildWidget(Option<Widget>);
-
-// impl Deref for ChildWidget {
-//     type Target = Option<Widget>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-// impl std::fmt::Debug for ChildWidget {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match &self.0 {
-//             Some(widget) => widget.fmt(f),
-//             None => write!(f, "None"),
-//         }
-//     }
-// }
-
 #[derive(Clone)]
 pub enum Widget {
     None,
