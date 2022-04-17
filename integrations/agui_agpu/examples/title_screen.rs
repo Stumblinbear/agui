@@ -147,7 +147,7 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
                             child: Padding {
                                 padding: Margin::All(10.0.into()),
                                 child: Text {
-                                    font: font.styled().color(Color::White).h_align(HorizontalAlign::Right).v_align(VerticalAlign::Bottom),
+                                    font: font.styled().color(Color::Gray).h_align(HorizontalAlign::Right).v_align(VerticalAlign::Bottom),
                                     text: "Beuton"
                                 }
                             },

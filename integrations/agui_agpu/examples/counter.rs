@@ -31,12 +31,12 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.register_default_plugins();
     // ui.register_default_globals();
 
-    // let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
+    let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
     ui.set_root(build! {
         App {
             child: CounterWidget {
-                // font: deja_vu.styled(),
+                font: deja_vu.styled(),
             }
         }
     });

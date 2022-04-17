@@ -15,6 +15,10 @@ impl StatelessWidget for Text {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: Sizing::Fill,
+            min_sizing: Sizing::Axis {
+                width: 0.0.into(),
+                height: self.font.size.into(),
+            },
             ..Layout::default()
         });
 
