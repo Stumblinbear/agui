@@ -52,11 +52,15 @@ fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
         })
     });
 
-    build! {
-        Column {
-            children: [
-                Text { font: font.clone(), text: format!("clicked: {} times", ctx.get_state()).into() },
-                ctx.key(Key::single(), Button {
+    build!(Column {
+        children: [
+            Text {
+                font: font.clone(),
+                text: format!("clicked: {} times", ctx.get_state()).into()
+            },
+            ctx.key(
+                Key::single(),
+                Button {
                     layout: Layout {
                         sizing: Sizing::Axis {
                             width: 256.0,
@@ -65,11 +69,15 @@ fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
                     },
                     child: Padding {
                         padding: Margin::All(10.0.into()),
-                        child: Text { font, text: "A Button" }
+                        child: Text {
+                            font,
+                            text: "A Button"
+                        }
                     },
                     on_pressed
-                }.into())
-            ]
-        }
-    }
+                }
+                .into()
+            )
+        ]
+    })
 }

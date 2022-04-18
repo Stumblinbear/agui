@@ -5,7 +5,6 @@ use agui_core::{
     unit::{Color, Key, Layout},
     widget::{BuildContext, BuildResult, StatefulWidget, Widget},
 };
-use agui_macros::build;
 
 use crate::GestureDetector;
 
@@ -90,15 +89,18 @@ impl StatefulWidget for Button {
             })
         });
 
-        build! {
-            ctx.key(
-                Key::single(),
-                GestureDetector {
-                    on_hover,
-                    on_pressed,
-                    child: self.child.clone(),
-                }.into(),
-            )
-        }
+        ctx.key(
+            Key::single(),
+            GestureDetector {
+                on_hover,
+                on_pressed,
+
+                child: self.child.clone(),
+
+                ..Default::default()
+            }
+            .into(),
+        )
+        .into()
     }
 }

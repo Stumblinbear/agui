@@ -57,18 +57,19 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         ctx.set_state(|state| *state = input.clone());
     });
 
-    build! {
-        Column {
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Stretch(1.0),
-                    height: Units::Stretch(1.0)
-                },
-                margin: Margin::center()
+    build!(Column {
+        layout: Layout {
+            sizing: Sizing::Axis {
+                width: Units::Stretch(1.0),
+                height: Units::Stretch(1.0)
             },
-            spacing: Units::Pixels(8.0),
-            children: [
-                ctx.key(Key::single(), TextInput {
+            margin: Margin::center()
+        },
+        spacing: Units::Pixels(8.0),
+        children: [
+            ctx.key(
+                Key::single(),
+                TextInput {
                     layout: Layout {
                         sizing: Sizing::Axis {
                             width: Units::Stretch(1.0),
@@ -80,13 +81,13 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
                     placeholder: "some text here",
 
                     on_value
-                }.into()),
-
-                Text {
-                    font: font.styled().color(Color::White),
-                    text: ctx.state.clone(),
-                },
-            ]
-        }
-    }
+                }
+                .into()
+            ),
+            Text {
+                font: font.styled().color(Color::White),
+                text: ctx.state.clone(),
+            },
+        ]
+    })
 }

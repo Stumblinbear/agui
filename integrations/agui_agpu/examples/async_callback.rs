@@ -35,13 +35,9 @@ fn main() -> Result<(), agpu::BoxError> {
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build! {
-        App {
-            child: ExampleMain {
-                font: deja_vu
-            }
-        }
-    });
+    ui.set_root(build!(App {
+        child: ExampleMain { font: deja_vu }
+    }));
 
     ui.run()
 }
@@ -67,20 +63,16 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         }
     });
 
-    build! {
-        Column {
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Stretch(1.0),
-                    height: Units::Auto
-                },
+    build!(Column {
+        layout: Layout {
+            sizing: Sizing::Axis {
+                width: Units::Stretch(1.0),
+                height: Units::Auto
             },
-            children: [
-                Text {
-                    font: font.styled().color(Color::White),
-                    text: format!("Called: {}", ctx.state).into(),
-                }
-            ]
-        }
-    }
+        },
+        children: [Text {
+            font: font.styled().color(Color::White),
+            text: format!("Called: {}", ctx.state).into(),
+        }]
+    })
 }

@@ -10,7 +10,6 @@ use agui_core::{
     unit::{Color, FontStyle, Key, Layout, Point, Rect},
     widget::{BuildContext, BuildResult, StatefulWidget},
 };
-use agui_macros::build;
 use agui_primitives::edit::EditableText;
 
 use crate::{
@@ -354,16 +353,18 @@ where
             }
         });
 
-        build! {
-            ctx.key(
-                Key::single(),
-                GestureDetector {
-                    on_hover,
+        ctx.key(
+            Key::single(),
+            GestureDetector {
+                on_hover,
 
-                    is_focused: ctx.state.focused,
-                    on_focus,
-                }.into()
-            )
-        }
+                is_focused: ctx.state.focused,
+                on_focus,
+
+                ..Default::default()
+            }
+            .into(),
+        )
+        .into()
     }
 }

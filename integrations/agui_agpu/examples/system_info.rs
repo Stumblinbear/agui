@@ -119,24 +119,22 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         ],
     };
 
-    build! {
-        Column {
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Stretch(1.0),
-                    height: Units::Auto,
-                },
+    build!(Column {
+        layout: Layout {
+            sizing: Sizing::Axis {
+                width: Units::Stretch(1.0),
+                height: Units::Auto,
             },
-            children: lines
-                .into_iter()
-                .map(|entry| {
-                    Text {
-                        font: font.styled().color(Color::White),
-                        text: entry.into(),
-                    }
-                    .into()
-                })
-                .collect::<Vec<_>>(),
-        }
-    }
+        },
+        children: lines
+            .into_iter()
+            .map(|entry| {
+                Text {
+                    font: font.styled().color(Color::White),
+                    text: entry.into(),
+                }
+                .into()
+            })
+            .collect::<Vec<_>>(),
+    })
 }

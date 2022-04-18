@@ -51,23 +51,104 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         ..Layout::default()
     });
 
-    build! {
-        Column {
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Stretch(1.0),
-                    height: Units::Stretch(1.0)
-                },
-                margin: Margin::center()
+    build!(Column {
+        layout: Layout {
+            sizing: Sizing::Axis {
+                width: Units::Stretch(1.0),
+                height: Units::Stretch(1.0)
             },
-            spacing: Units::Pixels(16.0),
-            children: [
-                Text {
-                    font: font.styled().h_align(HorizontalAlign::Center).size(64.0).color(Color::White),
-                    text: "A Title".into()
+            margin: Margin::center()
+        },
+        spacing: Units::Pixels(16.0),
+        children: [
+            Text {
+                font: font
+                    .styled()
+                    .h_align(HorizontalAlign::Center)
+                    .size(64.0)
+                    .color(Color::White),
+                text: "A Title".into()
+            },
+            Spacing::vertical(32.0.into()),
+            Button {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: 256.0,
+                        height: 64.0,
+                    },
                 },
-                Spacing::vertical(32.0.into()),
-                Button {
+                child: Padding {
+                    padding: Margin::All(10.0.into()),
+                    child: Text {
+                        font: font
+                            .styled()
+                            .h_align(HorizontalAlign::Center)
+                            .v_align(VerticalAlign::Center),
+                        text: "A Button"
+                    }
+                },
+                on_pressed: ctx.callback(|_ctx, ()| {
+                    println!("Pressed 1");
+                })
+            },
+            Button {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: 400.0,
+                        height: 50.0,
+                    },
+                },
+                child: Padding {
+                    padding: Margin::All(10.0.into()),
+                    child: Text {
+                        font: font
+                            .styled()
+                            .h_align(HorizontalAlign::Center)
+                            .v_align(VerticalAlign::Center),
+                        text: "Another Button"
+                    }
+                },
+                on_pressed: ctx.callback(|_ctx, ()| {
+                    println!("Pressed 2");
+                })
+            },
+            Button {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: 150.0,
+                        height: 100.0,
+                    },
+                },
+                child: Padding {
+                    padding: Margin::All(10.0.into()),
+                    child: Text {
+                        font: font
+                            .styled()
+                            .h_align(HorizontalAlign::Left)
+                            .v_align(VerticalAlign::Bottom),
+                        text: "Also a Button"
+                    }
+                },
+                on_pressed: ctx.callback(|_ctx, ()| {
+                    println!("Pressed 3");
+                })
+            },
+            Builder::new(move |ctx| {
+                // let theme = ctx.init_state(|| {
+                //     let mut theme = Theme::new();
+
+                //     theme.set(ButtonStyle {
+                //         normal: Color::Red,
+                //         hover: Color::Green,
+                //         pressed: Color::Blue,
+                //     });
+
+                //     theme
+                // });
+
+                // theme.provide(ctx);
+
+                build!(Button {
                     layout: Layout {
                         sizing: Sizing::Axis {
                             width: 256.0,
@@ -77,87 +158,19 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
                     child: Padding {
                         padding: Margin::All(10.0.into()),
                         child: Text {
-                            font: font.styled().h_align(HorizontalAlign::Center).v_align(VerticalAlign::Center),
-                            text: "A Button"
+                            font: font
+                                .styled()
+                                .color(Color::Gray)
+                                .h_align(HorizontalAlign::Right)
+                                .v_align(VerticalAlign::Bottom),
+                            text: "Beuton"
                         }
                     },
                     on_pressed: ctx.callback(|_ctx, ()| {
-                        println!("Pressed 1");
+                        println!("Pressed 4");
                     })
-                },
-                Button {
-                    layout: Layout {
-                        sizing: Sizing::Axis {
-                            width: 400.0,
-                            height: 50.0,
-                        },
-                    },
-                    child: Padding {
-                        padding: Margin::All(10.0.into()),
-                        child: Text {
-                            font: font.styled().h_align(HorizontalAlign::Center).v_align(VerticalAlign::Center),
-                            text: "Another Button"
-                        }
-                    },
-                    on_pressed: ctx.callback(|_ctx, ()| {
-                        println!("Pressed 2");
-                    })
-                },
-                Button {
-                    layout: Layout {
-                        sizing: Sizing::Axis {
-                            width: 150.0,
-                            height: 100.0,
-                        },
-                    },
-                    child: Padding {
-                        padding: Margin::All(10.0.into()),
-                        child: Text {
-                            font: font.styled().h_align(HorizontalAlign::Left).v_align(VerticalAlign::Bottom),
-                            text: "Also a Button"
-                        }
-                    },
-                    on_pressed: ctx.callback(|_ctx, ()| {
-                        println!("Pressed 3");
-                    })
-                },
-                Builder::new(move |ctx| {
-                    // let theme = ctx.init_state(|| {
-                    //     let mut theme = Theme::new();
-
-                    //     theme.set(ButtonStyle {
-                    //         normal: Color::Red,
-                    //         hover: Color::Green,
-                    //         pressed: Color::Blue,
-                    //     });
-
-                    //     theme
-                    // });
-
-                    // theme.provide(ctx);
-
-                    build! {
-                        Button {
-                            layout: Layout {
-                                sizing: Sizing::Axis {
-                                    width: 256.0,
-                                    height: 64.0,
-                                },
-                            },
-                            child: Padding {
-                                padding: Margin::All(10.0.into()),
-                                child: Text {
-                                    font: font.styled().color(Color::Gray).h_align(HorizontalAlign::Right).v_align(VerticalAlign::Bottom),
-                                    text: "Beuton"
-                                }
-                            },
-                            on_pressed: ctx.callback(|_ctx, ()| {
-                                println!("Pressed 4");
-                            })
-                        }
-                    }
                 })
-            ]
-        }
-    }
+            })
+        ]
+    })
 }
