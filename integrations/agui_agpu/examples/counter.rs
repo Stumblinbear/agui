@@ -56,7 +56,7 @@ fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
         children: [
             Text {
                 font: font.clone(),
-                text: format!("clicked: {} times", ctx.get_state()).into()
+                text: format!("clicked: {} times", ctx.state).into()
             },
             ctx.key(
                 Key::single(),

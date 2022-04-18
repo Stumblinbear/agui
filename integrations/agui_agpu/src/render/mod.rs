@@ -9,7 +9,7 @@ use std::{
 
 use agpu::{
     wgpu::{self, TextureSampleType, TextureViewDimension},
-    Frame, GpuHandle, RenderPipeline, TextureFormat,
+    Frame, Gpu, RenderPipeline, TextureFormat,
 };
 use agui::{
     canvas::{paint::Brush, Canvas},
@@ -39,7 +39,7 @@ pub struct RenderEngine {
 }
 
 impl RenderEngine {
-    pub fn new(gpu: &GpuHandle, size: Size) -> Self {
+    pub fn new(gpu: &Gpu, size: Size) -> Self {
         const INSTANCE_LAYOUT: wgpu::VertexBufferLayout = wgpu::VertexBufferLayout {
             array_stride: mem::size_of::<InstanceData>() as u64,
             step_mode: agpu::wgpu::VertexStepMode::Instance,
@@ -130,6 +130,7 @@ impl RenderEngine {
             .with_vertex(include_bytes!("shaders/layer.vert.spv"))
             .with_fragment(include_bytes!("shaders/layer.frag.spv"))
             .with_vertex_layouts(&[INSTANCE_LAYOUT, VERTEX_LAYOUT])
+            .with_depth_stencil()
             .with_bind_groups(&[
                 &gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
@@ -156,9 +157,14 @@ impl RenderEngine {
             pipeline,
 
             ctx: RenderContext {
-                gpu: GpuHandle::clone(gpu),
+                gpu: Gpu::clone(gpu),
 
                 render_size,
+
+                layer_stencil: gpu
+                    .new_texture("agui stencil")
+                    .as_depth_stencil()
+                    .create_empty((size.width.floor() as u32, size.height.floor() as u32)),
 
                 unknown_texture: gpu
                     .new_texture("agui unknown texture")
@@ -188,6 +194,10 @@ impl RenderEngine {
     }
 
     pub fn set_size(&mut self, size: Size) {
+        self.ctx
+            .layer_stencil
+            .resize((size.width.floor() as u32, size.height.floor() as u32));
+
         self.ctx
             .render_size
             .write_unchecked(&[size.width, size.height]);
@@ -307,10 +317,13 @@ impl RenderEngine {
         let mut r = frame
             .render_pass("agui layer pass")
             .with_pipeline(&self.pipeline)
+            .with_depth(self.ctx.layer_stencil.attach_depth_stencil())
             .begin();
 
         for node in &self.nodes {
             r.set_vertex_buffer(0, node.pos.slice(..));
+
+            r.set_stencil_reference(0);
 
             for layer in &node.canvas_buffer.layers {
                 for draw_call in &layer.draw_calls {

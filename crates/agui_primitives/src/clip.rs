@@ -1,13 +1,16 @@
 use agui_core::{
     canvas::paint::Paint,
-    unit::Shape,
+    unit::{Rect, Shape},
     widget::{BuildContext, BuildResult, StatelessWidget, Widget},
 };
 
 #[derive(Debug, Default)]
 pub struct Clip {
-    pub anti_alias: bool,
+    pub rect: Option<Rect>,
+
     pub shape: Shape,
+    pub anti_alias: bool,
+
     pub child: Widget,
 }
 
@@ -19,7 +22,10 @@ impl StatelessWidget for Clip {
                 ..Paint::default()
             });
 
-            canvas.start_layer(brush, ctx.shape.clone());
+            match ctx.rect {
+                Some(rect) => canvas.start_layer_at(rect, brush, ctx.shape.clone()),
+                None => canvas.start_layer(brush, ctx.shape.clone()),
+            }
         });
 
         (&self.child).into()

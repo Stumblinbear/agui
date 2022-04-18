@@ -62,14 +62,20 @@ impl CanvasCommand {
 
     pub fn get_brush(&self) -> Option<Brush> {
         match self {
-            CanvasCommand::Shape { brush, .. } | CanvasCommand::Text { brush, .. } => Some(*brush),
+            CanvasCommand::Layer { brush, .. }
+            | CanvasCommand::Shape { brush, .. }
+            | CanvasCommand::Texture { brush, .. }
+            | CanvasCommand::Text { brush, .. } => Some(*brush),
             _ => None,
         }
     }
 
     pub fn set_brush(&mut self, new_brush: Brush) {
         match self {
-            CanvasCommand::Shape { brush, .. } | CanvasCommand::Text { brush, .. } => {
+            CanvasCommand::Layer { brush, .. }
+            | CanvasCommand::Shape { brush, .. }
+            | CanvasCommand::Texture { brush, .. }
+            | CanvasCommand::Text { brush, .. } => {
                 *brush = new_brush;
             }
             _ => {}

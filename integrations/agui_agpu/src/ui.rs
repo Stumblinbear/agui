@@ -9,7 +9,7 @@ use agpu::{
         dpi::PhysicalPosition,
         event::{ElementState, Event as WinitEvent, MouseScrollDelta, WindowEvent},
     },
-    Event, GpuHandle, GpuProgram,
+    Event, Gpu, GpuProgram,
 };
 use agui::{
     engine::Engine,
@@ -59,7 +59,7 @@ impl UI {
         )
     }
 
-    pub fn using_gpu(gpu: &GpuHandle, size: Size) -> Self {
+    pub fn using_gpu(gpu: &Gpu, size: Size) -> Self {
         Self {
             engine: Engine::new(),
             renderer: RenderEngine::new(gpu, size),

@@ -1,13 +1,15 @@
 use std::cell::RefCell;
 
-use agpu::{Buffer, GpuHandle, Sampler, Texture};
+use agpu::{Buffer, Gpu, Sampler, Texture};
 use agui::canvas::texture::TextureId;
 use glyph_brush_draw_cache::DrawCache;
 
 pub struct RenderContext {
-    pub gpu: GpuHandle,
+    pub gpu: Gpu,
 
     pub render_size: Buffer,
+
+    pub layer_stencil: Texture<agpu::D2>,
 
     pub unknown_texture: Texture<agpu::D2>,
     pub texture_sampler: Sampler,

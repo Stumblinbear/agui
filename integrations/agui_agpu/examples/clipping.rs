@@ -7,7 +7,7 @@ use agui::{
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
-        primitives::{Clip, Column, Padding, Text},
+        primitives::{Clip, Padding, Text},
         App, Button,
     },
 };
@@ -51,22 +51,21 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
         ..Layout::default()
     });
 
-    build!(Column {
-        layout: Layout {
-            sizing: Sizing::Axis {
-                width: Units::Stretch(1.0),
-                height: Units::Stretch(1.0)
+    build!(Padding {
+        padding: Margin::center(),
+        child: Clip {
+            rect: Rect {
+                width: 128.0,
+                height: 64.0
             },
-            margin: Margin::center()
-        },
-        spacing: Units::Pixels(16.0),
-        children: [Clip {
+
             shape: Shape::RoundedRect {
                 top_left: 8.0,
                 top_right: 8.0,
                 bottom_right: 8.0,
                 bottom_left: 8.0
             },
+
             child: Button {
                 layout: Layout {
                     sizing: Sizing::Axis {
@@ -81,13 +80,13 @@ fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widge
                             .styled()
                             .h_align(HorizontalAlign::Center)
                             .v_align(VerticalAlign::Center),
-                        text: "A Button"
+                        text: "I am not   \nclipped properly"
                     }
                 },
                 on_pressed: ctx.callback(|_ctx, ()| {
                     println!("Pressed 1");
                 })
             }
-        }]
+        }
     })
 }

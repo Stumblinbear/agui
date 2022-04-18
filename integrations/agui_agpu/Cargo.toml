@@ -19,7 +19,7 @@ tracing-subscriber = "0.2"
 downcast-rs = "1.2"
 parking_lot = "0.12"
 
-agpu = { git = "https://github.com/lyricwulf/agpu", rev = "3ca6f7669b862945b550c7f10f92f663adaf0f89" }
+agpu = { git = "https://github.com/lyricwulf/agpu", rev = "4d6a850d7cf73f1ee65c1f935646414f5d56c8be" }
 bytemuck = { version = "1.7", features = ["extern_crate_alloc"] }
 
 lyon = "0.17"
