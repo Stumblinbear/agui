@@ -147,19 +147,17 @@ impl RenderEngine {
             ])
             .create();
 
-        let render_size = gpu
-            .new_buffer("agui render size")
-            .as_uniform_buffer()
-            .allow_copy_to()
-            .create(&[size.width, size.height]);
-
         Self {
             pipeline,
 
             ctx: RenderContext {
                 gpu: Gpu::clone(gpu),
 
-                render_size,
+                render_size: gpu
+                    .new_buffer("agui render size")
+                    .as_uniform_buffer()
+                    .allow_copy_to()
+                    .create(&[size.width, size.height]),
 
                 layer_stencil: gpu
                     .new_texture("agui stencil")
