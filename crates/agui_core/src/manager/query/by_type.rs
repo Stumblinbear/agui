@@ -1,7 +1,7 @@
 use std::{cell::Ref, marker::PhantomData};
 
 use crate::{
-    engine::widget::{WidgetBuilder, WidgetElement},
+    manager::widget::{WidgetBuilder, WidgetElement},
     widget::Widget,
 };
 
@@ -19,7 +19,7 @@ impl<I, W> QueryByType<I, W>
 where
     W: WidgetBuilder,
 {
-    pub(in crate::engine::query) fn new(iter: I) -> Self {
+    pub(in crate::manager::query) fn new(iter: I) -> Self {
         Self {
             iter,
             phantom: PhantomData,

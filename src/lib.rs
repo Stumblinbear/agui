@@ -23,7 +23,7 @@ pub mod prelude {
             paint::{Brush, Paint},
             Canvas,
         },
-        engine::{context::Context, query::*},
+        manager::{context::Context, query::*},
         unit::*,
         widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
     };

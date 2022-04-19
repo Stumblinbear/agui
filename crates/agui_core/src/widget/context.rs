@@ -5,8 +5,8 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
     canvas::{context::RenderContext, renderer::RenderFn, Canvas},
-    engine::{context::Context, tree::Tree, widget::WidgetBuilder, CallbackQueue, Data},
-    plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
+    manager::{context::Context, tree::Tree, widget::WidgetBuilder, CallbackQueue, Data},
+    plugin::{WidgetManagerPlugin, Plugin, PluginId, PluginMut, PluginRef},
     unit::{Key, Layout, LayoutType, Rect, Size},
     util::map::PluginMap,
     widget::WidgetId,
@@ -46,7 +46,7 @@ where
 
     fn get_plugin<P>(&self) -> Option<PluginRef<P>>
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         self.plugins
             .get(&PluginId::of::<P>())
@@ -55,7 +55,7 @@ where
 
     fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         self.plugins
             .get_mut(&PluginId::of::<P>())

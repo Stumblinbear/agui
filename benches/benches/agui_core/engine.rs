@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use agui::{engine::Engine, widgets::primitives::Column};
+use agui::{manager::WidgetManager, widgets::primitives::Column};
 
-fn engine_ops(c: &mut Criterion) {
-    c.bench_function("add to engine", |b| {
+fn widget_manager_ops(c: &mut Criterion) {
+    c.bench_function("add to widget manager", |b| {
         b.iter_with_setup(
             || {
                 let mut column = Column::default();
@@ -12,17 +12,17 @@ fn engine_ops(c: &mut Criterion) {
                     column.children.push(Column::default().into());
                 }
 
-                (Engine::new(), column)
+                (WidgetManager::new(), column)
             },
-            |(mut engine, widget)| {
-                engine.set_root(widget.into());
+            |(mut manager, widget)| {
+                manager.set_root(widget.into());
 
-                engine.update();
+                manager.update();
             },
         )
     });
 
-    c.bench_function("remove from engine", |b| {
+    c.bench_function("remove from widget manager", |b| {
         b.iter_with_setup(
             || {
                 let mut column = Column::default();
@@ -31,20 +31,20 @@ fn engine_ops(c: &mut Criterion) {
                     column.children.push(Column::default().into());
                 }
 
-                let mut engine = Engine::with_root(column);
+                let mut manager = WidgetManager::with_root(column);
 
-                engine.update();
+                manager.update();
 
-                engine
+                manager
             },
-            |mut engine| {
-                engine.remove_root();
+            |mut manager| {
+                manager.remove_root();
 
-                engine.update();
+                manager.update();
             },
         )
     });
 }
 
-criterion_group!(benches, engine_ops,);
+criterion_group!(benches, widget_manager_ops,);
 criterion_main!(benches);

@@ -10,7 +10,7 @@ use crate::{
     widget::{BuildContext, BuildResult, Widget, WidgetId},
 };
 
-use super::{context::EngineContext, Data};
+use super::{context::AguiContext, Data};
 
 pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
@@ -22,9 +22,9 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
     fn set_rect(&mut self, rect: Option<Rect>);
     fn get_rect(&self) -> Option<Rect>;
 
-    fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult;
+    fn build(&mut self, ctx: AguiContext, widget_id: WidgetId) -> BuildResult;
 
-    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
+    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
 
     fn render(&self, canvas: &mut Canvas);
 }
@@ -139,7 +139,7 @@ where
         self.rect
     }
 
-    fn build(&mut self, ctx: EngineContext, widget_id: WidgetId) -> BuildResult {
+    fn build(&mut self, ctx: AguiContext, widget_id: WidgetId) -> BuildResult {
         let span = tracing::error_span!("build");
         let _enter = span.enter();
 
@@ -172,7 +172,7 @@ where
         result
     }
 
-    fn call(&mut self, ctx: EngineContext, callback_id: CallbackId, arg: &dyn Data) -> bool {
+    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();
 

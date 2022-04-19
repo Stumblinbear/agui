@@ -2,8 +2,8 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    engine::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
-    plugin::{EnginePlugin, PluginContext},
+    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, WidgetManager},
+    plugin::{WidgetManagerPlugin, PluginContext},
     util::map::{TypeMap, TypeSet, WidgetMap},
     widget::BuildContext,
 };
@@ -11,10 +11,10 @@ use agui_core::{
 #[derive(Debug, Default)]
 pub struct EventPlugin;
 
-impl EnginePlugin for EventPlugin {
+impl WidgetManagerPlugin for EventPlugin {
     type State = EventState;
 
-    // Check if any changes occurred outside of the main engine loop.
+    // Check if any changes occurred outside of the main loop.
     fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         self.on_update(ctx, state);
     }
@@ -89,7 +89,7 @@ impl EventState {
     }
 }
 
-pub trait EventPluginEngineExt {
+pub trait EventPluginExt {
     fn fire_event<E>(&mut self, event: E)
     where
         E: Data;
@@ -109,7 +109,7 @@ where
         E: Data;
 }
 
-impl EventPluginEngineExt for Engine {
+impl EventPluginExt for WidgetManager {
     fn fire_event<E>(&mut self, event: E)
     where
         E: Data,
@@ -151,12 +151,12 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        engine::{context::Context, query::WidgetQueryExt, Engine},
+        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
         widget::{BuildContext, BuildResult, StatefulWidget},
     };
     use agui_primitives::Column;
 
-    use crate::plugins::event::{EventPlugin, EventPluginEngineExt};
+    use crate::plugins::event::{EventPlugin, EventPluginExt};
 
     use super::EventPluginContextExt;
 
@@ -179,13 +179,13 @@ mod tests {
 
     #[test]
     pub fn tracks_listeners() {
-        let mut engine = Engine::with_root(TestListener::default());
+        let mut manager = WidgetManager::with_root(TestListener::default());
 
-        engine.add_plugin(EventPlugin::default());
+        manager.add_plugin(EventPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<EventPlugin>().unwrap();
+        let plugin = manager.get_plugin::<EventPlugin>().unwrap();
         let callbacks = plugin.get_state().callbacks.get(&TypeId::of::<u32>());
         let listening = &plugin.get_state().listening;
 
@@ -195,17 +195,17 @@ mod tests {
 
     #[test]
     pub fn does_not_leak_memory() {
-        let mut engine = Engine::with_root(TestListener::default());
+        let mut manager = WidgetManager::with_root(TestListener::default());
 
-        engine.add_plugin(EventPlugin::default());
+        manager.add_plugin(EventPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        engine.set_root(TestListener::default().into());
+        manager.set_root(TestListener::default().into());
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<EventPlugin>().unwrap();
+        let plugin = manager.get_plugin::<EventPlugin>().unwrap();
         let listening = &plugin.get_state().listening;
         let callbacks = &plugin.get_state().callbacks;
 
@@ -215,22 +215,22 @@ mod tests {
 
     #[test]
     pub fn queue_events() {
-        let mut engine = Engine::with_root(TestListener::default());
+        let mut manager = WidgetManager::with_root(TestListener::default());
 
-        engine.add_plugin(EventPlugin::default());
+        manager.add_plugin(EventPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        engine.fire_event(7_u32);
+        manager.fire_event(7_u32);
 
-        let plugin = engine.get_plugin::<EventPlugin>().unwrap();
+        let plugin = manager.get_plugin::<EventPlugin>().unwrap();
         let queue = &plugin.get_state().queue;
 
         assert!(!queue.is_empty(), "should have queued the event");
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<EventPlugin>().unwrap();
+        let plugin = manager.get_plugin::<EventPlugin>().unwrap();
         let queue = &plugin.get_state().queue;
 
         assert!(
@@ -241,14 +241,14 @@ mod tests {
 
     #[test]
     pub fn listening_to_events() {
-        let mut engine = Engine::with_root(TestListener::default());
+        let mut manager = WidgetManager::with_root(TestListener::default());
 
-        engine.add_plugin(EventPlugin::default());
+        manager.add_plugin(EventPlugin::default());
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestListener>()
                 .next()
@@ -258,12 +258,12 @@ mod tests {
             "initial state should be zero"
         );
 
-        engine.fire_event(7_u32);
+        manager.fire_event(7_u32);
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestListener>()
                 .next()
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     pub fn multiple_widgets_listening() {
-        let mut engine = Engine::with_root(Column {
+        let mut manager = WidgetManager::with_root(Column {
             children: vec![
                 TestListener::default().into(),
                 TestListener::default().into(),
@@ -284,11 +284,11 @@ mod tests {
             ..Default::default()
         });
 
-        engine.add_plugin(EventPlugin::default());
+        manager.add_plugin(EventPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        for widget in engine.query().by_type::<TestListener>() {
+        for widget in manager.query().by_type::<TestListener>() {
             assert_eq!(
                 *widget.get_state(),
                 0,
@@ -296,11 +296,11 @@ mod tests {
             );
         }
 
-        engine.fire_event(7_u32);
+        manager.fire_event(7_u32);
 
-        engine.update();
+        manager.update();
 
-        for widget in engine.query().by_type::<TestListener>() {
+        for widget in manager.query().by_type::<TestListener>() {
             assert_eq!(
                 *widget.get_state(),
                 7,

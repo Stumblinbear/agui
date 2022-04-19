@@ -11,7 +11,7 @@
 
 pub mod callback;
 pub mod canvas;
-pub mod engine;
+pub mod manager;
 pub mod plugin;
 pub mod unit;
 pub mod util;

@@ -8,7 +8,7 @@ use std::{
 use slotmap::new_key_type;
 
 use crate::{
-    engine::{
+    manager::{
         tree::Tree,
         widget::{WidgetBuilder, WidgetElement, WidgetImpl},
     },

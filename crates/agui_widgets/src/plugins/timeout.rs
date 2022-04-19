@@ -7,8 +7,8 @@ use std::{
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    engine::{context::Context, event::WidgetEvent, widget::WidgetBuilder},
-    plugin::{EnginePlugin, PluginContext},
+    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder},
+    plugin::{WidgetManagerPlugin, PluginContext},
     widget::{BuildContext, WidgetId},
 };
 
@@ -17,7 +17,7 @@ pub struct TimeoutPlugin {
     dummy: Rc<()>,
 }
 
-impl EnginePlugin for TimeoutPlugin {
+impl WidgetManagerPlugin for TimeoutPlugin {
     type State = TimeoutPluginState;
 
     /// Check if any timeouts have completed before the next update.

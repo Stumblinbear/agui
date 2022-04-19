@@ -1,6 +1,6 @@
 use std::cell::Ref;
 
-use agui_core::{engine::widget::WidgetElement, widget::Widget};
+use agui_core::{manager::widget::WidgetElement, widget::Widget};
 
 use crate::Text;
 
@@ -59,13 +59,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::engine::Engine;
+    use agui_core::manager::WidgetManager;
 
     use crate::{query::TextQueryExt, Column, Text};
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut engine = Engine::with_root(Column {
+        let mut manager = WidgetManager::with_root(Column {
             children: vec![
                 Text {
                     text: "foo".into(),
@@ -81,10 +81,10 @@ mod tests {
             ..Default::default()
         });
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            engine
+            manager
                 .query()
                 .with_text("foo")
                 .next()
@@ -96,7 +96,7 @@ mod tests {
         );
 
         assert_eq!(
-            engine
+            manager
                 .query()
                 .with_text("bar")
                 .next()

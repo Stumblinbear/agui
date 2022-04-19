@@ -103,7 +103,7 @@ where
                 self.root = None;
             }
 
-            // We can't remove the children here, since the engine needs to have access to them.
+            // We can't remove the children here, since the widget manager needs to have access to them.
 
             Some(node)
         } else {

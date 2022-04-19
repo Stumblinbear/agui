@@ -1,7 +1,7 @@
 use downcast_rs::Downcast;
 
 use crate::{
-    engine::{widget::WidgetBuilder, Data},
+    manager::{widget::WidgetBuilder, Data},
     widget::{BuildContext, BuildResult},
 };
 
@@ -30,7 +30,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        engine::{context::Context, query::WidgetQueryExt, Engine},
+        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
         widget::{BuildContext, BuildResult},
     };
 
@@ -56,12 +56,12 @@ mod tests {
 
     #[test]
     pub fn widget_build_can_set_state() {
-        let mut engine = Engine::with_root(TestWidget::default());
+        let mut manager = WidgetManager::with_root(TestWidget::default());
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidget>()
                 .next()
@@ -71,10 +71,10 @@ mod tests {
             "widget `u32` should be 1"
         );
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidget>()
                 .next()

@@ -8,8 +8,8 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    engine::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, Engine},
-    plugin::{EnginePlugin, PluginContext},
+    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, WidgetManager},
+    plugin::{PluginContext, WidgetManagerPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
     widget::{BuildContext, WidgetId},
 };
@@ -17,10 +17,10 @@ use agui_core::{
 #[derive(Debug, Default)]
 pub struct GlobalPlugin;
 
-impl EnginePlugin for GlobalPlugin {
+impl WidgetManagerPlugin for GlobalPlugin {
     type State = GlobalPluginState;
 
-    // Check if any changes occurred outside of the main engine loop.
+    // Check if any changes occurred outside of the main loop.
     fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         self.on_update(ctx, state);
     }
@@ -152,7 +152,7 @@ pub trait GlobalPluginExt {
         G: Data + Default;
 }
 
-impl GlobalPluginExt for Engine {
+impl GlobalPluginExt for WidgetManager {
     fn get_global<G>(&mut self) -> Global<G>
     where
         G: Data + Default,
@@ -285,7 +285,7 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        engine::{context::Context, query::WidgetQueryExt, Engine},
+        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
         widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget},
     };
     use agui_primitives::Column;
@@ -325,13 +325,13 @@ mod tests {
 
     #[test]
     pub fn tracks_listeners() {
-        let mut engine = Engine::with_root(TestWidgetReader::default());
+        let mut manager = WidgetManager::with_root(TestWidgetReader::default());
 
-        engine.add_plugin(GlobalPlugin::default());
+        manager.add_plugin(GlobalPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<GlobalPlugin>().unwrap();
+        let plugin = manager.get_plugin::<GlobalPlugin>().unwrap();
         let listening = &plugin.get_state().listening;
         let listeners = &plugin
             .get_state()
@@ -346,17 +346,17 @@ mod tests {
 
     #[test]
     pub fn does_not_leak_memory() {
-        let mut engine = Engine::with_root(TestWidgetReader::default());
+        let mut manager = WidgetManager::with_root(TestWidgetReader::default());
 
-        engine.add_plugin(GlobalPlugin::default());
+        manager.add_plugin(GlobalPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        engine.set_root(TestWidgetReader::default().into());
+        manager.set_root(TestWidgetReader::default().into());
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<GlobalPlugin>().unwrap();
+        let plugin = manager.get_plugin::<GlobalPlugin>().unwrap();
         let listening = &plugin.get_state().listening;
         let listeners = &plugin
             .get_state()
@@ -371,37 +371,37 @@ mod tests {
 
     #[test]
     pub fn writing_globals() {
-        let mut engine = Engine::with_root(TestWidgetWriter::default());
+        let mut manager = WidgetManager::with_root(TestWidgetWriter::default());
 
-        engine.add_plugin(GlobalPlugin::default());
+        manager.add_plugin(GlobalPlugin::default());
 
-        let global = engine.get_global::<TestGlobal>();
+        let global = manager.get_global::<TestGlobal>();
 
         assert_eq!(global.borrow().0, 0, "should init to default");
 
-        engine.update();
+        manager.update();
 
         assert_eq!(global.borrow().0, 1, "should have updated to 1");
     }
 
     #[test]
     pub fn reading_globals() {
-        let mut engine = Engine::with_root(TestWidgetReader::default());
+        let mut manager = WidgetManager::with_root(TestWidgetReader::default());
 
-        engine.add_plugin(GlobalPlugin::default());
+        manager.add_plugin(GlobalPlugin::default());
 
-        let global = engine.get_global::<TestGlobal>();
+        let global = manager.get_global::<TestGlobal>();
 
         assert_eq!(global.borrow().0, 0, "should init to default");
 
-        engine.set_global::<TestGlobal, _>(|value| {
+        manager.set_global::<TestGlobal, _>(|value| {
             value.0 = 1;
         });
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidgetReader>()
                 .next()
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     pub fn reacting_to_globals() {
-        let mut engine = Engine::with_root(Column {
+        let mut manager = WidgetManager::with_root(Column {
             children: vec![
                 // Put the reader first so the writer will update the global
                 TestWidgetReader::default().into(),
@@ -423,16 +423,16 @@ mod tests {
             ..Default::default()
         });
 
-        engine.add_plugin(GlobalPlugin::default());
+        manager.add_plugin(GlobalPlugin::default());
 
-        let global = engine.get_global::<TestGlobal>();
+        let global = manager.get_global::<TestGlobal>();
 
         assert_eq!(global.borrow().0, 0, "should init to default");
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidgetReader>()
                 .next()

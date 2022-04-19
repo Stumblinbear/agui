@@ -1,4 +1,4 @@
-use crate::engine::widget::WidgetBuilder;
+use crate::manager::widget::WidgetBuilder;
 
 use super::Widget;
 

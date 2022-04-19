@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    engine::Modify,
+    manager::Modify,
     widget::{Widget, WidgetId},
 };
 

@@ -13,7 +13,7 @@ use agpu::{
 };
 use agui::{
     canvas::{paint::Brush, Canvas},
-    engine::Engine,
+    manager::WidgetManager,
     unit::Size,
     widget::WidgetId,
 };
@@ -201,11 +201,11 @@ impl RenderEngine {
             .write_unchecked(&[size.width, size.height]);
     }
 
-    pub fn redraw(&mut self, engine: &Engine) {
+    pub fn redraw(&mut self, manager: &WidgetManager) {
         let now = Instant::now();
 
-        if let Some(root_id) = engine.get_tree().get_root() {
-            self.redraw_node(engine, root_id);
+        if let Some(root_id) = manager.get_tree().get_root() {
+            self.redraw_node(manager, root_id);
         } else {
             self.nodes.clear();
         }
@@ -213,12 +213,12 @@ impl RenderEngine {
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    pub fn redraw_node(&mut self, engine: &Engine, widget_id: WidgetId) {
+    pub fn redraw_node(&mut self, manager: &WidgetManager, widget_id: WidgetId) {
         let mut nodes: Vec<RenderNode> = Vec::default();
 
-        let fonts = engine.get_fonts();
+        let fonts = manager.get_fonts();
 
-        let tree = engine.get_tree();
+        let tree = manager.get_tree();
 
         tree.iter_down(Some(widget_id))
             .map(|widget_id| {

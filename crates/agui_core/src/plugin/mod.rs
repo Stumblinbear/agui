@@ -6,7 +6,7 @@ use std::{
 
 use downcast_rs::Downcast;
 
-use crate::engine::{
+use crate::manager::{
     event::WidgetEvent,
     plugin::{PluginImpl, PluginElement},
     Data,
@@ -22,21 +22,21 @@ pub struct PluginId(TypeId);
 impl PluginId {
     pub fn of<P>() -> Self
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         Self(TypeId::of::<P>())
     }
 }
 
-/// A plugin for the engine.
+/// A plugin for the widget manager.
 #[allow(unused_variables)]
-pub trait EnginePlugin: std::fmt::Debug + Downcast {
+pub trait WidgetManagerPlugin: std::fmt::Debug + Downcast {
     type State: Data + Default;
 
-    /// Fired every time the engine is updated, before any widgets are updated.
+    /// Fired every time the widget manager is updated, before any widgets are updated.
     fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {}
 
-    /// Fired every time the engine is updated, after all widgets are updated.
+    /// Fired every time the widget manager is updated, after all widgets are updated.
     fn on_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {}
 
     /// Fired after widgets are updated, just after the layout is resolved.
@@ -73,7 +73,7 @@ impl Plugin {
 
     pub fn get_as<P>(&self) -> Option<PluginRef<P>>
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         if self.0.get_type_id() == TypeId::of::<P>() {
             Some(PluginRef {
@@ -88,7 +88,7 @@ impl Plugin {
 
     pub fn get_as_mut<P>(&mut self) -> Option<PluginMut<P>>
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         if self.0.get_type_id() == TypeId::of::<P>() {
             Some(PluginMut {
@@ -118,7 +118,7 @@ impl DerefMut for Plugin {
 
 pub struct PluginRef<'b, P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     phantom: PhantomData<P>,
 
@@ -128,7 +128,7 @@ where
 
 impl<'b, P> Deref for PluginRef<'b, P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     type Target = PluginElement<P>;
 
@@ -141,7 +141,7 @@ where
 
 pub struct PluginMut<'b, P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     phantom: PhantomData<P>,
 
@@ -150,7 +150,7 @@ where
 
 impl<'b, P> Deref for PluginMut<'b, P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     type Target = PluginElement<P>;
 
@@ -163,7 +163,7 @@ where
 
 impl<'b, P> DerefMut for PluginMut<'b, P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.plugin

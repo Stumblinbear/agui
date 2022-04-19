@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    engine::{widget::WidgetBuilder, CallbackQueue, Data},
+    manager::{widget::WidgetBuilder, CallbackQueue, Data},
     widget::WidgetId,
 };
 

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::engine::{widget::WidgetBuilder, Data};
+use crate::manager::{widget::WidgetBuilder, Data};
 
 use super::CallbackContext;
 

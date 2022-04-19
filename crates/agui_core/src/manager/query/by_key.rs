@@ -8,7 +8,7 @@ pub struct QueryByKey<I> {
 }
 
 impl<I> QueryByKey<I> {
-    pub(in crate::engine::query) fn new(iter: I, key: Key) -> Self {
+    pub(in crate::manager::query) fn new(iter: I, key: Key) -> Self {
         Self { iter, key }
     }
 }

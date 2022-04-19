@@ -13,8 +13,8 @@ use parking_lot::Mutex;
 
 use crate::{
     callback::CallbackId,
-    engine::{plugin::PluginImpl, widget::WidgetImpl},
-    plugin::{EnginePlugin, Plugin, PluginId, PluginMut, PluginRef},
+    manager::{plugin::PluginImpl, widget::WidgetImpl},
+    plugin::{Plugin, PluginId, PluginMut, PluginRef, WidgetManagerPlugin},
     unit::{Font, Units},
     util::map::PluginMap,
     widget::{BuildResult, Widget, WidgetId, WidgetKey},
@@ -30,10 +30,10 @@ pub mod widget;
 
 use self::{
     cache::LayoutCache,
-    context::EngineContext,
+    context::AguiContext,
     event::WidgetEvent,
     plugin::PluginElement,
-    query::EngineQuery,
+    query::WidgetQuery,
     tree::Tree,
     widget::{WidgetBuilder, WidgetElement},
 };
@@ -48,7 +48,7 @@ pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
-pub struct Engine {
+pub struct WidgetManager {
     plugins: PluginMap<Plugin>,
     tree: Tree<WidgetId, Widget>,
     dirty: FnvHashSet<WidgetId>,
@@ -60,7 +60,7 @@ pub struct Engine {
     modifications: Vec<Modify>,
 }
 
-impl Engine {
+impl WidgetManager {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self::default()
@@ -70,11 +70,11 @@ impl Engine {
     where
         W: WidgetBuilder,
     {
-        let mut engine = Self::new();
+        let mut manager = Self::new();
 
-        engine.set_root(widget.into());
+        manager.set_root(widget.into());
 
-        engine
+        manager
     }
 
     pub fn get_plugins(&mut self) -> &mut PluginMap<Plugin> {
@@ -83,7 +83,7 @@ impl Engine {
 
     pub fn get_plugin<P>(&self) -> Option<PluginRef<P>>
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         self.plugins
             .get(&PluginId::of::<P>())
@@ -92,7 +92,7 @@ impl Engine {
 
     pub fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         self.plugins
             .get_mut(&PluginId::of::<P>())
@@ -103,14 +103,14 @@ impl Engine {
         &self.fonts
     }
 
-    /// Adds an engine plugin.
+    /// Adds a widget manager plugin.
     ///
     /// # Panics
     ///
     /// Will panic if you attempt to add a plugin a second time.
     pub fn add_plugin<P>(&mut self, plugin: P)
     where
-        P: EnginePlugin,
+        P: WidgetManagerPlugin,
     {
         let plugin_id = PluginId::of::<P>();
 
@@ -127,7 +127,7 @@ impl Engine {
 
         tracing::info!(
             plugin = plugin.get_display_name().as_str(),
-            "adding plugin to engine"
+            "adding plugin to widget manager"
         );
 
         self.plugins.insert(plugin_id, Plugin::new(plugin));
@@ -216,8 +216,8 @@ impl Engine {
     ///
     /// This essentially iterates the widget tree's element Vec, and as such does not guarantee
     /// the order in which widgets will be returned.
-    pub fn query(&self) -> EngineQuery {
-        EngineQuery::new(self)
+    pub fn query(&self) -> WidgetQuery {
+        WidgetQuery::new(self)
     }
 
     pub fn has_changes(&self) -> bool {
@@ -230,7 +230,7 @@ impl Engine {
     pub fn update(&mut self) -> Option<Vec<WidgetEvent>> {
         // Update all plugins, as they may cause changes to state
         for plugin in self.plugins.values_mut() {
-            plugin.on_before_update(EngineContext {
+            plugin.on_before_update(AguiContext {
                 plugins: None,
                 tree: &self.tree,
                 dirty: &mut self.dirty,
@@ -260,7 +260,7 @@ impl Engine {
                 self.flush_callbacks();
 
                 for plugin in self.plugins.values_mut() {
-                    plugin.on_update(EngineContext {
+                    plugin.on_update(AguiContext {
                         plugins: None,
                         tree: &self.tree,
                         dirty: &mut self.dirty,
@@ -303,7 +303,7 @@ impl Engine {
 
         for plugin in self.plugins.values_mut() {
             plugin.on_events(
-                EngineContext {
+                AguiContext {
                     plugins: None,
                     tree: &self.tree,
                     dirty: &mut self.dirty,
@@ -410,7 +410,7 @@ impl Engine {
                 .expect("cannot call a callback on a widget that does not exist");
 
             let changed = widget.call(
-                EngineContext {
+                AguiContext {
                     plugins: Some(&mut self.plugins),
                     tree: &self.tree,
                     dirty: &mut self.dirty,
@@ -511,7 +511,7 @@ impl Engine {
         }
 
         for plugin in self.plugins.values_mut() {
-            plugin.on_layout(EngineContext {
+            plugin.on_layout(AguiContext {
                 plugins: None,
                 tree: &self.tree,
                 dirty: &mut self.dirty,
@@ -609,7 +609,7 @@ impl Engine {
         });
 
         let result = widget.build(
-            EngineContext {
+            AguiContext {
                 plugins: Some(&mut self.plugins),
                 tree: &self.tree,
                 dirty: &mut self.dirty,
@@ -682,7 +682,7 @@ enum Modify {
 mod tests {
     use crate::widget::{BuildContext, BuildResult, StatelessWidget, Widget};
 
-    use super::Engine;
+    use super::WidgetManager;
 
     #[derive(Clone, Debug, Default)]
     struct TestWidget {
@@ -697,16 +697,16 @@ mod tests {
 
     #[test]
     pub fn adding_a_root_widget() {
-        let mut engine = Engine::new();
+        let mut manager = WidgetManager::new();
 
-        engine.set_root(TestWidget::default().into());
+        manager.set_root(TestWidget::default().into());
 
-        assert_eq!(engine.get_root(), None, "should not have added the widget");
+        assert_eq!(manager.get_root(), None, "should not have added the widget");
 
-        engine.update();
+        manager.update();
 
         assert_ne!(
-            engine.get_root(),
+            manager.get_root(),
             None,
             "root widget should have been added"
         );
@@ -714,26 +714,26 @@ mod tests {
 
     #[test]
     pub fn removing_a_root_widget() {
-        let mut engine = Engine::new();
+        let mut manager = WidgetManager::new();
 
-        engine.set_root(TestWidget::default().into());
+        manager.set_root(TestWidget::default().into());
 
-        assert_eq!(engine.get_root(), None, "should not have added the widget");
+        assert_eq!(manager.get_root(), None, "should not have added the widget");
 
-        engine.update();
+        manager.update();
 
         assert_ne!(
-            engine.get_root(),
+            manager.get_root(),
             None,
             "root widget should have been added"
         );
 
-        engine.remove_root();
+        manager.remove_root();
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            engine.get_root(),
+            manager.get_root(),
             None,
             "root widget should have been removed"
         );
@@ -741,7 +741,7 @@ mod tests {
 
     #[test]
     pub fn removing_root_removes_children() {
-        let mut engine = Engine::new();
+        let mut manager = WidgetManager::new();
 
         let mut widget = TestWidget::default();
 
@@ -749,34 +749,34 @@ mod tests {
             widget.children.push(TestWidget::default().into());
         }
 
-        engine.set_root(widget.into());
+        manager.set_root(widget.into());
 
-        engine.update();
+        manager.update();
 
         assert_ne!(
-            engine.get_root(),
+            manager.get_root(),
             None,
             "root widget should have been added"
         );
 
         assert_eq!(
-            engine.get_tree().len(),
+            manager.get_tree().len(),
             1001,
             "children should have been added"
         );
 
-        engine.remove_root();
+        manager.remove_root();
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            engine.get_root(),
+            manager.get_root(),
             None,
             "root widget should have been removed"
         );
 
         assert_eq!(
-            engine.get_tree().len(),
+            manager.get_tree().len(),
             0,
             "all children should have been removed"
         );

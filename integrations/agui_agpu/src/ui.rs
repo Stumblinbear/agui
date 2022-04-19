@@ -12,10 +12,10 @@ use agpu::{
     Event, Gpu, GpuProgram,
 };
 use agui::{
-    engine::Engine,
+    manager::WidgetManager,
     unit::{Font, Point, Size},
     widgets::{
-        plugins::{event::EventPluginEngineExt, global::GlobalPluginExt},
+        plugins::{event::EventPluginExt, global::GlobalPluginExt},
         state::{
             keyboard::{KeyCode, KeyState, Keyboard, KeyboardCharacter, KeyboardInput},
             mouse::{Mouse, MouseButton, MouseButtonState, MouseButtons, MousePos, Scroll},
@@ -28,21 +28,21 @@ use glyph_brush_draw_cache::ab_glyph::InvalidFont;
 use crate::render::RenderEngine;
 
 pub struct UI {
-    engine: Engine,
+    manager: WidgetManager,
     renderer: RenderEngine,
 }
 
 impl Deref for UI {
-    type Target = Engine;
+    type Target = WidgetManager;
 
     fn deref(&self) -> &Self::Target {
-        &self.engine
+        &self.manager
     }
 }
 
 impl DerefMut for UI {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.engine
+        &mut self.manager
     }
 }
 
@@ -61,27 +61,27 @@ impl UI {
 
     pub fn using_gpu(gpu: &Gpu, size: Size) -> Self {
         Self {
-            engine: Engine::new(),
+            manager: WidgetManager::new(),
             renderer: RenderEngine::new(gpu, size),
         }
     }
 
     pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<Font, InvalidFont> {
-        self.engine.load_font_bytes(bytes)
+        self.manager.load_font_bytes(bytes)
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
-        self.engine.load_font_file(filename)
+        self.manager.load_font_file(filename)
     }
 
     pub fn redraw(&mut self) {
-        self.renderer.redraw(&self.engine);
+        self.renderer.redraw(&self.manager);
 
-        // print_tree(&self.engine);
+        // print_tree(&self.manager);
     }
 
     pub fn handle_event(&mut self, event: Event<'_, ()>, program: &GpuProgram) {
-        if let Some(_widget_events) = self.engine.update() {
+        if let Some(_widget_events) = self.manager.update() {
             self.redraw();
 
             // If the program is not already demanding a specific framerate, request a redraw

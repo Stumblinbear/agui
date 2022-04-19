@@ -1,0 +1,22 @@
+[package]
+name = "agui_render"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+description = "The render manager of agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = [ "gui", "graphics", "gamedev", "widgets" ]
+categories = [ "gui", "graphics", "rendering", "game-development" ]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+bitflags = "1.3"
+
+downcast-rs = "1.2"
+parking_lot = "0.12"
+anymap = "0.12"
+tracing = "0.1"
+
+agui_core = { path = "../agui_core", version = "0.3" }

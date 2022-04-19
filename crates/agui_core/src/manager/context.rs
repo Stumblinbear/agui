@@ -4,7 +4,7 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId},
-    plugin::{EnginePlugin, Plugin, PluginMut, PluginRef},
+    plugin::{WidgetManagerPlugin, Plugin, PluginMut, PluginRef},
     unit::{Rect, Size},
     util::map::PluginMap,
     widget::{Widget, WidgetId},
@@ -12,7 +12,7 @@ use crate::{
 
 use super::{tree::Tree, widget::WidgetBuilder, CallbackQueue, Data};
 
-pub struct EngineContext<'ctx> {
+pub struct AguiContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut PluginMap<Plugin>>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
@@ -27,11 +27,11 @@ where
 
     fn get_plugin<P>(&self) -> Option<PluginRef<P>>
     where
-        P: EnginePlugin;
+        P: WidgetManagerPlugin;
 
     fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
     where
-        P: EnginePlugin;
+        P: WidgetManagerPlugin;
 
     fn get_tree(&self) -> &Tree<WidgetId, Widget>;
 

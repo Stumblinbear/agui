@@ -7,8 +7,8 @@ use std::{
 };
 
 use agui_core::{
-    engine::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data},
-    plugin::{EnginePlugin, PluginContext},
+    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data},
+    plugin::{WidgetManagerPlugin, PluginContext},
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
     widget::{BuildContext, WidgetId},
 };
@@ -16,10 +16,10 @@ use agui_core::{
 #[derive(Debug, Default)]
 pub struct ProviderPlugin;
 
-impl EnginePlugin for ProviderPlugin {
+impl WidgetManagerPlugin for ProviderPlugin {
     type State = ProviderPluginState;
 
-    // Check if any changes occurred outside of the main engine loop.
+    // Check if any changes occurred outside of the main loop.
     fn on_before_update(&self, ctx: &mut PluginContext, state: &mut Self::State) {
         self.on_update(ctx, state);
     }
@@ -314,7 +314,7 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        engine::{context::Context, query::WidgetQueryExt, Engine},
+        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
         unit::Key,
         widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
     };
@@ -365,15 +365,15 @@ mod tests {
 
     #[test]
     pub fn can_provide_a_value() {
-        let mut engine = Engine::with_root(TestWidgetProvider {
+        let mut manager = WidgetManager::with_root(TestWidgetProvider {
             child: TestWidgetConsumer.into(),
         });
 
-        engine.add_plugin(ProviderPlugin::default());
+        manager.add_plugin(ProviderPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<ProviderPlugin>().unwrap();
+        let plugin = manager.get_plugin::<ProviderPlugin>().unwrap();
         let providers = &plugin.get_state().providers;
         let provided = &plugin.get_state().provided;
         let listeners = &plugin
@@ -393,19 +393,19 @@ mod tests {
 
     #[test]
     pub fn does_not_leak_memory() {
-        let mut engine = Engine::with_root(TestWidgetProvider {
+        let mut manager = WidgetManager::with_root(TestWidgetProvider {
             child: TestWidgetConsumer.into(),
         });
 
-        engine.add_plugin(ProviderPlugin::default());
+        manager.add_plugin(ProviderPlugin::default());
 
-        engine.update();
+        manager.update();
 
-        engine.set_root(TestWidgetProvider::default().into());
+        manager.set_root(TestWidgetProvider::default().into());
 
-        engine.update();
+        manager.update();
 
-        let plugin = engine.get_plugin::<ProviderPlugin>().unwrap();
+        let plugin = manager.get_plugin::<ProviderPlugin>().unwrap();
         let providers = &plugin.get_state().providers;
         let listeners = &plugin
             .get_state()
@@ -423,17 +423,17 @@ mod tests {
 
     #[test]
     pub fn reacts_to_changes() {
-        let mut engine = Engine::with_root(TestWidgetProvider {
+        let mut manager = WidgetManager::with_root(TestWidgetProvider {
             child: TestWidgetConsumer.into(),
         });
 
-        engine.add_plugin(GlobalPlugin::default());
-        engine.add_plugin(ProviderPlugin::default());
+        manager.add_plugin(GlobalPlugin::default());
+        manager.add_plugin(ProviderPlugin::default());
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidgetConsumer>()
                 .next()
@@ -443,12 +443,12 @@ mod tests {
             "consumer should have taken the value provided"
         );
 
-        engine.set_global::<u32, _>(|state| *state = 1);
+        manager.set_global::<u32, _>(|state| *state = 1);
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidgetConsumer>()
                 .next()
@@ -458,12 +458,12 @@ mod tests {
             "widget should have taken global value after rebuild"
         );
 
-        engine.set_global::<u32, _>(|state| *state = 7);
+        manager.set_global::<u32, _>(|state| *state = 7);
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            *engine
+            *manager
                 .query()
                 .by_type::<TestWidgetConsumer>()
                 .next()

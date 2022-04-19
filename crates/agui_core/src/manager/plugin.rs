@@ -2,18 +2,18 @@ use std::any::{type_name, TypeId};
 
 use downcast_rs::{impl_downcast, Downcast};
 
-use crate::plugin::{EnginePlugin, PluginContext};
+use crate::plugin::{WidgetManagerPlugin, PluginContext};
 
-use super::{context::EngineContext, event::WidgetEvent};
+use super::{context::AguiContext, event::WidgetEvent};
 
 pub trait PluginImpl: std::fmt::Debug + Downcast {
     fn get_type_id(&self) -> TypeId;
     fn get_display_name(&self) -> String;
 
-    fn on_before_update(&mut self, ctx: EngineContext);
-    fn on_update(&mut self, ctx: EngineContext);
-    fn on_layout(&mut self, ctx: EngineContext);
-    fn on_events(&mut self, ctx: EngineContext, events: &[WidgetEvent]);
+    fn on_before_update(&mut self, ctx: AguiContext);
+    fn on_update(&mut self, ctx: AguiContext);
+    fn on_layout(&mut self, ctx: AguiContext);
+    fn on_events(&mut self, ctx: AguiContext, events: &[WidgetEvent]);
 }
 
 impl_downcast!(PluginImpl);
@@ -21,7 +21,7 @@ impl_downcast!(PluginImpl);
 #[derive(Default)]
 pub struct PluginElement<P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     plugin: P,
     state: P::State,
@@ -29,7 +29,7 @@ where
 
 impl<P> PluginElement<P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     pub fn new(plugin: P) -> Self {
         Self {
@@ -41,7 +41,7 @@ where
 
 impl<P> PluginElement<P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     pub fn get_plugin(&self) -> &P {
         &self.plugin
@@ -58,7 +58,7 @@ where
 
 impl<P> PluginImpl for PluginElement<P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     fn get_type_id(&self) -> TypeId {
         TypeId::of::<P>()
@@ -88,7 +88,7 @@ where
         }
     }
 
-    fn on_before_update(&mut self, ctx: EngineContext) {
+    fn on_before_update(&mut self, ctx: AguiContext) {
         let span = tracing::error_span!("on_before_update");
         let _enter = span.enter();
 
@@ -102,7 +102,7 @@ where
         self.plugin.on_before_update(&mut ctx, &mut self.state);
     }
 
-    fn on_update(&mut self, ctx: EngineContext) {
+    fn on_update(&mut self, ctx: AguiContext) {
         let span = tracing::error_span!("on_update");
         let _enter = span.enter();
 
@@ -116,7 +116,7 @@ where
         self.plugin.on_update(&mut ctx, &mut self.state);
     }
 
-    fn on_layout(&mut self, ctx: EngineContext) {
+    fn on_layout(&mut self, ctx: AguiContext) {
         let span = tracing::error_span!("on_layout");
         let _enter = span.enter();
 
@@ -130,7 +130,7 @@ where
         self.plugin.on_layout(&mut ctx, &mut self.state);
     }
 
-    fn on_events(&mut self, ctx: EngineContext, events: &[WidgetEvent]) {
+    fn on_events(&mut self, ctx: AguiContext, events: &[WidgetEvent]) {
         let span = tracing::error_span!("on_events");
         let _enter = span.enter();
 
@@ -147,7 +147,7 @@ where
 
 impl<P> std::fmt::Debug for PluginElement<P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PluginElement")
@@ -159,7 +159,7 @@ where
 
 impl<P> From<P> for PluginElement<P>
 where
-    P: EnginePlugin,
+    P: WidgetManagerPlugin,
 {
     fn from(plugin: P) -> Self {
         Self::new(plugin)

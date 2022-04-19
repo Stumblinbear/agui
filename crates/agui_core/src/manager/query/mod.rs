@@ -10,21 +10,21 @@ pub mod by_type;
 
 use self::{by_key::QueryByKey, by_type::QueryByType};
 
-use super::{tree::TreeNode, widget::WidgetBuilder, Engine};
+use super::{tree::TreeNode, widget::WidgetBuilder, WidgetManager};
 
-pub struct EngineQuery<'query> {
+pub struct WidgetQuery<'query> {
     pub iter: Iter<'query, WidgetId, TreeNode<WidgetId, Widget>>,
 }
 
-impl<'query> EngineQuery<'query> {
-    pub(in crate::engine) fn new(engine: &'query Engine) -> EngineQuery<'query> {
-        EngineQuery {
-            iter: engine.tree.iter(),
+impl<'query> WidgetQuery<'query> {
+    pub(in crate::manager) fn new(manager: &'query WidgetManager) -> WidgetQuery<'query> {
+        WidgetQuery {
+            iter: manager.tree.iter(),
         }
     }
 }
 
-impl<'query> Iterator for EngineQuery<'query> {
+impl<'query> Iterator for WidgetQuery<'query> {
     type Item = &'query Widget;
 
     fn next(&mut self) -> Option<Self::Item> {

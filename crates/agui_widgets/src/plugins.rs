@@ -1,4 +1,4 @@
-use agui_core::engine::Engine;
+use agui_core::manager::WidgetManager;
 
 pub mod event;
 pub mod global;
@@ -10,7 +10,7 @@ pub trait DefaultPluginsExt {
     fn register_default_plugins(&mut self);
 }
 
-impl DefaultPluginsExt for Engine {
+impl DefaultPluginsExt for WidgetManager {
     fn register_default_plugins(&mut self) {
         self.add_plugin(global::GlobalPlugin);
         self.add_plugin(event::EventPlugin);
