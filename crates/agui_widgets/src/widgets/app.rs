@@ -1,6 +1,7 @@
 use agui_core::{
+    manager::widget::Widget,
     unit::{Key, Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+    widget::{BuildContext, BuildResult, StatelessWidget},
 };
 
 use crate::{plugins::global::GlobalPluginExt, state::window::WindowSize};

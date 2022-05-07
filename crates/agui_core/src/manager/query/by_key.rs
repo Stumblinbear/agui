@@ -1,4 +1,4 @@
-use crate::{unit::Key, widget::Widget};
+use crate::{manager::widget::Widget, unit::Key};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]

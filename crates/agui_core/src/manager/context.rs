@@ -4,19 +4,25 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId},
-    plugin::{WidgetManagerPlugin, Plugin, PluginMut, PluginRef},
+    plugin::WidgetManagerPlugin,
     unit::{Rect, Size},
-    util::map::PluginMap,
-    widget::{Widget, WidgetId},
+    util::{map::PluginMap, tree::Tree},
+    widget::WidgetBuilder,
 };
 
-use super::{tree::Tree, widget::WidgetBuilder, CallbackQueue, Data};
+use super::{
+    plugin::{Plugin, PluginMut, PluginRef},
+    widget::{Widget, WidgetId},
+    CallbackQueue, Data,
+};
 
 pub struct AguiContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut PluginMap<Plugin>>,
     pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
+
+    pub(crate) widget_id: Option<WidgetId>,
 }
 
 pub trait Context<W>

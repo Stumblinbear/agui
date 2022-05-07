@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 use morphorm::Hierarchy;
 use slotmap::{
@@ -32,11 +32,11 @@ pub struct TreeNode<K, V>
 where
     K: Key,
 {
-    pub depth: usize,
+    depth: usize,
     pub value: V,
 
-    pub parent: Option<K>,
-    pub children: Vec<K>,
+    parent: Option<K>,
+    children: Vec<K>,
 }
 
 impl<K, V> Deref for TreeNode<K, V>
@@ -85,7 +85,7 @@ where
         node_id
     }
 
-    pub fn remove(&mut self, node_id: K) -> Option<TreeNode<K, V>> {
+    pub fn remove(&mut self, node_id: K, cascade: bool) -> Option<V> {
         if let Some(node) = self.nodes.remove(node_id) {
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
@@ -103,9 +103,14 @@ where
                 self.root = None;
             }
 
-            // We can't remove the children here, since the widget manager needs to have access to them.
+            if cascade {
+                // Remove all children
+                for child_id in node.children.iter() {
+                    self.remove(*child_id, cascade);
+                }
+            }
 
-            Some(node)
+            Some(node.value)
         } else {
             None
         }
@@ -148,7 +153,7 @@ where
             self.root = Some(node_id);
         }
 
-        let node = self.nodes.get_mut(node_id).unwrap();
+        let node = &mut self.nodes[node_id];
 
         node.parent = parent_id;
 
@@ -175,16 +180,22 @@ where
         }
     }
 
-    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
-        self.nodes.get(node_id)
-    }
-
     pub fn get(&self, node_id: K) -> Option<&V> {
         self.nodes.get(node_id).map(|node| &node.value)
     }
 
-    pub(crate) fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
+    pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
         self.nodes.get_mut(node_id).map(|node| &mut node.value)
+    }
+
+    pub fn get_parent(&self, node_id: K) -> Option<&K> {
+        self.nodes
+            .get(node_id)
+            .and_then(|node| node.parent.as_ref())
+    }
+
+    pub fn get_children(&self, node_id: K) -> Option<&Vec<K>> {
+        self.nodes.get(node_id).map(|node| &node.children)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -237,18 +248,15 @@ where
 
     #[allow(clippy::missing_panics_doc)]
     pub fn has_child(&self, node_id: K, child_id: K) -> bool {
-        let node = self.nodes.get(node_id);
-        let child = self.nodes.get(child_id);
-
         // Make sure they're actually in the tree
-        if node.is_none() || child.is_none() {
+        if !self.nodes.contains_key(node_id) || !self.nodes.contains_key(child_id) {
             return false;
         }
 
-        let child_depth = child.unwrap().depth;
+        let child_depth = self.nodes[child_id].depth;
 
         // If the node's depth is below the child, it's impossible for the child to be in the parent
-        if node.unwrap().depth >= child_depth {
+        if self.nodes[node_id].depth >= child_depth {
             return false;
         }
 
@@ -286,18 +294,20 @@ where
     }
 
     #[allow(clippy::unused_self)]
-    fn get_next_sibling(&self, parent: &TreeNode<K, V>, sibling_id: K) -> Option<K> {
-        let mut children = parent.children.iter();
+    pub fn get_next_sibling(&self, parent_id: K, sibling_id: K) -> Option<K> {
+        if let Some(parent) = self.nodes.get(parent_id) {
+            let mut children = parent.children.iter();
 
-        while let Some(child_id) = children.next() {
-            if *child_id == sibling_id {
-                let child_id = children.next();
+            while let Some(child_id) = children.next() {
+                if *child_id == sibling_id {
+                    let child_id = children.next();
 
-                if let Some(child_id) = child_id {
-                    return Some(*child_id);
+                    if let Some(child_id) = child_id {
+                        return Some(*child_id);
+                    }
+
+                    return None;
                 }
-
-                return None;
             }
         }
 
@@ -305,18 +315,20 @@ where
     }
 
     #[allow(clippy::unused_self)]
-    fn get_prev_sibling(&self, parent: &TreeNode<K, V>, sibling_id: K) -> Option<K> {
-        let mut last_child_id = None;
+    pub fn get_prev_sibling(&self, parent_id: K, sibling_id: K) -> Option<K> {
+        if let Some(parent) = self.nodes.get(parent_id) {
+            let mut last_child_id = None;
 
-        for child_id in &parent.children {
-            if *child_id == sibling_id {
-                return last_child_id;
+            for child_id in &parent.children {
+                if *child_id == sibling_id {
+                    return last_child_id;
+                }
+
+                last_child_id = Some(*child_id);
             }
-
-            last_child_id = Some(*child_id);
         }
 
-        last_child_id
+        None
     }
 
     /// Returns any nodes that do not have any other node as a parent.
@@ -368,6 +380,26 @@ where
     }
 }
 
+impl<K, V> Index<K> for Tree<K, V>
+where
+    K: Key,
+{
+    type Output = V;
+
+    fn index(&self, key: K) -> &Self::Output {
+        &self.nodes[key]
+    }
+}
+
+impl<K, V> IndexMut<K> for Tree<K, V>
+where
+    K: Key,
+{
+    fn index_mut(&mut self, key: K) -> &mut Self::Output {
+        &mut self.nodes[key]
+    }
+}
+
 pub struct DownwardIterator<'a, K, V>
 where
     K: Key,
@@ -402,23 +434,17 @@ where
                     loop {
                         // If we have no children, return the sibling after the node_id
                         if let Some(parent_node_id) = current_parent {
-                            if let Some(parent_node) = self.tree.nodes.get(parent_node_id) {
-                                if let Some(sibling_id) =
-                                    self.tree.get_next_sibling(parent_node, after_child_id)
-                                {
-                                    self.node_id = Some(sibling_id);
-                                    break;
-                                }
-
+                            if let Some(sibling_id) =
+                                self.tree.get_next_sibling(parent_node_id, after_child_id)
+                            {
+                                self.node_id = Some(sibling_id);
+                                break;
+                            } else {
                                 // Move up to to the parent to check its next child
-                                current_parent = parent_node.parent;
+                                current_parent = self.tree.nodes[parent_node_id].parent;
 
                                 // Set after_child_id to parent_node_id so it's skipped
                                 after_child_id = parent_node_id;
-                            } else {
-                                // Parent doesn't exist in the tree. Bail.
-                                self.node_id = None;
-                                break;
                             }
                         } else {
                             // Has no parent. Bail.
@@ -462,18 +488,10 @@ where
             // Grab the node from the tree
             if let Some(node) = self.tree.nodes.get(node_id) {
                 if let Some(parent_node_id) = node.parent {
-                    if let Some(parent_node) = self.tree.nodes.get(parent_node_id) {
-                        let first_child_id = parent_node.children.first().unwrap();
-
-                        // If we're the parent's first child, then return the parent
-                        if node_id == *first_child_id {
-                            self.node_id = node.parent;
-                        } else {
-                            // Grab the previous sibling's deepest child
-                            let sibling_id = self.tree.get_prev_sibling(parent_node, node_id);
-
-                            self.node_id = self.tree.get_deepest_child(sibling_id);
-                        }
+                    if let Some(sibling_id) = self.tree.get_prev_sibling(parent_node_id, node_id) {
+                        self.node_id = self.tree.get_deepest_child(Some(sibling_id));
+                    } else {
+                        self.node_id = node.parent;
                     }
                 } else {
                     // TreeNode doesn't have a parent, so we're at the root.
@@ -638,7 +656,7 @@ where
 mod tests {
     use morphorm::Hierarchy;
 
-    use crate::widget::WidgetId;
+    use crate::manager::widget::WidgetId;
 
     use super::Tree;
 

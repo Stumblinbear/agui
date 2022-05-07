@@ -1,8 +1,8 @@
 use downcast_rs::Downcast;
 
 use crate::{
-    manager::{widget::WidgetBuilder, Data},
-    widget::{BuildContext, BuildResult},
+    manager::Data,
+    widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 
 /// Implements the widget's `build()` method.

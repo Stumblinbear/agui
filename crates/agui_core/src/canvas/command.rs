@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
-use crate::unit::{Bounds, FontStyle, Rect, Shape};
+use crate::unit::{BlendMode, Bounds, Color, FontStyle, Rect, Shape};
 
-use super::{paint::Brush, texture::TextureId};
+use super::texture::TextureId;
 
 #[derive(Debug, Clone, Hash)]
 #[non_exhaustive]
@@ -11,7 +11,8 @@ pub enum CanvasCommand {
         rect: Rect,
         shape: Shape,
 
-        brush: Brush,
+        anti_alias: bool,
+        blend_mode: BlendMode,
     },
 
     Pop,
@@ -20,14 +21,12 @@ pub enum CanvasCommand {
         rect: Rect,
         shape: Shape,
 
-        brush: Brush,
+        color: Color,
     },
 
     Texture {
         rect: Rect,
         shape: Shape,
-
-        brush: Brush,
 
         texture_id: TextureId,
         tex_bounds: Bounds,
@@ -36,7 +35,7 @@ pub enum CanvasCommand {
     Text {
         rect: Rect,
 
-        brush: Brush,
+        color: Color,
 
         font: FontStyle,
         text: Cow<'static, str>,
@@ -58,27 +57,5 @@ impl CanvasCommand {
         }
 
         false
-    }
-
-    pub fn get_brush(&self) -> Option<Brush> {
-        match self {
-            CanvasCommand::Layer { brush, .. }
-            | CanvasCommand::Shape { brush, .. }
-            | CanvasCommand::Texture { brush, .. }
-            | CanvasCommand::Text { brush, .. } => Some(*brush),
-            _ => None,
-        }
-    }
-
-    pub fn set_brush(&mut self, new_brush: Brush) {
-        match self {
-            CanvasCommand::Layer { brush, .. }
-            | CanvasCommand::Shape { brush, .. }
-            | CanvasCommand::Texture { brush, .. }
-            | CanvasCommand::Text { brush, .. } => {
-                *brush = new_brush;
-            }
-            _ => {}
-        }
     }
 }

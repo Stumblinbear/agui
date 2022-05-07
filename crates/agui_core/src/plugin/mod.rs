@@ -1,32 +1,24 @@
-use std::{
-    any::TypeId,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use std::any::TypeId;
 
-use downcast_rs::Downcast;
+use downcast_rs::{impl_downcast, Downcast};
 
-use crate::manager::{
-    event::WidgetEvent,
-    plugin::{PluginImpl, PluginElement},
-    Data,
-};
+use crate::manager::{context::AguiContext, event::WidgetEvent, Data};
 
 mod context;
 
 pub use context::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PluginId(TypeId);
+pub trait PluginImpl: std::fmt::Debug + Downcast {
+    fn get_type_id(&self) -> TypeId;
+    fn get_display_name(&self) -> String;
 
-impl PluginId {
-    pub fn of<P>() -> Self
-    where
-        P: WidgetManagerPlugin,
-    {
-        Self(TypeId::of::<P>())
-    }
+    fn on_before_update(&mut self, ctx: AguiContext);
+    fn on_update(&mut self, ctx: AguiContext);
+    fn on_layout(&mut self, ctx: AguiContext);
+    fn on_events(&mut self, ctx: AguiContext, events: &[WidgetEvent]);
 }
+
+impl_downcast!(PluginImpl);
 
 /// A plugin for the widget manager.
 #[allow(unused_variables)]
@@ -49,125 +41,4 @@ pub trait WidgetManagerPlugin: std::fmt::Debug + Downcast {
 
     /// Allows the plugin to listen to widget tree events.
     fn on_events(&self, ctx: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {}
-}
-
-#[derive(Debug)]
-pub struct Plugin(Box<dyn PluginImpl>);
-
-impl Plugin {
-    pub(crate) fn new<P>(plugin: P) -> Self
-    where
-        P: PluginImpl,
-    {
-        Self(Box::new(plugin))
-    }
-
-    #[allow(clippy::borrowed_box)]
-    pub fn get(&self) -> &Box<dyn PluginImpl> {
-        &self.0
-    }
-
-    pub fn get_mut(&mut self) -> &mut Box<dyn PluginImpl> {
-        &mut self.0
-    }
-
-    pub fn get_as<P>(&self) -> Option<PluginRef<P>>
-    where
-        P: WidgetManagerPlugin,
-    {
-        if self.0.get_type_id() == TypeId::of::<P>() {
-            Some(PluginRef {
-                phantom: PhantomData,
-
-                plugin: &self.0,
-            })
-        } else {
-            None
-        }
-    }
-
-    pub fn get_as_mut<P>(&mut self) -> Option<PluginMut<P>>
-    where
-        P: WidgetManagerPlugin,
-    {
-        if self.0.get_type_id() == TypeId::of::<P>() {
-            Some(PluginMut {
-                phantom: PhantomData,
-
-                plugin: &mut self.0,
-            })
-        } else {
-            None
-        }
-    }
-}
-
-impl Deref for Plugin {
-    type Target = Box<dyn PluginImpl>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Plugin {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-pub struct PluginRef<'b, P>
-where
-    P: WidgetManagerPlugin,
-{
-    phantom: PhantomData<P>,
-
-    #[allow(clippy::borrowed_box)]
-    plugin: &'b Box<dyn PluginImpl>,
-}
-
-impl<'b, P> Deref for PluginRef<'b, P>
-where
-    P: WidgetManagerPlugin,
-{
-    type Target = PluginElement<P>;
-
-    fn deref(&self) -> &Self::Target {
-        self.plugin
-            .downcast_ref::<PluginElement<P>>()
-            .expect("invalid PluginRef created")
-    }
-}
-
-pub struct PluginMut<'b, P>
-where
-    P: WidgetManagerPlugin,
-{
-    phantom: PhantomData<P>,
-
-    plugin: &'b mut Box<dyn PluginImpl>,
-}
-
-impl<'b, P> Deref for PluginMut<'b, P>
-where
-    P: WidgetManagerPlugin,
-{
-    type Target = PluginElement<P>;
-
-    fn deref(&self) -> &Self::Target {
-        self.plugin
-            .downcast_ref::<PluginElement<P>>()
-            .expect("invalid PluginRef created")
-    }
-}
-
-impl<'b, P> DerefMut for PluginMut<'b, P>
-where
-    P: WidgetManagerPlugin,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.plugin
-            .downcast_mut::<PluginElement<P>>()
-            .expect("invalid PluginRef created")
-    }
 }

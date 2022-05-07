@@ -1,8 +1,8 @@
 use std::{cell::Ref, marker::PhantomData};
 
 use crate::{
-    manager::widget::{WidgetBuilder, WidgetElement},
-    widget::Widget,
+    manager::widget::{Widget, WidgetElement},
+    widget::WidgetBuilder,
 };
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]

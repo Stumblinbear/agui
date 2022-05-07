@@ -1,4 +1,4 @@
-use crate::manager::widget::WidgetBuilder;
+use crate::widget::WidgetBuilder;
 
 use super::{context::RenderContext, Canvas};
 

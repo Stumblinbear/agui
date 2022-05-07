@@ -27,12 +27,14 @@ impl StatelessWidget for Text {
         });
 
         ctx.on_draw(|ctx, canvas| {
-            let brush = canvas.new_brush(Paint {
-                color: ctx.font.color,
-                ..Paint::default()
-            });
-
-            canvas.draw_text(brush, ctx.font.clone(), Cow::clone(&ctx.text));
+            canvas.draw_text(
+                &Paint {
+                    color: ctx.font.color,
+                    ..Paint::default()
+                },
+                ctx.font.clone(),
+                Cow::clone(&ctx.text),
+            );
         });
 
         BuildResult::None

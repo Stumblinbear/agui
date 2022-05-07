@@ -7,9 +7,9 @@ use std::{
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder},
-    plugin::{WidgetManagerPlugin, PluginContext},
-    widget::{BuildContext, WidgetId},
+    manager::{context::Context, event::WidgetEvent, widget::WidgetId},
+    plugin::{PluginContext, WidgetManagerPlugin},
+    widget::{BuildContext, WidgetBuilder},
 };
 
 #[derive(Debug, Default)]

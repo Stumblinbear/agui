@@ -1,6 +1,6 @@
-use crate::manager::widget::WidgetBuilder;
+use crate::manager::widget::Widget;
 
-use super::Widget;
+use super::WidgetBuilder;
 
 /// Encapsulates the result of a widget `build()` method.
 #[non_exhaustive]

@@ -1,8 +1,8 @@
 use agui_core::{
     callback::Callback,
-    manager::context::Context,
+    manager::{context::Context, widget::Widget},
     unit::{Layout, Sizing},
-    widget::{BuildContext, BuildResult, StatefulWidget, Widget},
+    widget::{BuildContext, BuildResult, StatefulWidget},
 };
 
 use crate::{

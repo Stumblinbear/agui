@@ -221,10 +221,7 @@ impl RenderEngine {
         let tree = manager.get_tree();
 
         tree.iter_down(Some(widget_id))
-            .map(|widget_id| {
-                tree.get_node(widget_id)
-                    .expect("tree node missing during redraw")
-            })
+            .map(|widget_id| tree.get(widget_id).unwrap())
             .for_each(|node| {
                 let widget = node.get().unwrap();
 
@@ -236,11 +233,6 @@ impl RenderEngine {
                 let mut canvas = Canvas::new(rect.into());
 
                 widget.render(&mut canvas);
-
-                // If the canvas added no commands, bail
-                if canvas.is_empty() {
-                    return;
-                }
 
                 let mut hasher = DefaultHasher::new();
                 canvas.hash(&mut hasher);
@@ -263,22 +255,7 @@ impl RenderEngine {
 
                     let mut paint_map = HashMap::new();
 
-                    while let Some(mut cmd) = canvas.consume() {
-                        if let Some(brush) = cmd.get_brush() {
-                            let paint = canvas.get_paint(brush);
-
-                            if let Some(new_brush) = paint_map.get(paint) {
-                                cmd.set_brush(*new_brush);
-                            } else {
-                                let new_brush = Brush::from(paint_map.len());
-
-                                paint_map.insert(paint.clone(), new_brush);
-                                builder.paints.push(paint.clone());
-
-                                cmd.set_brush(new_brush);
-                            }
-                        }
-
+                    for cmd in canvas.consume() {
                         builder.commands.push(cmd);
                     }
 

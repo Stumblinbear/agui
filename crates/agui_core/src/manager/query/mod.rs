@@ -1,16 +1,16 @@
 use slotmap::hop::Iter;
 
-use crate::{
-    unit::Key,
-    widget::{Widget, WidgetId},
-};
+use crate::{unit::Key, util::tree::TreeNode, widget::WidgetBuilder};
 
 pub mod by_key;
 pub mod by_type;
 
 use self::{by_key::QueryByKey, by_type::QueryByType};
 
-use super::{tree::TreeNode, widget::WidgetBuilder, WidgetManager};
+use super::{
+    widget::{Widget, WidgetId},
+    WidgetManager,
+};
 
 pub struct WidgetQuery<'query> {
     pub iter: Iter<'query, WidgetId, TreeNode<WidgetId, Widget>>,
@@ -19,7 +19,7 @@ pub struct WidgetQuery<'query> {
 impl<'query> WidgetQuery<'query> {
     pub(in crate::manager) fn new(manager: &'query WidgetManager) -> WidgetQuery<'query> {
         WidgetQuery {
-            iter: manager.tree.iter(),
+            iter: manager.widget_tree.iter(),
         }
     }
 }

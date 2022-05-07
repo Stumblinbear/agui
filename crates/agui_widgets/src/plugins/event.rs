@@ -2,10 +2,10 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, WidgetManager},
-    plugin::{WidgetManagerPlugin, PluginContext},
+    manager::{context::Context, event::WidgetEvent, Data, WidgetManager},
+    plugin::{PluginContext, WidgetManagerPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::BuildContext,
+    widget::{BuildContext, WidgetBuilder},
 };
 
 #[derive(Debug, Default)]

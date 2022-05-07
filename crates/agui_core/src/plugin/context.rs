@@ -4,8 +4,11 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId},
-    manager::{tree::Tree, CallbackQueue, Data},
-    widget::{Widget, WidgetId},
+    manager::{
+        widget::{Widget, WidgetId},
+        CallbackQueue, Data,
+    },
+    util::tree::Tree,
 };
 
 pub struct PluginContext<'ctx> {

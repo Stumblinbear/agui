@@ -8,10 +8,10 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    manager::{context::Context, event::WidgetEvent, widget::WidgetBuilder, Data, WidgetManager},
+    manager::{context::Context, event::WidgetEvent, widget::WidgetId, Data, WidgetManager},
     plugin::{PluginContext, WidgetManagerPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetId},
+    widget::{BuildContext, WidgetBuilder},
 };
 
 #[derive(Debug, Default)]

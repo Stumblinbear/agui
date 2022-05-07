@@ -278,18 +278,16 @@ where
                 &ctx.style.normal
             };
 
-            let bg_brush = canvas.new_brush(Paint {
+            canvas.draw_rect(&Paint {
                 color: input_state_style.background_color,
                 ..Paint::default()
             });
 
-            canvas.draw_rect(bg_brush);
-
             if ctx.state.cursor.shown {
-                let cursor_brush = canvas.new_brush(Paint {
+                let cursor_paint = &Paint {
                     color: input_state_style.cursor_color,
                     ..Paint::default()
-                });
+                };
 
                 if ctx.state.value.is_empty() {
                     canvas.draw_rect_at(
@@ -299,7 +297,7 @@ where
                             width: 4.0,
                             height: ctx.font.size,
                         },
-                        cursor_brush,
+                        cursor_paint,
                     );
                 } else {
                     let glyphs = ctx
@@ -327,26 +325,26 @@ where
                             width: 4.0,
                             height: ctx.font.size,
                         },
-                        cursor_brush,
+                        cursor_paint,
                     );
                 }
             }
 
             if ctx.state.value.is_empty() {
-                let text_brush = canvas.new_brush(Paint {
-                    color: input_state_style.placeholder_color,
-                    ..Paint::default()
-                });
-
-                canvas.draw_text(text_brush, ctx.font.clone(), ctx.placeholder.clone());
-            } else {
-                let text_brush = canvas.new_brush(Paint {
-                    color: input_state_style.text_color,
-                    ..Paint::default()
-                });
-
                 canvas.draw_text(
-                    text_brush,
+                    &Paint {
+                        color: input_state_style.placeholder_color,
+                        ..Paint::default()
+                    },
+                    ctx.font.clone(),
+                    ctx.placeholder.clone(),
+                );
+            } else {
+                canvas.draw_text(
+                    &Paint {
+                        color: input_state_style.text_color,
+                        ..Paint::default()
+                    },
                     ctx.font.clone(),
                     Cow::Owned(ctx.state.value.clone().into()),
                 );

@@ -1,7 +1,8 @@
 use agui_core::{
     canvas::paint::Paint,
+    manager::widget::Widget,
     unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+    widget::{BuildContext, BuildResult, StatelessWidget},
 };
 
 #[derive(Debug, Default)]
@@ -17,14 +18,14 @@ pub struct Clip {
 impl StatelessWidget for Clip {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.on_draw(|ctx, canvas| {
-            let brush = canvas.new_brush(Paint {
+            let paint = Paint {
                 anti_alias: ctx.anti_alias,
                 ..Paint::default()
-            });
+            };
 
             match ctx.rect {
-                Some(rect) => canvas.start_layer_at(rect, brush, ctx.shape.clone()),
-                None => canvas.start_layer(brush, ctx.shape.clone()),
+                Some(rect) => canvas.start_layer_at(rect, &paint, ctx.shape.clone()),
+                None => canvas.start_layer(&paint, ctx.shape.clone()),
             }
         });
 

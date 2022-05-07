@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::manager::widget::WidgetBuilder;
+use crate::widget::WidgetBuilder;
 
 pub struct RenderContext<'ctx, W>
 where

@@ -5,14 +5,19 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
     canvas::{context::RenderContext, renderer::RenderFn, Canvas},
-    manager::{context::Context, tree::Tree, widget::WidgetBuilder, CallbackQueue, Data},
-    plugin::{WidgetManagerPlugin, Plugin, PluginId, PluginMut, PluginRef},
+    manager::{
+        context::Context,
+        plugin::{Plugin, PluginId, PluginMut, PluginRef},
+        widget::Widget,
+        CallbackQueue, Data,
+    },
+    plugin::WidgetManagerPlugin,
     unit::{Key, Layout, LayoutType, Rect, Size},
-    util::map::PluginMap,
+    util::{map::PluginMap, tree::Tree},
     widget::WidgetId,
 };
 
-use super::{Widget, WidgetKey};
+use super::{WidgetBuilder, WidgetKey};
 
 pub struct BuildContext<'ctx, W>
 where

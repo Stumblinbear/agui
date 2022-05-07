@@ -13,11 +13,10 @@ use parking_lot::Mutex;
 
 use crate::{
     callback::CallbackId,
-    manager::{plugin::PluginImpl, widget::WidgetImpl},
-    plugin::{Plugin, PluginId, PluginMut, PluginRef, WidgetManagerPlugin},
+    plugin::{PluginImpl, WidgetManagerPlugin},
     unit::{Font, Units},
-    util::map::PluginMap,
-    widget::{BuildResult, Widget, WidgetId, WidgetKey},
+    util::{map::PluginMap, tree::Tree},
+    widget::{BuildResult, WidgetBuilder, WidgetImpl, WidgetKey},
 };
 
 mod cache;
@@ -25,17 +24,15 @@ pub mod context;
 pub mod event;
 pub mod plugin;
 pub mod query;
-pub mod tree;
 pub mod widget;
 
 use self::{
     cache::LayoutCache,
     context::AguiContext,
     event::WidgetEvent,
-    plugin::PluginElement,
+    plugin::{Plugin, PluginElement, PluginId, PluginMut, PluginRef},
     query::WidgetQuery,
-    tree::Tree,
-    widget::{WidgetBuilder, WidgetElement},
+    widget::{Widget, WidgetElement, WidgetId},
 };
 
 pub trait Data: std::fmt::Debug + Downcast {}
@@ -50,7 +47,7 @@ pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 #[derive(Default)]
 pub struct WidgetManager {
     plugins: PluginMap<Plugin>,
-    tree: Tree<WidgetId, Widget>,
+    widget_tree: Tree<WidgetId, Widget>,
     dirty: FnvHashSet<WidgetId>,
     callback_queue: CallbackQueue,
 
@@ -164,20 +161,20 @@ impl WidgetManager {
 
     /// Get the widget build context.
     pub fn get_tree(&self) -> &Tree<WidgetId, Widget> {
-        &self.tree
+        &self.widget_tree
     }
 
     /// Get the widget build context.
     pub fn get_root(&self) -> Option<WidgetId> {
-        self.tree.get_root()
+        self.widget_tree.get_root()
     }
 
     /// Queues the root widget for removal from tree
     pub fn remove_root(&mut self) {
-        if let Some(root_id) = self.tree.get_root() {
+        if let Some(root_id) = self.widget_tree.get_root() {
             tracing::info!(
                 widget = self
-                    .tree
+                    .widget_tree
                     .get(root_id)
                     .unwrap()
                     .get()
@@ -209,7 +206,7 @@ impl WidgetManager {
 
     /// Check if a widget exists in the tree.
     pub fn contains(&self, widget_id: WidgetId) -> bool {
-        self.tree.contains(widget_id)
+        self.widget_tree.contains(widget_id)
     }
 
     /// Query widgets from the tree.
@@ -232,9 +229,11 @@ impl WidgetManager {
         for plugin in self.plugins.values_mut() {
             plugin.on_before_update(AguiContext {
                 plugins: None,
-                tree: &self.tree,
+                tree: &self.widget_tree,
                 dirty: &mut self.dirty,
                 callback_queue: Arc::clone(&self.callback_queue),
+
+                widget_id: None,
             });
         }
 
@@ -262,9 +261,11 @@ impl WidgetManager {
                 for plugin in self.plugins.values_mut() {
                     plugin.on_update(AguiContext {
                         plugins: None,
-                        tree: &self.tree,
+                        tree: &self.widget_tree,
                         dirty: &mut self.dirty,
                         callback_queue: Arc::clone(&self.callback_queue),
+
+                        widget_id: None,
                     });
                 }
 
@@ -280,21 +281,13 @@ impl WidgetManager {
             }
         }
 
+        self.sanitize_events(&mut widget_events);
+
         widget_events.extend(
             widgets_layout
                 .into_iter()
                 .filter(|widget_id| self.contains(*widget_id))
-                .map(|widget_id| {
-                    let type_id = self
-                        .tree
-                        .get(widget_id)
-                        .unwrap()
-                        .get()
-                        .unwrap()
-                        .get_type_id();
-
-                    WidgetEvent::Layout { type_id, widget_id }
-                }),
+                .map(|widget_id| WidgetEvent::Layout { widget_id }),
         );
 
         if widget_events.is_empty() {
@@ -305,15 +298,48 @@ impl WidgetManager {
             plugin.on_events(
                 AguiContext {
                     plugins: None,
-                    tree: &self.tree,
+                    tree: &self.widget_tree,
                     dirty: &mut self.dirty,
                     callback_queue: Arc::clone(&self.callback_queue),
+
+                    widget_id: None,
                 },
                 &widget_events,
             );
         }
 
         Some(widget_events)
+    }
+
+    /// Sanitizes widget events, removing any widgets that were created and subsequently destroyed before the end of the Vec.
+    fn sanitize_events(&self, widget_events: &mut Vec<WidgetEvent>) {
+        let mut i = 0;
+
+        // This is exponentially slow, investigate if using a linked hash map is better
+        while widget_events.len() > i {
+            let mut remove_widget_id = None;
+
+            if let WidgetEvent::Spawned { widget_id } = &widget_events[i] {
+                for entry in &widget_events[i + 1..] {
+                    if let WidgetEvent::Destroyed {
+                        widget_id: destroyed_widget_id,
+                    } = entry
+                    {
+                        if widget_id == destroyed_widget_id {
+                            remove_widget_id = Some(*widget_id);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let Some(remove_widget_id) = remove_widget_id {
+                widget_events.retain(|entry| entry.widget_id() != &remove_widget_id);
+                continue;
+            }
+
+            i += 1;
+        }
     }
 
     pub fn flush_modifications(&mut self) -> Vec<WidgetEvent> {
@@ -344,7 +370,7 @@ impl WidgetManager {
                 Modify::Destroy(widget_id) => {
                     // If we're about to remove a keyed widget, store it instead
                     if let Some(key) = self
-                        .tree
+                        .widget_tree
                         .get(widget_id)
                         .expect("cannot remove a widget that does not exist")
                         .get_key()
@@ -375,11 +401,12 @@ impl WidgetManager {
         let span = tracing::debug_span!("flush_changes");
         let _enter = span.enter();
 
-        for widget_id in self.tree.filter_topmost(changed.into_iter()) {
+        // Does this play nicely with keyed widgets?
+        for widget_id in self.widget_tree.filter_topmost(changed.into_iter()) {
             tracing::trace!(
                 id = format!("{:?}", widget_id).as_str(),
                 widget = self
-                    .tree
+                    .widget_tree
                     .get(widget_id)
                     .unwrap()
                     .get()
@@ -404,7 +431,7 @@ impl WidgetManager {
 
         for (callback_id, args) in callbacks {
             let mut widget = self
-                .tree
+                .widget_tree
                 .get(callback_id.get_widget_id())
                 .and_then(|node| node.get_mut())
                 .expect("cannot call a callback on a widget that does not exist");
@@ -412,9 +439,11 @@ impl WidgetManager {
             let changed = widget.call(
                 AguiContext {
                     plugins: Some(&mut self.plugins),
-                    tree: &self.tree,
+                    tree: &self.widget_tree,
                     dirty: &mut self.dirty,
                     callback_queue: Arc::clone(&self.callback_queue),
+
+                    widget_id: Some(callback_id.get_widget_id()),
                 },
                 callback_id,
                 args.as_ref(),
@@ -439,14 +468,14 @@ impl WidgetManager {
         let span = tracing::debug_span!("flush_layout");
         let _enter = span.enter();
 
-        morphorm::layout(&mut self.cache, &self.tree, &self.tree);
+        morphorm::layout(&mut self.cache, &self.widget_tree, &self.widget_tree);
 
         // Workaround for morphorm ignoring root sizing
         let mut root_changed = false;
 
-        if let Some(widget_id) = self.tree.get_root() {
+        if let Some(widget_id) = self.widget_tree.get_root() {
             let widget = self
-                .tree
+                .widget_tree
                 .get(widget_id)
                 .and_then(|widget| widget.get_mut())
                 .expect("tree has a root node, but it doesn't exist");
@@ -489,12 +518,12 @@ impl WidgetManager {
         // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
         let mut newly_changed = self.cache.take_changed();
 
-        newly_changed.retain(|widget_id| self.tree.contains(*widget_id));
+        newly_changed.retain(|widget_id| self.widget_tree.contains(*widget_id));
 
         if root_changed {
             tracing::trace!("root layout updated, applying morphorm fix");
 
-            if let Some(widget_id) = self.tree.get_root() {
+            if let Some(widget_id) = self.widget_tree.get_root() {
                 newly_changed.insert(widget_id);
             }
         }
@@ -502,7 +531,7 @@ impl WidgetManager {
         // Update the widget rects in the context
         for widget_id in &newly_changed {
             let mut widget = self
-                .tree
+                .widget_tree
                 .get_mut(*widget_id)
                 .and_then(|widget| widget.get_mut())
                 .expect("newly changed widget does not exist in the tree");
@@ -513,9 +542,11 @@ impl WidgetManager {
         for plugin in self.plugins.values_mut() {
             plugin.on_layout(AguiContext {
                 plugins: None,
-                tree: &self.tree,
+                tree: &self.widget_tree,
                 dirty: &mut self.dirty,
                 callback_queue: Arc::clone(&self.callback_queue),
+
+                widget_id: None,
             });
         }
 
@@ -552,7 +583,7 @@ impl WidgetManager {
                 );
 
                 // Reparent the (removed) keyed widget to the new widget
-                self.tree.reparent(parent_id, keyed_id);
+                self.widget_tree.reparent(parent_id, keyed_id);
 
                 return;
             }
@@ -564,14 +595,9 @@ impl WidgetManager {
             "spawning widget"
         );
 
-        let type_id = widget
-            .get()
-            .expect("cannot add Widget::None to the tree")
-            .get_type_id();
+        let widget_id = self.widget_tree.add(parent_id, widget);
 
-        let widget_id = self.tree.add(parent_id, widget);
-
-        widget_events.push(WidgetEvent::Spawned { type_id, widget_id });
+        widget_events.push(WidgetEvent::Spawned { widget_id });
 
         self.cache.add(widget_id);
 
@@ -582,41 +608,30 @@ impl WidgetManager {
         let span = tracing::debug_span!("process_rebuild");
         let _enter = span.enter();
 
-        let node = self
-            .tree
-            .get_node(widget_id)
+        // Queue the widget's children for removal
+        if let Some(children) = self.widget_tree.get_children(widget_id) {
+            for child_id in children {
+                self.modifications.push(Modify::Destroy(*child_id));
+            }
+        }
+
+        widget_events.push(WidgetEvent::Rebuilt { widget_id });
+
+        let widget = self
+            .widget_tree
+            .get(widget_id)
             .expect("cannot destroy a widget that doesn't exist");
 
-        if !node.children.is_empty() {
-            tracing::trace!(
-                id = format!("{:?}", widget_id).as_str(),
-                widget = node.get().unwrap().get_display_name().as_str(),
-                len = node.children.len(),
-                "queueing destruction of children"
-            );
-        }
+        let mut widget = widget.get_mut().expect("widget destroyed before rebuild");
 
-        // Queue the children for removal
-        for child_id in &node.children {
-            self.modifications.push(Modify::Destroy(*child_id));
-        }
+        let result = widget.build(AguiContext {
+            plugins: Some(&mut self.plugins),
+            tree: &self.widget_tree,
+            dirty: &mut self.dirty,
+            callback_queue: Arc::clone(&self.callback_queue),
 
-        let mut widget = node.get_mut().expect("widget destroyed before rebuild");
-
-        widget_events.push(WidgetEvent::Rebuilt {
-            type_id: widget.get_type_id(),
-            widget_id,
+            widget_id: Some(widget_id),
         });
-
-        let result = widget.build(
-            AguiContext {
-                plugins: Some(&mut self.plugins),
-                tree: &self.tree,
-                dirty: &mut self.dirty,
-                callback_queue: Arc::clone(&self.callback_queue),
-            },
-            widget_id,
-        );
 
         match result {
             BuildResult::None => {}
@@ -641,33 +656,20 @@ impl WidgetManager {
         let span = tracing::debug_span!("process_destroy");
         let _enter = span.enter();
 
-        let node = self
-            .tree
-            .remove(widget_id)
-            .expect("cannot destroy a widget that doesn't exist");
+        // Queue the widget's children for removal
+        if let Some(children) = self.widget_tree.get_children(widget_id) {
+            for child_id in children {
+                self.modifications.push(Modify::Destroy(*child_id));
+            }
+        }
 
-        let widget = node.get().expect("cannot destroy a Widget::None");
-
-        widget_events.push(WidgetEvent::Destroyed {
-            type_id: widget.get_type_id(),
-            widget_id,
-        });
+        widget_events.push(WidgetEvent::Destroyed { widget_id });
 
         self.cache.remove(&widget_id);
 
-        if !node.children.is_empty() {
-            tracing::trace!(
-                id = format!("{:?}", widget_id).as_str(),
-                widget = widget.get_display_name().as_str(),
-                len = node.children.len(),
-                "queueing destruction of children"
-            );
-        }
-
-        // Add the child widgets to the removal queue
-        for child_id in &node.children {
-            self.modifications.push(Modify::Destroy(*child_id));
-        }
+        self.widget_tree
+            .remove(widget_id, false)
+            .expect("cannot destroy a widget that doesn't exist");
     }
 }
 
@@ -680,9 +682,12 @@ enum Modify {
 
 #[cfg(test)]
 mod tests {
-    use crate::widget::{BuildContext, BuildResult, StatelessWidget, Widget};
+    use crate::{
+        manager::event::WidgetEvent,
+        widget::{BuildContext, BuildResult, StatelessWidget},
+    };
 
-    use super::WidgetManager;
+    use super::{widget::Widget, WidgetManager};
 
     #[derive(Clone, Debug, Default)]
     struct TestWidget {
@@ -780,5 +785,52 @@ mod tests {
             0,
             "all children should have been removed"
         );
+    }
+
+    #[test]
+    pub fn properly_sanitizes_events() {
+        let mut manager = WidgetManager::new();
+
+        let widget = TestWidget::default();
+
+        let widget_id_1 = manager.widget_tree.add(None, widget.clone().into());
+        let widget_id_2 = manager.widget_tree.add(None, widget.clone().into());
+        let widget_id_3 = manager.widget_tree.add(None, widget.into());
+
+        let mut events = vec![
+            WidgetEvent::Spawned {
+                widget_id: widget_id_1,
+            },
+            WidgetEvent::Spawned {
+                widget_id: widget_id_2,
+            },
+            WidgetEvent::Spawned {
+                widget_id: widget_id_3,
+            },
+            WidgetEvent::Rebuilt {
+                widget_id: widget_id_2,
+            },
+            WidgetEvent::Rebuilt {
+                widget_id: widget_id_3,
+            },
+            WidgetEvent::Destroyed {
+                widget_id: widget_id_1,
+            },
+            WidgetEvent::Destroyed {
+                widget_id: widget_id_3,
+            },
+        ];
+
+        manager.sanitize_events(&mut events);
+
+        assert_eq!(
+            events[0],
+            WidgetEvent::Spawned {
+                widget_id: widget_id_2,
+            },
+            "should have retained `widget_id_2`"
+        );
+
+        assert_eq!(events.len(), 2, "should only have 2 events");
     }
 }

@@ -1,11 +1,19 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
-    manager::{context::Context, tree::Tree, widget::WidgetBuilder, CallbackQueue, Data},
-    plugin::{WidgetManagerPlugin, Plugin, PluginId, PluginMut, PluginRef},
+    manager::{
+        context::Context,
+        plugin::{Plugin, PluginId, PluginMut, PluginRef},
+        widget::{Widget, WidgetId},
+        CallbackQueue, Data,
+    },
+    plugin::WidgetManagerPlugin,
     unit::{Rect, Size},
-    util::map::{PluginMap, WidgetSet},
-    widget::{Widget, WidgetId},
+    util::{
+        map::{PluginMap, WidgetSet},
+        tree::Tree,
+    },
+    widget::WidgetBuilder,
 };
 
 use super::{Callback, CallbackId};

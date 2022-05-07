@@ -1,34 +1,20 @@
-use std::any::TypeId;
-
-use crate::widget::WidgetId;
+use super::widget::WidgetId;
 
 /// Used to indicate a change to widgets in the tree.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum WidgetEvent {
     /// A widget has been spawned.
-    Spawned {
-        type_id: TypeId,
-        widget_id: WidgetId,
-    },
+    Spawned { widget_id: WidgetId },
 
     /// A widget has been rebuilt.
-    Rebuilt {
-        type_id: TypeId,
-        widget_id: WidgetId,
-    },
+    Rebuilt { widget_id: WidgetId },
 
     /// A widget has changed in the layout.
-    Layout {
-        type_id: TypeId,
-        widget_id: WidgetId,
-    },
+    Layout { widget_id: WidgetId },
 
     /// A widget has been destroyed.
-    Destroyed {
-        type_id: TypeId,
-        widget_id: WidgetId,
-    },
+    Destroyed { widget_id: WidgetId },
 }
 
 impl WidgetEvent {

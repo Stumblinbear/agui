@@ -1,9 +1,9 @@
 use agui_core::{
     callback::Callback,
     canvas::paint::Paint,
-    manager::context::Context,
+    manager::{context::Context, widget::Widget},
     unit::{Color, Key, Layout},
-    widget::{BuildContext, BuildResult, StatefulWidget, Widget},
+    widget::{BuildContext, BuildResult, StatefulWidget},
 };
 
 use crate::GestureDetector;
@@ -63,12 +63,10 @@ impl StatefulWidget for Button {
                 style.normal
             };
 
-            let brush = canvas.new_brush(Paint {
+            canvas.draw_rect(&Paint {
                 color,
                 ..Paint::default()
             });
-
-            canvas.draw_rect(brush);
         });
 
         let on_hover = ctx.callback::<bool, _>(|ctx, arg| {

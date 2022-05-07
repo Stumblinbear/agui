@@ -12,20 +12,18 @@ use super::{
 pub struct CanvasBufferBuilder<'builder> {
     pub fonts: &'builder [FontArc],
 
-    pub paints: Vec<Paint>,
-
     pub commands: Vec<CanvasCommand>,
 }
 
 impl CanvasBufferBuilder<'_> {
     pub fn build(self, ctx: &mut RenderContext) -> CanvasBuffer {
-        let mut brush_data = vec![BrushData { color: [0.0; 4] }; self.paints.len()];
+        // let mut color_data = vec![BrushData { color: [0.0; 4] }; self.paints.len()];
 
-        for (idx, paint) in self.paints.iter().enumerate() {
-            brush_data[idx] = BrushData {
-                color: paint.color.into(),
-            };
-        }
+        // for (idx, paint) in self.paints.iter().enumerate() {
+        //     brush_data[idx] = BrushData {
+        //         color: paint.color.into(),
+        //     };
+        // }
 
         let mut canvas_buffer = CanvasBuffer {
             layers: vec![Layer::default()],

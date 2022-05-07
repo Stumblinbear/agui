@@ -1,8 +1,8 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    manager::{widget::WidgetBuilder, CallbackQueue, Data},
-    widget::WidgetId,
+    manager::{widget::WidgetId, CallbackQueue, Data},
+    widget::WidgetBuilder,
 };
 
 mod context;
@@ -88,7 +88,9 @@ where
     /// is different, it will panic.
     pub unsafe fn call_unsafe(&self, args: Rc<dyn Data>) {
         if let Some(callback_queue) = &self.callback_queue {
-            callback_queue.lock().push((self.id.unwrap(), args));
+            if let Some(callback_id) = self.id {
+                callback_queue.lock().push((callback_id, args));
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 use agui_core::{
+    manager::widget::Widget,
     unit::{Layout, Margin, Sizing},
-    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+    widget::{BuildContext, BuildResult, StatelessWidget},
 };
 
 #[derive(Debug, Default)]
