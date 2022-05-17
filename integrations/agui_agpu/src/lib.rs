@@ -1,3 +1,5 @@
+mod context;
+mod manager;
 mod program;
 mod render;
 mod ui;

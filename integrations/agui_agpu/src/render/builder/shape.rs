@@ -3,9 +3,12 @@ use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };
 
-use crate::render::{
+use crate::{
     context::RenderContext,
-    layer::{BrushData, DrawCall, LayerDrawOptions, LayerDrawType, PositionData, VertexData},
+    render::{
+        data::{LayerDrawOptions, LayerDrawType, PositionData, VertexData},
+        draw_call::DrawCall,
+    },
 };
 
 use super::DrawCallBuilder;
@@ -44,7 +47,7 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
     }
 
     fn process(&mut self, cmd: CanvasCommand) {
-        if let CanvasCommand::Shape { rect, brush, shape } = cmd {
+        if let CanvasCommand::Shape { rect, shape, color } = cmd {
             let mut builder =
                 BuffersBuilder::new(&mut self.geometry, |vertex: FillVertex| PositionData {
                     xy: vertex.position().to_array(),
@@ -63,13 +66,13 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
             self.vertex_data.resize(
                 self.vertex_data.len() + count.indices as usize,
                 VertexData {
-                    brush_id: brush.idx() as u32,
+                    color: color.into(),
                 },
             );
         }
     }
 
-    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<DrawCall> {
+    fn build(&self, ctx: &mut RenderContext) -> Option<DrawCall> {
         if self.vertex_data.is_empty() {
             return None;
         }
@@ -93,12 +96,6 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
                     }))
                     .bind_uniform()
                     .in_vertex_fragment(),
-                ctx.gpu
-                    .new_buffer("agui layer brush buffer")
-                    .as_storage_buffer()
-                    .create(brush_data)
-                    .bind_storage_readonly()
-                    .in_vertex(),
                 ctx.gpu
                     .new_buffer("agui layer index buffer")
                     .as_storage_buffer()

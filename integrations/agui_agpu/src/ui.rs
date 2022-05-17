@@ -25,11 +25,11 @@ use agui::{
 };
 use glyph_brush_draw_cache::ab_glyph::InvalidFont;
 
-use crate::render::RenderEngine;
+use crate::manager::RenderManager;
 
 pub struct UI {
     manager: WidgetManager,
-    renderer: RenderEngine,
+    renderer: RenderManager,
 }
 
 impl Deref for UI {
@@ -62,7 +62,7 @@ impl UI {
     pub fn using_gpu(gpu: &Gpu, size: Size) -> Self {
         Self {
             manager: WidgetManager::new(),
-            renderer: RenderEngine::new(gpu, size),
+            renderer: RenderManager::new(gpu, size),
         }
     }
 

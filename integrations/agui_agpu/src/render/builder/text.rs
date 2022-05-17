@@ -1,10 +1,13 @@
-use agui::canvas::{command::CanvasCommand, paint::Brush};
+use agui::canvas::command::CanvasCommand;
 use glyph_brush_draw_cache::{ab_glyph::FontArc, CachedBy};
 use glyph_brush_layout::SectionGlyph;
 
-use crate::render::{
+use crate::{
     context::RenderContext,
-    layer::{BrushData, DrawCall, LayerDrawOptions, LayerDrawType, PositionData, VertexData},
+    render::{
+        data::{LayerDrawOptions, LayerDrawType, PositionData, VertexData},
+        draw_call::DrawCall,
+    },
 };
 
 use super::DrawCallBuilder;
@@ -13,7 +16,7 @@ use super::DrawCallBuilder;
 pub struct TextDrawCallBuilder<'builder> {
     pub fonts: &'builder [FontArc],
 
-    pub glyphs: Vec<(Brush, SectionGlyph)>,
+    pub glyphs: Vec<([f32; 4], SectionGlyph)>,
 }
 
 impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
@@ -24,7 +27,8 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
     fn process(&mut self, cmd: CanvasCommand) {
         if let CanvasCommand::Text {
             rect,
-            brush,
+
+            color,
 
             font,
 
@@ -35,12 +39,15 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
                 return;
             }
 
-            self.glyphs
-                .extend(font.get_glyphs(rect, &text).into_iter().map(|v| (brush, v)));
+            self.glyphs.extend(
+                font.get_glyphs(rect, &text)
+                    .into_iter()
+                    .map(|v| (color.into(), v)),
+            );
         }
     }
 
-    fn build(&self, ctx: &mut RenderContext, brush_data: &[BrushData]) -> Option<DrawCall> {
+    fn build(&self, ctx: &mut RenderContext) -> Option<DrawCall> {
         if self.glyphs.is_empty() {
             return None;
         }
@@ -78,18 +85,13 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
             let mut index_data = Vec::with_capacity(self.glyphs.len() * 6);
             let mut position_data = Vec::with_capacity(self.glyphs.len() * 4);
 
-            for (brush, sg) in self.glyphs.iter() {
+            for (color, sg) in self.glyphs.iter() {
                 if let Some((tex_coords, px_coords)) = ctx
                     .font_draw_cache
                     .borrow()
                     .rect_for(sg.font_id.0, &sg.glyph)
                 {
-                    vertex_data.resize(
-                        vertex_data.len() + 6,
-                        VertexData {
-                            brush_id: brush.idx() as u32,
-                        },
-                    );
+                    vertex_data.resize(vertex_data.len() + 6, VertexData { color: *color });
 
                     let index = position_data.len() as u32;
 
@@ -142,12 +144,6 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
                         }))
                         .bind_uniform()
                         .in_vertex_fragment(),
-                    ctx.gpu
-                        .new_buffer("agui layer brush buffer")
-                        .as_storage_buffer()
-                        .create(brush_data)
-                        .bind_storage_readonly()
-                        .in_vertex(),
                     ctx.gpu
                         .new_buffer("agui layer index buffer")
                         .as_storage_buffer()

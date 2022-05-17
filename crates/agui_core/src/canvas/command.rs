@@ -1,22 +1,12 @@
 use std::borrow::Cow;
 
-use crate::unit::{BlendMode, Bounds, Color, FontStyle, Rect, Shape};
+use crate::unit::{Bounds, Color, FontStyle, Rect, Shape};
 
 use super::texture::TextureId;
 
 #[derive(Debug, Clone, Hash)]
 #[non_exhaustive]
 pub enum CanvasCommand {
-    Layer {
-        rect: Rect,
-        shape: Shape,
-
-        anti_alias: bool,
-        blend_mode: BlendMode,
-    },
-
-    Pop,
-
     Shape {
         rect: Rect,
         shape: Shape,

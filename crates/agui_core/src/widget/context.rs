@@ -4,7 +4,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
-    canvas::{context::RenderContext, renderer::RenderFn, Canvas},
+    canvas::{context::RenderContext, renderer::RenderFn, Canvas, Root},
     manager::{
         context::Context,
         plugin::{Plugin, PluginId, PluginMut, PluginRef},
@@ -142,7 +142,7 @@ where
 
     pub fn on_draw<F>(&mut self, func: F)
     where
-        F: Fn(&RenderContext<W>, &mut Canvas) + 'static,
+        F: Fn(&RenderContext<W>, &mut Canvas<Root>) + 'static,
     {
         self.renderer = Some(RenderFn::new(func));
     }

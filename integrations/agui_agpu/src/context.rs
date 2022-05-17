@@ -9,8 +9,6 @@ pub struct RenderContext {
 
     pub render_size: Buffer,
 
-    pub layer_stencil: Texture<agpu::D2>,
-
     pub unknown_texture: Texture<agpu::D2>,
     pub texture_sampler: Sampler,
 

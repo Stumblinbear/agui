@@ -15,12 +15,11 @@ layout(binding = 1) uniform DrawOptions {
     uint draw_type;
 };
 
-layout(std430, binding = 2) restrict readonly buffer BrushBuffer { vec4 Brushes[]; };
-layout(std430, binding = 3) restrict readonly buffer IndexBuffer { uint Indices[]; };
-layout(std430, binding = 4) restrict readonly buffer PositionBuffer { vec4 Positions[]; };
+layout(std430, binding = 2) restrict readonly buffer IndexBuffer { uint Indices[]; };
+layout(std430, binding = 3) restrict readonly buffer PositionBuffer { vec4 Positions[]; };
 
 layout(location = 0) in vec2 pos;
-layout(location = 1) in uint brushId;
+layout(location = 1) in vec4 color;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec2 outUV;
@@ -37,8 +36,6 @@ void main() {
     vec2 screen_pos = (pos + vertex_pos.xy) / viewport.size;
 
     gl_Position = INVERT_Y_AXIS_AND_SCALE * vec4(screen_pos.x, screen_pos.y, 0.0, 1.0);
-
-    vec4 color = Brushes[brushId];
 
     outColor = color;
     outUV = vertex_pos.zw;

@@ -9,8 +9,8 @@ use slotmap::new_key_type;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    canvas::{context::RenderContext, renderer::RenderFn, Canvas},
-    unit::{Key, Layout, LayoutType, Rect},
+    canvas::{context::RenderContext, renderer::RenderFn, Canvas, Root},
+    unit::{Layout, LayoutType, Rect},
     util::tree::Tree,
     widget::{BuildContext, BuildResult, WidgetBuilder, WidgetImpl, WidgetKey},
 };
@@ -517,7 +517,7 @@ where
         }
     }
 
-    fn render(&self, canvas: &mut Canvas) {
+    fn render(&self, canvas: &mut Canvas<Root>) {
         let span = tracing::error_span!("on_draw");
         let _enter = span.enter();
 

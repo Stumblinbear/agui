@@ -8,6 +8,8 @@ mod layout;
 mod shape;
 mod units;
 
+pub mod colors;
+
 pub use self::blend_mode::*;
 pub use self::color::*;
 pub use self::font::*;

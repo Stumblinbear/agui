@@ -3,8 +3,6 @@
 use agui::{
     macros::{build, functional_widget},
     prelude::*,
-    unit::{Color, Key, Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, Widget},
     widgets::{
         plugins::DefaultPluginsExt,
         primitives::{Column, Text},

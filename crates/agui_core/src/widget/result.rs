@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use crate::manager::widget::Widget;
 
 use super::WidgetBuilder;
@@ -17,6 +19,21 @@ pub enum BuildResult {
     ///
     /// Currently this results in a `panic!()`, however that may change in the future.
     Err(Box<dyn std::error::Error>),
+}
+
+impl std::ops::FromResidual<Option<Infallible>> for BuildResult {
+    fn from_residual(_: Option<Infallible>) -> Self {
+        BuildResult::None
+    }
+}
+
+impl<E> std::ops::FromResidual<Result<Infallible, E>> for BuildResult
+where
+    E: std::error::Error + 'static,
+{
+    fn from_residual(result: Result<Infallible, E>) -> Self {
+        Self::Err(Box::new(result.unwrap_err()))
+    }
 }
 
 impl<W> From<W> for BuildResult

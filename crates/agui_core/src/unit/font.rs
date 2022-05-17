@@ -23,7 +23,13 @@ impl Font {
     pub fn styled(&self) -> FontStyle {
         FontStyle {
             font: self.clone(),
-            color: Color::Black,
+            color: Color {
+                red: 0.0,
+                green: 0.0,
+                blue: 0.0,
+                alpha: 1.0,
+            },
+
             ..FontStyle::default()
         }
     }
@@ -55,7 +61,12 @@ impl Default for FontStyle {
         Self {
             font: Font(0, None),
             size: 32.0,
-            color: Color::Black,
+            color: Color {
+                red: 0.0,
+                green: 0.0,
+                blue: 0.0,
+                alpha: 1.0,
+            },
 
             h_align: HorizontalAlign::Left,
             v_align: VerticalAlign::Top,

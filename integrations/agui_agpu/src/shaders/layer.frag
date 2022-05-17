@@ -4,8 +4,8 @@ layout(binding = 1) uniform DrawOptions {
     uint draw_type;
 };
 
-layout(binding = 5) uniform texture2D tex;
-layout(binding = 6) uniform sampler textureSampler;
+layout(binding = 4) uniform texture2D tex;
+layout(binding = 5) uniform sampler textureSampler;
 
 layout(location = 0) in vec4 inColor;
 layout(location = 1) in vec2 uv;

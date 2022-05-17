@@ -4,7 +4,7 @@ use downcast_rs::{impl_downcast, Downcast};
 
 use crate::{
     callback::CallbackId,
-    canvas::Canvas,
+    canvas::{Canvas, Root},
     manager::{context::AguiContext, widget::WidgetId, Data},
     unit::{Layout, LayoutType, Rect},
 };
@@ -35,7 +35,7 @@ pub trait WidgetImpl: std::fmt::Debug + Downcast {
 
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
 
-    fn render(&self, canvas: &mut Canvas);
+    fn render(&self, canvas: &mut Canvas<Root>);
 }
 
 impl_downcast!(WidgetImpl);

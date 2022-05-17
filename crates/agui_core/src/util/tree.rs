@@ -6,6 +6,8 @@ use slotmap::{
     HopSlotMap, Key,
 };
 
+pub use slotmap::new_key_type;
+
 #[derive(Debug)]
 pub struct Tree<K, V>
 where

@@ -35,6 +35,7 @@
         "slotmap",
         "Sysrq",
         "Tessellator",
+        "thiserror",
         "trybuild",
         "unopinionated",
         "Unorm",
