@@ -20,7 +20,7 @@ use crate::{
         Canvas,
     },
     plugin::{PluginImpl, WidgetManagerPlugin},
-    unit::{Font, Units},
+    unit::{Font, Size, Units},
     util::{map::PluginMap, tree::Tree},
     widget::{BuildResult, WidgetBuilder, WidgetImpl, WidgetKey},
 };
@@ -317,145 +317,7 @@ impl WidgetManager {
             );
         }
 
-        let mut dirty_layers = FnvHashSet::default();
-        let mut layer_events = Vec::new();
-
-        for event in &widget_events {
-            match event {
-                WidgetEvent::Spawned {
-                    parent_id,
-                    widget_id,
-                } => {
-                    let parent_layer_id = parent_id
-                        .and_then(|parent_id| self.widget_layers.get(&parent_id))
-                        .and_then(|widget_layer| widget_layer.get_next_layer());
-
-                    self.widget_layers
-                        .insert(*widget_id, WidgetLayer::new(parent_layer_id));
-                }
-
-                WidgetEvent::Rebuilt { widget_id } => {
-                    let widget = self.widget_tree.get(*widget_id).unwrap().get().unwrap();
-
-                    let widget_layer = self.widget_layers.get_mut(widget_id).unwrap();
-
-                    let old_layer_element = widget_layer.parent_layer_id.and_then(|layer_id| {
-                        self.layer_tree
-                            .get(layer_id)
-                            .unwrap()
-                            .widgets
-                            .get(widget_id)
-                            .cloned()
-                    });
-
-                    let canvas = &mut Canvas {
-                        phantom: PhantomData,
-
-                        render_cache: &mut self.render_cache,
-                        layer_tree: &mut self.layer_tree,
-
-                        widget_id: *widget_id,
-                        size: self.cache.get_rect(widget_id).cloned().unwrap().into(),
-
-                        parent_layer_id: widget_layer.parent_layer_id,
-                        current_layer_id: widget_layer.parent_layer_id,
-                        next_layer_id: widget_layer.parent_layer_id,
-
-                        element: None,
-                    };
-
-                    widget.render(canvas);
-
-                    // Ensure the last element is added
-                    canvas.finalize_element();
-
-                    if let Some(parent_layer_id) = widget_layer.parent_layer_id {
-                        let new_layer_element = self
-                            .layer_tree
-                            .get(parent_layer_id)
-                            .unwrap()
-                            .widgets
-                            .get(widget_id)
-                            .cloned();
-
-                        // If the element it created for the parent layer changed, we need to update it
-                        if old_layer_element != new_layer_element {
-                            dirty_layers.insert(parent_layer_id);
-
-                            layer_events.push(LayerEvent::Redrawn {
-                                layer_id: parent_layer_id,
-                            });
-                        }
-                    }
-
-                    for layer_id in &widget_layer.child_layers {
-                        dirty_layers.insert(*layer_id);
-
-                        layer_events.push(LayerEvent::Spawned {
-                            layer_id: *layer_id,
-                        });
-                    }
-                }
-
-                WidgetEvent::Reparent {
-                    parent_id,
-                    widget_id,
-                } => {
-                    // Remove the widget from its old layer
-                    if let Some(old_parent_layer_id) = self
-                        .widget_layers
-                        .get(widget_id)
-                        .and_then(|widget_layer| widget_layer.parent_layer_id)
-                    {
-                        if let Some(old_layer) = self.layer_tree.get_mut(old_parent_layer_id) {
-                            old_layer.widgets.remove(widget_id);
-
-                            dirty_layers.insert(old_parent_layer_id);
-                        }
-                    }
-
-                    let new_parent_layer_id = parent_id.and_then(|parent_id| {
-                        self.widget_layers
-                            .get(&parent_id)
-                            .and_then(|widget_layer| widget_layer.get_next_layer())
-                    });
-
-                    self.widget_layers
-                        .get_mut(widget_id)
-                        .unwrap()
-                        .parent_layer_id = new_parent_layer_id;
-
-                    dirty_layers.extend(new_parent_layer_id);
-                }
-
-                WidgetEvent::Destroyed { widget_id } => {
-                    if let Some(WidgetLayer {
-                        parent_layer_id,
-                        child_layers,
-                        ..
-                    }) = self.widget_layers.remove(widget_id)
-                    {
-                        // Remove the widget from its parent layer
-                        if let Some(parent_layer_id) = parent_layer_id {
-                            if let Some(layer) = self.layer_tree.get_mut(parent_layer_id) {
-                                layer.widgets.remove(widget_id);
-
-                                dirty_layers.insert(parent_layer_id);
-                            }
-                        }
-
-                        // Remove all of the layers it created
-                        for layer_id in child_layers {
-                            self.layer_tree.remove(layer_id, false);
-
-                            layer_events.push(LayerEvent::Destroyed { layer_id });
-                        }
-                    }
-                }
-
-                _ => {}
-            }
-        }
+        let layer_events = self.redraw_layers(&widget_events);
 
         Some(widget_events)
     }
@@ -827,6 +689,144 @@ impl WidgetManager {
         self.widget_tree
             .remove(widget_id, false)
             .expect("cannot destroy a widget that doesn't exist");
+    }
+
+    fn redraw_layers(&mut self, events: &[WidgetEvent]) -> Option<Vec<LayerEvent>> {
+        let mut dirty_layers = FnvHashSet::default();
+        let mut layer_events = Vec::new();
+
+        for event in events {
+            match event {
+                WidgetEvent::Spawned {
+                    parent_id,
+                    widget_id,
+                } => {
+                    let parent_layer_id = parent_id
+                        .and_then(|parent_id| self.widget_layers.get(&parent_id))
+                        .and_then(|widget_layer| widget_layer.get_next_layer());
+
+                    self.widget_layers
+                        .insert(*widget_id, WidgetLayer::new(parent_layer_id));
+                }
+
+                WidgetEvent::Rebuilt { widget_id } => {
+                    let widget_layer = self.widget_layers.get_mut(widget_id).unwrap();
+
+                    // let old_layer_element = widget_layer.parent_layer_id.and_then(|layer_id| {
+                    //     self.layer_tree
+                    //         .get(layer_id)
+                    //         .unwrap()
+                    //         .widgets
+                    //         .get(widget_id)
+                    //         .cloned()
+                    // });
+
+                    let canvas = &mut Canvas {
+                        rect: self.cache.get_rect(widget_id).cloned().unwrap().normalize(),
+
+                        layer_style: None,
+
+                        head: None,
+                        children: Vec::default(),
+                        tail: Vec::default(),
+                    };
+
+                    self.widget_tree
+                        .get(*widget_id)
+                        .unwrap()
+                        .get()
+                        .unwrap()
+                        .render(canvas);
+
+                    if let Some(parent_layer_id) = widget_layer.parent_layer_id {
+                        let new_layer_element = self
+                            .layer_tree
+                            .get(parent_layer_id)
+                            .unwrap()
+                            .widgets
+                            .get(widget_id)
+                            .cloned();
+
+                        // If the element it created for the parent layer changed, we need to update it
+                        if old_layer_element != new_layer_element {
+                            dirty_layers.insert(parent_layer_id);
+
+                            layer_events.push(LayerEvent::Redrawn {
+                                layer_id: parent_layer_id,
+                            });
+                        }
+                    }
+
+                    for layer_id in &widget_layer.child_layers {
+                        dirty_layers.insert(*layer_id);
+
+                        layer_events.push(LayerEvent::Spawned {
+                            layer_id: *layer_id,
+                        });
+                    }
+                }
+
+                WidgetEvent::Reparent {
+                    parent_id,
+                    widget_id,
+                } => {
+                    // Remove the widget from its old layer
+                    if let Some(old_parent_layer_id) = self
+                        .widget_layers
+                        .get(widget_id)
+                        .and_then(|widget_layer| widget_layer.parent_layer_id)
+                    {
+                        if let Some(old_layer) = self.layer_tree.get_mut(old_parent_layer_id) {
+                            old_layer.widgets.remove(widget_id);
+
+                            dirty_layers.insert(old_parent_layer_id);
+                        }
+                    }
+
+                    let new_parent_layer_id = parent_id.and_then(|parent_id| {
+                        self.widget_layers
+                            .get(&parent_id)
+                            .and_then(|widget_layer| widget_layer.get_next_layer())
+                    });
+
+                    self.widget_layers
+                        .get_mut(widget_id)
+                        .unwrap()
+                        .parent_layer_id = new_parent_layer_id;
+
+                    dirty_layers.extend(new_parent_layer_id);
+                }
+
+                WidgetEvent::Destroyed { widget_id } => {
+                    if let Some(WidgetLayer {
+                        parent_layer_id,
+                        child_layers,
+                        ..
+                    }) = self.widget_layers.remove(widget_id)
+                    {
+                        // Remove the widget from its parent layer
+                        if let Some(parent_layer_id) = parent_layer_id {
+                            if let Some(layer) = self.layer_tree.get_mut(parent_layer_id) {
+                                layer.widgets.remove(widget_id);
+
+                                dirty_layers.insert(parent_layer_id);
+                            }
+                        }
+
+                        // Remove all of the layers it created
+                        for layer_id in child_layers {
+                            self.layer_tree.remove(layer_id, false);
+
+                            layer_events.push(LayerEvent::Destroyed { layer_id });
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        None
     }
 }
 

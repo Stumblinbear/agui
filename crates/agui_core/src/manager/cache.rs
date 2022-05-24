@@ -3,9 +3,7 @@ use std::hash::Hash;
 use fnv::{FnvHashMap, FnvHashSet};
 use morphorm::{Cache, GeometryChanged};
 
-use crate::unit::{Bounds, Rect, Size};
-
-const MARGIN_OF_ERROR: f32 = 0.5;
+use crate::unit::{Bounds, Rect, Size, POS_MARGIN_OF_ERROR};
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
@@ -59,10 +57,10 @@ where
                 if let Some(v1) = v1 {
                     if let Some(v2) = v2 {
                         // Make sure there was a significant enough change to warrant redrawing
-                        return (v1.x - v2.x).abs() > MARGIN_OF_ERROR
-                            || (v1.y - v2.y).abs() > MARGIN_OF_ERROR
-                            || (v1.width - v2.width).abs() > MARGIN_OF_ERROR
-                            || (v1.height - v2.height).abs() > MARGIN_OF_ERROR;
+                        return (v1.x - v2.x).abs() > POS_MARGIN_OF_ERROR
+                            || (v1.y - v2.y).abs() > POS_MARGIN_OF_ERROR
+                            || (v1.width - v2.width).abs() > POS_MARGIN_OF_ERROR
+                            || (v1.height - v2.height).abs() > POS_MARGIN_OF_ERROR;
                     }
                 }
 

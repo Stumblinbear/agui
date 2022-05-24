@@ -6,7 +6,7 @@ use lyon::{
 
 use crate::unit::Rect;
 
-use super::MARGIN_OF_ERROR;
+use super::POS_MARGIN_OF_ERROR;
 
 #[derive(Debug, Clone)]
 pub enum Shape {
@@ -42,10 +42,10 @@ impl std::hash::Hash for Shape {
                 bottom_left,
             } => {
                 1.hash(state);
-                ((top_left * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-                ((top_right * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-                ((bottom_right * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-                ((bottom_left * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+                ((top_left * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+                ((top_right * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+                ((bottom_right * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+                ((bottom_left * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
             }
 
             Shape::Circle => 2.hash(state),

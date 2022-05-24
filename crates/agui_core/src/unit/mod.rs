@@ -1,4 +1,5 @@
-pub(crate) const MARGIN_OF_ERROR: f32 = 0.01;
+pub(crate) const POS_MARGIN_OF_ERROR: f32 = 0.01;
+pub(crate) const COLOR_MARGIN_OF_ERROR: f32 = 0.001;
 
 mod blend_mode;
 mod color;
@@ -7,8 +8,6 @@ mod key;
 mod layout;
 mod shape;
 mod units;
-
-pub mod colors;
 
 pub use self::blend_mode::*;
 pub use self::color::*;

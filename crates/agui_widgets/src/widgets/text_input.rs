@@ -41,35 +41,35 @@ impl Default for TextInputStyle {
     fn default() -> Self {
         Self {
             normal: TextInputStateStyle {
-                background_color: Color::White,
-                cursor_color: Color::Black,
+                background_color: Color::from_rgb((1.0, 1.0, 1.0)),
+                cursor_color: Color::from_rgb((0.0, 0.0, 0.0)),
 
-                placeholder_color: Color::DarkGray,
-                text_color: Color::Black,
+                placeholder_color: Color::from_rgb((0.3, 0.3, 0.3)),
+                text_color: Color::from_rgb((0.0, 0.0, 0.0)),
             },
 
             disabled: TextInputStateStyle {
-                background_color: Color::DarkGray,
-                cursor_color: Color::Black,
+                background_color: Color::from_rgb((0.3, 0.3, 0.3)),
+                cursor_color: Color::from_rgb((0.0, 0.0, 0.0)),
 
-                placeholder_color: Color::DarkGray,
-                text_color: Color::Black,
+                placeholder_color: Color::from_rgb((0.3, 0.3, 0.3)),
+                text_color: Color::from_rgb((0.0, 0.0, 0.0)),
             },
 
             hover: TextInputStateStyle {
-                background_color: Color::LightGray,
-                cursor_color: Color::Black,
+                background_color: Color::from_rgb((0.7, 0.7, 0.7)),
+                cursor_color: Color::from_rgb((0.0, 0.0, 0.0)),
 
-                placeholder_color: Color::DarkGray,
-                text_color: Color::Black,
+                placeholder_color: Color::from_rgb((0.3, 0.3, 0.3)),
+                text_color: Color::from_rgb((0.0, 0.0, 0.0)),
             },
 
             focused: TextInputStateStyle {
-                background_color: Color::White,
-                cursor_color: Color::Black,
+                background_color: Color::from_rgb((1.0, 1.0, 1.0)),
+                cursor_color: Color::from_rgb((0.0, 0.0, 0.0)),
 
-                placeholder_color: Color::DarkGray,
-                text_color: Color::Black,
+                placeholder_color: Color::from_rgb((0.3, 0.3, 0.3)),
+                text_color: Color::from_rgb((0.0, 0.0, 0.0)),
             },
         }
     }

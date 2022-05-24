@@ -4,7 +4,7 @@ use glyph_brush_layout::{
     SectionGeometry, SectionGlyph, SectionText,
 };
 
-use crate::unit::{Color, Rect, MARGIN_OF_ERROR};
+use crate::unit::{Color, Rect, POS_MARGIN_OF_ERROR};
 
 #[derive(Debug, Clone, Default)]
 pub struct Font(pub(crate) usize, pub(crate) Option<FontArc>);
@@ -49,7 +49,7 @@ pub struct FontStyle {
 impl std::hash::Hash for FontStyle {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.font.hash(state);
-        ((self.size * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.size * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
         self.color.hash(state);
         self.h_align.hash(state);
         self.v_align.hash(state);

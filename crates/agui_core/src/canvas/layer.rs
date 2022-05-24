@@ -13,16 +13,20 @@ new_key_type! {
 }
 
 #[derive(Debug)]
-pub struct Layer {
-    pub rect: Rect,
+pub struct LayerStyle {
     pub shape: Shape,
-
+    
     pub anti_alias: bool,
     pub blend_mode: BlendMode,
+}
+
+#[derive(Debug)]
+pub struct Layer {
+    pub rect: Rect,
+
+    pub style: LayerStyle,
 
     pub widgets: FnvHashMap<WidgetId, RenderElementId>,
-
-    pub render_elements: Vec<RenderElementId>,
 }
 
 pub(crate) struct WidgetLayer {

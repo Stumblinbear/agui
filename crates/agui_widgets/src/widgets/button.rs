@@ -19,10 +19,10 @@ pub struct ButtonStyle {
 impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
-            normal: Color::White,
-            disabled: Color::LightGray,
-            hovered: Color::LightGray,
-            pressed: Color::DarkGray,
+            normal: Color::from_rgb((1.0, 1.0, 1.0)),
+            disabled: Color::from_rgb((0.3, 0.3, 0.3)),
+            hovered: Color::from_rgb((0.7, 0.7, 0.7)),
+            pressed: Color::from_rgb((0.5, 0.5, 0.5)),
         }
     }
 }

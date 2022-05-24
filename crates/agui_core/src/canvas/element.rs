@@ -28,6 +28,7 @@ impl std::fmt::Debug for RenderElementId {
     }
 }
 
+#[derive(Default)]
 pub struct RenderElement {
     pub commands: Vec<CanvasCommand>,
 }

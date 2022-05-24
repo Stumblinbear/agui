@@ -1,6 +1,6 @@
 use morphorm::PositionType;
 
-use super::{Units, MARGIN_OF_ERROR};
+use super::{Units, POS_MARGIN_OF_ERROR};
 
 /// Holds layout parameters to dictate how the element should be displayed.
 #[derive(Debug, Default, Hash, Clone, Copy)]
@@ -304,8 +304,8 @@ pub struct Point {
 
 impl std::hash::Hash for Point {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.x * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.y * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.x * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.y * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
     }
 }
 
@@ -318,17 +318,17 @@ pub struct Size {
 
 impl PartialEq for Size {
     fn eq(&self, other: &Self) -> bool {
-        ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize)
-            == ((other.width * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.height * (1.0 / MARGIN_OF_ERROR)) as usize)
+        ((self.width * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            == ((other.width * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.height * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.height * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
     }
 }
 
 impl std::hash::Hash for Size {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.width * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.height * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
     }
 }
 
@@ -343,23 +343,23 @@ pub struct Rect {
 
 impl PartialEq for Rect {
     fn eq(&self, other: &Self) -> bool {
-        ((self.x * (1.0 / MARGIN_OF_ERROR)) as usize)
-            == ((other.x * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.y * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.y * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.width * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.height * (1.0 / MARGIN_OF_ERROR)) as usize)
+        ((self.x * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            == ((other.x * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.y * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.y * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.width * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.width * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.height * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.height * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
     }
 }
 
 impl std::hash::Hash for Rect {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.x * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.y * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.width * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.height * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.x * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.y * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.width * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.height * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
     }
 }
 
@@ -371,6 +371,15 @@ impl Rect {
 
     pub const fn to_slice(self) -> [f32; 4] {
         [self.x, self.y, self.width, self.height]
+    }
+
+    pub const fn normalize(self) -> Rect {
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: self.width,
+            height: self.height,
+        }
     }
 }
 
@@ -414,23 +423,23 @@ pub struct Bounds {
 
 impl PartialEq for Bounds {
     fn eq(&self, other: &Self) -> bool {
-        ((self.top * (1.0 / MARGIN_OF_ERROR)) as usize)
-            == ((other.top * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.right * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.right * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.bottom * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.bottom * (1.0 / MARGIN_OF_ERROR)) as usize)
-            && ((self.left * (1.0 / MARGIN_OF_ERROR)) as usize)
-                == ((other.left * (1.0 / MARGIN_OF_ERROR)) as usize)
+        ((self.top * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            == ((other.top * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.right * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.right * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.bottom * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.bottom * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+            && ((self.left * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
+                == ((other.left * (1.0 / POS_MARGIN_OF_ERROR)) as usize)
     }
 }
 
 impl std::hash::Hash for Bounds {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.top * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.right * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.bottom * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.left * (1.0 / MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.top * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.right * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.bottom * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+        ((self.left * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
     }
 }
 
