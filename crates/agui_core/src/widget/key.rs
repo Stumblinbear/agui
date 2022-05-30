@@ -1,4 +1,4 @@
-use crate::{manager::widget::WidgetId, unit::Key};
+use crate::{unit::Key, widget::WidgetId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WidgetKey(pub(super) Option<WidgetId>, pub(super) Key);

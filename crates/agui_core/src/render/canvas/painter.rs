@@ -4,29 +4,34 @@ use lyon::path::Path;
 
 use crate::unit::{FontStyle, Rect, Shape, Size};
 
-use self::{command::CanvasCommand, element::RenderElement, layer::LayerStyle, paint::Paint};
+use super::{command::CanvasCommand, paint::Paint, Canvas, CanvasStyle};
 
-pub mod command;
-pub mod context;
-pub mod element;
-pub mod layer;
-pub mod paint;
-pub mod renderer;
-pub mod texture;
+#[derive(Default)]
+pub struct CanvasPainter {
+    style: CanvasStyle,
 
-pub struct Canvas {
-    pub(crate) rect: Rect,
-
-    pub(crate) layer_style: Option<LayerStyle>,
-
-    pub(crate) head: Option<RenderElement>,
-    pub(crate) children: Vec<Canvas>,
-    pub(crate) tail: Vec<Canvas>,
+    head: Vec<CanvasCommand>,
+    children: Vec<CanvasPainter>,
+    tail: Vec<CanvasPainter>,
 }
 
-impl Canvas {
+impl CanvasPainter {
     pub fn get_size(&self) -> Size {
-        self.rect.into()
+        self.style.rect.into()
+    }
+
+    pub fn finalize(self) -> Canvas {
+        Canvas {
+            style: self.style,
+
+            head: self.head,
+            children: self
+                .children
+                .into_iter()
+                .map(CanvasPainter::finalize)
+                .collect(),
+            tail: self.tail.into_iter().map(CanvasPainter::finalize).collect(),
+        }
     }
 
     fn push_command(&mut self, command: CanvasCommand) {
@@ -38,41 +43,35 @@ impl Canvas {
         if let Some(tail) = self.tail.last_mut() {
             tail.push_command(command);
         } else {
-            self.head
-                .get_or_insert_with(RenderElement::default)
-                .commands
-                .push(command);
+            self.head.push(command);
         }
     }
 
     /// Starts a layer with `shape` which child widgets will drawn to. It will be the `rect` of the canvas.
     pub fn start_layer(&mut self, paint: &Paint, shape: Shape) {
-        self.start_layer_at(self.rect, paint, shape);
+        self.start_layer_at(self.style.rect, paint, shape);
     }
 
     /// Starts a layer in the defined `rect` with `shape` which child widgets will drawn to.
     pub fn start_layer_at(&mut self, rect: Rect, paint: &Paint, shape: Shape) {
         tracing::trace!("starting new layer");
 
-        self.tail.push(Canvas {
-            rect,
-
-            layer_style: Some(LayerStyle {
+        self.tail.push(CanvasPainter {
+            style: CanvasStyle {
+                rect,
                 shape,
 
                 anti_alias: paint.anti_alias,
                 blend_mode: paint.blend_mode,
-            }),
+            },
 
-            head: None,
-            children: Vec::default(),
-            tail: Vec::default(),
+            ..CanvasPainter::default()
         });
     }
 
     /// Creates a layer with `shape`. It will be the `rect` of the canvas.
-    pub fn layer(&mut self, paint: &Paint, shape: Shape, func: impl FnOnce(&mut Canvas)) {
-        self.layer_at(self.rect, paint, shape, func);
+    pub fn layer(&mut self, paint: &Paint, shape: Shape, func: impl FnOnce(&mut CanvasPainter)) {
+        self.layer_at(self.style.rect, paint, shape, func);
     }
 
     /// Creates a layer with `shape`. It will be the `rect` of the canvas.
@@ -81,7 +80,7 @@ impl Canvas {
         rect: Rect,
         paint: &Paint,
         shape: Shape,
-        func: impl FnOnce(&mut Canvas),
+        func: impl FnOnce(&mut CanvasPainter),
     ) {
         if let Some(tail) = self.tail.last_mut() {
             return tail.layer_at(rect, paint, shape, func);
@@ -89,18 +88,16 @@ impl Canvas {
 
         tracing::trace!("creating new layer");
 
-        self.children.push(Canvas {
-            rect: self.rect,
-
-            layer_style: Some(LayerStyle {
+        self.children.push(CanvasPainter {
+            style: CanvasStyle {
+                rect,
                 shape,
 
                 anti_alias: paint.anti_alias,
                 blend_mode: paint.blend_mode,
-            }),
-            head: None,
-            children: Vec::default(),
-            tail: Vec::default(),
+            },
+
+            ..CanvasPainter::default()
         });
 
         let child = self.children.last_mut().unwrap();
@@ -110,7 +107,7 @@ impl Canvas {
 
     /// Draws a rectangle. It will be the `rect` of the canvas.
     pub fn draw_rect(&mut self, paint: &Paint) {
-        self.draw_rect_at(self.rect, paint);
+        self.draw_rect_at(self.style.rect, paint);
     }
 
     /// Draws a rectangle in the defined `rect`.
@@ -135,7 +132,7 @@ impl Canvas {
         bottom_left: f32,
     ) {
         self.draw_rounded_rect_at(
-            self.rect,
+            self.style.rect,
             paint,
             top_left,
             top_right,
@@ -171,7 +168,7 @@ impl Canvas {
 
     /// Draws a path. It will be the `rect` of the canvas.
     pub fn draw_path(&mut self, paint: &Paint, path: Path) {
-        self.draw_path_at(self.rect, paint, path);
+        self.draw_path_at(self.style.rect, paint, path);
     }
 
     /// Draws a path in the defined `rect`.
@@ -188,7 +185,7 @@ impl Canvas {
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
     pub fn draw_text(&mut self, paint: &Paint, font: FontStyle, text: Cow<'static, str>) {
-        self.draw_text_at(self.rect, paint, font, text);
+        self.draw_text_at(self.style.rect, paint, font, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.

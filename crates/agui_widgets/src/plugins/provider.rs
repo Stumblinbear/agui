@@ -7,16 +7,16 @@ use std::{
 };
 
 use agui_core::{
-    manager::{context::Context, event::WidgetEvent, widget::WidgetId, Data},
-    plugin::{PluginContext, WidgetManagerPlugin},
+    manager::{context::Context, event::WidgetEvent, Data},
+    plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
-    widget::{BuildContext, WidgetBuilder},
+    widget::{BuildContext, WidgetId, WidgetImpl},
 };
 
 #[derive(Debug, Default)]
 pub struct ProviderPlugin;
 
-impl WidgetManagerPlugin for ProviderPlugin {
+impl StatefulPlugin for ProviderPlugin {
     type State = ProviderPluginState;
 
     // Check if any changes occurred outside of the main loop.
@@ -185,7 +185,7 @@ pub trait ProviderPluginExt {
 
 impl<'ctx, W> ProviderPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     /// Makes some local widget state available to any child widget.
     fn provide<V, F>(&mut self, func: F) -> Provided<V>
@@ -195,7 +195,7 @@ where
     {
         let widget_id = self.get_widget_id();
 
-        if let Some(mut plugin) = self.get_plugin_mut::<ProviderPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<ProviderPlugin>() {
             plugin.get_state_mut().provide(widget_id, func)
         } else {
             Provided {
@@ -219,7 +219,7 @@ pub trait ConsumerPluginExt {
 
 impl<'ctx, W> ConsumerPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Provided<V>>
@@ -250,7 +250,7 @@ where
         }
 
         if let Some(owner_id) = owner_id {
-            if let Some(mut plugin) = self.get_plugin_mut::<ProviderPlugin>() {
+            if let Some(plugin) = self.get_plugin_mut::<ProviderPlugin>() {
                 plugin.get_state_mut().consume(owner_id, widget_id)
             } else {
                 None
@@ -314,9 +314,9 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::{context::Context, query::WidgetQueryExt, widget::Widget, WidgetManager},
+        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
         unit::Key,
-        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget},
+        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
     };
 
     use crate::plugins::{
@@ -342,7 +342,7 @@ mod tests {
 
             *provided.borrow_mut() = *global.borrow();
 
-            ctx.key(Key::single(), (&self.child).clone()).into()
+            ctx.key(Key::single(), self.child.clone()).into()
         }
     }
 
@@ -401,7 +401,7 @@ mod tests {
 
         manager.update();
 
-        manager.set_root(TestWidgetProvider::default().into());
+        manager.set_root(TestWidgetProvider::default());
 
         manager.update();
 

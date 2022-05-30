@@ -1,13 +1,17 @@
+use std::rc::Rc;
+
 use downcast_rs::Downcast;
 
 use crate::{
     manager::Data,
-    widget::{BuildContext, BuildResult, WidgetBuilder},
+    widget::{BuildContext, BuildResult, IntoWidget, WidgetElement},
 };
+
+use super::{BoxedWidget, Widget, WidgetImpl};
 
 /// Implements the widget's `build()` method.
 pub trait StatefulWidget: std::fmt::Debug + Downcast + Sized {
-    type State: Data + Default;
+    type State: Data + Default + Sized;
 
     /// Called whenever this widget is rebuilt.
     ///
@@ -16,7 +20,7 @@ pub trait StatefulWidget: std::fmt::Debug + Downcast + Sized {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult;
 }
 
-impl<W> WidgetBuilder for W
+impl<W> WidgetImpl for W
 where
     W: StatefulWidget,
 {
@@ -24,6 +28,26 @@ where
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         self.build(ctx)
+    }
+}
+
+impl<W, S> From<W> for Widget
+where
+    W: StatefulWidget<State = S>,
+    S: Data + Default,
+{
+    fn from(widget: W) -> Self {
+        Widget::new(widget)
+    }
+}
+
+impl<W, S> IntoWidget for W
+where
+    W: StatefulWidget<State = S>,
+    S: Data + Default,
+{
+    fn into_widget(self: Rc<Self>) -> BoxedWidget {
+        Box::new(WidgetElement::new(self))
     }
 }
 

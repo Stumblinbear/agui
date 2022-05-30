@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::{
+    collections::VecDeque,
+    ops::{Index, IndexMut},
+};
 
 use morphorm::Hierarchy;
 use slotmap::{
@@ -35,30 +38,10 @@ where
     K: Key,
 {
     depth: usize,
-    pub value: V,
+    pub value: Option<V>,
 
     parent: Option<K>,
     children: Vec<K>,
-}
-
-impl<K, V> Deref for TreeNode<K, V>
-where
-    K: Key,
-{
-    type Target = V;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<K, V> DerefMut for TreeNode<K, V>
-where
-    K: Key,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
 }
 
 impl<K, V> Tree<K, V>
@@ -77,7 +60,7 @@ where
     pub fn add(&mut self, parent_id: Option<K>, value: V) -> K {
         let node_id = self.nodes.insert(TreeNode {
             depth: 0,
-            value,
+            value: Some(value),
             parent: parent_id,
             children: Vec::new(),
         });
@@ -88,7 +71,7 @@ where
     }
 
     pub fn remove(&mut self, node_id: K, cascade: bool) -> Option<V> {
-        if let Some(node) = self.nodes.remove(node_id) {
+        if let Some(mut node) = self.nodes.remove(node_id) {
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
                     // Remove the child from its parent
@@ -112,7 +95,7 @@ where
                 }
             }
 
-            Some(node.value)
+            Some(node.value.take().expect("node is currently in use"))
         } else {
             None
         }
@@ -166,12 +149,12 @@ where
 
             // If the node had children, propagate the depth difference
             if node.children.is_empty() {
-                let mut queue = node.children.clone();
+                let mut queue = VecDeque::from(node.children.clone());
 
-                while !queue.is_empty() {
+                for child_id in queue.pop_front() {
                     let child = self
                         .nodes
-                        .get_mut(queue.remove(0))
+                        .get_mut(child_id)
                         .expect("unable to update child's depth, as it's not in the tree");
 
                     child.depth += diff;
@@ -182,12 +165,28 @@ where
         }
     }
 
+    pub fn take(&mut self, node_id: K) -> Option<V> {
+        self.nodes
+            .get_mut(node_id)
+            .map(|node| node.value.take().expect("node is currently in use"))
+    }
+
+    pub fn replace(&mut self, node_id: K, value: V) {
+        self.nodes
+            .get_mut(node_id)
+            .map(|node| node.value.replace(value));
+    }
+
     pub fn get(&self, node_id: K) -> Option<&V> {
-        self.nodes.get(node_id).map(|node| &node.value)
+        self.nodes
+            .get(node_id)
+            .map(|node| node.value.as_ref().expect("node is currently in use"))
     }
 
     pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.nodes.get_mut(node_id).map(|node| &mut node.value)
+        self.nodes
+            .get_mut(node_id)
+            .map(|node| node.value.as_mut().expect("node is currently in use"))
     }
 
     pub fn get_parent(&self, node_id: K) -> Option<&K> {
@@ -389,7 +388,10 @@ where
     type Output = V;
 
     fn index(&self, key: K) -> &Self::Output {
-        &self.nodes[key]
+        self.nodes[key]
+            .value
+            .as_ref()
+            .expect("node is currently in use")
     }
 }
 
@@ -398,7 +400,10 @@ where
     K: Key,
 {
     fn index_mut(&mut self, key: K) -> &mut Self::Output {
-        &mut self.nodes[key]
+        self.nodes[key]
+            .value
+            .as_mut()
+            .expect("node is currently in use")
     }
 }
 
@@ -658,7 +663,7 @@ where
 mod tests {
     use morphorm::Hierarchy;
 
-    use crate::manager::widget::WidgetId;
+    use crate::widget::WidgetId;
 
     use super::Tree;
 

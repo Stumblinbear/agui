@@ -1,19 +1,19 @@
 use std::marker::PhantomData;
 
-use crate::{manager::Data, widget::WidgetBuilder};
+use crate::{manager::Data, widget::WidgetImpl};
 
 use super::CallbackContext;
 
 pub trait CallbackFunc<W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     fn call(&self, ctx: &mut CallbackContext<W>, args: &dyn Data);
 }
 
 pub struct CallbackFn<W, A, F>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
     A: 'static,
     F: Fn(&mut CallbackContext<W>, &A),
 {
@@ -24,7 +24,7 @@ where
 
 impl<W, A, F> CallbackFn<W, A, F>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
     A: 'static,
     F: Fn(&mut CallbackContext<W>, &A),
 {
@@ -39,7 +39,7 @@ where
 
 impl<W, A, F> CallbackFunc<W> for CallbackFn<W, A, F>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
     A: Data,
     F: Fn(&mut CallbackContext<W>, &A),
 {

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use agpu::{Buffer, Gpu, Sampler, Texture};
-use agui::canvas::texture::TextureId;
+use agui::render::texture::TextureId;
 use glyph_brush_draw_cache::DrawCache;
 
 pub struct RenderContext {

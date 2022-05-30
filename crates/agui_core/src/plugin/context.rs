@@ -4,21 +4,19 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId},
-    manager::{
-        widget::{Widget, WidgetId},
-        CallbackQueue, Data,
-    },
+    manager::{CallbackQueue, Data},
     util::tree::Tree,
+    widget::{BoxedWidget, WidgetId},
 };
 
 pub struct PluginContext<'ctx> {
-    pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
+    pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 }
 
 impl PluginContext<'_> {
-    pub fn get_tree(&self) -> &Tree<WidgetId, Widget> {
+    pub fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget> {
         self.tree
     }
 

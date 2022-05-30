@@ -1,15 +1,12 @@
-use std::{cell::Ref, marker::PhantomData};
+use std::marker::PhantomData;
 
-use crate::{
-    manager::widget::{Widget, WidgetElement},
-    widget::WidgetBuilder,
-};
+use crate::widget::{BoxedWidget, WidgetImpl, WidgetElement};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
 pub struct QueryByType<I, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     pub(crate) iter: I,
     phantom: PhantomData<W>,
@@ -17,7 +14,7 @@ where
 
 impl<I, W> QueryByType<I, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     pub(in crate::manager::query) fn new(iter: I) -> Self {
         Self {
@@ -29,14 +26,14 @@ where
 
 impl<'query, I, W> Iterator for QueryByType<I, W>
 where
-    W: WidgetBuilder,
-    I: Iterator<Item = &'query Widget>,
+    W: WidgetImpl,
+    I: Iterator<Item = &'query BoxedWidget>,
 {
-    type Item = Ref<'query, WidgetElement<W>>;
+    type Item = &'query WidgetElement<W>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find_map(|widget| widget.get_as::<W>())
+        self.iter.find_map(|widget| widget.downcast_ref())
     }
 
     #[inline]

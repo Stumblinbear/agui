@@ -1,4 +1,4 @@
-use agui::canvas::command::CanvasCommand;
+use agui::render::command::CanvasCommand;
 
 use crate::context::RenderContext;
 

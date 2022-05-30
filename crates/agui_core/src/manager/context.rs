@@ -4,21 +4,17 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId},
-    plugin::WidgetManagerPlugin,
+    plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::{Rect, Size},
     util::{map::PluginMap, tree::Tree},
-    widget::WidgetBuilder,
+    widget::{BoxedWidget, WidgetId, WidgetImpl},
 };
 
-use super::{
-    plugin::{Plugin, PluginMut, PluginRef},
-    widget::{Widget, WidgetId},
-    CallbackQueue, Data,
-};
+use super::{CallbackQueue, Data};
 
 pub struct AguiContext<'ctx> {
-    pub(crate) plugins: Option<&'ctx mut PluginMap<Plugin>>,
-    pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
+    pub(crate) plugins: Option<&'ctx mut PluginMap<BoxedPlugin>>,
+    pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -27,19 +23,19 @@ pub struct AguiContext<'ctx> {
 
 pub trait Context<W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
-    fn get_plugins(&mut self) -> &mut PluginMap<Plugin>;
+    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin>;
 
-    fn get_plugin<P>(&self) -> Option<PluginRef<P>>
+    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
     where
-        P: WidgetManagerPlugin;
+        P: PluginImpl;
 
-    fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
+    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
     where
-        P: WidgetManagerPlugin;
+        P: PluginImpl;
 
-    fn get_tree(&self) -> &Tree<WidgetId, Widget>;
+    fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget>;
 
     fn mark_dirty(&mut self, widget_id: WidgetId);
 

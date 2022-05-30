@@ -1,4 +1,4 @@
-use agui::canvas::command::CanvasCommand;
+use agui::render::command::CanvasCommand;
 use glyph_brush_draw_cache::{ab_glyph::FontArc, CachedBy};
 use glyph_brush_layout::SectionGlyph;
 

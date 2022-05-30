@@ -1,8 +1,6 @@
 use std::convert::Infallible;
 
-use crate::manager::widget::Widget;
-
-use super::WidgetBuilder;
+use super::Widget;
 
 /// Encapsulates the result of a widget `build()` method.
 #[non_exhaustive]
@@ -36,14 +34,44 @@ where
     }
 }
 
-impl<W> From<W> for BuildResult
-where
-    W: WidgetBuilder,
-{
-    fn from(widget: W) -> Self {
-        Self::Some(vec![Widget::from(widget)])
-    }
-}
+// impl<W> From<W> for BuildResult
+// where
+//     W: IntoWidget,
+// {
+//     fn from(widget: W) -> Self {
+//         Self::Some(vec![Widget::new(widget)])
+//     }
+// }
+
+// impl<W> From<Option<W>> for BuildResult
+// where
+//     W: IntoWidget,
+// {
+//     fn from(widget: Option<W>) -> Self {
+//         match widget {
+//             Some(widget) => Self::Some(vec![Widget::new(widget)]),
+//             None => Self::None,
+//         }
+//     }
+// }
+
+// impl<W> From<Vec<W>> for BuildResult
+// where
+//     W: IntoWidget,
+// {
+//     fn from(widgets: Vec<W>) -> Self {
+//         if widgets.is_empty() {
+//             Self::None
+//         } else {
+//             Self::Some(
+//                 widgets
+//                     .into_iter()
+//                     .map(|widget| Widget::new(widget))
+//                     .collect(),
+//             )
+//         }
+//     }
+// }
 
 impl From<Widget> for BuildResult {
     fn from(widget: Widget) -> Self {
@@ -53,22 +81,30 @@ impl From<Widget> for BuildResult {
 
 impl From<&Widget> for BuildResult {
     fn from(widget: &Widget) -> Self {
-        widget.clone().into()
+        Self::Some(vec![widget.clone()])
     }
 }
 
-impl From<Vec<Widget>> for BuildResult {
-    fn from(widgets: Vec<Widget>) -> Self {
+// impl From<&Option<Widget>> for BuildResult {
+//     fn from(widget: &Option<Widget>) -> Self {
+//         match widget {
+//             Some(widget) => Self::Some(vec![widget.clone()]),
+//             None => Self::None,
+//         }
+//     }
+// }
+
+impl<'a, I> From<I> for BuildResult
+where
+    I: IntoIterator<Item = &'a Widget>,
+{
+    fn from(iter: I) -> Self {
+        let widgets = iter.into_iter().map(Widget::clone).collect::<Vec<_>>();
+
         if widgets.is_empty() {
             Self::None
         } else {
             Self::Some(widgets)
         }
-    }
-}
-
-impl From<&Vec<Widget>> for BuildResult {
-    fn from(widget: &Vec<Widget>) -> Self {
-        widget.clone().into()
     }
 }

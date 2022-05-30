@@ -1,8 +1,8 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use crate::{
-    manager::{widget::WidgetId, CallbackQueue, Data},
-    widget::WidgetBuilder,
+    manager::{CallbackQueue, Data},
+    widget::{WidgetImpl, WidgetId},
 };
 
 mod context;
@@ -49,7 +49,7 @@ where
 {
     pub(crate) fn new<F, W>(widget_id: WidgetId, callback_queue: CallbackQueue) -> Self
     where
-        W: WidgetBuilder,
+        W: WidgetImpl,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
         Self {

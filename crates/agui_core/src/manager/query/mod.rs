@@ -1,19 +1,20 @@
 use slotmap::hop::Iter;
 
-use crate::{unit::Key, util::tree::TreeNode, widget::WidgetBuilder};
+use crate::{
+    unit::Key,
+    util::tree::TreeNode,
+    widget::{BoxedWidget, WidgetImpl, WidgetId},
+};
+
+use super::WidgetManager;
 
 pub mod by_key;
 pub mod by_type;
 
 use self::{by_key::QueryByKey, by_type::QueryByType};
 
-use super::{
-    widget::{Widget, WidgetId},
-    WidgetManager,
-};
-
 pub struct WidgetQuery<'query> {
-    pub iter: Iter<'query, WidgetId, TreeNode<WidgetId, Widget>>,
+    pub iter: Iter<'query, WidgetId, TreeNode<WidgetId, BoxedWidget>>,
 }
 
 impl<'query> WidgetQuery<'query> {
@@ -25,10 +26,10 @@ impl<'query> WidgetQuery<'query> {
 }
 
 impl<'query> Iterator for WidgetQuery<'query> {
-    type Item = &'query Widget;
+    type Item = &'query BoxedWidget;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find_map(|(_, node)| Some(&**node))
+        self.iter.find_map(|(_, node)| node.value.as_ref())
     }
 }
 
@@ -40,12 +41,12 @@ pub trait WidgetQueryExt<'query> {
     fn by_type<W>(self) -> QueryByType<Self, W>
     where
         Self: Sized,
-        W: WidgetBuilder;
+        W: WidgetImpl;
 }
 
 impl<'query, I> WidgetQueryExt<'query> for I
 where
-    I: Iterator<Item = &'query Widget>,
+    I: Iterator<Item = &'query BoxedWidget>,
 {
     fn by_key(self, key: Key) -> QueryByKey<Self> {
         QueryByKey::new(self, key)
@@ -53,7 +54,7 @@ where
 
     fn by_type<W>(self) -> QueryByType<Self, W>
     where
-        W: WidgetBuilder,
+        W: WidgetImpl,
     {
         QueryByType::<Self, W>::new(self)
     }

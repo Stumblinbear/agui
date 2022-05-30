@@ -11,7 +11,7 @@
 // #![warn(missing_docs)]
 
 pub mod callback;
-pub mod canvas;
+pub mod render;
 pub mod manager;
 pub mod plugin;
 pub mod unit;

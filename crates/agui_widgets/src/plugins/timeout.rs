@@ -7,9 +7,9 @@ use std::{
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{context::Context, event::WidgetEvent, widget::WidgetId},
-    plugin::{PluginContext, WidgetManagerPlugin},
-    widget::{BuildContext, WidgetBuilder},
+    manager::{context::Context, event::WidgetEvent},
+    plugin::{PluginContext, StatefulPlugin},
+    widget::{BuildContext, WidgetId, WidgetImpl},
 };
 
 #[derive(Debug, Default)]
@@ -17,7 +17,7 @@ pub struct TimeoutPlugin {
     dummy: Rc<()>,
 }
 
-impl WidgetManagerPlugin for TimeoutPlugin {
+impl StatefulPlugin for TimeoutPlugin {
     type State = TimeoutPluginState;
 
     /// Check if any timeouts have completed before the next update.
@@ -80,7 +80,7 @@ pub struct TimeoutPluginState {
 
 pub trait TimeoutPluginExt<W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     fn set_timeout<F>(&mut self, duration: Duration, func: F)
     where
@@ -89,7 +89,7 @@ where
 
 impl<'ctx, W> TimeoutPluginExt<W> for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     /// Marks the caller for updating when `duration` elapses.
     fn set_timeout<F>(&mut self, duration: Duration, func: F)
@@ -98,7 +98,7 @@ where
     {
         let callback_id = self.callback(func).get_id().unwrap();
 
-        if let Some(mut plugin) = self.get_plugin_mut::<TimeoutPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<TimeoutPlugin>() {
             let state = plugin.get_state_mut();
 
             state

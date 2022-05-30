@@ -1,9 +1,9 @@
 use agui_core::{
     callback::Callback,
-    canvas::paint::Paint,
-    manager::{context::Context, widget::Widget},
+    manager::context::Context,
+    render::canvas::paint::Paint,
     unit::{Color, Key, Layout},
-    widget::{BuildContext, BuildResult, StatefulWidget},
+    widget::{BuildContext, BuildResult, StatefulWidget, Widget},
 };
 
 use crate::GestureDetector;

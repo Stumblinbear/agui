@@ -1,4 +1,4 @@
-use crate::{manager::widget::Widget, unit::Key};
+use crate::{unit::Key, widget::BoxedWidget};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
@@ -15,15 +15,17 @@ impl<I> QueryByKey<I> {
 
 impl<'query, I> Iterator for QueryByKey<I>
 where
-    I: Iterator<Item = &'query Widget>,
+    I: Iterator<Item = &'query BoxedWidget>,
 {
     type Item = I::Item;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find(|widget| match widget {
-            Widget::None => false,
-            Widget::Some { key, .. } => key.filter(|key| key.get_key() == self.key).is_some(),
+        self.iter.find(|widget| {
+            widget
+                .get_key()
+                .filter(|key| key.get_key() == self.key)
+                .is_some()
         })
     }
 

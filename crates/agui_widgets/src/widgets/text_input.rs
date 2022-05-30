@@ -5,8 +5,8 @@ use std::{
 
 use agui_core::{
     callback::Callback,
-    canvas::paint::Paint,
     manager::context::Context,
+    render::canvas::paint::Paint,
     unit::{Color, FontStyle, Key, Layout, Point, Rect},
     widget::{BuildContext, BuildResult, StatefulWidget},
 };

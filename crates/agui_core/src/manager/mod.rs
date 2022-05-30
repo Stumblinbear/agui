@@ -1,7 +1,7 @@
 use std::{
+    collections::VecDeque,
     fs::File,
     io::{self, BufReader, Read},
-    marker::PhantomData,
     rc::Rc,
     sync::Arc,
 };
@@ -14,32 +14,19 @@ use parking_lot::Mutex;
 
 use crate::{
     callback::CallbackId,
-    canvas::{
-        element::{RenderElement, RenderElementId},
-        layer::{Layer, LayerId, WidgetLayer},
-        Canvas,
-    },
-    plugin::{PluginImpl, WidgetManagerPlugin},
-    unit::{Font, Size, Units},
+    plugin::{BoxedPlugin, IntoPlugin, PluginElement, PluginId, PluginImpl},
+    unit::{Font, Units},
     util::{map::PluginMap, tree::Tree},
-    widget::{BuildResult, WidgetBuilder, WidgetImpl, WidgetKey},
+    widget::{BoxedWidget, BuildResult, IntoWidget, Widget, WidgetId, WidgetKey},
 };
 
 mod cache;
 pub mod context;
 pub mod event;
-pub mod plugin;
 pub mod query;
 pub mod widget;
 
-use self::{
-    cache::LayoutCache,
-    context::AguiContext,
-    event::{LayerEvent, WidgetEvent},
-    plugin::{Plugin, PluginElement, PluginId, PluginMut, PluginRef},
-    query::WidgetQuery,
-    widget::{Widget, WidgetElement, WidgetId},
-};
+use self::{cache::LayoutCache, context::AguiContext, event::WidgetEvent, query::WidgetQuery};
 
 pub trait Data: std::fmt::Debug + Downcast {}
 
@@ -52,19 +39,15 @@ pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
 pub struct WidgetManager {
-    plugins: PluginMap<Plugin>,
-    widget_tree: Tree<WidgetId, Widget>,
+    plugins: PluginMap<BoxedPlugin>,
+    widget_tree: Tree<WidgetId, BoxedWidget>,
     dirty: FnvHashSet<WidgetId>,
     callback_queue: CallbackQueue,
 
     fonts: Vec<FontArc>,
     cache: LayoutCache<WidgetId>,
 
-    render_cache: FnvHashMap<RenderElementId, Rc<RenderElement>>,
-    layer_tree: Tree<LayerId, Layer>,
-    widget_layers: FnvHashMap<WidgetId, WidgetLayer>,
-
-    modifications: Vec<Modify>,
+    modifications: VecDeque<Modify>,
 }
 
 impl WidgetManager {
@@ -74,35 +57,35 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: WidgetBuilder,
+        W: IntoWidget,
     {
         let mut manager = Self::new();
 
-        manager.set_root(widget.into());
+        manager.set_root(widget);
 
         manager
     }
 
-    pub fn get_plugins(&mut self) -> &mut PluginMap<Plugin> {
+    pub fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
         &mut self.plugins
     }
 
-    pub fn get_plugin<P>(&self) -> Option<PluginRef<P>>
+    pub fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
     where
-        P: WidgetManagerPlugin,
+        P: PluginImpl,
     {
         self.plugins
             .get(&PluginId::of::<P>())
-            .map(|p| p.get_as::<P>().unwrap())
+            .and_then(|p| p.downcast_ref())
     }
 
-    pub fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
+    pub fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
     where
-        P: WidgetManagerPlugin,
+        P: PluginImpl,
     {
         self.plugins
             .get_mut(&PluginId::of::<P>())
-            .map(|p| p.get_as_mut::<P>().unwrap())
+            .and_then(|p| p.downcast_mut())
     }
 
     pub fn get_fonts(&self) -> &[FontArc] {
@@ -116,11 +99,11 @@ impl WidgetManager {
     /// Will panic if you attempt to add a plugin a second time.
     pub fn add_plugin<P>(&mut self, plugin: P)
     where
-        P: WidgetManagerPlugin,
+        P: IntoPlugin,
     {
-        let plugin_id = PluginId::of::<P>();
+        let plugin = plugin.into_plugin();
 
-        let plugin: PluginElement<P> = plugin.into();
+        let plugin_id = PluginId::from(&plugin);
 
         if self.plugins.contains_key(&plugin_id) {
             tracing::warn!(
@@ -136,7 +119,7 @@ impl WidgetManager {
             "adding plugin to widget manager"
         );
 
-        self.plugins.insert(plugin_id, Plugin::new(plugin));
+        self.plugins.insert(plugin_id, plugin);
     }
 
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
@@ -169,7 +152,7 @@ impl WidgetManager {
     }
 
     /// Get the widget build context.
-    pub fn get_tree(&self) -> &Tree<WidgetId, Widget> {
+    pub fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget> {
         &self.widget_tree
     }
 
@@ -186,31 +169,24 @@ impl WidgetManager {
                     .widget_tree
                     .get(root_id)
                     .unwrap()
-                    .get()
-                    .unwrap()
                     .get_display_name()
                     .as_str(),
                 "removing root widget"
             );
 
-            self.modifications.push(Modify::Destroy(root_id));
+            self.modifications.push_back(Modify::Destroy(root_id));
         }
     }
 
     /// Queues the widget for addition into the tree
-    pub fn set_root<W>(&mut self, widget: WidgetElement<W>)
+    pub fn set_root<W>(&mut self, widget: W)
     where
-        W: WidgetBuilder,
+        W: IntoWidget,
     {
         self.remove_root();
 
-        tracing::info!(
-            widget = widget.get_display_name().as_str(),
-            "root widget set"
-        );
-
         self.modifications
-            .push(Modify::Spawn(None, Widget::new(None, widget)));
+            .push_back(Modify::Spawn(None, Widget::new(widget)));
     }
 
     /// Check if a widget exists in the tree.
@@ -317,8 +293,6 @@ impl WidgetManager {
             );
         }
 
-        let layer_events = self.redraw_layers(&widget_events);
-
         Some(widget_events)
     }
 
@@ -366,9 +340,7 @@ impl WidgetManager {
         // Apply any queued modifications
         let mut removed_keyed = FnvHashMap::default();
 
-        while !self.modifications.is_empty() {
-            let modification = self.modifications.remove(0);
-
+        for modification in self.modifications.pop_front() {
             match modification {
                 Modify::Spawn(parent_id, widget) => {
                     self.process_spawn(&mut widget_events, &mut removed_keyed, parent_id, widget);
@@ -420,14 +392,12 @@ impl WidgetManager {
                     .widget_tree
                     .get(widget_id)
                     .unwrap()
-                    .get()
-                    .unwrap()
                     .get_display_name()
                     .as_str(),
                 "queueing widget for rebuild"
             );
 
-            self.modifications.push(Modify::Rebuild(widget_id));
+            self.modifications.push_back(Modify::Rebuild(widget_id));
         }
     }
 
@@ -443,8 +413,7 @@ impl WidgetManager {
         for (callback_id, args) in callbacks {
             let mut widget = self
                 .widget_tree
-                .get(callback_id.get_widget_id())
-                .and_then(|node| node.get_mut())
+                .take(callback_id.get_widget_id())
                 .expect("cannot call a callback on a widget that does not exist");
 
             let changed = widget.call(
@@ -470,8 +439,11 @@ impl WidgetManager {
                 );
 
                 self.modifications
-                    .push(Modify::Rebuild(callback_id.get_widget_id()));
+                    .push_back(Modify::Rebuild(callback_id.get_widget_id()));
             }
+
+            self.widget_tree
+                .replace(callback_id.get_widget_id(), widget);
         }
     }
 
@@ -487,8 +459,7 @@ impl WidgetManager {
         if let Some(widget_id) = self.widget_tree.get_root() {
             let widget = self
                 .widget_tree
-                .get(widget_id)
-                .and_then(|widget| widget.get_mut())
+                .get_mut(widget_id)
                 .expect("tree has a root node, but it doesn't exist");
 
             if let Some(layout) = widget.get_layout() {
@@ -541,10 +512,9 @@ impl WidgetManager {
 
         // Update the widget rects in the context
         for widget_id in &newly_changed {
-            let mut widget = self
+            let widget = self
                 .widget_tree
                 .get_mut(*widget_id)
-                .and_then(|widget| widget.get_mut())
                 .expect("newly changed widget does not exist in the tree");
 
             widget.set_rect(self.cache.get_rect(widget_id).copied());
@@ -574,10 +544,15 @@ impl WidgetManager {
         let span = tracing::debug_span!("process_spawn");
         let _enter = span.enter();
 
+        let widget = match widget.create() {
+            Some(widget) => widget,
+            None => return,
+        };
+
         if parent_id.is_some() && !self.contains(parent_id.unwrap()) {
             tracing::error!(
                 parent_id = format!("{:?}", parent_id).as_str(),
-                widget = widget.get().unwrap().get_display_name().as_str(),
+                widget = widget.get_display_name().as_str(),
                 "cannot add a widget to a nonexistent parent"
             );
 
@@ -589,7 +564,7 @@ impl WidgetManager {
             if let Some(widget_id) = removed_keyed.remove(&key) {
                 tracing::trace!(
                     parent_id = format!("{:?}", parent_id).as_str(),
-                    widget = widget.get().unwrap().get_display_name().as_str(),
+                    widget = widget.get_display_name().as_str(),
                     "reparenting keyed widget"
                 );
 
@@ -607,7 +582,7 @@ impl WidgetManager {
 
         tracing::trace!(
             parent_id = format!("{:?}", parent_id).as_str(),
-            widget = widget.get().unwrap().get_display_name().as_str(),
+            widget = widget.get_display_name().as_str(),
             "spawning widget"
         );
 
@@ -620,7 +595,7 @@ impl WidgetManager {
 
         self.cache.add(widget_id);
 
-        self.modifications.push(Modify::Rebuild(widget_id));
+        self.modifications.push_back(Modify::Rebuild(widget_id));
     }
 
     fn process_rebuild(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
@@ -630,18 +605,16 @@ impl WidgetManager {
         // Queue the widget's children for removal
         if let Some(children) = self.widget_tree.get_children(widget_id) {
             for child_id in children {
-                self.modifications.push(Modify::Destroy(*child_id));
+                self.modifications.push_back(Modify::Destroy(*child_id));
             }
         }
 
         widget_events.push(WidgetEvent::Rebuilt { widget_id });
 
-        let widget = self
+        let mut widget = self
             .widget_tree
-            .get(widget_id)
+            .take(widget_id)
             .expect("cannot destroy a widget that doesn't exist");
-
-        let mut widget = widget.get_mut().expect("widget destroyed before rebuild");
 
         let result = widget.build(AguiContext {
             plugins: Some(&mut self.plugins),
@@ -652,14 +625,14 @@ impl WidgetManager {
             widget_id: Some(widget_id),
         });
 
+        self.widget_tree.replace(widget_id, widget);
+
         match result {
             BuildResult::None => {}
             BuildResult::Some(children) => {
                 for child in children {
-                    if !child.is_empty() {
-                        self.modifications
-                            .push(Modify::Spawn(Some(widget_id), child));
-                    }
+                    self.modifications
+                        .push_back(Modify::Spawn(Some(widget_id), child));
                 }
             }
             BuildResult::Err(err) => {
@@ -678,7 +651,7 @@ impl WidgetManager {
         // Queue the widget's children for removal
         if let Some(children) = self.widget_tree.get_children(widget_id) {
             for child_id in children {
-                self.modifications.push(Modify::Destroy(*child_id));
+                self.modifications.push_back(Modify::Destroy(*child_id));
             }
         }
 
@@ -691,143 +664,244 @@ impl WidgetManager {
             .expect("cannot destroy a widget that doesn't exist");
     }
 
-    fn redraw_layers(&mut self, events: &[WidgetEvent]) -> Option<Vec<LayerEvent>> {
-        let mut dirty_layers = FnvHashSet::default();
-        let mut layer_events = Vec::new();
+    // fn redraw_layers(&mut self, widget_events: &[WidgetEvent]) -> Vec<RenderEvent> {
+    //     let mut layer_events = Vec::new();
 
-        for event in events {
-            match event {
-                WidgetEvent::Spawned {
-                    parent_id,
-                    widget_id,
-                } => {
-                    let parent_layer_id = parent_id
-                        .and_then(|parent_id| self.widget_layers.get(&parent_id))
-                        .and_then(|widget_layer| widget_layer.get_next_layer());
+    //     // If the root node was removed, delete everything
+    //     if self.get_tree().get_root().is_none() {
+    //         for layer_id in self.layer_tree.iter_down(None) {
+    //             layer_events.push(RenderEvent::Destroyed { layer_id });
+    //         }
 
-                    self.widget_layers
-                        .insert(*widget_id, WidgetLayer::new(parent_layer_id));
-                }
+    //         return layer_events;
+    //     }
 
-                WidgetEvent::Rebuilt { widget_id } => {
-                    let widget_layer = self.widget_layers.get_mut(widget_id).unwrap();
+    //     let root_widget_id = self.widget_tree.get_root().unwrap();
 
-                    // let old_layer_element = widget_layer.parent_layer_id.and_then(|layer_id| {
-                    //     self.layer_tree
-                    //         .get(layer_id)
-                    //         .unwrap()
-                    //         .widgets
-                    //         .get(widget_id)
-                    //         .cloned()
-                    // });
+    //     for event in widget_events {
+    //         match event {
+    //             WidgetEvent::Spawned {
+    //                 parent_id,
+    //                 widget_id,
+    //             } => {
+    //                 if *widget_id == root_widget_id {
+    //                     let rect = *self.cache.get_rect(widget_id).unwrap();
 
-                    let canvas = &mut Canvas {
-                        rect: self.cache.get_rect(widget_id).cloned().unwrap().normalize(),
+    //                     // Spawn the root layer
+    //                     let layer_id = if let Some(root_id) = self.layer_tree.get_root() {
+    //                         root_id
+    //                     } else {
+    //                         self.layer_tree.add(
+    //                             None,
+    //                             Layer {
+    //                                 owner_id: *widget_id,
 
-                        layer_style: None,
+    //                                 pos: rect.into(),
+    //                                 size: rect.into(),
 
-                        head: None,
-                        children: Vec::default(),
-                        tail: Vec::default(),
-                    };
+    //                                 style: LayerStyle::default(),
 
-                    self.widget_tree
-                        .get(*widget_id)
-                        .unwrap()
-                        .get()
-                        .unwrap()
-                        .render(canvas);
+    //                                 widgets: vec![LayerWidget::new(*widget_id)],
+    //                             },
+    //                         )
+    //                     };
 
-                    if let Some(parent_layer_id) = widget_layer.parent_layer_id {
-                        let new_layer_element = self
-                            .layer_tree
-                            .get(parent_layer_id)
-                            .unwrap()
-                            .widgets
-                            .get(widget_id)
-                            .cloned();
+    //                     self.widget_layer.insert(*widget_id, layer_id);
+    //                 } else {
+    //                     let layer_id = *self.widget_layer.get(&parent_id.unwrap()).unwrap();
 
-                        // If the element it created for the parent layer changed, we need to update it
-                        if old_layer_element != new_layer_element {
-                            dirty_layers.insert(parent_layer_id);
+    //                     self.layer_tree
+    //                         .get(layer_id)
+    //                         .unwrap()
+    //                         .widgets
+    //                         .push(LayerWidget::new(*widget_id));
 
-                            layer_events.push(LayerEvent::Redrawn {
-                                layer_id: parent_layer_id,
-                            });
-                        }
-                    }
+    //                     // Attach the new widget to its parent layer
+    //                     self.widget_layer.insert(*widget_id, layer_id);
+    //                 }
+    //             }
 
-                    for layer_id in &widget_layer.child_layers {
-                        dirty_layers.insert(*layer_id);
+    //             WidgetEvent::Rebuilt { widget_id } => {
+    //                 // if *widget_id == root_widget_id {
+    //                 //     let rect = self.cache.get_rect(widget_id).unwrap().normalize();
 
-                        layer_events.push(LayerEvent::Spawned {
-                            layer_id: *layer_id,
-                        });
-                    }
-                }
+    //                 //     let layer = self.layer_tree
+    //                 //         .get_mut(self.layer_tree.get_root().unwrap())
+    //                 //         .unwrap();
+    //                 // }
 
-                WidgetEvent::Reparent {
-                    parent_id,
-                    widget_id,
-                } => {
-                    // Remove the widget from its old layer
-                    if let Some(old_parent_layer_id) = self
-                        .widget_layers
-                        .get(widget_id)
-                        .and_then(|widget_layer| widget_layer.parent_layer_id)
-                    {
-                        if let Some(old_layer) = self.layer_tree.get_mut(old_parent_layer_id) {
-                            old_layer.widgets.remove(widget_id);
+    //                 self.process_redraw(&mut layer_events, *widget_id);
+    //             }
 
-                            dirty_layers.insert(old_parent_layer_id);
-                        }
-                    }
+    //             WidgetEvent::Reparent {
+    //                 parent_id,
+    //                 widget_id,
+    //             } => {
+    //                 // Remove the widget from its old layer
+    //                 // if let Some(old_parent_layer_id) = self
+    //                 //     .widget_layers
+    //                 //     .get(widget_id)
+    //                 //     .and_then(|widget_layer| widget_layer.parent_layer_id)
+    //                 // {
+    //                 //     if let Some(old_layer) = self.layer_tree.get_mut(old_parent_layer_id) {
+    //                 //         old_layer.widgets.remove(widget_id);
 
-                    let new_parent_layer_id = parent_id.and_then(|parent_id| {
-                        self.widget_layers
-                            .get(&parent_id)
-                            .and_then(|widget_layer| widget_layer.get_next_layer())
-                    });
+    //                 //         layer_events.push(LayerEvent::Redrawn {
+    //                 //             layer_id: old_parent_layer_id,
+    //                 //         });
+    //                 //     }
+    //                 // }
 
-                    self.widget_layers
-                        .get_mut(widget_id)
-                        .unwrap()
-                        .parent_layer_id = new_parent_layer_id;
+    //                 // let new_parent_layer_id = parent_id.and_then(|parent_id| {
+    //                 //     self.widget_layers
+    //                 //         .get(&parent_id)
+    //                 //         .and_then(|widget_layer| widget_layer.get_tail_layer())
+    //                 // });
 
-                    dirty_layers.extend(new_parent_layer_id);
-                }
+    //                 // self.widget_layers
+    //                 //     .get_mut(widget_id)
+    //                 //     .unwrap()
+    //                 //     .parent_layer_id = new_parent_layer_id;
 
-                WidgetEvent::Destroyed { widget_id } => {
-                    if let Some(WidgetLayer {
-                        parent_layer_id,
-                        child_layers,
-                        ..
-                    }) = self.widget_layers.remove(widget_id)
-                    {
-                        // Remove the widget from its parent layer
-                        if let Some(parent_layer_id) = parent_layer_id {
-                            if let Some(layer) = self.layer_tree.get_mut(parent_layer_id) {
-                                layer.widgets.remove(widget_id);
+    //                 // dirty_layers.extend(new_parent_layer_id);
+    //             }
 
-                                dirty_layers.insert(parent_layer_id);
-                            }
-                        }
+    //             WidgetEvent::Destroyed { widget_id } => {
+    //                 // let head_layer_id = parent_id
+    //                 //     .and_then(|parent_id| self.widget_layers.get(&parent_id))
+    //                 //     .and_then(|widget_layer| widget_layer.get_tail_layer());
 
-                        // Remove all of the layers it created
-                        for layer_id in child_layers {
-                            self.layer_tree.remove(layer_id, false);
+    //                 // self.widget_layers
+    //                 //     .insert(*widget_id, WidgetLayer::new(head_layer_id));
 
-                            layer_events.push(LayerEvent::Destroyed { layer_id });
-                        }
-                    }
-                }
+    //                 // if let Some(WidgetLayer { head_layer_id, .. }) =
+    //                 //     self.widget_layers.remove(widget_id)
+    //                 // {
+    //                 //     // Remove the widget from its head layer
+    //                 //     if let Some(head_layer_id) = head_layer_id {
+    //                 //         let layer = self.layer_tree.get_mut(head_layer_id).unwrap();
 
-                _ => {}
-            }
-        }
+    //                 //         if let Some(render_element_idx) = layer
+    //                 //             .render_elements
+    //                 //             .iter()
+    //                 //             .position(|(id, _)| id == widget_id)
+    //                 //         {
+    //                 //             layer.render_elements.remove(render_element_idx);
 
-        None
-    }
+    //                 //             layer_events.push(LayerEvent::Redrawn {
+    //                 //                 layer_id: head_layer_id,
+    //                 //             });
+    //                 //         }
+
+    //                 //         let mut layer_queue = VecDeque::new();
+    //                 //         layer_queue.push_back(head_layer_id);
+
+    //                 //         // Remove any direct child layers the widget added to the layer
+    //                 //         if let Some(head_children) = self.layer_tree.get_children(head_layer_id)
+    //                 //         {
+    //                 //             for child_layer_id in head_children {
+    //                 //                 let child_layer = self.layer_tree.get(*child_layer_id).unwrap();
+
+    //                 //                 // If the widget added any layers, we need to propagate the deletion down the tree
+    //                 //                 if child_layer.owner_id == *widget_id {
+    //                 //                     layer_queue.push_back(*child_layer_id);
+    //                 //                 }
+    //                 //             }
+    //                 //         }
+
+    //                 //         let mut layers_destroyed = Vec::new();
+
+    //                 //         for layer_id in layer_queue.pop_front() {
+    //                 //             if let Some(children) = self.layer_tree.get_children(layer_id) {
+    //                 //                 for child_layer_id in children {
+    //                 //                     let child_layer =
+    //                 //                         self.layer_tree.get(*child_layer_id).unwrap();
+
+    //                 //                     if child_layer.owner_id != *widget_id {
+    //                 //                         continue;
+    //                 //                     }
+
+    //                 //                     layers_destroyed.push(*child_layer_id);
+
+    //                 //                     layer_queue.push(child_layer_id);
+    //                 //                 }
+    //                 //             }
+    //                 //         }
+    //                 //     }
+    //                 // }
+    //             }
+
+    //             _ => {}
+    //         }
+    //     }
+
+    //     layer_events
+    // }
+
+    // fn process_redraw(&mut self, layer_events: &mut Vec<RenderEvent>, widget_id: WidgetId) {
+    //     let canvas = &mut Canvas {
+    //         rect: self.cache.get_rect(&widget_id).unwrap().normalize(),
+
+    //         layer_style: None,
+
+    //         head: None,
+    //         children: Vec::default(),
+    //         tail: Vec::default(),
+    //     };
+
+    //     self.widget_tree
+    //         .get(widget_id)
+    //         .unwrap()
+    //         .get()
+    //         .unwrap()
+    //         .render(canvas);
+
+    //     let layer_id = *self.widget_layer.get(&widget_id).unwrap();
+
+    //     let layer = self.layer_tree.get_mut(layer_id).unwrap();
+
+    //     let layer_idx = if let Some(layer_idx) = layer
+    //         .widgets
+    //         .iter()
+    //         .position(|layer_widget| layer_widget.widget_id == widget_id)
+    //     {
+    //         layer_idx
+    //     } else {
+    //         layer.widgets.push(LayerWidget::new(widget_id));
+
+    //         layer.widgets.len() - 1
+    //     };
+
+    //     let layer_widget = &mut layer.widgets[layer_idx];
+
+    //     if let Some(render_element) = canvas.head.take() {
+    //         let render_element_id = RenderElementId::from(&render_element);
+
+    //         if head_layer
+    //             .widgets
+    //             .get(widget_id)
+    //             .map(|(last_element_id, _)| *last_element_id != render_element_id)
+    //             .unwrap_or(true)
+    //         {
+    //             let render_element = Rc::clone(
+    //                 &self
+    //                     .render_cache
+    //                     .entry(render_element_id)
+    //                     .or_insert_with(|| Rc::new(render_element)),
+    //             );
+
+    //             head_layer
+    //                 .widgets
+    //                 .insert(*widget_id, (render_element_id, render_element));
+    //         }
+    //     }
+
+    //     let tail_layer_id = widget_layer.tail_layer_id;
+
+    //     for tail_canvas in canvas.tail {
+    //         let layer = self.layer_tree.get_mut(tail_layer_id).unwrap();
+    //     }
+    // }
 }
 
 #[derive(Debug)]
@@ -839,14 +913,16 @@ enum Modify {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use crate::{
         manager::event::WidgetEvent,
-        widget::{BuildContext, BuildResult, StatelessWidget},
+        widget::{BuildContext, BuildResult, IntoWidget, StatelessWidget, Widget},
     };
 
-    use super::{widget::Widget, WidgetManager};
+    use super::WidgetManager;
 
-    #[derive(Clone, Debug, Default)]
+    #[derive(Debug, Default)]
     struct TestWidget {
         pub children: Vec<Widget>,
     }
@@ -861,7 +937,7 @@ mod tests {
     pub fn adding_a_root_widget() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestWidget::default().into());
+        manager.set_root(TestWidget::default());
 
         assert_eq!(manager.get_root(), None, "should not have added the widget");
 
@@ -878,7 +954,7 @@ mod tests {
     pub fn removing_a_root_widget() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestWidget::default().into());
+        manager.set_root(TestWidget::default());
 
         assert_eq!(manager.get_root(), None, "should not have added the widget");
 
@@ -911,7 +987,7 @@ mod tests {
             widget.children.push(TestWidget::default().into());
         }
 
-        manager.set_root(widget.into());
+        manager.set_root(widget);
 
         manager.update();
 
@@ -948,11 +1024,17 @@ mod tests {
     pub fn properly_sanitizes_events() {
         let mut manager = WidgetManager::new();
 
-        let widget = TestWidget::default();
+        let test_widget = Rc::new(TestWidget::default());
 
-        let widget_id_1 = manager.widget_tree.add(None, widget.clone().into());
-        let widget_id_2 = manager.widget_tree.add(None, widget.clone().into());
-        let widget_id_3 = manager.widget_tree.add(None, widget.into());
+        let widget_id_1 = manager
+            .widget_tree
+            .add(None, Rc::clone(&test_widget).into_widget());
+        let widget_id_2 = manager
+            .widget_tree
+            .add(None, Rc::clone(&test_widget).into_widget());
+        let widget_id_3 = manager
+            .widget_tree
+            .add(None, Rc::clone(&test_widget).into_widget());
 
         let mut events = vec![
             WidgetEvent::Spawned {

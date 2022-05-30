@@ -19,12 +19,9 @@ pub mod macros {
 pub mod prelude {
     pub use agui_core::{
         callback::Callback,
-        canvas::{
-            paint::{Brush, Paint},
-            Canvas,
-        },
-        manager::{context::Context, query::*, widget::Widget},
+        manager::{context::Context, query::*},
+        render::canvas::paint::{Brush, Paint},
         unit::*,
-        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget},
+        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
     };
 }

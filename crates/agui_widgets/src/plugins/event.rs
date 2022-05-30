@@ -3,15 +3,15 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 use agui_core::{
     callback::{CallbackContext, CallbackId},
     manager::{context::Context, event::WidgetEvent, Data, WidgetManager},
-    plugin::{PluginContext, WidgetManagerPlugin},
+    plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetBuilder},
+    widget::{BuildContext, WidgetImpl},
 };
 
 #[derive(Debug, Default)]
 pub struct EventPlugin;
 
-impl WidgetManagerPlugin for EventPlugin {
+impl StatefulPlugin for EventPlugin {
     type State = EventState;
 
     // Check if any changes occurred outside of the main loop.
@@ -97,7 +97,7 @@ pub trait EventPluginExt {
 
 pub trait EventPluginContextExt<W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
@@ -114,7 +114,7 @@ impl EventPluginExt for WidgetManager {
     where
         E: Data,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<EventPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<EventPlugin>() {
             plugin.get_state_mut().fire_event(event)
         }
     }
@@ -122,7 +122,7 @@ impl EventPluginExt for WidgetManager {
 
 impl<'ctx, W> EventPluginContextExt<W> for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
@@ -131,7 +131,7 @@ where
     {
         let callback_id = self.callback(func).get_id().unwrap();
 
-        if let Some(mut plugin) = self.get_plugin_mut::<EventPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<EventPlugin>() {
             plugin.get_state_mut().listen_to::<E>(callback_id)
         }
     }
@@ -140,7 +140,7 @@ where
     where
         E: Data,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<EventPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<EventPlugin>() {
             plugin.get_state_mut().fire_event(event)
         }
     }
@@ -201,7 +201,7 @@ mod tests {
 
         manager.update();
 
-        manager.set_root(TestListener::default().into());
+        manager.set_root(TestListener::default());
 
         manager.update();
 

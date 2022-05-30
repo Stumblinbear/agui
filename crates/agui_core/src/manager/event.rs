@@ -1,6 +1,4 @@
-use crate::canvas::layer::LayerId;
-
-use super::widget::WidgetId;
+use crate::widget::WidgetId;
 
 /// Used to indicate a change to widgets in the tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,30 +34,6 @@ impl WidgetEvent {
             | WidgetEvent::Reparent { widget_id, .. }
             | WidgetEvent::Layout { widget_id, .. }
             | WidgetEvent::Destroyed { widget_id, .. } => widget_id,
-        }
-    }
-}
-
-/// Used to indicate a change to layers in the tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum LayerEvent {
-    /// A layer has been spawned.
-    Spawned { layer_id: LayerId },
-
-    /// A layer has been redrawn.
-    Redrawn { layer_id: LayerId },
-
-    /// A layer has been destroyed.
-    Destroyed { layer_id: LayerId },
-}
-
-impl LayerEvent {
-    pub fn layer_id(&self) -> &LayerId {
-        match self {
-            LayerEvent::Spawned { layer_id, .. }
-            | LayerEvent::Redrawn { layer_id, .. }
-            | LayerEvent::Destroyed { layer_id, .. } => layer_id,
         }
     }
 }

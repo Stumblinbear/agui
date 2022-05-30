@@ -1,6 +1,4 @@
-use std::cell::Ref;
-
-use agui_core::manager::widget::{Widget, WidgetElement};
+use agui_core::widget::{BoxedWidget, WidgetElement};
 
 use crate::Text;
 
@@ -12,7 +10,7 @@ pub trait TextQueryExt<'query> {
 
 impl<'query, I> TextQueryExt<'query> for I
 where
-    I: Iterator<Item = &'query Widget>,
+    I: Iterator<Item = &'query BoxedWidget>,
 {
     fn with_text(self, text: &str) -> QueryWithText<Self>
     where
@@ -37,15 +35,15 @@ impl<'t, I> QueryWithText<'t, I> {
 
 impl<'query, 't, I> Iterator for QueryWithText<'t, I>
 where
-    I: Iterator<Item = &'query Widget>,
+    I: Iterator<Item = &'query BoxedWidget>,
 {
-    type Item = Ref<'query, WidgetElement<Text>>;
+    type Item = &'query WidgetElement<Text>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.find_map(|widget| {
             widget
-                .get_as::<Text>()
+                .downcast_ref::<WidgetElement<Text>>()
                 .filter(|widget| widget.get_widget().text == self.text)
         })
     }

@@ -8,16 +8,16 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    manager::{context::Context, event::WidgetEvent, widget::WidgetId, Data, WidgetManager},
-    plugin::{PluginContext, WidgetManagerPlugin},
+    manager::{context::Context, event::WidgetEvent, Data, WidgetManager},
+    plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetBuilder},
+    widget::{BuildContext, WidgetId, WidgetImpl},
 };
 
 #[derive(Debug, Default)]
 pub struct GlobalPlugin;
 
-impl WidgetManagerPlugin for GlobalPlugin {
+impl StatefulPlugin for GlobalPlugin {
     type State = GlobalPluginState;
 
     // Check if any changes occurred outside of the main loop.
@@ -157,7 +157,7 @@ impl GlobalPluginExt for WidgetManager {
     where
         G: Data + Default,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().get(None)
         } else {
             tracing::warn!("GlobalPlugin not added");
@@ -175,7 +175,7 @@ impl GlobalPluginExt for WidgetManager {
         F: FnOnce(&mut G) + 'static,
         G: Data + Default,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().set(func)
         } else {
             tracing::warn!("GlobalPlugin not added");
@@ -185,7 +185,7 @@ impl GlobalPluginExt for WidgetManager {
 
 impl<'ctx, W> GlobalPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -193,7 +193,7 @@ where
     {
         let widget_id = self.get_widget_id();
 
-        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().get(Some(widget_id))
         } else {
             tracing::warn!("GlobalPlugin not added");
@@ -211,7 +211,7 @@ where
         F: FnOnce(&mut G) + 'static,
         G: Data + Default,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().set(func)
         } else {
             tracing::warn!("GlobalPlugin not added")
@@ -221,13 +221,13 @@ where
 
 impl<'ctx, W> GlobalPluginExt for CallbackContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
         G: Data + Default,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().get(None)
         } else {
             Global {
@@ -243,7 +243,7 @@ where
         F: FnOnce(&mut G) + 'static,
         G: Data + Default,
     {
-        if let Some(mut plugin) = self.get_plugin_mut::<GlobalPlugin>() {
+        if let Some(plugin) = self.get_plugin_mut::<GlobalPlugin>() {
             plugin.get_state_mut().set(func)
         }
     }
@@ -352,7 +352,7 @@ mod tests {
 
         manager.update();
 
-        manager.set_root(TestWidgetReader::default().into());
+        manager.set_root(TestWidgetReader::default());
 
         manager.update();
 

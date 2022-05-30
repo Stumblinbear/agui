@@ -4,27 +4,21 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
-    canvas::{context::RenderContext, renderer::RenderFn, Canvas},
-    manager::{
-        context::Context,
-        plugin::{Plugin, PluginId, PluginMut, PluginRef},
-        widget::Widget,
-        CallbackQueue, Data,
-    },
-    plugin::WidgetManagerPlugin,
+    manager::{context::Context, CallbackQueue, Data},
+    plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
+    render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
     unit::{Key, Layout, LayoutType, Rect, Size},
     util::{map::PluginMap, tree::Tree},
-    widget::WidgetId,
 };
 
-use super::{WidgetBuilder, WidgetKey};
+use super::{BoxedWidget, Widget, WidgetId, WidgetImpl, WidgetKey};
 
 pub struct BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
-    pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
-    pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
+    pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
+    pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -43,31 +37,31 @@ where
 
 impl<W> Context<W> for BuildContext<'_, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
-    fn get_plugins(&mut self) -> &mut PluginMap<Plugin> {
+    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
         self.plugins
     }
 
-    fn get_plugin<P>(&self) -> Option<PluginRef<P>>
+    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
     where
-        P: WidgetManagerPlugin,
+        P: PluginImpl,
     {
         self.plugins
             .get(&PluginId::of::<P>())
-            .map(|p| p.get_as::<P>().unwrap())
+            .and_then(|p| p.downcast_ref())
     }
 
-    fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
+    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
     where
-        P: WidgetManagerPlugin,
+        P: PluginImpl,
     {
         self.plugins
             .get_mut(&PluginId::of::<P>())
-            .map(|p| p.get_as_mut::<P>().unwrap())
+            .and_then(|p| p.downcast_mut())
     }
 
-    fn get_tree(&self) -> &Tree<WidgetId, Widget> {
+    fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget> {
         self.tree
     }
 
@@ -124,7 +118,7 @@ where
 
 impl<W> BuildContext<'_, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     pub fn get_widget_id(&self) -> WidgetId {
         self.widget_id
@@ -142,7 +136,7 @@ where
 
     pub fn on_draw<F>(&mut self, func: F)
     where
-        F: Fn(&RenderContext<W>, &mut Canvas) + 'static,
+        F: Fn(&RenderContext<W>, &mut CanvasPainter) + 'static,
     {
         self.renderer = Some(RenderFn::new(func));
     }
@@ -170,15 +164,10 @@ where
             return widget;
         }
 
-        if let Widget::Some {
-            key: widget_key, ..
-        } = &mut widget
-        {
-            *widget_key = Some(match key {
-                Key::Local(_) => WidgetKey(Some(self.widget_id), key),
-                Key::Global(_) => WidgetKey(None, key),
-            });
-        }
+        widget.set_key(match key {
+            Key::Local(_) => WidgetKey(Some(self.widget_id), key),
+            Key::Global(_) => WidgetKey(None, key),
+        });
 
         widget
     }

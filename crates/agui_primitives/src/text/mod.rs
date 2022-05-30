@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use agui_core::{
-    canvas::paint::Paint,
+    render::canvas::paint::Paint,
     unit::{FontStyle, Layout, Sizing},
     widget::{BuildContext, BuildResult, StatelessWidget},
 };

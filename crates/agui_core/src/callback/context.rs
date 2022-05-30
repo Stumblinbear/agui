@@ -1,29 +1,24 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
-    manager::{
-        context::Context,
-        plugin::{Plugin, PluginId, PluginMut, PluginRef},
-        widget::{Widget, WidgetId},
-        CallbackQueue, Data,
-    },
-    plugin::WidgetManagerPlugin,
+    manager::{context::Context, CallbackQueue, Data},
+    plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     unit::{Rect, Size},
     util::{
         map::{PluginMap, WidgetSet},
         tree::Tree,
     },
-    widget::WidgetBuilder,
+    widget::{BoxedWidget, WidgetId, WidgetImpl},
 };
 
 use super::{Callback, CallbackId};
 
 pub struct CallbackContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
-    pub(crate) plugins: &'ctx mut PluginMap<Plugin>,
-    pub(crate) tree: &'ctx Tree<WidgetId, Widget>,
+    pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
+    pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
     pub(crate) dirty: &'ctx mut WidgetSet,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -37,7 +32,7 @@ where
 
 impl<W> Deref for CallbackContext<'_, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
     type Target = W;
 
@@ -48,31 +43,31 @@ where
 
 impl<W> Context<W> for CallbackContext<'_, W>
 where
-    W: WidgetBuilder,
+    W: WidgetImpl,
 {
-    fn get_plugins(&mut self) -> &mut PluginMap<Plugin> {
+    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
         self.plugins
     }
 
-    fn get_plugin<P>(&self) -> Option<PluginRef<P>>
+    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
     where
-        P: WidgetManagerPlugin,
+        P: PluginImpl,
     {
         self.plugins
             .get(&PluginId::of::<P>())
-            .map(|p| p.get_as::<P>().unwrap())
+            .and_then(|p| p.downcast_ref())
     }
 
-    fn get_plugin_mut<P>(&mut self) -> Option<PluginMut<P>>
+    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
     where
-        P: WidgetManagerPlugin,
+        P: PluginImpl,
     {
         self.plugins
             .get_mut(&PluginId::of::<P>())
-            .map(|p| p.get_as_mut::<P>().unwrap())
+            .and_then(|p| p.downcast_mut())
     }
 
-    fn get_tree(&self) -> &Tree<WidgetId, Widget> {
+    fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget> {
         self.tree
     }
 

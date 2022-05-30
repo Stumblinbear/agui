@@ -6,7 +6,7 @@ use std::{
 
 use fnv::{FnvHashMap, FnvHashSet};
 
-use crate::manager::{plugin::PluginId, widget::WidgetId};
+use crate::{plugin::PluginId, widget::WidgetId};
 
 use super::hasher::TypeIdHasher;
 

@@ -1,8 +1,7 @@
 use agui_core::{
-    canvas::paint::Paint,
-    manager::widget::Widget,
+    render::canvas::paint::Paint,
     unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, StatelessWidget},
+    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
 };
 
 #[derive(Debug, Default)]

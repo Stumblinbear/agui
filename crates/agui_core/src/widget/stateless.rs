@@ -1,8 +1,8 @@
 use downcast_rs::Downcast;
 
-use crate::widget::{BuildContext, BuildResult};
+use crate::widget::BuildResult;
 
-use super::StatefulWidget;
+use super::{BuildContext, StatefulWidget};
 
 /// Implements the widget's `build()` method.
 pub trait StatelessWidget: std::fmt::Debug + Downcast + Sized {
