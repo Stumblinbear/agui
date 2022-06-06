@@ -27,7 +27,7 @@ glyph_brush_layout = "0.2"
 glyph_brush_draw_cache = "0.1"
 
 [dev-dependencies]
-sysinfo = "0.23"
+sysinfo = "0.24"
 
 [[example]]
 name = "hello_world"
