@@ -5,7 +5,7 @@ use agui_core::{
     manager::{context::Context, event::WidgetEvent, Data, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetImpl},
+    widget::{BuildContext, WidgetBuilder},
 };
 
 #[derive(Debug, Default)]
@@ -97,7 +97,7 @@ pub trait EventPluginExt {
 
 pub trait EventPluginContextExt<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
@@ -122,7 +122,7 @@ impl EventPluginExt for WidgetManager {
 
 impl<'ctx, W> EventPluginContextExt<W> for BuildContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
@@ -152,7 +152,7 @@ mod tests {
 
     use agui_core::{
         manager::{context::Context, query::WidgetQueryExt, WidgetManager},
-        widget::{BuildContext, BuildResult, StatefulWidget},
+        widget::{BuildContext, BuildResult, WidgetBuilder},
     };
     use agui_primitives::Column;
 
@@ -163,7 +163,7 @@ mod tests {
     #[derive(Clone, Debug, Default)]
     struct TestListener {}
 
-    impl StatefulWidget for TestListener {
+    impl WidgetBuilder for TestListener {
         type State = u32;
 
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {

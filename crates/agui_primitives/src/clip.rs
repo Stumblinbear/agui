@@ -1,7 +1,7 @@
 use agui_core::{
     render::canvas::paint::Paint,
     unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
 #[derive(Debug, Default)]
@@ -14,7 +14,7 @@ pub struct Clip {
     pub child: Widget,
 }
 
-impl StatelessWidget for Clip {
+impl WidgetBuilder for Clip {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.on_draw(|ctx, canvas| {
             let paint = Paint {

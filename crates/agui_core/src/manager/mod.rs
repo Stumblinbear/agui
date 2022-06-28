@@ -917,7 +917,7 @@ mod tests {
 
     use crate::{
         manager::event::WidgetEvent,
-        widget::{BuildContext, BuildResult, IntoWidget, StatelessWidget, Widget},
+        widget::{BuildContext, BuildResult, IntoWidget, Widget, WidgetBuilder},
     };
 
     use super::WidgetManager;
@@ -927,7 +927,7 @@ mod tests {
         pub children: Vec<Widget>,
     }
 
-    impl StatelessWidget for TestWidget {
+    impl WidgetBuilder for TestWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
             (&self.children).into()
         }

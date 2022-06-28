@@ -10,7 +10,7 @@ use agui_core::{
     manager::{context::Context, event::WidgetEvent, Data},
     plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
-    widget::{BuildContext, WidgetId, WidgetImpl},
+    widget::{BuildContext, WidgetBuilder, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -185,7 +185,7 @@ pub trait ProviderPluginExt {
 
 impl<'ctx, W> ProviderPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     /// Makes some local widget state available to any child widget.
     fn provide<V, F>(&mut self, func: F) -> Provided<V>
@@ -219,7 +219,7 @@ pub trait ConsumerPluginExt {
 
 impl<'ctx, W> ConsumerPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Provided<V>>
@@ -316,7 +316,7 @@ mod tests {
     use agui_core::{
         manager::{context::Context, query::WidgetQueryExt, WidgetManager},
         unit::Key,
-        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget, Widget},
+        widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
     };
 
     use crate::plugins::{
@@ -334,7 +334,7 @@ mod tests {
         child: Widget,
     }
 
-    impl StatelessWidget for TestWidgetProvider {
+    impl WidgetBuilder for TestWidgetProvider {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             let global = ctx.get_global::<u32>();
 
@@ -349,7 +349,7 @@ mod tests {
     #[derive(Clone, Debug, Default)]
     struct TestWidgetConsumer;
 
-    impl StatefulWidget for TestWidgetConsumer {
+    impl WidgetBuilder for TestWidgetConsumer {
         type State = u32;
 
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {

@@ -12,11 +12,11 @@ use crate::{
     unit::{Layout, LayoutType, Rect},
 };
 
-use super::{BuildContext, BuildResult, WidgetImpl, WidgetInstance, WidgetKey};
+use super::{BuildContext, BuildResult, WidgetBuilder, WidgetInstance, WidgetKey};
 
 pub struct WidgetElement<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     widget: Rc<W>,
     state: W::State,
@@ -34,7 +34,7 @@ where
 
 impl<W> WidgetElement<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub fn new(widget: Rc<W>) -> Self {
         Self {
@@ -56,7 +56,7 @@ where
 
 impl<W> WidgetElement<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub fn get_widget(&self) -> &W {
         &self.widget
@@ -69,7 +69,7 @@ where
 
 impl<W> WidgetInstance for WidgetElement<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn get_type_id(&self) -> TypeId {
         TypeId::of::<W>()
@@ -205,7 +205,7 @@ where
 
 impl<W> std::fmt::Debug for WidgetElement<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WidgetElement")

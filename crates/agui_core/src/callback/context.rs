@@ -8,14 +8,14 @@ use crate::{
         map::{PluginMap, WidgetSet},
         tree::Tree,
     },
-    widget::{BoxedWidget, WidgetId, WidgetImpl},
+    widget::{BoxedWidget, WidgetBuilder, WidgetId},
 };
 
 use super::{Callback, CallbackId};
 
 pub struct CallbackContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
@@ -32,7 +32,7 @@ where
 
 impl<W> Deref for CallbackContext<'_, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     type Target = W;
 
@@ -43,7 +43,7 @@ where
 
 impl<W> Context<W> for CallbackContext<'_, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
         self.plugins

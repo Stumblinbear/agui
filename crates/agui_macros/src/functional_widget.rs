@@ -172,7 +172,7 @@ pub(crate) fn parse_functional_widget(args: TokenStream2, item: TokenStream2) ->
             #fields
         }
 
-        impl #agui_core::widget::StatefulWidget for #ident {
+        impl #agui_core::widget::WidgetBuilder for #ident {
             type State = #state;
 
             fn build(&self, ctx: &mut #agui_core::widget::BuildContext<Self>) -> #agui_core::widget::BuildResult {

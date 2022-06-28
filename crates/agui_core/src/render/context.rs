@@ -1,10 +1,10 @@
 use std::ops::Deref;
 
-use crate::widget::WidgetImpl;
+use crate::widget::WidgetBuilder;
 
 pub struct RenderContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub widget: &'ctx W,
     pub state: &'ctx W::State,
@@ -12,7 +12,7 @@ where
 
 impl<W> Deref for RenderContext<'_, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     type Target = W;
 
@@ -23,7 +23,7 @@ where
 
 impl<W> RenderContext<'_, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub fn get_widget(&self) -> &W {
         self.widget

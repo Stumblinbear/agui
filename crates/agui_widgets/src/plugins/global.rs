@@ -11,7 +11,7 @@ use agui_core::{
     manager::{context::Context, event::WidgetEvent, Data, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetId, WidgetImpl},
+    widget::{BuildContext, WidgetBuilder, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -185,7 +185,7 @@ impl GlobalPluginExt for WidgetManager {
 
 impl<'ctx, W> GlobalPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -221,7 +221,7 @@ where
 
 impl<'ctx, W> GlobalPluginExt for CallbackContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -286,7 +286,7 @@ mod tests {
 
     use agui_core::{
         manager::{context::Context, query::WidgetQueryExt, WidgetManager},
-        widget::{BuildContext, BuildResult, StatefulWidget, StatelessWidget},
+        widget::{BuildContext, BuildResult, WidgetBuilder},
     };
     use agui_primitives::Column;
 
@@ -298,7 +298,7 @@ mod tests {
     #[derive(Clone, Debug, Default)]
     struct TestWidgetWriter {}
 
-    impl StatelessWidget for TestWidgetWriter {
+    impl WidgetBuilder for TestWidgetWriter {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             ctx.set_global::<TestGlobal, _>(|value| value.0 += 1);
 
@@ -309,7 +309,7 @@ mod tests {
     #[derive(Clone, Debug, Default)]
     struct TestWidgetReader {}
 
-    impl StatefulWidget for TestWidgetReader {
+    impl WidgetBuilder for TestWidgetReader {
         type State = u32;
 
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {

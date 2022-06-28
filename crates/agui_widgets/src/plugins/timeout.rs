@@ -9,7 +9,7 @@ use agui_core::{
     callback::{CallbackContext, CallbackId},
     manager::{context::Context, event::WidgetEvent},
     plugin::{PluginContext, StatefulPlugin},
-    widget::{BuildContext, WidgetId, WidgetImpl},
+    widget::{BuildContext, WidgetBuilder, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -80,7 +80,7 @@ pub struct TimeoutPluginState {
 
 pub trait TimeoutPluginExt<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn set_timeout<F>(&mut self, duration: Duration, func: F)
     where
@@ -89,7 +89,7 @@ where
 
 impl<'ctx, W> TimeoutPluginExt<W> for BuildContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     /// Marks the caller for updating when `duration` elapses.
     fn set_timeout<F>(&mut self, duration: Duration, func: F)

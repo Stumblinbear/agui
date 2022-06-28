@@ -12,8 +12,10 @@ use agpu::{
     Frame, Gpu, RenderPipeline, TextureFormat,
 };
 use agui::{
+    manager::WidgetManager,
     unit::Size,
-    util::tree::{new_key_type, Tree}, widget::WidgetId, manager::WidgetManager,
+    util::tree::{new_key_type, Tree},
+    widget::WidgetId,
 };
 use glyph_brush_draw_cache::DrawCache;
 

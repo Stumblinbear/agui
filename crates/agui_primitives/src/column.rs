@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Layout, LayoutType, Units},
-    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
 #[derive(Debug, Default)]
@@ -12,7 +12,7 @@ pub struct Column {
     pub children: Vec<Widget>,
 }
 
-impl StatelessWidget for Column {
+impl WidgetBuilder for Column {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout_type(LayoutType::Column {
             spacing: self.spacing,

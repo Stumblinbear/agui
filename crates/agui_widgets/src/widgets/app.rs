@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Key, Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, StatelessWidget, Widget},
+    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
 use crate::{plugins::global::GlobalPluginExt, state::window::WindowSize};
@@ -10,7 +10,7 @@ pub struct App {
     pub child: Widget,
 }
 
-impl StatelessWidget for App {
+impl WidgetBuilder for App {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         let window_size = ctx.get_global::<WindowSize>();
 

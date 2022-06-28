@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use agui_core::{
     render::canvas::paint::Paint,
     unit::{FontStyle, Layout, Sizing},
-    widget::{BuildContext, BuildResult, StatelessWidget},
+    widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 
 pub mod edit;
@@ -15,7 +15,7 @@ pub struct Text {
     pub text: Cow<'static, str>,
 }
 
-impl StatelessWidget for Text {
+impl WidgetBuilder for Text {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: Sizing::Fill,

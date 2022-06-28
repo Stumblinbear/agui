@@ -11,11 +11,11 @@ use crate::{
     util::{map::PluginMap, tree::Tree},
 };
 
-use super::{BoxedWidget, Widget, WidgetId, WidgetImpl, WidgetKey};
+use super::{BoxedWidget, Widget, WidgetBuilder, WidgetId, WidgetKey};
 
 pub struct BuildContext<'ctx, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
     pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
@@ -37,7 +37,7 @@ where
 
 impl<W> Context<W> for BuildContext<'_, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
         self.plugins
@@ -118,7 +118,7 @@ where
 
 impl<W> BuildContext<'_, W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub fn get_widget_id(&self) -> WidgetId {
         self.widget_id

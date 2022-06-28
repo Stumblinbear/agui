@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use slotmap::new_key_type;
 
-use super::{WidgetInstance, WidgetKey};
+use super::{WidgetBuilder, WidgetInstance, WidgetKey};
 
 new_key_type! {
     pub struct WidgetId;
@@ -50,5 +50,14 @@ impl Widget {
 
     pub(crate) fn get_key(&self) -> &Option<WidgetKey> {
         &self.key
+    }
+}
+
+impl<W> From<W> for Widget
+where
+    W: IntoWidget,
+{
+    fn from(widget: W) -> Self {
+        Widget::new(widget)
     }
 }

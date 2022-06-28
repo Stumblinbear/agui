@@ -2,7 +2,7 @@ use agui_core::{
     callback::Callback,
     manager::context::Context,
     unit::{Layout, Sizing},
-    widget::{BuildContext, BuildResult, StatefulWidget, Widget},
+    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
 use crate::{
@@ -28,7 +28,7 @@ pub struct GestureState {
     focused: bool,
 }
 
-impl StatefulWidget for GestureDetector {
+impl WidgetBuilder for GestureDetector {
     type State = GestureState;
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {

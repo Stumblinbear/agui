@@ -1,17 +1,17 @@
-use crate::widget::WidgetImpl;
+use crate::widget::WidgetBuilder;
 
 use super::{canvas::painter::CanvasPainter, context::RenderContext};
 
 pub struct RenderFn<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     func: Box<dyn Fn(&RenderContext<W>, &mut CanvasPainter)>,
 }
 
 impl<W> RenderFn<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     pub fn new<F>(func: F) -> Self
     where

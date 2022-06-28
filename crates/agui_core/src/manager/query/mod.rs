@@ -3,7 +3,7 @@ use slotmap::hop::Iter;
 use crate::{
     unit::Key,
     util::tree::TreeNode,
-    widget::{BoxedWidget, WidgetImpl, WidgetId},
+    widget::{BoxedWidget, WidgetBuilder, WidgetId},
 };
 
 use super::WidgetManager;
@@ -41,7 +41,7 @@ pub trait WidgetQueryExt<'query> {
     fn by_type<W>(self) -> QueryByType<Self, W>
     where
         Self: Sized,
-        W: WidgetImpl;
+        W: WidgetBuilder;
 }
 
 impl<'query, I> WidgetQueryExt<'query> for I
@@ -54,7 +54,7 @@ where
 
     fn by_type<W>(self) -> QueryByType<Self, W>
     where
-        W: WidgetImpl,
+        W: WidgetBuilder,
     {
         QueryByType::<Self, W>::new(self)
     }

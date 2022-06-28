@@ -3,7 +3,7 @@ use agui_core::{
     manager::context::Context,
     render::canvas::paint::Paint,
     unit::{Color, Key, Layout},
-    widget::{BuildContext, BuildResult, StatefulWidget, Widget},
+    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
 use crate::GestureDetector;
@@ -44,7 +44,7 @@ pub struct Button {
     pub child: Widget,
 }
 
-impl StatefulWidget for Button {
+impl WidgetBuilder for Button {
     type State = ButtonState;
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {

@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, StatelessWidget},
+    widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 
 #[derive(Clone, Default, Debug)]
@@ -26,7 +26,7 @@ impl Spacing {
     }
 }
 
-impl StatelessWidget for Spacing {
+impl WidgetBuilder for Spacing {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout {
             sizing: self.0,

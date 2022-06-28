@@ -1,4 +1,4 @@
-use agui_core::widget::{BuildContext, BuildResult, StatelessWidget};
+use agui_core::widget::{BuildContext, BuildResult, WidgetBuilder};
 
 pub struct Builder {
     func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult + 'static>,
@@ -21,7 +21,7 @@ impl Builder {
     }
 }
 
-impl StatelessWidget for Builder {
+impl WidgetBuilder for Builder {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         (self.func)(ctx)
     }

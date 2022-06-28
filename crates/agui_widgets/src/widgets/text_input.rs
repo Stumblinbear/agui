@@ -8,7 +8,7 @@ use agui_core::{
     manager::context::Context,
     render::canvas::paint::Paint,
     unit::{Color, FontStyle, Key, Layout, Point, Rect},
-    widget::{BuildContext, BuildResult, StatefulWidget},
+    widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 use agui_primitives::edit::EditableText;
 
@@ -130,7 +130,7 @@ impl Default for TextInput<String> {
     }
 }
 
-impl<S> StatefulWidget for TextInput<S>
+impl<S> WidgetBuilder for TextInput<S>
 where
     S: EditableText + Default + 'static,
 {

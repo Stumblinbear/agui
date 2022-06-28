@@ -7,7 +7,7 @@ use crate::{
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::{Rect, Size},
     util::{map::PluginMap, tree::Tree},
-    widget::{BoxedWidget, WidgetId, WidgetImpl},
+    widget::{BoxedWidget, WidgetBuilder, WidgetId},
 };
 
 use super::{CallbackQueue, Data};
@@ -23,7 +23,7 @@ pub struct AguiContext<'ctx> {
 
 pub trait Context<W>
 where
-    W: WidgetImpl,
+    W: WidgetBuilder,
 {
     fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin>;
 
