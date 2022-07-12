@@ -22,7 +22,7 @@ parking_lot = "0.12"
 agpu = { git = "https://github.com/lyricwulf/agpu", rev = "3ca6f7669b862945b550c7f10f92f663adaf0f89" }
 bytemuck = { version = "1.7", features = ["extern_crate_alloc"] }
 
-lyon = "0.17"
+lyon = "1.0"
 glyph_brush_layout = "0.2"
 glyph_brush_draw_cache = "0.1"
 
