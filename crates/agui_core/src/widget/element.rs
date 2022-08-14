@@ -85,7 +85,7 @@ where
 
             let mut remaining = String::from(type_name);
 
-            while let Some((part, rest)) = remaining.split_once("<") {
+            while let Some((part, rest)) = remaining.split_once('<') {
                 name.push_str(part.rsplit("::").next().unwrap());
 
                 name.push('<');

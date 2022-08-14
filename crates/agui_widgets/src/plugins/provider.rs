@@ -7,10 +7,10 @@ use std::{
 };
 
 use agui_core::{
-    manager::{context::Context, event::WidgetEvent, Data},
+    manager::{event::WidgetEvent, Data},
     plugin::{PluginContext, StatefulPlugin},
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
-    widget::{BuildContext, WidgetBuilder, WidgetId},
+    widget::{BuildContext, WidgetBuilder, WidgetContext, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -314,9 +314,9 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
+        manager::{query::WidgetQueryExt, WidgetManager},
         unit::Key,
-        widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
+        widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
     };
 
     use crate::plugins::{

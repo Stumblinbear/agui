@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut, SubAssign},
 };
 
 use morphorm::Hierarchy;
@@ -55,6 +55,10 @@ where
 
     pub fn contains(&self, node_id: K) -> bool {
         self.nodes.contains_key(node_id)
+    }
+
+    pub fn get_depth(&self, node_id: K) -> Option<usize> {
+        self.nodes.get(node_id).map(|node| node.depth)
     }
 
     pub fn add(&mut self, parent_id: Option<K>, value: V) -> K {
@@ -143,21 +147,23 @@ where
         node.parent = parent_id;
 
         if node.depth != new_depth {
-            let diff = new_depth - node.depth;
+            let diff: i32 = (new_depth as i32) - (node.depth as i32);
 
             node.depth = new_depth;
 
             // If the node had children, propagate the depth difference
-            if node.children.is_empty() {
+            if !node.children.is_empty() {
                 let mut queue = VecDeque::from(node.children.clone());
 
-                for child_id in queue.pop_front() {
+                while let Some(child_id) = queue.pop_front() {
+                    println!("{:?}", child_id);
+
                     let child = self
                         .nodes
                         .get_mut(child_id)
                         .expect("unable to update child's depth, as it's not in the tree");
 
-                    child.depth += diff;
+                    child.depth = ((child.depth as i32) + diff) as usize;
 
                     queue.extend(child.children.iter());
                 }
@@ -957,6 +963,124 @@ mod tests {
             iter.next(),
             None,
             "upward iterator should have returned None"
+        );
+    }
+
+    #[test]
+    fn depth_propagation() {
+        let mut tree: Tree<WidgetId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        assert_eq!(
+            tree.get_depth(root_id),
+            Some(0),
+            "root node should have depth 0"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_1),
+            Some(1),
+            "child_1 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1),
+            Some(2),
+            "child_1_1 should have depth 2"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1_1),
+            Some(3),
+            "child_1_1_1 should have depth 3"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_2),
+            Some(2),
+            "child_1_2 should have depth 2"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_3),
+            Some(2),
+            "child_1_3 should have depth 2"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_2),
+            Some(1),
+            "child_2 should have depth 1"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_3),
+            Some(1),
+            "child_3 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_3_1),
+            Some(2),
+            "child_3_1 should have depth 2"
+        );
+
+        tree.reparent(Some(root_id), child_1_1);
+
+        assert_eq!(
+            tree.get_depth(root_id),
+            Some(0),
+            "root node should have depth 0"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_1),
+            Some(1),
+            "child_1 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1),
+            Some(1),
+            "child_1_1 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1_1),
+            Some(2),
+            "child_1_1_1 should have depth 2"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_2),
+            Some(2),
+            "child_1_2 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_3),
+            Some(2),
+            "child_1_3 should have depth 2"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_2),
+            Some(1),
+            "child_2 should have depth 1"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_3),
+            Some(1),
+            "child_3 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_3_1),
+            Some(2),
+            "child_3_1 should have depth 2"
         );
     }
 }

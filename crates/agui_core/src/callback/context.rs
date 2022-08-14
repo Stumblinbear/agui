@@ -1,17 +1,17 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
-    manager::{context::Context, CallbackQueue, Data},
+    manager::Data,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     unit::{Rect, Size},
     util::{
         map::{PluginMap, WidgetSet},
         tree::Tree,
     },
-    widget::{BoxedWidget, WidgetBuilder, WidgetId},
+    widget::{BoxedWidget, WidgetBuilder, WidgetContext, WidgetId},
 };
 
-use super::{Callback, CallbackId};
+use super::{Callback, CallbackId, CallbackQueue};
 
 pub struct CallbackContext<'ctx, W>
 where
@@ -25,7 +25,7 @@ where
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
 
-    pub rect: Option<Rect>,
+    pub(crate) rect: Option<Rect>,
 
     pub(crate) changed: bool,
 }
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<W> Context<W> for CallbackContext<'_, W>
+impl<W> WidgetContext<W> for CallbackContext<'_, W>
 where
     W: WidgetBuilder,
 {

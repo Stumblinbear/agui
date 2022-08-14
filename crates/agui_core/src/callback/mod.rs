@@ -1,7 +1,7 @@
-use std::{any::TypeId, marker::PhantomData, rc::Rc};
+use std::{any::TypeId, marker::PhantomData, rc::Rc, sync::Arc};
 
 use crate::{
-    manager::{CallbackQueue, Data},
+    manager::Data,
     widget::{WidgetBuilder, WidgetId},
 };
 
@@ -9,7 +9,10 @@ mod context;
 mod func;
 
 pub use context::*;
-pub use func::*;
+pub(crate) use func::*;
+use parking_lot::Mutex;
+
+pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CallbackId {
@@ -39,7 +42,7 @@ where
     callback_queue: Option<CallbackQueue>,
 }
 
-#[allow(clippy::non_send_fields_in_send_ty)]
+// #[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl<A> Send for Callback<A> where A: Data {}
 unsafe impl<A> Sync for Callback<A> where A: Data {}
 

@@ -5,10 +5,9 @@ use std::{
 
 use agui_core::{
     callback::Callback,
-    manager::context::Context,
     render::canvas::paint::Paint,
     unit::{Color, FontStyle, Key, Layout, Point, Rect},
-    widget::{BuildContext, BuildResult, WidgetBuilder},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
 };
 use agui_primitives::edit::EditableText;
 

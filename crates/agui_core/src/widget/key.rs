@@ -1,7 +1,7 @@
 use crate::{unit::Key, widget::WidgetId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WidgetKey(pub(super) Option<WidgetId>, pub(super) Key);
+pub struct WidgetKey(pub(crate) Option<WidgetId>, pub(crate) Key);
 
 impl WidgetKey {
     pub fn get_owner(&self) -> Option<WidgetId> {

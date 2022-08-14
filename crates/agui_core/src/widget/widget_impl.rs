@@ -21,15 +21,6 @@ where
     W: WidgetBuilder<State = S>,
     S: Data + Default,
 {
-    default fn into_widget(self: Rc<Self>) -> BoxedWidget {
-        Box::new(WidgetElement::new(self))
-    }
-}
-
-impl<W> IntoWidget for W
-where
-    W: WidgetBuilder<State = ()>,
-{
     fn into_widget(self: Rc<Self>) -> BoxedWidget {
         Box::new(WidgetElement::new(self))
     }
@@ -38,8 +29,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::{context::Context, query::WidgetQueryExt, WidgetManager},
-        widget::{BuildContext, BuildResult},
+        manager::{query::WidgetQueryExt, WidgetManager},
+        widget::{BuildContext, BuildResult, WidgetContext},
     };
 
     use super::WidgetBuilder;

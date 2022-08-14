@@ -3,8 +3,8 @@ use std::rc::Rc;
 use fnv::FnvHashSet;
 
 use crate::{
-    callback::{Callback, CallbackId},
-    manager::{CallbackQueue, Data},
+    callback::{Callback, CallbackId, CallbackQueue},
+    manager::Data,
     util::tree::Tree,
     widget::{BoxedWidget, WidgetId},
 };

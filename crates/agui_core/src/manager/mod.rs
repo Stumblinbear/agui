@@ -2,7 +2,6 @@ use std::{
     collections::VecDeque,
     fs::File,
     io::{self, BufReader, Read},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -10,10 +9,9 @@ use downcast_rs::{impl_downcast, Downcast};
 use fnv::{FnvHashMap, FnvHashSet};
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
-use parking_lot::Mutex;
 
 use crate::{
-    callback::CallbackId,
+    callback::CallbackQueue,
     plugin::{BoxedPlugin, IntoPlugin, PluginElement, PluginId, PluginImpl},
     unit::{Font, Units},
     util::{map::PluginMap, tree::Tree},
@@ -33,8 +31,6 @@ pub trait Data: std::fmt::Debug + Downcast {}
 impl<T> Data for T where T: std::fmt::Debug + Downcast {}
 
 impl_downcast!(Data);
-
-pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
 
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
@@ -340,7 +336,7 @@ impl WidgetManager {
         // Apply any queued modifications
         let mut removed_keyed = FnvHashMap::default();
 
-        for modification in self.modifications.pop_front() {
+        while let Some(modification) = self.modifications.pop_front() {
             match modification {
                 Modify::Spawn(parent_id, widget) => {
                     self.process_spawn(&mut widget_events, &mut removed_keyed, parent_id, widget);

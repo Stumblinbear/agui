@@ -3,15 +3,16 @@ use std::{rc::Rc, sync::Arc};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId},
-    manager::{context::Context, CallbackQueue, Data},
+    callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
+    manager::Data,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
     unit::{Key, Layout, LayoutType, Rect, Size},
     util::{map::PluginMap, tree::Tree},
+    widget::{BoxedWidget, Widget, WidgetBuilder, WidgetId, WidgetKey},
 };
 
-use super::{BoxedWidget, Widget, WidgetBuilder, WidgetId, WidgetKey};
+use super::WidgetContext;
 
 pub struct BuildContext<'ctx, W>
 where
@@ -26,16 +27,16 @@ where
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
 
-    pub layout_type: LayoutType,
-    pub layout: Layout,
+    pub(crate) layout_type: LayoutType,
+    pub(crate) layout: Layout,
 
-    pub rect: Option<Rect>,
+    pub(crate) rect: Option<Rect>,
 
     pub(crate) renderer: Option<RenderFn<W>>,
     pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
-impl<W> Context<W> for BuildContext<'_, W>
+impl<W> WidgetContext<W> for BuildContext<'_, W>
 where
     W: WidgetBuilder,
 {
