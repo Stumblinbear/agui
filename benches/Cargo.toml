@@ -7,7 +7,7 @@ publish = false
 license = "MIT OR Apache-2.0"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { version = "0.3", features = [ "html_reports" ] }
 agui = { path = "../" }
 
 [[bench]]

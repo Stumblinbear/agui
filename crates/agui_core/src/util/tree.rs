@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    ops::{Index, IndexMut, SubAssign},
+    ops::{Index, IndexMut},
 };
 
 use morphorm::Hierarchy;

@@ -15,7 +15,7 @@ fn widget_manager_ops(c: &mut Criterion) {
                 (WidgetManager::new(), column)
             },
             |(mut manager, widget)| {
-                manager.set_root(widget.into());
+                manager.set_root(widget);
 
                 manager.update();
             },
