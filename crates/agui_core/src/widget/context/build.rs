@@ -137,7 +137,7 @@ where
 
     pub fn on_draw<F>(&mut self, func: F)
     where
-        F: Fn(&RenderContext<W>, &mut CanvasPainter) + 'static,
+        F: Fn(&RenderContext<W>, CanvasPainter) + 'static,
     {
         self.renderer = Some(RenderFn::new(func));
     }

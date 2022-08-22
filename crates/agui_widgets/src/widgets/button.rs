@@ -49,7 +49,7 @@ impl WidgetBuilder for Button {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.set_layout(Layout::clone(&self.layout));
 
-        ctx.on_draw(move |ctx, canvas| {
+        ctx.on_draw(move |ctx, mut canvas| {
             let style = ctx.style.clone().unwrap_or_default();
 
             let color = if ctx.state.disabled {

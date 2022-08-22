@@ -5,7 +5,7 @@ use downcast_rs::{impl_downcast, Downcast};
 use crate::{
     callback::CallbackId,
     manager::{context::AguiContext, Data},
-    render::canvas::painter::CanvasPainter,
+    render::canvas::Canvas,
     unit::{Layout, LayoutType, Rect},
 };
 
@@ -26,9 +26,10 @@ pub trait WidgetInstance: std::fmt::Debug + Downcast {
 
     fn build(&mut self, ctx: AguiContext) -> BuildResult;
 
-    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
+    fn get_canvas(&self) -> Option<&Canvas>;
+    fn render(&mut self, rect: Rect);
 
-    fn render(&self, canvas: &mut CanvasPainter);
+    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
 }
 
 impl_downcast!(WidgetInstance);

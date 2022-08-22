@@ -8,7 +8,11 @@ use fnv::FnvHashMap;
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     manager::{context::AguiContext, Data},
-    render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
+    render::{
+        canvas::{painter::CanvasPainter, Canvas},
+        context::RenderContext,
+        renderer::RenderFn,
+    },
     unit::{Layout, LayoutType, Rect},
 };
 
@@ -26,7 +30,9 @@ where
     layout_type: LayoutType,
     layout: Layout,
 
+    canvas: Option<Canvas>,
     renderer: Option<RenderFn<W>>,
+
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 
     rect: Option<Rect>,
@@ -46,7 +52,9 @@ where
             layout_type: LayoutType::default(),
             layout: Layout::default(),
 
+            canvas: None,
             renderer: None,
+
             callbacks: FnvHashMap::default(),
 
             rect: None,
@@ -156,6 +164,32 @@ where
         result
     }
 
+    fn get_canvas(&self) -> Option<&Canvas> {
+        self.canvas.as_ref()
+    }
+
+    fn render(&mut self, rect: Rect) {
+        let span = tracing::error_span!("on_draw");
+        let _enter = span.enter();
+
+        if let Some(renderer) = &self.renderer {
+            let mut canvas = Canvas {
+                rect,
+
+                ..Canvas::default()
+            };
+
+            let ctx = RenderContext {
+                widget: self.widget.as_ref(),
+                state: &self.state,
+            };
+
+            renderer.call(&ctx, CanvasPainter::new(&mut canvas));
+        } else if self.canvas.is_some() {
+            self.canvas = None;
+        }
+    }
+
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();
@@ -185,20 +219,6 @@ where
             );
 
             false
-        }
-    }
-
-    fn render(&self, canvas: &mut CanvasPainter) {
-        let span = tracing::error_span!("on_draw");
-        let _enter = span.enter();
-
-        if let Some(renderer) = &self.renderer {
-            let ctx = RenderContext {
-                widget: self.widget.as_ref(),
-                state: &self.state,
-            };
-
-            renderer.call(&ctx, canvas);
         }
     }
 }

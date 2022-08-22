@@ -266,7 +266,7 @@ where
 
         // let style: TextInputStyle = self.style.resolve(ctx);
 
-        ctx.on_draw(|ctx, canvas| {
+        ctx.on_draw(|ctx, mut canvas| {
             let input_state_style = if ctx.state.disabled {
                 &ctx.style.disabled
             } else if ctx.state.hovered {

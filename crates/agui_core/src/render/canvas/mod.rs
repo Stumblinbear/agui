@@ -8,7 +8,6 @@ use self::command::CanvasCommand;
 
 #[derive(Default, Debug)]
 pub struct CanvasStyle {
-    pub rect: Rect,
     pub shape: Shape,
 
     pub anti_alias: bool,
@@ -17,9 +16,15 @@ pub struct CanvasStyle {
 
 #[derive(Default)]
 pub struct Canvas {
-    pub style: CanvasStyle,
+    pub rect: Rect,
 
     pub head: Vec<CanvasCommand>,
-    pub children: Vec<Canvas>,
-    pub tail: Vec<Canvas>,
+    pub children: Vec<CanvasLayer>,
+    pub tail: Option<Box<CanvasLayer>>,
+}
+
+pub struct CanvasLayer {
+    pub style: CanvasStyle,
+
+    pub canvas: Canvas,
 }

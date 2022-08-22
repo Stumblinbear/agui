@@ -26,7 +26,7 @@ impl WidgetBuilder for Text {
             ..Layout::default()
         });
 
-        ctx.on_draw(|ctx, canvas| {
+        ctx.on_draw(|ctx, mut canvas| {
             canvas.draw_text(
                 &Paint {
                     color: ctx.font.color,

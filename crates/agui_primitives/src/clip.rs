@@ -25,7 +25,7 @@ impl WidgetBuilder for Clip {
             match ctx.rect {
                 Some(rect) => canvas.start_layer_at(rect, &paint, ctx.shape.clone()),
                 None => canvas.start_layer(&paint, ctx.shape.clone()),
-            }
+            };
         });
 
         (&self.child).into()
