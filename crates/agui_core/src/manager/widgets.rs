@@ -36,7 +36,7 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: IntoWidget,
+        W: IntoWidget + 'static,
     {
         let mut manager = Self::new();
 
@@ -127,7 +127,7 @@ impl WidgetManager {
     /// Queues the widget for addition into the tree
     pub fn set_root<W>(&mut self, widget: W)
     where
-        W: IntoWidget,
+        W: IntoWidget + 'static,
     {
         self.remove_root();
 

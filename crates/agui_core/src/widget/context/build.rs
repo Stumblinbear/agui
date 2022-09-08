@@ -154,7 +154,10 @@ where
         callback
     }
 
-    pub fn key(&self, key: Key, widget: impl IntoWidget) -> Widget {
+    pub fn key<C>(&self, key: Key, widget: C) -> Widget
+    where
+        C: IntoWidget + 'static,
+    {
         let mut widget = Widget::from(widget);
 
         if widget.get_key().is_some() {

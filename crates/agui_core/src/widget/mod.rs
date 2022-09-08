@@ -17,7 +17,7 @@ new_key_type! {
 
 pub type BoxedWidget = Box<dyn WidgetInstance>;
 
-pub trait IntoWidget: 'static {
+pub trait IntoWidget {
     fn into_widget(self: Rc<Self>) -> BoxedWidget;
 }
 
@@ -31,7 +31,7 @@ pub struct Widget {
 impl Widget {
     pub fn new<W>(widget: W) -> Self
     where
-        W: IntoWidget,
+        W: IntoWidget + 'static,
     {
         Widget {
             key: None,
@@ -62,7 +62,7 @@ impl Widget {
 
 impl<W> From<W> for Widget
 where
-    W: IntoWidget,
+    W: IntoWidget + 'static,
 {
     fn from(widget: W) -> Self {
         Widget::new(widget)
