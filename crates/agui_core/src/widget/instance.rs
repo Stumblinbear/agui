@@ -5,7 +5,7 @@ use downcast_rs::{impl_downcast, Downcast};
 use crate::{
     callback::CallbackId,
     manager::context::AguiContext,
-    render::canvas::painter::CanvasPainter,
+    render::canvas::Canvas,
     unit::{Data, Layout, LayoutType, Rect},
 };
 

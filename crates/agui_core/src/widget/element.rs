@@ -8,7 +8,11 @@ use fnv::FnvHashMap;
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     manager::context::AguiContext,
-    render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
+    render::{
+        canvas::{painter::CanvasPainter, Canvas},
+        context::RenderContext,
+        renderer::RenderFn,
+    },
     unit::{Data, Layout, LayoutType, Rect},
 };
 
