@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use downcast_rs::Downcast;
 
-use crate::manager::Data;
+use crate::unit::Data;
 
 use super::{BoxedWidget, BuildContext, BuildResult, IntoWidget, WidgetElement};
 
@@ -29,7 +29,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::{query::WidgetQueryExt, WidgetManager},
+        manager::WidgetManager,
+        query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetContext},
     };
 

@@ -16,7 +16,7 @@ impl<I, W> QueryByType<I, W>
 where
     W: WidgetBuilder,
 {
-    pub(in crate::manager::query) fn new(iter: I) -> Self {
+    pub(in super) fn new(iter: I) -> Self {
         Self {
             iter,
             phantom: PhantomData,

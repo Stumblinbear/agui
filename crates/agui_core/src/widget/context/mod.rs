@@ -2,9 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     callback::{Callback, CallbackId},
-    manager::Data,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
-    unit::{Rect, Size},
+    unit::{Data, Rect, Size},
     util::{map::PluginMap, tree::Tree},
     widget::{BoxedWidget, WidgetBuilder, WidgetId},
 };

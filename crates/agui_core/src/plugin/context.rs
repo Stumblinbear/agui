@@ -4,7 +4,7 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue},
-    manager::Data,
+    unit::Data,
     util::tree::Tree,
     widget::{BoxedWidget, WidgetId},
 };

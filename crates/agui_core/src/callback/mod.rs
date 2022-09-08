@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc, sync::Arc};
 
 use crate::{
-    manager::Data,
+    unit::Data,
     widget::{WidgetBuilder, WidgetId},
 };
 
@@ -30,7 +30,7 @@ impl CallbackId {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct Callback<A>
 where
     A: Data,

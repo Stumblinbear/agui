@@ -1,9 +1,8 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
-    manager::Data,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
-    unit::{Rect, Size},
+    unit::{Data, Rect, Size},
     util::{
         map::{PluginMap, WidgetSet},
         tree::Tree,

@@ -138,7 +138,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PluginElement")
             .field("plugin", &self.plugin)
-            .field("state", &self.state)
+            // .field("state", &self.state)
             .finish()
     }
 }

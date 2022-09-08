@@ -4,9 +4,9 @@ use downcast_rs::{impl_downcast, Downcast};
 
 use crate::{
     callback::CallbackId,
-    manager::{context::AguiContext, Data},
-    render::canvas::Canvas,
-    unit::{Layout, LayoutType, Rect},
+    manager::context::AguiContext,
+    render::canvas::painter::CanvasPainter,
+    unit::{Data, Layout, LayoutType, Rect},
 };
 
 use super::{BuildResult, WidgetKey};

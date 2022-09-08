@@ -3,6 +3,7 @@ pub(crate) const COLOR_MARGIN_OF_ERROR: f32 = 0.001;
 
 mod blend_mode;
 mod color;
+mod data;
 mod font;
 mod key;
 mod layout;
@@ -11,6 +12,7 @@ mod units;
 
 pub use self::blend_mode::*;
 pub use self::color::*;
+pub use self::data::*;
 pub use self::font::*;
 pub use self::key::*;
 pub use self::layout::*;

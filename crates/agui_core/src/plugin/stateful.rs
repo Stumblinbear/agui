@@ -1,6 +1,6 @@
 use downcast_rs::Downcast;
 
-use crate::manager::{event::WidgetEvent, Data};
+use crate::{manager::event::WidgetEvent, unit::Data};
 
 use super::{IntoPlugin, PluginContext, PluginElement, PluginImpl};
 

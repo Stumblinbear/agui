@@ -7,13 +7,9 @@ use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    manager::{context::AguiContext, Data},
-    render::{
-        canvas::{painter::CanvasPainter, Canvas},
-        context::RenderContext,
-        renderer::RenderFn,
-    },
-    unit::{Layout, LayoutType, Rect},
+    manager::context::AguiContext,
+    render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
+    unit::{Data, Layout, LayoutType, Rect},
 };
 
 use super::{BuildContext, BuildResult, WidgetBuilder, WidgetInstance, WidgetKey};
@@ -230,7 +226,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WidgetElement")
             .field("widget", &self.widget)
-            .field("state", &self.state)
+            // .field("state", &self.state)
             .finish()
     }
 }

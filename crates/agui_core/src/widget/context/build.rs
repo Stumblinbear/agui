@@ -4,10 +4,9 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
-    manager::Data,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
-    unit::{Key, Layout, LayoutType, Rect, Size},
+    unit::{Data, Key, Layout, LayoutType, Rect, Size},
     util::{map::PluginMap, tree::Tree},
     widget::{BoxedWidget, Widget, WidgetBuilder, WidgetId, WidgetKey},
 };

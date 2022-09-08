@@ -14,6 +14,7 @@
 pub mod callback;
 pub mod manager;
 pub mod plugin;
+pub mod query;
 pub mod render;
 pub mod unit;
 pub mod util;
