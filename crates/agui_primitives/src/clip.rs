@@ -4,7 +4,7 @@ use agui_core::{
     widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Clip {
     pub rect: Option<Rect>,
 

@@ -2,8 +2,9 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{event::WidgetEvent, Data, WidgetManager},
+    manager::{event::WidgetEvent, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
+    unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
     widget::{BuildContext, WidgetBuilder, WidgetContext},
 };
@@ -49,7 +50,7 @@ impl StatefulPlugin for EventPlugin {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct EventState {
     listening: WidgetMap<TypeSet>,
     callbacks: TypeMap<HashSet<CallbackId>>,
@@ -151,7 +152,8 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::{query::WidgetQueryExt, WidgetManager},
+        manager::WidgetManager,
+        query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
     };
     use agui_primitives::Column;

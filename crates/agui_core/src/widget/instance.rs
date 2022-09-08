@@ -11,7 +11,7 @@ use crate::{
 
 use super::{BuildResult, WidgetKey};
 
-pub trait WidgetInstance: std::fmt::Debug + Downcast {
+pub trait WidgetInstance: Downcast {
     fn get_type_id(&self) -> TypeId;
     fn get_display_name(&self) -> String;
 

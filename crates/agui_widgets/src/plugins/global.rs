@@ -8,8 +8,9 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    manager::{event::WidgetEvent, Data, WidgetManager},
+    manager::{event::WidgetEvent, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
+    unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
     widget::{BuildContext, WidgetBuilder, WidgetContext, WidgetId},
 };
@@ -54,7 +55,7 @@ impl StatefulPlugin for GlobalPlugin {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct GlobalPluginState {
     globals: TypeMap<GlobalValue>,
 
@@ -65,16 +66,8 @@ pub struct GlobalPluginState {
 
 pub struct GlobalValue {
     value: Rc<RefCell<dyn Data>>,
-    listeners: HashSet<WidgetId>,
-}
 
-impl std::fmt::Debug for GlobalValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Global")
-            .field("value", &self.value.borrow())
-            .field("listeners", &self.listeners.len())
-            .finish()
-    }
+    listeners: HashSet<WidgetId>,
 }
 
 impl GlobalPluginState {
@@ -91,7 +84,8 @@ impl GlobalPluginState {
                 id = widget_id
                     .map_or(String::from(""), |widget_id| format!("{:?}", widget_id))
                     .as_str(),
-                value = format!("{:?}", value).as_str(),
+                r#type = format!("{:?}", std::any::type_name::<G>()).as_str(),
+                // value = format!("{:?}", value).as_str(),
                 "created new global"
             );
 
@@ -271,21 +265,13 @@ where
     }
 }
 
-impl<G> std::fmt::Debug for Global<G>
-where
-    G: Data + Default,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.borrow().fmt(f)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::{query::WidgetQueryExt, WidgetManager},
+        manager::WidgetManager,
+        query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
     };
     use agui_primitives::Column;

@@ -8,7 +8,7 @@ use crate::{
     render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
     unit::{Data, Key, Layout, LayoutType, Rect, Size},
     util::{map::PluginMap, tree::Tree},
-    widget::{BoxedWidget, Widget, WidgetBuilder, WidgetId, WidgetKey},
+    widget::{BoxedWidget, IntoWidget, Widget, WidgetBuilder, WidgetId, WidgetKey},
 };
 
 use super::WidgetContext;
@@ -154,7 +154,9 @@ where
         callback
     }
 
-    pub fn key(&self, key: Key, mut widget: Widget) -> Widget {
+    pub fn key(&self, key: Key, widget: impl IntoWidget) -> Widget {
+        let mut widget = Widget::from(widget);
+
         if widget.get_key().is_some() {
             tracing::warn!(
                 key = format!("{:?}", key).as_str(),

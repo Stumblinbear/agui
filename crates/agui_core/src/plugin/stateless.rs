@@ -5,7 +5,7 @@ use crate::manager::event::WidgetEvent;
 use super::PluginContext;
 
 #[allow(unused_variables)]
-pub trait StatelessPlugin: std::fmt::Debug + Downcast {
+pub trait StatelessPlugin: Downcast {
     /// Fired every time the widget manager is updated, before any widgets are updated.
     fn on_before_update(&self, ctx: &mut PluginContext) {}
 

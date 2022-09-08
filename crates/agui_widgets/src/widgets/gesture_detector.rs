@@ -9,7 +9,7 @@ use crate::{
     state::mouse::{MouseButton, MouseButtonState, MousePos},
 };
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct GestureDetector {
     pub on_hover: Callback<bool>,
     pub on_pressed: Callback<bool>,

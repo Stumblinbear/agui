@@ -5,7 +5,7 @@ use downcast_rs::{impl_downcast, Downcast};
 use crate::manager::{context::AguiContext, event::WidgetEvent};
 
 /// A plugin for the widget manager.
-pub trait PluginInstance: std::fmt::Debug + Downcast {
+pub trait PluginInstance: Downcast {
     fn get_type_id(&self) -> TypeId;
     fn get_display_name(&self) -> String;
 

@@ -7,8 +7,9 @@ use std::{
 };
 
 use agui_core::{
-    manager::{event::WidgetEvent, Data},
+    manager::event::WidgetEvent,
     plugin::{PluginContext, StatefulPlugin},
+    unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
     widget::{BuildContext, WidgetBuilder, WidgetContext, WidgetId},
 };
@@ -74,7 +75,7 @@ impl StatefulPlugin for ProviderPlugin {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct ProviderPluginState {
     providers: WidgetMap<TypeMap<ProvidedValue>>,
     provided: TypeMap<WidgetSet>,
@@ -87,15 +88,6 @@ pub struct ProviderPluginState {
 pub struct ProvidedValue {
     value: Rc<RefCell<dyn Data>>,
     listeners: HashSet<WidgetId>,
-}
-
-impl std::fmt::Debug for ProvidedValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Provided")
-            .field("value", &self.value.borrow())
-            .field("listeners", &self.listeners.len())
-            .finish()
-    }
 }
 
 impl ProviderPluginState {
@@ -116,7 +108,8 @@ impl ProviderPluginState {
 
                 tracing::debug!(
                     id = format!("{:?}", widget_id).as_str(),
-                    value = format!("{:?}", value).as_str(),
+                    r#type = format!("{:?}", std::any::type_name::<V>()).as_str(),
+                    // value = format!("{:?}", value).as_str(),
                     "provided new value"
                 );
 
@@ -300,21 +293,13 @@ where
     }
 }
 
-impl<D> std::fmt::Debug for Provided<D>
-where
-    D: Data + Default,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.borrow().fmt(f)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::{query::WidgetQueryExt, WidgetManager},
+        manager::WidgetManager,
+        query::WidgetQueryExt,
         unit::Key,
         widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
     };
@@ -329,7 +314,7 @@ mod tests {
     #[derive(Debug, Default, Clone, Copy)]
     struct TestGlobal(u32);
 
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Default)]
     struct TestWidgetProvider {
         child: Widget,
     }
@@ -342,7 +327,7 @@ mod tests {
 
             *provided.borrow_mut() = *global.borrow();
 
-            ctx.key(Key::single(), self.child.clone()).into()
+            (&self.child).into()
         }
     }
 

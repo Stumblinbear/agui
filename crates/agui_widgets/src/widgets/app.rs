@@ -5,7 +5,7 @@ use agui_core::{
 
 use crate::{plugins::global::GlobalPluginExt, state::window::WindowSize};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct App {
     pub child: Widget,
 }
@@ -24,6 +24,6 @@ impl WidgetBuilder for App {
             ..Layout::default()
         });
 
-        ctx.key(Key::single(), self.child.clone()).into()
+        (&self.child).into()
     }
 }

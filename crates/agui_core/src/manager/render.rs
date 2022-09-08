@@ -118,7 +118,7 @@ mod tests {
         widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
     };
 
-    #[derive(Debug, Default)]
+    #[derive(Default)]
     struct TestWidget {
         pub children: Vec<Widget>,
     }

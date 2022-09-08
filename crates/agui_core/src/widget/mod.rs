@@ -17,11 +17,11 @@ new_key_type! {
 
 pub type BoxedWidget = Box<dyn WidgetInstance>;
 
-pub trait IntoWidget: std::fmt::Debug + 'static {
+pub trait IntoWidget: 'static {
     fn into_widget(self: Rc<Self>) -> BoxedWidget;
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct Widget {
     key: Option<WidgetKey>,
 

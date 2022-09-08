@@ -850,7 +850,6 @@ impl WidgetManager {
     // }
 }
 
-#[derive(Debug)]
 enum Modify {
     Spawn(Option<WidgetId>, Widget),
     Rebuild(WidgetId),
@@ -868,7 +867,7 @@ mod tests {
 
     use super::WidgetManager;
 
-    #[derive(Debug, Default)]
+    #[derive(Default)]
     struct TestWidget {
         pub children: Vec<Widget>,
     }

@@ -34,45 +34,6 @@ where
     }
 }
 
-// impl<W> From<W> for BuildResult
-// where
-//     W: IntoWidget,
-// {
-//     fn from(widget: W) -> Self {
-//         Self::Some(vec![Widget::new(widget)])
-//     }
-// }
-
-// impl<W> From<Option<W>> for BuildResult
-// where
-//     W: IntoWidget,
-// {
-//     fn from(widget: Option<W>) -> Self {
-//         match widget {
-//             Some(widget) => Self::Some(vec![Widget::new(widget)]),
-//             None => Self::None,
-//         }
-//     }
-// }
-
-// impl<W> From<Vec<W>> for BuildResult
-// where
-//     W: IntoWidget,
-// {
-//     fn from(widgets: Vec<W>) -> Self {
-//         if widgets.is_empty() {
-//             Self::None
-//         } else {
-//             Self::Some(
-//                 widgets
-//                     .into_iter()
-//                     .map(|widget| Widget::new(widget))
-//                     .collect(),
-//             )
-//         }
-//     }
-// }
-
 impl From<Widget> for BuildResult {
     fn from(widget: Widget) -> Self {
         Self::Some(vec![widget])
@@ -84,15 +45,6 @@ impl From<&Widget> for BuildResult {
         Self::Some(vec![widget.clone()])
     }
 }
-
-// impl From<&Option<Widget>> for BuildResult {
-//     fn from(widget: &Option<Widget>) -> Self {
-//         match widget {
-//             Some(widget) => Self::Some(vec![widget.clone()]),
-//             None => Self::None,
-//         }
-//     }
-// }
 
 impl<'a, I> From<I> for BuildResult
 where

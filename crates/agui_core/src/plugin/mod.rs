@@ -27,6 +27,6 @@ impl PluginId {
 
 pub type BoxedPlugin = Box<dyn PluginInstance>;
 
-pub trait IntoPlugin: std::fmt::Debug + 'static {
+pub trait IntoPlugin {
     fn into_plugin(self) -> BoxedPlugin;
 }

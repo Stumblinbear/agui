@@ -7,7 +7,7 @@ use crate::unit::Data;
 use super::{BoxedWidget, BuildContext, BuildResult, IntoWidget, WidgetElement};
 
 /// Implements the widget's `build()` method.
-pub trait WidgetBuilder: std::fmt::Debug + Downcast + Sized {
+pub trait WidgetBuilder: Downcast + Sized {
     type State: Data + Default = ();
 
     /// Called whenever this widget is rebuilt.

@@ -97,7 +97,6 @@ pub struct Cursor {
     glyph_index: usize,
 }
 
-#[derive(Debug)]
 pub struct TextInput<S>
 where
     S: EditableText + 'static,
@@ -359,8 +358,7 @@ where
                 on_focus,
 
                 ..Default::default()
-            }
-            .into(),
+            },
         )
         .into()
     }

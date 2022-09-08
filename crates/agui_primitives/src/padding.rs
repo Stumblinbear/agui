@@ -3,7 +3,7 @@ use agui_core::{
     widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
 };
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Padding {
     pub padding: Margin,
 

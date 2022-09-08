@@ -33,7 +33,7 @@ pub struct ButtonState {
     disabled: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
@@ -95,8 +95,7 @@ impl WidgetBuilder for Button {
                 child: self.child.clone(),
 
                 ..Default::default()
-            }
-            .into(),
+            },
         )
         .into()
     }

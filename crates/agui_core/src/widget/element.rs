@@ -221,12 +221,13 @@ where
 
 impl<W> std::fmt::Debug for WidgetElement<W>
 where
-    W: WidgetBuilder,
+    W: WidgetBuilder + std::fmt::Debug,
+    <W>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WidgetElement")
             .field("widget", &self.widget)
-            // .field("state", &self.state)
+            .field("state", &self.state)
             .finish()
     }
 }

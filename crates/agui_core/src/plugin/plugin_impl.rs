@@ -5,7 +5,7 @@ use crate::{manager::event::WidgetEvent, unit::Data};
 use super::PluginContext;
 
 #[allow(unused_variables)]
-pub trait PluginImpl: std::fmt::Debug + Downcast {
+pub trait PluginImpl: Downcast {
     type State: Data + Default;
 
     /// Fired every time the widget manager is updated, before any widgets are updated.

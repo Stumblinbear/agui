@@ -2,9 +2,7 @@ use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
 use std::ops::Range;
 
-pub trait EditableText:
-    std::fmt::Debug + PartialEq + Eq + Clone + Into<String> + Send + Sync
-{
+pub trait EditableText: PartialEq + Eq + Clone + Into<String> + Send + Sync {
     fn as_str(&self) -> &str;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;

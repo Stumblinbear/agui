@@ -133,12 +133,13 @@ where
 
 impl<P> std::fmt::Debug for PluginElement<P>
 where
-    P: PluginImpl,
+    P: PluginImpl + std::fmt::Debug,
+    <P>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PluginElement")
             .field("plugin", &self.plugin)
-            // .field("state", &self.state)
+            .field("state", &self.state)
             .finish()
     }
 }
