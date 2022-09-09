@@ -8,7 +8,7 @@ pub struct QueryByKey<I> {
 }
 
 impl<I> QueryByKey<I> {
-    pub(in super) fn new(iter: I, key: Key) -> Self {
+    pub(super) fn new(iter: I, key: Key) -> Self {
         Self { iter, key }
     }
 }
@@ -23,6 +23,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.find(|widget| {
             widget
+                .get_descriptor()
                 .get_key()
                 .filter(|key| key.get_key() == self.key)
                 .is_some()

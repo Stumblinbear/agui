@@ -92,7 +92,7 @@ impl WidgetBuilder for Button {
                 on_hover,
                 on_pressed,
 
-                child: self.child.clone(),
+                child: (&self.child).into(),
 
                 ..Default::default()
             },

@@ -9,14 +9,13 @@ use crate::{
     unit::{Data, Layout, LayoutType, Rect},
 };
 
-use super::{BuildResult, WidgetKey};
+use super::{descriptor::WidgetDescriptor, BuildResult};
 
 pub trait WidgetInstance: Downcast {
+    fn get_descriptor(&self) -> &WidgetDescriptor;
+
     fn get_type_id(&self) -> TypeId;
     fn get_display_name(&self) -> String;
-
-    fn get_key(&self) -> Option<WidgetKey>;
-    fn set_key(&mut self, key: WidgetKey);
 
     fn get_layout_type(&self) -> Option<LayoutType>;
     fn get_layout(&self) -> Option<Layout>;

@@ -300,7 +300,6 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        unit::Key,
         widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
     };
 
@@ -314,7 +313,7 @@ mod tests {
     #[derive(Debug, Default, Clone, Copy)]
     struct TestGlobal(u32);
 
-    #[derive(Clone, Default)]
+    #[derive(Default)]
     struct TestWidgetProvider {
         child: Widget,
     }

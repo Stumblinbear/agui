@@ -160,15 +160,6 @@ where
     {
         let mut widget = Widget::from(widget);
 
-        if widget.get_key().is_some() {
-            tracing::warn!(
-                key = format!("{:?}", key).as_str(),
-                "cannot key a widget that has already been keyed, ignoring"
-            );
-
-            return widget;
-        }
-
         widget.set_key(match key {
             Key::Local(_) => WidgetKey(Some(self.widget_id), key),
             Key::Global(_) => WidgetKey(None, key),

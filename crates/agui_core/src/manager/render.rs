@@ -144,9 +144,7 @@ mod tests {
             "root widget should have been added"
         );
 
-        if let Some(widget_events) = widget_events {
-            render_manager.update(widget_manager.get_tree(), &widget_events);
-        }
+        render_manager.update(widget_manager.get_tree(), &widget_events);
 
         assert_ne!(
             render_manager.get_root(),

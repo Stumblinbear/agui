@@ -42,7 +42,7 @@ impl From<Widget> for BuildResult {
 
 impl From<&Widget> for BuildResult {
     fn from(widget: &Widget) -> Self {
-        Self::Some(vec![widget.clone()])
+        Self::Some(vec![widget.into()])
     }
 }
 
@@ -51,7 +51,7 @@ where
     I: IntoIterator<Item = &'a Widget>,
 {
     fn from(iter: I) -> Self {
-        let widgets = iter.into_iter().map(Widget::clone).collect::<Vec<_>>();
+        let widgets = iter.into_iter().map(Widget::to_owned).collect::<Vec<_>>();
 
         if widgets.is_empty() {
             Self::None

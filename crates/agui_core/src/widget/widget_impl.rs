@@ -4,7 +4,9 @@ use downcast_rs::Downcast;
 
 use crate::unit::Data;
 
-use super::{BoxedWidget, BuildContext, BuildResult, IntoWidget, WidgetElement};
+use super::{
+    descriptor::WidgetDescriptor, BoxedWidget, BuildContext, BuildResult, IntoWidget, WidgetElement,
+};
 
 /// Implements the widget's `build()` method.
 pub trait WidgetBuilder: Downcast + Sized {
@@ -21,8 +23,8 @@ where
     W: WidgetBuilder<State = S>,
     S: Data + Default,
 {
-    fn into_widget(self: Rc<Self>) -> BoxedWidget {
-        Box::new(WidgetElement::new(self))
+    fn into_widget(self: Rc<Self>, desc: WidgetDescriptor) -> BoxedWidget {
+        Box::new(WidgetElement::new(desc, self))
     }
 }
 

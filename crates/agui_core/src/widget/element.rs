@@ -16,16 +16,18 @@ use crate::{
     unit::{Data, Layout, LayoutType, Rect},
 };
 
-use super::{BuildContext, BuildResult, WidgetBuilder, WidgetInstance, WidgetKey};
+use super::{
+    descriptor::WidgetDescriptor, BuildContext, BuildResult, WidgetBuilder, WidgetInstance,
+};
 
 pub struct WidgetElement<W>
 where
     W: WidgetBuilder,
 {
+    desc: WidgetDescriptor,
+
     widget: Rc<W>,
     state: W::State,
-
-    key: Option<WidgetKey>,
 
     layout_type: LayoutType,
     layout: Layout,
@@ -42,12 +44,12 @@ impl<W> WidgetElement<W>
 where
     W: WidgetBuilder,
 {
-    pub fn new(widget: Rc<W>) -> Self {
+    pub fn new(desc: WidgetDescriptor, widget: Rc<W>) -> Self {
         Self {
+            desc,
+
             widget,
             state: W::State::default(),
-
-            key: None,
 
             layout_type: LayoutType::default(),
             layout: Layout::default(),
@@ -79,6 +81,10 @@ impl<W> WidgetInstance for WidgetElement<W>
 where
     W: WidgetBuilder,
 {
+    fn get_descriptor(&self) -> &WidgetDescriptor {
+        &self.desc
+    }
+
     fn get_type_id(&self) -> TypeId {
         TypeId::of::<W>()
     }
@@ -105,14 +111,6 @@ where
 
             name
         }
-    }
-
-    fn get_key(&self) -> Option<WidgetKey> {
-        self.key
-    }
-
-    fn set_key(&mut self, key: WidgetKey) {
-        self.key = Some(key);
     }
 
     fn get_layout_type(&self) -> Option<LayoutType> {

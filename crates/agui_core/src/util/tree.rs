@@ -156,8 +156,6 @@ where
                 let mut queue = VecDeque::from(node.children.clone());
 
                 while let Some(child_id) = queue.pop_front() {
-                    println!("{:?}", child_id);
-
                     let child = self
                         .nodes
                         .get_mut(child_id)

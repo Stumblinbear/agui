@@ -1,15 +1,18 @@
-use std::rc::Rc;
+use std::{hash::Hash, rc::Rc};
 
 use slotmap::new_key_type;
 
 mod context;
+mod descriptor;
 mod element;
 mod instance;
 mod key;
 mod result;
 mod widget_impl;
 
-pub use self::{context::*, element::*, instance::*, key::*, result::*, widget_impl::*};
+pub use self::{
+    context::*, descriptor::*, element::*, instance::*, key::*, result::*, widget_impl::*,
+};
 
 new_key_type! {
     pub struct WidgetId;
@@ -18,45 +21,30 @@ new_key_type! {
 pub type BoxedWidget = Box<dyn WidgetInstance>;
 
 pub trait IntoWidget {
-    fn into_widget(self: Rc<Self>) -> BoxedWidget;
+    fn into_widget(self: Rc<Self>, desc: WidgetDescriptor) -> BoxedWidget;
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone, Default)]
 pub struct Widget {
-    key: Option<WidgetKey>,
-
-    inner: Option<Rc<dyn IntoWidget>>,
+    desc: Option<WidgetDescriptor>,
 }
 
 impl Widget {
-    pub fn new<W>(widget: W) -> Self
-    where
-        W: IntoWidget + 'static,
-    {
-        Widget {
-            key: None,
-            inner: Some(Rc::new(widget)),
-        }
-    }
-
-    pub(crate) fn create(self) -> Option<BoxedWidget> {
-        self.inner.map(|inner| {
-            let mut widget = inner.into_widget();
-
-            if let Some(key) = self.key {
-                widget.set_key(key);
-            }
-
-            widget
-        })
+    pub(crate) fn get_descriptor(&self) -> Option<&WidgetDescriptor> {
+        self.desc.as_ref()
     }
 
     pub(crate) fn set_key(&mut self, key: WidgetKey) {
-        self.key = Some(key);
-    }
-
-    pub(crate) fn get_key(&self) -> &Option<WidgetKey> {
-        &self.key
+        if let Some(desc) = self.desc.as_mut() {
+            if desc.key.is_some() {
+                tracing::warn!(
+                    key = format!("{:?}", key).as_str(),
+                    "cannot key a widget that has already been keyed, ignoring"
+                );
+            } else {
+                desc.key = Some(key);
+            }
+        }
     }
 }
 
@@ -65,6 +53,17 @@ where
     W: IntoWidget + 'static,
 {
     fn from(widget: W) -> Self {
-        Widget::new(widget)
+        Widget {
+            desc: Some(WidgetDescriptor {
+                key: None,
+                inner: Rc::new(widget),
+            }),
+        }
+    }
+}
+
+impl From<&Widget> for Widget {
+    fn from(widget: &Widget) -> Self {
+        widget.to_owned()
     }
 }

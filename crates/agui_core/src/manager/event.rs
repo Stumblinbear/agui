@@ -19,11 +19,11 @@ pub enum WidgetEvent {
         widget_id: WidgetId,
     },
 
-    /// A widget has changed in the layout.
-    Layout { widget_id: WidgetId },
-
     /// A widget has been destroyed.
     Destroyed { widget_id: WidgetId },
+
+    /// A widget has changed in the layout.
+    Layout { widget_id: WidgetId },
 }
 
 impl WidgetEvent {
@@ -32,8 +32,8 @@ impl WidgetEvent {
             WidgetEvent::Spawned { widget_id, .. }
             | WidgetEvent::Rebuilt { widget_id, .. }
             | WidgetEvent::Reparent { widget_id, .. }
-            | WidgetEvent::Layout { widget_id, .. }
-            | WidgetEvent::Destroyed { widget_id, .. } => widget_id,
+            | WidgetEvent::Destroyed { widget_id, .. }
+            | WidgetEvent::Layout { widget_id, .. } => widget_id,
         }
     }
 }

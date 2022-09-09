@@ -199,8 +199,6 @@ impl<'paint> CanvasPainter<'paint> {
 
 #[cfg(test)]
 mod tests {
-    use super::CanvasPainter;
-
     #[test]
     pub fn canvas_style() {}
 }
