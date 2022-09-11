@@ -54,14 +54,7 @@ impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
 
 impl<Ok: 'static, Error: 'static> WidgetBuilder for Fallible<Ok, Error> {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        // Take the old hook then restore it after calling `func`
-        let old_hook = std::panic::take_hook();
-
-        std::panic::set_hook(Box::new(|_| {}));
-
         let result = std::panic::catch_unwind(&self.func);
-
-        std::panic::set_hook(old_hook);
 
         match result {
             Ok(result) => match result {
@@ -146,9 +139,6 @@ mod tests {
             )
             .on_err(|_, _| {
                 panic!("should not have been called");
-            })
-            .on_panic(|_, _| {
-                panic!("should not have been called");
             }),
         );
 
@@ -169,10 +159,7 @@ mod tests {
                     panic!("should not have been called");
                 },
             )
-            .on_err(|_, _| BuildResult::with_children([TestWidget::default()]))
-            .on_panic(|_, _| {
-                panic!("should not have been called");
-            }),
+            .on_err(|_, _| BuildResult::with_children([TestWidget::default()])),
         );
 
         manager.update();
@@ -185,6 +172,8 @@ mod tests {
 
     #[test]
     pub fn on_panic() {
+        std::panic::set_hook(Box::new(|_| {}));
+
         let mut manager = WidgetManager::with_root(
             Fallible::<Infallible, Infallible>::new(
                 || panic!("aaaaaaaaaaaaaaaaaaa"),
