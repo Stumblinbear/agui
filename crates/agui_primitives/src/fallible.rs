@@ -8,7 +8,7 @@ use agui_core::{
 
 const ERROR_BORDER: f32 = 5.0;
 
-pub struct Falliable<Ok: 'static, Error: 'static> {
+pub struct Fallible<Ok: 'static, Error: 'static> {
     pub func: Box<dyn Fn() -> Result<Ok, Error> + RefUnwindSafe>,
 
     pub on_ok: Box<dyn Fn(&mut BuildContext<Self>, Ok) -> BuildResult>,
@@ -17,7 +17,7 @@ pub struct Falliable<Ok: 'static, Error: 'static> {
     pub on_panic: Option<Box<dyn Fn(&mut BuildContext<Self>, Box<dyn Any + Send>) -> BuildResult>>,
 }
 
-impl<Ok: 'static, Error: 'static> Falliable<Ok, Error> {
+impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
     pub fn new<F, OkF>(func: F, on_ok: OkF) -> Self
     where
         F: Fn() -> Result<Ok, Error> + RefUnwindSafe + 'static,
@@ -52,7 +52,7 @@ impl<Ok: 'static, Error: 'static> Falliable<Ok, Error> {
     }
 }
 
-impl<Ok: 'static, Error: 'static> WidgetBuilder for Falliable<Ok, Error> {
+impl<Ok: 'static, Error: 'static> WidgetBuilder for Fallible<Ok, Error> {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         // Take the old hook then restore it after calling `func`
         let old_hook = std::panic::take_hook();
@@ -122,7 +122,7 @@ mod tests {
         widget::{BuildContext, BuildResult, WidgetBuilder},
     };
 
-    use crate::Falliable;
+    use crate::Fallible;
 
     #[derive(Debug, Default)]
     struct TestWidget {}
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     pub fn on_success() {
         let mut manager = WidgetManager::with_root(
-            Falliable::<_, Infallible>::new(
+            Fallible::<_, Infallible>::new(
                 || Ok(42),
                 |_, ok| {
                     assert_eq!(ok, 42, "should have received the correct value");
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     pub fn on_error() {
         let mut manager = WidgetManager::with_root(
-            Falliable::<Infallible, _>::new(
+            Fallible::<Infallible, _>::new(
                 || Err(13),
                 |_, _| {
                     panic!("should not have been called");
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     pub fn on_panic() {
         let mut manager = WidgetManager::with_root(
-            Falliable::<Infallible, Infallible>::new(
+            Fallible::<Infallible, Infallible>::new(
                 || panic!("aaaaaaaaaaaaaaaaaaa"),
                 |_, _| {
                     panic!("should not have been called");
