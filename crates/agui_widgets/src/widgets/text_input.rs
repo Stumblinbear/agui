@@ -244,7 +244,7 @@ where
                 }
 
                 ch => {
-                    ctx.state.value.insert(cursor.string_index, *ch);
+                    ctx.state.value.insert(cursor.string_index, ch.to_string());
 
                     let grapheme_idx = ctx.state.value.next_grapheme_offset(cursor.string_index);
 
@@ -344,7 +344,7 @@ where
                         ..Paint::default()
                     },
                     ctx.font.clone(),
-                    Cow::Owned(ctx.state.value.clone().into()),
+                    ctx.state.value.clone(),
                 );
             }
         });

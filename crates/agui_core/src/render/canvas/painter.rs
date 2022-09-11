@@ -172,18 +172,18 @@ impl<'paint> CanvasPainter<'paint> {
     }
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
-    pub fn draw_text(&mut self, paint: &Paint, font: FontStyle, text: Cow<'static, str>) {
+    pub fn draw_text<T>(&mut self, paint: &Paint, font: FontStyle, text: T)
+    where
+        T: Into<Cow<'static, str>>,
+    {
         self.draw_text_at(self.canvas.rect, paint, font, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
-    pub fn draw_text_at(
-        &mut self,
-        rect: Rect,
-        paint: &Paint,
-        font: FontStyle,
-        text: Cow<'static, str>,
-    ) {
+    pub fn draw_text_at<T>(&mut self, rect: Rect, paint: &Paint, font: FontStyle, text: T)
+    where
+        T: Into<Cow<'static, str>>,
+    {
         tracing::trace!("drawing text");
 
         self.push_command(CanvasCommand::Text {
@@ -192,7 +192,7 @@ impl<'paint> CanvasPainter<'paint> {
             color: paint.color,
 
             font,
-            text,
+            text: text.into(),
         });
     }
 }

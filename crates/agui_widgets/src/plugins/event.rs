@@ -175,7 +175,7 @@ mod tests {
                 });
             });
 
-            BuildResult::None
+            BuildResult::empty()
         }
     }
 
@@ -279,10 +279,11 @@ mod tests {
     #[test]
     pub fn multiple_widgets_listening() {
         let mut manager = WidgetManager::with_root(Column {
-            children: vec![
+            children: [
                 TestListener::default().into(),
                 TestListener::default().into(),
-            ],
+            ]
+            .into(),
             ..Default::default()
         });
 

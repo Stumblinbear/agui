@@ -1,13 +1,7 @@
 use agui_core::widget::{BuildContext, BuildResult, WidgetBuilder};
 
 pub struct Builder {
-    func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult + 'static>,
-}
-
-impl std::fmt::Debug for Builder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Builder").finish()
-    }
+    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult>,
 }
 
 impl Builder {
@@ -24,5 +18,39 @@ impl Builder {
 impl WidgetBuilder for Builder {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         (self.func)(ctx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agui_core::{
+        manager::WidgetManager,
+        query::WidgetQueryExt,
+        widget::{BuildContext, BuildResult, WidgetBuilder},
+    };
+
+    use crate::Builder;
+
+    #[derive(Debug, Default)]
+    struct TestWidget {}
+
+    impl WidgetBuilder for TestWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+            BuildResult::empty()
+        }
+    }
+
+    #[test]
+    pub fn calls_func() {
+        let mut manager = WidgetManager::with_root(Builder::new(|_| {
+            BuildResult::with_children([TestWidget::default()])
+        }));
+
+        manager.update();
+
+        assert!(
+            manager.query().by_type::<TestWidget>().next().is_some(),
+            "widget should have been created"
+        );
     }
 }

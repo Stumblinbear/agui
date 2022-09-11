@@ -33,6 +33,6 @@ impl WidgetBuilder for Spacing {
             ..Layout::default()
         });
 
-        BuildResult::None
+        BuildResult::empty()
     }
 }

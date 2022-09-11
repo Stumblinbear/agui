@@ -37,6 +37,6 @@ impl WidgetBuilder for Text {
             );
         });
 
-        BuildResult::None
+        BuildResult::empty()
     }
 }

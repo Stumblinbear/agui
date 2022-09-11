@@ -52,7 +52,7 @@ mod tests {
                 *state += 1;
             });
 
-            BuildResult::None
+            BuildResult::empty()
         }
     }
 

@@ -10,7 +10,7 @@ use crate::{
     query::WidgetQuery,
     unit::Units,
     util::{map::PluginMap, tree::Tree},
-    widget::{BoxedWidget, BuildResult, IntoWidget, Widget, WidgetDescriptor, WidgetId},
+    widget::{BoxedWidget, IntoWidget, Widget, WidgetDescriptor, WidgetId},
 };
 
 use super::{cache::LayoutCache, context::AguiContext, event::WidgetEvent};
@@ -486,20 +486,20 @@ impl WidgetManager {
         parent_id: Option<WidgetId>,
         widget: Widget,
     ) -> Option<WidgetId> {
-        let descriptor = widget.get_descriptor();
+        let descriptor = widget.get_descriptor().clone();
 
         if descriptor.is_none() {
             return None;
         }
 
-        let descriptor = descriptor.unwrap().clone();
+        let descriptor = descriptor.unwrap();
 
         // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
         if self.widget_refs.contains_key(&descriptor) {
             panic!("two instances of the same widget cannot exist at one time");
         }
 
-        let widget = descriptor.clone().create();
+        let widget = descriptor.create();
 
         tracing::trace!(
             parent_id = format!("{:?}", parent_id).as_str(),
@@ -514,7 +514,7 @@ impl WidgetManager {
             widget_id,
         });
 
-        self.widget_refs.insert(descriptor, widget_id);
+        self.widget_refs.insert(descriptor.to_owned(), widget_id);
 
         self.cache.add(widget_id);
 
@@ -551,59 +551,44 @@ impl WidgetManager {
 
             self.widget_tree.replace(widget_id, widget);
 
-            match result {
-                BuildResult::None => {}
-
-                BuildResult::Some(children) => {
-                    // Spawn the child widgets
-                    for child in children {
-                        if let Some(desc) = child.get_descriptor() {
-                            // If the widget already exists in the tree
-                            if let Some(child_id) = self.widget_refs.get(desc) {
-                                // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
-                                if reparented_widgets.contains(child_id) {
-                                    panic!(
-                                        "two instances of the same widget cannot exist at one time"
-                                    );
-                                }
-
-                                reparented_widgets.insert(*child_id);
-
-                                let widget = self.widget_tree.get(*child_id).unwrap();
-
-                                tracing::trace!(
-                                    parent_id = format!("{:?}", widget_id).as_str(),
-                                    widget = widget.get_display_name().as_str(),
-                                    "reparenting widget"
-                                );
-
-                                widget_events.push(WidgetEvent::Reparent {
-                                    parent_id: Some(widget_id),
-                                    widget_id: *child_id,
-                                });
-
-                                self.widget_tree.reparent(Some(widget_id), *child_id);
-
-                                continue;
-                            }
+            // Spawn the child widgets
+            for child in result.children {
+                if let Some(desc) = child.get_descriptor() {
+                    // If the widget already exists in the tree
+                    if let Some(child_id) = self.widget_refs.get(desc) {
+                        // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
+                        if reparented_widgets.contains(child_id) {
+                            panic!("two instances of the same widget cannot exist at one time");
                         }
 
-                        // Spawn the new widget and queue it for building
-                        if let Some(child_id) =
-                            self.process_spawn(widget_events, Some(widget_id), child)
-                        {
-                            spawn_queue.push_back(child_id);
-                        }
+                        reparented_widgets.insert(*child_id);
+
+                        let widget = self.widget_tree.get(*child_id).unwrap();
+
+                        tracing::trace!(
+                            parent_id = format!("{:?}", widget_id).as_str(),
+                            widget = widget.get_display_name().as_str(),
+                            "reparenting widget"
+                        );
+
+                        widget_events.push(WidgetEvent::Reparent {
+                            parent_id: Some(widget_id),
+                            widget_id: *child_id,
+                        });
+
+                        self.widget_tree.reparent(Some(widget_id), *child_id);
+
+                        continue;
+                    }
+
+                    // Spawn the new widget and queue it for building
+                    if let Some(child_id) =
+                        self.process_spawn(widget_events, Some(widget_id), child)
+                    {
+                        spawn_queue.push_back(child_id);
                     }
                 }
-
-                BuildResult::Err(err) => {
-                    // TODO: error widget?
-                    // tracing::error!("build failed: {}", err);
-
-                    panic!("build failed: {}", err);
-                }
-            };
+            }
         }
     }
 
@@ -929,10 +914,12 @@ mod tests {
 
     impl WidgetBuilder for TestNestedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-            BuildResult::Some(vec![TestWidget {
-                children: self.children.clone(),
+            BuildResult {
+                children: vec![TestWidget {
+                    children: self.children.clone(),
+                }
+                .into()],
             }
-            .into()])
         }
     }
 
@@ -1304,24 +1291,24 @@ mod tests {
             None,
             Widget::from(TestWidget::default())
                 .get_descriptor()
-                .unwrap()
                 .clone()
+                .unwrap()
                 .create(),
         );
         let widget_id_2 = manager.widget_tree.add(
             None,
             Widget::from(TestWidget::default())
                 .get_descriptor()
-                .unwrap()
                 .clone()
+                .unwrap()
                 .create(),
         );
         let widget_id_3 = manager.widget_tree.add(
             None,
             Widget::from(TestWidget::default())
                 .get_descriptor()
-                .unwrap()
                 .clone()
+                .unwrap()
                 .create(),
         );
 

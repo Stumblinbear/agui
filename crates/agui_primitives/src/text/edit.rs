@@ -1,20 +1,20 @@
 use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 
-pub trait EditableText: PartialEq + Eq + Clone + Into<String> + Send + Sync {
+pub trait EditableText: PartialEq + Eq + Clone + Into<Cow<'static, str>> + Send + Sync {
     fn as_str(&self) -> &str;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
 
     /// Add text to the location
-    fn insert(&mut self, index: usize, text: impl Into<String>);
+    fn insert(&mut self, index: usize, text: impl Into<Cow<'static, str>>);
 
     /// Remove a range of text
     fn remove(&mut self, range: Range<usize>);
 
     /// Replace range with new text
-    fn replace(&mut self, range: Range<usize>, txt: impl Into<String>);
+    fn replace(&mut self, range: Range<usize>, txt: impl Into<Cow<'static, str>>);
 
     /// Get the next grapheme offset from the current offset if it exists
     fn next_grapheme_offset(&self, current: usize) -> Option<usize>;
@@ -40,7 +40,7 @@ impl EditableText for String {
         self.is_empty()
     }
 
-    fn insert(&mut self, index: usize, txt: impl Into<String>) {
+    fn insert(&mut self, index: usize, txt: impl Into<Cow<'static, str>>) {
         self.insert_str(index, &txt.into());
     }
 
@@ -48,7 +48,7 @@ impl EditableText for String {
         self.replace_range(range, "");
     }
 
-    fn replace(&mut self, range: Range<usize>, txt: impl Into<String>) {
+    fn replace(&mut self, range: Range<usize>, txt: impl Into<Cow<'static, str>>) {
         self.replace_range(range, &txt.into());
     }
 

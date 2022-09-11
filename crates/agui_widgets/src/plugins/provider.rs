@@ -343,7 +343,7 @@ mod tests {
                 *value = *consumed.borrow();
             });
 
-            BuildResult::None
+            BuildResult::empty()
         }
     }
 

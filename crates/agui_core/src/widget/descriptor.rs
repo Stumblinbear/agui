@@ -14,8 +14,8 @@ impl WidgetDescriptor {
         self.key.as_ref()
     }
 
-    pub(crate) fn create(self) -> BoxedWidget {
-        Rc::clone(&self.inner).into_widget(self)
+    pub(crate) fn create(&self) -> BoxedWidget {
+        Rc::clone(&self.inner).into_widget(self.clone())
     }
 }
 

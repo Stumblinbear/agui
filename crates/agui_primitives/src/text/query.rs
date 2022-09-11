@@ -64,7 +64,7 @@ mod tests {
     #[test]
     pub fn finds_widget_with_text() {
         let mut manager = WidgetManager::with_root(Column {
-            children: vec![
+            children: [
                 Text {
                     text: "foo".into(),
                     ..Default::default()
@@ -75,7 +75,8 @@ mod tests {
                     ..Default::default()
                 }
                 .into(),
-            ],
+            ]
+            .into(),
             ..Default::default()
         });
 

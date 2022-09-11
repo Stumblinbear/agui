@@ -24,14 +24,14 @@ pub trait IntoWidget {
     fn into_widget(self: Rc<Self>, desc: WidgetDescriptor) -> BoxedWidget;
 }
 
-#[derive(Clone, Default)]
+#[derive(Default, Clone)]
 pub struct Widget {
     desc: Option<WidgetDescriptor>,
 }
 
 impl Widget {
-    pub(crate) fn get_descriptor(&self) -> Option<&WidgetDescriptor> {
-        self.desc.as_ref()
+    pub(crate) fn get_descriptor(&self) -> &Option<WidgetDescriptor> {
+        &self.desc
     }
 
     pub(crate) fn set_key(&mut self, key: WidgetKey) {

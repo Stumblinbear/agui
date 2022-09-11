@@ -16,7 +16,7 @@ impl<I, W> QueryByType<I, W>
 where
     W: WidgetBuilder,
 {
-    pub(in super) fn new(iter: I) -> Self {
+    pub(super) fn new(iter: I) -> Self {
         Self {
             iter,
             phantom: PhantomData,
@@ -26,7 +26,7 @@ where
 
 impl<'query, I, W> Iterator for QueryByType<I, W>
 where
-    W: WidgetBuilder,
+    W: WidgetBuilder + 'query,
     I: Iterator<Item = &'query BoxedWidget>,
 {
     type Item = &'query WidgetElement<W>;

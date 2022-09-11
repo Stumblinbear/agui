@@ -288,7 +288,7 @@ mod tests {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             ctx.set_global::<TestGlobal, _>(|value| value.0 += 1);
 
-            BuildResult::None
+            BuildResult::empty()
         }
     }
 
@@ -305,7 +305,7 @@ mod tests {
                 *value += global.borrow().0;
             });
 
-            BuildResult::None
+            BuildResult::empty()
         }
     }
 
@@ -401,11 +401,12 @@ mod tests {
     #[test]
     pub fn reacting_to_globals() {
         let mut manager = WidgetManager::with_root(Column {
-            children: vec![
+            children: [
                 // Put the reader first so the writer will update the global
                 TestWidgetReader::default().into(),
                 TestWidgetWriter::default().into(),
-            ],
+            ]
+            .into(),
             ..Default::default()
         });
 
