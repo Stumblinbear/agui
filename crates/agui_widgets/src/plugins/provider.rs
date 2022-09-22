@@ -224,7 +224,7 @@ where
         let mut owner_id = None;
 
         if let Some(plugin) = self.get_plugin::<ProviderPlugin>() {
-            let tree = self.get_tree();
+            let tree = self.get_widgets();
 
             if let Some(providers) = plugin.get_state().provided.get(&TypeId::of::<V>()) {
                 // If the widget calling this is also providing the state, return that.
@@ -298,9 +298,9 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::WidgetManager,
+        manager::widgets::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
+        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
     };
 
     use crate::plugins::{
@@ -310,12 +310,9 @@ mod tests {
 
     use super::{ConsumerPluginExt, ProviderPluginExt};
 
-    #[derive(Debug, Default, Clone, Copy)]
-    struct TestGlobal(u32);
-
-    #[derive(Default)]
+    #[derive(Default, PartialEq)]
     struct TestWidgetProvider {
-        child: Widget,
+        child: WidgetRef,
     }
 
     impl WidgetBuilder for TestWidgetProvider {
@@ -330,7 +327,7 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Debug, Default, PartialEq)]
     struct TestWidgetConsumer;
 
     impl WidgetBuilder for TestWidgetConsumer {

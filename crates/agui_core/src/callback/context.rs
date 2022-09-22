@@ -1,13 +1,14 @@
 use std::{ops::Deref, rc::Rc};
 
 use crate::{
+    manager::widgets::node::WidgetNode,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     unit::{Data, Rect, Size},
     util::{
         map::{PluginMap, WidgetSet},
         tree::Tree,
     },
-    widget::{BoxedWidget, WidgetBuilder, WidgetContext, WidgetId},
+    widget::{WidgetBuilder, WidgetContext, WidgetId},
 };
 
 use super::{Callback, CallbackId, CallbackQueue};
@@ -17,7 +18,7 @@ where
     W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
+    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetNode>,
     pub(crate) dirty: &'ctx mut WidgetSet,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -66,8 +67,8 @@ where
             .and_then(|p| p.downcast_mut())
     }
 
-    fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget> {
-        self.tree
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode> {
+        self.widget_tree
     }
 
     fn mark_dirty(&mut self, widget_id: WidgetId) {

@@ -1,15 +1,15 @@
 use agui_core::{
     unit::{Layout, LayoutType, Units},
-    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Column {
     pub layout: Layout,
 
     pub spacing: Units,
 
-    pub children: Vec<Widget>,
+    pub children: Vec<WidgetRef>,
 }
 
 impl WidgetBuilder for Column {

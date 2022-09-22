@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, marker::PhantomData};
 
 use lyon::path::Path;
 
@@ -7,15 +7,35 @@ use crate::{
     unit::{FontStyle, Rect, Shape, Size},
 };
 
-use super::{command::CanvasCommand, paint::Paint, Canvas, CanvasStyle};
+use super::{command::CanvasCommand, paint::Paint, Canvas, LayerStyle};
 
-pub struct CanvasPainter<'paint> {
+pub trait CanvasPainterState {}
+
+pub struct Head;
+pub struct Tail;
+
+impl CanvasPainterState for Head {}
+impl CanvasPainterState for Tail {}
+
+pub struct CanvasPainter<'paint, State>
+where
+    State: CanvasPainterState,
+{
+    phantom: PhantomData<State>,
+
     canvas: &'paint mut Canvas,
 }
 
-impl<'paint> CanvasPainter<'paint> {
-    pub fn new(canvas: &'paint mut Canvas) -> CanvasPainter<'paint> {
-        CanvasPainter { canvas }
+impl<'paint, State> CanvasPainter<'paint, State>
+where
+    State: CanvasPainterState,
+{
+    pub fn new(canvas: &'paint mut Canvas) -> CanvasPainter<'paint, State> {
+        CanvasPainter {
+            phantom: PhantomData,
+
+            canvas,
+        }
     }
 
     pub fn get_size(&self) -> Size {
@@ -32,18 +52,23 @@ impl<'paint> CanvasPainter<'paint> {
     }
 
     /// Starts a layer with `shape` which child widgets will drawn to. It will be the `rect` of the canvas.
-    pub fn start_layer(self, paint: &Paint, shape: Shape) -> CanvasPainter<'paint> {
+    pub fn start_layer(self, paint: &Paint, shape: Shape) -> CanvasPainter<'paint, Head> {
         let rect = self.canvas.rect;
 
         self.start_layer_at(rect, paint, shape)
     }
 
     /// Starts a layer in the defined `rect` with `shape` which child widgets will drawn to.
-    pub fn start_layer_at(self, rect: Rect, paint: &Paint, shape: Shape) -> CanvasPainter<'paint> {
+    pub fn start_layer_at(
+        self,
+        rect: Rect,
+        paint: &Paint,
+        shape: Shape,
+    ) -> CanvasPainter<'paint, Head> {
         tracing::trace!("starting new layer");
 
         self.canvas.tail = Some(Box::new(CanvasLayer {
-            style: CanvasStyle {
+            style: LayerStyle {
                 shape,
 
                 anti_alias: paint.anti_alias,
@@ -60,22 +85,29 @@ impl<'paint> CanvasPainter<'paint> {
     }
 
     /// Creates a layer with `shape`. It will be the `rect` of the canvas.
-    pub fn layer(&mut self, paint: &Paint, shape: Shape, func: impl FnOnce(&mut CanvasPainter)) {
-        self.layer_at(self.canvas.rect, paint, shape, func);
+    pub fn layer(
+        self,
+        paint: &Paint,
+        shape: Shape,
+        func: impl FnOnce(&mut CanvasPainter<Head>),
+    ) -> CanvasPainter<'paint, Tail> {
+        let rect = self.canvas.rect;
+
+        self.layer_at(rect, paint, shape, func)
     }
 
     /// Creates a layer with `shape`. It will be the `rect` of the canvas.
     pub fn layer_at(
-        &mut self,
+        self,
         rect: Rect,
         paint: &Paint,
         shape: Shape,
-        func: impl FnOnce(&mut CanvasPainter),
-    ) {
+        func: impl FnOnce(&mut CanvasPainter<Head>),
+    ) -> CanvasPainter<'paint, Tail> {
         tracing::trace!("creating new layer");
 
         self.canvas.children.push(CanvasLayer {
-            style: CanvasStyle {
+            style: LayerStyle {
                 shape,
 
                 anti_alias: paint.anti_alias,
@@ -88,11 +120,17 @@ impl<'paint> CanvasPainter<'paint> {
             },
         });
 
-        func(&mut CanvasPainter::new(
-            &mut self.canvas.children.last_mut().unwrap().canvas,
-        ));
-    }
+        func(&mut CanvasPainter {
+            phantom: PhantomData,
 
+            canvas: &mut self.canvas.children.last_mut().unwrap().canvas,
+        });
+
+        CanvasPainter::<Tail>::new(self.canvas)
+    }
+}
+
+impl<'paint> CanvasPainter<'paint, Head> {
     /// Draws a rectangle. It will be the `rect` of the canvas.
     pub fn draw_rect(&mut self, paint: &Paint) {
         self.draw_rect_at(self.canvas.rect, paint);

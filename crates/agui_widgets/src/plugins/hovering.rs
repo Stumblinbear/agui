@@ -35,10 +35,10 @@ impl EnginePlugin for HoveringPlugin {
             match &mouse.pos {
                 Some(pos) => {
                     let hovering_ids = ctx
-                        .get_tree()
+                        .get_widgets()
                         .iter_down(None)
                         .filter(|widget_id| {
-                            match ctx.get_tree().get(*widget_id).and_then(|node| node.rect) {
+                            match ctx.get_widgets().get(*widget_id).and_then(|node| node.rect) {
                                 Some(rect) => rect.contains((pos.x as f32, pos.y as f32)),
                                 None => false,
                             }

@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use downcast_rs::{impl_downcast, Downcast};
 
 use crate::{
@@ -9,13 +7,10 @@ use crate::{
     unit::{Data, Layout, LayoutType, Rect},
 };
 
-use super::{descriptor::WidgetDescriptor, BuildResult};
+use super::{BuildResult, WidgetRef};
 
 pub trait WidgetInstance: Downcast {
-    fn get_descriptor(&self) -> &WidgetDescriptor;
-
-    fn get_type_id(&self) -> TypeId;
-    fn get_display_name(&self) -> String;
+    fn is_similar(&self, other: &WidgetRef) -> bool;
 
     fn get_layout_type(&self) -> Option<LayoutType>;
     fn get_layout(&self) -> Option<Layout>;
@@ -25,8 +20,7 @@ pub trait WidgetInstance: Downcast {
 
     fn build(&mut self, ctx: AguiContext) -> BuildResult;
 
-    fn get_canvas(&self) -> Option<&Canvas>;
-    fn render(&mut self, rect: Rect);
+    fn render(&self) -> Option<Canvas>;
 
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
 }

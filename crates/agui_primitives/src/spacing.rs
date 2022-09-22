@@ -3,7 +3,7 @@ use agui_core::{
     widget::{BuildContext, BuildResult, WidgetBuilder},
 };
 
-#[derive(Clone, Default, Debug)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Spacing(pub Sizing);
 
 impl Spacing {

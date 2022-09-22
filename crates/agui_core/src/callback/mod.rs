@@ -42,9 +42,27 @@ where
     callback_queue: Option<CallbackQueue>,
 }
 
+impl<A> PartialEq for Callback<A>
+where
+    A: Data,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
 // #[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl<A> Send for Callback<A> where A: Data {}
 unsafe impl<A> Sync for Callback<A> where A: Data {}
+
+impl<A> std::fmt::Debug for Callback<A>
+where
+    A: Data,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Callback").field(&self.id).finish()
+    }
+}
 
 impl<A> Callback<A>
 where

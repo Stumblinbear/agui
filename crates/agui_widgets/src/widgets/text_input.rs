@@ -19,7 +19,7 @@ use crate::{
 
 const CURSOR_BLINK_SECS: f32 = 0.5;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextInputStateStyle {
     pub background_color: Color,
     pub cursor_color: Color,
@@ -28,7 +28,7 @@ pub struct TextInputStateStyle {
     pub text_color: Color,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextInputStyle {
     pub normal: TextInputStateStyle,
     pub disabled: TextInputStateStyle,
@@ -97,6 +97,7 @@ pub struct Cursor {
     glyph_index: usize,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct TextInput<S>
 where
     S: EditableText + 'static,

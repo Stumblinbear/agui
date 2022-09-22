@@ -1,7 +1,7 @@
 use agui_core::{
     callback::Callback,
     unit::{Layout, Sizing},
-    widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     state::mouse::{MouseButton, MouseButtonState, MousePos},
 };
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct GestureDetector {
     pub on_hover: Callback<bool>,
     pub on_pressed: Callback<bool>,
@@ -17,7 +17,7 @@ pub struct GestureDetector {
     pub is_focused: bool,
     pub on_focus: Callback<bool>,
 
-    pub child: Widget,
+    pub child: WidgetRef,
 }
 
 #[derive(Debug, Default)]

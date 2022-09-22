@@ -1,8 +1,6 @@
-use agui_core::widget::Widget;
+use agui_core::widget::WidgetRef;
 use agui_macros::build;
 
 fn main() {
-    let _widget: Widget = build! {
-        
-    };
+    let _widget: WidgetRef = build! {};
 }

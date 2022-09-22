@@ -4,12 +4,10 @@ use downcast_rs::Downcast;
 
 use crate::unit::Data;
 
-use super::{
-    descriptor::WidgetDescriptor, BoxedWidget, BuildContext, BuildResult, IntoWidget, WidgetElement,
-};
+use super::{BuildContext, BuildResult, IntoWidget, WidgetElement, WidgetInstance};
 
 /// Implements the widget's `build()` method.
-pub trait WidgetBuilder: Downcast + Sized {
+pub trait WidgetBuilder: Downcast + Sized + PartialEq {
     type State: Data + Default = ();
 
     /// Called whenever this widget is rebuilt.
@@ -23,15 +21,15 @@ where
     W: WidgetBuilder<State = S>,
     S: Data + Default,
 {
-    fn into_widget(self: Rc<Self>, desc: WidgetDescriptor) -> BoxedWidget {
-        Box::new(WidgetElement::new(desc, self))
+    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetInstance> {
+        Box::new(WidgetElement::new(self))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::WidgetManager,
+        manager::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetContext},
     };
@@ -41,7 +39,7 @@ mod tests {
     #[derive(Debug, Default, Clone, Copy)]
     struct TestGlobal(i32);
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, PartialEq)]
     struct TestWidget {}
 
     impl WidgetBuilder for TestWidget {

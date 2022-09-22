@@ -9,9 +9,9 @@ use crate::unit::{Color, Rect, POS_MARGIN_OF_ERROR};
 #[derive(Debug, Clone, Default)]
 pub struct Font(pub(crate) usize, pub(crate) Option<FontArc>);
 
-impl std::hash::Hash for Font {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+impl PartialEq for Font {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
     }
 }
 
@@ -46,13 +46,13 @@ pub struct FontStyle {
     pub v_align: VerticalAlign,
 }
 
-impl std::hash::Hash for FontStyle {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.font.hash(state);
-        ((self.size * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
-        self.color.hash(state);
-        self.h_align.hash(state);
-        self.v_align.hash(state);
+impl PartialEq for FontStyle {
+    fn eq(&self, other: &Self) -> bool {
+        (self.font == other.font)
+            && ((self.size - other.size).abs() < POS_MARGIN_OF_ERROR)
+            && (self.color == other.color)
+            && (self.h_align == other.h_align)
+            && (self.v_align == other.v_align)
     }
 }
 

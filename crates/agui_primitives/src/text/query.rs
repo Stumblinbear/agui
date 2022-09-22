@@ -1,4 +1,4 @@
-use agui_core::widget::{BoxedWidget, WidgetElement};
+use agui_core::{manager::widgets::node::WidgetNode, widget::WidgetElement};
 
 use crate::Text;
 
@@ -10,7 +10,7 @@ pub trait TextQueryExt<'query> {
 
 impl<'query, I> TextQueryExt<'query> for I
 where
-    I: Iterator<Item = &'query BoxedWidget>,
+    I: Iterator<Item = &'query WidgetNode>,
 {
     fn with_text(self, text: &str) -> QueryWithText<Self>
     where
@@ -35,7 +35,7 @@ impl<'t, I> QueryWithText<'t, I> {
 
 impl<'query, 't, I> Iterator for QueryWithText<'t, I>
 where
-    I: Iterator<Item = &'query BoxedWidget>,
+    I: Iterator<Item = &'query WidgetNode>,
 {
     type Item = &'query WidgetElement<Text>;
 
@@ -57,7 +57,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::manager::WidgetManager;
+    use agui_core::manager::widgets::WidgetManager;
 
     use crate::{query::TextQueryExt, Column, Text};
 

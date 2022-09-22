@@ -4,11 +4,16 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
+    manager::widgets::node::WidgetNode,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
-    render::{canvas::painter::CanvasPainter, context::RenderContext, renderer::RenderFn},
+    render::{
+        canvas::painter::{CanvasPainter, Head},
+        context::RenderContext,
+        renderer::RenderFn,
+    },
     unit::{Data, Key, Layout, LayoutType, Rect, Size},
     util::{map::PluginMap, tree::Tree},
-    widget::{BoxedWidget, IntoWidget, Widget, WidgetBuilder, WidgetId, WidgetKey},
+    widget::{IntoWidget, WidgetBuilder, WidgetId, WidgetKey, WidgetRef},
 };
 
 use super::WidgetContext;
@@ -18,7 +23,7 @@ where
     W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) tree: &'ctx Tree<WidgetId, BoxedWidget>,
+    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetNode>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -61,8 +66,8 @@ where
             .and_then(|p| p.downcast_mut())
     }
 
-    fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget> {
-        self.tree
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode> {
+        self.widget_tree
     }
 
     fn mark_dirty(&mut self, widget_id: WidgetId) {
@@ -136,7 +141,7 @@ where
 
     pub fn on_draw<F>(&mut self, func: F)
     where
-        F: Fn(&RenderContext<W>, CanvasPainter) + 'static,
+        F: Fn(&RenderContext<W>, CanvasPainter<Head>) + 'static,
     {
         self.renderer = Some(RenderFn::new(func));
     }
@@ -154,17 +159,16 @@ where
         callback
     }
 
-    pub fn key<C>(&self, key: Key, widget: C) -> Widget
+    pub fn key<C>(&self, key: Key, widget: C) -> WidgetRef
     where
         C: IntoWidget + 'static,
     {
-        let mut widget = Widget::from(widget);
-
-        widget.set_key(match key {
-            Key::Local(_) => WidgetKey(Some(self.widget_id), key),
-            Key::Global(_) => WidgetKey(None, key),
-        });
-
-        widget
+        WidgetRef::new_with_key(
+            Some(match key {
+                Key::Local(_) => WidgetKey(Some(self.widget_id), key),
+                Key::Global(_) => WidgetKey(None, key),
+            }),
+            widget,
+        )
     }
 }

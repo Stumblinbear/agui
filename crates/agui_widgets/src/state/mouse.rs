@@ -62,7 +62,7 @@ impl Default for MouseButtonState {
     }
 }
 
-#[derive(Debug, Default, Hash, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Scroll(pub Point);
 
 impl Deref for Scroll {

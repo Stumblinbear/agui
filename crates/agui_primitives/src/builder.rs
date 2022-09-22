@@ -4,6 +4,12 @@ pub struct Builder {
     pub func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult>,
 }
 
+impl PartialEq for Builder {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
 impl Builder {
     pub fn new<F>(func: F) -> Self
     where
@@ -24,14 +30,14 @@ impl WidgetBuilder for Builder {
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        manager::WidgetManager,
+        manager::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder},
     };
 
     use crate::Builder;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, PartialEq)]
     struct TestWidget {}
 
     impl WidgetBuilder for TestWidget {

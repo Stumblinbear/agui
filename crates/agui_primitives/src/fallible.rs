@@ -17,6 +17,12 @@ pub struct Fallible<Ok: 'static, Error: 'static> {
     pub on_panic: Option<Box<dyn Fn(&mut BuildContext<Self>, Box<dyn Any + Send>) -> BuildResult>>,
 }
 
+impl<Ok: 'static, Error: 'static> PartialEq for Fallible<Ok, Error> {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
 impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
     pub fn new<F, OkF>(func: F, on_ok: OkF) -> Self
     where
@@ -110,14 +116,14 @@ mod tests {
     use std::convert::Infallible;
 
     use agui_core::{
-        manager::WidgetManager,
+        manager::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder},
     };
 
     use crate::Fallible;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, PartialEq)]
     struct TestWidget {}
 
     impl WidgetBuilder for TestWidget {

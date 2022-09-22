@@ -6,8 +6,10 @@ use morphorm::{Cache, GeometryChanged};
 use crate::{
     unit::{Bounds, Rect, Size, POS_MARGIN_OF_ERROR},
     util::tree::Tree,
-    widget::{BoxedWidget, WidgetId},
+    widget::WidgetId,
 };
+
+use super::widgets::node::WidgetNode;
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
@@ -337,7 +339,7 @@ where
 }
 
 impl<'ui> morphorm::Node<'ui> for WidgetId {
-    type Data = Tree<Self, BoxedWidget>;
+    type Data = Tree<Self, WidgetNode>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         store

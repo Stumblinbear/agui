@@ -194,7 +194,7 @@ impl RenderManager {
     pub fn redraw(&mut self, manager: &WidgetManager) {
         let now = Instant::now();
 
-        if let Some(root_id) = manager.get_tree().get_root() {
+        if let Some(root_id) = manager.get_widgets().get_root() {
             self.redraw_node(manager, root_id);
         } else if let Some(root_id) = self.tree.get_root() {
             self.canvas_cache.clear();
@@ -214,7 +214,7 @@ impl RenderManager {
     ) {
         let fonts = manager.get_fonts();
 
-        let tree = manager.get_tree();
+        let tree = manager.get_widgets();
 
         tree.iter_down(Some(widget_id))
             .map(|widget_id| tree.get(widget_id).unwrap())

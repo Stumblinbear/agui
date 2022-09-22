@@ -30,29 +30,35 @@ impl Default for Shape {
     }
 }
 
-impl std::hash::Hash for Shape {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Shape::Rect => 0.hash(state),
-
-            Shape::RoundedRect {
-                top_left,
-                top_right,
-                bottom_right,
-                bottom_left,
-            } => {
-                1.hash(state);
-                ((top_left * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
-                ((top_right * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
-                ((bottom_right * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
-                ((bottom_left * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
+impl PartialEq for Shape {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::RoundedRect {
+                    top_left: l_top_left,
+                    top_right: l_top_right,
+                    bottom_right: l_bottom_right,
+                    bottom_left: l_bottom_left,
+                },
+                Self::RoundedRect {
+                    top_left: r_top_left,
+                    top_right: r_top_right,
+                    bottom_right: r_bottom_right,
+                    bottom_left: r_bottom_left,
+                },
+            ) => {
+                ((l_top_left - r_top_left).abs() < POS_MARGIN_OF_ERROR)
+                    && ((l_top_right - r_top_right).abs() < POS_MARGIN_OF_ERROR)
+                    && ((l_bottom_right - r_bottom_right).abs() < POS_MARGIN_OF_ERROR)
+                    && ((l_bottom_left - r_bottom_left).abs() < POS_MARGIN_OF_ERROR)
             }
 
-            Shape::Circle => 2.hash(state),
+            (Self::Path(l0), Self::Path(r0)) => l0
+                .iter_with_attributes()
+                .zip(r0.iter_with_attributes())
+                .all(|(e0, e1)| e0 == e1),
 
-            Shape::Path(_) => {
-                3.hash(state);
-            }
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
 }

@@ -3,30 +3,24 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use morphorm::Hierarchy;
 use slotmap::{
     hop::{Iter, IterMut},
     HopSlotMap, Key,
 };
 
-pub use slotmap::new_key_type;
-
-#[derive(Debug)]
-pub struct Tree<K, V>
+pub struct TreeMap<K, V>
 where
     K: Key,
 {
-    root: Option<K>,
     nodes: HopSlotMap<K, TreeNode<K, V>>,
 }
 
-impl<K, V> Default for Tree<K, V>
+impl<K, V> Default for TreeMap<K, V>
 where
     K: Key,
 {
     fn default() -> Self {
         Self {
-            root: None,
             nodes: HopSlotMap::default(),
         }
     }
@@ -40,19 +34,14 @@ where
     depth: usize,
     pub value: Option<V>,
 
-    parent: Option<K>,
-    children: Vec<K>,
+    pub parent: Option<K>,
+    pub children: Vec<K>,
 }
 
-impl<K, V> Tree<K, V>
+impl<K, V> TreeMap<K, V>
 where
     K: Key,
 {
-    #[allow(dead_code)]
-    pub fn get_root(&self) -> Option<K> {
-        self.root
-    }
-
     pub fn contains(&self, node_id: K) -> bool {
         self.nodes.contains_key(node_id)
     }
@@ -61,7 +50,11 @@ where
         self.nodes.get(node_id).map(|node| node.depth)
     }
 
-    pub fn add(&mut self, parent_id: Option<K>, value: V) -> K {
+    pub(super) fn clear(&mut self) {
+        self.nodes.clear();
+    }
+
+    pub(super) fn add(&mut self, parent_id: Option<K>, value: V) -> K {
         let node_id = self.nodes.insert(TreeNode {
             depth: 0,
             value: Some(value),
@@ -74,7 +67,7 @@ where
         node_id
     }
 
-    pub fn remove(&mut self, node_id: K, cascade: bool) -> Option<V> {
+    pub(super) fn remove(&mut self, node_id: K) -> Option<V> {
         if let Some(mut node) = self.nodes.remove(node_id) {
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
@@ -87,16 +80,6 @@ where
                             .expect("unable to find child in removed node's parent"),
                     );
                 }
-            } else {
-                // If the node has no parent, then we can assume it was the root
-                self.root = None;
-            }
-
-            if cascade {
-                // Remove all children
-                for child_id in node.children.iter() {
-                    self.remove(*child_id, cascade);
-                }
             }
 
             Some(node.value.take().expect("node is currently in use"))
@@ -105,7 +88,7 @@ where
         }
     }
 
-    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
+    pub(super) fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
         if let Some(node) = self.nodes.get(node_id) {
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
@@ -118,9 +101,6 @@ where
                             .expect("unable to find child in removed node's parent"),
                     );
                 }
-            } else {
-                // If the node has no parent, then we can assume it was the root
-                self.root = None;
             }
 
             self.propagate_node(new_parent_id, node_id);
@@ -138,8 +118,6 @@ where
             } else {
                 panic!("cannot add a node to a parent that doesn't exist");
             }
-        } else {
-            self.root = Some(node_id);
         }
 
         let node = &mut self.nodes[node_id];
@@ -219,18 +197,10 @@ where
         self.nodes.iter_mut()
     }
 
-    pub fn iter_down(&self, node_id: Option<K>) -> DownwardIterator<K, V> {
+    pub fn iter_down_from(&self, node_id: K) -> DownwardIterator<K, V> {
         DownwardIterator {
             tree: self,
-            node_id: node_id.or(self.root),
-            first: true,
-        }
-    }
-
-    pub fn iter_up(&self) -> UpwardIterator<K, V> {
-        UpwardIterator {
-            tree: self,
-            node_id: self.get_deepest_child(self.root),
+            node_id: Some(node_id),
             first: true,
         }
     }
@@ -265,7 +235,7 @@ where
             return false;
         }
 
-        for node_id in self.iter_down(Some(node_id)) {
+        for node_id in self.iter_down_from(node_id) {
             let node = self.nodes.get(node_id).expect("tree broken");
 
             // If we reach a depth lower than the child, bail, because the child won't be found. We do
@@ -277,6 +247,32 @@ where
             // The child exists under the parent
             if node_id == child_id {
                 return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_first_child(&self, node_id: K) -> bool {
+        if let Some(parent_id) = self.get_parent(node_id) {
+            if let Some(parent) = self.nodes.get(*parent_id) {
+                return parent
+                    .children
+                    .first()
+                    .map_or(false, |child_id| *child_id == node_id);
+            }
+        }
+
+        false
+    }
+
+    pub fn is_last_child(&self, node_id: K) -> bool {
+        if let Some(parent_id) = self.get_parent(node_id) {
+            if let Some(parent) = self.nodes.get(*parent_id) {
+                return parent
+                    .children
+                    .last()
+                    .map_or(false, |child_id| *child_id == node_id);
             }
         }
 
@@ -385,7 +381,7 @@ where
     }
 }
 
-impl<K, V> Index<K> for Tree<K, V>
+impl<K, V> Index<K> for TreeMap<K, V>
 where
     K: Key,
 {
@@ -399,7 +395,7 @@ where
     }
 }
 
-impl<K, V> IndexMut<K> for Tree<K, V>
+impl<K, V> IndexMut<K> for TreeMap<K, V>
 where
     K: Key,
 {
@@ -415,9 +411,9 @@ pub struct DownwardIterator<'a, K, V>
 where
     K: Key,
 {
-    tree: &'a Tree<K, V>,
-    node_id: Option<K>,
-    first: bool,
+    pub(super) tree: &'a TreeMap<K, V>,
+    pub(super) node_id: Option<K>,
+    pub(super) first: bool,
 }
 
 impl<'a, K, V> Iterator for DownwardIterator<'a, K, V>
@@ -478,9 +474,9 @@ pub struct UpwardIterator<'a, K, V>
 where
     K: Key,
 {
-    tree: &'a Tree<K, V>,
-    node_id: Option<K>,
-    first: bool,
+    pub(super) tree: &'a TreeMap<K, V>,
+    pub(super) node_id: Option<K>,
+    pub(super) first: bool,
 }
 
 impl<'a, K, V> Iterator for UpwardIterator<'a, K, V>
@@ -522,7 +518,7 @@ pub struct ParentIterator<'a, K, V>
 where
     K: Key,
 {
-    tree: &'a Tree<K, V>,
+    tree: &'a TreeMap<K, V>,
     node_id: Option<K>,
 }
 
@@ -551,10 +547,10 @@ pub struct ChildIterator<'a, K, V>
 where
     K: Key,
 {
-    tree: &'a Tree<K, V>,
-    node_id: K,
-    current_child_id: Option<K>,
-    first: bool,
+    pub(super) tree: &'a TreeMap<K, V>,
+    pub(super) node_id: K,
+    pub(super) current_child_id: Option<K>,
+    pub(super) first: bool,
 }
 
 impl<'a, K, V> Iterator for ChildIterator<'a, K, V>
@@ -602,78 +598,15 @@ where
     }
 }
 
-impl<'a, K: 'a, V: 'a> Hierarchy<'a> for Tree<K, V>
-where
-    K: Key + for<'b> morphorm::Node<'b>,
-{
-    type Item = K;
-    type DownIter = DownwardIterator<'a, K, V>;
-    type UpIter = UpwardIterator<'a, K, V>;
-    type ChildIter = ChildIterator<'a, K, V>;
-
-    fn up_iter(&'a self) -> Self::UpIter {
-        self.iter_up()
-    }
-
-    fn down_iter(&'a self) -> Self::DownIter {
-        self.iter_down(None)
-    }
-
-    fn child_iter(&'a self, node_id: Self::Item) -> Self::ChildIter {
-        ChildIterator {
-            tree: self,
-            node_id,
-            current_child_id: None,
-            first: true,
-        }
-    }
-
-    fn parent(&self, node_id: Self::Item) -> Option<Self::Item> {
-        if let Some(parent) = self.nodes.get(node_id) {
-            return parent.parent;
-        }
-
-        None
-    }
-
-    fn is_first_child(&self, node_id: Self::Item) -> bool {
-        if let Some(parent_id) = self.parent(node_id) {
-            if let Some(parent) = self.nodes.get(parent_id) {
-                return parent
-                    .children
-                    .first()
-                    .map_or(false, |child_id| *child_id == node_id);
-            }
-        }
-
-        false
-    }
-
-    fn is_last_child(&self, node_id: Self::Item) -> bool {
-        if let Some(parent_id) = self.parent(node_id) {
-            if let Some(parent) = self.nodes.get(parent_id) {
-                return parent
-                    .children
-                    .last()
-                    .map_or(false, |child_id| *child_id == node_id);
-            }
-        }
-
-        false
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use morphorm::Hierarchy;
-
     use crate::widget::WidgetId;
 
-    use super::Tree;
+    use super::TreeMap;
 
     #[test]
     fn hierarchy() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 
@@ -763,7 +696,7 @@ mod tests {
 
     #[test]
     fn downward_iter() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 
@@ -778,7 +711,7 @@ mod tests {
         let child_3 = tree.add(Some(root_id), 7);
         let child_3_1 = tree.add(Some(child_3), 8);
 
-        let mut iter = tree.iter_down(None);
+        let mut iter = tree.iter_down_from(root_id);
 
         assert_eq!(
             iter.next(),
@@ -836,7 +769,7 @@ mod tests {
             "downward iterator should have returned None"
         );
 
-        let mut iter = tree.iter_down(Some(child_3));
+        let mut iter = tree.iter_down_from(child_3);
 
         assert_eq!(
             iter.next(),
@@ -857,7 +790,7 @@ mod tests {
 
     #[test]
     fn upward_iter() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 
@@ -872,7 +805,7 @@ mod tests {
         let child_3 = tree.add(Some(root_id), 7);
         let child_3_1 = tree.add(Some(child_3), 8);
 
-        let mut iter = tree.iter_up();
+        let mut iter = tree.iter_up_from(child_3_1);
 
         assert_eq!(
             iter.next(),
@@ -966,7 +899,7 @@ mod tests {
 
     #[test]
     fn depth_propagation() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 

@@ -66,7 +66,12 @@ pub struct SystemInfo {
 type OptSystem = Option<SystemInfo>;
 
 #[functional_widget(OptSystem)]
-fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widget) -> BuildResult {
+fn example_main(
+    ctx: &mut BuildContext,
+    font: Font,
+    _color: Color,
+    _child: WidgetRef,
+) -> BuildResult {
     ctx.set_layout(Layout {
         sizing: Sizing::Fill,
         ..Layout::default()

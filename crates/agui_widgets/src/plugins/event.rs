@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{event::WidgetEvent, WidgetManager},
+    manager::{event::WidgetEvent, widgets::WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
@@ -152,7 +152,7 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::WidgetManager,
+        manager::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
     };
@@ -162,7 +162,7 @@ mod tests {
 
     use super::EventPluginContextExt;
 
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Debug, Default, PartialEq)]
     struct TestListener {}
 
     impl WidgetBuilder for TestListener {

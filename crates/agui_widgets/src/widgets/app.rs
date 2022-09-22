@@ -1,13 +1,13 @@
 use agui_core::{
     unit::{Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 
 use crate::{plugins::global::GlobalPluginExt, state::window::WindowSize};
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct App {
-    pub child: Widget,
+    pub child: WidgetRef,
 }
 
 impl WidgetBuilder for App {

@@ -2,10 +2,11 @@ use std::rc::Rc;
 
 use crate::{
     callback::{Callback, CallbackId},
+    manager::widgets::node::WidgetNode,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::{Data, Rect, Size},
     util::{map::PluginMap, tree::Tree},
-    widget::{BoxedWidget, WidgetBuilder, WidgetId},
+    widget::{WidgetBuilder, WidgetId},
 };
 
 mod build;
@@ -26,7 +27,7 @@ where
     where
         P: PluginImpl;
 
-    fn get_tree(&self) -> &Tree<WidgetId, BoxedWidget>;
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode>;
 
     fn mark_dirty(&mut self, widget_id: WidgetId);
 

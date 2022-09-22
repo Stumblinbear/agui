@@ -45,7 +45,12 @@ fn main() -> Result<(), agpu::BoxError> {
 }
 
 #[functional_widget]
-fn example_main(ctx: &mut BuildContext, font: Font, _color: Color, _child: Widget) -> BuildResult {
+fn example_main(
+    ctx: &mut BuildContext,
+    font: Font,
+    _color: Color,
+    _child: WidgetRef,
+) -> BuildResult {
     ctx.set_layout(Layout {
         sizing: Sizing::Fill,
         ..Layout::default()

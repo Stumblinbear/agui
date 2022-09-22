@@ -6,15 +6,7 @@ pub mod painter;
 
 use self::command::CanvasCommand;
 
-#[derive(Default, Debug)]
-pub struct CanvasStyle {
-    pub shape: Shape,
-
-    pub anti_alias: bool,
-    pub blend_mode: BlendMode,
-}
-
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Canvas {
     pub rect: Rect,
 
@@ -23,8 +15,17 @@ pub struct Canvas {
     pub tail: Option<Box<CanvasLayer>>,
 }
 
+#[derive(Debug)]
 pub struct CanvasLayer {
-    pub style: CanvasStyle,
+    pub style: LayerStyle,
 
     pub canvas: Canvas,
+}
+
+#[derive(Default, Debug, PartialEq)]
+pub struct LayerStyle {
+    pub shape: Shape,
+
+    pub anti_alias: bool,
+    pub blend_mode: BlendMode,
 }

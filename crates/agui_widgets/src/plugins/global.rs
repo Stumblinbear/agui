@@ -8,7 +8,7 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    manager::{event::WidgetEvent, WidgetManager},
+    manager::{event::WidgetEvent, widgets::WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
@@ -192,10 +192,12 @@ where
         } else {
             tracing::warn!("GlobalPlugin not added");
 
+            println!("test");
+
             Global {
                 phantom: PhantomData,
 
-                value: Rc::new(RefCell::new(Box::new(G::default()))),
+                value: Rc::new(RefCell::new(G::default())),
             }
         }
     }
@@ -265,12 +267,32 @@ where
     }
 }
 
+impl<G> std::fmt::Debug for Global<G>
+where
+    G: Data + std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Global")
+            .field("value", &self.borrow())
+            .finish()
+    }
+}
+
+impl<G> std::fmt::Display for Global<G>
+where
+    G: Data + std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.borrow().fmt(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::WidgetManager,
+        manager::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
     };
@@ -281,7 +303,7 @@ mod tests {
     #[derive(Debug, Default, Clone, Copy)]
     struct TestGlobal(u32);
 
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Debug, Default, PartialEq)]
     struct TestWidgetWriter {}
 
     impl WidgetBuilder for TestWidgetWriter {
@@ -292,7 +314,7 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Debug, Default, PartialEq)]
     struct TestWidgetReader {}
 
     impl WidgetBuilder for TestWidgetReader {

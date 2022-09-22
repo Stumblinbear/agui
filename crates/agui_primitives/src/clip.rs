@@ -1,17 +1,17 @@
 use agui_core::{
     render::canvas::paint::Paint,
     unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Clip {
     pub rect: Option<Rect>,
 
     pub shape: Shape,
     pub anti_alias: bool,
 
-    pub child: Widget,
+    pub child: WidgetRef,
 }
 
 impl WidgetBuilder for Clip {

@@ -22,6 +22,6 @@ pub mod prelude {
         query::*,
         render::canvas::paint::{Brush, Paint},
         unit::*,
-        widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
+        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
     };
 }

@@ -1,10 +1,7 @@
 error: unexpected end of input, expected expression
- --> tests/compile-fail/build_empty.rs:5:27
+ --> tests/compile-fail/build_empty.rs:5:30
   |
-5 |       let _widget: Widget = build! {
-  |  ___________________________^
-6 | |
-7 | |     };
-  | |_____^
+5 |     let _widget: WidgetRef = build! {};
+  |                              ^^^^^^^^^
   |
   = note: this error originates in the macro `build` (in Nightly builds, run with -Z macro-backtrace for more info)

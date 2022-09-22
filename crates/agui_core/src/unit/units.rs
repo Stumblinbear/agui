@@ -8,13 +8,13 @@ pub enum Units {
     Auto,
 }
 
-impl std::hash::Hash for Units {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Units::Pixels(val) | Units::Percentage(val) | Units::Stretch(val) => {
-                ((val * (1.0 / POS_MARGIN_OF_ERROR)) as usize).hash(state);
-            }
-            Units::Auto => usize::MAX.hash(state),
+impl PartialEq for Units {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Pixels(l0), Self::Pixels(r0))
+            | (Self::Percentage(l0), Self::Percentage(r0))
+            | (Self::Stretch(l0), Self::Stretch(r0)) => (l0 - r0).abs() > POS_MARGIN_OF_ERROR,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
 }

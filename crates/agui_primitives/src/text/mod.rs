@@ -9,7 +9,7 @@ use agui_core::{
 pub mod edit;
 pub mod query;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,

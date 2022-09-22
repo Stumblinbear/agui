@@ -55,15 +55,6 @@ impl PartialEq for Color {
 
 impl Eq for Color {}
 
-impl std::hash::Hash for Color {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.red * (1.0 / COLOR_MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.green * (1.0 / COLOR_MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.blue * (1.0 / COLOR_MARGIN_OF_ERROR)) as usize).hash(state);
-        ((self.alpha * (1.0 / COLOR_MARGIN_OF_ERROR)) as usize).hash(state);
-    }
-}
-
 impl From<u32> for Color {
     fn from(c: u32) -> Self {
         Self {

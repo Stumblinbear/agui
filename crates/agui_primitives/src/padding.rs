@@ -1,13 +1,13 @@
 use agui_core::{
     unit::{Layout, Margin, Sizing},
-    widget::{BuildContext, BuildResult, Widget, WidgetBuilder},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
 };
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Padding {
     pub padding: Margin,
 
-    pub child: Widget,
+    pub child: WidgetRef,
 }
 
 impl WidgetBuilder for Padding {

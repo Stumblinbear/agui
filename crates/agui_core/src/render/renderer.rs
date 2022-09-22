@@ -1,12 +1,15 @@
 use crate::widget::WidgetBuilder;
 
-use super::{canvas::painter::CanvasPainter, context::RenderContext};
+use super::{
+    canvas::painter::{CanvasPainter, Head},
+    context::RenderContext,
+};
 
 pub struct RenderFn<W>
 where
     W: WidgetBuilder,
 {
-    func: Box<dyn Fn(&RenderContext<W>, CanvasPainter)>,
+    func: Box<dyn Fn(&RenderContext<W>, CanvasPainter<Head>)>,
 }
 
 impl<W> RenderFn<W>
@@ -15,14 +18,14 @@ where
 {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&RenderContext<W>, CanvasPainter) + 'static,
+        F: Fn(&RenderContext<W>, CanvasPainter<Head>) + 'static,
     {
         Self {
             func: Box::new(func),
         }
     }
 
-    pub fn call(&self, ctx: &RenderContext<W>, canvas: CanvasPainter) {
+    pub fn call(&self, ctx: &RenderContext<W>, canvas: CanvasPainter<Head>) {
         let span = tracing::trace_span!("render_fn");
         let _enter = span.enter();
 

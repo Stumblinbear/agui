@@ -2,12 +2,12 @@ use agui_core::{
     callback::Callback,
     render::canvas::paint::Paint,
     unit::{Color, Key, Layout},
-    widget::{BuildContext, BuildResult, Widget, WidgetBuilder, WidgetContext},
+    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
 };
 
 use crate::GestureDetector;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ButtonStyle {
     pub normal: Color,
     pub disabled: Color,
@@ -33,14 +33,14 @@ pub struct ButtonState {
     disabled: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
 
     pub on_pressed: Callback<()>,
 
-    pub child: Widget,
+    pub child: WidgetRef,
 }
 
 impl WidgetBuilder for Button {
