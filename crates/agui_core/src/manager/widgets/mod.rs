@@ -15,9 +15,12 @@ use crate::{
 
 use self::node::WidgetNode;
 
-use super::{cache::LayoutCache, context::AguiContext, event::WidgetEvent};
+use super::{cache::LayoutCache, context::AguiContext};
 
+pub mod events;
 pub mod node;
+
+use events::WidgetEvent;
 
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
@@ -675,7 +678,7 @@ enum Modify {
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::{event::WidgetEvent, widgets::node::WidgetNode},
+        manager::{widgets::events::WidgetEvent, widgets::node::WidgetNode},
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
     };
 

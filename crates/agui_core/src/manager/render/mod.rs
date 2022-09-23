@@ -15,26 +15,13 @@ use crate::{
     widget::WidgetId,
 };
 
-use super::{
-    event::{RenderEvent, WidgetEvent},
-    widgets::node::WidgetNode,
-};
+use super::{widgets::events::WidgetEvent, widgets::node::WidgetNode};
 
-#[derive(Debug)]
-pub enum RenderError {
-    MissingWidget {
-        widget_id: WidgetId,
-    },
+pub mod errors;
+pub mod events;
+pub mod node;
 
-    MissingLayer {
-        layer_id: LayerId,
-    },
-
-    NoLayerTarget {
-        parent_id: WidgetId,
-        widget_id: WidgetId,
-    },
-}
+use self::{errors::RenderError, events::RenderEvent};
 
 new_key_type! {
     pub struct LayerId;
@@ -500,7 +487,10 @@ impl RenderManager {
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::{event::RenderEvent, render::RenderManager, widgets::WidgetManager},
+        manager::{
+            render::{events::RenderEvent, RenderManager},
+            widgets::WidgetManager,
+        },
         render::canvas::{
             paint::Paint,
             painter::{CanvasPainter, Head},

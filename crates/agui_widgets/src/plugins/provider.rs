@@ -7,7 +7,7 @@ use std::{
 };
 
 use agui_core::{
-    manager::event::WidgetEvent,
+    manager::widgets::events::WidgetEvent,
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},

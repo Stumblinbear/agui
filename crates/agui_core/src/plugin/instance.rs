@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use downcast_rs::{impl_downcast, Downcast};
 
-use crate::manager::{context::AguiContext, event::WidgetEvent};
+use crate::manager::{context::AguiContext, widgets::events::WidgetEvent};
 
 /// A plugin for the widget manager.
 pub trait PluginInstance: Downcast {

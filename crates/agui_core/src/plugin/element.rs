@@ -1,6 +1,6 @@
 use std::any::{type_name, TypeId};
 
-use crate::manager::{context::AguiContext, event::WidgetEvent};
+use crate::manager::{context::AguiContext, widgets::events::WidgetEvent};
 
 use super::{PluginContext, PluginImpl, PluginInstance};
 

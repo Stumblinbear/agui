@@ -31,6 +31,10 @@ where
 
     fn mark_dirty(&mut self, widget_id: WidgetId);
 
+    // fn depend_on<D>(&mut self) -> Option<&D::State>
+    // where
+    //     D: WidgetBuilder;
+
     fn get_rect(&self) -> Option<Rect>;
 
     fn get_size(&self) -> Option<Size> {

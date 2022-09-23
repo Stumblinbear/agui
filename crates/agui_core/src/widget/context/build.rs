@@ -74,6 +74,20 @@ where
         self.dirty.insert(widget_id);
     }
 
+    // fn depend_on<D>(&mut self) -> Option<&D::State>
+    // where
+    //     D: WidgetBuilder,
+    // {
+    //     self.inherited
+    //         .get(&TypeId::of::<D>())
+    //         .and_then(|widget_id| {
+    //             self.widget_tree
+    //                 .get(*widget_id)
+    //                 .and_then(|widget| widget.downcast_ref::<WidgetElement<D>>())
+    //                 .map(|element| element.get_state())
+    //         })
+    // }
+
     fn get_rect(&self) -> Option<Rect> {
         self.rect
     }

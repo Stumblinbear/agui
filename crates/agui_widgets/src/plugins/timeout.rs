@@ -7,7 +7,7 @@ use std::{
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::event::WidgetEvent,
+    manager::widgets::events::WidgetEvent,
     plugin::{PluginContext, StatefulPlugin},
     widget::{BuildContext, WidgetBuilder, WidgetContext, WidgetId},
 };

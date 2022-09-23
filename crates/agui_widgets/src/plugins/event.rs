@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashSet, rc::Rc};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{event::WidgetEvent, widgets::WidgetManager},
+    manager::{widgets::events::WidgetEvent, widgets::WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},

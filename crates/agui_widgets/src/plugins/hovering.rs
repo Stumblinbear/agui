@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use agui_core::{
-    manager::event::WidgetEvent,
+    manager::widgets::events::WidgetEvent,
     plugin::{EnginePlugin, PluginContext},
     state::ContextState,
     widget::{BuildContext, WidgetId},
