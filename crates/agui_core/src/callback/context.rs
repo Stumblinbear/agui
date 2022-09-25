@@ -1,9 +1,9 @@
-use std::{ops::Deref, rc::Rc};
+use std::ops::Deref;
 
 use crate::{
     manager::widgets::node::WidgetNode,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
-    unit::{Data, Rect, Size},
+    unit::Data,
     util::{
         map::{PluginMap, WidgetSet},
         tree::Tree,
@@ -24,8 +24,6 @@ where
 
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
-
-    pub(crate) rect: Option<Rect>,
 
     pub(crate) changed: bool,
 }
@@ -75,14 +73,6 @@ where
         self.dirty.insert(widget_id);
     }
 
-    fn get_rect(&self) -> Option<Rect> {
-        self.rect
-    }
-
-    fn get_size(&self) -> Option<Size> {
-        self.rect.map(|rect| rect.into())
-    }
-
     fn get_widget(&self) -> &W {
         self.widget
     }
@@ -104,22 +94,25 @@ where
         func(self.state);
     }
 
-    fn call<A>(&mut self, callback: Callback<A>, args: A)
+    fn call<A>(&mut self, callback: Callback<A>, arg: A)
     where
         A: Data,
     {
-        if let Some(callback_id) = callback.get_id() {
-            self.callback_queue
-                .lock()
-                .push((callback_id, Rc::new(args)));
-        }
+        self.callback_queue.call(callback, arg);
     }
 
-    /// # Safety
-    ///
-    /// You must ensure the callback is expecting the type of the `args` passed in. If the type
-    /// is different, it will panic.
-    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.callback_queue.lock().push((callback_id, args));
+    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) {
+        self.callback_queue.call_unsafe(callback_id, arg);
+    }
+
+    fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
+    where
+        A: Data,
+    {
+        self.callback_queue.call_many(callbacks, arg);
+    }
+
+    unsafe fn call_many_unsafe(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
+        self.callback_queue.call_many_unsafe(callback_ids, arg);
     }
 }

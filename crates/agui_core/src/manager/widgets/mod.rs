@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::collections::VecDeque;
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -153,9 +153,7 @@ impl WidgetManager {
     }
 
     pub fn has_changes(&self) -> bool {
-        !self.modifications.is_empty()
-            || !self.dirty.is_empty()
-            || !self.callback_queue.lock().is_empty()
+        !self.modifications.is_empty() || !self.dirty.is_empty() || !self.callback_queue.is_empty()
     }
 
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
@@ -171,7 +169,7 @@ impl WidgetManager {
                 plugins: None,
                 tree: &self.widget_tree,
                 dirty: &mut self.dirty,
-                callback_queue: Arc::clone(&self.callback_queue),
+                callback_queue: self.callback_queue.clone(),
 
                 widget_id: None,
             });
@@ -203,7 +201,7 @@ impl WidgetManager {
                         plugins: None,
                         tree: &self.widget_tree,
                         dirty: &mut self.dirty,
-                        callback_queue: Arc::clone(&self.callback_queue),
+                        callback_queue: self.callback_queue.clone(),
 
                         widget_id: None,
                     });
@@ -236,7 +234,7 @@ impl WidgetManager {
                     plugins: None,
                     tree: &self.widget_tree,
                     dirty: &mut self.dirty,
-                    callback_queue: Arc::clone(&self.callback_queue),
+                    callback_queue: self.callback_queue.clone(),
 
                     widget_id: None,
                 },
@@ -348,45 +346,44 @@ impl WidgetManager {
         let span = tracing::debug_span!("flush_callbacks");
         let _enter = span.enter();
 
-        // It's possible that without these braces, the lock is held until the end of the function, possibly
-        // leading to deadlocks.
-        #[allow(unused_braces)]
-        let callbacks = { self.callback_queue.lock().drain(..).collect::<Vec<_>>() };
+        let callback_invokes = self.callback_queue.take();
 
-        for (callback_id, args) in callbacks {
-            let mut widget = self
-                .widget_tree
-                .take(callback_id.get_widget_id())
-                .expect("cannot call a callback on a widget that does not exist");
+        for invoke in callback_invokes {
+            for callback_id in invoke.callback_ids {
+                let mut widget = self
+                    .widget_tree
+                    .take(callback_id.get_widget_id())
+                    .expect("cannot call a callback on a widget that does not exist");
 
-            let changed = widget.call(
-                AguiContext {
-                    plugins: Some(&mut self.plugins),
-                    tree: &self.widget_tree,
-                    dirty: &mut self.dirty,
-                    callback_queue: Arc::clone(&self.callback_queue),
+                let changed = widget.call(
+                    AguiContext {
+                        plugins: Some(&mut self.plugins),
+                        tree: &self.widget_tree,
+                        dirty: &mut self.dirty,
+                        callback_queue: self.callback_queue.clone(),
 
-                    widget_id: Some(callback_id.get_widget_id()),
-                },
-                callback_id,
-                args.as_ref(),
-            );
-
-            if changed {
-                let widget_id = callback_id.get_widget_id();
-
-                tracing::debug!(
-                    id = &format!("{:?}", widget_id),
-                    widget = widget.get_display_name(),
-                    "widget updated, queueing for rebuild"
+                        widget_id: Some(callback_id.get_widget_id()),
+                    },
+                    callback_id,
+                    &invoke.arg,
                 );
 
-                self.modifications
-                    .push_back(Modify::Rebuild(callback_id.get_widget_id()));
-            }
+                if changed {
+                    let widget_id = callback_id.get_widget_id();
 
-            self.widget_tree
-                .replace(callback_id.get_widget_id(), widget);
+                    tracing::debug!(
+                        id = &format!("{:?}", widget_id),
+                        widget = widget.get_display_name(),
+                        "widget updated, queueing for rebuild"
+                    );
+
+                    self.modifications
+                        .push_back(Modify::Rebuild(callback_id.get_widget_id()));
+                }
+
+                self.widget_tree
+                    .replace(callback_id.get_widget_id(), widget);
+            }
         }
     }
 
@@ -468,7 +465,7 @@ impl WidgetManager {
                 plugins: None,
                 tree: &self.widget_tree,
                 dirty: &mut self.dirty,
-                callback_queue: Arc::clone(&self.callback_queue),
+                callback_queue: self.callback_queue.clone(),
 
                 widget_id: None,
             });
@@ -544,7 +541,7 @@ impl WidgetManager {
                 plugins: Some(&mut self.plugins),
                 tree: &self.widget_tree,
                 dirty: &mut self.dirty,
-                callback_queue: Arc::clone(&self.callback_queue),
+                callback_queue: self.callback_queue.clone(),
 
                 widget_id: Some(widget_id),
             });

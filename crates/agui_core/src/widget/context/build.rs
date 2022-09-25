@@ -1,5 +1,3 @@
-use std::{rc::Rc, sync::Arc};
-
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
@@ -11,7 +9,7 @@ use crate::{
         context::RenderContext,
         renderer::RenderFn,
     },
-    unit::{Data, Key, Rect, Size},
+    unit::{Data, Key},
     util::{map::PluginMap, tree::Tree},
     widget::{IntoWidget, WidgetBuilder, WidgetId, WidgetKey, WidgetRef},
 };
@@ -30,8 +28,6 @@ where
     pub(crate) widget_id: WidgetId,
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
-
-    pub(crate) rect: Option<Rect>,
 
     pub(crate) renderer: Option<RenderFn<W>>,
     pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
@@ -85,14 +81,6 @@ where
     //         })
     // }
 
-    fn get_rect(&self) -> Option<Rect> {
-        self.rect
-    }
-
-    fn get_size(&self) -> Option<Size> {
-        self.rect.map(|rect| rect.into())
-    }
-
     fn get_widget(&self) -> &W {
         self.widget
     }
@@ -112,23 +100,26 @@ where
         func(self.state);
     }
 
-    fn call<A>(&mut self, callback: Callback<A>, args: A)
+    fn call<A>(&mut self, callback: Callback<A>, arg: A)
     where
         A: Data,
     {
-        if let Some(callback_id) = callback.get_id() {
-            self.callback_queue
-                .lock()
-                .push((callback_id, Rc::new(args)));
-        }
+        self.callback_queue.call(callback, arg);
     }
 
-    /// # Safety
-    ///
-    /// You must ensure the callback is expecting the type of the `args` passed in. If the type
-    /// is different, it will panic.
-    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.callback_queue.lock().push((callback_id, args));
+    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) {
+        self.callback_queue.call_unsafe(callback_id, arg);
+    }
+
+    fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
+    where
+        A: Data,
+    {
+        self.callback_queue.call_many(callbacks, arg);
+    }
+
+    unsafe fn call_many_unsafe(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
+        self.callback_queue.call_many_unsafe(callback_ids, arg);
     }
 }
 
@@ -152,7 +143,7 @@ where
         A: Data,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        let callback = Callback::new::<F, W>(self.widget_id, Arc::clone(&self.callback_queue));
+        let callback = Callback::new::<F, W>(self.widget_id, self.callback_queue.clone());
 
         self.callbacks
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));

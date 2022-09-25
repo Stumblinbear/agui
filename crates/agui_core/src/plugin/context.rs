@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use fnv::FnvHashSet;
 
 use crate::{
@@ -25,22 +23,33 @@ impl PluginContext<'_> {
         self.dirty.insert(widget_id);
     }
 
-    pub fn call<A>(&mut self, callback: Callback<A>, args: A)
+    pub fn call<A>(&mut self, callback: Callback<A>, arg: A)
     where
         A: Data,
     {
-        if let Some(callback_id) = callback.get_id() {
-            self.callback_queue
-                .lock()
-                .push((callback_id, Rc::new(args)));
-        }
+        self.callback_queue.call(callback, arg);
     }
 
     /// # Safety
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>) {
-        self.callback_queue.lock().push((callback_id, args));
+    pub unsafe fn call_unsafe(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) {
+        self.callback_queue.call_unsafe(callback_id, arg);
+    }
+
+    pub fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
+    where
+        A: Data,
+    {
+        self.callback_queue.call_many(callbacks, arg);
+    }
+
+    /// # Safety
+    ///
+    /// You must ensure the callbacks are expecting the type of the `arg` passed in. If the type
+    /// is different, it will panic.
+    pub unsafe fn call_many_unsafe(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
+        self.callback_queue.call_many_unsafe(callback_ids, arg);
     }
 }

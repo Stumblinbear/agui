@@ -85,8 +85,6 @@ where
             widget: self.widget.as_ref(),
             state: &mut self.state,
 
-            rect: self.rect,
-
             renderer: None,
             callbacks: FnvHashMap::default(),
         };
@@ -134,8 +132,6 @@ where
 
                 widget: self.widget.as_ref(),
                 state: &mut self.state,
-
-                rect: self.rect,
 
                 changed: false,
             };

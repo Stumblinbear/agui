@@ -62,6 +62,10 @@ impl WidgetNode {
         self.layout
     }
 
+    pub fn get_rect(&self) -> Option<Rect> {
+        self.rect
+    }
+
     pub fn set_rect(&mut self, rect: Option<Rect>) {
         self.rect = rect;
     }

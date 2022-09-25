@@ -1,10 +1,8 @@
-use std::rc::Rc;
-
 use crate::{
     callback::{Callback, CallbackId},
     manager::widgets::node::WidgetNode,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
-    unit::{Data, Rect, Size},
+    unit::Data,
     util::{map::PluginMap, tree::Tree},
     widget::{WidgetBuilder, WidgetId},
 };
@@ -35,12 +33,6 @@ where
     // where
     //     D: WidgetBuilder;
 
-    fn get_rect(&self) -> Option<Rect>;
-
-    fn get_size(&self) -> Option<Size> {
-        self.get_rect().map(|rect| rect.into())
-    }
-
     fn get_widget(&self) -> &W;
 
     fn get_state(&self) -> &W::State;
@@ -51,13 +43,23 @@ where
     where
         F: FnOnce(&mut W::State);
 
-    fn call<A>(&mut self, callback: Callback<A>, args: A)
+    fn call<A>(&mut self, callback: Callback<A>, arg: A)
     where
         A: Data;
 
     /// # Safety
     ///
-    /// You must ensure the callback is expecting the type of the `args` passed in. If the type
+    /// You must ensure the callback is expecting the type of the `arg` passed in. If the type
     /// is different, it will panic.
-    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, args: Rc<dyn Data>);
+    unsafe fn call_unsafe(&mut self, callback_id: CallbackId, arg: Box<dyn Data>);
+
+    fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
+    where
+        A: Data;
+
+    /// # Safety
+    ///
+    /// You must ensure the callbacks are expecting the type of the `arg` passed in. If the type
+    /// is different, it will panic.
+    unsafe fn call_many_unsafe(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>);
 }

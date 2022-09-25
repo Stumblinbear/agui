@@ -36,19 +36,19 @@ impl WidgetBuilder for GestureDetector {
 
         if self.on_hover.is_some() {
             ctx.listen_to::<MousePos, _>(|ctx, event| {
-                if let Some(rect) = ctx.get_rect() {
-                    if let Some(pos) = **event {
-                        if rect.contains((pos.x as f32, pos.y as f32)) {
-                            if !ctx.state.hovering {
-                                ctx.state.hovering = true;
+                // if let Some(rect) = ctx.get_rect() {
+                //     if let Some(pos) = **event {
+                //         if rect.contains((pos.x as f32, pos.y as f32)) {
+                //             if !ctx.state.hovering {
+                //                 ctx.state.hovering = true;
 
-                                ctx.on_hover.call(true);
-                            }
+                //                 ctx.on_hover.call(true);
+                //             }
 
-                            return;
-                        }
-                    }
-                }
+                //             return;
+                //         }
+                //     }
+                // }
 
                 if ctx.state.hovering {
                     ctx.state.hovering = false;
@@ -63,35 +63,35 @@ impl WidgetBuilder for GestureDetector {
                 let pos = ctx.get_global::<MousePos>();
                 let pos = pos.borrow();
 
-                let is_hovering = if let Some(rect) = ctx.get_rect() {
-                    if let Some(pos) = **pos {
-                        rect.contains((pos.x as f32, pos.y as f32))
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                // let is_hovering = if let Some(rect) = ctx.get_rect() {
+                //     if let Some(pos) = **pos {
+                //         rect.contains((pos.x as f32, pos.y as f32))
+                //     } else {
+                //         false
+                //     }
+                // } else {
+                //     false
+                // };
 
-                if is_hovering {
-                    if let MouseButton::Left(btn) = event {
-                        match btn {
-                            MouseButtonState::Pressed => {
-                                ctx.state.pressed = true;
+                // if is_hovering {
+                //     if let MouseButton::Left(btn) = event {
+                //         match btn {
+                //             MouseButtonState::Pressed => {
+                //                 ctx.state.pressed = true;
 
-                                ctx.on_pressed.call(true);
-                            }
+                //                 ctx.on_pressed.call(true);
+                //             }
 
-                            MouseButtonState::Released => {
-                                if ctx.state.pressed {
-                                    ctx.state.pressed = false;
+                //             MouseButtonState::Released => {
+                //                 if ctx.state.pressed {
+                //                     ctx.state.pressed = false;
 
-                                    ctx.on_pressed.call(false);
-                                }
-                            }
-                        }
-                    }
-                }
+                //                     ctx.on_pressed.call(false);
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
             });
         }
 
@@ -100,27 +100,27 @@ impl WidgetBuilder for GestureDetector {
                 let pos = ctx.get_global::<MousePos>();
                 let pos = pos.borrow();
 
-                let is_hovering = if let Some(rect) = ctx.get_rect() {
-                    if let Some(pos) = **pos {
-                        rect.contains((pos.x as f32, pos.y as f32))
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                // let is_hovering = if let Some(rect) = ctx.get_rect() {
+                //     if let Some(pos) = **pos {
+                //         rect.contains((pos.x as f32, pos.y as f32))
+                //     } else {
+                //         false
+                //     }
+                // } else {
+                //     false
+                // };
 
-                if let MouseButton::Left(MouseButtonState::Pressed) = event {
-                    if is_hovering {
-                        ctx.state.focused = true;
+                // if let MouseButton::Left(MouseButtonState::Pressed) = event {
+                //     if is_hovering {
+                //         ctx.state.focused = true;
 
-                        ctx.on_focus.call(true);
-                    } else if ctx.state.focused {
-                        ctx.state.focused = false;
+                //         ctx.on_focus.call(true);
+                //     } else if ctx.state.focused {
+                //         ctx.state.focused = false;
 
-                        ctx.on_focus.call(false);
-                    }
-                }
+                //         ctx.on_focus.call(false);
+                //     }
+                // }
             });
         }
 

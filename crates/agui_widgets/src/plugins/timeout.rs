@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     ops::Add,
-    rc::Rc,
     time::{Duration, Instant},
 };
 
@@ -13,9 +12,7 @@ use agui_core::{
 };
 
 #[derive(Debug, Default)]
-pub struct TimeoutPlugin {
-    dummy: Rc<()>,
-}
+pub struct TimeoutPlugin {}
 
 impl StatefulPlugin for TimeoutPlugin {
     type State = TimeoutPluginState;
@@ -44,7 +41,9 @@ impl StatefulPlugin for TimeoutPlugin {
                         "timeout expired"
                     );
 
-                    unsafe { ctx.call_unsafe(*callback_id, Rc::clone(&self.dummy) as _) };
+                    unsafe {
+                        ctx.call_unsafe(*callback_id, Box::new(()));
+                    };
 
                     updated.push(*callback_id);
                 }

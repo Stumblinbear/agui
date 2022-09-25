@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData, rc::Rc, sync::Arc};
+use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
     unit::Data,
@@ -7,12 +7,11 @@ use crate::{
 
 mod context;
 mod func;
+mod queue;
 
 pub use context::*;
 pub(crate) use func::*;
-use parking_lot::Mutex;
-
-pub type CallbackQueue = Arc<Mutex<Vec<(CallbackId, Rc<dyn Data>)>>>;
+pub use queue::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CallbackId {
@@ -96,10 +95,19 @@ where
     pub fn is_none(&self) -> bool {
         self.id.is_none()
     }
+}
 
-    pub fn call(&self, args: A) {
-        unsafe {
-            self.call_unsafe(Rc::new(args));
+impl<A> Callback<A>
+where
+    A: Data,
+{
+    pub fn call(&self, arg: A) {
+        if let Some(callback_queue) = &self.callback_queue {
+            if let Some(callback_id) = self.id {
+                unsafe {
+                    callback_queue.call_unsafe(callback_id, Box::new(arg));
+                }
+            }
         }
     }
 
@@ -107,10 +115,10 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn call_unsafe(&self, args: Rc<dyn Data>) {
+    pub unsafe fn call_unsafe(&self, arg: Box<dyn Data>) {
         if let Some(callback_queue) = &self.callback_queue {
             if let Some(callback_id) = self.id {
-                callback_queue.lock().push((callback_id, args));
+                callback_queue.call_unsafe(callback_id, arg);
             }
         }
     }

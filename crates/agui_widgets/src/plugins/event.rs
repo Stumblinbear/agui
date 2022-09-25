@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashSet, rc::Rc};
+use std::{any::TypeId, collections::HashSet};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
@@ -25,8 +25,8 @@ impl StatefulPlugin for EventPlugin {
             let type_id = event.type_id();
 
             if let Some(callbacks) = state.callbacks.get(&type_id) {
-                for callback_id in callbacks {
-                    unsafe { ctx.call_unsafe(*callback_id, Rc::clone(&event)) }
+                unsafe {
+                    ctx.call_many_unsafe(&callbacks.iter().copied().collect::<Vec<_>>(), event);
                 }
             }
         }
@@ -55,7 +55,7 @@ pub struct EventState {
     listening: WidgetMap<TypeSet>,
     callbacks: TypeMap<HashSet<CallbackId>>,
 
-    queue: Vec<Rc<dyn Data>>,
+    queue: Vec<Box<dyn Data>>,
 }
 
 impl EventState {
@@ -86,7 +86,7 @@ impl EventState {
             return;
         }
 
-        self.queue.push(Rc::new(event));
+        self.queue.push(Box::new(event));
     }
 }
 
