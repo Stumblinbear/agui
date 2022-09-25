@@ -521,18 +521,22 @@ mod tests {
         F: Fn(CanvasPainter<Head>) + Clone + 'static,
     {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-            ctx.set_layout(Layout {
-                sizing: Sizing::All(512.into()),
-                ..Layout::default()
-            });
-
             let on_draw = self.on_draw.clone();
 
             ctx.on_draw(move |_, painter| {
                 (on_draw)(painter);
             });
 
-            (&self.children).into()
+            BuildResult {
+                layout: Layout {
+                    sizing: Sizing::All(512.into()),
+                    ..Layout::default()
+                },
+
+                children: self.children.clone(),
+
+                ..BuildResult::default()
+            }
         }
     }
 

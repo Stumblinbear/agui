@@ -60,3 +60,11 @@ impl Key {
         Self::Global(rand::thread_rng().gen())
     }
 }
+
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Local(hash) | Key::Global(hash) => hash.fmt(f),
+        }
+    }
+}

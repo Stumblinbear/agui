@@ -16,14 +16,18 @@ impl WidgetBuilder for App {
 
         let window_size = window_size.borrow();
 
-        ctx.set_layout(Layout {
-            sizing: Sizing::Axis {
-                width: Units::Pixels(window_size.width),
-                height: Units::Pixels(window_size.height),
+        BuildResult {
+            layout: Layout {
+                sizing: Sizing::Axis {
+                    width: Units::Pixels(window_size.width),
+                    height: Units::Pixels(window_size.height),
+                },
+                ..Layout::default()
             },
-            ..Layout::default()
-        });
 
-        (&self.child).into()
+            children: vec![self.child.clone()],
+
+            ..BuildResult::default()
+        }
     }
 }

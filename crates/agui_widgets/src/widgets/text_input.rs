@@ -136,8 +136,6 @@ where
     type State = TextInputState<S>;
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.set_layout(Layout::clone(&self.layout));
-
         let on_focus = ctx.callback::<bool, _>(|ctx, arg| {
             if *arg {
                 if !ctx.state.focused {
@@ -350,17 +348,22 @@ where
             }
         });
 
-        ctx.key(
-            Key::single(),
-            GestureDetector {
-                on_hover,
+        BuildResult {
+            layout: Layout::clone(&self.layout),
 
-                is_focused: ctx.state.focused,
-                on_focus,
+            children: vec![ctx.key(
+                Key::single(),
+                GestureDetector {
+                    on_hover,
 
-                ..Default::default()
-            },
-        )
-        .into()
+                    is_focused: ctx.state.focused,
+                    on_focus,
+
+                    ..Default::default()
+                },
+            )],
+
+            ..BuildResult::default()
+        }
     }
 }

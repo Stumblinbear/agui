@@ -11,7 +11,7 @@ use crate::{
         context::RenderContext,
         renderer::RenderFn,
     },
-    unit::{Data, Key, Layout, LayoutType, Rect, Size},
+    unit::{Data, Key, Rect, Size},
     util::{map::PluginMap, tree::Tree},
     widget::{IntoWidget, WidgetBuilder, WidgetId, WidgetKey, WidgetRef},
 };
@@ -30,9 +30,6 @@ where
     pub(crate) widget_id: WidgetId,
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
-
-    pub(crate) layout_type: LayoutType,
-    pub(crate) layout: Layout,
 
     pub(crate) rect: Option<Rect>,
 
@@ -143,16 +140,6 @@ where
         self.widget_id
     }
 
-    /// Set the layout type of the widget.
-    pub fn set_layout_type(&mut self, layout_type: LayoutType) {
-        self.layout_type = layout_type;
-    }
-
-    /// Set the layout of the widget.
-    pub fn set_layout(&mut self, layout: Layout) {
-        self.layout = layout;
-    }
-
     pub fn on_draw<F>(&mut self, func: F)
     where
         F: Fn(&RenderContext<W>, CanvasPainter<Head>) + 'static,
@@ -175,7 +162,7 @@ where
 
     pub fn key<C>(&self, key: Key, widget: C) -> WidgetRef
     where
-        C: IntoWidget + 'static,
+        C: IntoWidget,
     {
         WidgetRef::new_with_key(
             Some(match key {

@@ -1,7 +1,12 @@
+use crate::unit::{Layout, LayoutType};
+
 use super::WidgetRef;
 
 #[derive(Default)]
 pub struct BuildResult {
+    pub layout_type: LayoutType,
+    pub layout: Layout,
+
     pub children: Vec<WidgetRef>,
 }
 
@@ -16,6 +21,8 @@ impl BuildResult {
     {
         Self {
             children: children.into_iter().map(|w| w.into()).collect(),
+
+            ..Self::default()
         }
     }
 }

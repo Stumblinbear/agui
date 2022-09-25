@@ -13,13 +13,15 @@ pub struct Row {
 }
 
 impl WidgetBuilder for Row {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.set_layout_type(LayoutType::Row {
-            spacing: self.spacing,
-        });
+    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        BuildResult {
+            layout_type: LayoutType::Row {
+                spacing: self.spacing,
+            },
 
-        ctx.set_layout(Layout::clone(&self.layout));
+            layout: Layout::clone(&self.layout),
 
-        (&self.children).into()
+            children: self.children.clone(),
+        }
     }
 }

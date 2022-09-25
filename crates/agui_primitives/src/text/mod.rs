@@ -17,15 +17,6 @@ pub struct Text {
 
 impl WidgetBuilder for Text {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.set_layout(Layout {
-            sizing: Sizing::Fill,
-            min_sizing: Sizing::Axis {
-                width: 0.0.into(),
-                height: self.font.size.into(),
-            },
-            ..Layout::default()
-        });
-
         ctx.on_draw(|ctx, mut canvas| {
             canvas.draw_text(
                 &Paint {
@@ -37,6 +28,17 @@ impl WidgetBuilder for Text {
             );
         });
 
-        BuildResult::empty()
+        BuildResult {
+            layout: Layout {
+                sizing: Sizing::Fill,
+                min_sizing: Sizing::Axis {
+                    width: 0.0.into(),
+                    height: self.font.size.into(),
+                },
+                ..Layout::default()
+            },
+
+            ..BuildResult::default()
+        }
     }
 }

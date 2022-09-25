@@ -27,12 +27,14 @@ impl Spacing {
 }
 
 impl WidgetBuilder for Spacing {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.set_layout(Layout {
-            sizing: self.0,
-            ..Layout::default()
-        });
+    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        BuildResult {
+            layout: Layout {
+                sizing: self.0,
+                ..Layout::default()
+            },
 
-        BuildResult::empty()
+            ..BuildResult::default()
+        }
     }
 }

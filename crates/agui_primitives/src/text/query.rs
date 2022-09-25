@@ -28,7 +28,7 @@ pub struct QueryWithText<'t, I> {
 }
 
 impl<'t, I> QueryWithText<'t, I> {
-    pub(in crate::text) fn new(iter: I, text: &'t str) -> Self {
+    fn new(iter: I, text: &'t str) -> Self {
         Self { iter, text }
     }
 }

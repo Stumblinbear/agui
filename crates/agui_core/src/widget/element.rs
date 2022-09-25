@@ -13,10 +13,10 @@ use crate::{
         context::RenderContext,
         renderer::RenderFn,
     },
-    unit::{Data, Layout, LayoutType, Rect},
+    unit::{Data, Rect},
 };
 
-use super::{BuildContext, BuildResult, WidgetBuilder, WidgetInstance, WidgetRef};
+use crate::widget::{BuildContext, BuildResult, WidgetBuilder, WidgetInstance, WidgetRef};
 
 pub struct WidgetElement<W>
 where
@@ -25,14 +25,9 @@ where
     widget: Rc<W>,
     state: W::State,
 
-    layout_type: LayoutType,
-    layout: Layout,
-
     renderer: Option<RenderFn<W>>,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
-
-    rect: Option<Rect>,
 }
 
 impl<W> WidgetElement<W>
@@ -44,14 +39,9 @@ where
             widget,
             state: W::State::default(),
 
-            layout_type: LayoutType::default(),
-            layout: Layout::default(),
-
             renderer: None,
 
             callbacks: FnvHashMap::default(),
-
-            rect: None,
         }
     }
 }
@@ -74,27 +64,11 @@ where
     W: WidgetBuilder,
 {
     fn is_similar(&self, other: &WidgetRef) -> bool {
-        if let Some(other) = other.downcast_ref::<W>() {
+        if let Some(other) = other.downcast_rc::<W>() {
             self.widget == other
         } else {
             false
         }
-    }
-
-    fn get_layout_type(&self) -> Option<LayoutType> {
-        Some(self.layout_type)
-    }
-
-    fn get_layout(&self) -> Option<Layout> {
-        Some(self.layout)
-    }
-
-    fn set_rect(&mut self, rect: Option<Rect>) {
-        self.rect = rect;
-    }
-
-    fn get_rect(&self) -> Option<Rect> {
-        self.rect
     }
 
     fn build(&mut self, ctx: AguiContext) -> BuildResult {
@@ -111,8 +85,6 @@ where
             widget: self.widget.as_ref(),
             state: &mut self.state,
 
-            layout_type: LayoutType::default(),
-            layout: Layout::default(),
             rect: self.rect,
 
             renderer: None,
@@ -121,38 +93,32 @@ where
 
         let result = self.widget.build(&mut ctx);
 
-        self.layout_type = ctx.layout_type;
-        self.layout = ctx.layout;
-
         self.renderer = ctx.renderer;
         self.callbacks = ctx.callbacks;
 
         result
     }
 
-    fn render(&self) -> Option<Canvas> {
+    fn render(&self, rect: Rect) -> Option<Canvas> {
         let span = tracing::error_span!("on_draw");
         let _enter = span.enter();
 
-        self.renderer
-            .as_ref()
-            .zip(self.rect)
-            .map(|(renderer, rect)| {
-                let mut canvas = Canvas {
-                    rect,
+        self.renderer.as_ref().map(|renderer| {
+            let mut canvas = Canvas {
+                rect,
 
-                    ..Canvas::default()
-                };
+                ..Canvas::default()
+            };
 
-                let ctx = RenderContext {
-                    widget: self.widget.as_ref(),
-                    state: &self.state,
-                };
+            let ctx = RenderContext {
+                widget: self.widget.as_ref(),
+                state: &self.state,
+            };
 
-                renderer.call(&ctx, CanvasPainter::<Head>::new(&mut canvas));
+            renderer.call(&ctx, CanvasPainter::<Head>::new(&mut canvas));
 
-                canvas
-            })
+            canvas
+        })
     }
 
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool {

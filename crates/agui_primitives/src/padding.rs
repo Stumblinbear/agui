@@ -11,15 +11,19 @@ pub struct Padding {
 }
 
 impl WidgetBuilder for Padding {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.set_layout(Layout {
-            sizing: Sizing::Fill,
+    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        BuildResult {
+            layout: Layout {
+                sizing: Sizing::Fill,
 
-            margin: self.padding,
+                margin: self.padding,
 
-            ..Layout::default()
-        });
+                ..Layout::default()
+            },
 
-        (&self.child).into()
+            children: vec![self.child.clone()],
+
+            ..BuildResult::default()
+        }
     }
 }

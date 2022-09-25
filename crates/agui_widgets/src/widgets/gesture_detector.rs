@@ -34,11 +34,6 @@ impl WidgetBuilder for GestureDetector {
         // Allow us to carry over the focused state through rebuilds
         ctx.state.focused = self.is_focused;
 
-        ctx.set_layout(Layout {
-            sizing: Sizing::Fill,
-            ..Default::default()
-        });
-
         if self.on_hover.is_some() {
             ctx.listen_to::<MousePos, _>(|ctx, event| {
                 if let Some(rect) = ctx.get_rect() {
@@ -129,6 +124,15 @@ impl WidgetBuilder for GestureDetector {
             });
         }
 
-        (&self.child).into()
+        BuildResult {
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Default::default()
+            },
+
+            children: vec![self.child.clone()],
+
+            ..BuildResult::default()
+        }
     }
 }

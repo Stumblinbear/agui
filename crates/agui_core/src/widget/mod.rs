@@ -7,14 +7,14 @@ use std::{
 use downcast_rs::{impl_downcast, Downcast};
 use slotmap::new_key_type;
 
+mod builder;
 mod context;
 mod element;
 mod instance;
 mod key;
 mod result;
-mod widget_impl;
 
-pub use self::{context::*, element::*, instance::*, key::*, result::*, widget_impl::*};
+pub use self::{builder::*, context::*, element::*, instance::*, key::*, result::*};
 
 new_key_type! {
     pub struct WidgetId;
@@ -41,14 +41,14 @@ pub enum WidgetRef {
 impl WidgetRef {
     pub fn new<W>(widget: W) -> Self
     where
-        W: IntoWidget + 'static,
+        W: IntoWidget,
     {
         Self::new_with_key(None, widget)
     }
 
     pub fn new_with_key<W>(key: Option<WidgetKey>, widget: W) -> Self
     where
-        W: IntoWidget + 'static,
+        W: IntoWidget,
     {
         let type_name = type_name::<W>();
 
@@ -112,9 +112,9 @@ impl WidgetRef {
         }
     }
 
-    pub fn downcast_ref<W>(&self) -> Option<Rc<W>>
+    pub fn downcast_rc<W>(&self) -> Option<Rc<W>>
     where
-        W: IntoWidget + 'static,
+        W: IntoWidget,
     {
         if let Self::Some { widget, .. } = self {
             Rc::clone(widget).downcast_rc::<W>().ok()
@@ -181,6 +181,8 @@ impl std::fmt::Debug for WidgetRef {
             key, display_name, ..
         } = self
         {
+            f.write_str("WidgetRef::Some(")?;
+
             f.write_str(display_name)?;
 
             if let Some(key) = key {
@@ -196,9 +198,30 @@ impl std::fmt::Debug for WidgetRef {
     }
 }
 
+impl std::fmt::Display for WidgetRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Self::Some {
+            key, display_name, ..
+        } = self
+        {
+            f.write_str(display_name)?;
+
+            if let Some(key) = key {
+                f.write_str(" <key: ")?;
+                key.fmt(f)?;
+                f.write_str(">")?;
+            }
+
+            Ok(())
+        } else {
+            f.debug_struct("None").finish()
+        }
+    }
+}
+
 impl<W> From<W> for WidgetRef
 where
-    W: IntoWidget + 'static,
+    W: IntoWidget,
 {
     fn from(widget: W) -> Self {
         WidgetRef::new(widget)

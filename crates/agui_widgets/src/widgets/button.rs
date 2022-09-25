@@ -47,8 +47,6 @@ impl WidgetBuilder for Button {
     type State = ButtonState;
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.set_layout(Layout::clone(&self.layout));
-
         ctx.on_draw(move |ctx, mut canvas| {
             let style = ctx.style.clone().unwrap_or_default();
 
@@ -86,17 +84,22 @@ impl WidgetBuilder for Button {
             })
         });
 
-        ctx.key(
-            Key::single(),
-            GestureDetector {
-                on_hover,
-                on_pressed,
+        BuildResult {
+            layout: Layout::clone(&self.layout),
 
-                child: (&self.child).into(),
+            children: vec![ctx.key(
+                Key::single(),
+                GestureDetector {
+                    on_hover,
+                    on_pressed,
 
-                ..Default::default()
-            },
-        )
-        .into()
+                    child: (&self.child).into(),
+
+                    ..Default::default()
+                },
+            )],
+
+            ..BuildResult::default()
+        }
     }
 }
