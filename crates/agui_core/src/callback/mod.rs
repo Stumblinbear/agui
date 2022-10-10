@@ -123,3 +123,186 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use crate::{
+        callback::Callback,
+        manager::WidgetManager,
+        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
+    };
+
+    thread_local! {
+        pub static CALLBACK: RefCell<Vec<Callback<u32>>> = RefCell::default();
+        pub static RESULT: RefCell<Vec<u32>> = RefCell::default();
+    }
+
+    #[derive(Default)]
+    struct TestWidget {
+        children: Vec<WidgetRef>,
+    }
+
+    impl PartialEq for TestWidget {
+        fn eq(&self, _: &Self) -> bool {
+            false
+        }
+    }
+
+    impl WidgetBuilder for TestWidget {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+            let callback = ctx.callback::<u32, _>(|_ctx, val| {
+                RESULT.with(|f| {
+                    f.borrow_mut().push(*val);
+                });
+            });
+
+            CALLBACK.with(|f| {
+                f.borrow_mut().push(callback);
+            });
+
+            (&self.children).into()
+        }
+    }
+
+    #[test]
+    pub fn should_not_call_immediately() {
+        let mut manager = WidgetManager::new();
+
+        manager.set_root(TestWidget::default());
+
+        manager.update();
+
+        let callback = CALLBACK.with(|f| f.borrow()[0].clone());
+
+        callback.call(3);
+
+        RESULT.with(|f| {
+            assert_ne!(
+                f.borrow().first().copied(),
+                Some(3),
+                "callback should not have been called immediately"
+            );
+        });
+    }
+
+    #[test]
+    pub fn can_fire_callbacks() {
+        let mut manager = WidgetManager::new();
+
+        manager.set_root(TestWidget::default());
+
+        manager.update();
+
+        let callback = CALLBACK.with(|f| f.borrow()[0].clone());
+
+        callback.call(7);
+
+        manager.update();
+
+        RESULT.with(|f| {
+            assert_eq!(f.borrow()[0], 7, "callback should have been executed");
+        });
+
+        unsafe {
+            callback.call_unsafe(Box::new(10_u32));
+        }
+
+        manager.update();
+
+        RESULT.with(|f| {
+            assert_eq!(
+                f.borrow()[1],
+                10,
+                "unsafe callback should have been executed"
+            );
+        });
+
+        manager.get_callback_queue().call(&callback, 18_u32);
+
+        manager.update();
+
+        RESULT.with(|f| {
+            assert_eq!(
+                f.borrow()[2],
+                18,
+                "callback through queue should have been called during update"
+            );
+        });
+
+        unsafe {
+            manager
+                .get_callback_queue()
+                .call_unsafe(callback.get_id().unwrap(), Box::new(31_u32));
+        }
+
+        manager.update();
+
+        RESULT.with(|f| {
+            assert_eq!(
+                f.borrow()[3],
+                31,
+                "unsafe callback through queue should have been called during update"
+            );
+        });
+    }
+
+    #[test]
+    pub fn can_fire_many_callbacks() {
+        let mut manager = WidgetManager::new();
+
+        manager.set_root(TestWidget {
+            children: vec![TestWidget::default().into()],
+        });
+
+        manager.update();
+
+        let callbacks = CALLBACK.with(|f| f.borrow().clone());
+
+        let callback_ids = callbacks
+            .iter()
+            .map(|cb| cb.get_id().unwrap())
+            .collect::<Vec<_>>();
+
+        manager.get_callback_queue().call_many(&callbacks, 47);
+
+        manager.update();
+
+        RESULT.with(|f| {
+            assert_eq!(
+                f.borrow()[0],
+                47,
+                "callback should have been called during update"
+            );
+
+            assert_eq!(
+                f.borrow()[1],
+                47,
+                "callback should have been called during update"
+            );
+        });
+
+        unsafe {
+            manager
+                .get_callback_queue()
+                .call_many_unsafe(&callback_ids, Box::new(53_u32));
+        }
+
+        manager.update();
+
+        RESULT.with(|f| {
+            assert_eq!(
+                f.borrow()[2],
+                53,
+                "callback should have been called during update"
+            );
+
+            assert_eq!(
+                f.borrow()[3],
+                53,
+                "callback should have been called during update"
+            );
+        });
+    }
+}

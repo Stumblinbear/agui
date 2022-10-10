@@ -8,7 +8,7 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    manager::widgets::{events::WidgetEvent, WidgetManager},
+    manager::{events::WidgetEvent, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
@@ -290,7 +290,7 @@ mod tests {
     use std::any::TypeId;
 
     use agui_core::{
-        manager::widgets::WidgetManager,
+        manager::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
     };

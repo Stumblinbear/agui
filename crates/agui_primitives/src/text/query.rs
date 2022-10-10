@@ -1,4 +1,4 @@
-use agui_core::{manager::widgets::element::WidgetElement, widget::WidgetInstance};
+use agui_core::{manager::element::WidgetElement, widget::WidgetInstance};
 
 use crate::Text;
 
@@ -57,7 +57,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::manager::widgets::WidgetManager;
+    use agui_core::manager::WidgetManager;
 
     use crate::{query::TextQueryExt, Column, Text};
 

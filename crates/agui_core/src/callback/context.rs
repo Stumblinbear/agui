@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use crate::{
-    manager::widgets::element::WidgetElement,
+    manager::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     unit::Data,
     util::{
@@ -94,7 +94,7 @@ where
         func(self.state);
     }
 
-    fn call<A>(&mut self, callback: Callback<A>, arg: A)
+    fn call<A>(&mut self, callback: &Callback<A>, arg: A)
     where
         A: Data,
     {

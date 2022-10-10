@@ -119,7 +119,7 @@ where
         })
     }
 
-    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool {
+    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();
 

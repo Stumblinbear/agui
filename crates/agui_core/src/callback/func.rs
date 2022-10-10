@@ -8,7 +8,8 @@ pub trait CallbackFunc<W>
 where
     W: WidgetBuilder,
 {
-    fn call(&self, ctx: &mut CallbackContext<W>, args: &dyn Data);
+    #[allow(clippy::borrowed_box)]
+    fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn Data>);
 }
 
 pub struct CallbackFn<W, A, F>
@@ -43,7 +44,7 @@ where
     A: Data,
     F: Fn(&mut CallbackContext<W>, &A),
 {
-    fn call(&self, ctx: &mut CallbackContext<W>, args: &dyn Data) {
+    fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn Data>) {
         let args = args
             .downcast_ref::<A>()
             .expect("failed to downcast callback args");

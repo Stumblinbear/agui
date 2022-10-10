@@ -6,7 +6,7 @@ pub mod painter;
 
 use self::command::CanvasCommand;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Canvas {
     pub rect: Rect,
 
@@ -15,7 +15,7 @@ pub struct Canvas {
     pub tail: Option<Box<CanvasLayer>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CanvasLayer {
     pub style: LayerStyle,
 

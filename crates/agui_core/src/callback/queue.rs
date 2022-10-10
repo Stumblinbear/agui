@@ -20,7 +20,7 @@ impl CallbackQueue {
         self.queue.lock().is_empty()
     }
 
-    pub fn call<A>(&self, callback: Callback<A>, arg: A)
+    pub fn call<A>(&self, callback: &Callback<A>, arg: A)
     where
         A: Data,
     {

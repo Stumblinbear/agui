@@ -117,7 +117,7 @@ mod tests {
     use std::convert::Infallible;
 
     use agui_core::{
-        manager::widgets::WidgetManager,
+        manager::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder},
     };

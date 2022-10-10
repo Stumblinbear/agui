@@ -29,7 +29,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::widgets::WidgetManager,
+        manager::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetContext},
     };

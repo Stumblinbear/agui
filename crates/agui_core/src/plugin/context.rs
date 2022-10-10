@@ -2,7 +2,7 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue},
-    manager::widgets::element::WidgetElement,
+    manager::element::WidgetElement,
     unit::Data,
     util::tree::Tree,
     widget::WidgetId,
@@ -23,7 +23,7 @@ impl PluginContext<'_> {
         self.dirty.insert(widget_id);
     }
 
-    pub fn call<A>(&mut self, callback: Callback<A>, arg: A)
+    pub fn call<A>(&mut self, callback: &Callback<A>, arg: A)
     where
         A: Data,
     {

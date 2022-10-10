@@ -1,7 +1,7 @@
 use slotmap::hop::Iter;
 
 use crate::{
-    manager::widgets::element::WidgetElement,
+    manager::element::WidgetElement,
     unit::Key,
     util::tree::{Tree, TreeNode},
     widget::{WidgetBuilder, WidgetId},

@@ -1,6 +1,6 @@
 use crate::{
     callback::{Callback, CallbackId},
-    manager::widgets::element::WidgetElement,
+    manager::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::Data,
     util::{map::PluginMap, tree::Tree},
@@ -43,7 +43,7 @@ where
     where
         F: FnOnce(&mut W::State);
 
-    fn call<A>(&mut self, callback: Callback<A>, arg: A)
+    fn call<A>(&mut self, callback: &Callback<A>, arg: A)
     where
         A: Data;
 

@@ -31,7 +31,7 @@ impl WidgetBuilder for Builder {
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        manager::widgets::WidgetManager,
+        manager::WidgetManager,
         query::WidgetQueryExt,
         widget::{BuildContext, BuildResult, WidgetBuilder},
     };

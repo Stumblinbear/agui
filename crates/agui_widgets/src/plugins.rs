@@ -1,4 +1,4 @@
-use agui_core::manager::widgets::WidgetManager;
+use agui_core::manager::WidgetManager;
 
 pub mod event;
 pub mod global;

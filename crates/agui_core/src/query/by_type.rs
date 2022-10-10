@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    manager::widgets::element::WidgetElement,
+    manager::element::WidgetElement,
     widget::{WidgetBuilder, WidgetInstance},
 };
 

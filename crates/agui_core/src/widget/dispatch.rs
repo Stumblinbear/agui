@@ -16,7 +16,8 @@ pub trait WidgetDispatch: Downcast {
 
     fn render(&self, rect: Rect) -> Option<Canvas>;
 
-    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool;
+    #[allow(clippy::borrowed_box)]
+    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool;
 }
 
 impl_downcast!(WidgetDispatch);

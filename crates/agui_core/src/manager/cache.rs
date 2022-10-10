@@ -9,7 +9,7 @@ use crate::{
     widget::WidgetId,
 };
 
-use super::widgets::element::WidgetElement;
+use super::element::WidgetElement;
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {

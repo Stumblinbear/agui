@@ -1,6 +1,6 @@
 use downcast_rs::Downcast;
 
-use crate::manager::widgets::events::WidgetEvent;
+use crate::manager::events::WidgetEvent;
 
 use super::PluginContext;
 

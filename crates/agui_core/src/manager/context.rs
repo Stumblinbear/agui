@@ -7,7 +7,7 @@ use crate::{
     widget::WidgetId,
 };
 
-use super::widgets::element::WidgetElement;
+use super::element::WidgetElement;
 
 pub struct AguiContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut PluginMap<BoxedPlugin>>,

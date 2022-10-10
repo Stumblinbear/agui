@@ -16,6 +16,8 @@ pub struct WidgetElement {
     layout: Layout,
 
     rect: Option<Rect>,
+
+    canvas: Option<Canvas>,
 }
 
 impl WidgetElement {
@@ -28,6 +30,8 @@ impl WidgetElement {
             layout: Layout::default(),
 
             rect: None,
+
+            canvas: None,
         })
     }
 
@@ -47,13 +51,6 @@ impl WidgetElement {
         &self.widget_ref
     }
 
-    pub fn downcast_ref<W>(&self) -> Option<&W>
-    where
-        W: WidgetDispatch,
-    {
-        self.dispatch.downcast_ref()
-    }
-
     pub fn get_layout_type(&self) -> LayoutType {
         self.layout_type
     }
@@ -70,11 +67,22 @@ impl WidgetElement {
         self.rect = rect;
     }
 
+    pub fn get_canvas(&self) -> Option<&Canvas> {
+        self.canvas.as_ref()
+    }
+
     pub fn is_similar(&self, other: &WidgetRef) -> bool {
         self.dispatch.is_similar(other)
     }
 
-    pub fn build(&mut self, ctx: AguiContext) -> BuildResult {
+    pub fn downcast_ref<W>(&self) -> Option<&W>
+    where
+        W: WidgetDispatch,
+    {
+        self.dispatch.downcast_ref()
+    }
+
+    pub(crate) fn build(&mut self, ctx: AguiContext) -> BuildResult {
         let result = self.dispatch.build(ctx);
 
         self.layout_type = result.layout_type;
@@ -83,11 +91,26 @@ impl WidgetElement {
         result
     }
 
-    pub fn render(&self) -> Option<Canvas> {
-        self.rect.and_then(|rect| self.dispatch.render(rect))
+    /// Causes the widget to redraw its canvas. Returns a `bool` indicating if the canvas changed or not.
+    pub(crate) fn render(&mut self) -> bool {
+        let new_canvas = self.rect.and_then(|rect| self.dispatch.render(rect));
+
+        if self.canvas != new_canvas {
+            self.canvas = new_canvas;
+
+            true
+        } else {
+            false
+        }
     }
 
-    pub fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &dyn Data) -> bool {
+    #[allow(clippy::borrowed_box)]
+    pub(crate) fn call(
+        &mut self,
+        ctx: AguiContext,
+        callback_id: CallbackId,
+        arg: &Box<dyn Data>,
+    ) -> bool {
         self.dispatch.call(ctx, callback_id, arg)
     }
 }
