@@ -4,18 +4,18 @@ use std::{
     io::{self, BufReader, Read},
 };
 
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use slotmap::new_key_type;
 
 use crate::{
     render::canvas::{command::CanvasCommand, Canvas, LayerStyle},
     unit::{Font, Rect},
-    util::tree::{Forest, Tree},
+    util::tree::Tree,
     widget::WidgetId,
 };
 
-use super::{widgets::events::WidgetEvent, widgets::node::WidgetNode};
+use super::{widgets::events::WidgetEvent, widgets::node::WidgetElement};
 
 pub mod errors;
 pub mod events;
@@ -29,7 +29,7 @@ new_key_type! {
 
 #[derive(Default)]
 struct WidgetLayers {
-    head: Option<LayerId>,
+    head: LayerId,
     children: Vec<LayerId>,
     tail: Option<LayerId>,
 }
@@ -40,7 +40,7 @@ impl WidgetLayers {
         if self.children.len() > 0 {
             self.tail
         } else {
-            self.tail.or(self.head)
+            self.tail.or(Some(self.head))
         }
     }
 }
@@ -93,7 +93,7 @@ impl Layer {
 pub struct RenderManager {
     fonts: Vec<FontArc>,
 
-    layers: Forest<LayerId, Layer>,
+    layers: Tree<LayerId, Layer>,
     widget_layers: FnvHashMap<WidgetId, WidgetLayers>,
 }
 
@@ -136,13 +136,13 @@ impl RenderManager {
     }
 
     /// Get the layer trees.
-    pub fn get_layers(&self) -> &Forest<LayerId, Layer> {
+    pub fn get_layers(&self) -> &Tree<LayerId, Layer> {
         &self.layers
     }
 
     /// Get the root layers.
-    pub fn get_roots(&self) -> &FnvHashSet<LayerId> {
-        self.layers.get_roots()
+    pub fn get_root(&self) -> Option<LayerId> {
+        self.layers.get_root()
     }
 
     pub fn clear(&mut self) {
@@ -161,28 +161,30 @@ impl RenderManager {
      */
     pub fn update(
         &mut self,
-        widget_widgets: &Tree<WidgetId, WidgetNode>,
+        widget_tree: &Tree<WidgetId, WidgetElement>,
         widget_events: &[WidgetEvent],
     ) -> Vec<RenderEvent> {
-        self.try_update(widget_widgets, widget_events)
+        self.try_update(widget_tree, widget_events)
             .unwrap_or_else(|err| {
                 tracing::warn!(
                     reason = format!("{:?}", err).as_str(),
                     "rebuilding layer tree from scratch"
                 );
 
-                self.build_tree(widget_widgets)
+                self.flush_and_build_tree(widget_tree)
                     .expect("unable to resolve layer tree")
             })
     }
 
-    fn build_tree(
+    fn flush_and_build_tree(
         &mut self,
-        widget_widgets: &Tree<WidgetId, WidgetNode>,
+        widget_tree: &Tree<WidgetId, WidgetElement>,
     ) -> Result<Vec<RenderEvent>, RenderError> {
         self.clear();
 
-        let faux_widget_events = widget_widgets
+        let mut render_events = Vec::new();
+
+        let faux_widget_events = widget_tree
             .iter()
             .map(|(widget_id, node)| WidgetEvent::Spawned {
                 parent_id: node.parent,
@@ -190,15 +192,36 @@ impl RenderManager {
             })
             .collect::<Vec<_>>();
 
-        self.try_update(widget_widgets, &faux_widget_events)
+        // Tell the renderer to clear everything and start over
+        render_events.push(RenderEvent::Flush);
+
+        render_events.extend(self.try_update(widget_tree, &faux_widget_events)?);
+
+        Ok(render_events)
     }
 
     pub fn try_update(
         &mut self,
-        widget_widgets: &Tree<WidgetId, WidgetNode>,
+        widget_tree: &Tree<WidgetId, WidgetElement>,
         widget_events: &[WidgetEvent],
     ) -> Result<Vec<RenderEvent>, RenderError> {
         let mut render_events = Vec::new();
+
+        let root_layer_id = self.layers.get_root().or_else(|| {
+            self.layers.add(
+                None,
+                Layer {
+                    rect: widget.get_rect().unwrap_or_default(),
+
+                    ..Layer::default()
+                },
+            )
+        });
+
+        render_events.push(RenderEvent::Spawned {
+            parent_id: None,
+            layer_id: root_layer_id,
+        });
 
         for event in widget_events {
             match event {
@@ -206,11 +229,14 @@ impl RenderManager {
                     parent_id,
                     widget_id,
                 } => {
-                    let widget = widget_widgets.get(*event.widget_id()).ok_or(
-                        RenderError::MissingWidget {
-                            widget_id: *event.widget_id(),
-                        },
-                    )?;
+                    let widget =
+                        widget_tree
+                            .get(*event.widget_id())
+                            .ok_or(RenderError::MissingWidget {
+                                widget_id: *event.widget_id(),
+                            })?;
+
+                    let canvas = widget.render();
 
                     let mut widget_layers = WidgetLayers::default();
 
@@ -221,20 +247,39 @@ impl RenderManager {
                             .ok_or(RenderError::MissingWidget {
                                 widget_id: *parent_id,
                             })?
-                            .next();
+                            .next()
+                            .ok_or(RenderError::NoLayerTarget {
+                                parent_id: *parent_id,
+                                widget_id: *widget_id,
+                            })?;
+                    } else {
+                        // If it has no parent, it's the root widget. Create a root layer for it.
+                        let root_layer_id = self.layers.add(
+                            None,
+                            Layer {
+                                rect: widget.get_rect().unwrap_or_default(),
+
+                                ..Layer::default()
+                            },
+                        );
+
+                        render_events.push(RenderEvent::Spawned {
+                            parent_id: None,
+                            layer_id: root_layer_id,
+                        });
+
+                        widget_layers.head = root_layer_id;
                     }
 
-                    if let Some(canvas) = widget.render() {
-                        let layer_id = widget_layers.head;
+                    let layer_id = widget_layers.head;
 
-                        self.process_spawn(
-                            &mut render_events,
-                            *widget_id,
-                            &mut widget_layers,
-                            layer_id,
-                            canvas,
-                        )?;
-                    }
+                    self.process_spawn(
+                        &mut render_events,
+                        *widget_id,
+                        &mut widget_layers,
+                        layer_id,
+                        canvas,
+                    )?;
 
                     self.widget_layers.insert(*widget_id, widget_layers);
                 }
@@ -242,7 +287,7 @@ impl RenderManager {
                 WidgetEvent::Rebuilt { widget_id } => {
                     println!("rebuilt: {:?}", widget_id);
 
-                    self.process_rebuild(widget_widgets, &mut render_events, *widget_id)?;
+                    self.process_rebuild(widget_tree, &mut render_events, *widget_id)?;
                 }
 
                 WidgetEvent::Reparent {
@@ -266,37 +311,27 @@ impl RenderManager {
         render_events: &mut Vec<RenderEvent>,
         widget_id: WidgetId,
         widget_layers: &mut WidgetLayers,
-        mut target_layer_id: Option<LayerId>,
-        canvas: Canvas,
+        mut head_layer_id: Option<LayerId>,
+        canvas: Option<Canvas>,
     ) -> Result<(), RenderError> {
-        if target_layer_id.is_none() && canvas.head.len() > 0 {
-            // If the canvas added commands to the head, but we have no target layer, then this
-            // widget is the root of the layer tree and we should create a new layer for it.
-            target_layer_id = Some(self.layers.add(None, Layer::default()));
+        let head_layer = self
+            .layers
+            .get_mut(head_layer_id)
+            .ok_or(RenderError::MissingLayer {
+                layer_id: head_layer_id,
+            })?;
+
+        // Add the widget to the head layer
+        if head_layer.widgets.last() != Some(&widget_id) {
+            head_layer.widgets.push(widget_id);
         }
 
-        if let Some(target_layer_id) = target_layer_id {
-            let head_layer =
-                self.layers
-                    .get_mut(target_layer_id)
-                    .ok_or(RenderError::MissingLayer {
-                        layer_id: target_layer_id,
-                    })?;
-
-            // Add the widget to the head layer
-            if head_layer.widgets.last() != Some(&widget_id) {
-                head_layer.widgets.push(widget_id);
-            }
-
-            // Only add the widget to the map if it actually added commands
-            if canvas.head.len() > 0 {
-                head_layer.commands.insert(widget_id, canvas.head);
-            }
+        // Only add the widget to the map if it actually added commands
+        if canvas.head.len() > 0 {
+            head_layer.commands.insert(widget_id, canvas.head);
         }
 
         if canvas.children.len() > 0 {
-            println!("spawning children");
-
             for child in canvas.children {
                 let layer = Layer {
                     style: child.style,
@@ -306,12 +341,10 @@ impl RenderManager {
                     ..Layer::default()
                 };
 
-                let child_layer_id = self.layers.add(target_layer_id, layer);
-
-                println!("spawning child {:?}", child_layer_id);
+                let child_layer_id = self.layers.add(Some(head_layer_id), layer);
 
                 render_events.push(RenderEvent::Spawned {
-                    parent_id: target_layer_id,
+                    parent_id: Some(head_layer_id),
                     layer_id: child_layer_id,
                 });
 
@@ -321,7 +354,7 @@ impl RenderManager {
                     render_events,
                     widget_id,
                     widget_layers,
-                    Some(child_layer_id),
+                    child_layer_id,
                     child.canvas,
                 )?;
             }
@@ -336,10 +369,10 @@ impl RenderManager {
                 ..Layer::default()
             };
 
-            let tail_layer_id = self.layers.add(target_layer_id, layer);
+            let tail_layer_id = self.layers.add(Some(head_layer_id), layer);
 
             render_events.push(RenderEvent::Spawned {
-                parent_id: widget_layers.tail.or(target_layer_id),
+                parent_id: widget_layers.tail.or(Some(head_layer_id)),
                 layer_id: tail_layer_id,
             });
 
@@ -352,7 +385,7 @@ impl RenderManager {
                 render_events,
                 widget_id,
                 widget_layers,
-                Some(tail_layer_id),
+                tail_layer_id,
                 tail.canvas,
             )?;
         }
@@ -362,26 +395,36 @@ impl RenderManager {
 
     fn process_rebuild(
         &mut self,
-        _widget_widgets: &Tree<WidgetId, WidgetNode>,
+        widget_tree: &Tree<WidgetId, WidgetElement>,
         _render_events: &mut Vec<RenderEvent>,
-        _widget_id: WidgetId,
+        widget_id: WidgetId,
     ) -> Result<(), RenderError> {
-        // let canvas = widget_widgets
-        //     .get(widget_id)
-        //     .ok_or(RenderError::MissingWidget { widget_id })?
-        //     .render();
+        let canvas = widget_tree
+            .get(widget_id)
+            .ok_or(RenderError::MissingWidget { widget_id })?
+            .render();
 
-        // let layers = self
-        //     .widget_layers
-        //     .get_mut(&widget_id)
-        //     .ok_or(RenderError::MissingWidget { widget_id })?;
+        let layers = self
+            .widget_layers
+            .get_mut(&widget_id)
+            .ok_or(RenderError::MissingWidget { widget_id })?;
 
-        // let head_layer = self
-        //     .layers
-        //     .get_mut(layers.head)
-        //     .ok_or(RenderError::MissingLayer {
-        //         layer_id: layers.head,
-        //     })?;
+        // If the canvas drew to a head layer in the previous render
+        if let Some(head_layer_id) = layers.head {
+            // let head_layer =
+            //     self.layers
+            //         .get_mut(head_layer_id)
+            //         .ok_or(RenderError::MissingLayer {
+            //             layer_id: head_layer_id,
+            //         })?;
+
+            if let Some(canvas) = canvas {
+                // The canvas did not draw anything to the head this time, remove the head layer
+                if canvas.head.is_empty() {
+                    self.layers.remove(head_layer_id, false);
+                }
+            }
+        }
 
         // let existing_head_commands = head_layer.commands.get(&widget_id);
 

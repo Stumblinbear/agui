@@ -1,27 +1,28 @@
 use std::{
     any::{type_name, TypeId},
+    cell::RefCell,
     hash::Hash,
     rc::Rc,
 };
 
 use downcast_rs::{impl_downcast, Downcast};
-use slotmap::new_key_type;
+use slotmap::{new_key_type, Key};
 
 mod builder;
 mod context;
-mod element;
+mod dispatch;
 mod instance;
 mod key;
 mod result;
 
-pub use self::{builder::*, context::*, element::*, instance::*, key::*, result::*};
+pub use self::{builder::*, context::*, dispatch::*, instance::*, key::*, result::*};
 
 new_key_type! {
     pub struct WidgetId;
 }
 
 pub trait IntoWidget: Downcast {
-    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetInstance>;
+    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetDispatch>;
 }
 
 impl_downcast!(IntoWidget);
@@ -35,6 +36,8 @@ pub enum WidgetRef {
 
         display_name: String,
         widget: Rc<dyn IntoWidget>,
+
+        widget_id: Rc<RefCell<WidgetId>>,
     },
 }
 
@@ -77,6 +80,8 @@ impl WidgetRef {
 
             display_name,
             widget: Rc::new(widget),
+
+            widget_id: Rc::default(),
         }
     }
 
@@ -90,7 +95,7 @@ impl WidgetRef {
 
     pub fn get_display_name(&self) -> Option<&str> {
         if let Self::Some { display_name, .. } = self {
-            Some(&display_name)
+            Some(display_name)
         } else {
             None
         }
@@ -112,6 +117,20 @@ impl WidgetRef {
         }
     }
 
+    pub(crate) fn get_current_id(&self) -> WidgetId {
+        if let Self::Some { widget_id, .. } = self {
+            *widget_id.as_ref().borrow()
+        } else {
+            WidgetId::default()
+        }
+    }
+
+    pub(crate) fn set_current_id(&self, current_widget_id: WidgetId) {
+        if let Self::Some { widget_id, .. } = self {
+            *widget_id.as_ref().borrow_mut() = current_widget_id;
+        }
+    }
+
     pub fn downcast_rc<W>(&self) -> Option<Rc<W>>
     where
         W: IntoWidget,
@@ -123,16 +142,14 @@ impl WidgetRef {
         }
     }
 
-    pub(crate) fn create(&self) -> Option<Box<dyn WidgetInstance>> {
+    pub(crate) fn create(&self) -> Option<Box<dyn WidgetDispatch>> {
         if let Self::Some { widget, .. } = self {
-            Some(Rc::clone(&widget).into_widget())
+            Some(Rc::clone(widget).into_widget())
         } else {
             None
         }
     }
 }
-
-impl Eq for WidgetRef {}
 
 impl PartialEq for WidgetRef {
     fn eq(&self, other: &Self) -> bool {
@@ -140,10 +157,10 @@ impl PartialEq for WidgetRef {
             return false;
         }
 
-        if let Self::Some { key, widget, .. } = self {
+        if let Self::Some { key, widget_id, .. } = self {
             if let Self::Some {
                 key: other_key,
-                widget: other_widget,
+                widget_id: other_widget_id,
                 ..
             } = other
             {
@@ -152,7 +169,13 @@ impl PartialEq for WidgetRef {
                     return key == other_key;
                 }
 
-                return Rc::ptr_eq(widget, other_widget);
+                // If either of them are null, one of them isn't in the tree and are not equal
+                if widget_id.borrow().is_null() || other_widget_id.borrow().is_null() {
+                    return false;
+                }
+
+                // If the two widget_ids are equal, then the two widgets are equal and currently exist in the tree
+                return widget_id == other_widget_id;
             }
         }
 
@@ -160,20 +183,22 @@ impl PartialEq for WidgetRef {
     }
 }
 
-impl Hash for WidgetRef {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.get_type_id().hash(state);
+impl Eq for WidgetRef {}
 
-        if let Self::Some { key, widget, .. } = self {
-            if let Some(key) = key {
-                // The key is effectively the hash of this reference
-                key.hash(state);
-            } else {
-                Rc::as_ptr(widget).hash(state);
-            }
-        }
-    }
-}
+// impl Hash for WidgetRef {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.get_type_id().hash(state);
+
+//         if let Self::Some { key, widget, .. } = self {
+//             if let Some(key) = key {
+//                 // The key is effectively the hash of this reference
+//                 key.hash(state);
+//             } else {
+//                 Rc::as_ptr(widget).hash(state);
+//             }
+//         }
+//     }
+// }
 
 impl std::fmt::Debug for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

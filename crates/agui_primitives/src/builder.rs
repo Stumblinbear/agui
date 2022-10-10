@@ -1,6 +1,7 @@
 use agui_core::widget::{BuildContext, BuildResult, WidgetBuilder};
 
 pub struct Builder {
+    #[allow(clippy::type_complexity)]
     pub func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult>,
 }
 

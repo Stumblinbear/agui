@@ -2,7 +2,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
-    manager::widgets::node::WidgetNode,
+    manager::widgets::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     render::{
         canvas::painter::{CanvasPainter, Head},
@@ -21,7 +21,7 @@ where
     W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetNode>,
+    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetElement>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -59,7 +59,7 @@ where
             .and_then(|p| p.downcast_mut())
     }
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode> {
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
         self.widget_tree
     }
 
@@ -76,7 +76,7 @@ where
     //         .and_then(|widget_id| {
     //             self.widget_tree
     //                 .get(*widget_id)
-    //                 .and_then(|widget| widget.downcast_ref::<WidgetElement<D>>())
+    //                 .and_then(|widget| widget.downcast_ref::<WidgetInstance<D>>())
     //                 .map(|element| element.get_state())
     //         })
     // }

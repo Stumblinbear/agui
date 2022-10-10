@@ -192,8 +192,6 @@ where
         } else {
             tracing::warn!("GlobalPlugin not added");
 
-            println!("test");
-
             Global {
                 phantom: PhantomData,
 

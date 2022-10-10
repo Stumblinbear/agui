@@ -53,8 +53,6 @@ impl PartialEq for Color {
     }
 }
 
-impl Eq for Color {}
-
 impl From<u32> for Color {
     fn from(c: u32) -> Self {
         Self {
@@ -146,7 +144,7 @@ impl TryFrom<&str> for Color {
         } else if let Some(value) = value.strip_prefix('#') {
             value
         } else {
-            &value
+            value
         };
 
         if hex_code.len() == 6 {

@@ -1,4 +1,4 @@
-use crate::{manager::widgets::node::WidgetNode, unit::Key};
+use crate::{manager::widgets::element::WidgetElement, unit::Key};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
@@ -15,7 +15,7 @@ impl<I> QueryByKey<I> {
 
 impl<'query, I> Iterator for QueryByKey<I>
 where
-    I: Iterator<Item = &'query WidgetNode>,
+    I: Iterator<Item = &'query WidgetElement>,
 {
     type Item = I::Item;
 

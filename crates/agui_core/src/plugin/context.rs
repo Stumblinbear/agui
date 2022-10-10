@@ -2,20 +2,20 @@ use fnv::FnvHashSet;
 
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue},
-    manager::widgets::node::WidgetNode,
+    manager::widgets::element::WidgetElement,
     unit::Data,
     util::tree::Tree,
     widget::WidgetId,
 };
 
 pub struct PluginContext<'ctx> {
-    pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode>,
+    pub(crate) tree: &'ctx Tree<WidgetId, WidgetElement>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 }
 
 impl PluginContext<'_> {
-    pub fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode> {
+    pub fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
         self.tree
     }
 

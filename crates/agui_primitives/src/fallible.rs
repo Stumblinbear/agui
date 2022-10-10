@@ -8,6 +8,7 @@ use agui_core::{
 
 const ERROR_BORDER: f32 = 5.0;
 
+#[allow(clippy::type_complexity)]
 pub struct Fallible<Ok: 'static, Error: 'static> {
     pub func: Box<dyn Fn() -> Result<Ok, Error> + RefUnwindSafe>,
 

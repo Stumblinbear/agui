@@ -37,11 +37,14 @@ impl CallbackQueue {
         A: Data,
     {
         self.queue.lock().push(CallbackInvoke {
-            callback_ids: callbacks.into_iter().filter_map(|id| id.get_id()).collect(),
+            callback_ids: callbacks.iter().filter_map(|id| id.get_id()).collect(),
             arg: Box::new(arg),
         });
     }
 
+    /// # Safety
+    ///
+    /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
     pub unsafe fn call_unsafe(&self, callback_id: CallbackId, arg: Box<dyn Data>) {
         self.queue.lock().push(CallbackInvoke {
             callback_ids: vec![callback_id],
@@ -49,6 +52,9 @@ impl CallbackQueue {
         });
     }
 
+    /// # Safety
+    ///
+    /// This function must be called with the expected `arg` for all of the `callback_ids`, or it will panic.
     pub unsafe fn call_many_unsafe(&self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
         self.queue.lock().push(CallbackInvoke {
             callback_ids: Vec::from(callback_ids),

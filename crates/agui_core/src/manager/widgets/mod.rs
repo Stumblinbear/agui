@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashSet;
 
 use morphorm::Cache;
 
@@ -13,12 +13,12 @@ use crate::{
     widget::{IntoWidget, WidgetId, WidgetRef},
 };
 
-use self::node::WidgetNode;
+use self::element::WidgetElement;
 
 use super::{cache::LayoutCache, context::AguiContext};
 
+pub mod element;
 pub mod events;
-pub mod node;
 
 use events::WidgetEvent;
 
@@ -27,8 +27,7 @@ use events::WidgetEvent;
 pub struct WidgetManager {
     plugins: PluginMap<BoxedPlugin>,
 
-    widget_tree: Tree<WidgetId, WidgetNode>,
-    widget_refs: FnvHashMap<WidgetRef, WidgetId>,
+    widget_tree: Tree<WidgetId, WidgetElement>,
 
     dirty: FnvHashSet<WidgetId>,
     callback_queue: CallbackQueue,
@@ -107,7 +106,7 @@ impl WidgetManager {
     }
 
     /// Get the widget tree.
-    pub fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode> {
+    pub fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
         &self.widget_tree
     }
 
@@ -485,18 +484,14 @@ impl WidgetManager {
         }
 
         // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
-        if self.widget_refs.contains_key(&widget_ref) {
+        if self.widget_tree.contains(widget_ref.get_current_id()) {
             panic!(
                 "two instances of the same widget cannot exist at one time: {:?}",
                 widget_ref
             );
         }
 
-        let widget_node = if let Some(widget_node) = WidgetNode::new(widget_ref.clone()) {
-            widget_node
-        } else {
-            return None;
-        };
+        let widget_node = WidgetElement::new(widget_ref.clone())?;
 
         tracing::trace!(
             parent_id = &format!("{:?}", parent_id),
@@ -511,7 +506,7 @@ impl WidgetManager {
             widget_id,
         });
 
-        self.widget_refs.insert(widget_ref, widget_id);
+        widget_ref.set_current_id(widget_id);
 
         self.cache.add(widget_id);
 
@@ -548,7 +543,7 @@ impl WidgetManager {
 
             self.widget_tree.replace(widget_id, widget);
 
-            if result.children.len() == 0 {
+            if result.children.is_empty() {
                 continue;
             }
 
@@ -563,7 +558,7 @@ impl WidgetManager {
 
                     result.children.pop();
 
-                    if result.children.len() == 0 {
+                    if result.children.is_empty() {
                         break;
                     }
                 } else {
@@ -575,19 +570,19 @@ impl WidgetManager {
             // Spawn the child widgets
             for child_ref in result.children {
                 if child_ref.is_some() {
+                    let child_id = child_ref.get_current_id();
+
                     // If the widget already exists in the tree
-                    if let Some(child_id) = self.widget_refs.get(&child_ref) {
+                    if let Some(widget) = self.widget_tree.get(child_id) {
                         // If we're trying to reparent a widget that has already been retained, panic. The same widget cannot exist twice.
-                        if retained_widgets.contains(child_id) {
+                        if retained_widgets.contains(&child_id) {
                             panic!(
                                 "two instances of the same widget cannot exist at one time: {:?}",
                                 child_ref
                             );
                         }
 
-                        retained_widgets.insert(*child_id);
-
-                        let widget = self.widget_tree.get(*child_id).unwrap();
+                        retained_widgets.insert(child_id);
 
                         tracing::trace!(
                             parent_id = &format!("{:?}", widget_id),
@@ -597,10 +592,10 @@ impl WidgetManager {
 
                         widget_events.push(WidgetEvent::Reparent {
                             parent_id: Some(widget_id),
-                            widget_id: *child_id,
+                            widget_id: child_id,
                         });
 
-                        self.widget_tree.reparent(Some(widget_id), *child_id);
+                        self.widget_tree.reparent(Some(widget_id), child_id);
 
                         continue;
                     }
@@ -656,12 +651,9 @@ impl WidgetManager {
 
             self.cache.remove(&widget_id);
 
-            let widget = self
-                .widget_tree
+            self.widget_tree
                 .remove(widget_id, false)
                 .expect("cannot destroy a widget that doesn't exist");
-
-            self.widget_refs.remove(widget.get_ref());
         }
     }
 }
@@ -675,7 +667,7 @@ enum Modify {
 #[cfg(test)]
 mod tests {
     use crate::{
-        manager::{widgets::events::WidgetEvent, widgets::node::WidgetNode},
+        manager::{widgets::element::WidgetElement, widgets::events::WidgetEvent},
         widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
     };
 
@@ -784,11 +776,7 @@ mod tests {
             "should have generated a layout event"
         );
 
-        assert_eq!(
-            events.iter().nth(2),
-            None,
-            "should have only generated two events"
-        );
+        assert_eq!(events.get(2), None, "should have only generated two events");
     }
 
     #[test]
@@ -825,11 +813,7 @@ mod tests {
             "should have generated a destroyed event"
         );
 
-        assert_eq!(
-            events.iter().nth(1),
-            None,
-            "should have only generated one event"
-        );
+        assert_eq!(events.get(1), None, "should have only generated one event");
     }
 
     #[test]
@@ -1023,13 +1007,11 @@ mod tests {
             "should have generated rebuild event for the root widget"
         );
 
-        let retained_children = old_children
-            .iter()
-            .filter(|child_id| new_children.contains(*child_id))
-            .collect::<Vec<_>>();
-
         assert_eq!(
-            retained_children.len(),
+            old_children
+                .iter()
+                .filter(|child_id| new_children.contains(*child_id))
+                .count(),
             0,
             "should not have retained any children"
         );
@@ -1065,26 +1047,24 @@ mod tests {
         manager.update();
 
         let root_id = manager.get_root().unwrap();
-        let root_child_id = manager
+        let root_child_id = *manager
             .get_widgets()
             .get_children(root_id)
             .unwrap()
             .first()
-            .unwrap()
-            .clone();
+            .unwrap();
 
         manager.mark_dirty(root_id);
 
         let events = manager.update();
 
         let new_root_id = manager.get_root().unwrap();
-        let new_root_child_id = manager
+        let new_root_child_id = *manager
             .get_widgets()
             .get_children(root_id)
             .unwrap()
             .first()
-            .unwrap()
-            .clone();
+            .unwrap();
 
         assert_eq!(
             root_id, new_root_id,
@@ -1110,13 +1090,12 @@ mod tests {
         manager.update();
 
         let root_id = manager.get_root().unwrap();
-        let root_child_id = manager
+        let root_child_id = *manager
             .get_widgets()
             .get_children(root_id)
             .unwrap()
             .first()
-            .unwrap()
-            .clone();
+            .unwrap();
         let nested_children_ids = manager
             .get_widgets()
             .get_children(root_child_id)
@@ -1128,13 +1107,12 @@ mod tests {
         let events = manager.update();
 
         let new_root_id = manager.get_root().unwrap();
-        let new_root_child_id = manager
+        let new_root_child_id = *manager
             .get_widgets()
             .get_children(root_id)
             .unwrap()
             .first()
-            .unwrap()
-            .clone();
+            .unwrap();
         let new_nested_children_ids = manager
             .get_widgets()
             .get_children(new_root_child_id)
@@ -1165,13 +1143,13 @@ mod tests {
 
         let widget_id_1 = manager
             .widget_tree
-            .add(None, WidgetNode::from(TestUnretainedWidget::default()));
+            .add(None, WidgetElement::from(TestUnretainedWidget::default()));
         let widget_id_2 = manager
             .widget_tree
-            .add(None, WidgetNode::from(TestUnretainedWidget::default()));
+            .add(None, WidgetElement::from(TestUnretainedWidget::default()));
         let widget_id_3 = manager
             .widget_tree
-            .add(None, WidgetNode::from(TestUnretainedWidget::default()));
+            .add(None, WidgetElement::from(TestUnretainedWidget::default()));
 
         let mut events = vec![
             WidgetEvent::Spawned {

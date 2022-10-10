@@ -4,6 +4,8 @@ use super::LayerId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RenderEvent {
+    Flush,
+
     /// A layer has been spawned.
     Spawned {
         parent_id: Option<LayerId>,
@@ -11,10 +13,14 @@ pub enum RenderEvent {
     },
 
     /// A layer has been resized.
-    Resized { layer_id: LayerId },
+    Resized {
+        layer_id: LayerId,
+    },
 
     /// A layer has been redrawn.
-    Redrawn { layer_id: LayerId },
+    Redrawn {
+        layer_id: LayerId,
+    },
 
     /// A layer has been reparented.
     Reparent {
@@ -23,17 +29,20 @@ pub enum RenderEvent {
     },
 
     /// A layer has been destroyed.
-    Destroyed { layer_id: LayerId },
+    Destroyed {
+        layer_id: LayerId,
+    },
 }
 
 impl RenderEvent {
-    pub fn layer_id(&self) -> &LayerId {
+    pub fn layer_id(&self) -> Option<&LayerId> {
         match self {
-            RenderEvent::Spawned { layer_id, .. }
-            | RenderEvent::Resized { layer_id, .. }
-            | RenderEvent::Redrawn { layer_id, .. }
-            | RenderEvent::Reparent { layer_id, .. }
-            | RenderEvent::Destroyed { layer_id, .. } => layer_id,
+            Self::Flush => None,
+            Self::Spawned { layer_id, .. }
+            | Self::Resized { layer_id, .. }
+            | Self::Redrawn { layer_id, .. }
+            | Self::Reparent { layer_id, .. }
+            | Self::Destroyed { layer_id, .. } => Some(layer_id),
         }
     }
 }

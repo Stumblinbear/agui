@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
-    manager::widgets::node::WidgetNode,
-    widget::{WidgetBuilder, WidgetElement},
+    manager::widgets::element::WidgetElement,
+    widget::{WidgetBuilder, WidgetInstance},
 };
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
@@ -30,9 +30,9 @@ where
 impl<'query, I, W> Iterator for QueryByType<I, W>
 where
     W: WidgetBuilder + 'query,
-    I: Iterator<Item = &'query WidgetNode>,
+    I: Iterator<Item = &'query WidgetElement>,
 {
-    type Item = &'query WidgetElement<W>;
+    type Item = &'query WidgetInstance<W>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

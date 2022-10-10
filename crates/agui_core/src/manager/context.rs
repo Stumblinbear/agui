@@ -7,11 +7,11 @@ use crate::{
     widget::WidgetId,
 };
 
-use super::widgets::node::WidgetNode;
+use super::widgets::element::WidgetElement;
 
 pub struct AguiContext<'ctx> {
     pub(crate) plugins: Option<&'ctx mut PluginMap<BoxedPlugin>>,
-    pub(crate) tree: &'ctx Tree<WidgetId, WidgetNode>,
+    pub(crate) tree: &'ctx Tree<WidgetId, WidgetElement>,
     pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
     pub(crate) callback_queue: CallbackQueue,
 

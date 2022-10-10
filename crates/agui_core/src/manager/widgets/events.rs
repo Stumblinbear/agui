@@ -11,7 +11,9 @@ pub enum WidgetEvent {
     },
 
     /// A widget has been rebuilt.
-    Rebuilt { widget_id: WidgetId },
+    Rebuilt {
+        widget_id: WidgetId,
+    },
 
     /// A widget has been reparented.
     Reparent {
@@ -20,10 +22,18 @@ pub enum WidgetEvent {
     },
 
     /// A widget has been destroyed.
-    Destroyed { widget_id: WidgetId },
+    Destroyed {
+        widget_id: WidgetId,
+    },
 
     /// A widget has changed in the layout.
-    Layout { widget_id: WidgetId },
+    Layout {
+        widget_id: WidgetId,
+    },
+
+    Draw {
+        widget_id: WidgetId,
+    },
 }
 
 impl WidgetEvent {
@@ -33,7 +43,8 @@ impl WidgetEvent {
             | WidgetEvent::Rebuilt { widget_id, .. }
             | WidgetEvent::Reparent { widget_id, .. }
             | WidgetEvent::Destroyed { widget_id, .. }
-            | WidgetEvent::Layout { widget_id, .. } => widget_id,
+            | WidgetEvent::Layout { widget_id, .. }
+            | WidgetEvent::Draw { widget_id, .. } => widget_id,
         }
     }
 }

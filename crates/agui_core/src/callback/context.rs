@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use crate::{
-    manager::widgets::node::WidgetNode,
+    manager::widgets::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
     unit::Data,
     util::{
@@ -18,7 +18,7 @@ where
     W: WidgetBuilder,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetNode>,
+    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetElement>,
     pub(crate) dirty: &'ctx mut WidgetSet,
     pub(crate) callback_queue: CallbackQueue,
 
@@ -65,7 +65,7 @@ where
             .and_then(|p| p.downcast_mut())
     }
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode> {
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
         self.widget_tree
     }
 

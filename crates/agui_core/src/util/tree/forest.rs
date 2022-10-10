@@ -151,7 +151,7 @@ where
 
                 self[node_id].fmt(f)?;
 
-                writeln!(f, "{}", format!(" (#{:?})", node_id))?;
+                writeln!(f, " (#{:?})", node_id)?;
             }
         }
 
@@ -185,7 +185,7 @@ where
 
                 self[node_id].fmt(f)?;
 
-                writeln!(f, "{}", format!(" (#{:?})", node_id))?;
+                writeln!(f, " (#{:?})", node_id)?;
             }
         }
 

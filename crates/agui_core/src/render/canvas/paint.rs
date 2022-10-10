@@ -1,6 +1,6 @@
 use crate::unit::{BlendMode, Color};
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Paint {
     pub anti_alias: bool,
     pub color: Color,

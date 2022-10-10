@@ -4,7 +4,7 @@ use downcast_rs::Downcast;
 
 use crate::unit::Data;
 
-use super::{BuildContext, BuildResult, IntoWidget, WidgetElement, WidgetInstance};
+use super::{BuildContext, BuildResult, IntoWidget, WidgetDispatch, WidgetInstance};
 
 /// Implements the widget's `build()` method.
 pub trait WidgetBuilder: Downcast + Sized + PartialEq {
@@ -21,8 +21,8 @@ where
     W: WidgetBuilder<State = S>,
     S: Data + Default,
 {
-    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetInstance> {
-        Box::new(WidgetElement::new(self))
+    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetDispatch> {
+        Box::new(WidgetInstance::new(self))
     }
 }
 

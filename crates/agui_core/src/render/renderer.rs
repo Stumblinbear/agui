@@ -9,6 +9,7 @@ pub struct RenderFn<W>
 where
     W: WidgetBuilder,
 {
+    #[allow(clippy::type_complexity)]
     func: Box<dyn Fn(&RenderContext<W>, CanvasPainter<Head>)>,
 }
 

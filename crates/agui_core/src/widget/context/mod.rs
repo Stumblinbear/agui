@@ -1,6 +1,6 @@
 use crate::{
     callback::{Callback, CallbackId},
-    manager::widgets::node::WidgetNode,
+    manager::widgets::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::Data,
     util::{map::PluginMap, tree::Tree},
@@ -25,7 +25,7 @@ where
     where
         P: PluginImpl;
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetNode>;
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement>;
 
     fn mark_dirty(&mut self, widget_id: WidgetId);
 

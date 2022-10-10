@@ -9,7 +9,7 @@ use crate::{
     widget::WidgetId,
 };
 
-use super::widgets::node::WidgetNode;
+use super::widgets::element::WidgetElement;
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
@@ -339,7 +339,7 @@ where
 }
 
 impl<'ui> morphorm::Node<'ui> for WidgetId {
-    type Data = Tree<Self, WidgetNode>;
+    type Data = Tree<Self, WidgetElement>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         store
