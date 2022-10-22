@@ -246,17 +246,17 @@ fn example_widget(ctx: &amp;BuildContext, layout: Layout, child: WidgetRef) -&gt
 <h2 id="primitives"><a class="header" href="#primitives">Primitives</a></h2>
 <p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="usage/../widgets/primitives.html">Primitive Widget Reference</a>.</p>
 <h2 id="creating-a-widget"><a class="header" href="#creating-a-widget">Creating a Widget</a></h2>
-<p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetBuilder</code>. We're going to start simple, with a basic box on the screen:</p>
+<p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetView</code>. We're going to start simple, with a basic box on the screen:</p>
 <pre><code class="language-rust noplaypen">pub struct MyWidget { }
 
-impl WidgetBuilder for MyWidget {
+impl WidgetView for MyWidget {
     fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
         BuildResult::None
     }
 }
 </code></pre>
 <p>If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.</p>
-<pre><code class="language-rust noplaypen">impl WidgetBuilder for MyWidget {
+<pre><code class="language-rust noplaypen">impl WidgetView for MyWidget {
     fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
         build! {
             Button {
