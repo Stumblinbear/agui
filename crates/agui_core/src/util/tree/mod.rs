@@ -92,12 +92,12 @@ where
         self.map.remove(node_id)
     }
 
-    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
+    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> bool {
         if self.root == Some(node_id) {
             self.root = None;
         }
 
-        self.map.reparent(new_parent_id, node_id);
+        self.map.reparent(new_parent_id, node_id)
     }
 
     pub fn iter_down(&self) -> DownwardIterator<K, V> {

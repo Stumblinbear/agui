@@ -88,8 +88,15 @@ where
         }
     }
 
-    pub(super) fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) {
+    /// Moves a node from one parent to another.
+    ///
+    /// Returns `true` if the node was moved, `false` if the node was already a child of the new parent.
+    pub(super) fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> bool {
         if let Some(node) = self.nodes.get(node_id) {
+            if node.parent == new_parent_id {
+                return false;
+            }
+
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
                     // Remove the child from its parent
@@ -105,6 +112,8 @@ where
 
             self.propagate_node(new_parent_id, node_id);
         }
+
+        true
     }
 
     fn propagate_node(&mut self, parent_id: Option<K>, node_id: K) {

@@ -689,7 +689,7 @@ impl WidgetManager {
                     existing_child_idx += 1;
 
                     // If the widget already exists in the tree
-                    if let Some(widget) = self.widget_tree.get(child_id) {
+                    if self.widget_tree.contains(child_id) {
                         // If we're trying to reparent a widget that has already been retained, panic. The same widget cannot exist twice.
                         if retained_widgets.contains(&child_id) {
                             panic!(
@@ -700,18 +700,18 @@ impl WidgetManager {
 
                         retained_widgets.insert(child_id);
 
-                        tracing::trace!(
-                            parent_id = &format!("{:?}", widget_id),
-                            widget = widget.get_display_name(),
-                            "reparenting widget"
-                        );
+                        if self.widget_tree.reparent(Some(widget_id), child_id) {
+                            tracing::trace!(
+                                parent_id = &format!("{:?}", widget_id),
+                                widget = self.widget_tree.get(child_id).unwrap().get_display_name(),
+                                "reparented widget"
+                            );
 
-                        widget_events.push(WidgetEvent::Reparent {
-                            parent_id: Some(widget_id),
-                            widget_id: child_id,
-                        });
-
-                        self.widget_tree.reparent(Some(widget_id), child_id);
+                            widget_events.push(WidgetEvent::Reparent {
+                                parent_id: Some(widget_id),
+                                widget_id: child_id,
+                            });
+                        }
 
                         continue;
                     }

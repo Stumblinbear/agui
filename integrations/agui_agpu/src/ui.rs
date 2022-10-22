@@ -1,6 +1,7 @@
 use std::{
     io, mem,
     ops::{Deref, DerefMut},
+    time::Instant,
 };
 
 use agpu::{
@@ -74,15 +75,15 @@ impl Agui {
         self.manager.load_font_file(filename)
     }
 
-    pub fn redraw(&mut self) {
-        self.renderer.redraw(&self.manager);
-
-        // print_tree(&self.manager);
-    }
-
     pub fn handle_event(&mut self, event: Event<'_, ()>, program: &GpuProgram) {
-        if !self.manager.update().is_empty() {
-            self.redraw();
+        let now = Instant::now();
+
+        let events = self.manager.update();
+
+        if !events.is_empty() {
+            tracing::info!("updated in: {:?}", Instant::now().duration_since(now));
+
+            self.renderer.redraw(&self.manager, &events);
 
             // If the program is not already demanding a specific framerate, request a redraw
             if program.time.is_none() {

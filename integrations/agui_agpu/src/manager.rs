@@ -12,7 +12,7 @@ use agpu::{
     Frame, Gpu, RenderPipeline, TextureFormat,
 };
 use agui::{
-    manager::WidgetManager,
+    manager::{events::WidgetEvent, WidgetManager},
     render::canvas::{command::CanvasCommand, Canvas},
     unit::Size,
     util::tree::{new_key_type, Tree},
@@ -193,7 +193,7 @@ impl RenderManager {
             .write_unchecked(&[size.width, size.height]);
     }
 
-    pub fn redraw(&mut self, manager: &WidgetManager) {
+    pub fn redraw(&mut self, manager: &WidgetManager, events: &[WidgetEvent]) {
         let now = Instant::now();
 
         // if let Some(root_id) = manager.get_widgets().get_root() {
