@@ -6,13 +6,17 @@ use std::{
 use agui_core::{
     callback::Callback,
     render::canvas::paint::Paint,
-    unit::{Color, FontStyle, Key, Layout, Point, Rect},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
+    unit::{Color, FontStyle, Layout, LayoutType, Point, Rect},
+    widget::{
+        BuildContext, BuildResult, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
+        LayoutResult, WidgetState, WidgetView,
+    },
 };
+use agui_macros::StatefulWidget;
 use agui_primitives::edit::EditableText;
 
 use crate::{
-    plugins::{event::EventPluginContextExt, timeout::TimeoutPluginExt},
+    plugins::{event::ContextEventPluginExt, timeout::ContextTimeoutPluginExt},
     state::keyboard::{KeyCode, KeyState, KeyboardCharacter, KeyboardInput},
     GestureDetector,
 };
@@ -74,7 +78,7 @@ impl Default for TextInputStyle {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TextInputState<S>
 where
     S: EditableText + 'static,
@@ -97,7 +101,7 @@ pub struct Cursor {
     glyph_index: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(StatefulWidget, Debug, PartialEq)]
 pub struct TextInput<S>
 where
     S: EditableText + 'static,
@@ -129,11 +133,36 @@ impl Default for TextInput<String> {
     }
 }
 
-impl<S> WidgetBuilder for TextInput<S>
+impl<S> WidgetState for TextInput<S>
 where
-    S: EditableText + Default + 'static,
+    S: EditableText + 'static,
 {
     type State = TextInputState<S>;
+
+    fn create_state(&self) -> Self::State {
+        TextInputState {
+            disabled: false,
+            hovered: false,
+            focused: false,
+
+            cursor: Cursor::default(),
+
+            value: self.value.clone(),
+        }
+    }
+}
+
+impl<S> WidgetView for TextInput<S>
+where
+    S: EditableText + 'static,
+{
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout::clone(&self.layout),
+        }
+    }
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         let on_focus = ctx.callback::<bool, _>(|ctx, arg| {
@@ -348,22 +377,13 @@ where
             }
         });
 
-        BuildResult {
-            layout: Layout::clone(&self.layout),
+        BuildResult::from([GestureDetector {
+            on_hover,
 
-            children: vec![ctx.key(
-                Key::single(),
-                GestureDetector {
-                    on_hover,
+            is_focused: ctx.state.focused,
+            on_focus,
 
-                    is_focused: ctx.state.focused,
-                    on_focus,
-
-                    ..Default::default()
-                },
-            )],
-
-            ..BuildResult::default()
-        }
+            ..Default::default()
+        }])
     }
 }

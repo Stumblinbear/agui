@@ -12,7 +12,7 @@ use agui_core::{
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetBuilder, WidgetContext, WidgetId},
+    widget::{ContextPlugins, ContextWidget, WidgetId, WidgetView},
 };
 
 #[derive(Debug, Default)]
@@ -177,9 +177,20 @@ impl GlobalPluginExt for WidgetManager {
     }
 }
 
-impl<'ctx, W> GlobalPluginExt for BuildContext<'ctx, W>
+pub trait ContextGlobalPluginExt {
+    fn get_global<G>(&mut self) -> Global<G>
+    where
+        G: Data + Default;
+
+    fn set_global<G, F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut G) + 'static,
+        G: Data + Default;
+}
+
+impl<C> ContextGlobalPluginExt for C
 where
-    W: WidgetBuilder,
+    C: ContextPlugins + ContextWidget,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -215,7 +226,7 @@ where
 
 impl<'ctx, W> GlobalPluginExt for CallbackContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetView,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -287,24 +298,28 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::any::TypeId;
+    use std::{any::TypeId, cell::RefCell};
 
     use agui_core::{
         manager::WidgetManager,
-        query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
+        widget::{BuildContext, BuildResult, WidgetState, WidgetView},
     };
+    use agui_macros::{StatefulWidget, StatelessWidget};
     use agui_primitives::Column;
 
-    use super::{GlobalPlugin, GlobalPluginExt};
+    use super::{ContextGlobalPluginExt, GlobalPlugin, GlobalPluginExt};
+
+    thread_local! {
+        pub static STATE: RefCell<Vec<u32>> = RefCell::default();
+    }
 
     #[derive(Debug, Default, Clone, Copy)]
     struct TestGlobal(u32);
 
-    #[derive(Clone, Debug, Default, PartialEq)]
+    #[derive(StatelessWidget, Clone, Debug, Default, PartialEq)]
     struct TestWidgetWriter {}
 
-    impl WidgetBuilder for TestWidgetWriter {
+    impl WidgetView for TestWidgetWriter {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             ctx.set_global::<TestGlobal, _>(|value| value.0 += 1);
 
@@ -312,17 +327,23 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Debug, Default, PartialEq)]
+    #[derive(StatefulWidget, Clone, Debug, Default, PartialEq)]
     struct TestWidgetReader {}
 
-    impl WidgetBuilder for TestWidgetReader {
+    impl WidgetState for TestWidgetReader {
         type State = u32;
 
+        fn create_state(&self) -> Self::State {
+            0
+        }
+    }
+
+    impl WidgetView for TestWidgetReader {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             let global = ctx.get_global::<TestGlobal>();
 
-            ctx.set_state(move |value| {
-                *value += global.borrow().0;
+            STATE.with(|f| {
+                f.borrow_mut().push(global.borrow().0);
             });
 
             BuildResult::empty()
@@ -406,16 +427,9 @@ mod tests {
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestWidgetReader>()
-                .next()
-                .unwrap()
-                .get_state(),
-            1,
-            "widget should have taken global value"
-        );
+        STATE.with(|f| {
+            assert_eq!(f.borrow()[0], 1, "widget should have taken global value");
+        });
     }
 
     #[test]
@@ -438,15 +452,12 @@ mod tests {
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestWidgetReader>()
-                .next()
-                .unwrap()
-                .get_state(),
-            1,
-            "widget should have taken global value after it was incremented"
-        );
+        STATE.with(|f| {
+            assert_eq!(
+                f.borrow()[0],
+                1,
+                "widget should have taken global value after it was incremented"
+            );
+        });
     }
 }

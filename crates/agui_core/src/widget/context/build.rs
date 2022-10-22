@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
@@ -11,14 +13,14 @@ use crate::{
     },
     unit::{Data, Key},
     util::{map::PluginMap, tree::Tree},
-    widget::{IntoWidget, WidgetBuilder, WidgetId, WidgetKey, WidgetRef},
+    widget::{Widget, WidgetId, WidgetKey, WidgetRef, WidgetState, WidgetView},
 };
 
-use super::WidgetContext;
+use super::{ContextMut, ContextPlugins, ContextStatefulWidget, ContextWidget, ContextWidgetMut};
 
 pub struct BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetView + WidgetState,
 {
     pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
     pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetElement>,
@@ -33,9 +35,20 @@ where
     pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
-impl<W> WidgetContext<W> for BuildContext<'_, W>
+impl<W> Deref for BuildContext<'_, W>
 where
-    W: WidgetBuilder,
+    W: WidgetView + WidgetState,
+{
+    type Target = W;
+
+    fn deref(&self) -> &Self::Target {
+        self.widget
+    }
+}
+
+impl<W> ContextPlugins for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
 {
     fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
         self.plugins
@@ -58,46 +71,14 @@ where
             .get_mut(&PluginId::of::<P>())
             .and_then(|p| p.downcast_mut())
     }
+}
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
-        self.widget_tree
-    }
-
+impl<W> ContextMut for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
     fn mark_dirty(&mut self, widget_id: WidgetId) {
         self.dirty.insert(widget_id);
-    }
-
-    // fn depend_on<D>(&mut self) -> Option<&D::State>
-    // where
-    //     D: WidgetBuilder,
-    // {
-    //     self.inherited
-    //         .get(&TypeId::of::<D>())
-    //         .and_then(|widget_id| {
-    //             self.widget_tree
-    //                 .get(*widget_id)
-    //                 .and_then(|widget| widget.downcast_ref::<WidgetInstance<D>>())
-    //                 .map(|element| element.get_state())
-    //         })
-    // }
-
-    fn get_widget(&self) -> &W {
-        self.widget
-    }
-
-    fn get_state(&self) -> &W::State {
-        self.state
-    }
-
-    fn get_state_mut(&mut self) -> &mut W::State {
-        self.state
-    }
-
-    fn set_state<F>(&mut self, func: F)
-    where
-        F: FnOnce(&mut W::State),
-    {
-        func(self.state);
     }
 
     fn call<A>(&mut self, callback: &Callback<A>, arg: A)
@@ -123,22 +104,50 @@ where
     }
 }
 
-impl<W> BuildContext<'_, W>
+impl<W> ContextWidget for BuildContext<'_, W>
 where
-    W: WidgetBuilder,
+    W: WidgetView + WidgetState,
 {
-    pub fn get_widget_id(&self) -> WidgetId {
+    type Widget = W;
+
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
+        self.widget_tree
+    }
+
+    fn get_widget_id(&self) -> WidgetId {
         self.widget_id
     }
 
-    pub fn on_draw<F>(&mut self, func: F)
-    where
-        F: Fn(&RenderContext<W>, CanvasPainter<Head>) + 'static,
-    {
-        self.renderer = Some(RenderFn::new(func));
+    fn get_widget(&self) -> &W {
+        self.widget
+    }
+}
+
+impl<W> ContextStatefulWidget for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
+    fn get_state(&self) -> &W::State {
+        self.state
     }
 
-    pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
+    fn get_state_mut(&mut self) -> &mut W::State {
+        self.state
+    }
+
+    fn set_state<F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut W::State),
+    {
+        func(self.state);
+    }
+}
+
+impl<W> ContextWidgetMut for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
+    fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: Data,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
@@ -150,10 +159,22 @@ where
 
         callback
     }
+}
+
+impl<W> BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
+    pub fn on_draw<F>(&mut self, func: F)
+    where
+        F: Fn(&RenderContext<W>, CanvasPainter<Head>) + 'static,
+    {
+        self.renderer = Some(RenderFn::new(func));
+    }
 
     pub fn key<C>(&self, key: Key, widget: C) -> WidgetRef
     where
-        C: IntoWidget,
+        C: Widget,
     {
         WidgetRef::new_with_key(
             Some(match key {

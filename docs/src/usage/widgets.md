@@ -1,6 +1,6 @@
 # Widgets
 
-A widget is anything that *exists* in the UI tree. It could be a visual element, a management system, or just plain-ol-data. You can find a full list of them in the [Widget Reference](../widgets/widgets.html).
+A widget is anything that _exists_ in the UI tree. It could be a visual element, a management system, or just plain-ol-data. You can find a full list of them in the [Widget Reference](../widgets/widgets.html).
 
 ## Primitives
 
@@ -8,12 +8,12 @@ A widget is anything that *exists* in the UI tree. It could be a visual element,
 
 ## Creating a Widget
 
-A widget consists of two things: its settings and a build function. In Rust, this is just a `struct` with an `impl WidgetBuilder`. We're going to start simple, with a basic box on the screen:
+A widget consists of two things: its settings and a build function. In Rust, this is just a `struct` with an `impl WidgetView`. We're going to start simple, with a basic box on the screen:
 
 ```rust,noplaypen
 pub struct MyWidget { }
 
-impl WidgetBuilder for MyWidget {
+impl WidgetView for MyWidget {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         BuildResult::None
     }
@@ -23,7 +23,7 @@ impl WidgetBuilder for MyWidget {
 If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.
 
 ```rust,noplaypen
-impl WidgetBuilder for MyWidget {
+impl WidgetView for MyWidget {
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         build! {
             Button {

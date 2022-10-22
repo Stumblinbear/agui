@@ -6,6 +6,8 @@ use syn::{
     Expr, ExprStruct, FieldValue,
 };
 
+use crate::utils::resolve_agui_path;
+
 struct BuildVisitor {}
 
 impl BuildVisitor {}
@@ -97,6 +99,8 @@ impl VisitMut for BuildVisitor {
 }
 
 pub(crate) fn build_impl(item: TokenStream2) -> TokenStream2 {
+    let agui_core = resolve_agui_path();
+
     let mut expr = match parse2(item) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error(),
@@ -119,7 +123,7 @@ pub(crate) fn build_impl(item: TokenStream2) -> TokenStream2 {
 
         expr = Expr::Block(parse_quote! {
             {
-                let mut vec: Vec<agui::widget::Widget> = Vec::with_capacity(#count);
+                let mut vec: Vec<#agui_core::widget::Widget> = Vec::with_capacity(#count);
 
                 #inner
 

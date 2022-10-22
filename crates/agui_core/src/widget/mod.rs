@@ -5,27 +5,22 @@ use std::{
     rc::Rc,
 };
 
-use downcast_rs::{impl_downcast, Downcast};
 use slotmap::{new_key_type, Key};
 
 mod builder;
 mod context;
-mod dispatch;
-mod instance;
-mod key;
+pub mod dispatch;
+pub mod instance;
+pub mod key;
 mod result;
 
-pub use self::{builder::*, context::*, dispatch::*, instance::*, key::*, result::*};
+use self::{dispatch::WidgetDispatch, key::WidgetKey};
+
+pub use self::{builder::*, context::*, result::*};
 
 new_key_type! {
     pub struct WidgetId;
 }
-
-pub trait IntoWidget: Downcast {
-    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetDispatch>;
-}
-
-impl_downcast!(IntoWidget);
 
 #[derive(Default, Clone)]
 pub enum WidgetRef {
@@ -35,7 +30,7 @@ pub enum WidgetRef {
         key: Option<WidgetKey>,
 
         display_name: String,
-        widget: Rc<dyn IntoWidget>,
+        widget: Rc<dyn Widget>,
 
         widget_id: Rc<RefCell<WidgetId>>,
     },
@@ -44,14 +39,14 @@ pub enum WidgetRef {
 impl WidgetRef {
     pub fn new<W>(widget: W) -> Self
     where
-        W: IntoWidget,
+        W: Widget,
     {
         Self::new_with_key(None, widget)
     }
 
     pub fn new_with_key<W>(key: Option<WidgetKey>, widget: W) -> Self
     where
-        W: IntoWidget,
+        W: Widget,
     {
         let type_name = type_name::<W>();
 
@@ -133,7 +128,7 @@ impl WidgetRef {
 
     pub fn downcast_rc<W>(&self) -> Option<Rc<W>>
     where
-        W: IntoWidget,
+        W: Widget,
     {
         if let Self::Some { widget, .. } = self {
             Rc::clone(widget).downcast_rc::<W>().ok()
@@ -246,7 +241,7 @@ impl std::fmt::Display for WidgetRef {
 
 impl<W> From<W> for WidgetRef
 where
-    W: IntoWidget,
+    W: Widget,
 {
     fn from(widget: W) -> Self {
         WidgetRef::new(widget)

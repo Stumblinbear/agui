@@ -1,9 +1,13 @@
 use agui_core::{
     callback::Callback,
     render::canvas::paint::Paint,
-    unit::{Color, Key, Layout},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
+    unit::{Color, Layout, LayoutType},
+    widget::{
+        BuildContext, BuildResult, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
+        LayoutResult, WidgetRef, WidgetState, WidgetView,
+    },
 };
+use agui_macros::StatefulWidget;
 
 use crate::GestureDetector;
 
@@ -33,7 +37,7 @@ pub struct ButtonState {
     disabled: bool,
 }
 
-#[derive(Default, PartialEq)]
+#[derive(StatefulWidget, Default, PartialEq)]
 pub struct Button {
     pub layout: Layout,
     pub style: Option<ButtonStyle>,
@@ -43,8 +47,22 @@ pub struct Button {
     pub child: WidgetRef,
 }
 
-impl WidgetBuilder for Button {
+impl WidgetState for Button {
     type State = ButtonState;
+
+    fn create_state(&self) -> Self::State {
+        ButtonState::default()
+    }
+}
+
+impl WidgetView for Button {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout::clone(&self.layout),
+        }
+    }
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.on_draw(move |ctx, mut canvas| {
@@ -84,22 +102,13 @@ impl WidgetBuilder for Button {
             })
         });
 
-        BuildResult {
-            layout: Layout::clone(&self.layout),
+        BuildResult::from([GestureDetector {
+            on_hover,
+            on_pressed,
 
-            children: vec![ctx.key(
-                Key::single(),
-                GestureDetector {
-                    on_hover,
-                    on_pressed,
+            child: (&self.child).into(),
 
-                    child: (&self.child).into(),
-
-                    ..Default::default()
-                },
-            )],
-
-            ..BuildResult::default()
-        }
+            ..Default::default()
+        }])
     }
 }

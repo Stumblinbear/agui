@@ -1,18 +1,21 @@
 use agui_core::{
-    unit::{Layout, Margin, Sizing},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
+    unit::{Layout, LayoutType, Margin, Sizing},
+    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetRef, WidgetView},
 };
+use agui_macros::StatelessWidget;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(StatelessWidget, Debug, Default, PartialEq)]
 pub struct Padding {
     pub padding: Margin,
 
     pub child: WidgetRef,
 }
 
-impl WidgetBuilder for Padding {
-    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult {
+impl WidgetView for Padding {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
             layout: Layout {
                 sizing: Sizing::Fill,
 
@@ -20,10 +23,10 @@ impl WidgetBuilder for Padding {
 
                 ..Layout::default()
             },
-
-            children: vec![self.child.clone()],
-
-            ..BuildResult::default()
         }
+    }
+
+    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        BuildResult::from(&self.child)
     }
 }

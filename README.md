@@ -54,10 +54,10 @@ Docs for `agui` are under development, however you can check the `agui_agpu/exam
 
 ## Creating new widgets
 
-Currently, widgets are created using a `Widget` derive macro, and by implementing the `WidgetBuilder` trait.
+Currently, widgets are created using a `StatelessWidget` or `StatefulWidget` derive macro, and by implementing the `WidgetView` trait.
 
 ```rust
-#[derive(Default, Widget)]
+#[derive(Default, StatelessWidget)]
 pub struct MyWidget {
     // We can define parameters, here.
     pub layout: Layout,
@@ -66,12 +66,12 @@ pub struct MyWidget {
     pub child: WidgetRef,
 }
 
-impl WidgetBuilder for MyWidget {
+impl WidgetView for MyWidget {
     // Widgets can return nothing, one or more children, or an error. BuildResult is the enum we use to cover those possibilities.
     fn build(&self, ctx: &mut BuildContext) -> BuildResult {
         // `ctx.set_layout_type` is what we use to define this widget's layout type (row, column, grid).
         ctx.set_layout_type(LayoutType::Row);
-        
+
         // `ctx.set_layout` is what we use to define this widget's layout parameters.
         ctx.set_layout(Layout::clone(&self.layout));
 
@@ -120,13 +120,13 @@ A more complex widget implementation (featuring globals and computed values) can
 
 ## Functional widgets
 
-Functional widgets are an additional quality-of-life magic way of creating new widgets. Since widgets are *generally* just fields with a build function, we can usually use a single function which represents the `build` function.
+Functional widgets are an additional quality-of-life magic way of creating new widgets. Since widgets are _generally_ just fields with a build function, we can usually use a single function which represents the `build` function.
 
 ```rust
 #[functional_widget]
 fn example_widget(ctx: &BuildContext, layout: Layout, child: WidgetRef) -> BuildResult {
     ctx.set_layout(layout);
-    
+
     build!{
         Button {
             child: Text {

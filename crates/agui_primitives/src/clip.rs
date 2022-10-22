@@ -1,10 +1,11 @@
 use agui_core::{
     render::canvas::paint::Paint,
     unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
+    widget::{BuildContext, BuildResult, WidgetRef, WidgetView},
 };
+use agui_macros::StatelessWidget;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(StatelessWidget, Debug, Default, PartialEq)]
 pub struct Clip {
     pub rect: Option<Rect>,
 
@@ -14,7 +15,7 @@ pub struct Clip {
     pub child: WidgetRef,
 }
 
-impl WidgetBuilder for Clip {
+impl WidgetView for Clip {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         ctx.on_draw(|ctx, canvas| {
             let paint = Paint {

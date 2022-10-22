@@ -3,12 +3,14 @@ use std::{any::Any, panic::RefUnwindSafe};
 use agui_core::{
     render::canvas::paint::Paint,
     unit::{Color, FontStyle, Rect},
-    widget::{BuildContext, BuildResult, WidgetBuilder},
+    widget::{BuildContext, BuildResult, WidgetView},
 };
+use agui_macros::StatelessWidget;
 
 const ERROR_BORDER: f32 = 5.0;
 
 #[allow(clippy::type_complexity)]
+#[derive(StatelessWidget)]
 pub struct Fallible<Ok: 'static, Error: 'static> {
     pub func: Box<dyn Fn() -> Result<Ok, Error> + RefUnwindSafe>,
 
@@ -59,7 +61,7 @@ impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
     }
 }
 
-impl<Ok: 'static, Error: 'static> WidgetBuilder for Fallible<Ok, Error> {
+impl<Ok: 'static, Error: 'static> WidgetView for Fallible<Ok, Error> {
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         let result = std::panic::catch_unwind(&self.func);
 
@@ -119,15 +121,16 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, WidgetBuilder},
+        widget::{BuildContext, BuildResult, WidgetView},
     };
+    use agui_macros::StatelessWidget;
 
     use crate::Fallible;
 
-    #[derive(Debug, Default, PartialEq)]
+    #[derive(StatelessWidget, Debug, Default, PartialEq)]
     struct TestWidget {}
 
-    impl WidgetBuilder for TestWidget {
+    impl WidgetView for TestWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
             BuildResult::empty()
         }
@@ -141,7 +144,7 @@ mod tests {
                 |_, ok| {
                     assert_eq!(ok, 42, "should have received the correct value");
 
-                    BuildResult::with_children([TestWidget::default()])
+                    BuildResult::from([TestWidget::default()])
                 },
             )
             .on_err(|_, _| {
@@ -166,7 +169,7 @@ mod tests {
                     panic!("should not have been called");
                 },
             )
-            .on_err(|_, _| BuildResult::with_children([TestWidget::default()])),
+            .on_err(|_, _| BuildResult::from([TestWidget::default()])),
         );
 
         manager.update();
@@ -191,7 +194,7 @@ mod tests {
             .on_err(|_, _| {
                 panic!("should not have been called");
             })
-            .on_panic(|_, _| BuildResult::with_children([TestWidget::default()])),
+            .on_panic(|_, _| BuildResult::from([TestWidget::default()])),
         );
 
         manager.update();

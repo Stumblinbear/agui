@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use fnv::FnvHashSet;
 
 use morphorm::Cache;
+use slotmap::Key;
 
 use crate::{
     callback::CallbackQueue,
@@ -10,7 +11,7 @@ use crate::{
     query::WidgetQuery,
     unit::Units,
     util::{map::PluginMap, tree::Tree},
-    widget::{IntoWidget, WidgetId, WidgetRef},
+    widget::{Widget, WidgetId, WidgetRef, dispatch::WidgetEquality},
 };
 
 use self::{cache::LayoutCache, context::AguiContext, element::WidgetElement};
@@ -44,7 +45,7 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: IntoWidget,
+        W: Widget,
     {
         let mut manager = Self::new();
 
@@ -130,7 +131,7 @@ impl WidgetManager {
     /// Queues the widget for addition into the tree
     pub fn set_root<W>(&mut self, widget: W)
     where
-        W: IntoWidget,
+        W: Widget,
     {
         self.remove_root();
 
@@ -335,7 +336,10 @@ impl WidgetManager {
                     let span = tracing::debug_span!("spawn");
                     let _enter = span.enter();
 
-                    if let Some(widget_id) = self.process_spawn(widget_events, parent_id, widget) {
+                    // This `process_spawn` will only ever return `Created` or `Empty` because `existing_widget_id` is `None`
+                    if let SpawnResult::Created(widget_id) =
+                        self.process_spawn(widget_events, parent_id, widget, None)
+                    {
                         self.process_build(widget_events, widget_id);
                     }
                 }
@@ -517,9 +521,10 @@ impl WidgetManager {
         widget_events: &mut Vec<WidgetEvent>,
         parent_id: Option<WidgetId>,
         widget_ref: WidgetRef,
-    ) -> Option<WidgetId> {
+        existing_widget_id: Option<WidgetId>,
+    ) -> SpawnResult {
         if widget_ref.is_none() {
-            return None;
+            return SpawnResult::Empty;
         }
 
         // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
@@ -530,7 +535,38 @@ impl WidgetManager {
             );
         }
 
-        let widget_node = WidgetElement::new(widget_ref.clone())?;
+        // Grab the existing widget in the tree
+        if let Some(existing_widget_id) = existing_widget_id {
+            let existing_widget = self.widget_tree.get_mut(existing_widget_id).unwrap();
+
+            // Check the existing child against the new child to see what we can safely do about retaining
+            // its state
+            match existing_widget.is_similar(&widget_ref) {
+                WidgetEquality::Equal => {
+                    // Widget is exactly equal, we gain nothing by replacing or rebuilding it
+                    return SpawnResult::Retained {
+                        widget_id: existing_widget_id,
+                        needs_rebuild: false,
+                    };
+                }
+
+                WidgetEquality::Unequal => {
+                    // The widgets parameters have changed, but it is of the same type. All we need to do is
+                    // update the element to the new widget instance, retaining its state. However, this *does*
+                    // mean we have to queue it for a rebuild.
+                    let needs_rebuild = existing_widget.update(widget_ref);
+
+                    return SpawnResult::Retained {
+                        widget_id: existing_widget_id,
+                        needs_rebuild,
+                    };
+                }
+
+                _ => {}
+            }
+        }
+
+        let widget_node = WidgetElement::new(widget_ref.clone()).unwrap();
 
         tracing::trace!(
             parent_id = &format!("{:?}", parent_id),
@@ -549,7 +585,7 @@ impl WidgetManager {
 
         self.cache.add(widget_id);
 
-        Some(widget_id)
+        SpawnResult::Created(widget_id)
     }
 
     fn process_build(
@@ -572,7 +608,7 @@ impl WidgetManager {
                 .take(widget_id)
                 .expect("cannot build a widget that doesn't exist");
 
-            let mut result = widget.build(AguiContext {
+            widget.layout(AguiContext {
                 plugins: Some(&mut self.plugins),
                 tree: &self.widget_tree,
                 dirty: &mut self.dirty,
@@ -581,36 +617,40 @@ impl WidgetManager {
                 widget_id: Some(widget_id),
             });
 
+            let result = widget
+                .build(AguiContext {
+                    plugins: Some(&mut self.plugins),
+                    tree: &self.widget_tree,
+                    dirty: &mut self.dirty,
+                    callback_queue: self.callback_queue.clone(),
+
+                    widget_id: Some(widget_id),
+                })
+                .take();
+
             self.widget_tree.replace(widget_id, widget);
 
-            if result.children.is_empty() {
+            if result.is_empty() {
                 continue;
             }
 
-            for child_id in self.widget_tree.iter_children(widget_id) {
-                let child = self
-                    .widget_tree
-                    .get(child_id)
-                    .expect("child does not exist");
-
-                if child.is_similar(&result.children[0]) {
-                    retained_widgets.insert(child_id);
-
-                    result.children.pop();
-
-                    if result.children.is_empty() {
-                        break;
-                    }
-                } else {
-                    // Bail on the first widget that's not the same
-                    break;
-                }
-            }
+            let mut existing_child_idx = 0;
 
             // Spawn the child widgets
-            for child_ref in result.children {
+            for child_ref in result {
                 if child_ref.is_some() {
                     let child_id = child_ref.get_current_id();
+
+                    // If the child already has an identifier, we know that we don't own it, as any widget we DO own will
+                    // have been created anew and thus not have an identifier. If we do own it, we can attempt to retain
+                    // its state.
+                    let existing_child_id = if !child_id.is_null() {
+                        None
+                    } else {
+                        self.widget_tree.get_child(widget_id, existing_child_idx)
+                    };
+
+                    existing_child_idx += 1;
 
                     // If the widget already exists in the tree
                     if let Some(widget) = self.widget_tree.get(child_id) {
@@ -641,10 +681,28 @@ impl WidgetManager {
                     }
 
                     // Spawn the new widget and queue it for building
-                    if let Some(child_id) =
-                        self.process_spawn(widget_events, Some(widget_id), child_ref)
-                    {
-                        build_queue.push_back(child_id);
+                    match self.process_spawn(
+                        widget_events,
+                        Some(widget_id),
+                        child_ref,
+                        existing_child_id.cloned(),
+                    ) {
+                        SpawnResult::Retained {
+                            widget_id,
+                            needs_rebuild,
+                        } => {
+                            retained_widgets.insert(widget_id);
+
+                            if needs_rebuild {
+                                build_queue.push_back(widget_id);
+                            }
+                        }
+
+                        SpawnResult::Created(widget_id) => {
+                            build_queue.push_back(widget_id);
+                        }
+
+                        _ => {}
                     }
                 }
             }
@@ -704,16 +762,40 @@ enum Modify {
     Destroy(WidgetId),
 }
 
+enum SpawnResult {
+    Created(WidgetId),
+    Retained {
+        widget_id: WidgetId,
+        needs_rebuild: bool,
+    },
+    Empty,
+}
+
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
+    use agui_macros::StatelessWidget;
+
     use crate::{
         manager::{element::WidgetElement, events::WidgetEvent},
-        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
+        widget::{BuildContext, BuildResult, WidgetRef, WidgetView},
     };
 
     use super::WidgetManager;
 
     #[derive(Default)]
+    struct Built {
+        unretained: bool,
+        retained: bool,
+        nested_unretained: bool,
+    }
+
+    thread_local! {
+        static BUILT: RefCell<Built> = RefCell::default();
+    }
+
+    #[derive(Default, StatelessWidget)]
     struct TestUnretainedWidget {
         pub children: Vec<WidgetRef>,
     }
@@ -724,24 +806,32 @@ mod tests {
         }
     }
 
-    impl WidgetBuilder for TestUnretainedWidget {
+    impl WidgetView for TestUnretainedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+            BUILT.with(|built| {
+                built.borrow_mut().unretained = true;
+            });
+
             (&self.children).into()
         }
     }
 
-    #[derive(Default, PartialEq)]
+    #[derive(StatelessWidget, Default, PartialEq)]
     struct TestRetainedWidget {
         pub children: Vec<WidgetRef>,
     }
 
-    impl WidgetBuilder for TestRetainedWidget {
+    impl WidgetView for TestRetainedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+            BUILT.with(|built| {
+                built.borrow_mut().retained = true;
+            });
+
             (&self.children).into()
         }
     }
 
-    #[derive(Default)]
+    #[derive(StatelessWidget, Default)]
     struct TestNestedUnretainedWidget {
         pub children: Vec<WidgetRef>,
     }
@@ -752,34 +842,28 @@ mod tests {
         }
     }
 
-    impl WidgetBuilder for TestNestedUnretainedWidget {
+    impl WidgetView for TestNestedUnretainedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-            BuildResult {
-                children: vec![TestUnretainedWidget {
-                    children: self.children.clone(),
-                }
-                .into()],
+            BUILT.with(|built| {
+                built.borrow_mut().nested_unretained = true;
+            });
 
-                ..BuildResult::default()
-            }
+            BuildResult::from([TestUnretainedWidget {
+                children: self.children.clone(),
+            }])
         }
     }
 
-    #[derive(Default, PartialEq)]
+    #[derive(StatelessWidget, Default, PartialEq)]
     struct TestNestedRetainedWidget {
         pub children: Vec<WidgetRef>,
     }
 
-    impl WidgetBuilder for TestNestedRetainedWidget {
+    impl WidgetView for TestNestedRetainedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-            BuildResult {
-                children: vec![TestRetainedWidget {
-                    children: self.children.clone(),
-                }
-                .into()],
-
-                ..BuildResult::default()
-            }
+            BuildResult::from([TestUnretainedWidget {
+                children: self.children.clone(),
+            }])
         }
     }
 
@@ -1027,9 +1111,11 @@ mod tests {
 
         manager.mark_dirty(root_id);
 
-        let events = manager.update();
+        BUILT.with(|built| {
+            *built.borrow_mut() = Built::default();
+        });
 
-        let new_children = manager.get_widgets().get_children(root_id).unwrap().clone();
+        let events = manager.update();
 
         assert_eq!(old_children.len(), 1, "root should still have one child");
 
@@ -1041,35 +1127,14 @@ mod tests {
             "should have generated rebuild event for the root widget"
         );
 
-        assert_eq!(
-            old_children
-                .iter()
-                .filter(|child_id| new_children.contains(*child_id))
-                .count(),
-            0,
-            "should not have retained any children"
-        );
-
-        for i in 0..(new_children.len()) {
-            assert_eq!(
-                events[i + 1],
-                WidgetEvent::Spawned {
-                    parent_id: Some(root_id),
-                    widget_id: new_children[i]
-                },
-                "should have generated a spawned event for all new children"
+        BUILT.with(|built| {
+            assert!(
+                built.borrow().nested_unretained,
+                "should have rebuilt the root"
             );
-        }
 
-        for i in 0..(old_children.len()) {
-            assert_eq!(
-                events[i + 1 + new_children.len()],
-                WidgetEvent::Destroyed {
-                    widget_id: old_children[i]
-                },
-                "should have generated a destroyed event for all previous children"
-            );
-        }
+            assert!(built.borrow().unretained, "should have rebuilt the child");
+        });
     }
 
     #[test]
@@ -1108,64 +1173,6 @@ mod tests {
         assert_eq!(
             root_child_id, new_root_child_id,
             "root widget should not have regenerated its first child"
-        );
-
-        assert_ne!(events.len(), 0, "should generate events");
-    }
-
-    #[test]
-    pub fn reuses_unchanged_widget_refs() {
-        let mut manager = WidgetManager::new();
-
-        manager.set_root(TestNestedUnretainedWidget {
-            children: vec![WidgetRef::from(TestUnretainedWidget::default())],
-        });
-
-        manager.update();
-
-        let root_id = manager.get_root().unwrap();
-        let root_child_id = *manager
-            .get_widgets()
-            .get_children(root_id)
-            .unwrap()
-            .first()
-            .unwrap();
-        let nested_children_ids = manager
-            .get_widgets()
-            .get_children(root_child_id)
-            .unwrap()
-            .clone();
-
-        manager.mark_dirty(root_id);
-
-        let events = manager.update();
-
-        let new_root_id = manager.get_root().unwrap();
-        let new_root_child_id = *manager
-            .get_widgets()
-            .get_children(root_id)
-            .unwrap()
-            .first()
-            .unwrap();
-        let new_nested_children_ids = manager
-            .get_widgets()
-            .get_children(new_root_child_id)
-            .unwrap()
-            .clone();
-
-        assert_eq!(
-            root_id, new_root_id,
-            "root widget should have remained unchanged"
-        );
-
-        assert_ne!(
-            root_child_id, new_root_child_id,
-            "root widget should have regenerated its first child"
-        );
-
-        assert_eq!(
-            nested_children_ids, new_nested_children_ids,
-            "nested children should have remained unchanged"
         );
 
         assert_ne!(events.len(), 0, "should generate events");

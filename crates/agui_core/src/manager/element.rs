@@ -5,7 +5,7 @@ use crate::{
     manager::context::AguiContext,
     render::canvas::Canvas,
     unit::{Data, Layout, LayoutType, Rect},
-    widget::{BuildResult, IntoWidget, WidgetDispatch, WidgetKey, WidgetRef},
+    widget::{dispatch::{WidgetDispatch, WidgetEquality}, BuildResult, Widget, WidgetRef, key::WidgetKey},
 };
 
 pub struct WidgetElement {
@@ -71,7 +71,11 @@ impl WidgetElement {
         self.canvas.as_ref()
     }
 
-    pub fn is_similar(&self, other: &WidgetRef) -> bool {
+    pub fn update(&mut self, other: WidgetRef) -> bool {
+        self.dispatch.update(other)
+    }
+
+    pub fn is_similar(&self, other: &WidgetRef) -> WidgetEquality {
         self.dispatch.is_similar(other)
     }
 
@@ -82,13 +86,15 @@ impl WidgetElement {
         self.dispatch.downcast_ref()
     }
 
+    pub(crate) fn layout(&mut self, ctx: AguiContext) {
+        let layout = self.dispatch.layout(ctx);
+
+        self.layout_type = layout.layout_type;
+        self.layout = layout.layout;
+    }
+
     pub(crate) fn build(&mut self, ctx: AguiContext) -> BuildResult {
-        let result = self.dispatch.build(ctx);
-
-        self.layout_type = result.layout_type;
-        self.layout = result.layout;
-
-        result
+        self.dispatch.build(ctx)
     }
 
     /// Causes the widget to redraw its canvas. Returns a `bool` indicating if the canvas changed or not.
@@ -129,7 +135,7 @@ impl std::fmt::Display for WidgetElement {
 
 impl<W> From<W> for WidgetElement
 where
-    W: IntoWidget,
+    W: Widget,
 {
     fn from(widget: W) -> Self {
         WidgetElement::new(widget.into()).unwrap()

@@ -1,9 +1,10 @@
 use agui_core::{
-    unit::{Layout, Sizing, Units},
-    widget::{BuildContext, BuildResult, WidgetBuilder},
+    unit::{Layout, LayoutType, Sizing, Units},
+    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetView},
 };
+use agui_macros::StatelessWidget;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(StatelessWidget, Debug, Default, PartialEq)]
 pub struct Spacing(pub Sizing);
 
 impl Spacing {
@@ -26,15 +27,19 @@ impl Spacing {
     }
 }
 
-impl WidgetBuilder for Spacing {
-    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult {
+impl WidgetView for Spacing {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
             layout: Layout {
                 sizing: self.0,
                 ..Layout::default()
             },
-
-            ..BuildResult::default()
         }
+    }
+
+    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        BuildResult::empty()
     }
 }

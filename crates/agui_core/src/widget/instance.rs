@@ -16,11 +16,13 @@ use crate::{
     unit::{Data, Rect},
 };
 
-use crate::widget::{BuildContext, BuildResult, WidgetBuilder, WidgetDispatch, WidgetRef};
+use crate::widget::{BuildContext, BuildResult, WidgetDispatch, WidgetRef, WidgetView};
+
+use super::{dispatch::WidgetEquality, LayoutContext, LayoutResult, WidgetState};
 
 pub struct WidgetInstance<W>
 where
-    W: WidgetBuilder,
+    W: WidgetView + WidgetState,
 {
     widget: Rc<W>,
     state: W::State,
@@ -32,43 +34,68 @@ where
 
 impl<W> WidgetInstance<W>
 where
-    W: WidgetBuilder,
+    W: WidgetView + WidgetState,
 {
     pub fn new(widget: Rc<W>) -> Self {
+        let state = widget.create_state();
+
         Self {
             widget,
-            state: W::State::default(),
+            state,
 
             renderer: None,
 
             callbacks: FnvHashMap::default(),
         }
     }
-}
 
-impl<W> WidgetInstance<W>
-where
-    W: WidgetBuilder,
-{
     pub fn get_widget(&self) -> &W {
         &self.widget
-    }
-
-    pub fn get_state(&self) -> &W::State {
-        &self.state
     }
 }
 
 impl<W> WidgetDispatch for WidgetInstance<W>
 where
-    W: WidgetBuilder,
+    W: WidgetView + WidgetState,
 {
-    fn is_similar(&self, other: &WidgetRef) -> bool {
+    fn is_similar(&self, other: &WidgetRef) -> WidgetEquality {
         if let Some(other) = other.downcast_rc::<W>() {
-            self.widget == other
+            if self.widget == other {
+                WidgetEquality::Equal
+            } else {
+                WidgetEquality::Unequal
+            }
         } else {
-            false
+            WidgetEquality::Invalid
         }
+    }
+
+    fn update(&mut self, other: WidgetRef) -> bool {
+        let other = other
+            .downcast_rc::<W>()
+            .expect("cannot update a widget instance with a different type");
+
+        let needs_build = self.widget.updated(&other);
+
+        self.widget = other;
+
+        needs_build
+    }
+
+    fn layout(&mut self, ctx: AguiContext) -> LayoutResult {
+        let span = tracing::error_span!("layout");
+        let _enter = span.enter();
+
+        let mut ctx = LayoutContext {
+            plugins: ctx.plugins.unwrap(),
+            widget_tree: ctx.tree,
+
+            widget_id: ctx.widget_id.unwrap(),
+            widget: self.widget.as_ref(),
+            state: &mut self.state,
+        };
+
+        self.widget.layout(&mut ctx)
     }
 
     fn build(&mut self, ctx: AguiContext) -> BuildResult {
@@ -130,6 +157,7 @@ where
                 dirty: ctx.dirty,
                 callback_queue: ctx.callback_queue,
 
+                widget_id: ctx.widget_id.unwrap(),
                 widget: self.widget.as_ref(),
                 state: &mut self.state,
 
@@ -152,7 +180,7 @@ where
 
 impl<W> std::fmt::Debug for WidgetInstance<W>
 where
-    W: WidgetBuilder + std::fmt::Debug,
+    W: WidgetView + WidgetState + std::fmt::Debug,
     <W>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

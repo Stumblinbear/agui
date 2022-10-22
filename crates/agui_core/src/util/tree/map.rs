@@ -177,6 +177,12 @@ where
             .and_then(|node| node.parent.as_ref())
     }
 
+    pub fn get_child(&self, node_id: K, idx: usize) -> Option<&K> {
+        self.nodes
+            .get(node_id)
+            .and_then(|node| node.children.get(idx))
+    }
+
     pub fn get_children(&self, node_id: K) -> Option<&Vec<K>> {
         self.nodes.get(node_id).map(|node| &node.children)
     }

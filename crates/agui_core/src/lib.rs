@@ -6,7 +6,6 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![warn(clippy::clone_on_ref_ptr)]
-#![feature(associated_type_defaults)]
 
 // #![warn(missing_docs)]
 

@@ -11,7 +11,7 @@ use agui_core::{
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
-    widget::{BuildContext, WidgetBuilder, WidgetContext, WidgetId},
+    widget::{BuildContext, ContextPlugins, ContextWidget, WidgetId, WidgetView},
 };
 
 #[derive(Debug, Default)]
@@ -178,7 +178,7 @@ pub trait ProviderPluginExt {
 
 impl<'ctx, W> ProviderPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetView,
 {
     /// Makes some local widget state available to any child widget.
     fn provide<V, F>(&mut self, func: F) -> Provided<V>
@@ -212,7 +212,7 @@ pub trait ConsumerPluginExt {
 
 impl<'ctx, W> ConsumerPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetBuilder,
+    W: WidgetView,
 {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Provided<V>>
@@ -295,27 +295,31 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::any::TypeId;
+    use std::{any::TypeId, cell::RefCell};
 
     use agui_core::{
         manager::WidgetManager,
-        query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
+        widget::{BuildContext, BuildResult, WidgetRef, WidgetState, WidgetView},
     };
+    use agui_macros::{StatefulWidget, StatelessWidget};
 
     use crate::plugins::{
-        global::{GlobalPlugin, GlobalPluginExt},
+        global::{ContextGlobalPluginExt, GlobalPlugin, GlobalPluginExt},
         provider::ProviderPlugin,
     };
 
     use super::{ConsumerPluginExt, ProviderPluginExt};
 
-    #[derive(Default, PartialEq)]
+    thread_local! {
+        pub static STATE: RefCell<Vec<u32>> = RefCell::default();
+    }
+
+    #[derive(StatelessWidget, Default, PartialEq)]
     struct TestWidgetProvider {
         child: WidgetRef,
     }
 
-    impl WidgetBuilder for TestWidgetProvider {
+    impl WidgetView for TestWidgetProvider {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             let global = ctx.get_global::<u32>();
 
@@ -327,17 +331,23 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Debug, Default, PartialEq)]
+    #[derive(StatefulWidget, Clone, Debug, Default, PartialEq)]
     struct TestWidgetConsumer;
 
-    impl WidgetBuilder for TestWidgetConsumer {
+    impl WidgetState for TestWidgetConsumer {
         type State = u32;
 
+        fn create_state(&self) -> Self::State {
+            0
+        }
+    }
+
+    impl WidgetView for TestWidgetConsumer {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             let consumed = ctx.consume::<u32>().expect("failed to consume");
 
-            ctx.set_state(move |value| {
-                *value = *consumed.borrow();
+            STATE.with(|f| {
+                f.borrow_mut().push(*consumed.borrow());
             });
 
             BuildResult::empty()
@@ -413,45 +423,32 @@ mod tests {
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestWidgetConsumer>()
-                .next()
-                .unwrap()
-                .get_state(),
-            0,
-            "consumer should have taken the value provided"
-        );
+        STATE.with(|f| {
+            assert_eq!(f.borrow()[0], 0, "should have taken the default value");
+        });
 
         manager.set_global::<u32, _>(|state| *state = 1);
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestWidgetConsumer>()
-                .next()
-                .unwrap()
-                .get_state(),
-            1,
-            "widget should have taken global value after rebuild"
-        );
+        STATE.with(|f| {
+            assert_eq!(
+                f.borrow()[1],
+                1,
+                "widget should have taken global value after rebuild"
+            );
+        });
 
         manager.set_global::<u32, _>(|state| *state = 7);
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestWidgetConsumer>()
-                .next()
-                .unwrap()
-                .get_state(),
-            7,
-            "widget should have taken the new global value after rebuild"
-        );
+        STATE.with(|f| {
+            assert_eq!(
+                f.borrow()[2],
+                7,
+                "widget should have taken the new global value after rebuild"
+            );
+        });
     }
 }

@@ -1,4 +1,4 @@
-use agui_core::{manager::element::WidgetElement, widget::WidgetInstance};
+use agui_core::{manager::element::WidgetElement, widget::instance::WidgetInstance};
 
 use crate::Text;
 

@@ -3,39 +3,33 @@ use crate::unit::{Layout, LayoutType};
 use super::WidgetRef;
 
 #[derive(Default)]
-pub struct BuildResult {
+pub struct LayoutResult {
     pub layout_type: LayoutType,
     pub layout: Layout,
-
-    pub children: Vec<WidgetRef>,
 }
+
+#[derive(Default)]
+pub struct BuildResult(Vec<WidgetRef>);
 
 impl BuildResult {
     pub fn empty() -> Self {
         Self::default()
     }
 
-    pub fn with_children<W>(children: impl IntoIterator<Item = W>) -> Self
-    where
-        W: Into<WidgetRef>,
-    {
-        Self {
-            children: children.into_iter().map(|w| w.into()).collect(),
-
-            ..Self::default()
-        }
+    pub(crate) fn take(self) -> Vec<WidgetRef> {
+        self.0
     }
 }
 
 impl From<WidgetRef> for BuildResult {
     fn from(widget: WidgetRef) -> Self {
-        BuildResult::with_children([widget])
+        BuildResult::from([widget])
     }
 }
 
 impl From<&WidgetRef> for BuildResult {
     fn from(widget: &WidgetRef) -> Self {
-        BuildResult::with_children([widget])
+        BuildResult::from([widget])
     }
 }
 
@@ -45,6 +39,6 @@ where
     I: IntoIterator<Item = W>,
 {
     fn from(iter: I) -> Self {
-        BuildResult::with_children(iter)
+        BuildResult(iter.into_iter().map(|w| w.into()).collect())
     }
 }

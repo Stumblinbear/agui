@@ -1,4 +1,4 @@
-use crate::widget::WidgetBuilder;
+use crate::widget::{Widget, WidgetState};
 
 use super::{
     canvas::painter::{CanvasPainter, Head},
@@ -7,7 +7,7 @@ use super::{
 
 pub struct RenderFn<W>
 where
-    W: WidgetBuilder,
+    W: Widget + WidgetState,
 {
     #[allow(clippy::type_complexity)]
     func: Box<dyn Fn(&RenderContext<W>, CanvasPainter<Head>)>,
@@ -15,7 +15,7 @@ where
 
 impl<W> RenderFn<W>
 where
-    W: WidgetBuilder,
+    W: Widget + WidgetState,
 {
     pub fn new<F>(func: F) -> Self
     where

@@ -1,47 +1,22 @@
 use crate::{
-    callback::{Callback, CallbackId},
+    callback::{Callback, CallbackId, CallbackContext},
     manager::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::Data,
     util::{map::PluginMap, tree::Tree},
-    widget::{WidgetBuilder, WidgetId},
+    widget::{Widget, WidgetId},
 };
 
 mod build;
+mod layout;
 
 pub use build::*;
+pub use layout::*;
 
-pub trait WidgetContext<W>
-where
-    W: WidgetBuilder,
-{
-    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin>;
+use super::WidgetState;
 
-    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
-    where
-        P: PluginImpl;
-
-    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
-    where
-        P: PluginImpl;
-
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement>;
-
+pub trait ContextMut {
     fn mark_dirty(&mut self, widget_id: WidgetId);
-
-    // fn depend_on<D>(&mut self) -> Option<&D::State>
-    // where
-    //     D: WidgetBuilder;
-
-    fn get_widget(&self) -> &W;
-
-    fn get_state(&self) -> &W::State;
-
-    fn get_state_mut(&mut self) -> &mut W::State;
-
-    fn set_state<F>(&mut self, func: F)
-    where
-        F: FnOnce(&mut W::State);
 
     fn call<A>(&mut self, callback: &Callback<A>, arg: A)
     where
@@ -62,4 +37,46 @@ where
     /// You must ensure the callbacks are expecting the type of the `arg` passed in. If the type
     /// is different, it will panic.
     unsafe fn call_many_unsafe(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>);
+}
+
+pub trait ContextPlugins {
+    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin>;
+
+    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
+    where
+        P: PluginImpl;
+
+    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
+    where
+        P: PluginImpl;
+}
+
+pub trait ContextWidget {
+    type Widget: Widget;
+
+    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement>;
+
+    fn get_widget_id(&self) -> WidgetId;
+
+    fn get_widget(&self) -> &Self::Widget;
+}
+
+pub trait ContextStatefulWidget: ContextWidget
+where
+    Self::Widget: WidgetState,
+{
+    fn get_state(&self) -> &<Self::Widget as WidgetState>::State;
+
+    fn get_state_mut(&mut self) -> &mut <Self::Widget as WidgetState>::State;
+
+    fn set_state<F>(&mut self, func: F)
+    where
+        F: FnOnce(&mut <Self::Widget as WidgetState>::State);
+}
+
+pub trait ContextWidgetMut: ContextWidget {
+    fn callback<A, F>(&mut self, func: F) -> Callback<A>
+    where
+        A: Data,
+        F: Fn(&mut CallbackContext<Self::Widget>, &A) + 'static;
 }

@@ -2,7 +2,7 @@ use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
     unit::Data,
-    widget::{WidgetBuilder, WidgetId},
+    widget::{Widget, WidgetId},
 };
 
 mod context;
@@ -69,7 +69,7 @@ where
 {
     pub(crate) fn new<F, W>(widget_id: WidgetId, callback_queue: CallbackQueue) -> Self
     where
-        W: WidgetBuilder,
+        W: Widget,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
         Self {
@@ -128,10 +128,12 @@ where
 mod tests {
     use std::cell::RefCell;
 
+    use agui_macros::StatelessWidget;
+
     use crate::{
         callback::Callback,
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetRef},
+        widget::{BuildContext, BuildResult, ContextWidgetMut, WidgetRef, WidgetView},
     };
 
     thread_local! {
@@ -139,7 +141,7 @@ mod tests {
         pub static RESULT: RefCell<Vec<u32>> = RefCell::default();
     }
 
-    #[derive(Default)]
+    #[derive(Default, StatelessWidget)]
     struct TestWidget {
         children: Vec<WidgetRef>,
     }
@@ -150,7 +152,7 @@ mod tests {
         }
     }
 
-    impl WidgetBuilder for TestWidget {
+    impl WidgetView for TestWidget {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
             let callback = ctx.callback::<u32, _>(|_ctx, val| {
                 RESULT.with(|f| {

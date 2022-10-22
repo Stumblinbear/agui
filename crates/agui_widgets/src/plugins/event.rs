@@ -6,7 +6,7 @@ use agui_core::{
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, WidgetBuilder, WidgetContext},
+    widget::{ContextPlugins, ContextWidgetMut, Widget, WidgetState},
 };
 
 #[derive(Debug, Default)]
@@ -96,20 +96,6 @@ pub trait EventPluginExt {
         E: Data;
 }
 
-pub trait EventPluginContextExt<W>
-where
-    W: WidgetBuilder,
-{
-    fn listen_to<E, F>(&mut self, func: F)
-    where
-        E: Data,
-        F: Fn(&mut CallbackContext<W>, &E) + 'static;
-
-    fn fire_event<E>(&mut self, event: E)
-    where
-        E: Data;
-}
-
 impl EventPluginExt for WidgetManager {
     fn fire_event<E>(&mut self, event: E)
     where
@@ -121,9 +107,24 @@ impl EventPluginExt for WidgetManager {
     }
 }
 
-impl<'ctx, W> EventPluginContextExt<W> for BuildContext<'ctx, W>
+pub trait ContextEventPluginExt<W>
 where
-    W: WidgetBuilder,
+    W: Widget + WidgetState,
+{
+    fn listen_to<E, F>(&mut self, func: F)
+    where
+        E: Data,
+        F: Fn(&mut CallbackContext<W>, &E) + 'static;
+
+    fn fire_event<E>(&mut self, event: E)
+    where
+        E: Data;
+}
+
+impl<C, W> ContextEventPluginExt<W> for C
+where
+    C: ContextPlugins + ContextWidgetMut<Widget = W>,
+    W: Widget + WidgetState,
 {
     fn listen_to<E, F>(&mut self, func: F)
     where
@@ -149,29 +150,39 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::any::TypeId;
+    use std::{any::TypeId, cell::RefCell};
 
     use agui_core::{
         manager::WidgetManager,
-        query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext},
+        widget::{BuildContext, BuildResult, WidgetState, WidgetView},
     };
+    use agui_macros::StatefulWidget;
     use agui_primitives::Column;
 
     use crate::plugins::event::{EventPlugin, EventPluginExt};
 
-    use super::EventPluginContextExt;
+    use super::ContextEventPluginExt;
 
-    #[derive(Clone, Debug, Default, PartialEq)]
+    thread_local! {
+        pub static STATE: RefCell<Vec<u32>> = RefCell::default();
+    }
+
+    #[derive(StatefulWidget, Clone, Debug, Default, PartialEq)]
     struct TestListener {}
 
-    impl WidgetBuilder for TestListener {
+    impl WidgetState for TestListener {
         type State = u32;
 
+        fn create_state(&self) -> Self::State {
+            0
+        }
+    }
+
+    impl WidgetView for TestListener {
         fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-            ctx.listen_to::<u32, _>(|ctx, event| {
-                ctx.set_state(|state| {
-                    *state = *event;
+            ctx.listen_to::<u32, _>(|_, event| {
+                STATE.with(|f| {
+                    f.borrow_mut().push(*event);
                 });
             });
 
@@ -249,31 +260,13 @@ mod tests {
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestListener>()
-                .next()
-                .unwrap()
-                .get_state(),
-            0,
-            "initial state should be zero"
-        );
-
         manager.fire_event(7_u32);
 
         manager.update();
 
-        assert_eq!(
-            *manager
-                .query()
-                .by_type::<TestListener>()
-                .next()
-                .unwrap()
-                .get_state(),
-            7,
-            "state should have updated to the event's value"
-        );
+        STATE.with(|f| {
+            assert_eq!(f.borrow()[0], 7, "widget should have received event");
+        });
     }
 
     #[test]
@@ -291,24 +284,13 @@ mod tests {
 
         manager.update();
 
-        for widget in manager.query().by_type::<TestListener>() {
-            assert_eq!(
-                *widget.get_state(),
-                0,
-                "state should have updated to the event's value"
-            );
-        }
-
         manager.fire_event(7_u32);
 
         manager.update();
 
-        for widget in manager.query().by_type::<TestListener>() {
-            assert_eq!(
-                *widget.get_state(),
-                7,
-                "state should have updated to the event's value"
-            );
-        }
+        STATE.with(|f| {
+            assert_eq!(f.borrow()[0], 7, "first widget should have received event");
+            assert_eq!(f.borrow()[1], 7, "second widget should have received event");
+        });
     }
 }

@@ -1,15 +1,18 @@
 use agui_core::{
     callback::Callback,
-    unit::{Layout, Sizing},
-    widget::{BuildContext, BuildResult, WidgetBuilder, WidgetContext, WidgetRef},
+    unit::{Layout, LayoutType, Sizing},
+    widget::{
+        BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetRef, WidgetState, WidgetView,
+    },
 };
+use agui_macros::StatefulWidget;
 
 use crate::{
-    plugins::{event::EventPluginContextExt, global::GlobalPluginExt},
-    state::mouse::{MouseButton, MouseButtonState, MousePos},
+    plugins::{event::ContextEventPluginExt, global::ContextGlobalPluginExt},
+    state::mouse::{MouseButton, MousePos},
 };
 
-#[derive(Default, PartialEq)]
+#[derive(StatefulWidget, Default, PartialEq)]
 pub struct GestureDetector {
     pub on_hover: Callback<bool>,
     pub on_pressed: Callback<bool>,
@@ -27,8 +30,25 @@ pub struct GestureState {
     focused: bool,
 }
 
-impl WidgetBuilder for GestureDetector {
+impl WidgetState for GestureDetector {
     type State = GestureState;
+
+    fn create_state(&self) -> Self::State {
+        GestureState::default()
+    }
+}
+
+impl WidgetView for GestureDetector {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Default::default()
+            },
+        }
+    }
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
         // Allow us to carry over the focused state through rebuilds
@@ -124,15 +144,6 @@ impl WidgetBuilder for GestureDetector {
             });
         }
 
-        BuildResult {
-            layout: Layout {
-                sizing: Sizing::Fill,
-                ..Default::default()
-            },
-
-            children: vec![self.child.clone()],
-
-            ..BuildResult::default()
-        }
+        BuildResult::from(&self.child)
     }
 }
