@@ -1,7 +1,12 @@
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    fs::File,
+    io::{self, BufReader, Read},
+};
 
 use fnv::FnvHashSet;
 
+use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
 use slotmap::Key;
 
@@ -9,9 +14,9 @@ use crate::{
     callback::CallbackQueue,
     plugin::{BoxedPlugin, IntoPlugin, PluginElement, PluginId, PluginImpl},
     query::WidgetQuery,
-    unit::Units,
+    unit::{Font, Units},
     util::{map::PluginMap, tree::Tree},
-    widget::{Widget, WidgetId, WidgetRef, dispatch::WidgetEquality},
+    widget::{dispatch::WidgetEquality, Widget, WidgetId, WidgetRef},
 };
 
 use self::{cache::LayoutCache, context::AguiContext, element::WidgetElement};
@@ -36,6 +41,8 @@ pub struct WidgetManager {
     cache: LayoutCache<WidgetId>,
 
     modifications: VecDeque<Modify>,
+
+    fonts: Vec<FontArc>,
 }
 
 impl WidgetManager {
@@ -104,6 +111,35 @@ impl WidgetManager {
         );
 
         self.plugins.insert(plugin_id, plugin);
+    }
+
+    pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
+        let f = File::open(filename)?;
+
+        let mut reader = BufReader::new(f);
+
+        let mut bytes = Vec::new();
+
+        reader.read_to_end(&mut bytes)?;
+
+        let font = FontArc::try_from_vec(bytes)
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+
+        Ok(self.load_font(font))
+    }
+
+    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<Font, InvalidFont> {
+        let font = FontArc::try_from_slice(bytes)?;
+
+        Ok(self.load_font(font))
+    }
+
+    pub fn load_font(&mut self, font: FontArc) -> Font {
+        let font_id = self.fonts.len();
+
+        self.fonts.push(font.clone());
+
+        Font(font_id, Some(font))
     }
 
     /// Get the widget tree.

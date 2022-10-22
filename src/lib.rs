@@ -11,11 +11,6 @@ pub mod widgets {
     pub use agui_widgets::*;
 }
 
-#[cfg(feature = "macros")]
-pub mod macros {
-    pub use agui_macros::*;
-}
-
 pub mod prelude {
     pub use agui_core::{
         callback::Callback,
@@ -24,4 +19,7 @@ pub mod prelude {
         unit::*,
         widget::*,
     };
+
+    #[cfg(feature = "macros")]
+    pub use agui_macros::*;
 }

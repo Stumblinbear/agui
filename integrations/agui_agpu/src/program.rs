@@ -2,16 +2,16 @@ use std::ops::{Deref, DerefMut};
 
 use agpu::GpuProgram;
 
-use crate::ui::UI;
+use crate::ui::Agui;
 
-pub struct UIProgram {
+pub struct AguiProgram {
     program: GpuProgram,
 
-    ui: UI,
+    ui: Agui,
 }
 
-impl UIProgram {
-    pub fn new(title: &str) -> Result<UIProgram, agpu::BoxError> {
+impl AguiProgram {
+    pub fn new(title: &str) -> Result<AguiProgram, agpu::BoxError> {
         Ok(Self::from(
             agpu::GpuProgram::builder(title)
                 .with_framerate(f32::MAX)
@@ -20,7 +20,7 @@ impl UIProgram {
     }
 
     pub fn from(program: GpuProgram) -> Self {
-        let ui = UI::from_program(&program);
+        let ui = Agui::from_program(&program);
 
         Self { program, ui }
     }
@@ -32,15 +32,15 @@ impl UIProgram {
     }
 }
 
-impl Deref for UIProgram {
-    type Target = UI;
+impl Deref for AguiProgram {
+    type Target = Agui;
 
     fn deref(&self) -> &Self::Target {
         &self.ui
     }
 }
 
-impl DerefMut for UIProgram {
+impl DerefMut for AguiProgram {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.ui
     }

@@ -27,12 +27,12 @@ use glyph_brush_draw_cache::ab_glyph::InvalidFont;
 
 use crate::manager::RenderManager;
 
-pub struct UI {
+pub struct Agui {
     manager: WidgetManager,
     renderer: RenderManager,
 }
 
-impl Deref for UI {
+impl Deref for Agui {
     type Target = WidgetManager;
 
     fn deref(&self) -> &Self::Target {
@@ -40,13 +40,13 @@ impl Deref for UI {
     }
 }
 
-impl DerefMut for UI {
+impl DerefMut for Agui {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.manager
     }
 }
 
-impl UI {
+impl Agui {
     pub fn from_program(program: &GpuProgram) -> Self {
         let surface = program.viewport.sc_desc.borrow();
 
@@ -81,7 +81,7 @@ impl UI {
     }
 
     pub fn handle_event(&mut self, event: Event<'_, ()>, program: &GpuProgram) {
-        if let Some(_widget_events) = self.manager.update() {
+        if !self.manager.update().is_empty() {
             self.redraw();
 
             // If the program is not already demanding a specific framerate, request a redraw

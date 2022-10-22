@@ -6,7 +6,6 @@ use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
-    macros::{build, functional_widget},
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
@@ -14,7 +13,7 @@ use agui::{
         App,
     },
 };
-use agui_agpu::UIProgram;
+use agui_agpu::AguiProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
     let filter = EnvFilter::from_default_env()
@@ -29,19 +28,15 @@ fn main() -> Result<(), agpu::BoxError> {
         .with_env_filter(filter)
         .init();
 
-    let mut ui = UIProgram::new("agui os info")?;
+    let mut ui = AguiProgram::new("agui os info")?;
 
     ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build! {
-        App {
-            child: ExampleMain {
-                font: deja_vu
-            }
-        }
+    ui.set_root(App {
+        child: ExampleMain { font: deja_vu }.into(),
     });
 
     ui.run()
@@ -63,83 +58,98 @@ pub struct SystemInfo {
     processors: usize,
 }
 
-type OptSystem = Option<SystemInfo>;
-
-#[functional_widget(OptSystem)]
-fn example_main(
-    ctx: &mut BuildContext,
+#[derive(StatefulWidget, PartialEq)]
+struct ExampleMain {
     font: Font,
-    _color: Color,
-    _child: WidgetRef,
-) -> BuildResult {
-    ctx.set_layout(Layout {
-        sizing: Sizing::Fill,
-        ..Layout::default()
-    });
+}
 
-    let callback = ctx.callback::<System, _>(|ctx, system| {
-        ctx.set_state(|state| {
-            state.replace(SystemInfo {
-                total_memory: system.total_memory(),
-                used_memory: system.used_memory(),
+impl WidgetState for ExampleMain {
+    type State = Option<SystemInfo>;
 
-                total_swap: system.total_swap(),
-                used_swap: system.used_swap(),
+    fn create_state(&self) -> Self::State {
+        None
+    }
+}
 
-                name: system.name().unwrap_or_else(|| "---".into()),
-                kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
-                os_version: system.os_version().unwrap_or_else(|| "---".into()),
-                host_name: system.host_name().unwrap_or_else(|| "---".into()),
+impl WidgetView for ExampleMain {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
 
-                processors: system.processors().len(),
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Layout::default()
+            },
+        }
+    }
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        let callback = ctx.callback::<System, _>(|ctx, system| {
+            ctx.set_state(|state| {
+                state.replace(SystemInfo {
+                    total_memory: system.total_memory(),
+                    used_memory: system.used_memory(),
+
+                    total_swap: system.total_swap(),
+                    used_swap: system.used_swap(),
+
+                    name: system.name().unwrap_or_else(|| "---".into()),
+                    kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
+                    os_version: system.os_version().unwrap_or_else(|| "---".into()),
+                    host_name: system.host_name().unwrap_or_else(|| "---".into()),
+
+                    processors: system.cpus().len(),
+                });
             });
         });
-    });
 
-    thread::spawn(move || {
-        thread::sleep(Duration::from_millis(1000));
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(1000));
 
-        let mut system = System::new_all();
+            let mut system = System::new_all();
 
-        system.refresh_all();
+            system.refresh_all();
 
-        callback.call(system);
-    });
+            callback.call(system);
+        });
 
-    let lines = match ctx.state {
-        None => vec!["Collecting system info...".into()],
+        let lines = match ctx.state {
+            None => vec!["Collecting system info...".into()],
 
-        Some(sys) => vec![
-            format!("System name: {}", sys.name),
-            format!("System kernel version: {}", sys.kernel_version),
-            format!("System OS version: {}", sys.os_version),
-            format!("System host name: {}", sys.host_name),
-            "".into(),
-            format!("NB processors: {}", sys.processors),
-            "".into(),
-            format!("Total Memory: {} KB", sys.total_memory),
-            format!("Used Memory: {} KB", sys.used_memory),
-            format!("Total Swap: {} KB", sys.total_swap),
-            format!("Used Swap: {} KB", sys.used_swap),
-        ],
-    };
+            Some(sys) => vec![
+                format!("System name: {}", sys.name),
+                format!("System kernel version: {}", sys.kernel_version),
+                format!("System OS version: {}", sys.os_version),
+                format!("System host name: {}", sys.host_name),
+                "".into(),
+                format!("NB processors: {}", sys.processors),
+                "".into(),
+                format!("Total Memory: {} KB", sys.total_memory),
+                format!("Used Memory: {} KB", sys.used_memory),
+                format!("Total Swap: {} KB", sys.total_swap),
+                format!("Used Swap: {} KB", sys.used_swap),
+            ],
+        };
 
-    build!(Column {
-        layout: Layout {
-            sizing: Sizing::Axis {
-                width: Units::Stretch(1.0),
-                height: Units::Auto,
-            },
-        },
-        children: lines
-            .into_iter()
-            .map(|entry| {
-                Text {
-                    font: font.styled().color(Color::White),
-                    text: entry.into(),
-                }
-                .into()
-            })
-            .collect::<Vec<_>>(),
-    })
+        BuildResult::new(build! {
+            Column {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: Units::Stretch(1.0),
+                        height: Units::Auto,
+                    },
+                },
+                children: lines
+                    .into_iter()
+                    .map(|entry| {
+                        Text {
+                            font: self.font.styled().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                            text: entry.into(),
+                        }
+                        .into()
+                    })
+                    .collect::<Vec<_>>(),
+            }
+        })
+    }
 }

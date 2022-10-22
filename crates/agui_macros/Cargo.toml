@@ -29,6 +29,7 @@ syn = {version = "1.0", default-features = false, features = [
   "printing",
 ]}
 heck = "0.4"
+toml = "0.5"
 
 [dev-dependencies]
 trybuild = "1.0"

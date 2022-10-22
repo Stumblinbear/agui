@@ -16,6 +16,10 @@ impl BuildResult {
         Self::default()
     }
 
+    pub fn new(widget: WidgetRef) -> Self {
+        Self(vec![widget])
+    }
+
     pub(crate) fn take(self) -> Vec<WidgetRef> {
         self.0
     }

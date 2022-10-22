@@ -1,7 +1,6 @@
 #![allow(clippy::needless_update)]
 
 use agui::{
-    macros::{build, functional_widget},
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
@@ -9,7 +8,7 @@ use agui::{
         App, TextInput,
     },
 };
-use agui_agpu::UIProgram;
+use agui_agpu::AguiProgram;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
@@ -26,71 +25,80 @@ fn main() -> Result<(), agpu::BoxError> {
         .with_env_filter(filter)
         .init();
 
-    let mut ui = UIProgram::new("agui input")?;
+    let mut ui = AguiProgram::new("agui input")?;
 
     ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build! {
-        App {
-            child: ExampleMain {
-                font: deja_vu
-            }
-        }
+    ui.set_root(App {
+        child: ExampleMain { font: deja_vu }.into(),
     });
 
     ui.run()
 }
 
-#[functional_widget(String)]
-fn example_main(
-    ctx: &mut BuildContext,
+#[derive(StatefulWidget, PartialEq)]
+struct ExampleMain {
     font: Font,
-    _color: Color,
-    _child: WidgetRef,
-) -> BuildResult {
-    ctx.set_layout(Layout {
-        sizing: Sizing::Fill,
-        ..Layout::default()
-    });
+}
 
-    let on_value = ctx.callback::<String, _>(|ctx, input: &String| {
-        ctx.set_state(|state| *state = input.clone());
-    });
+impl WidgetState for ExampleMain {
+    type State = String;
 
-    build!(Column {
-        layout: Layout {
-            sizing: Sizing::Axis {
-                width: Units::Stretch(1.0),
-                height: Units::Stretch(1.0)
+    fn create_state(&self) -> Self::State {
+        String::new()
+    }
+}
+
+impl WidgetView for ExampleMain {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Layout::default()
             },
-            margin: Margin::center()
-        },
-        spacing: Units::Pixels(8.0),
-        children: [
-            ctx.key(
-                Key::single(),
-                TextInput {
-                    layout: Layout {
-                        sizing: Sizing::Axis {
-                            width: Units::Stretch(1.0),
-                            height: Units::Pixels(32.0),
-                        }
+        }
+    }
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        let on_value = ctx.callback::<String, _>(|ctx, input: &String| {
+            ctx.set_state(|state| *state = input.clone());
+        });
+
+        BuildResult::new(build! {
+            Column {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: Units::Stretch(1.0),
+                        height: Units::Stretch(1.0)
                     },
+                    margin: Margin::center()
+                },
+                spacing: Units::Pixels(8.0),
+                children: [
+                    TextInput {
+                        layout: Layout {
+                            sizing: Sizing::Axis {
+                                width: Units::Stretch(1.0),
+                                height: Units::Pixels(32.0),
+                            }
+                        },
 
-                    font: font.styled(),
-                    placeholder: "some text here",
+                        font: self.font.styled(),
+                        placeholder: "some text here",
 
-                    on_value
-                }
-                .into()
-            ),
-            Text {
-                font: font.styled().color(Color::White),
-                text: ctx.state.clone(),
-            },
-        ]
-    })
+                        on_value
+                    },
+                    Text {
+                        font: self.font.styled().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                        text: ctx.state.clone(),
+                    },
+                ]
+            }
+        })
+    }
 }

@@ -1,4 +1,4 @@
-use agui::render::{command::CanvasCommand, texture::TextureId};
+use agui::render::{canvas::command::CanvasCommand, texture::TextureId};
 use lyon::lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers,
 };

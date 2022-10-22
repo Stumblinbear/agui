@@ -3,7 +3,6 @@ use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
-    macros::{build, functional_widget},
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
@@ -11,7 +10,7 @@ use agui::{
         App, Button,
     },
 };
-use agui_agpu::UIProgram;
+use agui_agpu::AguiProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
     let filter = EnvFilter::from_default_env()
@@ -26,72 +25,75 @@ fn main() -> Result<(), agpu::BoxError> {
         .with_env_filter(filter)
         .init();
 
-    let mut ui = UIProgram::new("agui clipping")?;
+    let mut ui = AguiProgram::new("agui clipping")?;
 
     ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build! {
-        App {
-            child: ExampleMain {
-                font: deja_vu
-            }
-        }
+    ui.set_root(App {
+        child: ExampleMain { font: deja_vu }.into(),
     });
 
     ui.run()
 }
 
-#[functional_widget]
-fn example_main(
-    ctx: &mut BuildContext,
+#[derive(StatelessWidget, PartialEq)]
+struct ExampleMain {
     font: Font,
-    _color: Color,
-    _child: WidgetRef,
-) -> BuildResult {
-    ctx.set_layout(Layout {
-        sizing: Sizing::Fill,
-        ..Layout::default()
-    });
+}
 
-    build!(Padding {
-        padding: Margin::center(),
-        child: Clip {
-            rect: Rect {
-                width: 128.0,
-                height: 64.0
+impl WidgetView for ExampleMain {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Layout::default()
             },
-
-            shape: Shape::RoundedRect {
-                top_left: 8.0,
-                top_right: 8.0,
-                bottom_right: 8.0,
-                bottom_left: 8.0
-            },
-
-            child: Button {
-                layout: Layout {
-                    sizing: Sizing::Axis {
-                        width: 256.0,
-                        height: 64.0,
-                    },
-                },
-                child: Padding {
-                    padding: Margin::All(10.0.into()),
-                    child: Text {
-                        font: font
-                            .styled()
-                            .h_align(HorizontalAlign::Center)
-                            .v_align(VerticalAlign::Center),
-                        text: "I am not   \nclipped properly"
-                    }
-                },
-                on_pressed: ctx.callback(|_ctx, ()| {
-                    println!("Pressed 1");
-                })
-            }
         }
-    })
+    }
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        BuildResult::new(build! {Padding {
+            padding: Margin::center(),
+            child: Clip {
+                rect: Rect {
+                    width: 128.0,
+                    height: 64.0
+                },
+
+                shape: Shape::RoundedRect {
+                    top_left: 8.0,
+                    top_right: 8.0,
+                    bottom_right: 8.0,
+                    bottom_left: 8.0
+                },
+
+                child: Button {
+                    layout: Layout {
+                        sizing: Sizing::Axis {
+                            width: 256.0,
+                            height: 64.0,
+                        },
+                    },
+                    child: Padding {
+                        padding: Margin::All(10.0.into()),
+                        child: Text {
+                            font: self.font
+                                .styled()
+                                .h_align(HorizontalAlign::Center)
+                                .v_align(VerticalAlign::Center),
+                            text: "I am not   \nclipped properly"
+                        }
+                    },
+                    on_pressed: ctx.callback(|_ctx, ()| {
+                        println!("Pressed 1");
+                    })
+                }
+            }
+        }})
+    }
 }

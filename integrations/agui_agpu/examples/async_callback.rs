@@ -5,7 +5,6 @@ use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
-    macros::{build, functional_widget},
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
@@ -13,7 +12,7 @@ use agui::{
         App,
     },
 };
-use agui_agpu::UIProgram;
+use agui_agpu::AguiProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
     let filter = EnvFilter::from_default_env()
@@ -28,56 +27,73 @@ fn main() -> Result<(), agpu::BoxError> {
         .with_env_filter(filter)
         .init();
 
-    let mut ui = UIProgram::new("agui async callback")?;
+    let mut ui = AguiProgram::new("agui async callback")?;
 
     ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build!(App {
-        child: ExampleMain { font: deja_vu }
-    }));
+    ui.set_root(App {
+        child: ExampleMain { font: deja_vu }.into(),
+    });
 
     ui.run()
 }
 
-#[functional_widget(usize)]
-fn example_main(
-    ctx: &mut BuildContext,
+#[derive(StatefulWidget, PartialEq)]
+struct ExampleMain {
     font: Font,
-    _color: Color,
-    _child: WidgetRef,
-) -> BuildResult {
-    ctx.set_layout(Layout {
-        sizing: Sizing::Fill,
-        ..Layout::default()
-    });
+}
 
-    let callback = ctx.callback::<usize, _>(|ctx, num| {
-        ctx.set_state(|state| *state = *num);
-    });
+impl WidgetState for ExampleMain {
+    type State = usize;
 
-    thread::spawn({
-        let num = *ctx.state;
+    fn create_state(&self) -> Self::State {
+        0
+    }
+}
 
-        move || {
-            thread::sleep(Duration::from_millis(1000));
+impl WidgetView for ExampleMain {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
 
-            callback.call(num + 1);
-        }
-    });
-
-    build!(Column {
-        layout: Layout {
-            sizing: Sizing::Axis {
-                width: Units::Stretch(1.0),
-                height: Units::Auto
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Layout::default()
             },
-        },
-        children: [Text {
-            font: font.styled().color(Color::White),
-            text: format!("Called: {}", ctx.state).into(),
-        }]
-    })
+        }
+    }
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        let callback = ctx.callback::<usize, _>(|ctx, num| {
+            ctx.set_state(|state| *state = *num);
+        });
+
+        thread::spawn({
+            let num = *ctx.state;
+
+            move || {
+                thread::sleep(Duration::from_millis(1000));
+
+                callback.call(num + 1);
+            }
+        });
+
+        BuildResult::new(build! {
+            Column {
+                layout: Layout {
+                    sizing: Sizing::Axis {
+                        width: Units::Stretch(1.0),
+                        height: Units::Auto
+                    },
+                },
+                children: [Text {
+                    font: self.font.styled().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                    text: format!("Called: {}", ctx.state).into(),
+                }]
+            }
+        })
+    }
 }

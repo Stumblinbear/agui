@@ -3,7 +3,6 @@ use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
-    macros::{build, functional_widget},
     prelude::*,
     widgets::{
         plugins::DefaultPluginsExt,
@@ -11,7 +10,7 @@ use agui::{
         App, Button,
     },
 };
-use agui_agpu::UIProgram;
+use agui_agpu::AguiProgram;
 
 fn main() -> Result<(), agpu::BoxError> {
     let filter = EnvFilter::from_default_env()
@@ -26,58 +25,81 @@ fn main() -> Result<(), agpu::BoxError> {
         .with_env_filter(filter)
         .init();
 
-    let mut ui = UIProgram::new("agui counter")?;
+    let mut ui = AguiProgram::new("agui counter")?;
 
     ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))?;
 
-    ui.set_root(build! {
-        App {
-            child: CounterWidget {
-                font: deja_vu.styled(),
-            }
-        }
+    ui.set_root(App {
+        child: CounterWidget { font: deja_vu }.into(),
     });
 
     ui.run()
 }
 
-#[functional_widget(i32)]
-fn counter_widget(ctx: &mut BuildContext, font: FontStyle) -> BuildResult {
-    let on_pressed = ctx.callback(|ctx, ()| {
-        ctx.set_state(|state| {
-            *state += 1;
-        })
-    });
+#[derive(StatefulWidget, PartialEq)]
+struct CounterWidget {
+    font: Font,
+}
 
-    build!(Column {
-        children: [
-            Text {
-                font: font.clone(),
-                text: format!("clicked: {} times", ctx.state).into()
+impl WidgetState for CounterWidget {
+    type State = usize;
+
+    fn create_state(&self) -> Self::State {
+        0
+    }
+}
+
+impl WidgetView for CounterWidget {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout {
+                sizing: Sizing::Fill,
+                ..Layout::default()
             },
-            ctx.key(
-                Key::single(),
-                Button {
-                    layout: Layout {
-                        sizing: Sizing::Axis {
-                            width: 256.0,
-                            height: 64.0,
-                        },
+        }
+    }
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        let on_pressed = ctx.callback(|ctx, ()| {
+            ctx.set_state(|state| {
+                *state += 1;
+            })
+        });
+
+        BuildResult::new(build! {
+            Column {
+                children: [
+                    Text {
+                        font: self.font.styled(),
+                        text: format!("clicked: {} times", ctx.state).into()
                     },
-                    child: Padding {
-                        padding: Margin::All(10.0.into()),
-                        child: Text {
-                            font,
-                            text: "A Button"
+
+                    ctx.key(
+                        Key::single(),
+                        Button {
+                            layout: Layout {
+                                sizing: Sizing::Axis {
+                                    width: 256.0,
+                                    height: 64.0,
+                                },
+                            },
+                            child: Padding {
+                                padding: Margin::All(10.0.into()),
+                                child: Text {
+                                    font: self.font.styled(),
+                                    text: "A Button"
+                                }
+                            },
+                            on_pressed
                         }
-                    },
-                    on_pressed
-                }
-                .into()
-            )
-        ]
-    })
+                    )
+                ]
+            }
+        })
+    }
 }

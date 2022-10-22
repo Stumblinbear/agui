@@ -1,7 +1,6 @@
 use agpu::{BindGroup, Buffer, Texture};
 use agui::unit::{BlendMode, Size};
 
-#[derive(Hash)]
 pub struct RenderTextureId {
     pub size: Size,
 

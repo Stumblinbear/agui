@@ -4,5 +4,5 @@ mod program;
 mod render;
 mod ui;
 
-pub use program::UIProgram;
-pub use ui::UI;
+pub use program::AguiProgram;
+pub use ui::Agui;

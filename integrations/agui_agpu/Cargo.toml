@@ -15,7 +15,7 @@ readme = "README.md"
 agui = { path = "../../", version = "0.3" }
 
 tracing = "0.1"
-tracing-subscriber = "0.2"
+tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
 downcast-rs = "1.2"
 parking_lot = "0.12"
 
@@ -27,7 +27,7 @@ glyph_brush_layout = "0.2"
 glyph_brush_draw_cache = "0.1"
 
 [dev-dependencies]
-sysinfo = "0.23"
+sysinfo = "0.26"
 
 [[example]]
 name = "hello_world"

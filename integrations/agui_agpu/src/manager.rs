@@ -13,6 +13,7 @@ use agpu::{
 };
 use agui::{
     manager::WidgetManager,
+    render::canvas::{command::CanvasCommand, Canvas},
     unit::Size,
     util::tree::{new_key_type, Tree},
     widget::WidgetId,
@@ -27,6 +28,7 @@ use crate::{
         data::{InstanceData, VertexData},
         draw_call::DrawCall,
         layer::RenderLayer,
+        node::RenderNode,
     },
 };
 
@@ -194,200 +196,200 @@ impl RenderManager {
     pub fn redraw(&mut self, manager: &WidgetManager) {
         let now = Instant::now();
 
-        if let Some(root_id) = manager.get_widgets().get_root() {
-            self.redraw_node(manager, root_id);
-        } else if let Some(root_id) = self.tree.get_root() {
-            self.canvas_cache.clear();
-            self.draw_cache.clear();
+        // if let Some(root_id) = manager.get_widgets().get_root() {
+        //     self.redraw_node(manager, root_id);
+        // } else if let Some(root_id) = self.tree.get_root() {
+        //     self.canvas_cache.clear();
+        //     self.draw_cache.clear();
 
-            self.tree.remove(root_id, true);
-        }
+        //     self.tree.remove(root_id, true);
+        // }
 
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    pub fn redraw_node(
-        &mut self,
-        manager: &WidgetManager,
-        layer_id: Option<LayerId>,
-        widget_id: WidgetId,
-    ) {
-        let fonts = manager.get_fonts();
+    // pub fn redraw_node(
+    //     &mut self,
+    //     manager: &WidgetManager,
+    //     layer_id: Option<LayerId>,
+    //     widget_id: WidgetId,
+    // ) {
+    //     let fonts = manager.get_fonts();
 
-        let tree = manager.get_widgets();
+    //     let tree = manager.get_widgets();
 
-        tree.iter_down(Some(widget_id))
-            .map(|widget_id| tree.get(widget_id).unwrap())
-            .for_each(|node| {
-                let widget = node.get().unwrap();
+    //     tree.iter_down(Some(widget_id))
+    //         .map(|widget_id| tree.get(widget_id).unwrap())
+    //         .for_each(|node| {
+    //             let widget = node.get().unwrap();
 
-                let rect = match widget.get_rect() {
-                    Some(rect) => rect,
-                    None => return,
-                };
+    //             let rect = match widget.get_rect() {
+    //                 Some(rect) => rect,
+    //                 None => return,
+    //             };
 
-                let mut canvas = Canvas::new(rect.into());
+    //             let mut canvas = Canvas::new(rect.into());
 
-                widget.render(&mut canvas);
+    //             widget.render(&mut canvas);
 
-                let canvas_buffer = self.render_canvas(fonts, canvas);
+    //             let canvas_buffer = self.render_canvas(fonts, canvas);
 
-                nodes.push(RenderNode {
-                    pos: self
-                        .ctx
-                        .gpu
-                        .new_buffer("agui layer instance buffer")
-                        .as_vertex_buffer()
-                        .create(&[rect.x, rect.y]),
-                    canvas_buffer,
-                });
-            });
+    //             nodes.push(RenderNode {
+    //                 pos: self
+    //                     .ctx
+    //                     .gpu
+    //                     .new_buffer("agui layer instance buffer")
+    //                     .as_vertex_buffer()
+    //                     .create(&[rect.x, rect.y]),
+    //                 canvas_buffer,
+    //             });
+    //         });
 
-        self.root = root;
+    //     self.root = root;
 
-        // Remove any invalidated buffers from the cache
-        self.canvas_cache
-            .retain(|_, canvas_buffer| canvas_buffer.upgrade().is_some());
+    //     // Remove any invalidated buffers from the cache
+    //     self.canvas_cache
+    //         .retain(|_, canvas_buffer| canvas_buffer.upgrade().is_some());
 
-        self.draw_cache
-            .retain(|_, draw_call| draw_call.upgrade().is_some());
-    }
+    //     self.draw_cache
+    //         .retain(|_, draw_call| draw_call.upgrade().is_some());
+    // }
 
-    fn render_canvas(
-        &self,
-        ctx: &mut RenderContext,
-        layer: &mut Option<RenderLayer>,
-        canvas: Canvas,
-    ) -> Rc<RenderCanvas> {
-        let mut hasher = DefaultHasher::new();
-        canvas.hash(&mut hasher);
-        let hash = hasher.finish();
+    // fn render_canvas(
+    //     &self,
+    //     ctx: &mut RenderContext,
+    //     layer: &mut Option<RenderLayer>,
+    //     canvas: Canvas,
+    // ) -> Rc<RenderCanvas> {
+    //     let mut hasher = DefaultHasher::new();
+    //     canvas.hash(&mut hasher);
+    //     let hash = hasher.finish();
 
-        if let Some(canvas_buffer) = self
-            .canvas_cache
-            .get(&hash)
-            .and_then(|canvas_buffer| canvas_buffer.upgrade())
-        {
-            return canvas_buffer;
-        }
+    //     if let Some(canvas_buffer) = self
+    //         .canvas_cache
+    //         .get(&hash)
+    //         .and_then(|canvas_buffer| canvas_buffer.upgrade())
+    //     {
+    //         return canvas_buffer;
+    //     }
 
-        let mut canvas_buffer = RenderCanvas::default();
+    //     let mut canvas_buffer = RenderCanvas::default();
 
-        let mut layer_idx: usize = 0;
+    //     let mut layer_idx: usize = 0;
 
-        let mut commands = Vec::new();
-        let mut draw_call_builder: Option<Box<dyn DrawCallBuilder>> = None;
+    //     let mut commands = Vec::new();
+    //     let mut draw_call_builder: Option<Box<dyn DrawCallBuilder>> = None;
 
-        for cmd in canvas.consume() {
-            // Check if the current layer builder can process the command, and finalize the build if not
-            if let Some(builder) = draw_call_builder.as_ref() {
-                if !builder.can_process(&cmd) {
-                    // Add the draw call to the current layer
+    //     for cmd in canvas.consume() {
+    //         // Check if the current layer builder can process the command, and finalize the build if not
+    //         if let Some(builder) = draw_call_builder.as_ref() {
+    //             if !builder.can_process(&cmd) {
+    //                 // Add the draw call to the current layer
 
-                    let mut hasher = DefaultHasher::new();
-                    commands.hash(&mut hasher);
-                    let hash = hasher.finish();
+    //                 let mut hasher = DefaultHasher::new();
+    //                 commands.hash(&mut hasher);
+    //                 let hash = hasher.finish();
 
-                    if let Some(draw_call) = self
-                        .draw_cache
-                        .get(&hash)
-                        .and_then(|draw_call| draw_call.upgrade())
-                    {
-                        canvas_buffer.nodes
-                    }
+    //                 if let Some(draw_call) = self
+    //                     .draw_cache
+    //                     .get(&hash)
+    //                     .and_then(|draw_call| draw_call.upgrade())
+    //                 {
+    //                     canvas_buffer.nodes
+    //                 }
 
-                    if let Some(draw_call) = builder.build(ctx) {
-                        canvas_buffer.nodes.push(draw_call);
-                    }
+    //                 if let Some(draw_call) = builder.build(ctx) {
+    //                     canvas_buffer.nodes.push(draw_call);
+    //                 }
 
-                    commands.clear();
-                    draw_call_builder = None;
-                }
-            }
+    //                 commands.clear();
+    //                 draw_call_builder = None;
+    //             }
+    //         }
 
-            commands.push(cmd);
+    //         commands.push(cmd);
 
-            match cmd {
-                CanvasCommand::Layer {
-                    rect,
-                    shape,
-                    anti_alias,
-                    blend_mode,
-                } => {
-                    // Create a new layer and insert it after the current layer
-                    let new_layer = Layer {
-                        rect,
-                        shape,
+    //         match cmd {
+    //             CanvasCommand::Layer {
+    //                 rect,
+    //                 shape,
+    //                 anti_alias,
+    //                 blend_mode,
+    //             } => {
+    //                 // Create a new layer and insert it after the current layer
+    //                 let new_layer = Layer {
+    //                     rect,
+    //                     shape,
 
-                        anti_alias,
-                        blend_mode,
+    //                     anti_alias,
+    //                     blend_mode,
 
-                        ..Layer::default()
-                    };
+    //                     ..Layer::default()
+    //                 };
 
-                    canvas_buffer.layers.insert(layer_idx, new_layer);
+    //                 canvas_buffer.layers.insert(layer_idx, new_layer);
 
-                    // Switch to the new layer
-                    layer_idx += 1;
+    //                 // Switch to the new layer
+    //                 layer_idx += 1;
 
-                    continue;
-                }
+    //                 continue;
+    //             }
 
-                CanvasCommand::Pop => {
-                    // We can't pop beyond the layers owned by the canvas
-                    if layer_idx == 0 {
-                        panic!("can't pop layer, no layer to pop");
-                    }
+    //             CanvasCommand::Pop => {
+    //                 // We can't pop beyond the layers owned by the canvas
+    //                 if layer_idx == 0 {
+    //                     panic!("can't pop layer, no layer to pop");
+    //                 }
 
-                    // Grab the previous layer
-                    layer_idx -= 1;
-                }
+    //                 // Grab the previous layer
+    //                 layer_idx -= 1;
+    //             }
 
-                CanvasCommand::Shape { .. } => {
-                    if draw_call_builder.is_none() {
-                        draw_call_builder =
-                            Some(Box::new(LayerShapeBuilder::new(TextureId::default())));
-                    }
-                }
+    //             CanvasCommand::Shape { .. } => {
+    //                 if draw_call_builder.is_none() {
+    //                     draw_call_builder =
+    //                         Some(Box::new(LayerShapeBuilder::new(TextureId::default())));
+    //                 }
+    //             }
 
-                CanvasCommand::Texture { texture_id, .. } => {
-                    if draw_call_builder.is_none() {
-                        draw_call_builder = Some(Box::new(LayerShapeBuilder::new(texture_id)));
-                    }
-                }
+    //             CanvasCommand::Texture { texture_id, .. } => {
+    //                 if draw_call_builder.is_none() {
+    //                     draw_call_builder = Some(Box::new(LayerShapeBuilder::new(texture_id)));
+    //                 }
+    //             }
 
-                CanvasCommand::Text { .. } => {
-                    if draw_call_builder.is_none() {
-                        draw_call_builder = Some(Box::new(TextDrawCallBuilder {
-                            fonts: self.fonts,
-                            ..TextDrawCallBuilder::default()
-                        }));
-                    }
-                }
+    //             CanvasCommand::Text { .. } => {
+    //                 if draw_call_builder.is_none() {
+    //                     draw_call_builder = Some(Box::new(TextDrawCallBuilder {
+    //                         fonts: self.fonts,
+    //                         ..TextDrawCallBuilder::default()
+    //                     }));
+    //                 }
+    //             }
 
-                cmd => {
-                    tracing::error!("unknown command: {:?}", cmd);
+    //             cmd => {
+    //                 tracing::error!("unknown command: {:?}", cmd);
 
-                    continue;
-                }
-            }
+    //                 continue;
+    //             }
+    //         }
 
-            draw_call_builder.as_mut().unwrap().process(cmd);
-        }
+    //         draw_call_builder.as_mut().unwrap().process(cmd);
+    //     }
 
-        if let Some(builder) = draw_call_builder.take() {
-            canvas_buffer.layers[layer_idx]
-                .draw_calls
-                .extend(builder.build(ctx));
-        }
+    //     if let Some(builder) = draw_call_builder.take() {
+    //         canvas_buffer.layers[layer_idx]
+    //             .draw_calls
+    //             .extend(builder.build(ctx));
+    //     }
 
-        let canvas_buffer = Rc::new(canvas_buffer);
+    //     let canvas_buffer = Rc::new(canvas_buffer);
 
-        self.canvas_cache
-            .insert(hash, Rc::downgrade(&canvas_buffer));
+    //     self.canvas_cache
+    //         .insert(hash, Rc::downgrade(&canvas_buffer));
 
-        canvas_buffer
-    }
+    //     canvas_buffer
+    // }
 
     pub fn render(&self, mut frame: Frame) {
         frame
@@ -399,17 +401,17 @@ impl RenderManager {
             .with_pipeline(&self.pipeline)
             .begin();
 
-        for node in &self.nodes {
-            r.set_vertex_buffer(0, node.pos.slice(..));
+        // for node in &self.nodes {
+        //     r.set_vertex_buffer(0, node.pos.slice(..));
 
-            for layer in &node.canvas_buffer.layers {
-                for draw_call in &layer.draw_calls {
-                    r.set_bind_group(0, &draw_call.bind_group, &[]);
+        //     for layer in &node.canvas_buffer.layers {
+        //         for draw_call in &layer.draw_calls {
+        //             r.set_bind_group(0, &draw_call.bind_group, &[]);
 
-                    r.set_vertex_buffer(1, draw_call.vertex_data.slice(..))
-                        .draw(0..draw_call.count, 0..1);
-                }
-            }
-        }
+        //             r.set_vertex_buffer(1, draw_call.vertex_data.slice(..))
+        //                 .draw(0..draw_call.count, 0..1);
+        //         }
+        //     }
+        // }
     }
 }
