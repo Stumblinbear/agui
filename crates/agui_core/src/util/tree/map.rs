@@ -95,20 +95,27 @@ where
         if let Some(node) = self.nodes.get(node_id) {
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
-                    // Remove the child from its parent
-                    parent.children.remove(
-                        parent
-                            .children
-                            .iter()
-                            .position(|child_id| node_id == *child_id)
-                            .expect("unable to find child in removed node's parent"),
-                    );
+                    let child_idx = parent
+                        .children
+                        .iter()
+                        .position(|child_id| node_id == *child_id)
+                        .expect("unable to find child in removed node's parent");
 
-                    // If the parent was unchanged, add it to the end of the children list and return
+                    // If the node isn't being moved to an entirely new parent
                     if Some(parent_id) == new_parent_id {
+                        // If the widget is already the last child in the parent, don't do anything
+                        if child_idx == parent.children.len() - 1 {
+                            return false;
+                        }
+
+                        parent.children.remove(child_idx);
+
                         parent.children.push(node_id);
 
                         return false;
+                    } else {
+                        // Remove the child from its parent
+                        parent.children.remove(child_idx);
                     }
                 }
             }
