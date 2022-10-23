@@ -113,6 +113,10 @@ impl WidgetManager {
         self.plugins.insert(plugin_id, plugin);
     }
 
+    pub fn get_fonts(&self) -> &[FontArc] {
+        &self.fonts
+    }
+
     pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
         let f = File::open(filename)?;
 
@@ -730,7 +734,7 @@ impl WidgetManager {
                             retained_widgets.insert(widget_id);
 
                             if needs_rebuild {
-                                build_queue.push_back(widget_id);
+                                self.modifications.push_back(Modify::Rebuild(widget_id));
                             }
                         }
 

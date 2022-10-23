@@ -46,7 +46,7 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
         }
     }
 
-    fn process(&mut self, cmd: CanvasCommand) {
+    fn process(&mut self, cmd: &CanvasCommand) {
         if let CanvasCommand::Shape { rect, shape, color } = cmd {
             let mut builder =
                 BuffersBuilder::new(&mut self.geometry, |vertex: FillVertex| PositionData {
@@ -57,7 +57,7 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
             let count = self
                 .tessellator
                 .tessellate_path(
-                    &shape.build_path(rect),
+                    &shape.build_path(*rect),
                     &FillOptions::default(),
                     &mut builder,
                 )
@@ -66,7 +66,7 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
             self.vertex_data.resize(
                 self.vertex_data.len() + count.indices as usize,
                 VertexData {
-                    color: color.into(),
+                    color: (*color).into(),
                 },
             );
         }

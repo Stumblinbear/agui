@@ -92,7 +92,7 @@ impl Agui {
         }
 
         if let Event::RedrawFrame(frame) = event {
-            self.renderer.render(frame);
+            self.renderer.render(&self.manager, frame);
         } else if let Event::Winit(WinitEvent::WindowEvent { event, .. }) = event {
             match event {
                 WindowEvent::Resized(size) => {

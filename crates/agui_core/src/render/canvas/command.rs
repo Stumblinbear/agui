@@ -5,7 +5,7 @@ use crate::{
     unit::{Bounds, Color, FontStyle, Rect, Shape},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CanvasCommand {
     Shape {

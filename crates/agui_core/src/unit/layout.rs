@@ -302,6 +302,13 @@ pub struct Point {
     pub y: f32,
 }
 
+impl PartialEq for Point {
+    fn eq(&self, other: &Self) -> bool {
+        ((self.x - other.x).abs() < POS_MARGIN_OF_ERROR)
+            && ((self.y - other.y).abs() < POS_MARGIN_OF_ERROR)
+    }
+}
+
 /// Holds width and height values.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Size {

@@ -24,7 +24,7 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
         matches!(cmd, CanvasCommand::Text { .. })
     }
 
-    fn process(&mut self, cmd: CanvasCommand) {
+    fn process(&mut self, cmd: &CanvasCommand) {
         if let CanvasCommand::Text {
             rect,
 
@@ -40,9 +40,9 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
             }
 
             self.glyphs.extend(
-                font.get_glyphs(rect, &text)
+                font.get_glyphs(*rect, &text)
                     .into_iter()
-                    .map(|v| (color.into(), v)),
+                    .map(|v| ((*color).into(), v)),
             );
         }
     }

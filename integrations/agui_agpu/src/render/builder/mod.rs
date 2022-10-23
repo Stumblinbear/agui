@@ -10,7 +10,7 @@ pub mod text;
 pub trait DrawCallBuilder<'builder> {
     fn can_process(&self, cmd: &CanvasCommand) -> bool;
 
-    fn process(&mut self, cmd: CanvasCommand);
+    fn process(&mut self, cmd: &CanvasCommand);
 
     fn build(&self, ctx: &mut RenderContext) -> Option<DrawCall>;
 }

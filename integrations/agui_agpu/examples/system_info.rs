@@ -18,7 +18,7 @@ use agui_agpu::AguiProgram;
 fn main() -> Result<(), agpu::BoxError> {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
-        .add_directive(format!("agui={}", LevelFilter::DEBUG).parse().unwrap());
+        .add_directive(format!("agui={}", LevelFilter::INFO).parse().unwrap());
 
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
@@ -42,7 +42,7 @@ fn main() -> Result<(), agpu::BoxError> {
     ui.run()
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SystemInfo {
     total_memory: u64,
     used_memory: u64,
@@ -84,22 +84,9 @@ impl WidgetView for ExampleMain {
     }
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        let callback = ctx.callback::<System, _>(|ctx, system| {
+        let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             ctx.set_state(|state| {
-                state.replace(SystemInfo {
-                    total_memory: system.total_memory(),
-                    used_memory: system.used_memory(),
-
-                    total_swap: system.total_swap(),
-                    used_swap: system.used_swap(),
-
-                    name: system.name().unwrap_or_else(|| "---".into()),
-                    kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
-                    os_version: system.os_version().unwrap_or_else(|| "---".into()),
-                    host_name: system.host_name().unwrap_or_else(|| "---".into()),
-
-                    processors: system.cpus().len(),
-                });
+                state.replace(system_info.clone());
             });
         });
 
@@ -110,7 +97,20 @@ impl WidgetView for ExampleMain {
 
             system.refresh_all();
 
-            callback.call(system);
+            callback.call(SystemInfo {
+                total_memory: system.total_memory(),
+                used_memory: system.used_memory(),
+
+                total_swap: system.total_swap(),
+                used_swap: system.used_swap(),
+
+                name: system.name().unwrap_or_else(|| "---".into()),
+                kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
+                os_version: system.os_version().unwrap_or_else(|| "---".into()),
+                host_name: system.host_name().unwrap_or_else(|| "---".into()),
+
+                processors: system.cpus().len(),
+            });
         });
 
         let lines = match ctx.state {

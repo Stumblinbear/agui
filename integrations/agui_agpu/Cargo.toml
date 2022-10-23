@@ -18,6 +18,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
 downcast-rs = "1.2"
 parking_lot = "0.12"
+fnv = "1.0"
 
 agpu = { git = "https://github.com/lyricwulf/agpu", rev = "4d6a850d7cf73f1ee65c1f935646414f5d56c8be" }
 bytemuck = { version = "1.7", features = ["extern_crate_alloc"] }

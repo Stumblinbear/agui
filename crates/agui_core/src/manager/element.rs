@@ -5,7 +5,11 @@ use crate::{
     manager::context::AguiContext,
     render::canvas::Canvas,
     unit::{Data, Layout, LayoutType, Rect},
-    widget::{dispatch::{WidgetDispatch, WidgetEquality}, BuildResult, Widget, WidgetRef, key::WidgetKey},
+    widget::{
+        dispatch::{WidgetDispatch, WidgetEquality},
+        key::WidgetKey,
+        BuildResult, Widget, WidgetRef,
+    },
 };
 
 pub struct WidgetElement {
