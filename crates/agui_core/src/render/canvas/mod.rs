@@ -1,4 +1,4 @@
-use crate::unit::{BlendMode, Rect, Shape};
+use crate::unit::{BlendMode, Point, Shape, Size};
 
 pub mod command;
 pub mod painter;
@@ -8,7 +8,7 @@ pub use self::command::*;
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Canvas {
-    pub rect: Rect,
+    pub size: Size,
 
     pub head: Vec<CanvasCommand>,
     pub children: Vec<CanvasLayer>,
@@ -18,6 +18,8 @@ pub struct Canvas {
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct CanvasLayer {
+    pub offset: Point,
+
     pub style: LayerStyle,
 
     pub canvas: Canvas,

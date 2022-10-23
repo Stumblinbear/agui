@@ -1,7 +1,7 @@
 use agpu::{Buffer, RenderPass};
 use agui::{
     render::{canvas::command::CanvasCommand, texture::TextureId},
-    unit::{Point, Rect},
+    unit::Point,
 };
 use glyph_brush_draw_cache::ab_glyph::FontArc;
 
@@ -13,9 +13,9 @@ use super::{
 };
 
 pub(crate) struct RenderCanvas {
-    pub rect: Rect,
+    pub pos: Point,
 
-    pub pos: Buffer,
+    pub pos_buffer: Buffer,
     pub draw_calls: Vec<DrawCall>,
 }
 
@@ -23,17 +23,18 @@ impl RenderCanvas {
     pub fn new(
         ctx: &mut PaintContext,
         fonts: &[FontArc],
-        rect: Rect,
+        pos: Point,
         commands: &[CanvasCommand],
     ) -> Self {
         let mut canvas = Self {
-            rect,
+            pos,
 
-            pos: ctx
+            pos_buffer: ctx
                 .gpu
                 .new_buffer("agui canvas position buffer")
                 .as_vertex_buffer()
-                .create(&[rect.x, rect.y]),
+                .allow_copy_to()
+                .create(&[pos.x, pos.y]),
 
             draw_calls: Vec::default(),
         };
@@ -47,18 +48,14 @@ impl RenderCanvas {
         &mut self,
         ctx: &mut PaintContext,
         fonts: &[FontArc],
-        rect: Rect,
+        pos: Point,
         commands: &[CanvasCommand],
     ) {
         // Update the position if necessary
-        if Point::from(self.rect) != Point::from(rect) {
-            self.rect = rect;
+        if self.pos != pos {
+            self.pos = pos;
 
-            self.pos = ctx
-                .gpu
-                .new_buffer("agui canvas position buffer")
-                .as_vertex_buffer()
-                .create(&[rect.x, rect.y]);
+            self.pos_buffer.write_unchecked(&[pos.x, pos.y]);
         }
 
         self.build(ctx, fonts, commands);
@@ -123,7 +120,7 @@ impl RenderCanvas {
     }
 
     pub fn render<'pass>(&'pass self, r: &mut RenderPass<'pass>) {
-        r.set_vertex_buffer(0, self.pos.slice(..));
+        r.set_vertex_buffer(0, self.pos_buffer.slice(..));
 
         for draw_call in &self.draw_calls {
             draw_call.render(r);

@@ -4,7 +4,7 @@ use crate::{
     callback::CallbackId,
     manager::context::AguiContext,
     render::canvas::Canvas,
-    unit::{Data, Rect},
+    unit::{Data, Size},
 };
 
 use super::{BuildResult, LayoutResult, WidgetRef};
@@ -37,7 +37,7 @@ pub trait WidgetDispatch: Downcast {
 
     fn build(&mut self, ctx: AguiContext) -> BuildResult;
 
-    fn paint(&self, rect: Rect) -> Option<Canvas>;
+    fn paint(&self, size: Size) -> Option<Canvas>;
 
     #[allow(clippy::borrowed_box)]
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool;

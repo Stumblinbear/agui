@@ -4,7 +4,7 @@ use crate::{
     callback::CallbackId,
     manager::context::AguiContext,
     render::canvas::Canvas,
-    unit::{Data, Layout, LayoutType, Rect},
+    unit::{Data, Layout, LayoutType, Rect, Size},
     widget::{
         dispatch::{WidgetDispatch, WidgetEquality},
         key::WidgetKey,
@@ -95,7 +95,8 @@ impl WidgetElement {
 
     /// Causes the widget to draw to a canvas.
     pub fn paint(&self) -> Option<Canvas> {
-        self.rect.and_then(|rect| self.dispatch.paint(rect))
+        self.rect
+            .and_then(|rect| self.dispatch.paint(Size::from(rect)))
     }
 
     #[allow(clippy::borrowed_box)]

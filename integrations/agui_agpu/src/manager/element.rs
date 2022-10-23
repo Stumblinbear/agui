@@ -1,5 +1,5 @@
 use agpu::RenderPass;
-use agui::{render::canvas::Canvas, widget::WidgetId};
+use agui::{render::canvas::Canvas, unit::Point, widget::WidgetId};
 use glyph_brush_draw_cache::ab_glyph::FontArc;
 
 use crate::{
@@ -18,13 +18,19 @@ pub(crate) struct RenderElement {
 }
 
 impl RenderElement {
-    pub fn update(&mut self, ctx: &mut PaintContext, fonts: &[FontArc], canvas: Canvas) {
+    pub fn update(
+        &mut self,
+        ctx: &mut PaintContext,
+        fonts: &[FontArc],
+        pos: Point,
+        canvas: Canvas,
+    ) {
         if canvas.head.is_empty() {
             self.head = None;
         } else if let Some(head) = &mut self.head {
-            head.update(ctx, fonts, canvas.rect, &canvas.head);
+            head.update(ctx, fonts, pos, &canvas.head);
         } else {
-            self.head = Some(RenderCanvas::new(ctx, fonts, canvas.rect, &canvas.head));
+            self.head = Some(RenderCanvas::new(ctx, fonts, pos, &canvas.head));
         }
     }
 

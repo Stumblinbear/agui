@@ -9,7 +9,7 @@ use crate::{
         painter::{CanvasPainter, Head},
         Canvas,
     },
-    unit::{Data, Rect},
+    unit::{Data, Size},
 };
 
 use crate::widget::{BuildContext, BuildResult, WidgetDispatch, WidgetRef, WidgetView};
@@ -114,12 +114,12 @@ where
         result
     }
 
-    fn paint(&self, rect: Rect) -> Option<Canvas> {
+    fn paint(&self, size: Size) -> Option<Canvas> {
         let span = tracing::error_span!("draw");
         let _enter = span.enter();
 
         let mut canvas = Canvas {
-            rect,
+            size,
 
             head: Vec::default(),
             children: Vec::default(),

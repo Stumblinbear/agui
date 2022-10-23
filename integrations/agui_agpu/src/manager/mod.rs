@@ -6,7 +6,7 @@ use agpu::{
 };
 use agui::{
     manager::{events::WidgetEvent, WidgetManager},
-    unit::Size,
+    unit::{Point, Size},
     widget::WidgetId,
 };
 use fnv::{FnvHashMap, FnvHashSet};
@@ -265,11 +265,13 @@ impl RenderManager {
             .get_mut(&widget_id)
             .expect("drawn render element not found");
 
-        println!("updating element: {:?}", widget_id);
+        let widget_element = manager.get_widgets().get(widget_id).unwrap();
 
-        let canvas = manager.get_widgets().get(widget_id).unwrap().paint();
+        let canvas = widget_element.paint();
 
         if let Some(canvas) = canvas {
+            let pos = Point::from(widget_element.get_rect().unwrap());
+
             // If we have or are drawing to the target layer, mark it dirty
             if !canvas.head.is_empty() || element.head.is_some() {
                 dirty_layers.extend(element.head_target);
@@ -277,7 +279,7 @@ impl RenderManager {
 
             let fonts = manager.get_fonts();
 
-            element.update(&mut self.ctx, fonts, canvas);
+            element.update(&mut self.ctx, fonts, pos, canvas);
         } else {
             // We previously drew to the target layer, dirty it
             if element.head.is_some() {

@@ -40,7 +40,7 @@ where
     }
 
     pub fn get_size(&self) -> Size {
-        self.canvas.rect.into()
+        self.canvas.size
     }
 
     fn push_command(&mut self, command: CanvasCommand) {
@@ -54,7 +54,7 @@ where
 
     /// Starts a layer with `shape` which child widgets will drawn to. It will be the `rect` of the canvas.
     pub fn start_layer(self, paint: &Paint, shape: Shape) -> CanvasPainter<'paint, Head> {
-        let rect = self.canvas.rect;
+        let rect = self.canvas.size.into();
 
         self.start_layer_at(rect, paint, shape)
     }
@@ -69,6 +69,8 @@ where
         tracing::trace!("starting new layer");
 
         self.canvas.tail = Some(Box::new(CanvasLayer {
+            offset: rect.into(),
+
             style: LayerStyle {
                 shape,
 
@@ -77,7 +79,7 @@ where
             },
 
             canvas: Canvas {
-                rect,
+                size: rect.into(),
 
                 head: Vec::default(),
                 children: Vec::default(),
@@ -95,7 +97,7 @@ where
         shape: Shape,
         func: impl FnOnce(&mut CanvasPainter<Head>),
     ) -> CanvasPainter<'paint, Tail> {
-        let rect = self.canvas.rect;
+        let rect = self.canvas.size.into();
 
         self.layer_at(rect, paint, shape, func)
     }
@@ -111,6 +113,8 @@ where
         tracing::trace!("creating new layer");
 
         self.canvas.children.push(CanvasLayer {
+            offset: rect.into(),
+
             style: LayerStyle {
                 shape,
 
@@ -119,7 +123,7 @@ where
             },
 
             canvas: Canvas {
-                rect,
+                size: rect.into(),
 
                 head: Vec::default(),
                 children: Vec::default(),
@@ -140,7 +144,7 @@ where
 impl<'paint> CanvasPainter<'paint, Head> {
     /// Draws a rectangle. It will be the `rect` of the canvas.
     pub fn draw_rect(&mut self, paint: &Paint) {
-        self.draw_rect_at(self.canvas.rect, paint);
+        self.draw_rect_at(self.canvas.size.into(), paint);
     }
 
     /// Draws a rectangle in the defined `rect`.
@@ -165,7 +169,7 @@ impl<'paint> CanvasPainter<'paint, Head> {
         bottom_left: f32,
     ) {
         self.draw_rounded_rect_at(
-            self.canvas.rect,
+            self.canvas.size.into(),
             paint,
             top_left,
             top_right,
@@ -201,7 +205,7 @@ impl<'paint> CanvasPainter<'paint, Head> {
 
     /// Draws a path. It will be the `rect` of the canvas.
     pub fn draw_path(&mut self, paint: &Paint, path: Path) {
-        self.draw_path_at(self.canvas.rect, paint, path);
+        self.draw_path_at(self.canvas.size.into(), paint, path);
     }
 
     /// Draws a path in the defined `rect`.
@@ -221,7 +225,7 @@ impl<'paint> CanvasPainter<'paint, Head> {
     where
         T: Into<Cow<'static, str>>,
     {
-        self.draw_text_at(self.canvas.rect, paint, font, text);
+        self.draw_text_at(self.canvas.size.into(), paint, font, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
