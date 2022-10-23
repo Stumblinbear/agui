@@ -5,20 +5,16 @@ use fnv::FnvHashMap;
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     manager::context::AguiContext,
-    render::{
-        canvas::{
-            painter::{CanvasPainter, Head},
-            Canvas,
-        },
-        context::RenderContext,
-        renderer::RenderFn,
+    render::canvas::{
+        painter::{CanvasPainter, Head},
+        Canvas,
     },
     unit::{Data, Rect},
 };
 
 use crate::widget::{BuildContext, BuildResult, WidgetDispatch, WidgetRef, WidgetView};
 
-use super::{dispatch::WidgetEquality, LayoutContext, LayoutResult, WidgetState};
+use super::{dispatch::WidgetEquality, LayoutContext, LayoutResult, PaintContext, WidgetState};
 
 pub struct WidgetInstance<W>
 where
@@ -26,8 +22,6 @@ where
 {
     widget: Rc<W>,
     state: W::State,
-
-    renderer: Option<RenderFn<W>>,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
@@ -42,8 +36,6 @@ where
         Self {
             widget,
             state,
-
-            renderer: None,
 
             callbacks: FnvHashMap::default(),
         }
@@ -112,38 +104,41 @@ where
             widget: self.widget.as_ref(),
             state: &mut self.state,
 
-            renderer: None,
             callbacks: FnvHashMap::default(),
         };
 
         let result = self.widget.build(&mut ctx);
 
-        self.renderer = ctx.renderer;
         self.callbacks = ctx.callbacks;
 
         result
     }
 
-    fn render(&self, rect: Rect) -> Option<Canvas> {
-        let span = tracing::error_span!("on_draw");
+    fn paint(&self, rect: Rect) -> Option<Canvas> {
+        let span = tracing::error_span!("draw");
         let _enter = span.enter();
 
-        self.renderer.as_ref().map(|renderer| {
-            let mut canvas = Canvas {
-                rect,
+        let mut canvas = Canvas {
+            rect,
 
-                ..Canvas::default()
-            };
+            head: Vec::default(),
+            children: Vec::default(),
+            tail: None,
+        };
 
-            let ctx = RenderContext {
-                widget: self.widget.as_ref(),
-                state: &self.state,
-            };
+        let mut ctx = PaintContext {
+            widget: self.widget.as_ref(),
+            state: &self.state,
+        };
 
-            renderer.call(&ctx, CanvasPainter::<Head>::new(&mut canvas));
+        self.widget
+            .paint(&mut ctx, CanvasPainter::<Head>::begin(&mut canvas));
 
-            canvas
-        })
+        if !canvas.head.is_empty() || !canvas.children.is_empty() || canvas.tail.is_some() {
+            Some(canvas)
+        } else {
+            None
+        }
     }
 
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {

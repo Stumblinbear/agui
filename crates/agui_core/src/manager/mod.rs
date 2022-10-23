@@ -268,14 +268,7 @@ impl WidgetManager {
         self.sanitize_events(&mut widget_events);
 
         for widget_id in needs_redraw {
-            let widget = self
-                .widget_tree
-                .get_mut(widget_id)
-                .expect("widget marked for redraw does not exist");
-
-            if widget.render() {
-                widget_events.push(WidgetEvent::Draw { widget_id });
-            }
+            widget_events.push(WidgetEvent::Draw { widget_id });
         }
 
         for plugin in self.plugins.values_mut() {

@@ -1,10 +1,10 @@
 use agui_core::{
     callback::Callback,
-    render::canvas::paint::Paint,
+    render::{CanvasPainter, Paint},
     unit::{Color, Layout, LayoutType},
     widget::{
         BuildContext, BuildResult, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
-        LayoutResult, WidgetRef, WidgetState, WidgetView,
+        LayoutResult, PaintContext, WidgetRef, WidgetState, WidgetView,
     },
 };
 use agui_macros::StatefulWidget;
@@ -65,25 +65,6 @@ impl WidgetView for Button {
     }
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.on_draw(move |ctx, mut canvas| {
-            let style = ctx.style.clone().unwrap_or_default();
-
-            let color = if ctx.state.disabled {
-                style.disabled
-            } else if ctx.state.pressed {
-                style.pressed
-            } else if ctx.state.hovered {
-                style.hovered
-            } else {
-                style.normal
-            };
-
-            canvas.draw_rect(&Paint {
-                color,
-                ..Paint::default()
-            });
-        });
-
         let on_hover = ctx.callback::<bool, _>(|ctx, arg| {
             if ctx.state.hovered != *arg {
                 ctx.set_state(|state| {
@@ -110,5 +91,24 @@ impl WidgetView for Button {
 
             ..Default::default()
         }])
+    }
+
+    fn paint(&self, ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
+        let style = self.style.clone().unwrap_or_default();
+
+        let color = if ctx.state.disabled {
+            style.disabled
+        } else if ctx.state.pressed {
+            style.pressed
+        } else if ctx.state.hovered {
+            style.hovered
+        } else {
+            style.normal
+        };
+
+        canvas.draw_rect(&Paint {
+            color,
+            ..Paint::default()
+        });
     }
 }

@@ -15,7 +15,7 @@ use glyph_brush_draw_cache::DrawCache;
 mod element;
 
 use crate::{
-    context::RenderContext,
+    context::PaintContext,
     manager::element::RenderElement,
     render::data::{InstanceData, VertexData},
 };
@@ -25,7 +25,7 @@ const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 pub(crate) struct RenderManager {
     pipeline: RenderPipeline,
 
-    ctx: RenderContext,
+    ctx: PaintContext,
 
     widgets: FnvHashMap<WidgetId, RenderElement>,
 }
@@ -129,7 +129,7 @@ impl RenderManager {
         Self {
             pipeline,
 
-            ctx: RenderContext {
+            ctx: PaintContext {
                 gpu: Gpu::clone(gpu),
 
                 render_size: gpu
@@ -265,7 +265,9 @@ impl RenderManager {
             .get_mut(&widget_id)
             .expect("drawn render element not found");
 
-        let canvas = manager.get_widgets().get(widget_id).unwrap().get_canvas();
+        println!("updating element: {:?}", widget_id);
+
+        let canvas = manager.get_widgets().get(widget_id).unwrap().paint();
 
         if let Some(canvas) = canvas {
             // If we have or are drawing to the target layer, mark it dirty

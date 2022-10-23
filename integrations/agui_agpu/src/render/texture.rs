@@ -1,7 +1,7 @@
 use agpu::{BindGroup, Buffer, Texture};
 use agui::unit::{BlendMode, Size};
 
-use crate::context::RenderContext;
+use crate::context::PaintContext;
 
 pub struct RenderTexture {
     pub texture: Texture<agpu::D2>,
@@ -12,7 +12,7 @@ pub struct RenderTexture {
 }
 
 impl RenderTexture {
-    pub fn new(ctx: &mut RenderContext, size: Size) -> Self {
+    pub fn new(ctx: &mut PaintContext, size: Size) -> Self {
         Self {
             texture: ctx.gpu.new_texture("agui layer").allow_binding().create(
                 (size.width.round() as u32, size.height.round() as u32),

@@ -2,9 +2,11 @@ use std::rc::Rc;
 
 use downcast_rs::{impl_downcast, Downcast};
 
-use crate::unit::Data;
+use crate::{render::CanvasPainter, unit::Data};
 
-use super::{dispatch::WidgetDispatch, BuildContext, BuildResult, LayoutContext, LayoutResult};
+use super::{
+    dispatch::WidgetDispatch, BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext,
+};
 
 pub trait Widget: Downcast {
     fn into_widget(self: Rc<Self>) -> Box<dyn WidgetDispatch>;
@@ -37,6 +39,10 @@ pub trait WidgetView: Widget + WidgetState + Sized {
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
     fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult;
+
+    /// Called whenever this widget is redrawn.
+    #[allow(unused_variables)]
+    fn paint(&self, ctx: &mut PaintContext<Self>, canvas: CanvasPainter) {}
 }
 
 #[cfg(test)]

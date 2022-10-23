@@ -22,7 +22,7 @@ pub enum WidgetEvent {
     /// A widget has been destroyed.
     Destroyed { widget_id: WidgetId },
 
-    /// A widget has been drawn. This will occur the first time a widget is drawn and for subsequent changes.
+    /// A widget needs to be redrawn. This will occur the first time a widget is drawn and for subsequent changes.
     Draw { widget_id: WidgetId },
 }
 

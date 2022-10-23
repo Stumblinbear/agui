@@ -37,7 +37,7 @@ pub trait WidgetDispatch: Downcast {
 
     fn build(&mut self, ctx: AguiContext) -> BuildResult;
 
-    fn render(&self, rect: Rect) -> Option<Canvas>;
+    fn paint(&self, rect: Rect) -> Option<Canvas>;
 
     #[allow(clippy::borrowed_box)]
     fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool;

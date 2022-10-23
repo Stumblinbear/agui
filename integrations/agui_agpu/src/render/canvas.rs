@@ -5,7 +5,7 @@ use agui::{
 };
 use glyph_brush_draw_cache::ab_glyph::FontArc;
 
-use crate::context::RenderContext;
+use crate::context::PaintContext;
 
 use super::{
     builder::{shape::LayerShapeBuilder, text::TextDrawCallBuilder, DrawCallBuilder},
@@ -21,7 +21,7 @@ pub(crate) struct RenderCanvas {
 
 impl RenderCanvas {
     pub fn new(
-        ctx: &mut RenderContext,
+        ctx: &mut PaintContext,
         fonts: &[FontArc],
         rect: Rect,
         commands: &[CanvasCommand],
@@ -45,7 +45,7 @@ impl RenderCanvas {
 
     pub fn update(
         &mut self,
-        ctx: &mut RenderContext,
+        ctx: &mut PaintContext,
         fonts: &[FontArc],
         rect: Rect,
         commands: &[CanvasCommand],
@@ -64,7 +64,7 @@ impl RenderCanvas {
         self.build(ctx, fonts, commands);
     }
 
-    fn build(&mut self, ctx: &mut RenderContext, fonts: &[FontArc], commands: &[CanvasCommand]) {
+    fn build(&mut self, ctx: &mut PaintContext, fonts: &[FontArc], commands: &[CanvasCommand]) {
         self.draw_calls.clear();
 
         let mut draw_call_builder: Option<Box<dyn DrawCallBuilder>> = None;

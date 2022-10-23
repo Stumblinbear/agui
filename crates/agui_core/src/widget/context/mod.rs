@@ -1,5 +1,5 @@
 use crate::{
-    callback::{Callback, CallbackId, CallbackContext},
+    callback::{Callback, CallbackContext, CallbackId},
     manager::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginImpl},
     unit::Data,
@@ -9,9 +9,11 @@ use crate::{
 
 mod build;
 mod layout;
+mod paint;
 
 pub use build::*;
 pub use layout::*;
+pub use paint::*;
 
 use super::WidgetState;
 

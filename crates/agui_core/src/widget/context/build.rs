@@ -6,11 +6,6 @@ use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
     manager::element::WidgetElement,
     plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
-    render::{
-        canvas::painter::{CanvasPainter, Head},
-        context::RenderContext,
-        renderer::RenderFn,
-    },
     unit::{Data, Key},
     util::{map::PluginMap, tree::Tree},
     widget::{Widget, WidgetId, WidgetKey, WidgetRef, WidgetState, WidgetView},
@@ -31,7 +26,6 @@ where
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
 
-    pub(crate) renderer: Option<RenderFn<W>>,
     pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
@@ -165,13 +159,6 @@ impl<W> BuildContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {
-    pub fn on_draw<F>(&mut self, func: F)
-    where
-        F: Fn(&RenderContext<W>, CanvasPainter<Head>) + 'static,
-    {
-        self.renderer = Some(RenderFn::new(func));
-    }
-
     pub fn key<C>(&self, key: Key, widget: C) -> WidgetRef
     where
         C: Widget,

@@ -1,7 +1,7 @@
 use agui_core::{
-    render::canvas::paint::Paint,
+    render::{CanvasPainter, Paint},
     unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, WidgetRef, WidgetView},
+    widget::{BuildContext, BuildResult, PaintContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -16,19 +16,19 @@ pub struct Clip {
 }
 
 impl WidgetView for Clip {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.on_draw(|ctx, canvas| {
-            let paint = Paint {
-                anti_alias: ctx.anti_alias,
-                ..Paint::default()
-            };
-
-            match ctx.rect {
-                Some(rect) => canvas.start_layer_at(rect, &paint, ctx.shape.clone()),
-                None => canvas.start_layer(&paint, ctx.shape.clone()),
-            };
-        });
-
+    fn build(&self, _ctx: &mut BuildContext<Self>) -> BuildResult {
         (&self.child).into()
+    }
+
+    fn paint(&self, _ctx: &mut PaintContext<Self>, canvas: CanvasPainter) {
+        let paint = Paint {
+            anti_alias: self.anti_alias,
+            ..Paint::default()
+        };
+
+        match self.rect {
+            Some(rect) => canvas.start_layer_at(rect, &paint, self.shape.clone()),
+            None => canvas.start_layer(&paint, self.shape.clone()),
+        };
     }
 }

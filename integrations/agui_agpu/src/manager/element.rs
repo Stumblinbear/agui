@@ -3,7 +3,7 @@ use agui::{render::canvas::Canvas, widget::WidgetId};
 use glyph_brush_draw_cache::ab_glyph::FontArc;
 
 use crate::{
-    context::RenderContext,
+    context::PaintContext,
     render::{canvas::RenderCanvas, layer::RenderLayer},
 };
 
@@ -18,7 +18,7 @@ pub(crate) struct RenderElement {
 }
 
 impl RenderElement {
-    pub fn update(&mut self, ctx: &mut RenderContext, fonts: &[FontArc], canvas: &Canvas) {
+    pub fn update(&mut self, ctx: &mut PaintContext, fonts: &[FontArc], canvas: Canvas) {
         if canvas.head.is_empty() {
             self.head = None;
         } else if let Some(head) = &mut self.head {

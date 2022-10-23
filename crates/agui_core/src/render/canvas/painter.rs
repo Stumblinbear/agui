@@ -3,11 +3,12 @@ use std::{borrow::Cow, marker::PhantomData};
 use lyon::path::Path;
 
 use crate::{
-    render::canvas::CanvasLayer,
+    render::{
+        canvas::{command::CanvasCommand, Canvas, CanvasLayer, LayerStyle},
+        paint::Paint,
+    },
     unit::{FontStyle, Rect, Shape, Size},
 };
-
-use super::{command::CanvasCommand, paint::Paint, Canvas, LayerStyle};
 
 pub trait CanvasPainterState {}
 
@@ -30,7 +31,7 @@ impl<'paint, State> CanvasPainter<'paint, State>
 where
     State: CanvasPainterState,
 {
-    pub fn new(canvas: &'paint mut Canvas) -> CanvasPainter<'paint, State> {
+    pub(crate) fn begin(canvas: &'paint mut Canvas) -> CanvasPainter<'paint, State> {
         CanvasPainter {
             phantom: PhantomData,
 
@@ -77,11 +78,14 @@ where
 
             canvas: Canvas {
                 rect,
-                ..Canvas::default()
+
+                head: Vec::default(),
+                children: Vec::default(),
+                tail: None,
             },
         }));
 
-        CanvasPainter::new(&mut self.canvas.tail.as_mut().unwrap().canvas)
+        CanvasPainter::<Head>::begin(&mut self.canvas.tail.as_mut().unwrap().canvas)
     }
 
     /// Creates a layer with `shape`. It will be the `rect` of the canvas.
@@ -116,7 +120,10 @@ where
 
             canvas: Canvas {
                 rect,
-                ..Canvas::default()
+
+                head: Vec::default(),
+                children: Vec::default(),
+                tail: None,
             },
         });
 
@@ -126,7 +133,7 @@ where
             canvas: &mut self.canvas.children.last_mut().unwrap().canvas,
         });
 
-        CanvasPainter::<Tail>::new(self.canvas)
+        CanvasPainter::<Tail>::begin(self.canvas)
     }
 }
 

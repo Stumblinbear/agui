@@ -3,7 +3,7 @@ use glyph_brush_draw_cache::{ab_glyph::FontArc, CachedBy};
 use glyph_brush_layout::SectionGlyph;
 
 use crate::{
-    context::RenderContext,
+    context::PaintContext,
     render::{
         data::{LayerDrawOptions, LayerDrawType, PositionData, VertexData},
         draw_call::DrawCall,
@@ -47,7 +47,7 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
         }
     }
 
-    fn build(&self, ctx: &mut RenderContext) -> Option<DrawCall> {
+    fn build(&self, ctx: &mut PaintContext) -> Option<DrawCall> {
         if self.glyphs.is_empty() {
             return None;
         }

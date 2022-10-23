@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
 use agui_core::{
-    render::canvas::paint::Paint,
+    render::{CanvasPainter, Paint},
     unit::{FontStyle, Layout, LayoutType, Sizing},
-    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetView},
+    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -32,18 +32,18 @@ impl WidgetView for Text {
         }
     }
 
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        ctx.on_draw(|ctx, mut canvas| {
-            canvas.draw_text(
-                &Paint {
-                    color: ctx.font.color,
-                    ..Paint::default()
-                },
-                ctx.font.clone(),
-                Cow::clone(&ctx.text),
-            );
-        });
-
+    fn build(&self, _ctx: &mut BuildContext<Self>) -> BuildResult {
         BuildResult::empty()
+    }
+
+    fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
+        canvas.draw_text(
+            &Paint {
+                color: self.font.color,
+                ..Paint::default()
+            },
+            self.font.clone(),
+            Cow::clone(&self.text),
+        );
     }
 }

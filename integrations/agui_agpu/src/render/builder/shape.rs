@@ -4,7 +4,7 @@ use lyon::lyon_tessellation::{
 };
 
 use crate::{
-    context::RenderContext,
+    context::PaintContext,
     render::{
         data::{LayerDrawOptions, LayerDrawType, PositionData, VertexData},
         draw_call::DrawCall,
@@ -72,7 +72,7 @@ impl DrawCallBuilder<'_> for LayerShapeBuilder {
         }
     }
 
-    fn build(&self, ctx: &mut RenderContext) -> Option<DrawCall> {
+    fn build(&self, ctx: &mut PaintContext) -> Option<DrawCall> {
         if self.vertex_data.is_empty() {
             return None;
         }

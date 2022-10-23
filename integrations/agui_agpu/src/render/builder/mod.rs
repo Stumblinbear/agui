@@ -1,6 +1,6 @@
 use agui::render::canvas::command::CanvasCommand;
 
-use crate::context::RenderContext;
+use crate::context::PaintContext;
 
 use super::draw_call::DrawCall;
 
@@ -12,5 +12,5 @@ pub trait DrawCallBuilder<'builder> {
 
     fn process(&mut self, cmd: &CanvasCommand);
 
-    fn build(&self, ctx: &mut RenderContext) -> Option<DrawCall>;
+    fn build(&self, ctx: &mut PaintContext) -> Option<DrawCall>;
 }

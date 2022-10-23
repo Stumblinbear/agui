@@ -5,11 +5,11 @@ use std::{
 
 use agui_core::{
     callback::Callback,
-    render::canvas::paint::Paint,
+    render::{CanvasPainter, Paint},
     unit::{Color, FontStyle, Layout, LayoutType, Point, Rect},
     widget::{
         BuildContext, BuildResult, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
-        LayoutResult, WidgetState, WidgetView,
+        LayoutResult, PaintContext, WidgetState, WidgetView,
     },
 };
 use agui_macros::StatefulWidget;
@@ -293,90 +293,6 @@ where
 
         // let style: TextInputStyle = self.style.resolve(ctx);
 
-        ctx.on_draw(|ctx, mut canvas| {
-            let input_state_style = if ctx.state.disabled {
-                &ctx.style.disabled
-            } else if ctx.state.hovered {
-                &ctx.style.hover
-            } else if ctx.state.focused {
-                &ctx.style.focused
-            } else {
-                &ctx.style.normal
-            };
-
-            canvas.draw_rect(&Paint {
-                color: input_state_style.background_color,
-                ..Paint::default()
-            });
-
-            if ctx.state.cursor.shown {
-                let cursor_paint = &Paint {
-                    color: input_state_style.cursor_color,
-                    ..Paint::default()
-                };
-
-                if ctx.state.value.is_empty() {
-                    canvas.draw_rect_at(
-                        Rect {
-                            x: 0.0,
-                            y: 0.0,
-                            width: 4.0,
-                            height: ctx.font.size,
-                        },
-                        cursor_paint,
-                    );
-                } else {
-                    let glyphs = ctx
-                        .font
-                        .get_glyphs(canvas.get_size().into(), ctx.state.value.as_str());
-
-                    let pos = if let Some(g) = glyphs.get(ctx.state.cursor.glyph_index) {
-                        Point {
-                            x: g.glyph.position.x,
-                            y: g.glyph.position.y,
-                        }
-                    } else if let Some(g) = glyphs.last() {
-                        Point {
-                            x: g.glyph.position.x + ctx.font.h_advance(g.glyph.id),
-                            y: g.glyph.position.y,
-                        }
-                    } else {
-                        Point { x: 0.0, y: 0.0 }
-                    };
-
-                    canvas.draw_rect_at(
-                        Rect {
-                            x: pos.x,
-                            y: 0.0,
-                            width: 4.0,
-                            height: ctx.font.size,
-                        },
-                        cursor_paint,
-                    );
-                }
-            }
-
-            if ctx.state.value.is_empty() {
-                canvas.draw_text(
-                    &Paint {
-                        color: input_state_style.placeholder_color,
-                        ..Paint::default()
-                    },
-                    ctx.font.clone(),
-                    ctx.placeholder.clone(),
-                );
-            } else {
-                canvas.draw_text(
-                    &Paint {
-                        color: input_state_style.text_color,
-                        ..Paint::default()
-                    },
-                    ctx.font.clone(),
-                    ctx.state.value.clone(),
-                );
-            }
-        });
-
         BuildResult::from([GestureDetector {
             on_hover,
 
@@ -385,5 +301,89 @@ where
 
             ..Default::default()
         }])
+    }
+
+    fn paint(&self, ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
+        let input_state_style = if ctx.state.disabled {
+            &ctx.style.disabled
+        } else if ctx.state.hovered {
+            &ctx.style.hover
+        } else if ctx.state.focused {
+            &ctx.style.focused
+        } else {
+            &ctx.style.normal
+        };
+
+        canvas.draw_rect(&Paint {
+            color: input_state_style.background_color,
+            ..Paint::default()
+        });
+
+        if ctx.state.cursor.shown {
+            let cursor_paint = &Paint {
+                color: input_state_style.cursor_color,
+                ..Paint::default()
+            };
+
+            if ctx.state.value.is_empty() {
+                canvas.draw_rect_at(
+                    Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 4.0,
+                        height: ctx.font.size,
+                    },
+                    cursor_paint,
+                );
+            } else {
+                let glyphs = ctx
+                    .font
+                    .get_glyphs(canvas.get_size().into(), ctx.state.value.as_str());
+
+                let pos = if let Some(g) = glyphs.get(ctx.state.cursor.glyph_index) {
+                    Point {
+                        x: g.glyph.position.x,
+                        y: g.glyph.position.y,
+                    }
+                } else if let Some(g) = glyphs.last() {
+                    Point {
+                        x: g.glyph.position.x + ctx.font.h_advance(g.glyph.id),
+                        y: g.glyph.position.y,
+                    }
+                } else {
+                    Point { x: 0.0, y: 0.0 }
+                };
+
+                canvas.draw_rect_at(
+                    Rect {
+                        x: pos.x,
+                        y: 0.0,
+                        width: 4.0,
+                        height: ctx.font.size,
+                    },
+                    cursor_paint,
+                );
+            }
+        }
+
+        if ctx.state.value.is_empty() {
+            canvas.draw_text(
+                &Paint {
+                    color: input_state_style.placeholder_color,
+                    ..Paint::default()
+                },
+                ctx.font.clone(),
+                ctx.placeholder.clone(),
+            );
+        } else {
+            canvas.draw_text(
+                &Paint {
+                    color: input_state_style.text_color,
+                    ..Paint::default()
+                },
+                ctx.font.clone(),
+                ctx.state.value.clone(),
+            );
+        }
     }
 }

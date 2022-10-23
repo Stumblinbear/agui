@@ -20,8 +20,6 @@ pub struct WidgetElement {
     layout: Layout,
 
     rect: Option<Rect>,
-
-    canvas: Option<Canvas>,
 }
 
 impl WidgetElement {
@@ -34,8 +32,6 @@ impl WidgetElement {
             layout: Layout::default(),
 
             rect: None,
-
-            canvas: None,
         })
     }
 
@@ -71,10 +67,6 @@ impl WidgetElement {
         self.rect = rect;
     }
 
-    pub fn get_canvas(&self) -> Option<&Canvas> {
-        self.canvas.as_ref()
-    }
-
     pub fn update(&mut self, other: WidgetRef) -> bool {
         self.dispatch.update(other)
     }
@@ -101,17 +93,9 @@ impl WidgetElement {
         self.dispatch.build(ctx)
     }
 
-    /// Causes the widget to redraw its canvas. Returns a `bool` indicating if the canvas changed or not.
-    pub(crate) fn render(&mut self) -> bool {
-        let new_canvas = self.rect.and_then(|rect| self.dispatch.render(rect));
-
-        if self.canvas != new_canvas {
-            self.canvas = new_canvas;
-
-            true
-        } else {
-            false
-        }
+    /// Causes the widget to draw to a canvas.
+    pub fn paint(&self) -> Option<Canvas> {
+        self.rect.and_then(|rect| self.dispatch.paint(rect))
     }
 
     #[allow(clippy::borrowed_box)]

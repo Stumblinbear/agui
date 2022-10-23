@@ -1,9 +1,9 @@
 use std::{any::Any, panic::RefUnwindSafe};
 
 use agui_core::{
-    render::canvas::paint::Paint,
+    render::{CanvasPainter, Paint},
     unit::{Color, FontStyle, Rect},
-    widget::{BuildContext, BuildResult, WidgetView},
+    widget::{BuildContext, BuildResult, PaintContext, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -83,34 +83,33 @@ impl<Ok: 'static, Error: 'static> WidgetView for Fallible<Ok, Error> {
             }
         };
 
-        // Create a generic error widget
-        ctx.on_draw(|_, mut canvas| {
-            let rect: Rect = canvas.get_size().into();
-
-            let red = Paint {
-                color: Color::from_rgb((1.0, 0.0, 0.0)),
-                ..Paint::default()
-            };
-
-            canvas.draw_rect_at(rect, &red);
-
-            canvas.draw_rect_at(
-                Rect {
-                    x: rect.x + ERROR_BORDER,
-                    y: rect.y + ERROR_BORDER,
-                    width: rect.width - ERROR_BORDER * 2.0,
-                    height: rect.height - ERROR_BORDER * 2.0,
-                },
-                &Paint {
-                    color: Color::from_rgb((1.0, 1.0, 0.0)),
-                    ..Paint::default()
-                },
-            );
-
-            canvas.draw_text(&red, FontStyle::default(), "an error occured");
-        });
-
         BuildResult::empty()
+    }
+
+    fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
+        let rect: Rect = canvas.get_size().into();
+
+        let red = Paint {
+            color: Color::from_rgb((1.0, 0.0, 0.0)),
+            ..Paint::default()
+        };
+
+        canvas.draw_rect_at(rect, &red);
+
+        canvas.draw_rect_at(
+            Rect {
+                x: rect.x + ERROR_BORDER,
+                y: rect.y + ERROR_BORDER,
+                width: rect.width - ERROR_BORDER * 2.0,
+                height: rect.height - ERROR_BORDER * 2.0,
+            },
+            &Paint {
+                color: Color::from_rgb((1.0, 1.0, 0.0)),
+                ..Paint::default()
+            },
+        );
+
+        canvas.draw_text(&red, FontStyle::default(), "an error occured");
     }
 }
 

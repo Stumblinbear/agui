@@ -1,12 +1,12 @@
 use crate::unit::{BlendMode, Rect, Shape};
 
 pub mod command;
-pub mod paint;
 pub mod painter;
 
-use self::command::CanvasCommand;
+pub use self::command::*;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Canvas {
     pub rect: Rect,
 
@@ -16,13 +16,15 @@ pub struct Canvas {
 }
 
 #[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub struct CanvasLayer {
     pub style: LayerStyle,
 
     pub canvas: Canvas,
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub struct LayerStyle {
     pub shape: Shape,
 

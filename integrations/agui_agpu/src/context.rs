@@ -4,7 +4,7 @@ use agpu::{Buffer, Gpu, Sampler, Texture};
 use agui::render::texture::TextureId;
 use glyph_brush_draw_cache::DrawCache;
 
-pub struct RenderContext {
+pub struct PaintContext {
     pub gpu: Gpu,
 
     pub render_size: Buffer,
@@ -18,7 +18,7 @@ pub struct RenderContext {
     pub font_draw_cache: RefCell<DrawCache>,
 }
 
-impl RenderContext {
+impl PaintContext {
     pub fn get_texture(&self, texture_id: TextureId) -> Option<&Texture<agpu::D2>> {
         if let Some(texture_idx) = texture_id.idx() {
             if texture_idx < self.textures.len() {

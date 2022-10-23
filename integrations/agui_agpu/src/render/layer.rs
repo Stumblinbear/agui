@@ -1,7 +1,7 @@
 use agpu::Buffer;
 use agui::unit::Rect;
 
-use crate::context::RenderContext;
+use crate::context::PaintContext;
 
 use super::texture::RenderTexture;
 
@@ -14,7 +14,7 @@ pub(crate) struct RenderLayer {
 }
 
 impl RenderLayer {
-    fn new(ctx: &mut RenderContext, rect: Rect) -> Self {
+    fn new(ctx: &mut PaintContext, rect: Rect) -> Self {
         Self {
             rect,
 
