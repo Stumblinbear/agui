@@ -72,7 +72,7 @@ impl RenderCanvas {
         for cmd in commands {
             // Check if the current layer builder can process the command, and finalize the build if not
             if let Some(builder) = draw_call_builder.as_ref() {
-                if !builder.can_process(&cmd) {
+                if !builder.can_process(cmd) {
                     // Add the draw call to the current layer
 
                     if let Some(draw_call) = builder.build(ctx) {

@@ -40,7 +40,7 @@ impl<'builder> DrawCallBuilder<'builder> for TextDrawCallBuilder<'builder> {
             }
 
             self.glyphs.extend(
-                font.get_glyphs(*rect, &text)
+                font.get_glyphs(*rect, text)
                     .into_iter()
                     .map(|v| ((*color).into(), v)),
             );
