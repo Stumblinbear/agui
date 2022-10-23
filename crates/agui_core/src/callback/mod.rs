@@ -104,21 +104,19 @@ where
     pub fn call(&self, arg: A) {
         if let Some(callback_queue) = &self.callback_queue {
             if let Some(callback_id) = self.id {
-                unsafe {
-                    callback_queue.call_unsafe(callback_id, Box::new(arg));
-                }
+                callback_queue.call_unchecked(callback_id, Box::new(arg));
             }
         }
     }
 
-    /// # Safety
+    /// # Panics
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn call_unsafe(&self, arg: Box<dyn Data>) {
+    pub fn call_unchecked(&self, arg: Box<dyn Data>) {
         if let Some(callback_queue) = &self.callback_queue {
             if let Some(callback_id) = self.id {
-                callback_queue.call_unsafe(callback_id, arg);
+                callback_queue.call_unchecked(callback_id, arg);
             }
         }
     }
@@ -207,9 +205,7 @@ mod tests {
             assert_eq!(f.borrow()[0], 7, "callback should have been executed");
         });
 
-        unsafe {
-            callback.call_unsafe(Box::new(10_u32));
-        }
+        callback.call_unchecked(Box::new(10_u32));
 
         manager.update();
 
@@ -233,11 +229,9 @@ mod tests {
             );
         });
 
-        unsafe {
-            manager
-                .get_callback_queue()
-                .call_unsafe(callback.get_id().unwrap(), Box::new(31_u32));
-        }
+        manager
+            .get_callback_queue()
+            .call_unchecked(callback.get_id().unwrap(), Box::new(31_u32));
 
         manager.update();
 
@@ -285,11 +279,9 @@ mod tests {
             );
         });
 
-        unsafe {
-            manager
-                .get_callback_queue()
-                .call_many_unsafe(&callback_ids, Box::new(53_u32));
-        }
+        manager
+            .get_callback_queue()
+            .call_many_unchecked(&callback_ids, Box::new(53_u32));
 
         manager.update();
 

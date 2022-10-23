@@ -42,20 +42,20 @@ impl CallbackQueue {
         });
     }
 
-    /// # Safety
+    /// # Panics
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
-    pub unsafe fn call_unsafe(&self, callback_id: CallbackId, arg: Box<dyn Data>) {
+    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Data>) {
         self.queue.lock().push(CallbackInvoke {
             callback_ids: vec![callback_id],
             arg,
         });
     }
 
-    /// # Safety
+    /// # Panics
     ///
     /// This function must be called with the expected `arg` for all of the `callback_ids`, or it will panic.
-    pub unsafe fn call_many_unsafe(&self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
+    pub fn call_many_unchecked(&self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
         self.queue.lock().push(CallbackInvoke {
             callback_ids: Vec::from(callback_ids),
             arg,

@@ -31,7 +31,7 @@ impl StatefulPlugin for TimeoutPlugin {
             let mut updated = Vec::new();
 
             // for (callback_id, instant) in timeouts.drain_filter(|k, instant| now > *instant) {
-            //     unsafe { ctx.notify_unsafe(callback_id, Rc::clone(&self.dummy) as _) };
+            //     ctx.notify_unchecked(callback_id, Rc::clone(&self.dummy) as _);
             // }
 
             for (callback_id, instant) in timeouts.iter() {
@@ -41,9 +41,7 @@ impl StatefulPlugin for TimeoutPlugin {
                         "timeout expired"
                     );
 
-                    unsafe {
-                        ctx.call_unsafe(*callback_id, Box::new(()));
-                    };
+                    ctx.call_unchecked(*callback_id, Box::new(()));
 
                     updated.push(*callback_id);
                 }

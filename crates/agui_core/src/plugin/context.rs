@@ -30,12 +30,12 @@ impl PluginContext<'_> {
         self.callback_queue.call(callback, arg);
     }
 
-    /// # Safety
+    /// # Panics
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn call_unsafe(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) {
-        self.callback_queue.call_unsafe(callback_id, arg);
+    pub fn call_unchecked(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) {
+        self.callback_queue.call_unchecked(callback_id, arg);
     }
 
     pub fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
@@ -45,11 +45,11 @@ impl PluginContext<'_> {
         self.callback_queue.call_many(callbacks, arg);
     }
 
-    /// # Safety
+    /// # Panics
     ///
     /// You must ensure the callbacks are expecting the type of the `arg` passed in. If the type
     /// is different, it will panic.
-    pub unsafe fn call_many_unsafe(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
-        self.callback_queue.call_many_unsafe(callback_ids, arg);
+    pub fn call_many_unchecked(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
+        self.callback_queue.call_many_unchecked(callback_ids, arg);
     }
 }

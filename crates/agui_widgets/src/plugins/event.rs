@@ -25,9 +25,7 @@ impl StatefulPlugin for EventPlugin {
             let type_id = event.type_id();
 
             if let Some(callbacks) = state.callbacks.get(&type_id) {
-                unsafe {
-                    ctx.call_many_unsafe(&callbacks.iter().copied().collect::<Vec<_>>(), event);
-                }
+                ctx.call_many_unchecked(&callbacks.iter().copied().collect::<Vec<_>>(), event);
             }
         }
     }
