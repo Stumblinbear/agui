@@ -93,10 +93,6 @@ where
     /// Returns `true` if the node was moved, `false` if the node was already a child of the new parent.
     pub(super) fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> bool {
         if let Some(node) = self.nodes.get(node_id) {
-            if node.parent == new_parent_id {
-                return false;
-            }
-
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
                     // Remove the child from its parent
@@ -107,6 +103,13 @@ where
                             .position(|child_id| node_id == *child_id)
                             .expect("unable to find child in removed node's parent"),
                     );
+
+                    // If the parent was unchanged, add it to the end of the children list and return
+                    if Some(parent_id) == new_parent_id {
+                        parent.children.push(node_id);
+
+                        return false;
+                    }
                 }
             }
 
