@@ -167,9 +167,9 @@
 agui = &quot;0.3&quot; # ensure this is the latest version
 </code></pre>
 <h2 id="hello-world"><a class="header" href="#hello-world">Hello, world!</a></h2>
-<p>First, you need to select your integration. To get started quickly, we're going to run with <code>agui_agpu</code> since it's the most feature complete. <code>agpu</code> is an abstraction over <code>wgpu</code> to make it easier to use, so it's effectively a <code>wgpu</code> integration.</p>
-<p>The smallest program you can start up to render something can be found in <code>agui_agpu/examples/hello_world.rs</code>:</p>
-<pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
+<p>First, you need to select your integration. To get started quickly, we're going to run with <code>agui_wgpu</code> since it's the most feature complete.</p>
+<p>The smallest program you can start up to render something can be found in <code>agui_wgpu/examples/hello_world.rs</code>:</p>
+<pre><code class="language-rust noplaypen"><span class="boring">fn main() {
 </span>    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 
     // Register some default behavior
@@ -334,8 +334,8 @@ impl WidgetView for MyWidget {
 <h2 id="parental-rebuilds"><a class="header" href="#parental-rebuilds">Parental Rebuilds</a></h2>
 <p>When a widget is rebuilt, its state is persisted. However, any children it has will be reinitialized, meaning <em>their</em> state will be destroyed. This means you need to be careful in how you structure your interface to reduce rebuilds, and to work around this limitation. For more information on this, you can see <a href="usage/limiting-rebuilds.html">Limiting Rebuilds</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
-<p><code>agui</code> comes with a built-in font system. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
-<pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
+<p><code>agui</code> comes with a built-in font system. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using <code>agui_wgpu</code> as an example, we just need to load the font file, or bytes:</p>
+<pre><code class="language-rust noplaypen"><span class="boring">fn main() {
 </span><span class="boring">    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 </span><span class="boring">
 </span><span class="boring">

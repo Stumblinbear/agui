@@ -141,9 +141,9 @@
 agui = &quot;0.3&quot; # ensure this is the latest version
 </code></pre>
 <h2 id="hello-world"><a class="header" href="#hello-world">Hello, world!</a></h2>
-<p>First, you need to select your integration. To get started quickly, we're going to run with <code>agui_agpu</code> since it's the most feature complete. <code>agpu</code> is an abstraction over <code>wgpu</code> to make it easier to use, so it's effectively a <code>wgpu</code> integration.</p>
-<p>The smallest program you can start up to render something can be found in <code>agui_agpu/examples/hello_world.rs</code>:</p>
-<pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
+<p>First, you need to select your integration. To get started quickly, we're going to run with <code>agui_wgpu</code> since it's the most feature complete.</p>
+<p>The smallest program you can start up to render something can be found in <code>agui_wgpu/examples/hello_world.rs</code>:</p>
+<pre><code class="language-rust noplaypen"><span class="boring">fn main() {
 </span>    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 
     // Register some default behavior

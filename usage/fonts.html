@@ -135,8 +135,8 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="fonts"><a class="header" href="#fonts">Fonts</a></h1>
-<p><code>agui</code> comes with a built-in font system. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using <code>agui_agpu</code> as an example, we just need to load the font file, or bytes:</p>
-<pre><code class="language-rust noplaypen"><span class="boring">fn main() -&gt; Result&lt;(), agpu::BoxError&gt; {
+<p><code>agui</code> comes with a built-in font system. In order to render text, you must begin by loading the font into <code>agui</code>; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using <code>agui_wgpu</code> as an example, we just need to load the font file, or bytes:</p>
+<pre><code class="language-rust noplaypen"><span class="boring">fn main() {
 </span><span class="boring">    let mut ui = UIProgram::new(&quot;agui hello world&quot;)?;
 </span><span class="boring">
 </span><span class="boring">
