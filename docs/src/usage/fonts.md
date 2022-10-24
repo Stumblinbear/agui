@@ -1,12 +1,12 @@
 # Fonts
 
-`agui` comes with a built-in font system. In order to render text, you must begin by loading the font into `agui`; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using `agui_agpu` as an example, we just need to load the font file, or bytes:
+`agui` comes with a built-in font system. In order to render text, you must begin by loading the font into `agui`; this is because the layout system must know how large text will be before rendering. While each integration may have their own methods for doing so, most of them should follow the same general convention. Using `agui_wgpu` as an example, we just need to load the font file, or bytes:
 
 ```rust,noplaypen
-# fn main() -> Result<(), agpu::BoxError> {
+# fn main() {
 #     let mut ui = UIProgram::new("agui hello world")?;
-# 
-# 
+#
+#
     // Import font bytes directly
     let font = ui.load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"));
 

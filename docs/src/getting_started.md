@@ -11,12 +11,12 @@ agui = "0.3" # ensure this is the latest version
 
 ## Hello, world!
 
-First, you need to select your integration. To get started quickly, we're going to run with `agui_agpu` since it's the most feature complete. `agpu` is an abstraction over `wgpu` to make it easier to use, so it's effectively a `wgpu` integration.
+First, you need to select your integration. To get started quickly, we're going to run with `agui_wgpu` since it's the most feature complete.
 
-The smallest program you can start up to render something can be found in `agui_agpu/examples/hello_world.rs`:
+The smallest program you can start up to render something can be found in `agui_wgpu/examples/hello_world.rs`:
 
 ```rust,noplaypen
-# fn main() -> Result<(), agpu::BoxError> {
+# fn main() {
     let mut ui = UIProgram::new("agui hello world")?;
 
     // Register some default behavior

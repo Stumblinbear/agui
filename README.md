@@ -1,5 +1,5 @@
 <div align="center">
-    <a href="https://github.com/stumblinbear/agpu">
+    <a href="https://github.com/stumblinbear/agui">
         <img src=".github/logo.webp" alt="Logo" width="128" />
     </a>
     <br />
@@ -50,7 +50,7 @@ agui = "0.3" # ensure this is the latest version
 
 # 🚀 Usage
 
-Docs for `agui` are under development, however you can check the `agui_agpu/examples` directory for basic setup, and `agui_widgets` for many examples on widget creation.
+Docs for `agui` are under development, however you can check the `agui_wgpu/examples` directory for basic setup, and `agui_widgets` for many examples on widget creation.
 
 ## Creating new widgets
 
