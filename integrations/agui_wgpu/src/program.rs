@@ -156,16 +156,7 @@ impl AguiProgram {
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    let mut encoder = self.handle.device.create_command_encoder(
-                        &wgpu::CommandEncoderDescriptor {
-                            label: Some("agui render encoder"),
-                        },
-                    );
-
-                    self.renderer
-                        .render(&self.manager, &mut encoder, &output_view);
-
-                    self.handle.queue.submit(Some(encoder.finish()));
+                    self.renderer.render(&self.handle, &output_view);
 
                     output_frame.present();
                 }

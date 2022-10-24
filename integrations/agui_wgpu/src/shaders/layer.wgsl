@@ -22,6 +22,12 @@ struct DrawOptions {
 @group(0) @binding(4) var t_texture: texture_2d<f32>;
 @group(0) @binding(5) var t_sampler: sampler;
 
+struct VertexInput {
+    @builtin(vertex_index) vertex_index: u32,
+    @location(0) pos: vec2<f32>,
+    @location(1) color: vec4<f32>,
+}
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
@@ -30,19 +36,17 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-    @builtin(vertex_index) vertex_index: u32,
-    @location(0) pos: vec2<f32>,
-    @location(1) color: vec4<f32>,
+    input: VertexInput,
 ) -> VertexOutput {
-    let vertex_pos = positions[indices[vertex_index]];
+    let vertex_pos = positions[indices[input.vertex_index]];
 
-    let screen_pos = (pos + vertex_pos.xy) / viewport.size;
+    let screen_pos = (input.pos + vertex_pos.xy) / viewport.size;
 
     var result: VertexOutput;
 
     result.position = INVERT_Y_AXIS_AND_SCALE * vec4<f32>(screen_pos.xy, 0.0, 1.0);
     result.uv = vertex_pos.zw;
-    result.color = color;
+    result.color = input.color;
 
     return result;
 }

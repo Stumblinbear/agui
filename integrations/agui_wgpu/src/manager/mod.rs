@@ -9,29 +9,30 @@ use fnv::{FnvHashMap, FnvHashSet};
 use glyph_brush_draw_cache::DrawCache;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    CommandEncoder, Extent3d, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
-    SamplerDescriptor, TextureDescriptor, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor,
+    CommandEncoderDescriptor, Extent3d, Operations, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, SamplerDescriptor, TextureDescriptor, TextureFormat,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 
-pub mod direct_pipeline;
 mod element;
 pub mod paint_pipeline;
 
 use crate::{
     context::RenderContext, handle::RenderHandle, manager::element::RenderElement,
-    render::texture::RenderTexture, storage::RenderStorage,
+    pipelines::screen::ScreenPipeline, render::texture::RenderTexture, storage::RenderStorage,
 };
 
 const INITIAL_FONT_CACHE_SIZE: (u32, u32) = (1024, 1024);
 
 pub(crate) struct RenderManager {
-    direct_pipeline: RenderPipeline,
+    screen_pipeline: ScreenPipeline,
     paint_pipeline: RenderPipeline,
 
     storage: RenderStorage,
 
-    root_texture: RenderTexture,
+    resize_to: Option<Size>,
+
+    root_texture: Option<RenderTexture>,
 
     widgets: FnvHashMap<WidgetId, RenderElement>,
 }
@@ -72,7 +73,7 @@ impl RenderManager {
 
         let font_texture_view = font_texture.create_view(&TextureViewDescriptor::default());
 
-        let mut storage = RenderStorage {
+        let storage = RenderStorage {
             render_size: handle.device.create_buffer_init(&BufferInitDescriptor {
                 label: Some("agui size buffer"),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -101,22 +102,15 @@ impl RenderManager {
             ),
         };
 
-        let root_texture = RenderTexture::new(
-            &mut RenderContext {
-                handle,
-
-                storage: &mut storage,
-            },
-            size,
-        );
-
         Self {
-            direct_pipeline: direct_pipeline::create(&handle.device),
+            screen_pipeline: ScreenPipeline::new(&handle.device),
             paint_pipeline: paint_pipeline::create(&handle.device),
 
             storage,
 
-            root_texture,
+            resize_to: Some(size),
+
+            root_texture: None,
 
             // canvas_cache: HashMap::default(),
             // draw_cache: HashMap::default(),
@@ -130,6 +124,8 @@ impl RenderManager {
             0,
             bytemuck::cast_slice(&[size.width, size.height]),
         );
+
+        self.resize_to = Some(size);
     }
 
     pub fn redraw(
@@ -217,32 +213,54 @@ impl RenderManager {
             self.redraw_layer(manager, layer);
         }
 
-        // let mut encoder = handle
-        //     .device
-        //     .create_command_encoder(&CommandEncoderDescriptor {
-        //         label: Some("agui redraw encoder"),
-        //     });
+        let mut encoder = handle
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("agui redraw encoder"),
+            });
 
-        // let mut r = encoder.begin_render_pass(&RenderPassDescriptor {
-        //     label: Some("agui redraw pass"),
-        //     color_attachments: &[Some(RenderPassColorAttachment {
-        //         view: &self.root_texture.view,
-        //         resolve_target: None,
-        //         ops: Operations {
-        //             load: LoadOp::Load,
-        //             store: true,
-        //         },
-        //     })],
-        //     depth_stencil_attachment: None,
-        // });
+        if let Some(resize_to) = self.resize_to.take() {
+            self.root_texture = Some(RenderTexture::new(
+                &RenderContext {
+                    handle,
 
-        // r.set_pipeline(&self.paint_pipeline);
+                    storage: &mut self.storage,
+                },
+                resize_to,
+            ));
+        }
 
-        // for widget_id in manager.get_widgets().iter_down() {
-        //     let element = self.widgets.get(&widget_id).unwrap();
+        if let Some(root_texture) = &self.root_texture {
+            let mut r = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("agui redraw pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &root_texture.view,
+                    resolve_target: None,
+                    ops: Operations {
+                        // load: LoadOp::Load,
+                        // store: true,
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
 
-        //     element.render(&mut r);
-        // }
+            r.set_pipeline(&self.paint_pipeline);
+
+            for widget_id in manager.get_widgets().iter_down() {
+                let element = self.widgets.get(&widget_id).unwrap();
+
+                element.render(&mut r);
+            }
+        }
+
+        handle.queue.submit(Some(encoder.finish()));
 
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
@@ -300,40 +318,39 @@ impl RenderManager {
             .expect("drawn render element not found");
     }
 
-    pub fn render(
-        &self,
-        manager: &WidgetManager,
-        encoder: &mut CommandEncoder,
-        texture_view: &TextureView,
-    ) {
-        let mut r = encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("agui render pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: texture_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.3,
-                        g: 0.3,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
+    pub fn render(&mut self, handle: &RenderHandle, texture_view: &TextureView) {
+        if let Some(root_texture) = &self.root_texture {
+            let mut encoder = handle
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor {
+                    label: Some("agui render encoder"),
+                });
 
-        // r.set_pipeline(&self.direct_pipeline);
+            {
+                let mut r = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("agui render pass"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: texture_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.3,
+                                g: 0.3,
+                                b: 0.3,
+                                a: 1.0,
+                            }),
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                });
 
-        // self.root_texture.render(&mut r);
+                r.set_pipeline(&self.screen_pipeline.pipeline);
 
-        r.set_pipeline(&self.paint_pipeline);
+                root_texture.render(&mut r);
+            }
 
-        for widget_id in manager.get_widgets().iter_down() {
-            let element = self.widgets.get(&widget_id).unwrap();
-
-            element.render(&mut r);
+            handle.queue.submit(Some(encoder.finish()));
         }
     }
 }
