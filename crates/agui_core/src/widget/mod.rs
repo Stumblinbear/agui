@@ -1,26 +1,29 @@
-use std::{
-    any::{type_name, TypeId},
-    cell::RefCell,
-    hash::Hash,
-    rc::Rc,
-};
+use std::{any::type_name, cell::RefCell, rc::Rc};
 
-use slotmap::{new_key_type, Key};
+use downcast_rs::{impl_downcast, Downcast};
+use slotmap::Key;
 
 mod builder;
 mod context;
-pub mod dispatch;
+mod inherited;
 pub mod instance;
 pub mod key;
 mod result;
+mod state;
 
-use self::{dispatch::WidgetDispatch, key::WidgetKey};
+use crate::element::{ElementId, ElementType};
 
-pub use self::{builder::*, context::*, result::*};
+use self::key::WidgetKey;
 
-new_key_type! {
-    pub struct WidgetId;
+pub use self::{builder::*, context::*, inherited::*, result::*, state::*};
+
+pub trait WidgetDerive: Downcast {
+    fn create_element(self: Rc<Self>) -> ElementType;
 }
+
+impl_downcast!(WidgetDerive);
+
+pub trait Widget: WidgetDerive + WidgetState + PartialEq {}
 
 #[derive(Default, Clone)]
 pub enum WidgetRef {
@@ -30,9 +33,9 @@ pub enum WidgetRef {
         key: Option<WidgetKey>,
 
         display_name: String,
-        widget: Rc<dyn Widget>,
+        widget: Rc<dyn WidgetDerive>,
 
-        widget_id: Rc<RefCell<WidgetId>>,
+        element_id: Rc<RefCell<ElementId>>,
     },
 }
 
@@ -76,15 +79,7 @@ impl WidgetRef {
             display_name,
             widget: Rc::new(widget),
 
-            widget_id: Rc::default(),
-        }
-    }
-
-    pub fn get_type_id(&self) -> Option<TypeId> {
-        if let Self::Some { widget, .. } = self {
-            Some(widget.type_id())
-        } else {
-            None
+            element_id: Rc::default(),
         }
     }
 
@@ -112,17 +107,17 @@ impl WidgetRef {
         }
     }
 
-    pub(crate) fn get_current_id(&self) -> WidgetId {
-        if let Self::Some { widget_id, .. } = self {
-            *widget_id.as_ref().borrow()
+    pub(crate) fn get_current_id(&self) -> ElementId {
+        if let Self::Some { element_id, .. } = self {
+            *element_id.as_ref().borrow()
         } else {
-            WidgetId::default()
+            ElementId::default()
         }
     }
 
-    pub(crate) fn set_current_id(&self, current_widget_id: WidgetId) {
-        if let Self::Some { widget_id, .. } = self {
-            *widget_id.as_ref().borrow_mut() = current_widget_id;
+    pub(crate) fn set_current_id(&self, current_element_id: ElementId) {
+        if let Self::Some { element_id, .. } = self {
+            *element_id.as_ref().borrow_mut() = current_element_id;
         }
     }
 
@@ -137,9 +132,9 @@ impl WidgetRef {
         }
     }
 
-    pub(crate) fn create(&self) -> Option<Box<dyn WidgetDispatch>> {
+    pub(crate) fn create(&self) -> Option<ElementType> {
         if let Self::Some { widget, .. } = self {
-            Some(Rc::clone(widget).into_widget())
+            Some(Rc::clone(widget).create_element())
         } else {
             None
         }
@@ -148,14 +143,13 @@ impl WidgetRef {
 
 impl PartialEq for WidgetRef {
     fn eq(&self, other: &Self) -> bool {
-        if self.get_type_id() != other.get_type_id() {
-            return false;
-        }
-
-        if let Self::Some { key, widget_id, .. } = self {
+        if let Self::Some {
+            key, element_id, ..
+        } = self
+        {
             if let Self::Some {
                 key: other_key,
-                widget_id: other_widget_id,
+                element_id: other_element_id,
                 ..
             } = other
             {
@@ -165,12 +159,12 @@ impl PartialEq for WidgetRef {
                 }
 
                 // If either of them are null, one of them isn't in the tree and are not equal
-                if widget_id.borrow().is_null() || other_widget_id.borrow().is_null() {
+                if element_id.borrow().is_null() || other_element_id.borrow().is_null() {
                     return false;
                 }
 
-                // If the two widget_ids are equal, then the two widgets are equal and currently exist in the tree
-                return widget_id == other_widget_id;
+                // If the two element_ids are equal, then the two widgets are equal and currently exist in the tree
+                return element_id == other_element_id;
             }
         }
 

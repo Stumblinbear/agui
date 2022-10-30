@@ -4,12 +4,10 @@ use fnv::{FnvHashMap, FnvHashSet};
 use morphorm::{Cache, GeometryChanged};
 
 use crate::{
+    element::{Element, ElementId},
     unit::{Bounds, Rect, Size, POS_MARGIN_OF_ERROR},
     util::tree::Tree,
-    widget::WidgetId,
 };
-
-use super::element::WidgetElement;
 
 #[derive(Debug, Default)]
 pub struct LayoutCache<K> {
@@ -338,13 +336,13 @@ where
     }
 }
 
-impl<'ui> morphorm::Node<'ui> for WidgetId {
-    type Data = Tree<Self, WidgetElement>;
+impl<'ui> morphorm::Node<'ui> for ElementId {
+    type Data = Tree<Self, Element>;
 
     fn layout_type(&self, store: &'_ Self::Data) -> Option<morphorm::LayoutType> {
         store
             .get(*self)
-            .map(|node| node.get_layout_type())
+            .map(|node| *node.get_layout_type())
             .map(Into::into)
     }
 

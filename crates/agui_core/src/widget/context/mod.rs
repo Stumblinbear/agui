@@ -1,10 +1,9 @@
 use crate::{
-    callback::{Callback, CallbackContext, CallbackId},
-    manager::element::WidgetElement,
-    plugin::{BoxedPlugin, PluginElement, PluginImpl},
+    callback::{Callback, CallbackContext},
+    element::{Element, ElementId},
     unit::Data,
-    util::{map::PluginMap, tree::Tree},
-    widget::{Widget, WidgetId},
+    util::tree::Tree,
+    widget::Widget,
 };
 
 mod build;
@@ -15,50 +14,14 @@ pub use build::*;
 pub use layout::*;
 pub use paint::*;
 
-use super::WidgetState;
-
-pub trait ContextMut {
-    fn mark_dirty(&mut self, widget_id: WidgetId);
-
-    fn call<A>(&mut self, callback: &Callback<A>, arg: A)
-    where
-        A: Data;
-
-    /// # Panics
-    ///
-    /// You must ensure the callback is expecting the type of the `arg` passed in. If the type
-    /// is different, it will panic.
-    fn call_unchecked(&mut self, callback_id: CallbackId, arg: Box<dyn Data>);
-
-    fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
-    where
-        A: Data;
-
-    /// # Panics
-    ///
-    /// You must ensure the callbacks are expecting the type of the `arg` passed in. If the type
-    /// is different, it will panic.
-    fn call_many_unchecked(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>);
-}
-
-pub trait ContextPlugins {
-    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin>;
-
-    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
-    where
-        P: PluginImpl;
-
-    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
-    where
-        P: PluginImpl;
-}
+use super::{InheritedWidget, WidgetState};
 
 pub trait ContextWidget {
     type Widget: Widget;
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement>;
+    fn get_elements(&self) -> &Tree<ElementId, Element>;
 
-    fn get_widget_id(&self) -> WidgetId;
+    fn get_element_id(&self) -> ElementId;
 
     fn get_widget(&self) -> &Self::Widget;
 }
@@ -77,6 +40,10 @@ where
 }
 
 pub trait ContextWidgetMut: ContextWidget {
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I::State>
+    where
+        I: InheritedWidget + 'static;
+
     fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: Data,

@@ -1,28 +1,31 @@
-use std::ops::Deref;
+use std::{any::TypeId, ops::Deref};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
-    manager::element::WidgetElement,
-    plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
+    context::ContextMut,
+    element::{Element, ElementId},
+    inheritance::Inheritance,
     unit::{Data, Key},
-    util::{map::PluginMap, tree::Tree},
-    widget::{Widget, WidgetId, WidgetKey, WidgetRef, WidgetState, WidgetView},
+    util::tree::Tree,
+    widget::{InheritedWidget, Widget, WidgetKey, WidgetRef, WidgetState, WidgetView},
 };
 
-use super::{ContextMut, ContextPlugins, ContextStatefulWidget, ContextWidget, ContextWidgetMut};
+use super::{ContextStatefulWidget, ContextWidget, ContextWidgetMut};
 
 pub struct BuildContext<'ctx, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
-    pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetElement>,
-    pub(crate) dirty: &'ctx mut FnvHashSet<WidgetId>,
-    pub(crate) callback_queue: CallbackQueue,
+    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) callback_queue: &'ctx CallbackQueue,
 
-    pub(crate) widget_id: WidgetId,
+    pub(crate) element_id: ElementId,
+
+    pub(crate) inheritance: &'ctx mut Inheritance,
+
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
 
@@ -31,7 +34,7 @@ where
 
 impl<W> Deref for BuildContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
     type Target = W;
 
@@ -40,39 +43,12 @@ where
     }
 }
 
-impl<W> ContextPlugins for BuildContext<'_, W>
-where
-    W: WidgetView + WidgetState,
-{
-    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
-        self.plugins
-    }
-
-    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_ref())
-    }
-
-    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get_mut(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_mut())
-    }
-}
-
 impl<W> ContextMut for BuildContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
-    fn mark_dirty(&mut self, widget_id: WidgetId) {
-        self.dirty.insert(widget_id);
+    fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
     }
 
     fn call<A>(&mut self, callback: &Callback<A>, arg: A)
@@ -100,16 +76,16 @@ where
 
 impl<W> ContextWidget for BuildContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
     type Widget = W;
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
-        self.widget_tree
+    fn get_elements(&self) -> &Tree<ElementId, Element> {
+        self.element_tree
     }
 
-    fn get_widget_id(&self) -> WidgetId {
-        self.widget_id
+    fn get_element_id(&self) -> ElementId {
+        self.element_id
     }
 
     fn get_widget(&self) -> &W {
@@ -119,7 +95,7 @@ where
 
 impl<W> ContextStatefulWidget for BuildContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
     fn get_state(&self) -> &W::State {
         self.state
@@ -139,14 +115,60 @@ where
 
 impl<W> ContextWidgetMut for BuildContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I::State>
+    where
+        I: InheritedWidget + 'static,
+    {
+        let type_id = TypeId::of::<I>();
+
+        // self.inheritance.listening_to.insert(type_id);
+
+        // if let Some(inheritance_scope_id) = self.inheritance.scope {
+        //     // Grab our ancestor inherited node from the tree. This contains the mappings of available
+        //     // types that we can consume.
+        //     let target_inherited_element_id = self
+        //         .element_tree
+        //         .get(inheritance_scope_id)
+        //         .expect("ancestor inherited node does not exist")
+        //         .inheritance_scope
+        //         .available
+        //         .get(&type_id)
+        //         .copied();
+
+        //     if let Some(target_inherited_element_id) = target_inherited_element_id {
+        //         let target_inherited_element = self
+        //             .element_tree
+        //             .get_mut(target_inherited_element_id)
+        //             .expect("inherited element does not exist");
+
+        //         let inheritance_node = &mut target_inherited_element.inheritance_scope;
+
+        //         // Add this widget as a listener on the element we're inheriting from
+        //         inheritance_node.listeners.insert(self.element_id);
+
+        //         self.inheritance
+        //             .depends_on
+        //             .insert(target_inherited_element_id);
+
+        //         let instance = target_inherited_element
+        //             .downcast_mut::<WidgetInstance<I>>()
+        //             .expect("inherited widget downcast failed");
+
+        //         return Some(&mut instance.state);
+        //     }
+        // }
+
+        None
+    }
+
     fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: Data,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        let callback = Callback::new::<F, W>(self.widget_id, self.callback_queue.clone());
+        let callback = Callback::new::<F, W>(self.element_id, self.callback_queue.clone());
 
         self.callbacks
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
@@ -165,7 +187,7 @@ where
     {
         WidgetRef::new_with_key(
             Some(match key {
-                Key::Local(_) => WidgetKey(Some(self.widget_id), key),
+                Key::Local(_) => WidgetKey(Some(self.element_id), key),
                 Key::Global(_) => WidgetKey(None, key),
             }),
             widget,

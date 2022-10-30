@@ -1,31 +1,26 @@
 use std::ops::Deref;
 
+use fnv::FnvHashSet;
+
 use crate::{
-    manager::element::WidgetElement,
-    plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
+    context::ContextMut,
+    element::{Element, ElementId},
     unit::Data,
-    util::{
-        map::{PluginMap, WidgetSet},
-        tree::Tree,
-    },
-    widget::{
-        ContextMut, ContextPlugins, ContextStatefulWidget, ContextWidget, Widget, WidgetId,
-        WidgetState,
-    },
+    util::tree::Tree,
+    widget::{ContextStatefulWidget, ContextWidget, Widget},
 };
 
 use super::{Callback, CallbackId, CallbackQueue};
 
 pub struct CallbackContext<'ctx, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
-    pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetElement>,
-    pub(crate) dirty: &'ctx mut WidgetSet,
-    pub(crate) callback_queue: CallbackQueue,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) callback_queue: &'ctx CallbackQueue,
 
-    pub(crate) widget_id: WidgetId,
+    pub(crate) element_id: ElementId,
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
 
@@ -34,7 +29,7 @@ where
 
 impl<W> Deref for CallbackContext<'_, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     type Target = W;
 
@@ -43,39 +38,12 @@ where
     }
 }
 
-impl<W> ContextPlugins for CallbackContext<'_, W>
-where
-    W: Widget + WidgetState,
-{
-    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
-        self.plugins
-    }
-
-    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_ref())
-    }
-
-    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get_mut(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_mut())
-    }
-}
-
 impl<W> ContextMut for CallbackContext<'_, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
-    fn mark_dirty(&mut self, widget_id: WidgetId) {
-        self.dirty.insert(widget_id);
+    fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
     }
 
     fn call<A>(&mut self, callback: &Callback<A>, arg: A)
@@ -103,16 +71,16 @@ where
 
 impl<W> ContextWidget for CallbackContext<'_, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     type Widget = W;
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
-        self.widget_tree
+    fn get_elements(&self) -> &Tree<ElementId, Element> {
+        self.element_tree
     }
 
-    fn get_widget_id(&self) -> WidgetId {
-        self.widget_id
+    fn get_element_id(&self) -> ElementId {
+        self.element_id
     }
 
     fn get_widget(&self) -> &W {
@@ -122,7 +90,7 @@ where
 
 impl<W> ContextStatefulWidget for CallbackContext<'_, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     fn get_state(&self) -> &W::State {
         self.state

@@ -1,35 +1,9 @@
-use std::rc::Rc;
+use crate::render::CanvasPainter;
 
-use downcast_rs::{impl_downcast, Downcast};
-
-use crate::{render::CanvasPainter, unit::Data};
-
-use super::{
-    dispatch::WidgetDispatch, BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext,
-};
-
-pub trait Widget: Downcast {
-    fn into_widget(self: Rc<Self>) -> Box<dyn WidgetDispatch>;
-}
-
-impl_downcast!(Widget);
-
-pub trait WidgetState: Widget + PartialEq {
-    type State: Data;
-
-    fn create_state(&self) -> Self::State;
-
-    /// Called when the widget is replaced in the tree by a new widget of the same concrete type.
-    ///
-    /// If the return value is `true`, the widget will be rebuilt, otherwise it will be kept as is.
-    #[allow(unused_variables)]
-    fn updated(&self, other: &Self) -> bool {
-        true
-    }
-}
+use super::{BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext, Widget};
 
 /// Implements the widget's `layout()` and `build()` method.
-pub trait WidgetView: Widget + WidgetState + Sized {
+pub trait WidgetView: Widget + Sized {
     #[allow(unused_variables)]
     fn layout(&self, ctx: &mut LayoutContext<Self>) -> LayoutResult {
         LayoutResult::default()
@@ -53,10 +27,10 @@ mod tests {
 
     use crate::{
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, ContextStatefulWidget},
+        widget::{BuildContext, BuildResult, ContextStatefulWidget, WidgetState},
     };
 
-    use super::{WidgetState, WidgetView};
+    use super::WidgetView;
 
     thread_local! {
         pub static STATE: RefCell<Vec<u32>> = RefCell::default();

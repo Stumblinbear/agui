@@ -15,14 +15,16 @@ pub fn impl_stateless_widget(input: TokenStream2) -> TokenStream2 {
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
     parse_quote! {
-        impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause {
-            fn into_widget(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::dispatch::WidgetDispatch>
+        impl #impl_generics #agui_core::widget::WidgetDerive for #ident #ty_generics #where_clause {
+            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where
                 Self: Sized
             {
-                Box::new(#agui_core::widget::instance::WidgetInstance::new(self))
+                #agui_core::element::ElementType::new_stateless(self)
             }
         }
+
+        impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause { }
 
         impl #impl_generics #agui_core::widget::WidgetState for #ident #ty_generics #where_clause {
             type State = ();

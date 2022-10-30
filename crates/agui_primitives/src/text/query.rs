@@ -1,4 +1,6 @@
-use agui_core::{manager::element::WidgetElement, widget::instance::WidgetInstance};
+use std::rc::Rc;
+
+use agui_core::element::{Element, ElementLifecycle};
 
 use crate::Text;
 
@@ -10,7 +12,7 @@ pub trait TextQueryExt<'query> {
 
 impl<'query, I> TextQueryExt<'query> for I
 where
-    I: Iterator<Item = &'query WidgetElement>,
+    I: Iterator<Item = &'query Element>,
 {
     fn with_text(self, text: &str) -> QueryWithText<Self>
     where
@@ -35,16 +37,16 @@ impl<'t, I> QueryWithText<'t, I> {
 
 impl<'query, 't, I> Iterator for QueryWithText<'t, I>
 where
-    I: Iterator<Item = &'query WidgetElement>,
+    I: Iterator<Item = &'query Element>,
 {
-    type Item = &'query WidgetInstance<Text>;
+    type Item = Rc<Text>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find_map(|widget| {
-            widget
-                .downcast_ref::<WidgetInstance<Text>>()
-                .filter(|widget| widget.get_widget().text == self.text)
+        self.iter.find_map(|element| {
+            element
+                .get_widget::<Text>()
+                .filter(|text| text.text == self.text)
         })
     }
 
@@ -88,7 +90,6 @@ mod tests {
                 .with_text("foo")
                 .next()
                 .expect("should have found a widget")
-                .get_widget()
                 .text,
             "foo",
             "should have found the \"foo\" text widget"
@@ -100,7 +101,6 @@ mod tests {
                 .with_text("bar")
                 .next()
                 .expect("should have found a widget")
-                .get_widget()
                 .text,
             "bar",
             "should have found the \"bar\" text widget"

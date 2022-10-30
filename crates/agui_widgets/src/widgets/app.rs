@@ -4,7 +4,7 @@ use agui_core::{
 };
 use agui_macros::StatelessWidget;
 
-use crate::{plugins::global::ContextGlobalPluginExt, state::window::WindowSize};
+use crate::state::window::WindowSize;
 
 #[derive(StatelessWidget, Default, PartialEq)]
 pub struct App {
@@ -12,10 +12,13 @@ pub struct App {
 }
 
 impl WidgetView for App {
-    fn layout(&self, ctx: &mut LayoutContext<Self>) -> LayoutResult {
-        let window_size = ctx.get_global::<WindowSize>();
+    fn layout(&self, _ctx: &mut LayoutContext<Self>) -> LayoutResult {
+        let window_size = WindowSize {
+            width: 800.0,
+            height: 600.0,
+        }; //ctx.get_global::<WindowSize>();
 
-        let window_size = window_size.borrow();
+        // let window_size = window_size.borrow();
 
         LayoutResult {
             layout_type: LayoutType::default(),

@@ -12,33 +12,30 @@ use slotmap::Key;
 
 use crate::{
     callback::CallbackQueue,
-    plugin::{BoxedPlugin, IntoPlugin, PluginElement, PluginId, PluginImpl},
+    element::{Element, ElementId},
     query::WidgetQuery,
     unit::{Font, Units},
-    util::{map::PluginMap, tree::Tree},
-    widget::{dispatch::WidgetEquality, Widget, WidgetId, WidgetRef},
+    util::tree::Tree,
+    widget::{instance::WidgetEquality, Widget, WidgetRef},
 };
 
-use self::{cache::LayoutCache, context::AguiContext, element::WidgetElement};
+use self::{cache::LayoutCache, context::AguiContext};
 
 mod cache;
 pub mod context;
-pub mod element;
 pub mod events;
 
-use events::WidgetEvent;
+use events::ElementEvent;
 
 /// Handles the entirety of the agui lifecycle.
 #[derive(Default)]
 pub struct WidgetManager {
-    plugins: PluginMap<BoxedPlugin>,
+    element_tree: Tree<ElementId, Element>,
 
-    widget_tree: Tree<WidgetId, WidgetElement>,
-
-    dirty: FnvHashSet<WidgetId>,
+    dirty: FnvHashSet<ElementId>,
     callback_queue: CallbackQueue,
 
-    cache: LayoutCache<WidgetId>,
+    cache: LayoutCache<ElementId>,
 
     modifications: VecDeque<Modify>,
 
@@ -59,58 +56,6 @@ impl WidgetManager {
         manager.set_root(widget);
 
         manager
-    }
-
-    pub fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
-        &mut self.plugins
-    }
-
-    pub fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_ref())
-    }
-
-    pub fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get_mut(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_mut())
-    }
-
-    /// Adds a widget manager plugin.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if you attempt to add a plugin a second time.
-    pub fn add_plugin<P>(&mut self, plugin: P)
-    where
-        P: IntoPlugin,
-    {
-        let plugin = plugin.into_plugin();
-
-        let plugin_id = PluginId::from(&plugin);
-
-        if self.plugins.contains_key(&plugin_id) {
-            tracing::warn!(
-                plugin = plugin.get_display_name().as_str(),
-                "plugin already added, ignoring"
-            );
-
-            return;
-        }
-
-        tracing::info!(
-            plugin = plugin.get_display_name().as_str(),
-            "adding plugin to widget manager"
-        );
-
-        self.plugins.insert(plugin_id, plugin);
     }
 
     pub fn get_fonts(&self) -> &[FontArc] {
@@ -146,21 +91,21 @@ impl WidgetManager {
         Font(font_id, Some(font))
     }
 
-    /// Get the widget tree.
-    pub fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
-        &self.widget_tree
+    /// Get the element tree.
+    pub fn get_tree(&self) -> &Tree<ElementId, Element> {
+        &self.element_tree
     }
 
     /// Get the root widget.
-    pub fn get_root(&self) -> Option<WidgetId> {
-        self.widget_tree.get_root()
+    pub fn get_root(&self) -> Option<ElementId> {
+        self.element_tree.get_root()
     }
 
     /// Queues the root widget for removal from tree
     pub fn remove_root(&mut self) {
-        if let Some(root_id) = self.widget_tree.get_root() {
+        if let Some(root_id) = self.element_tree.get_root() {
             tracing::info!(
-                widget = self.widget_tree.get(root_id).unwrap().get_display_name(),
+                element = self.element_tree.get(root_id).unwrap().get_display_name(),
                 "removing root widget"
             );
 
@@ -180,8 +125,8 @@ impl WidgetManager {
     }
 
     /// Check if a widget exists in the tree.
-    pub fn contains(&self, widget_id: WidgetId) -> bool {
-        self.widget_tree.contains(widget_id)
+    pub fn contains(&self, element_id: ElementId) -> bool {
+        self.element_tree.contains(element_id)
     }
 
     /// Query widgets from the tree.
@@ -189,7 +134,7 @@ impl WidgetManager {
     /// This essentially iterates the widget tree's element Vec, and as such does not guarantee
     /// the order in which widgets will be returned.
     pub fn query(&self) -> WidgetQuery {
-        WidgetQuery::new(&self.widget_tree)
+        WidgetQuery::new(&self.element_tree)
     }
 
     pub fn has_changes(&self) -> bool {
@@ -197,8 +142,8 @@ impl WidgetManager {
     }
 
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
-    pub fn mark_dirty(&mut self, widget_id: WidgetId) {
-        self.dirty.insert(widget_id);
+    pub fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
     }
 
     /// Fetch the callback queue, which can queue callbacks to be executed on the next update.
@@ -207,19 +152,7 @@ impl WidgetManager {
     }
 
     /// Update the UI tree.
-    pub fn update(&mut self) -> Vec<WidgetEvent> {
-        // Update all plugins, as they may cause changes to state
-        for plugin in self.plugins.values_mut() {
-            plugin.on_before_update(AguiContext {
-                plugins: None,
-                tree: &self.widget_tree,
-                dirty: &mut self.dirty,
-                callback_queue: self.callback_queue.clone(),
-
-                widget_id: None,
-            });
-        }
-
+    pub fn update(&mut self) -> Vec<ElementEvent> {
         if !self.has_changes() {
             return Vec::default();
         }
@@ -240,17 +173,6 @@ impl WidgetManager {
 
                 self.flush_callbacks();
 
-                for plugin in self.plugins.values_mut() {
-                    plugin.on_update(AguiContext {
-                        plugins: None,
-                        tree: &self.widget_tree,
-                        dirty: &mut self.dirty,
-                        callback_queue: self.callback_queue.clone(),
-
-                        widget_id: None,
-                    });
-                }
-
                 if !self.has_changes() {
                     break 'changes;
                 }
@@ -258,7 +180,7 @@ impl WidgetManager {
 
             needs_redraw.extend(self.flush_layout());
 
-            needs_redraw.retain(|widget_id| self.contains(*widget_id));
+            needs_redraw.retain(|element_id| self.contains(*element_id));
 
             if !self.has_changes() {
                 break 'layout;
@@ -267,50 +189,36 @@ impl WidgetManager {
 
         self.sanitize_events(&mut widget_events);
 
-        for widget_id in needs_redraw {
-            widget_events.push(WidgetEvent::Draw { widget_id });
-        }
-
-        for plugin in self.plugins.values_mut() {
-            plugin.on_events(
-                AguiContext {
-                    plugins: None,
-                    tree: &self.widget_tree,
-                    dirty: &mut self.dirty,
-                    callback_queue: self.callback_queue.clone(),
-
-                    widget_id: None,
-                },
-                &widget_events,
-            );
+        for element_id in needs_redraw {
+            widget_events.push(ElementEvent::Draw { element_id });
         }
 
         widget_events
     }
 
     /// Sanitizes widget events, removing any widgets that were created and subsequently destroyed before the end of the Vec.
-    fn sanitize_events(&self, widget_events: &mut Vec<WidgetEvent>) {
+    fn sanitize_events(&self, widget_events: &mut Vec<ElementEvent>) {
         let mut i = 0;
 
         // This is exponentially slow, investigate if using a linked hash map is better
         while widget_events.len() > i {
-            let mut remove_widget_id = None;
+            let mut remove_element_id = None;
 
-            if let WidgetEvent::Spawned { widget_id, .. } = &widget_events[i] {
+            if let ElementEvent::Spawned { element_id, .. } = &widget_events[i] {
                 for entry in &widget_events[i + 1..] {
-                    if let WidgetEvent::Destroyed {
-                        widget_id: destroyed_widget_id,
+                    if let ElementEvent::Destroyed {
+                        element_id: destroyed_element_id,
                     } = entry
                     {
-                        if widget_id == destroyed_widget_id {
-                            remove_widget_id = Some(*widget_id);
+                        if element_id == destroyed_element_id {
+                            remove_element_id = Some(*element_id);
                             break;
                         }
                     }
                 }
             }
 
-            if let Some(ref removed_widget_id) = remove_widget_id {
+            if let Some(ref removed_element_id) = remove_element_id {
                 // Remove the first detected event
                 widget_events.remove(i);
 
@@ -321,19 +229,21 @@ impl WidgetManager {
 
                     match &widget_events[real_i] {
                         // Remove all events that are related to the widget
-                        WidgetEvent::Rebuilt { widget_id, .. }
-                        | WidgetEvent::Reparent { widget_id, .. }
-                        | WidgetEvent::Reparent {
-                            parent_id: Some(widget_id),
+                        ElementEvent::Rebuilt { element_id, .. }
+                        | ElementEvent::Reparent { element_id, .. }
+                        | ElementEvent::Reparent {
+                            parent_id: Some(element_id),
                             ..
-                        } if widget_id == removed_widget_id => {
+                        } if element_id == removed_element_id => {
                             widget_events.remove(real_i);
 
                             // Offset the index by one to account for the removed event
                             remove_offset += 1;
                         }
 
-                        WidgetEvent::Destroyed { widget_id } if widget_id == removed_widget_id => {
+                        ElementEvent::Destroyed { element_id }
+                            if element_id == removed_element_id =>
+                        {
                             widget_events.remove(real_i);
 
                             // This widget won't exist following this event, so break
@@ -352,8 +262,8 @@ impl WidgetManager {
 
     pub fn flush_modifications(
         &mut self,
-        widget_events: &mut Vec<WidgetEvent>,
-        needs_redraw: &mut FnvHashSet<WidgetId>,
+        widget_events: &mut Vec<ElementEvent>,
+        needs_redraw: &mut FnvHashSet<ElementId>,
     ) {
         if self.modifications.is_empty() {
             return;
@@ -369,28 +279,28 @@ impl WidgetManager {
                     let span = tracing::debug_span!("spawn");
                     let _enter = span.enter();
 
-                    // This `process_spawn` will only ever return `Created` or `Empty` because `existing_widget_id` is `None`
-                    if let SpawnResult::Created(widget_id) =
+                    // This `process_spawn` will only ever return `Created` or `Empty` because `existing_element_id` is `None`
+                    if let SpawnResult::Created(element_id) =
                         self.process_spawn(widget_events, parent_id, widget, None)
                     {
-                        self.process_build(widget_events, widget_id);
+                        self.process_build(widget_events, element_id);
                     }
                 }
 
-                Modify::Rebuild(widget_id) => {
-                    needs_redraw.insert(widget_id);
+                Modify::Rebuild(element_id) => {
+                    needs_redraw.insert(element_id);
 
                     let span = tracing::debug_span!("rebuild");
                     let _enter = span.enter();
 
-                    self.process_rebuild(widget_events, widget_id);
+                    self.process_rebuild(widget_events, element_id);
                 }
 
-                Modify::Destroy(widget_id) => {
+                Modify::Destroy(element_id) => {
                     let span = tracing::debug_span!("destroy");
                     let _enter = span.enter();
 
-                    self.process_destroy(widget_events, widget_id);
+                    self.process_destroy(widget_events, element_id);
                 }
             }
         }
@@ -406,14 +316,18 @@ impl WidgetManager {
         let span = tracing::debug_span!("flush_changes");
         let _enter = span.enter();
 
-        for widget_id in changed {
+        for element_id in changed {
             tracing::trace!(
-                id = format!("{:?}", widget_id).as_str(),
-                widget = self.widget_tree.get(widget_id).unwrap().get_display_name(),
+                id = format!("{:?}", element_id).as_str(),
+                element = self
+                    .element_tree
+                    .get(element_id)
+                    .unwrap()
+                    .get_display_name(),
                 "queueing widget for rebuild"
             );
 
-            self.modifications.push_back(Modify::Rebuild(widget_id));
+            self.modifications.push_back(Modify::Rebuild(element_id));
         }
     }
 
@@ -425,89 +339,83 @@ impl WidgetManager {
 
         for invoke in callback_invokes {
             for callback_id in invoke.callback_ids {
-                let mut widget = self
-                    .widget_tree
-                    .take(callback_id.get_widget_id())
+                let element_id = callback_id.get_element_id();
+
+                self.element_tree
+                    .with(element_id, |element_tree, element| {
+                        let changed = element.call(
+                            AguiContext {
+                                element_tree,
+                                dirty: &mut self.dirty,
+                                callback_queue: &self.callback_queue,
+
+                                element_id,
+                            },
+                            callback_id,
+                            &invoke.arg,
+                        );
+
+                        if changed {
+                            tracing::debug!(
+                                id = &format!("{:?}", element_id),
+                                element = element.get_display_name(),
+                                "element updated, queueing for rebuild"
+                            );
+
+                            self.modifications.push_back(Modify::Rebuild(element_id));
+                        }
+                    })
                     .expect("cannot call a callback on a widget that does not exist");
-
-                let changed = widget.call(
-                    AguiContext {
-                        plugins: Some(&mut self.plugins),
-                        tree: &self.widget_tree,
-                        dirty: &mut self.dirty,
-                        callback_queue: self.callback_queue.clone(),
-
-                        widget_id: Some(callback_id.get_widget_id()),
-                    },
-                    callback_id,
-                    &invoke.arg,
-                );
-
-                if changed {
-                    let widget_id = callback_id.get_widget_id();
-
-                    tracing::debug!(
-                        id = &format!("{:?}", widget_id),
-                        widget = widget.get_display_name(),
-                        "widget updated, queueing for rebuild"
-                    );
-
-                    self.modifications
-                        .push_back(Modify::Rebuild(callback_id.get_widget_id()));
-                }
-
-                self.widget_tree
-                    .replace(callback_id.get_widget_id(), widget);
             }
         }
     }
 
-    pub fn flush_layout(&mut self) -> FnvHashSet<WidgetId> {
+    pub fn flush_layout(&mut self) -> FnvHashSet<ElementId> {
         let span = tracing::debug_span!("flush_layout");
         let _enter = span.enter();
 
-        morphorm::layout(&mut self.cache, &self.widget_tree, &self.widget_tree);
+        morphorm::layout(&mut self.cache, &self.element_tree, &self.element_tree);
 
         // Workaround for morphorm ignoring root sizing
         let mut root_changed = false;
 
-        if let Some(widget_id) = self.widget_tree.get_root() {
-            let widget = self
-                .widget_tree
-                .get_mut(widget_id)
+        if let Some(element_id) = self.element_tree.get_root() {
+            let element = self
+                .element_tree
+                .get_mut(element_id)
                 .expect("tree has a root node, but it doesn't exist");
 
-            let layout = widget.get_layout();
+            let layout = element.get_layout();
 
             if let Some(Units::Pixels(px)) = layout.position.get_left() {
-                if (self.cache.posx(widget_id) - px).abs() > f32::EPSILON {
+                if (self.cache.posx(element_id) - px).abs() > f32::EPSILON {
                     root_changed = true;
 
-                    self.cache.set_posx(widget_id, px);
+                    self.cache.set_posx(element_id, px);
                 }
             }
 
             if let Some(Units::Pixels(px)) = layout.position.get_top() {
-                if (self.cache.posy(widget_id) - px).abs() > f32::EPSILON {
+                if (self.cache.posy(element_id) - px).abs() > f32::EPSILON {
                     root_changed = true;
 
-                    self.cache.set_posy(widget_id, px);
+                    self.cache.set_posy(element_id, px);
                 }
             }
 
             if let Units::Pixels(px) = layout.sizing.get_width() {
-                if (self.cache.width(widget_id) - px).abs() > f32::EPSILON {
+                if (self.cache.width(element_id) - px).abs() > f32::EPSILON {
                     root_changed = true;
 
-                    self.cache.set_width(widget_id, px);
+                    self.cache.set_width(element_id, px);
                 }
             }
 
             if let Units::Pixels(px) = layout.sizing.get_height() {
-                if (self.cache.height(widget_id) - px).abs() > f32::EPSILON {
+                if (self.cache.height(element_id) - px).abs() > f32::EPSILON {
                     root_changed = true;
 
-                    self.cache.set_height(widget_id, px);
+                    self.cache.set_height(element_id, px);
                 }
             }
         }
@@ -515,35 +423,24 @@ impl WidgetManager {
         // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
         let mut newly_changed = self.cache.take_changed();
 
-        newly_changed.retain(|widget_id| self.widget_tree.contains(*widget_id));
+        newly_changed.retain(|element_id| self.element_tree.contains(*element_id));
 
         if root_changed {
             tracing::trace!("root layout updated, applying morphorm fix");
 
-            if let Some(widget_id) = self.widget_tree.get_root() {
-                newly_changed.insert(widget_id);
+            if let Some(element_id) = self.element_tree.get_root() {
+                newly_changed.insert(element_id);
             }
         }
 
-        // Update the widget rects in the context
-        for widget_id in &newly_changed {
-            let widget = self
-                .widget_tree
-                .get_mut(*widget_id)
-                .expect("newly changed widget does not exist in the tree");
+        // Update the element rects in the context
+        for element_id in &newly_changed {
+            let element = self
+                .element_tree
+                .get_mut(*element_id)
+                .expect("newly changed element does not exist in the tree");
 
-            widget.set_rect(self.cache.get_rect(widget_id).copied());
-        }
-
-        for plugin in self.plugins.values_mut() {
-            plugin.on_layout(AguiContext {
-                plugins: None,
-                tree: &self.widget_tree,
-                dirty: &mut self.dirty,
-                callback_queue: self.callback_queue.clone(),
-
-                widget_id: None,
-            });
+            element.set_rect(self.cache.get_rect(element_id).copied());
         }
 
         newly_changed
@@ -551,34 +448,34 @@ impl WidgetManager {
 
     fn process_spawn(
         &mut self,
-        widget_events: &mut Vec<WidgetEvent>,
-        parent_id: Option<WidgetId>,
+        element_events: &mut Vec<ElementEvent>,
+        parent_id: Option<ElementId>,
         widget_ref: WidgetRef,
-        existing_widget_id: Option<WidgetId>,
+        existing_element_id: Option<ElementId>,
     ) -> SpawnResult {
         if widget_ref.is_none() {
             return SpawnResult::Empty;
         }
 
         // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
-        if self.widget_tree.contains(widget_ref.get_current_id()) {
+        if self.element_tree.contains(widget_ref.get_current_id()) {
             panic!(
                 "two instances of the same widget cannot exist at one time: {:?}",
                 widget_ref
             );
         }
 
-        // Grab the existing widget in the tree
-        if let Some(existing_widget_id) = existing_widget_id {
-            let existing_widget = self.widget_tree.get_mut(existing_widget_id).unwrap();
+        // Grab the existing element in the tree
+        if let Some(existing_element_id) = existing_element_id {
+            let existing_element = self.element_tree.get_mut(existing_element_id).unwrap();
 
             // Check the existing child against the new child to see what we can safely do about retaining
             // its state
-            match existing_widget.is_similar(&widget_ref) {
+            match existing_element.is_similar(&widget_ref) {
                 WidgetEquality::Equal => {
                     // Widget is exactly equal, we gain nothing by replacing or rebuilding it
                     return SpawnResult::Retained {
-                        widget_id: existing_widget_id,
+                        element_id: existing_element_id,
                         needs_rebuild: false,
                     };
                 }
@@ -587,10 +484,10 @@ impl WidgetManager {
                     // The widgets parameters have changed, but it is of the same type. All we need to do is
                     // update the element to the new widget instance, retaining its state. However, this *does*
                     // mean we have to queue it for a rebuild.
-                    let needs_rebuild = existing_widget.update(widget_ref);
+                    let needs_rebuild = existing_element.update(widget_ref);
 
                     return SpawnResult::Retained {
-                        widget_id: existing_widget_id,
+                        element_id: existing_element_id,
                         needs_rebuild,
                     };
                 }
@@ -599,69 +496,78 @@ impl WidgetManager {
             }
         }
 
-        let widget_node = WidgetElement::new(widget_ref.clone()).unwrap();
+        let element_type = widget_ref.create().unwrap();
 
         tracing::trace!(
             parent_id = &format!("{:?}", parent_id),
-            widget = widget_node.get_display_name(),
+            widget = widget_ref.get_display_name(),
             "spawning widget"
         );
 
-        let widget_id = self.widget_tree.add(parent_id, widget_node);
-
-        widget_events.push(WidgetEvent::Spawned {
+        let element_id = self.element_tree.add(
             parent_id,
-            widget_id,
+            Element::new(widget_ref.get_key().cloned(), element_type),
+        );
+
+        self.element_tree.with(element_id, |element_tree, element| {
+            element.mount(AguiContext {
+                element_tree,
+                dirty: &mut self.dirty,
+                callback_queue: &self.callback_queue,
+
+                element_id,
+            });
         });
 
-        widget_ref.set_current_id(widget_id);
+        element_events.push(ElementEvent::Spawned {
+            parent_id,
+            element_id,
+        });
 
-        self.cache.add(widget_id);
+        widget_ref.set_current_id(element_id);
 
-        SpawnResult::Created(widget_id)
+        self.cache.add(element_id);
+
+        SpawnResult::Created(element_id)
     }
 
     fn process_build(
         &mut self,
-        widget_events: &mut Vec<WidgetEvent>,
-        widget_id: WidgetId,
-    ) -> FnvHashSet<WidgetId> {
+        element_events: &mut Vec<ElementEvent>,
+        element_id: ElementId,
+    ) -> FnvHashSet<ElementId> {
         let span = tracing::debug_span!("process_build");
         let _enter = span.enter();
 
-        let mut retained_widgets = FnvHashSet::default();
+        let mut retained_elements = FnvHashSet::default();
 
         let mut build_queue = VecDeque::new();
 
-        build_queue.push_back(widget_id);
+        build_queue.push_back(element_id);
 
-        while let Some(widget_id) = build_queue.pop_front() {
-            let mut widget = self
-                .widget_tree
-                .take(widget_id)
-                .expect("cannot build a widget that doesn't exist");
+        while let Some(element_id) = build_queue.pop_front() {
+            let result = self
+                .element_tree
+                .with(element_id, |element_tree, element| {
+                    element.layout(AguiContext {
+                        element_tree,
+                        dirty: &mut self.dirty,
+                        callback_queue: &self.callback_queue,
 
-            widget.layout(AguiContext {
-                plugins: Some(&mut self.plugins),
-                tree: &self.widget_tree,
-                dirty: &mut self.dirty,
-                callback_queue: self.callback_queue.clone(),
+                        element_id,
+                    });
 
-                widget_id: Some(widget_id),
-            });
+                    element
+                        .build(AguiContext {
+                            element_tree,
+                            dirty: &mut self.dirty,
+                            callback_queue: &self.callback_queue,
 
-            let result = widget
-                .build(AguiContext {
-                    plugins: Some(&mut self.plugins),
-                    tree: &self.widget_tree,
-                    dirty: &mut self.dirty,
-                    callback_queue: self.callback_queue.clone(),
-
-                    widget_id: Some(widget_id),
+                            element_id,
+                        })
+                        .take()
                 })
-                .take();
-
-            self.widget_tree.replace(widget_id, widget);
+                .expect("cannot build a widget that doesn't exist");
 
             if result.is_empty() {
                 continue;
@@ -680,33 +586,44 @@ impl WidgetManager {
                     let existing_child_id = if !child_id.is_null() {
                         None
                     } else {
-                        self.widget_tree.get_child(widget_id, existing_child_idx)
+                        self.element_tree.get_child(element_id, existing_child_idx)
                     };
 
                     existing_child_idx += 1;
 
-                    // If the widget already exists in the tree
-                    if self.widget_tree.contains(child_id) {
-                        // If we're trying to reparent a widget that has already been retained, panic. The same widget cannot exist twice.
-                        if retained_widgets.contains(&child_id) {
+                    // If the widget element already exists in the tree
+                    if self.element_tree.contains(child_id) {
+                        // If we're trying to reparent an element that has already been retained, panic. The same widget cannot exist twice.
+                        if retained_elements.contains(&child_id) {
                             panic!(
                                 "two instances of the same widget cannot exist at one time: {:?}",
                                 child_ref
                             );
                         }
 
-                        retained_widgets.insert(child_id);
+                        retained_elements.insert(child_id);
 
-                        if self.widget_tree.reparent(Some(widget_id), child_id) {
+                        if self.element_tree.reparent(Some(element_id), child_id) {
                             tracing::trace!(
-                                parent_id = &format!("{:?}", widget_id),
-                                widget = self.widget_tree.get(child_id).unwrap().get_display_name(),
+                                parent_id = &format!("{:?}", element_id),
+                                element =
+                                    self.element_tree.get(child_id).unwrap().get_display_name(),
                                 "reparented widget"
                             );
 
-                            widget_events.push(WidgetEvent::Reparent {
-                                parent_id: Some(widget_id),
-                                widget_id: child_id,
+                            self.element_tree.with(element_id, |element_tree, element| {
+                                element.mount(AguiContext {
+                                    element_tree,
+                                    dirty: &mut self.dirty,
+                                    callback_queue: &self.callback_queue,
+
+                                    element_id,
+                                });
+                            });
+
+                            element_events.push(ElementEvent::Reparent {
+                                parent_id: Some(element_id),
+                                element_id: child_id,
                             });
                         }
 
@@ -715,24 +632,24 @@ impl WidgetManager {
 
                     // Spawn the new widget and queue it for building
                     match self.process_spawn(
-                        widget_events,
-                        Some(widget_id),
+                        element_events,
+                        Some(element_id),
                         child_ref,
                         existing_child_id.cloned(),
                     ) {
                         SpawnResult::Retained {
-                            widget_id,
+                            element_id,
                             needs_rebuild,
                         } => {
-                            retained_widgets.insert(widget_id);
+                            retained_elements.insert(element_id);
 
                             if needs_rebuild {
-                                self.modifications.push_back(Modify::Rebuild(widget_id));
+                                self.modifications.push_back(Modify::Rebuild(element_id));
                             }
                         }
 
-                        SpawnResult::Created(widget_id) => {
-                            build_queue.push_back(widget_id);
+                        SpawnResult::Created(element_id) => {
+                            build_queue.push_back(element_id);
                         }
 
                         _ => {}
@@ -741,64 +658,74 @@ impl WidgetManager {
             }
         }
 
-        retained_widgets
+        retained_elements
     }
 
-    fn process_rebuild(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
-        widget_events.push(WidgetEvent::Rebuilt { widget_id });
+    fn process_rebuild(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
+        element_events.push(ElementEvent::Rebuilt { element_id });
 
         // Grab the current children so we know which ones to remove post-build
         let children = self
-            .widget_tree
-            .get_children(widget_id)
+            .element_tree
+            .get_children(element_id)
             .map(Vec::clone)
             .unwrap_or_default();
 
-        let retained_widgets = self.process_build(widget_events, widget_id);
+        let retained_elements = self.process_build(element_events, element_id);
 
         // Remove the old children
         for child_id in children {
-            // If the child widget was not reparented, remove it
-            if !retained_widgets.contains(&child_id) {
-                self.process_destroy(widget_events, child_id);
+            // If the child element was not reparented, remove it
+            if !retained_elements.contains(&child_id) {
+                self.process_destroy(element_events, child_id);
             }
         }
     }
 
-    fn process_destroy(&mut self, widget_events: &mut Vec<WidgetEvent>, widget_id: WidgetId) {
+    fn process_destroy(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
         let mut destroy_queue = VecDeque::new();
 
-        destroy_queue.push_back(widget_id);
+        destroy_queue.push_back(element_id);
 
-        while let Some(widget_id) = destroy_queue.pop_front() {
-            // Queue the widget's children for removal
-            if let Some(children) = self.widget_tree.get_children(widget_id) {
+        while let Some(element_id) = destroy_queue.pop_front() {
+            // Queue the element's children for removal
+            if let Some(children) = self.element_tree.get_children(element_id) {
                 for child_id in children {
                     destroy_queue.push_back(*child_id);
                 }
             }
 
-            widget_events.push(WidgetEvent::Destroyed { widget_id });
+            self.element_tree
+                .with(element_id, |element_tree, element| {
+                    element.unmount(AguiContext {
+                        element_tree,
+                        dirty: &mut self.dirty,
+                        callback_queue: &self.callback_queue,
 
-            self.cache.remove(&widget_id);
+                        element_id,
+                    });
+                })
+                .expect("cannot destroy an element that doesn't exist");
 
-            self.widget_tree
-                .remove(widget_id, false)
-                .expect("cannot destroy a widget that doesn't exist");
+            element_events.push(ElementEvent::Destroyed { element_id });
+
+            self.cache.remove(&element_id);
+
+            self.element_tree.remove(element_id, false).unwrap();
         }
     }
 }
 
 enum Modify {
-    Spawn(Option<WidgetId>, WidgetRef),
-    Rebuild(WidgetId),
-    Destroy(WidgetId),
+    Spawn(Option<ElementId>, WidgetRef),
+    Rebuild(ElementId),
+    Destroy(ElementId),
 }
 
 enum SpawnResult {
-    Created(WidgetId),
+    Created(ElementId),
     Retained {
-        widget_id: WidgetId,
+        element_id: ElementId,
         needs_rebuild: bool,
     },
     Empty,
@@ -811,7 +738,7 @@ mod tests {
     use agui_macros::StatelessWidget;
 
     use crate::{
-        manager::{element::WidgetElement, events::WidgetEvent},
+        manager::events::ElementEvent,
         widget::{BuildContext, BuildResult, WidgetRef, WidgetView},
     };
 
@@ -920,14 +847,12 @@ mod tests {
 
         assert_eq!(
             events[0],
-            WidgetEvent::Spawned {
+            ElementEvent::Spawned {
                 parent_id: None,
-                widget_id: root_id,
+                element_id: root_id,
             },
             "should have generated a spawn event"
         );
-
-        assert_eq!(events.get(1), None, "should have only generated one events");
     }
 
     #[test]
@@ -960,7 +885,9 @@ mod tests {
 
         assert_eq!(
             events[0],
-            WidgetEvent::Destroyed { widget_id: root_id },
+            ElementEvent::Destroyed {
+                element_id: root_id
+            },
             "should have generated a destroyed event"
         );
 
@@ -989,7 +916,9 @@ mod tests {
 
         assert_eq!(
             events[0],
-            WidgetEvent::Rebuilt { widget_id: root_id },
+            ElementEvent::Rebuilt {
+                element_id: root_id
+            },
             "should have generated rebuild event for the widget"
         );
     }
@@ -1014,7 +943,7 @@ mod tests {
         let root_id = root_id.unwrap();
 
         assert_eq!(
-            manager.get_widgets().len(),
+            manager.get_tree().len(),
             3,
             "children should have been added"
         );
@@ -1023,31 +952,31 @@ mod tests {
 
         assert_eq!(
             events[0],
-            WidgetEvent::Spawned {
+            ElementEvent::Spawned {
                 parent_id: None,
-                widget_id: root_id
+                element_id: root_id
             },
             "should have generated spawn event for the root widget"
         );
 
-        let children = manager.get_widgets().get_children(root_id).unwrap();
+        let children = manager.get_tree().get_children(root_id).unwrap();
 
         assert_eq!(children.len(), 2, "root should have two children");
 
         assert_eq!(
             events[1],
-            WidgetEvent::Spawned {
+            ElementEvent::Spawned {
                 parent_id: Some(root_id),
-                widget_id: children[0]
+                element_id: children[0]
             },
             "should have generated spawn event for the first child"
         );
 
         assert_eq!(
             events[2],
-            WidgetEvent::Spawned {
+            ElementEvent::Spawned {
                 parent_id: Some(root_id),
-                widget_id: children[1]
+                element_id: children[1]
             },
             "should have generated spawn event for the second child"
         );
@@ -1074,12 +1003,12 @@ mod tests {
         let root_id = root_id.unwrap();
 
         assert_eq!(
-            manager.get_widgets().len(),
+            manager.get_tree().len(),
             1001,
             "children should have been added"
         );
 
-        let children = manager.get_widgets().get_children(root_id).unwrap().clone();
+        let children = manager.get_tree().get_children(root_id).unwrap().clone();
 
         assert_eq!(children.len(), 1000, "root should have all children");
 
@@ -1094,7 +1023,7 @@ mod tests {
         );
 
         assert_eq!(
-            manager.get_widgets().len(),
+            manager.get_tree().len(),
             0,
             "all children should have been removed"
         );
@@ -1103,15 +1032,17 @@ mod tests {
 
         assert_eq!(
             events[0],
-            WidgetEvent::Destroyed { widget_id: root_id },
+            ElementEvent::Destroyed {
+                element_id: root_id
+            },
             "should have generated a destroyed event for the root widget"
         );
 
         for i in 0..1000 {
             assert_eq!(
                 events[i + 1],
-                WidgetEvent::Destroyed {
-                    widget_id: children[i]
+                ElementEvent::Destroyed {
+                    element_id: children[i]
                 },
                 "should have generated a destroyed event for all children"
             );
@@ -1132,13 +1063,9 @@ mod tests {
 
         let root_id = root_id.unwrap();
 
-        assert_eq!(
-            manager.get_widgets().len(),
-            2,
-            "child should have been added"
-        );
+        assert_eq!(manager.get_tree().len(), 2, "child should have been added");
 
-        let old_children = manager.get_widgets().get_children(root_id).unwrap().clone();
+        let old_children = manager.get_tree().get_children(root_id).unwrap().clone();
 
         assert_eq!(old_children.len(), 1, "root should have one child");
 
@@ -1156,7 +1083,9 @@ mod tests {
 
         assert_eq!(
             events[0],
-            WidgetEvent::Rebuilt { widget_id: root_id },
+            ElementEvent::Rebuilt {
+                element_id: root_id
+            },
             "should have generated rebuild event for the root widget"
         );
 
@@ -1180,7 +1109,7 @@ mod tests {
 
         let root_id = manager.get_root().unwrap();
         let root_child_id = *manager
-            .get_widgets()
+            .get_tree()
             .get_children(root_id)
             .unwrap()
             .first()
@@ -1192,7 +1121,7 @@ mod tests {
 
         let new_root_id = manager.get_root().unwrap();
         let new_root_child_id = *manager
-            .get_widgets()
+            .get_tree()
             .get_children(root_id)
             .unwrap()
             .first()
@@ -1209,60 +1138,5 @@ mod tests {
         );
 
         assert_ne!(events.len(), 0, "should generate events");
-    }
-
-    #[test]
-    pub fn properly_sanitizes_events() {
-        let mut manager = WidgetManager::new();
-
-        let widget_id_1 = manager
-            .widget_tree
-            .add(None, WidgetElement::from(TestUnretainedWidget::default()));
-        let widget_id_2 = manager
-            .widget_tree
-            .add(None, WidgetElement::from(TestUnretainedWidget::default()));
-        let widget_id_3 = manager
-            .widget_tree
-            .add(None, WidgetElement::from(TestUnretainedWidget::default()));
-
-        let mut events = vec![
-            WidgetEvent::Spawned {
-                parent_id: None,
-                widget_id: widget_id_1,
-            },
-            WidgetEvent::Spawned {
-                parent_id: None,
-                widget_id: widget_id_2,
-            },
-            WidgetEvent::Spawned {
-                parent_id: None,
-                widget_id: widget_id_3,
-            },
-            WidgetEvent::Rebuilt {
-                widget_id: widget_id_2,
-            },
-            WidgetEvent::Rebuilt {
-                widget_id: widget_id_3,
-            },
-            WidgetEvent::Destroyed {
-                widget_id: widget_id_1,
-            },
-            WidgetEvent::Destroyed {
-                widget_id: widget_id_3,
-            },
-        ];
-
-        manager.sanitize_events(&mut events);
-
-        assert_eq!(
-            events[0],
-            WidgetEvent::Spawned {
-                parent_id: None,
-                widget_id: widget_id_2,
-            },
-            "should have retained `widget_id_2`"
-        );
-
-        assert_eq!(events.len(), 2, "should only have 2 events");
     }
 }

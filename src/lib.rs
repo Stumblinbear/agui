@@ -12,7 +12,7 @@ pub mod widgets {
 }
 
 pub mod prelude {
-    pub use agui_core::{callback::Callback, query::*, render::*, unit::*, widget::*};
+    pub use agui_core::{callback::*, context::*, query::*, render::*, unit::*, widget::*};
 
     #[cfg(feature = "macros")]
     pub use agui_macros::*;

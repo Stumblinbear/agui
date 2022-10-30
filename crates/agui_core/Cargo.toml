@@ -17,6 +17,7 @@ cfg-if = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 downcast-rs = "1.2"
+enum_dispatch = "0.3"
 
 fnv = "1.0"
 slotmap = "1.0"

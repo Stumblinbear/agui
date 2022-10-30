@@ -20,10 +20,12 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::new_stateful(self)
+                #agui_core::element::ElementType::new_inherited(self)
             }
         }
 
         impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause { }
+
+        impl #impl_generics #agui_core::widget::InheritedWidget for #ident #ty_generics #where_clause { }
     }
 }

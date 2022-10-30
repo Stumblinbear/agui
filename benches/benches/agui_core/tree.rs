@@ -1,12 +1,12 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use agui::{util::tree::Tree, widget::WidgetId};
+use agui::{element::ElementId, util::tree::Tree};
 
 fn tree_ops(c: &mut Criterion) {
     c.bench_function("add to tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<WidgetId, usize>::default();
+                let mut tree = Tree::<ElementId, usize>::default();
 
                 let root_id = tree.add(None, 0);
 
@@ -23,7 +23,7 @@ fn tree_ops(c: &mut Criterion) {
     c.bench_function("remove from tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<WidgetId, usize>::default();
+                let mut tree = Tree::<ElementId, usize>::default();
 
                 let mut widget_ids = Vec::new();
 
@@ -50,7 +50,7 @@ fn tree_iter_down(c: &mut Criterion) {
     c.bench_function("iterate down tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<WidgetId, usize>::default();
+                let mut tree = Tree::<ElementId, usize>::default();
 
                 let parent_id = tree.add(None, 0);
                 let parent_id = tree.add(Some(parent_id), 1);
@@ -74,7 +74,7 @@ fn tree_iter_up(c: &mut Criterion) {
     c.bench_function("iterate up tree", |b| {
         b.iter_with_setup(
             || {
-                let mut tree = Tree::<WidgetId, usize>::default();
+                let mut tree = Tree::<ElementId, usize>::default();
 
                 let parent_id = tree.add(None, 0);
                 let widget_id = tree.add(Some(parent_id), 1);

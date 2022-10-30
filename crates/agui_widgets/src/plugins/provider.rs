@@ -7,10 +7,10 @@ use std::{
 };
 
 use agui_core::{
-    manager::events::WidgetEvent,
+    manager::events::ElementEvent,
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
-    util::map::{TypeMap, TypeSet, WidgetMap, WidgetSet},
+    util::map::{TypeMap, TypeSet, WidgetMap},
     widget::{BuildContext, ContextPlugins, ContextWidget, WidgetId, WidgetView},
 };
 
@@ -39,9 +39,9 @@ impl StatefulPlugin for ProviderPlugin {
         }
     }
 
-    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[ElementEvent]) {
         for event in events {
-            if let WidgetEvent::Destroyed { widget_id, .. } = event {
+            if let ElementEvent::Destroyed { widget_id, .. } = event {
                 // Remove the provided values and any listeners of it
                 if let Some(types) = state.providers.remove(widget_id) {
                     for (type_id, provided) in types {
@@ -78,7 +78,7 @@ impl StatefulPlugin for ProviderPlugin {
 #[derive(Default)]
 pub struct ProviderPluginState {
     providers: WidgetMap<TypeMap<ProvidedValue>>,
-    provided: TypeMap<WidgetSet>,
+    provided: TypeMap<FnvHashSet<WidgetId>>,
 
     listening: WidgetMap<WidgetMap<TypeSet>>,
 
@@ -121,7 +121,7 @@ impl ProviderPluginState {
 
         self.provided
             .entry(type_id)
-            .or_insert_with(WidgetSet::default)
+            .or_insert_with(FnvHashSet::default)
             .insert(widget_id);
 
         Provided {

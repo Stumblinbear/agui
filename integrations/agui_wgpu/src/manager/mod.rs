@@ -1,7 +1,8 @@
 use std::{cell::RefCell, time::Instant};
 
 use agui::{
-    manager::{events::WidgetEvent, WidgetManager},
+    element::ElementLifecycle,
+    manager::{events::ElementEvent, WidgetManager},
     unit::{Point, Size},
     widget::WidgetId,
 };
@@ -132,7 +133,7 @@ impl RenderManager {
         &mut self,
         handle: &RenderHandle,
         manager: &WidgetManager,
-        events: &[WidgetEvent],
+        events: &[ElementEvent],
     ) {
         let now = Instant::now();
 
@@ -140,7 +141,7 @@ impl RenderManager {
 
         for event in events {
             match event {
-                WidgetEvent::Spawned {
+                ElementEvent::Spawned {
                     parent_id,
                     widget_id,
                 } => {
@@ -165,9 +166,9 @@ impl RenderManager {
                     );
                 }
 
-                WidgetEvent::Rebuilt { .. } => {}
+                ElementEvent::Rebuilt { .. } => {}
 
-                WidgetEvent::Reparent {
+                ElementEvent::Reparent {
                     parent_id,
                     widget_id,
                 } => {
@@ -195,13 +196,13 @@ impl RenderManager {
                     element.head_target = new_head_target;
                 }
 
-                WidgetEvent::Destroyed { widget_id } => {
+                ElementEvent::Destroyed { widget_id } => {
                     if let Some(element) = self.widgets.remove(widget_id) {
                         dirty_layers.extend(element.head_target);
                     }
                 }
 
-                WidgetEvent::Draw { widget_id } => {
+                ElementEvent::Draw { widget_id } => {
                     self.update_element(handle, manager, *widget_id, &mut dirty_layers);
                 }
 
@@ -277,7 +278,7 @@ impl RenderManager {
             .get_mut(&widget_id)
             .expect("drawn render element not found");
 
-        let widget_element = manager.get_widgets().get(widget_id).unwrap();
+        let widget_element = manager.get_tree().get(widget_id).unwrap();
 
         let canvas = widget_element.paint();
 

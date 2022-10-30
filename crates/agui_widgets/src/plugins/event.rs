@@ -2,11 +2,11 @@ use std::{any::TypeId, collections::HashSet};
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::{events::WidgetEvent, WidgetManager},
+    manager::{events::ElementEvent, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
-    util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{ContextPlugins, ContextWidgetMut, Widget, WidgetState},
+    util::map::{TypeMap, TypeSet},
+    widget::{ContextWidgetMut, Widget, WidgetState},
 };
 
 #[derive(Debug, Default)]
@@ -30,9 +30,9 @@ impl StatefulPlugin for EventPlugin {
         }
     }
 
-    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[ElementEvent]) {
         for event in events {
-            if let WidgetEvent::Destroyed { widget_id, .. } = event {
+            if let ElementEvent::Destroyed { widget_id, .. } = event {
                 // If the widget is listening to something, remove it from the respective listeners
                 if let Some(types) = state.listening.remove(widget_id) {
                     for type_id in types {

@@ -1,24 +1,77 @@
-use std::rc::Rc;
+use std::{
+    any::{type_name, TypeId},
+    rc::Rc,
+};
 
+use downcast_rs::Downcast;
 use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    manager::context::AguiContext,
+    element::context::ElementContext,
     render::canvas::{
         painter::{CanvasPainter, Head},
         Canvas,
     },
     unit::{Data, Size},
+    widget::{
+        BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext, WidgetRef,
+        WidgetState,
+    },
 };
 
-use crate::widget::{BuildContext, BuildResult, WidgetDispatch, WidgetRef, WidgetView};
+use super::{WidgetDerive, WidgetView};
 
-use super::{dispatch::WidgetEquality, LayoutContext, LayoutResult, PaintContext, WidgetState};
+pub enum WidgetEquality {
+    /// Indicates that the two widgets are exactly equal.
+    ///
+    /// The engine will immediately stop rebuilding the tree starting from this widget, as
+    /// it can guarantee that it, nor its children, have changed.
+    Equal,
 
-pub struct WidgetInstance<W>
+    /// Indicates that the two widgets are of equal types, but their parameters differ.
+    ///
+    /// The engine will retain the state of the widget, but will rebuild the widget and continue
+    /// rebuilding the tree.
+    Unequal,
+
+    /// Indicates that the two widgets are of different types.
+    ///
+    /// The engine will destroy the widget completely and continue rebuilding the tree.
+    Invalid,
+}
+
+pub trait WidgetDispatch: Downcast {
+    fn get_display_name(&self) -> String;
+
+    fn get_widget(&self) -> Rc<dyn WidgetDerive>;
+
+    fn get_state(&self) -> &dyn Data;
+
+    fn is_similar(&self, other: &WidgetRef) -> WidgetEquality;
+
+    fn update(&mut self, other: WidgetRef) -> bool;
+
+    fn layout(&mut self, ctx: ElementContext) -> LayoutResult;
+
+    fn build(&mut self, ctx: ElementContext) -> BuildResult;
+
+    fn paint(&self, size: Size) -> Option<Canvas>;
+
+    #[allow(clippy::borrowed_box)]
+    fn call(&mut self, ctx: ElementContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool;
+}
+
+impl std::fmt::Debug for Box<dyn WidgetDispatch> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(&self.get_display_name())
+            .finish_non_exhaustive()
+    }
+}
+
+pub(crate) struct WidgetInstance<W>
 where
-    W: WidgetView + WidgetState,
+    W: WidgetView,
 {
     widget: Rc<W>,
     state: W::State,
@@ -28,7 +81,7 @@ where
 
 impl<W> WidgetInstance<W>
 where
-    W: WidgetView + WidgetState,
+    W: WidgetView,
 {
     pub fn new(widget: Rc<W>) -> Self {
         let state = widget.create_state();
@@ -40,16 +93,44 @@ where
             callbacks: FnvHashMap::default(),
         }
     }
-
-    pub fn get_widget(&self) -> &W {
-        &self.widget
-    }
 }
 
 impl<W> WidgetDispatch for WidgetInstance<W>
 where
-    W: WidgetView + WidgetState,
+    W: WidgetView,
 {
+    fn get_display_name(&self) -> String {
+        let type_name = type_name::<W>();
+
+        if !type_name.contains('<') {
+            String::from(type_name.rsplit("::").next().unwrap())
+        } else {
+            let mut name = String::new();
+
+            let mut remaining = String::from(type_name);
+
+            while let Some((part, rest)) = remaining.split_once('<') {
+                name.push_str(part.rsplit("::").next().unwrap());
+
+                name.push('<');
+
+                remaining = String::from(rest);
+            }
+
+            name.push_str(remaining.rsplit("::").next().unwrap());
+
+            name
+        }
+    }
+
+    fn get_widget(&self) -> Rc<dyn WidgetDerive> {
+        Rc::clone(&self.widget) as Rc<dyn WidgetDerive>
+    }
+
+    fn get_state(&self) -> &dyn Data {
+        &self.state
+    }
+
     fn is_similar(&self, other: &WidgetRef) -> WidgetEquality {
         if let Some(other) = other.downcast_rc::<W>() {
             if self.widget == other {
@@ -74,15 +155,11 @@ where
         needs_build
     }
 
-    fn layout(&mut self, ctx: AguiContext) -> LayoutResult {
-        let span = tracing::error_span!("layout");
-        let _enter = span.enter();
-
+    fn layout(&mut self, ctx: ElementContext) -> LayoutResult {
         let mut ctx = LayoutContext {
-            plugins: ctx.plugins.unwrap(),
-            widget_tree: ctx.tree,
+            element_tree: ctx.element_tree,
 
-            widget_id: ctx.widget_id.unwrap(),
+            element_id: ctx.element_id,
             widget: self.widget.as_ref(),
             state: &mut self.state,
         };
@@ -90,17 +167,16 @@ where
         self.widget.layout(&mut ctx)
     }
 
-    fn build(&mut self, ctx: AguiContext) -> BuildResult {
-        let span = tracing::error_span!("build");
-        let _enter = span.enter();
-
+    fn build(&mut self, ctx: ElementContext) -> BuildResult {
         let mut ctx = BuildContext {
-            plugins: ctx.plugins.unwrap(),
-            widget_tree: ctx.tree,
+            element_tree: ctx.element_tree,
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
 
-            widget_id: ctx.widget_id.unwrap(),
+            element_id: ctx.element_id,
+
+            inheritance: ctx.inheritance,
+
             widget: self.widget.as_ref(),
             state: &mut self.state,
 
@@ -109,15 +185,14 @@ where
 
         let result = self.widget.build(&mut ctx);
 
+        // TODO: check `listening_to` against its previous value and unregister listeners
+
         self.callbacks = ctx.callbacks;
 
         result
     }
 
     fn paint(&self, size: Size) -> Option<Canvas> {
-        let span = tracing::error_span!("draw");
-        let _enter = span.enter();
-
         let mut canvas = Canvas {
             size,
 
@@ -141,18 +216,14 @@ where
         }
     }
 
-    fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {
-        let span = tracing::error_span!("callback");
-        let _enter = span.enter();
-
+    fn call(&mut self, ctx: ElementContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
-                plugins: ctx.plugins.unwrap(),
-                widget_tree: ctx.tree,
+                element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
                 callback_queue: ctx.callback_queue,
 
-                widget_id: ctx.widget_id.unwrap(),
+                element_id: ctx.element_id,
                 widget: self.widget.as_ref(),
                 state: &mut self.state,
 
@@ -175,13 +246,18 @@ where
 
 impl<W> std::fmt::Debug for WidgetInstance<W>
 where
-    W: WidgetView + WidgetState + std::fmt::Debug,
-    <W>::State: std::fmt::Debug,
+    W: WidgetState + WidgetView + std::fmt::Debug,
+    <W as WidgetState>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WidgetInstance")
-            .field("widget", &self.widget)
-            .field("state", &self.state)
-            .finish()
+        let mut dbg = f.debug_struct("WidgetInstance");
+
+        dbg.field("widget", &self.widget);
+
+        if TypeId::of::<W::State>() != TypeId::of::<()>() {
+            dbg.field("state", &self.state);
+        }
+
+        dbg.finish()
     }
 }

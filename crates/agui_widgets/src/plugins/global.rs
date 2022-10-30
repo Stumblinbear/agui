@@ -8,11 +8,11 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
-    manager::{events::WidgetEvent, WidgetManager},
+    manager::{events::ElementEvent, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{ContextPlugins, ContextWidget, WidgetId, WidgetView},
+    widget::{ContextPlugins, ContextWidget, WidgetView}, element::ElementId,
 };
 
 #[derive(Debug, Default)]
@@ -36,9 +36,9 @@ impl StatefulPlugin for GlobalPlugin {
         }
     }
 
-    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[ElementEvent]) {
         for event in events {
-            if let WidgetEvent::Destroyed { widget_id, .. } = event {
+            if let ElementEvent::Destroyed { widget_id, .. } = event {
                 // If the widget is listening to something, remove it from the respective listeners
                 if let Some(types) = state.listening.remove(widget_id) {
                     for type_id in types {
@@ -67,11 +67,11 @@ pub struct GlobalPluginState {
 pub struct GlobalValue {
     value: Rc<RefCell<dyn Data>>,
 
-    listeners: HashSet<WidgetId>,
+    listeners: HashSet<ElementId>,
 }
 
 impl GlobalPluginState {
-    fn get<G>(&mut self, widget_id: Option<WidgetId>) -> Global<G>
+    fn get<G>(&mut self, widget_id: Option<ElementId>) -> Global<G>
     where
         G: Data + Default,
     {

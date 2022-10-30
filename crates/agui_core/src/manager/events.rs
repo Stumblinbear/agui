@@ -1,39 +1,39 @@
-use crate::widget::WidgetId;
+use crate::element::ElementId;
 
-/// Used to indicate a change to widgets in the tree.
+/// Used to indicate a change to elements in the tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum WidgetEvent {
-    /// A widget has been spawned.
+pub enum ElementEvent {
+    /// A element has been spawned.
     Spawned {
-        parent_id: Option<WidgetId>,
-        widget_id: WidgetId,
+        parent_id: Option<ElementId>,
+        element_id: ElementId,
     },
 
-    /// A widget has been rebuilt.
-    Rebuilt { widget_id: WidgetId },
+    /// A element has been rebuilt.
+    Rebuilt { element_id: ElementId },
 
-    /// A widget has been reparented.
+    /// A element has been reparented.
     Reparent {
-        parent_id: Option<WidgetId>,
-        widget_id: WidgetId,
+        parent_id: Option<ElementId>,
+        element_id: ElementId,
     },
 
-    /// A widget has been destroyed.
-    Destroyed { widget_id: WidgetId },
+    /// A element has been destroyed.
+    Destroyed { element_id: ElementId },
 
-    /// A widget needs to be redrawn. This will occur the first time a widget is drawn and for subsequent changes.
-    Draw { widget_id: WidgetId },
+    /// A element needs to be redrawn. This will occur the first time a element is drawn and for subsequent changes.
+    Draw { element_id: ElementId },
 }
 
-impl WidgetEvent {
-    pub fn widget_id(&self) -> &WidgetId {
+impl ElementEvent {
+    pub fn element_id(&self) -> &ElementId {
         match self {
-            WidgetEvent::Spawned { widget_id, .. }
-            | WidgetEvent::Rebuilt { widget_id, .. }
-            | WidgetEvent::Reparent { widget_id, .. }
-            | WidgetEvent::Destroyed { widget_id, .. }
-            | WidgetEvent::Draw { widget_id, .. } => widget_id,
+            ElementEvent::Spawned { element_id, .. }
+            | ElementEvent::Rebuilt { element_id, .. }
+            | ElementEvent::Reparent { element_id, .. }
+            | ElementEvent::Destroyed { element_id, .. }
+            | ElementEvent::Draw { element_id, .. } => element_id,
         }
     }
 }

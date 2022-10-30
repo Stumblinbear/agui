@@ -195,13 +195,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::widget::WidgetId;
+    use crate::element::ElementId;
 
     use super::Forest;
 
     #[test]
     fn is_first_last_child() {
-        let mut tree: Forest<WidgetId, usize> = Forest::default();
+        let mut tree: Forest<ElementId, usize> = Forest::default();
 
         let root_1_id = tree.add(None, 0);
 

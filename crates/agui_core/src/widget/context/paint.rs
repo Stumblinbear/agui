@@ -1,10 +1,10 @@
 use std::ops::Deref;
 
-use crate::widget::{Widget, WidgetState};
+use crate::widget::Widget;
 
 pub struct PaintContext<'ctx, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     pub widget: &'ctx W,
     pub state: &'ctx W::State,
@@ -12,7 +12,7 @@ where
 
 impl<W> Deref for PaintContext<'_, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     type Target = W;
 
@@ -23,7 +23,7 @@ where
 
 impl<W> PaintContext<'_, W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     pub fn get_widget(&self) -> &W {
         self.widget

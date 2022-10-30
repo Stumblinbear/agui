@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
 
-use crate::{unit::Data, widget::{Widget, WidgetState}};
+use crate::{unit::Data, widget::Widget};
 
 use super::CallbackContext;
 
 pub trait CallbackFunc<W>
 where
-    W: Widget + WidgetState,
+    W: Widget,
 {
     #[allow(clippy::borrowed_box)]
     fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn Data>);
@@ -14,7 +14,7 @@ where
 
 pub struct CallbackFn<W, A, F>
 where
-    W: Widget + WidgetState,
+    W: Widget,
     A: 'static,
     F: Fn(&mut CallbackContext<W>, &A),
 {
@@ -25,7 +25,7 @@ where
 
 impl<W, A, F> CallbackFn<W, A, F>
 where
-    W: Widget + WidgetState,
+    W: Widget,
     A: 'static,
     F: Fn(&mut CallbackContext<W>, &A),
 {
@@ -40,7 +40,7 @@ where
 
 impl<W, A, F> CallbackFunc<W> for CallbackFn<W, A, F>
 where
-    W: Widget + WidgetState,
+    W: Widget,
     A: Data,
     F: Fn(&mut CallbackContext<W>, &A),
 {

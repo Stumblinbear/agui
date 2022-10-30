@@ -6,7 +6,7 @@ use std::{
 
 use agui_core::{
     callback::{CallbackContext, CallbackId},
-    manager::events::WidgetEvent,
+    manager::events::ElementEvent,
     plugin::{PluginContext, StatefulPlugin},
     widget::{ContextPlugins, ContextWidgetMut, Widget, WidgetId, WidgetState},
 };
@@ -61,9 +61,9 @@ impl StatefulPlugin for TimeoutPlugin {
         }
     }
 
-    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[WidgetEvent]) {
+    fn on_events(&self, _: &mut PluginContext, state: &mut Self::State, events: &[ElementEvent]) {
         for event in events {
-            if let WidgetEvent::Destroyed { widget_id, .. } = event {
+            if let ElementEvent::Destroyed { widget_id, .. } = event {
                 state.widgets.remove(widget_id);
             }
         }

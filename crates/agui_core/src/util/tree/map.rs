@@ -166,6 +166,21 @@ where
         }
     }
 
+    pub fn with<F, R>(&mut self, node_id: K, func: F) -> Option<R>
+    where
+        F: FnOnce(&mut TreeMap<K, V>, &mut V) -> R,
+    {
+        if let Some(mut value) = self.take(node_id) {
+            let ret = func(self, &mut value);
+
+            self.replace(node_id, value);
+
+            Some(ret)
+        } else {
+            None
+        }
+    }
+
     pub fn take(&mut self, node_id: K) -> Option<V> {
         self.nodes
             .get_mut(node_id)
@@ -625,13 +640,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::widget::WidgetId;
+    use crate::element::ElementId;
 
     use super::TreeMap;
 
     #[test]
     fn hierarchy() {
-        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
+        let mut tree: TreeMap<ElementId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 
@@ -721,7 +736,7 @@ mod tests {
 
     #[test]
     fn downward_iter() {
-        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
+        let mut tree: TreeMap<ElementId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 
@@ -815,7 +830,7 @@ mod tests {
 
     #[test]
     fn upward_iter() {
-        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
+        let mut tree: TreeMap<ElementId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 
@@ -924,7 +939,7 @@ mod tests {
 
     #[test]
     fn depth_propagation() {
-        let mut tree: TreeMap<WidgetId, usize> = TreeMap::default();
+        let mut tree: TreeMap<ElementId, usize> = TreeMap::default();
 
         let root_id = tree.add(None, 0);
 

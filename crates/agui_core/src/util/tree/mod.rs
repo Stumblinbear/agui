@@ -92,6 +92,21 @@ where
         self.map.remove(node_id)
     }
 
+    pub fn with<F, R>(&mut self, node_id: K, func: F) -> Option<R>
+    where
+        F: FnOnce(&mut Tree<K, V>, &mut V) -> R,
+    {
+        if let Some(mut value) = self.take(node_id) {
+            let ret = func(self, &mut value);
+
+            self.replace(node_id, value);
+
+            Some(ret)
+        } else {
+            None
+        }
+    }
+
     pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> bool {
         if self.root == Some(node_id) {
             self.root = None;
@@ -248,13 +263,13 @@ where
 mod tests {
     use morphorm::Hierarchy;
 
-    use crate::widget::WidgetId;
+    use crate::element::ElementId;
 
     use super::Tree;
 
     #[test]
     fn is_first_last_child() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: Tree<ElementId, usize> = Tree::default();
 
         let root_id = tree.add(None, 0);
 
@@ -270,7 +285,7 @@ mod tests {
 
     #[test]
     fn downward_iter() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: Tree<ElementId, usize> = Tree::default();
 
         let root_id = tree.add(None, 0);
 
@@ -301,7 +316,7 @@ mod tests {
 
     #[test]
     fn upward_iter() {
-        let mut tree: Tree<WidgetId, usize> = Tree::default();
+        let mut tree: Tree<ElementId, usize> = Tree::default();
 
         let root_id = tree.add(None, 0);
 

@@ -1,9 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{
-    unit::Data,
-    widget::{Widget, WidgetId},
-};
+use crate::{element::ElementId, unit::Data, widget::Widget};
 
 mod context;
 mod func;
@@ -15,13 +12,13 @@ pub use queue::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CallbackId {
-    widget_id: WidgetId,
+    element_id: ElementId,
     type_id: TypeId,
 }
 
 impl CallbackId {
-    pub fn get_widget_id(&self) -> WidgetId {
-        self.widget_id
+    pub fn get_element_id(&self) -> ElementId {
+        self.element_id
     }
 
     pub fn get_type_id(&self) -> TypeId {
@@ -67,7 +64,7 @@ impl<A> Callback<A>
 where
     A: Data,
 {
-    pub(crate) fn new<F, W>(widget_id: WidgetId, callback_queue: CallbackQueue) -> Self
+    pub(crate) fn new<F, W>(element_id: ElementId, callback_queue: CallbackQueue) -> Self
     where
         W: Widget,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
@@ -76,7 +73,7 @@ where
             phantom: PhantomData,
 
             id: Some(CallbackId {
-                widget_id,
+                element_id,
                 type_id: TypeId::of::<F>(),
             }),
 

@@ -1,29 +1,27 @@
 use std::ops::Deref;
 
 use crate::{
-    manager::element::WidgetElement,
-    plugin::{BoxedPlugin, PluginElement, PluginId, PluginImpl},
-    util::{map::PluginMap, tree::Tree},
-    widget::{WidgetId, WidgetState, WidgetView},
+    element::{Element, ElementId},
+    util::tree::Tree,
+    widget::Widget,
 };
 
-use super::{ContextPlugins, ContextStatefulWidget, ContextWidget};
+use super::{ContextStatefulWidget, ContextWidget};
 
 pub struct LayoutContext<'ctx, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
-    pub(crate) plugins: &'ctx mut PluginMap<BoxedPlugin>,
-    pub(crate) widget_tree: &'ctx Tree<WidgetId, WidgetElement>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
-    pub(crate) widget_id: WidgetId,
+    pub(crate) element_id: ElementId,
     pub widget: &'ctx W,
     pub state: &'ctx mut W::State,
 }
 
 impl<W> Deref for LayoutContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
     type Target = W;
 
@@ -32,45 +30,18 @@ where
     }
 }
 
-impl<W> ContextPlugins for LayoutContext<'_, W>
-where
-    W: WidgetView + WidgetState,
-{
-    fn get_plugins(&mut self) -> &mut PluginMap<BoxedPlugin> {
-        self.plugins
-    }
-
-    fn get_plugin<P>(&self) -> Option<&PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_ref())
-    }
-
-    fn get_plugin_mut<P>(&mut self) -> Option<&mut PluginElement<P>>
-    where
-        P: PluginImpl,
-    {
-        self.plugins
-            .get_mut(&PluginId::of::<P>())
-            .and_then(|p| p.downcast_mut())
-    }
-}
-
 impl<W> ContextWidget for LayoutContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
     type Widget = W;
 
-    fn get_widgets(&self) -> &Tree<WidgetId, WidgetElement> {
-        self.widget_tree
+    fn get_elements(&self) -> &Tree<ElementId, Element> {
+        self.element_tree
     }
 
-    fn get_widget_id(&self) -> WidgetId {
-        self.widget_id
+    fn get_element_id(&self) -> ElementId {
+        self.element_id
     }
 
     fn get_widget(&self) -> &W {
@@ -80,7 +51,7 @@ where
 
 impl<W> ContextStatefulWidget for LayoutContext<'_, W>
 where
-    W: WidgetView + WidgetState,
+    W: Widget,
 {
     fn get_state(&self) -> &W::State {
         self.state

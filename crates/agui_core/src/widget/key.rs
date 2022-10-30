@@ -1,10 +1,10 @@
-use crate::{unit::Key, widget::WidgetId};
+use crate::{element::ElementId, unit::Key};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WidgetKey(pub(crate) Option<WidgetId>, pub(crate) Key);
+pub struct WidgetKey(pub(crate) Option<ElementId>, pub(crate) Key);
 
 impl WidgetKey {
-    pub fn get_owner(&self) -> Option<WidgetId> {
+    pub fn get_owner(&self) -> Option<ElementId> {
         self.0
     }
 
