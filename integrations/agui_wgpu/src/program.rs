@@ -129,7 +129,7 @@ impl AguiProgram {
 
     pub fn run(mut self) -> ! {
         self.event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
+            *control_flow = ControlFlow::Poll;
 
             match event {
                 WinitEvent::RedrawRequested(..) => {
