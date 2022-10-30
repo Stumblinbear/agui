@@ -1,4 +1,4 @@
-use agui::{render::canvas::Canvas, unit::Point, widget::WidgetId};
+use agui::{element::ElementId, render::canvas::Canvas, unit::Point};
 use glyph_brush_draw_cache::ab_glyph::FontArc;
 use wgpu::RenderPass;
 
@@ -10,7 +10,7 @@ use crate::{
 #[derive(Default)]
 pub(crate) struct RenderElement {
     /// This is the layer that this render element belongs to
-    pub head_target: Option<WidgetId>,
+    pub head_target: Option<ElementId>,
 
     pub head: Option<RenderCanvas>,
     pub children: Vec<RenderLayer>,

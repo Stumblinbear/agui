@@ -4,7 +4,7 @@ use std::{
 };
 
 use downcast_rs::Downcast;
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
@@ -133,7 +133,7 @@ where
 
     fn is_similar(&self, other: &WidgetRef) -> WidgetEquality {
         if let Some(other) = other.downcast_rc::<W>() {
-            if self.widget == other {
+            if self.widget.as_ref().is_equal(other.as_ref()) {
                 WidgetEquality::Equal
             } else {
                 WidgetEquality::Unequal
@@ -181,6 +181,8 @@ where
             state: &mut self.state,
 
             callbacks: FnvHashMap::default(),
+
+            keyed_children: FnvHashSet::default(),
         };
 
         let result = self.widget.build(&mut ctx);

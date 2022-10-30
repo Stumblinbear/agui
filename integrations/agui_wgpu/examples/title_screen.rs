@@ -5,7 +5,6 @@ use tracing_subscriber::EnvFilter;
 use agui::{
     prelude::*,
     widgets::{
-        plugins::DefaultPluginsExt,
         primitives::{Builder, Column, Padding, Spacing, Text},
         App, Button,
     },
@@ -33,7 +32,7 @@ fn main() {
         },
     );
 
-    ui.register_default_plugins();
+    // ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui

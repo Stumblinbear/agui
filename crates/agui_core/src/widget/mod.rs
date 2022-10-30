@@ -1,7 +1,6 @@
-use std::{any::type_name, cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use downcast_rs::{impl_downcast, Downcast};
-use slotmap::Key;
 
 mod builder;
 mod context;
@@ -11,13 +10,17 @@ pub mod key;
 mod result;
 mod state;
 
-use crate::element::{ElementId, ElementType};
+use crate::element::ElementType;
 
 use self::key::WidgetKey;
 
 pub use self::{builder::*, context::*, inherited::*, result::*, state::*};
 
 pub trait WidgetDerive: Downcast {
+    fn get_type_name(&self) -> &str;
+
+    fn is_equal(&self, other: &dyn WidgetDerive) -> bool;
+
     fn create_element(self: Rc<Self>) -> ElementType;
 }
 
@@ -31,11 +34,7 @@ pub enum WidgetRef {
     None,
     Some {
         key: Option<WidgetKey>,
-
-        display_name: String,
         widget: Rc<dyn WidgetDerive>,
-
-        element_id: Rc<RefCell<ElementId>>,
     },
 }
 
@@ -51,40 +50,37 @@ impl WidgetRef {
     where
         W: Widget,
     {
-        let type_name = type_name::<W>();
-
-        let display_name = if !type_name.contains('<') {
-            String::from(type_name.rsplit("::").next().unwrap())
-        } else {
-            let mut name = String::new();
-
-            let mut remaining = String::from(type_name);
-
-            while let Some((part, rest)) = remaining.split_once('<') {
-                name.push_str(part.rsplit("::").next().unwrap());
-
-                name.push('<');
-
-                remaining = String::from(rest);
-            }
-
-            name.push_str(remaining.rsplit("::").next().unwrap());
-
-            name
-        };
-
         Self::Some {
             key,
 
-            display_name,
             widget: Rc::new(widget),
-
-            element_id: Rc::default(),
         }
     }
 
-    pub fn get_display_name(&self) -> Option<&str> {
-        if let Self::Some { display_name, .. } = self {
+    pub fn get_display_name(&self) -> Option<String> {
+        if let Self::Some { widget, .. } = self {
+            let type_name = widget.get_type_name();
+
+            let display_name = if !type_name.contains('<') {
+                String::from(type_name.rsplit("::").next().unwrap())
+            } else {
+                let mut name = String::new();
+
+                let mut remaining = String::from(type_name);
+
+                while let Some((part, rest)) = remaining.split_once('<') {
+                    name.push_str(part.rsplit("::").next().unwrap());
+
+                    name.push('<');
+
+                    remaining = String::from(rest);
+                }
+
+                name.push_str(remaining.rsplit("::").next().unwrap());
+
+                name
+            };
+
             Some(display_name)
         } else {
             None
@@ -104,20 +100,6 @@ impl WidgetRef {
             key.as_ref()
         } else {
             None
-        }
-    }
-
-    pub(crate) fn get_current_id(&self) -> ElementId {
-        if let Self::Some { element_id, .. } = self {
-            *element_id.as_ref().borrow()
-        } else {
-            ElementId::default()
-        }
-    }
-
-    pub(crate) fn set_current_id(&self, current_element_id: ElementId) {
-        if let Self::Some { element_id, .. } = self {
-            *element_id.as_ref().borrow_mut() = current_element_id;
         }
     }
 
@@ -143,14 +125,10 @@ impl WidgetRef {
 
 impl PartialEq for WidgetRef {
     fn eq(&self, other: &Self) -> bool {
-        if let Self::Some {
-            key, element_id, ..
-        } = self
-        {
+        if let Self::Some { key, widget } = self {
             if let Self::Some {
                 key: other_key,
-                element_id: other_element_id,
-                ..
+                widget: other_widget,
             } = other
             {
                 if key.is_some() || other_key.is_some() {
@@ -158,13 +136,7 @@ impl PartialEq for WidgetRef {
                     return key == other_key;
                 }
 
-                // If either of them are null, one of them isn't in the tree and are not equal
-                if element_id.borrow().is_null() || other_element_id.borrow().is_null() {
-                    return false;
-                }
-
-                // If the two element_ids are equal, then the two widgets are equal and currently exist in the tree
-                return element_id == other_element_id;
+                return widget.as_ref().is_equal(other_widget.as_ref());
             }
         }
 
@@ -191,13 +163,10 @@ impl Eq for WidgetRef {}
 
 impl std::fmt::Debug for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Some {
-            key, display_name, ..
-        } = self
-        {
+        if let Self::Some { key, .. } = self {
             f.write_str("WidgetRef::Some(")?;
 
-            f.write_str(display_name)?;
+            f.write_str(&self.get_display_name().unwrap())?;
 
             if let Some(key) = key {
                 f.write_str(" <key: ")?;
@@ -214,11 +183,8 @@ impl std::fmt::Debug for WidgetRef {
 
 impl std::fmt::Display for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Some {
-            key, display_name, ..
-        } = self
-        {
-            f.write_str(display_name)?;
+        if let Self::Some { key, .. } = self {
+            f.write_str(&self.get_display_name().unwrap())?;
 
             if let Some(key) = key {
                 f.write_str(" <key: ")?;

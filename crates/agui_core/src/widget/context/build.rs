@@ -30,6 +30,8 @@ where
     pub state: &'ctx mut W::State,
 
     pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+
+    pub(crate) keyed_children: FnvHashSet<Key>,
 }
 
 impl<W> Deref for BuildContext<'_, W>
@@ -181,10 +183,16 @@ impl<W> BuildContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {
-    pub fn key<C>(&self, key: Key, widget: C) -> WidgetRef
+    pub fn key<C>(&mut self, key: Key, widget: C) -> WidgetRef
     where
         C: Widget,
     {
+        if self.keyed_children.contains(&key) {
+            panic!("cannot use the same key twice in a widget");
+        }
+
+        self.keyed_children.insert(key);
+
         WidgetRef::new_with_key(
             Some(match key {
                 Key::Local(_) => WidgetKey(Some(self.element_id), key),

@@ -4,11 +4,10 @@ use std::{
     io::{self, BufReader, Read},
 };
 
-use fnv::FnvHashSet;
+use fnv::{FnvHashMap, FnvHashSet};
 
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 use morphorm::Cache;
-use slotmap::Key;
 
 use crate::{
     callback::CallbackQueue,
@@ -16,7 +15,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Font, Units},
     util::tree::Tree,
-    widget::{instance::WidgetEquality, Widget, WidgetRef},
+    widget::{instance::WidgetEquality, key::WidgetKey, Widget, WidgetRef},
 };
 
 use self::{cache::LayoutCache, context::AguiContext};
@@ -31,6 +30,7 @@ use events::ElementEvent;
 #[derive(Default)]
 pub struct WidgetManager {
     element_tree: Tree<ElementId, Element>,
+    keyed_elements: FnvHashMap<WidgetKey, ElementId>,
 
     dirty: FnvHashSet<ElementId>,
     callback_queue: CallbackQueue,
@@ -272,6 +272,8 @@ impl WidgetManager {
         let span = tracing::debug_span!("flush_modifications");
         let _enter = span.enter();
 
+        let mut retained_elements = FnvHashSet::default();
+
         // Apply any queued modifications
         while let Some(modification) = self.modifications.pop_front() {
             match modification {
@@ -283,7 +285,7 @@ impl WidgetManager {
                     if let SpawnResult::Created(element_id) =
                         self.process_spawn(widget_events, parent_id, widget, None)
                     {
-                        self.process_build(widget_events, element_id);
+                        self.process_build(widget_events, &mut retained_elements, element_id);
                     }
                 }
 
@@ -293,7 +295,7 @@ impl WidgetManager {
                     let span = tracing::debug_span!("rebuild");
                     let _enter = span.enter();
 
-                    self.process_rebuild(widget_events, element_id);
+                    self.process_rebuild(widget_events, &mut retained_elements, element_id);
                 }
 
                 Modify::Destroy(element_id) => {
@@ -457,14 +459,6 @@ impl WidgetManager {
             return SpawnResult::Empty;
         }
 
-        // If we're trying to spawn a widget that has already been reparented, panic. The same widget cannot exist twice.
-        if self.element_tree.contains(widget_ref.get_current_id()) {
-            panic!(
-                "two instances of the same widget cannot exist at one time: {:?}",
-                widget_ref
-            );
-        }
-
         // Grab the existing element in the tree
         if let Some(existing_element_id) = existing_element_id {
             let existing_element = self.element_tree.get_mut(existing_element_id).unwrap();
@@ -510,6 +504,10 @@ impl WidgetManager {
         );
 
         self.element_tree.with(element_id, |element_tree, element| {
+            if let Some(widget_key) = element.get_key() {
+                self.keyed_elements.insert(*widget_key, element_id);
+            }
+
             element.mount(AguiContext {
                 element_tree,
                 dirty: &mut self.dirty,
@@ -524,8 +522,6 @@ impl WidgetManager {
             element_id,
         });
 
-        widget_ref.set_current_id(element_id);
-
         self.cache.add(element_id);
 
         SpawnResult::Created(element_id)
@@ -534,12 +530,11 @@ impl WidgetManager {
     fn process_build(
         &mut self,
         element_events: &mut Vec<ElementEvent>,
+        retained_elements: &mut FnvHashSet<ElementId>,
         element_id: ElementId,
-    ) -> FnvHashSet<ElementId> {
+    ) {
         let span = tracing::debug_span!("process_build");
         let _enter = span.enter();
-
-        let mut retained_elements = FnvHashSet::default();
 
         let mut build_queue = VecDeque::new();
 
@@ -573,57 +568,52 @@ impl WidgetManager {
                 continue;
             }
 
-            let mut existing_child_idx = 0;
-
             // Spawn the child widgets
-            for child_ref in result {
+            for (i, child_ref) in result.into_iter().enumerate() {
                 if child_ref.is_some() {
-                    let child_id = child_ref.get_current_id();
-
-                    // If the child already has an identifier, we know that we don't own it, as any widget we DO own will
-                    // have been created anew and thus not have an identifier. If we do own it, we can attempt to retain
-                    // its state.
-                    let existing_child_id = if !child_id.is_null() {
-                        None
-                    } else {
-                        self.element_tree.get_child(element_id, existing_child_idx)
-                    };
-
-                    existing_child_idx += 1;
-
-                    // If the widget element already exists in the tree
-                    if self.element_tree.contains(child_id) {
+                    // If the child's key exists in the tree, reparent and retain it
+                    if let Some(keyed_element_id) = child_ref
+                        .get_key()
+                        .and_then(|widget_key| self.keyed_elements.get(widget_key).copied())
+                    {
                         // If we're trying to reparent an element that has already been retained, panic. The same widget cannot exist twice.
-                        if retained_elements.contains(&child_id) {
+                        if retained_elements.contains(&keyed_element_id) {
                             panic!(
                                 "two instances of the same widget cannot exist at one time: {:?}",
                                 child_ref
                             );
                         }
 
-                        retained_elements.insert(child_id);
+                        retained_elements.insert(keyed_element_id);
 
-                        if self.element_tree.reparent(Some(element_id), child_id) {
+                        if self
+                            .element_tree
+                            .reparent(Some(element_id), keyed_element_id)
+                        {
                             tracing::trace!(
                                 parent_id = &format!("{:?}", element_id),
-                                element =
-                                    self.element_tree.get(child_id).unwrap().get_display_name(),
+                                element = self
+                                    .element_tree
+                                    .get(keyed_element_id)
+                                    .unwrap()
+                                    .get_display_name(),
                                 "reparented widget"
                             );
 
-                            self.element_tree.with(element_id, |element_tree, element| {
-                                element.mount(AguiContext {
-                                    element_tree,
-                                    dirty: &mut self.dirty,
-                                    callback_queue: &self.callback_queue,
+                            self.element_tree
+                                .with(keyed_element_id, |element_tree, element| {
+                                    element.mount(AguiContext {
+                                        element_tree,
+                                        dirty: &mut self.dirty,
+                                        callback_queue: &self.callback_queue,
 
-                                    element_id,
+                                        element_id: keyed_element_id,
+                                    });
                                 });
-                            });
 
                             element_events.push(ElementEvent::Reparent {
                                 parent_id: Some(element_id),
-                                element_id: child_id,
+                                element_id: keyed_element_id,
                             });
                         }
 
@@ -635,7 +625,7 @@ impl WidgetManager {
                         element_events,
                         Some(element_id),
                         child_ref,
-                        existing_child_id.cloned(),
+                        self.element_tree.get_child(element_id, i).cloned(),
                     ) {
                         SpawnResult::Retained {
                             element_id,
@@ -657,11 +647,14 @@ impl WidgetManager {
                 }
             }
         }
-
-        retained_elements
     }
 
-    fn process_rebuild(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
+    fn process_rebuild(
+        &mut self,
+        element_events: &mut Vec<ElementEvent>,
+        retained_elements: &mut FnvHashSet<ElementId>,
+        element_id: ElementId,
+    ) {
         element_events.push(ElementEvent::Rebuilt { element_id });
 
         // Grab the current children so we know which ones to remove post-build
@@ -671,7 +664,7 @@ impl WidgetManager {
             .map(Vec::clone)
             .unwrap_or_default();
 
-        let retained_elements = self.process_build(element_events, element_id);
+        self.process_build(element_events, retained_elements, element_id);
 
         // Remove the old children
         for child_id in children {
@@ -711,7 +704,11 @@ impl WidgetManager {
 
             self.cache.remove(&element_id);
 
-            self.element_tree.remove(element_id, false).unwrap();
+            let element = self.element_tree.remove(element_id, false).unwrap();
+
+            if let Some(key) = element.get_key() {
+                self.keyed_elements.remove(key);
+            }
         }
     }
 }

@@ -1,10 +1,9 @@
 use std::{cell::RefCell, time::Instant};
 
 use agui::{
-    element::ElementLifecycle,
+    element::ElementId,
     manager::{events::ElementEvent, WidgetManager},
     unit::{Point, Size},
-    widget::WidgetId,
 };
 use fnv::{FnvHashMap, FnvHashSet};
 use glyph_brush_draw_cache::DrawCache;
@@ -35,7 +34,7 @@ pub(crate) struct RenderManager {
 
     root_texture: Option<RenderTexture>,
 
-    widgets: FnvHashMap<WidgetId, RenderElement>,
+    widgets: FnvHashMap<ElementId, RenderElement>,
 }
 
 impl RenderManager {
@@ -143,10 +142,10 @@ impl RenderManager {
             match event {
                 ElementEvent::Spawned {
                     parent_id,
-                    widget_id,
+                    element_id,
                 } => {
                     self.widgets.insert(
-                        *widget_id,
+                        *element_id,
                         RenderElement {
                             head_target: parent_id.and_then(|parent_id| {
                                 let parent = self
@@ -170,7 +169,7 @@ impl RenderManager {
 
                 ElementEvent::Reparent {
                     parent_id,
-                    widget_id,
+                    element_id,
                 } => {
                     let new_head_target = parent_id.and_then(|parent_id| {
                         let parent = self
@@ -187,7 +186,7 @@ impl RenderManager {
 
                     let element = self
                         .widgets
-                        .get_mut(widget_id)
+                        .get_mut(element_id)
                         .expect("reparented render element not found");
 
                     dirty_layers.extend(element.head_target);
@@ -196,14 +195,14 @@ impl RenderManager {
                     element.head_target = new_head_target;
                 }
 
-                ElementEvent::Destroyed { widget_id } => {
-                    if let Some(element) = self.widgets.remove(widget_id) {
+                ElementEvent::Destroyed { element_id } => {
+                    if let Some(element) = self.widgets.remove(element_id) {
                         dirty_layers.extend(element.head_target);
                     }
                 }
 
-                ElementEvent::Draw { widget_id } => {
-                    self.update_element(handle, manager, *widget_id, &mut dirty_layers);
+                ElementEvent::Draw { element_id } => {
+                    self.update_element(handle, manager, *element_id, &mut dirty_layers);
                 }
 
                 _ => todo!(),
@@ -254,8 +253,8 @@ impl RenderManager {
 
             r.set_pipeline(&self.paint_pipeline);
 
-            for widget_id in manager.get_widgets().iter_down() {
-                let element = self.widgets.get(&widget_id).unwrap();
+            for element_id in manager.get_tree().iter_down() {
+                let element = self.widgets.get(&element_id).unwrap();
 
                 element.render(&mut r);
             }
@@ -270,20 +269,20 @@ impl RenderManager {
         &mut self,
         handle: &RenderHandle,
         manager: &WidgetManager,
-        widget_id: WidgetId,
-        dirty_layers: &mut FnvHashSet<WidgetId>,
+        element_id: ElementId,
+        dirty_layers: &mut FnvHashSet<ElementId>,
     ) {
         let render_element = self
             .widgets
-            .get_mut(&widget_id)
+            .get_mut(&element_id)
             .expect("drawn render element not found");
 
-        let widget_element = manager.get_tree().get(widget_id).unwrap();
+        let widget_element = manager.get_tree().get(element_id).unwrap();
 
         let canvas = widget_element.paint();
 
         if let Some(canvas) = canvas {
-            let pos = Point::from(widget_element.get_rect().unwrap());
+            let pos = Point::from(widget_element.get_rect().cloned().unwrap());
 
             // If we have or are drawing to the target layer, mark it dirty
             if !canvas.head.is_empty() || render_element.head.is_some() {
@@ -312,10 +311,10 @@ impl RenderManager {
         }
     }
 
-    fn redraw_layer(&mut self, manager: &WidgetManager, widget_id: WidgetId) {
+    fn redraw_layer(&mut self, manager: &WidgetManager, element_id: ElementId) {
         let element = self
             .widgets
-            .get_mut(&widget_id)
+            .get_mut(&element_id)
             .expect("drawn render element not found");
     }
 

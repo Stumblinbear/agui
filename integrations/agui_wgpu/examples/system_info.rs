@@ -8,7 +8,6 @@ use tracing_subscriber::EnvFilter;
 use agui::{
     prelude::*,
     widgets::{
-        plugins::DefaultPluginsExt,
         primitives::{Column, Text},
         App,
     },
@@ -36,7 +35,7 @@ fn main() {
         },
     );
 
-    ui.register_default_plugins();
+    // ui.register_default_plugins();
     // ui.register_default_globals();
 
     let deja_vu = ui

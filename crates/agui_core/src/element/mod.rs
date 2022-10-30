@@ -117,6 +117,7 @@ impl Element {
     pub(crate) fn new(key: Option<WidgetKey>, lifecycle: ElementType) -> Self {
         Self {
             key,
+
             layout_type: LayoutType::default(),
             layout: Layout::default(),
 

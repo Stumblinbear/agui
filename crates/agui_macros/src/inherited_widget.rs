@@ -16,6 +16,16 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
 
     parse_quote! {
         impl #impl_generics #agui_core::widget::WidgetDerive for #ident #ty_generics #where_clause {
+            fn get_type_name(&self) -> &str {
+                std::any::type_name::<Self>()
+            }
+
+            fn is_equal(&self, other: &dyn #agui_core::widget::WidgetDerive) -> bool {
+                other
+                    .downcast_ref::<Self>()
+                    .map_or(false, |a| self == a)
+            }
+
             fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where
                 Self: Sized

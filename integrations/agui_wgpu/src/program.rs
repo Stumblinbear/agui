@@ -7,13 +7,10 @@ use std::{
 use agui::{
     manager::WidgetManager,
     unit::{Point, Size},
-    widgets::{
-        plugins::{event::EventPluginExt, global::GlobalPluginExt},
-        state::{
-            keyboard::{KeyCode, KeyState, Keyboard, KeyboardCharacter, KeyboardInput},
-            mouse::{Mouse, MouseButton, MouseButtonState, MouseButtons, MousePos, Scroll},
-            window::{WindowFocus, WindowPosition, WindowSize},
-        },
+    widgets::state::{
+        keyboard::{KeyCode, KeyState},
+        mouse::{MouseButtonState, MousePos, Scroll},
+        window::{WindowFocus, WindowPosition, WindowSize},
     },
 };
 use wgpu::{CompositeAlphaMode, PresentMode, Surface, SurfaceConfiguration, TextureUsages};
@@ -190,9 +187,9 @@ impl AguiProgram {
                                 height: size.height as f32,
                             };
 
-                            self.manager.fire_event(window_size);
-                            self.manager
-                                .set_global::<WindowSize, _>(move |state| *state = window_size);
+                            // self.manager.fire_event(window_size);
+                            // self.manager
+                            //     .set_global::<WindowSize, _>(move |state| *state = window_size);
                         }
                     }
 
@@ -206,17 +203,17 @@ impl AguiProgram {
                             y: pos.y as f32,
                         };
 
-                        self.manager.fire_event(window_pos);
-                        self.manager
-                            .set_global::<WindowPosition, _>(move |state| *state = window_pos);
+                        // self.manager.fire_event(window_pos);
+                        // self.manager
+                        //     .set_global::<WindowPosition, _>(move |state| *state = window_pos);
                     }
 
                     WindowEvent::Focused(focused) => {
                         let window_focused = WindowFocus(focused);
 
-                        self.manager.fire_event(window_focused);
-                        self.manager
-                            .set_global::<WindowFocus, _>(move |state| *state = window_focused);
+                        // self.manager.fire_event(window_focused);
+                        // self.manager
+                        //     .set_global::<WindowFocus, _>(move |state| *state = window_focused);
                     }
 
                     WindowEvent::CursorMoved { position: pos, .. } => {
@@ -225,21 +222,21 @@ impl AguiProgram {
                             y: pos.y as f32,
                         }));
 
-                        self.manager.fire_event(mouse_pos);
-                        self.manager
-                            .set_global::<MousePos, _>(move |state| *state = mouse_pos);
-                        self.manager
-                            .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
+                        // self.manager.fire_event(mouse_pos);
+                        // self.manager
+                        //     .set_global::<MousePos, _>(move |state| *state = mouse_pos);
+                        // self.manager
+                        //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                     }
 
                     WindowEvent::CursorLeft { .. } => {
                         let mouse_pos = MousePos(None);
 
-                        self.manager.fire_event(mouse_pos);
-                        self.manager
-                            .set_global::<MousePos, _>(move |state| *state = mouse_pos);
-                        self.manager
-                            .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
+                        // self.manager.fire_event(mouse_pos);
+                        // self.manager
+                        //     .set_global::<MousePos, _>(move |state| *state = mouse_pos);
+                        // self.manager
+                        //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                     }
 
                     WindowEvent::MouseWheel { delta, .. } => {
@@ -252,9 +249,9 @@ impl AguiProgram {
                             },
                         });
 
-                        self.manager.fire_event(scroll);
-                        self.manager
-                            .set_global::<Scroll, _>(move |state| *state = scroll);
+                        // self.manager.fire_event(scroll);
+                        // self.manager
+                        //     .set_global::<Scroll, _>(move |state| *state = scroll);
                     }
 
                     WindowEvent::MouseInput {
@@ -267,42 +264,42 @@ impl AguiProgram {
                             ElementState::Released => MouseButtonState::Released,
                         };
 
-                        self.manager.fire_event(match button {
-                            winit::event::MouseButton::Left => MouseButton::Left(button_state),
-                            winit::event::MouseButton::Right => MouseButton::Right(button_state),
-                            winit::event::MouseButton::Middle => MouseButton::Middle(button_state),
-                            winit::event::MouseButton::Other(i) => {
-                                MouseButton::Other(i, button_state)
-                            }
-                        });
+                        // self.manager.fire_event(match button {
+                        //     winit::event::MouseButton::Left => MouseButton::Left(button_state),
+                        //     winit::event::MouseButton::Right => MouseButton::Right(button_state),
+                        //     winit::event::MouseButton::Middle => MouseButton::Middle(button_state),
+                        //     winit::event::MouseButton::Other(i) => {
+                        //         MouseButton::Other(i, button_state)
+                        //     }
+                        // });
 
-                        self.manager
-                            .set_global::<MouseButtons, _>(move |state| match button {
-                                winit::event::MouseButton::Left => state.left = button_state,
-                                winit::event::MouseButton::Right => state.right = button_state,
-                                winit::event::MouseButton::Middle => state.middle = button_state,
-                                winit::event::MouseButton::Other(i) => {
-                                    state.other.insert(i, button_state);
-                                }
-                            });
+                        // self.manager
+                        //     .set_global::<MouseButtons, _>(move |state| match button {
+                        //         winit::event::MouseButton::Left => state.left = button_state,
+                        //         winit::event::MouseButton::Right => state.right = button_state,
+                        //         winit::event::MouseButton::Middle => state.middle = button_state,
+                        //         winit::event::MouseButton::Other(i) => {
+                        //             state.other.insert(i, button_state);
+                        //         }
+                        //     });
 
-                        self.manager
-                            .set_global::<Mouse, _>(move |state| match button {
-                                winit::event::MouseButton::Left => state.button.left = button_state,
-                                winit::event::MouseButton::Right => {
-                                    state.button.right = button_state
-                                }
-                                winit::event::MouseButton::Middle => {
-                                    state.button.middle = button_state
-                                }
-                                winit::event::MouseButton::Other(i) => {
-                                    state.button.other.insert(i, button_state);
-                                }
-                            });
+                        // self.manager
+                        //     .set_global::<Mouse, _>(move |state| match button {
+                        //         winit::event::MouseButton::Left => state.button.left = button_state,
+                        //         winit::event::MouseButton::Right => {
+                        //             state.button.right = button_state
+                        //         }
+                        //         winit::event::MouseButton::Middle => {
+                        //             state.button.middle = button_state
+                        //         }
+                        //         winit::event::MouseButton::Other(i) => {
+                        //             state.button.other.insert(i, button_state);
+                        //         }
+                        //     });
                     }
 
                     WindowEvent::ReceivedCharacter(c) => {
-                        self.manager.fire_event(KeyboardCharacter(c));
+                        // self.manager.fire_event(KeyboardCharacter(c));
                     }
 
                     WindowEvent::KeyboardInput { input, .. } => {
@@ -314,18 +311,18 @@ impl AguiProgram {
                                 ElementState::Released => KeyState::Released,
                             };
 
-                            self.manager.fire_event(KeyboardInput(key, key_state));
+                            // self.manager.fire_event(KeyboardInput(key, key_state));
 
-                            self.manager.set_global::<Keyboard, _>(move |state| {
-                                state.keys.insert(key, key_state);
-                            });
+                            // self.manager.set_global::<Keyboard, _>(move |state| {
+                            //     state.keys.insert(key, key_state);
+                            // });
                         }
                     }
 
                     WindowEvent::ModifiersChanged(modifiers) => {
-                        self.manager.set_global::<Keyboard, _>(move |state| {
-                            state.modifiers = unsafe { mem::transmute(modifiers) };
-                        });
+                        // self.manager.set_global::<Keyboard, _>(move |state| {
+                        //     state.modifiers = unsafe { mem::transmute(modifiers) };
+                        // });
                     }
 
                     _ => {}
