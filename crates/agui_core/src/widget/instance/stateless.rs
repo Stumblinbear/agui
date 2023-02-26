@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{marker::PhantomData, rc::Rc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -70,11 +70,12 @@ where
 
     fn layout(&mut self, ctx: ElementContext) -> LayoutResult {
         let mut ctx = LayoutContext {
+            phantom: PhantomData,
+
             element_tree: ctx.element_tree,
             dirty: ctx.dirty,
 
             element_id: ctx.element_id,
-            widget: self.widget.as_ref(),
             state: &mut (),
         };
 
@@ -85,6 +86,8 @@ where
         self.callbacks.clear();
 
         let mut ctx = BuildContext {
+            phantom: PhantomData,
+
             element_tree: ctx.element_tree,
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
@@ -93,7 +96,6 @@ where
 
             inheritance: ctx.inheritance,
 
-            widget: self.widget.as_ref(),
             state: &mut (),
 
             callbacks: &mut self.callbacks,
@@ -114,7 +116,8 @@ where
         };
 
         let mut ctx = PaintContext {
-            widget: self.widget.as_ref(),
+            phantom: PhantomData,
+
             state: &mut (),
         };
 
@@ -131,11 +134,12 @@ where
     fn call(&mut self, ctx: ElementContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
+                phantom: PhantomData,
+
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
 
                 element_id: ctx.element_id,
-                widget: self.widget.as_ref(),
                 state: &mut (),
 
                 changed: false,

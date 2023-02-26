@@ -1,5 +1,6 @@
 use std::{
     any::TypeId,
+    marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
@@ -20,6 +21,8 @@ pub struct BuildContext<'ctx, W>
 where
     W: WidgetView,
 {
+    pub(crate) phantom: PhantomData<W>,
+
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
@@ -28,7 +31,6 @@ where
 
     pub(crate) inheritance: &'ctx mut Inheritance,
 
-    pub widget: &'ctx W,
     pub(crate) state: &'ctx mut dyn Data,
 
     pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,

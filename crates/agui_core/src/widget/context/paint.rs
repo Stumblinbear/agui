@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{marker::PhantomData, ops::Deref};
 
 use crate::{
     unit::Data,
@@ -9,7 +9,8 @@ pub struct PaintContext<'ctx, W>
 where
     W: WidgetView,
 {
-    pub widget: &'ctx W,
+    pub(crate) phantom: PhantomData<W>,
+
     pub(crate) state: &'ctx dyn Data,
 }
 

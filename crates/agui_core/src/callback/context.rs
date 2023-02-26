@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use fnv::FnvHashSet;
 
@@ -13,11 +16,13 @@ pub struct CallbackContext<'ctx, W>
 where
     W: WidgetView,
 {
+    pub(crate) phantom: PhantomData<W>,
+
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
-    pub widget: &'ctx W,
+
     pub(crate) state: &'ctx mut dyn Data,
 
     pub(crate) changed: bool,
