@@ -225,23 +225,23 @@ impl WidgetView for Flex {
            };
         */
 
-        let mut max_baseline_distance = 0.0;
+        // let mut max_baseline_distance = 0.0;
 
-        if let CrossAxisAlignment::Baseline(text_baseline) = self.cross_axis_alignment {
-            let mut max_size_above_baseline = 0.0;
-            let mut max_size_below_baseline = 0.0;
+        // if let CrossAxisAlignment::Baseline(text_baseline) = self.cross_axis_alignment {
+        //     let mut max_size_above_baseline = 0.0;
+        //     let mut max_size_below_baseline = 0.0;
 
-            for (idx, child_id) in ctx.get_children().iter().enumerate() {
-                /*
-                if let Some(distance) = ctx.get_distance_to_baseline(*child_id, text_baseline, only_real: true) {
-                    max_baseline_distance = max_baseline_distance.max(distance);
-                    max_size_above_baseline = max_size_above_baseline.max(distance);
-                    max_size_below_baseline = max_size_below_baseline.max(child.size.height - distance);
-                    cross_size = cross_size.max(max_size_above_baseline + max_size_below_baseline);
-                }
-                */
-            }
-        }
+        //     for (idx, child_id) in ctx.get_children().iter().enumerate() {
+        //         /*
+        //         if let Some(distance) = ctx.get_distance_to_baseline(*child_id, text_baseline, only_real: true) {
+        //             max_baseline_distance = max_baseline_distance.max(distance);
+        //             max_size_above_baseline = max_size_above_baseline.max(distance);
+        //             max_size_below_baseline = max_size_below_baseline.max(child.size.height - distance);
+        //             cross_size = cross_size.max(max_size_above_baseline + max_size_below_baseline);
+        //         }
+        //         */
+        //     }
+        // }
 
         let size = match self.direction {
             Axis::Horizontal => {
@@ -264,7 +264,7 @@ impl WidgetView for Flex {
         };
 
         let actual_size_delta = main_size - allocated_size;
-        let overflow = (-actual_size_delta).max(0.0);
+        // let overflow = (-actual_size_delta).max(0.0);
 
         let remaining_space = actual_size_delta.max(0.0);
 

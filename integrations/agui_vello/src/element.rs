@@ -39,7 +39,7 @@ pub(crate) struct CanvasElement {
 }
 
 impl CanvasElement {
-    pub fn update(&mut self, gcx: &mut GlyphContext, offset: Offset, canvas: Option<Canvas>) {
+    pub fn update(&mut self, gcx: &mut GlyphContext, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
             self.children.clear();
@@ -72,7 +72,7 @@ impl CanvasElement {
                 },
             };
 
-            layer_element.update(gcx, Offset::ZERO, Some(tail.canvas));
+            layer_element.update(gcx, Some(tail.canvas));
 
             self.tail = Some(Box::new(layer_element));
         }
@@ -222,8 +222,8 @@ pub(crate) struct LayerElement {
 }
 
 impl LayerElement {
-    pub fn update(&mut self, gcx: &mut GlyphContext, offset: Offset, canvas: Option<Canvas>) {
-        self.canvas.update(gcx, offset, canvas);
+    pub fn update(&mut self, gcx: &mut GlyphContext, canvas: Option<Canvas>) {
+        self.canvas.update(gcx, canvas);
     }
 
     pub fn begin(&self, transform: Affine, sb: &mut SceneBuilder) {

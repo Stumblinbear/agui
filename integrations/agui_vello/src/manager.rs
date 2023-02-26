@@ -198,9 +198,7 @@ impl RenderManager {
 
         render_element.offset = widget_element.get_offset();
 
-        render_element
-            .canvas
-            .update(&mut self.glyph_cx, Offset::ZERO, canvas);
+        render_element.canvas.update(&mut self.glyph_cx, canvas);
 
         // if let Some(canvas) = canvas {
         //     let pos = Point::from(widget_element.get_rect().cloned().unwrap());
