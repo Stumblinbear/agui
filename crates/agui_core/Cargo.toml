@@ -24,7 +24,7 @@ slotmap = "1.0"
 parking_lot = "0.12"
 
 rand = "0.8"
-lyon = "0.17"
+lyon = "1.0"
 
 glyph_brush_layout = "0.2"
 
