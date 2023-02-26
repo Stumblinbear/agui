@@ -1,5 +1,5 @@
 use agui_core::{
-    unit::{Constraints, Point, Size},
+    unit::{Alignment, Constraints, Size},
     widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
@@ -14,7 +14,7 @@ pub struct Align {
     pub child: WidgetRef,
 }
 
-impl WidgetView for Center {
+impl WidgetView for Align {
     fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
         let children = ctx.get_children();
 
@@ -39,13 +39,7 @@ impl WidgetView for Center {
                     .unwrap_or(f32::INFINITY),
             });
 
-            ctx.set_offset(
-                0,
-                Point {
-                    x: (size.width - child_size.width) / 2.0,
-                    y: (size.height - child_size.height) / 2.0,
-                },
-            );
+            ctx.set_offset(0, self.alignment.along_size(size - child_size));
 
             size
         } else {

@@ -1,3 +1,4 @@
+mod align;
 mod builder;
 mod center;
 mod clip;
@@ -10,6 +11,7 @@ mod row;
 mod sized_box;
 mod text;
 
+pub use self::align::*;
 pub use self::builder::*;
 pub use self::center::*;
 pub use self::clip::*;

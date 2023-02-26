@@ -92,6 +92,21 @@ impl MulAssign for Offset {
     }
 }
 
+impl Mul<f32> for Offset {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self::new(self.x * rhs, self.y * rhs)
+    }
+}
+
+impl MulAssign<f32> for Offset {
+    fn mul_assign(&mut self, rhs: f32) {
+        self.x *= rhs;
+        self.y *= rhs;
+    }
+}
+
 impl Div for Offset {
     type Output = Self;
 
@@ -107,6 +122,21 @@ impl DivAssign for Offset {
     }
 }
 
+impl Div<f32> for Offset {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        Self::new(self.x / rhs, self.y / rhs)
+    }
+}
+
+impl DivAssign<f32> for Offset {
+    fn div_assign(&mut self, rhs: f32) {
+        self.x /= rhs;
+        self.y /= rhs;
+    }
+}
+
 impl Rem for Offset {
     type Output = Self;
 
@@ -119,6 +149,21 @@ impl RemAssign for Offset {
     fn rem_assign(&mut self, rhs: Self) {
         self.x %= rhs.x;
         self.y %= rhs.y;
+    }
+}
+
+impl Rem<f32> for Offset {
+    type Output = Self;
+
+    fn rem(self, rhs: f32) -> Self::Output {
+        Self::new(self.x % rhs, self.y % rhs)
+    }
+}
+
+impl RemAssign<f32> for Offset {
+    fn rem_assign(&mut self, rhs: f32) {
+        self.x %= rhs;
+        self.y %= rhs;
     }
 }
 

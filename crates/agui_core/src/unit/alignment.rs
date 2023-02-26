@@ -2,10 +2,18 @@ use std::ops::{
     Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
 };
 
+use super::{Offset, Rect, Size};
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Alignment {
     pub x: f32,
     pub y: f32,
+}
+
+impl Default for Alignment {
+    fn default() -> Self {
+        Self::CENTER
+    }
 }
 
 impl Alignment {
@@ -38,6 +46,50 @@ impl Alignment {
 
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
+    }
+
+    /// Returns the offset that is this fraction in the direction of the given offset.
+    pub fn along_offset(&self, offset: Offset) -> Offset {
+        let center = offset / 2.0;
+
+        Offset::new(center.x + self.x * center.x, center.y + self.y * center.y)
+    }
+
+    /// Returns the offset that is this fraction within the given size.
+    pub fn along_size(&self, size: Size) -> Offset {
+        let half_size = size / 2.0;
+
+        Offset::new(
+            half_size.width + self.x * half_size.width,
+            half_size.height + self.y * half_size.height,
+        )
+    }
+
+    /// Returns the point that is this fraction within the given rect.
+    pub fn within_rect(&self, rect: Rect) -> Offset {
+        let half_size = Size::from(rect) / 2.0;
+
+        Offset::new(
+            rect.x + half_size.width + self.x * half_size.width,
+            rect.y + half_size.height + self.y * half_size.height,
+        )
+    }
+
+    /// Returns a rect of the given size, aligned within given rect as specified
+    /// by this alignment.
+    ///
+    /// For example, a 100×100 size inscribed on a 200×200 rect using
+    /// [Alignment.topLeft] would be the 100×100 rect at the top left of
+    /// the 200×200 rect.
+    pub fn inscribe(&self, size: Size, rect: Rect) -> Rect {
+        let half_size_delta = (Size::from(rect) - size) / 2.0;
+
+        Rect {
+            x: rect.x + half_size_delta.width + self.x * half_size_delta.width,
+            y: rect.y + half_size_delta.height + self.y * half_size_delta.height,
+            width: size.width,
+            height: size.height,
+        }
     }
 }
 
