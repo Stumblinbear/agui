@@ -107,34 +107,12 @@ impl WidgetRef {
 
     pub(crate) fn create(&self) -> Option<Element> {
         if let Self::Some(key, widget) = self {
-            Some(Element::new(
-                key.clone(),
-                Rc::clone(widget).into_element_widget(),
-            ))
+            Some(Element::new(*key, Rc::clone(widget).into_element_widget()))
         } else {
             None
         }
     }
 }
-
-impl PartialEq for WidgetRef {
-    fn eq(&self, other: &Self) -> bool {
-        if let Self::Some(key, widget) = self {
-            if let Self::Some(other_key, other_widget) = other {
-                if key.is_some() || other_key.is_some() {
-                    // If either one has a key, this will always override equality checks
-                    return key == other_key;
-                }
-
-                return Rc::ptr_eq(widget, other_widget);
-            }
-        }
-
-        false
-    }
-}
-
-impl Eq for WidgetRef {}
 
 // impl Hash for WidgetRef {
 //     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
