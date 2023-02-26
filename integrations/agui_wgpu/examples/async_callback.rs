@@ -73,13 +73,13 @@ impl WidgetView for ExampleMain {
         }
     }
 
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
         let callback = ctx.callback::<usize, _>(|ctx, num| {
             ctx.set_state(|state| *state = *num);
         });
 
         thread::spawn({
-            let num = *ctx.state;
+            let num = **ctx;
 
             move || {
                 thread::sleep(Duration::from_millis(1000));
@@ -88,7 +88,7 @@ impl WidgetView for ExampleMain {
             }
         });
 
-        BuildResult::new(build! {
+        Children::new(build! {
             Column {
                 layout: Layout {
                     sizing: Sizing::Axis {
@@ -98,7 +98,7 @@ impl WidgetView for ExampleMain {
                 },
                 children: [Text {
                     font: self.font.styled().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                    text: format!("Called: {}", ctx.state).into(),
+                    text: format!("Called: {}", **ctx).into(),
                 }]
             }
         })

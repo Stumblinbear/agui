@@ -8,11 +8,12 @@ use std::{
 
 use agui_core::{
     callback::CallbackContext,
+    element::ElementId,
     manager::{events::ElementEvent, WidgetManager},
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{ContextPlugins, ContextWidget, WidgetView}, element::ElementId,
+    widget::{ContextPlugins, ContextWidget, Widget},
 };
 
 #[derive(Debug, Default)]
@@ -226,7 +227,7 @@ where
 
 impl<'ctx, W> GlobalPluginExt for CallbackContext<'ctx, W>
 where
-    W: WidgetView,
+    W: Widget,
 {
     fn get_global<G>(&mut self) -> Global<G>
     where
@@ -302,7 +303,7 @@ mod tests {
 
     use agui_core::{
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, WidgetState, WidgetView},
+        widget::{BuildContext, BuildResult, Widget, WidgetState},
     };
     use agui_macros::{StatefulWidget, StatelessWidget};
     use agui_primitives::Column;

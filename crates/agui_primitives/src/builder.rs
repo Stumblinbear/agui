@@ -1,10 +1,10 @@
-use agui_core::widget::{BuildContext, BuildResult, WidgetView};
+use agui_core::widget::{BuildContext, Children, WidgetView};
 use agui_macros::StatelessWidget;
 
 #[derive(StatelessWidget)]
 pub struct Builder {
     #[allow(clippy::type_complexity)]
-    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> BuildResult>,
+    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> Children>,
 }
 
 impl PartialEq for Builder {
@@ -16,7 +16,7 @@ impl PartialEq for Builder {
 impl Builder {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&mut BuildContext<Self>) -> BuildResult + 'static,
+        F: Fn(&mut BuildContext<Self>) -> Children + 'static,
     {
         Self {
             func: Box::new(func),
@@ -25,7 +25,7 @@ impl Builder {
 }
 
 impl WidgetView for Builder {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
         (self.func)(ctx)
     }
 }
@@ -35,7 +35,7 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, WidgetView},
+        widget::{BuildContext, Children, WidgetView},
     };
     use agui_macros::StatelessWidget;
 
@@ -45,15 +45,15 @@ mod tests {
     struct TestWidget {}
 
     impl WidgetView for TestWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-            BuildResult::empty()
+        fn build(&self, _: &mut BuildContext<Self>) -> Children {
+            Children::none()
         }
     }
 
     #[test]
     pub fn calls_func() {
         let mut manager =
-            WidgetManager::with_root(Builder::new(|_| BuildResult::from([TestWidget::default()])));
+            WidgetManager::with_root(Builder::new(|_| Children::from([TestWidget::default()])));
 
         manager.update();
 

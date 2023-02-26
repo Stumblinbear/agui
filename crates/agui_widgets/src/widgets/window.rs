@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Layout, LayoutType, Size, Sizing, Units},
-    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetRef, WidgetView},
+    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -28,7 +28,7 @@ impl WidgetView for Window {
         }
     }
 
-    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult::from(&self.child)
+    fn build(&self, _: &mut BuildContext<Self>) -> Children {
+        Children::from(&self.child)
     }
 }

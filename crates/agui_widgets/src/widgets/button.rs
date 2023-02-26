@@ -3,7 +3,7 @@ use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Color, Layout, LayoutType},
     widget::{
-        BuildContext, BuildResult, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
+        BuildContext, Children, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
         LayoutResult, PaintContext, WidgetRef, WidgetState, WidgetView,
     },
 };
@@ -64,9 +64,9 @@ impl WidgetView for Button {
         }
     }
 
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
         let on_hover = ctx.callback::<bool, _>(|ctx, arg| {
-            if ctx.state.hovered != *arg {
+            if ctx.hovered != *arg {
                 ctx.set_state(|state| {
                     state.hovered = *arg;
                 })
@@ -74,7 +74,7 @@ impl WidgetView for Button {
         });
 
         let on_pressed = ctx.callback::<bool, _>(|ctx, arg| {
-            if ctx.state.pressed && !arg {
+            if ctx.pressed && !arg {
                 ctx.on_pressed.call(());
             }
 
@@ -83,7 +83,7 @@ impl WidgetView for Button {
             })
         });
 
-        BuildResult::from([GestureDetector {
+        Children::from([GestureDetector {
             on_hover,
             on_pressed,
 
@@ -96,11 +96,11 @@ impl WidgetView for Button {
     fn paint(&self, ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
         let style = self.style.clone().unwrap_or_default();
 
-        let color = if ctx.state.disabled {
+        let color = if ctx.disabled {
             style.disabled
-        } else if ctx.state.pressed {
+        } else if ctx.pressed {
             style.pressed
-        } else if ctx.state.hovered {
+        } else if ctx.hovered {
             style.hovered
         } else {
             style.normal

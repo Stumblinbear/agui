@@ -1,0 +1,37 @@
+[package]
+name = "agui_vello"
+version = "0.3.0"
+edition = "2021"
+resolver = "2"
+description = "An wgpu renderer for agui widgets"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = [ "gui", "graphics", "gamedev", "widgets", "wgpu" ]
+categories = [ "gui", "graphics", "rendering", "game-development" ]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+agui = { path = "../../", version = "0.3" }
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
+downcast-rs = "1.2"
+parking_lot = "0.12"
+fnv = "1.0"
+
+futures = "0.3"
+winit = "0.28"
+bytemuck = { version = "1.12", features = ["derive"] }
+
+wgpu = "0.15"
+vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1" }
+raw-window-handle = "0.5.0"
+pinot = "0.1.5"
+
+[dev-dependencies]
+sysinfo = "0.28"
+
+[[example]]
+name = "hello_world"
+path = "examples/hello_world.rs"

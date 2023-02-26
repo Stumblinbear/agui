@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{FontStyle, Layout, LayoutType, Sizing},
-    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext, WidgetView},
+    widget::{BuildContext, Children, LayoutContext, LayoutResult, PaintContext, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -32,8 +32,8 @@ impl WidgetView for Text {
         }
     }
 
-    fn build(&self, _ctx: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult::empty()
+    fn build(&self, _ctx: &mut BuildContext<Self>) -> Children {
+        Children::none()
     }
 
     fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {

@@ -63,44 +63,46 @@ impl WidgetView for ExampleMain {
         }
     }
 
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult::new(build! {Padding {
-            padding: Margin::center(),
-            child: Clip {
-                rect: Rect {
-                    width: 128.0,
-                    height: 64.0
-                },
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
+        Children::new(build! {
+            Padding {
+                padding: Margin::center(),
+                child: Clip {
+                    rect: Rect {
+                        width: 128.0,
+                        height: 64.0
+                    },
 
-                shape: Shape::RoundedRect {
-                    top_left: 8.0,
-                    top_right: 8.0,
-                    bottom_right: 8.0,
-                    bottom_left: 8.0
-                },
+                    shape: Shape::RoundedRect {
+                        top_left: 8.0,
+                        top_right: 8.0,
+                        bottom_right: 8.0,
+                        bottom_left: 8.0
+                    },
 
-                child: Button {
-                    layout: Layout {
-                        sizing: Sizing::Axis {
-                            width: 256.0,
-                            height: 64.0,
+                    child: Button {
+                        layout: Layout {
+                            sizing: Sizing::Axis {
+                                width: 256.0,
+                                height: 64.0,
+                            },
                         },
-                    },
-                    child: Padding {
-                        padding: Margin::All(10.0.into()),
-                        child: Text {
-                            font: self.font
-                                .styled()
-                                .h_align(HorizontalAlign::Center)
-                                .v_align(VerticalAlign::Center),
-                            text: "I am not   \nclipped properly"
-                        }
-                    },
-                    on_pressed: ctx.callback(|_ctx, ()| {
-                        println!("Pressed 1");
-                    })
+                        child: Padding {
+                            padding: Margin::All(10.0.into()),
+                            child: Text {
+                                font: self.font
+                                    .styled()
+                                    .h_align(HorizontalAlign::Center)
+                                    .v_align(VerticalAlign::Center),
+                                text: "I am not   \nclipped properly"
+                            }
+                        },
+                        on_pressed: ctx.callback(|_ctx, ()| {
+                            println!("Pressed 1");
+                        })
+                    }
                 }
             }
-        }})
+        })
     }
 }

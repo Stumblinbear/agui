@@ -275,11 +275,11 @@ mod tests {
 
         assert!(
             !tree.is_first_child(root_id),
-            "root should return false for first child checks"
+            "root should return true for first child checks"
         );
         assert!(
             !tree.is_last_child(root_id),
-            "root should return false for last child checks"
+            "root should return true for last child checks"
         );
     }
 

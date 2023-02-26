@@ -10,7 +10,6 @@
 // #![warn(missing_docs)]
 
 pub mod callback;
-pub mod context;
 pub mod element;
 pub mod inheritance;
 pub mod manager;

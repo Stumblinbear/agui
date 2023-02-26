@@ -1,0 +1,253 @@
+use std::time::Instant;
+
+use agui::{
+    element::ElementId,
+    manager::{events::ElementEvent, WidgetManager},
+    unit::Point,
+};
+use fnv::FnvHashMap;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use vello::{
+    block_on_wgpu,
+    glyph::GlyphContext,
+    kurbo::Affine,
+    util::{RenderContext, RenderSurface},
+    Renderer, Scene, SceneBuilder,
+};
+
+use crate::element::RenderElement;
+
+pub(crate) struct RenderManager {
+    surface: RenderSurface,
+
+    render_cx: RenderContext,
+    renderer: Renderer,
+
+    glyph_cx: GlyphContext,
+
+    scene: Scene,
+
+    widgets: FnvHashMap<ElementId, RenderElement>,
+}
+
+impl RenderManager {
+    pub async fn new<W>(window: &W, width: u32, height: u32) -> Self
+    where
+        W: HasRawWindowHandle + HasRawDisplayHandle,
+    {
+        let mut render_cx = RenderContext::new().unwrap();
+
+        let surface = render_cx.create_surface(&window, width, height).await;
+
+        let device_handle = &render_cx.devices[surface.dev_id];
+
+        let renderer = Renderer::new(&device_handle.device).unwrap();
+
+        Self {
+            surface,
+
+            render_cx,
+            renderer,
+
+            glyph_cx: GlyphContext::new(),
+
+            scene: Scene::new(),
+
+            widgets: FnvHashMap::default(),
+        }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.render_cx
+            .resize_surface(&mut self.surface, width, height);
+    }
+
+    pub fn redraw(&mut self, manager: &WidgetManager, events: &[ElementEvent]) {
+        let now = Instant::now();
+
+        for event in events {
+            match event {
+                ElementEvent::Spawned {
+                    parent_id,
+                    element_id,
+                } => {
+                    self.widgets.insert(
+                        *element_id,
+                        RenderElement {
+                            head_target: parent_id.and_then(|parent_id| {
+                                let parent = self
+                                    .widgets
+                                    .get(&parent_id)
+                                    .expect("render element spawned to a non-existent parent");
+
+                                if parent.canvas.tail.is_some() {
+                                    Some(parent_id)
+                                } else {
+                                    parent.head_target
+                                }
+                            }),
+
+                            ..RenderElement::default()
+                        },
+                    );
+                }
+
+                ElementEvent::Rebuilt { .. } => {}
+
+                ElementEvent::Reparent {
+                    parent_id,
+                    element_id,
+                } => {
+                    let new_head_target = parent_id.and_then(|parent_id| {
+                        let parent = self
+                            .widgets
+                            .get(&parent_id)
+                            .expect("render element spawned to a non-existent parent");
+
+                        if parent.canvas.tail.is_some() {
+                            Some(parent_id)
+                        } else {
+                            parent.head_target
+                        }
+                    });
+
+                    let element = self
+                        .widgets
+                        .get_mut(element_id)
+                        .expect("reparented render element not found");
+
+                    element.head_target = new_head_target;
+                }
+
+                ElementEvent::Destroyed { element_id } => {
+                    self.widgets.remove(element_id);
+                }
+
+                ElementEvent::Draw { element_id } => {
+                    self.update_element(manager, *element_id);
+                }
+
+                _ => todo!(),
+            }
+        }
+
+        let mut builder = SceneBuilder::for_scene(&mut self.scene);
+
+        let mut element_stack = Vec::<(usize, ElementId)>::new();
+
+        for element_id in manager.get_tree().iter_down() {
+            let element = self.widgets.get(&element_id).unwrap();
+
+            let element_depth = manager.get_tree().get_depth(element_id).unwrap();
+
+            // End any elements in the stack that are deeper than this one
+            while let Some(element_id) = element_stack
+                .last()
+                .filter(|(depth, _)| *depth >= element_depth)
+                .map(|(_, element_id)| *element_id)
+            {
+                let element = self.widgets.get(&element_id).unwrap();
+
+                element.canvas.end(&mut builder);
+
+                element_stack.pop();
+            }
+
+            element.canvas.begin(Affine::IDENTITY, &mut builder);
+
+            element_stack.push((element_depth, element_id));
+        }
+
+        // End any remaining elements in the stack
+        while let Some((_, element_id)) = element_stack.pop() {
+            let element = self.widgets.get(&element_id).unwrap();
+
+            element.canvas.end(&mut builder);
+        }
+
+        builder.finish();
+
+        tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
+    }
+
+    fn update_element(&mut self, manager: &WidgetManager, element_id: ElementId) {
+        let render_element = self
+            .widgets
+            .get_mut(&element_id)
+            .expect("drawn render element not found");
+
+        let widget_element = manager.get_tree().get(element_id).unwrap();
+
+        let canvas = widget_element.paint();
+
+        render_element.canvas.update(
+            &mut self.glyph_cx,
+            Point::from(widget_element.get_rect().cloned().unwrap()),
+            canvas,
+        );
+
+        // if let Some(canvas) = canvas {
+        //     let pos = Point::from(widget_element.get_rect().cloned().unwrap());
+
+        //     // If we have or are drawing to the target layer, mark it dirty
+        //     // if !canvas.head.is_empty() || render_element.head.is_some() {
+        //     //     dirty_layers.extend(render_element.head_target);
+        //     // }
+
+        //     render_element.redraw(&mut self.glyph_cx, pos, canvas);
+        // } else {
+        //     // We previously drew to the target layer, dirty it
+        //     // if render_element.head.is_some() {
+        //     //     dirty_layers.extend(render_element.head_target);
+        //     // }
+
+        //     render_element.clear();
+        // }
+    }
+
+    pub fn render(&mut self) {
+        let width = self.surface.config.width;
+        let height = self.surface.config.height;
+        let device_handle = &self.render_cx.devices[self.surface.dev_id];
+
+        let surface_texture = self
+            .surface
+            .surface
+            .get_current_texture()
+            .expect("failed to get surface texture");
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            block_on_wgpu(
+                &device_handle.device,
+                self.renderer.render_to_surface_async(
+                    &device_handle.device,
+                    &device_handle.queue,
+                    &self.scene,
+                    &surface_texture,
+                    width,
+                    height,
+                ),
+            )
+            .expect("failed to render to surface");
+        }
+
+        // Note: in the wasm case, we're currently not running the robust
+        // pipeline, as it requires more async wiring for the readback.
+        #[cfg(target_arch = "wasm32")]
+        self.renderer
+            .render_to_surface(
+                &device_handle.device,
+                &device_handle.queue,
+                &self.scene,
+                &surface_texture,
+                width,
+                height,
+            )
+            .expect("failed to render to surface");
+
+        surface_texture.present();
+
+        device_handle.device.poll(wgpu::Maintain::Poll);
+    }
+}

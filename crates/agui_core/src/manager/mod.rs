@@ -15,7 +15,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Font, Units},
     util::tree::Tree,
-    widget::{instance::WidgetEquality, key::WidgetKey, Widget, WidgetRef},
+    widget::{key::WidgetKey, IntoElementWidget, WidgetRef},
 };
 
 use self::{cache::LayoutCache, context::AguiContext};
@@ -49,7 +49,7 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: Widget,
+        W: IntoElementWidget,
     {
         let mut manager = Self::new();
 
@@ -105,7 +105,7 @@ impl WidgetManager {
     pub fn remove_root(&mut self) {
         if let Some(root_id) = self.element_tree.get_root() {
             tracing::info!(
-                element = self.element_tree.get(root_id).unwrap().get_display_name(),
+                element = self.element_tree.get(root_id).unwrap().type_name(),
                 "removing root widget"
             );
 
@@ -116,7 +116,7 @@ impl WidgetManager {
     /// Queues the widget for addition into the tree
     pub fn set_root<W>(&mut self, widget: W)
     where
-        W: Widget,
+        W: IntoElementWidget,
     {
         self.remove_root();
 
@@ -321,11 +321,7 @@ impl WidgetManager {
         for element_id in changed {
             tracing::trace!(
                 id = format!("{:?}", element_id).as_str(),
-                element = self
-                    .element_tree
-                    .get(element_id)
-                    .unwrap()
-                    .get_display_name(),
+                element = self.element_tree.get(element_id).unwrap().type_name(),
                 "queueing widget for rebuild"
             );
 
@@ -360,7 +356,7 @@ impl WidgetManager {
                         if changed {
                             tracing::debug!(
                                 id = &format!("{:?}", element_id),
-                                element = element.get_display_name(),
+                                element = element.type_name(),
                                 "element updated, queueing for rebuild"
                             );
 
@@ -465,32 +461,17 @@ impl WidgetManager {
 
             // Check the existing child against the new child to see what we can safely do about retaining
             // its state
-            match existing_element.is_similar(&widget_ref) {
-                WidgetEquality::Equal => {
-                    // Widget is exactly equal, we gain nothing by replacing or rebuilding it
-                    return SpawnResult::Retained {
-                        element_id: existing_element_id,
-                        needs_rebuild: false,
-                    };
-                }
+            if existing_element.is_similar(&widget_ref) {
+                // Widget is of the same type, so update the widget to see if it needs to be rebuilt. This will retain
+                // the element and the widget's state in the tree, but replace the widget instance with a new one.
+                let needs_rebuild = existing_element.update(widget_ref);
 
-                WidgetEquality::Unequal => {
-                    // The widgets parameters have changed, but it is of the same type. All we need to do is
-                    // update the element to the new widget instance, retaining its state. However, this *does*
-                    // mean we have to queue it for a rebuild.
-                    let needs_rebuild = existing_element.update(widget_ref);
-
-                    return SpawnResult::Retained {
-                        element_id: existing_element_id,
-                        needs_rebuild,
-                    };
-                }
-
-                _ => {}
+                return SpawnResult::Retained {
+                    element_id: existing_element_id,
+                    needs_rebuild,
+                };
             }
         }
-
-        let element_type = widget_ref.create().unwrap();
 
         tracing::trace!(
             parent_id = &format!("{:?}", parent_id),
@@ -498,10 +479,9 @@ impl WidgetManager {
             "spawning widget"
         );
 
-        let element_id = self.element_tree.add(
-            parent_id,
-            Element::new(widget_ref.get_key().cloned(), element_type),
-        );
+        let element = widget_ref.create().unwrap();
+
+        let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
             if let Some(widget_key) = element.get_key() {
@@ -592,11 +572,8 @@ impl WidgetManager {
                         {
                             tracing::trace!(
                                 parent_id = &format!("{:?}", element_id),
-                                element = self
-                                    .element_tree
-                                    .get(keyed_element_id)
-                                    .unwrap()
-                                    .get_display_name(),
+                                element =
+                                    self.element_tree.get(keyed_element_id).unwrap().type_name(),
                                 "reparented widget"
                             );
 
@@ -736,7 +713,7 @@ mod tests {
 
     use crate::{
         manager::events::ElementEvent,
-        widget::{BuildContext, BuildResult, WidgetRef, WidgetView},
+        widget::{BuildContext, Children, WidgetRef, WidgetView},
     };
 
     use super::WidgetManager;
@@ -764,12 +741,12 @@ mod tests {
     }
 
     impl WidgetView for TestUnretainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        fn build(&self, _: &mut BuildContext<Self>) -> Children {
             BUILT.with(|built| {
                 built.borrow_mut().unretained = true;
             });
 
-            (&self.children).into()
+            Children::from(&self.children)
         }
     }
 
@@ -779,12 +756,12 @@ mod tests {
     }
 
     impl WidgetView for TestRetainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        fn build(&self, _: &mut BuildContext<Self>) -> Children {
             BUILT.with(|built| {
                 built.borrow_mut().retained = true;
             });
 
-            (&self.children).into()
+            Children::from(&self.children)
         }
     }
 
@@ -800,12 +777,12 @@ mod tests {
     }
 
     impl WidgetView for TestNestedUnretainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
+        fn build(&self, _: &mut BuildContext<Self>) -> Children {
             BUILT.with(|built| {
                 built.borrow_mut().nested_unretained = true;
             });
 
-            BuildResult::from([TestUnretainedWidget {
+            Children::from([TestUnretainedWidget {
                 children: self.children.clone(),
             }])
         }
@@ -817,8 +794,8 @@ mod tests {
     }
 
     impl WidgetView for TestNestedRetainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-            BuildResult::from([TestUnretainedWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Children {
+            Children::from([TestUnretainedWidget {
                 children: self.children.clone(),
             }])
         }

@@ -1,7 +1,9 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
-    unit::{Rect, Shape},
-    widget::{BuildContext, BuildResult, PaintContext, WidgetRef, WidgetView},
+    unit::{Layout, LayoutType, Rect, Shape, Sizing},
+    widget::{
+        BuildContext, Children, LayoutContext, LayoutResult, PaintContext, WidgetRef, WidgetView,
+    },
 };
 use agui_macros::StatelessWidget;
 
@@ -16,7 +18,19 @@ pub struct Clip {
 }
 
 impl WidgetView for Clip {
-    fn build(&self, _ctx: &mut BuildContext<Self>) -> BuildResult {
+    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
+        LayoutResult {
+            layout_type: LayoutType::default(),
+
+            layout: Layout {
+                sizing: Sizing::Fill,
+
+                ..Layout::default()
+            },
+        }
+    }
+
+    fn build(&self, _ctx: &mut BuildContext<Self>) -> Children {
         (&self.child).into()
     }
 

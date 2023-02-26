@@ -1,22 +1,24 @@
-use std::{any::TypeId, ops::Deref};
+use std::{
+    any::TypeId,
+    ops::{Deref, DerefMut},
+};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
-    context::ContextMut,
     element::{Element, ElementId},
     inheritance::Inheritance,
     unit::{Data, Key},
     util::tree::Tree,
-    widget::{InheritedWidget, Widget, WidgetKey, WidgetRef, WidgetState, WidgetView},
+    widget::{InheritedWidget, IntoElementWidget, WidgetKey, WidgetRef, WidgetState, WidgetView},
 };
 
 use super::{ContextStatefulWidget, ContextWidget, ContextWidgetMut};
 
 pub struct BuildContext<'ctx, W>
 where
-    W: Widget,
+    W: WidgetView,
 {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
@@ -27,58 +29,16 @@ where
     pub(crate) inheritance: &'ctx mut Inheritance,
 
     pub widget: &'ctx W,
-    pub state: &'ctx mut W::State,
+    pub(crate) state: &'ctx mut dyn Data,
 
-    pub(crate) callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+    pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 
     pub(crate) keyed_children: FnvHashSet<Key>,
 }
 
-impl<W> Deref for BuildContext<'_, W>
-where
-    W: Widget,
-{
-    type Target = W;
-
-    fn deref(&self) -> &Self::Target {
-        self.widget
-    }
-}
-
-impl<W> ContextMut for BuildContext<'_, W>
-where
-    W: Widget,
-{
-    fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
-    }
-
-    fn call<A>(&mut self, callback: &Callback<A>, arg: A)
-    where
-        A: Data,
-    {
-        self.callback_queue.call(callback, arg);
-    }
-
-    fn call_unchecked(&mut self, callback_id: CallbackId, arg: Box<dyn Data>) {
-        self.callback_queue.call_unchecked(callback_id, arg);
-    }
-
-    fn call_many<A>(&mut self, callbacks: &[Callback<A>], arg: A)
-    where
-        A: Data,
-    {
-        self.callback_queue.call_many(callbacks, arg);
-    }
-
-    fn call_many_unchecked(&mut self, callback_ids: &[CallbackId], arg: Box<dyn Data>) {
-        self.callback_queue.call_many_unchecked(callback_ids, arg);
-    }
-}
-
 impl<W> ContextWidget for BuildContext<'_, W>
 where
-    W: Widget,
+    W: WidgetView,
 {
     type Widget = W;
 
@@ -89,37 +49,31 @@ where
     fn get_element_id(&self) -> ElementId {
         self.element_id
     }
-
-    fn get_widget(&self) -> &W {
-        self.widget
-    }
 }
 
 impl<W> ContextStatefulWidget for BuildContext<'_, W>
 where
-    W: Widget,
+    W: WidgetView + WidgetState,
 {
-    fn get_state(&self) -> &W::State {
-        self.state
-    }
+    type Widget = W;
 
-    fn get_state_mut(&mut self) -> &mut W::State {
-        self.state
+    fn get_state(&self) -> &W::State {
+        self.state.downcast_ref().unwrap()
     }
 
     fn set_state<F>(&mut self, func: F)
     where
         F: FnOnce(&mut W::State),
     {
-        func(self.state);
+        func(self.state.downcast_mut().unwrap());
     }
 }
 
 impl<W> ContextWidgetMut for BuildContext<'_, W>
 where
-    W: Widget,
+    W: WidgetView,
 {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I::State>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut <I as WidgetState>::State>
     where
         I: InheritedWidget + 'static,
     {
@@ -183,9 +137,13 @@ impl<W> BuildContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {
+    pub fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
+    }
+
     pub fn key<C>(&mut self, key: Key, widget: C) -> WidgetRef
     where
-        C: Widget,
+        C: IntoElementWidget,
     {
         if self.keyed_children.contains(&key) {
             panic!("cannot use the same key twice in a widget");
@@ -200,5 +158,25 @@ where
             }),
             widget,
         )
+    }
+}
+
+impl<W> Deref for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
+    type Target = W::State;
+
+    fn deref(&self) -> &Self::Target {
+        self.state.downcast_ref().unwrap()
+    }
+}
+
+impl<W> DerefMut for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.state.downcast_mut().unwrap()
     }
 }

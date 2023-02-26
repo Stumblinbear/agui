@@ -1,35 +1,25 @@
 use std::ops::Deref;
 
-use crate::widget::Widget;
+use crate::{
+    unit::Data,
+    widget::{WidgetState, WidgetView},
+};
 
 pub struct PaintContext<'ctx, W>
 where
-    W: Widget,
+    W: WidgetView,
 {
     pub widget: &'ctx W,
-    pub state: &'ctx W::State,
+    pub(crate) state: &'ctx dyn Data,
 }
 
 impl<W> Deref for PaintContext<'_, W>
 where
-    W: Widget,
+    W: WidgetView + WidgetState,
 {
-    type Target = W;
+    type Target = W::State;
 
     fn deref(&self) -> &Self::Target {
-        self.widget
-    }
-}
-
-impl<W> PaintContext<'_, W>
-where
-    W: Widget,
-{
-    pub fn get_widget(&self) -> &W {
-        self.widget
-    }
-
-    pub fn get_state(&self) -> &W::State {
-        self.state
+        self.state.downcast_ref().unwrap()
     }
 }

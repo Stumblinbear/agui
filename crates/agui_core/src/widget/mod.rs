@@ -1,8 +1,7 @@
-use std::rc::Rc;
-
-use downcast_rs::{impl_downcast, Downcast};
+use std::{any::Any, rc::Rc};
 
 mod builder;
+mod children;
 mod context;
 mod inherited;
 pub mod instance;
@@ -10,78 +9,70 @@ pub mod key;
 mod result;
 mod state;
 
-use crate::element::ElementType;
+use crate::element::Element;
 
-use self::key::WidgetKey;
+use self::{instance::ElementWidget, key::WidgetKey};
 
-pub use self::{builder::*, context::*, inherited::*, result::*, state::*};
+pub use self::{builder::*, children::*, context::*, inherited::*, result::*, state::*};
 
-pub trait WidgetDerive: Downcast {
-    fn get_type_name(&self) -> &str;
+pub trait AnyWidget: 'static {
+    fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
 
-    fn is_equal(&self, other: &dyn WidgetDerive) -> bool;
-
-    fn create_element(self: Rc<Self>) -> ElementType;
+    fn type_name(&self) -> &'static str;
 }
 
-impl_downcast!(WidgetDerive);
+impl<T> AnyWidget for T
+where
+    T: WidgetView + 'static,
+{
+    fn as_any(self: Rc<Self>) -> Rc<dyn Any> {
+        self
+    }
 
-pub trait Widget: WidgetDerive + WidgetState + PartialEq {}
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}
+
+pub trait IntoElementWidget: AnyWidget {
+    fn into_element_widget(self: Rc<Self>) -> Box<dyn ElementWidget>;
+}
 
 #[derive(Default, Clone)]
 pub enum WidgetRef {
     #[default]
     None,
-    Some {
-        key: Option<WidgetKey>,
-        widget: Rc<dyn WidgetDerive>,
-    },
+    Some(Option<WidgetKey>, Rc<dyn IntoElementWidget>),
 }
 
 impl WidgetRef {
     pub fn new<W>(widget: W) -> Self
     where
-        W: Widget,
+        W: IntoElementWidget,
     {
         Self::new_with_key(None, widget)
     }
 
     pub fn new_with_key<W>(key: Option<WidgetKey>, widget: W) -> Self
     where
-        W: Widget,
+        W: IntoElementWidget,
     {
-        Self::Some {
-            key,
-
-            widget: Rc::new(widget),
-        }
+        Self::Some(key, Rc::new(widget))
     }
 
-    pub fn get_display_name(&self) -> Option<String> {
-        if let Self::Some { widget, .. } = self {
-            let type_name = widget.get_type_name();
+    pub fn get_display_name(&self) -> Option<&str> {
+        if let Self::Some(.., widget) = self {
+            let type_name = widget.type_name();
 
-            let display_name = if !type_name.contains('<') {
-                String::from(type_name.rsplit("::").next().unwrap())
-            } else {
-                let mut name = String::new();
-
-                let mut remaining = String::from(type_name);
-
-                while let Some((part, rest)) = remaining.split_once('<') {
-                    name.push_str(part.rsplit("::").next().unwrap());
-
-                    name.push('<');
-
-                    remaining = String::from(rest);
-                }
-
-                name.push_str(remaining.rsplit("::").next().unwrap());
-
-                name
-            };
-
-            Some(display_name)
+            Some(
+                type_name
+                    .split('<')
+                    .next()
+                    .unwrap_or(type_name)
+                    .split("::")
+                    .last()
+                    .unwrap_or(type_name),
+            )
         } else {
             None
         }
@@ -96,27 +87,30 @@ impl WidgetRef {
     }
 
     pub fn get_key(&self) -> Option<&WidgetKey> {
-        if let Self::Some { key, .. } = self {
+        if let Self::Some(key, ..) = self {
             key.as_ref()
         } else {
             None
         }
     }
 
-    pub fn downcast_rc<W>(&self) -> Option<Rc<W>>
+    pub fn downcast<W>(&self) -> Option<Rc<W>>
     where
-        W: Widget,
+        W: WidgetView,
     {
-        if let Self::Some { widget, .. } = self {
-            Rc::clone(widget).downcast_rc::<W>().ok()
+        if let Self::Some(.., widget) = self {
+            Rc::clone(widget).as_any().downcast::<W>().ok()
         } else {
             None
         }
     }
 
-    pub(crate) fn create(&self) -> Option<ElementType> {
-        if let Self::Some { widget, .. } = self {
-            Some(Rc::clone(widget).create_element())
+    pub(crate) fn create(&self) -> Option<Element> {
+        if let Self::Some(key, widget) = self {
+            Some(Element::new(
+                key.clone(),
+                Rc::clone(widget).into_element_widget(),
+            ))
         } else {
             None
         }
@@ -125,18 +119,14 @@ impl WidgetRef {
 
 impl PartialEq for WidgetRef {
     fn eq(&self, other: &Self) -> bool {
-        if let Self::Some { key, widget } = self {
-            if let Self::Some {
-                key: other_key,
-                widget: other_widget,
-            } = other
-            {
+        if let Self::Some(key, widget) = self {
+            if let Self::Some(other_key, other_widget) = other {
                 if key.is_some() || other_key.is_some() {
                     // If either one has a key, this will always override equality checks
                     return key == other_key;
                 }
 
-                return widget.as_ref().is_equal(other_widget.as_ref());
+                return Rc::ptr_eq(widget, other_widget);
             }
         }
 
@@ -163,10 +153,10 @@ impl Eq for WidgetRef {}
 
 impl std::fmt::Debug for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Some { key, .. } = self {
+        if let Self::Some(key, ..) = self {
             f.write_str("WidgetRef::Some(")?;
 
-            f.write_str(&self.get_display_name().unwrap())?;
+            f.write_str(self.get_display_name().unwrap())?;
 
             if let Some(key) = key {
                 f.write_str(" <key: ")?;
@@ -183,8 +173,8 @@ impl std::fmt::Debug for WidgetRef {
 
 impl std::fmt::Display for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Some { key, .. } = self {
-            f.write_str(&self.get_display_name().unwrap())?;
+        if let Self::Some(key, ..) = self {
+            f.write_str(self.get_display_name().unwrap())?;
 
             if let Some(key) = key {
                 f.write_str(" <key: ")?;
@@ -201,7 +191,7 @@ impl std::fmt::Display for WidgetRef {
 
 impl<W> From<W> for WidgetRef
 where
-    W: Widget,
+    W: IntoElementWidget,
 {
     fn from(widget: W) -> Self {
         WidgetRef::new(widget)

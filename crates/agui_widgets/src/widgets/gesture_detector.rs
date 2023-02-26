@@ -2,7 +2,7 @@ use agui_core::{
     callback::Callback,
     unit::{Layout, LayoutType, Sizing},
     widget::{
-        BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetRef, WidgetState, WidgetView,
+        BuildContext, BuildResult, LayoutContext, LayoutResult, Widget, WidgetRef, WidgetState,
     },
 };
 use agui_macros::StatefulWidget;

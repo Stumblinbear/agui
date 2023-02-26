@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{element::ElementId, unit::Data, widget::Widget};
+use crate::{element::ElementId, unit::Data, widget::WidgetView};
 
 mod context;
 mod func;
@@ -66,7 +66,7 @@ where
 {
     pub(crate) fn new<F, W>(element_id: ElementId, callback_queue: CallbackQueue) -> Self
     where
-        W: Widget,
+        W: WidgetView,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
         Self {
@@ -128,7 +128,7 @@ mod tests {
     use crate::{
         callback::Callback,
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, ContextWidgetMut, WidgetRef, WidgetView},
+        widget::{BuildContext, Children, ContextWidgetMut, WidgetRef, WidgetView},
     };
 
     thread_local! {
@@ -148,7 +148,7 @@ mod tests {
     }
 
     impl WidgetView for TestWidget {
-        fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
             let callback = ctx.callback::<u32, _>(|_ctx, val| {
                 RESULT.with(|f| {
                     f.borrow_mut().push(*val);
@@ -159,7 +159,7 @@ mod tests {
                 f.borrow_mut().push(callback);
             });
 
-            (&self.children).into()
+            Children::from(&self.children)
         }
     }
 

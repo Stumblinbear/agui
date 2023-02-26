@@ -27,7 +27,7 @@ impl Theme {
 
         self.styles.get(&style_id).map(|s| {
             Rc::clone(s)
-                .downcast_rc::<S>()
+                .downcast::<S>()
                 .expect("failed to downcast style")
                 .as_ref()
                 .clone()

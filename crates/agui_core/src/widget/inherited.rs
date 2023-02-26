@@ -1,3 +1,3 @@
-use super::{Widget, WidgetState};
+use super::{WidgetState, WidgetView};
 
-pub trait InheritedWidget: Widget + WidgetState {}
+pub trait InheritedWidget: WidgetView + WidgetState {}

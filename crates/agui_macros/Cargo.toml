@@ -20,7 +20,7 @@ internal = []
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-darling = "0.13"
+darling = "0.14"
 syn = {version = "1.0", default-features = false, features = [
   "full",
   "parsing",
@@ -29,10 +29,7 @@ syn = {version = "1.0", default-features = false, features = [
   "printing",
 ]}
 heck = "0.4"
-toml = "0.5"
+toml = "0.7"
 
 [dev-dependencies]
 trybuild = "1.0"
-
-agui_core = { path = "../agui_core" }
-agui_primitives = { path = "../agui_primitives" }

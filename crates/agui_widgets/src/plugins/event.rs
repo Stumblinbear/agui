@@ -152,7 +152,7 @@ mod tests {
 
     use agui_core::{
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, WidgetState, WidgetView},
+        widget::{BuildContext, BuildResult, Widget, WidgetState},
     };
     use agui_macros::StatefulWidget;
     use agui_primitives::Column;

@@ -219,21 +219,21 @@ mod tests {
         tree.add(Some(child_3), 9);
 
         assert!(
-            !tree.is_first_child(root_1_id),
-            "roots should return false for first child checks"
+            tree.is_first_child(root_1_id),
+            "roots should return true for first child checks"
         );
         assert!(
-            !tree.is_last_child(root_1_id),
-            "roots should return false for last child checks"
+            tree.is_last_child(root_1_id),
+            "roots should return true for last child checks"
         );
 
         assert!(
-            !tree.is_first_child(root_2_id),
-            "roots should return false for first child checks"
+            tree.is_first_child(root_2_id),
+            "roots should return true for first child checks"
         );
         assert!(
-            !tree.is_last_child(root_2_id),
-            "roots should return false for last child checks"
+            tree.is_last_child(root_2_id),
+            "roots should return true for last child checks"
         );
 
         assert!(

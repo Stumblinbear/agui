@@ -90,7 +90,7 @@ impl WidgetView for ExampleMain {
         }
     }
 
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             ctx.set_state(|state| {
                 state.replace(system_info.clone());
@@ -120,7 +120,7 @@ impl WidgetView for ExampleMain {
             });
         });
 
-        let lines = match ctx.state {
+        let lines = match ctx.get_state() {
             None => vec!["Collecting system info...".into()],
 
             Some(sys) => vec![
@@ -138,7 +138,7 @@ impl WidgetView for ExampleMain {
             ],
         };
 
-        BuildResult::new(build! {
+        Children::new(build! {
             Column {
                 layout: Layout {
                     sizing: Sizing::Axis {

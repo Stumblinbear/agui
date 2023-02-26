@@ -5,7 +5,7 @@ use crate::{
     render::canvas::Canvas,
     unit::{Data, Size},
     widget::{
-        instance::{WidgetDispatch, WidgetInstance},
+        instance::{ElementWidget, WidgetInstance},
         BuildResult, InheritedWidget, LayoutResult, WidgetRef, WidgetView,
     },
 };
@@ -14,7 +14,7 @@ use super::{context::ElementContext, ElementLifecycle};
 
 pub struct InheritedElement {
     // scope: InheritanceScope,
-    inner: Box<dyn WidgetDispatch>,
+    inner: Box<dyn WidgetLifecycle>,
 }
 
 impl InheritedElement {
@@ -56,7 +56,7 @@ impl ElementLifecycle for InheritedElement {
 }
 
 impl std::ops::Deref for InheritedElement {
-    type Target = dyn WidgetDispatch;
+    type Target = dyn WidgetLifecycle;
 
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()

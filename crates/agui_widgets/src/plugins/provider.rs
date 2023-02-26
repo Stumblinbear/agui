@@ -11,7 +11,7 @@ use agui_core::{
     plugin::{PluginContext, StatefulPlugin},
     unit::Data,
     util::map::{TypeMap, TypeSet, WidgetMap},
-    widget::{BuildContext, ContextPlugins, ContextWidget, WidgetId, WidgetView},
+    widget::{BuildContext, ContextPlugins, ContextWidget, Widget, WidgetId},
 };
 
 #[derive(Debug, Default)]
@@ -178,7 +178,7 @@ pub trait ProviderPluginExt {
 
 impl<'ctx, W> ProviderPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetView,
+    W: Widget,
 {
     /// Makes some local widget state available to any child widget.
     fn provide<V, F>(&mut self, func: F) -> Provided<V>
@@ -212,7 +212,7 @@ pub trait ConsumerPluginExt {
 
 impl<'ctx, W> ConsumerPluginExt for BuildContext<'ctx, W>
 where
-    W: WidgetView,
+    W: Widget,
 {
     /// Makes some local widget state available to any child widget.
     fn consume<V>(&mut self) -> Option<Provided<V>>
@@ -299,7 +299,7 @@ mod tests {
 
     use agui_core::{
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, WidgetRef, WidgetState, WidgetView},
+        widget::{BuildContext, BuildResult, Widget, WidgetRef, WidgetState},
     };
     use agui_macros::{StatefulWidget, StatelessWidget};
 

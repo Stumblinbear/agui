@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Layout, LayoutType, Sizing, Units},
-    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetView},
+    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -39,7 +39,7 @@ impl WidgetView for Spacing {
         }
     }
 
-    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult::empty()
+    fn build(&self, _: &mut BuildContext<Self>) -> Children {
+        Children::none()
     }
 }

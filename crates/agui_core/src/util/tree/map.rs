@@ -299,11 +299,11 @@ where
                 return parent
                     .children
                     .first()
-                    .map_or(false, |child_id| *child_id == node_id);
+                    .map_or(true, |child_id| *child_id == node_id);
             }
         }
 
-        false
+        true
     }
 
     pub fn is_last_child(&self, node_id: K) -> bool {
@@ -312,11 +312,11 @@ where
                 return parent
                     .children
                     .last()
-                    .map_or(false, |child_id| *child_id == node_id);
+                    .map_or(true, |child_id| *child_id == node_id);
             }
         }
 
-        false
+        true
     }
 
     pub fn get_deepest_child(&self, mut current_node_id: Option<K>) -> Option<K> {

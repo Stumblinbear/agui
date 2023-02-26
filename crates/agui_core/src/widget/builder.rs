@@ -1,9 +1,9 @@
 use crate::render::CanvasPainter;
 
-use super::{BuildContext, BuildResult, LayoutContext, LayoutResult, PaintContext, Widget};
+use super::{BuildContext, Children, LayoutContext, LayoutResult, PaintContext};
 
 /// Implements the widget's `layout()` and `build()` method.
-pub trait WidgetView: Widget + Sized {
+pub trait WidgetView: Sized + 'static {
     #[allow(unused_variables)]
     fn layout(&self, ctx: &mut LayoutContext<Self>) -> LayoutResult {
         LayoutResult::default()
@@ -12,7 +12,7 @@ pub trait WidgetView: Widget + Sized {
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult;
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children;
 
     /// Called whenever this widget is redrawn.
     #[allow(unused_variables)]
@@ -27,7 +27,7 @@ mod tests {
 
     use crate::{
         manager::WidgetManager,
-        widget::{BuildContext, BuildResult, ContextStatefulWidget, WidgetState},
+        widget::{BuildContext, Children, ContextStatefulWidget, WidgetState},
     };
 
     use super::WidgetView;
@@ -48,16 +48,16 @@ mod tests {
     }
 
     impl WidgetView for TestWidget {
-        fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
             ctx.set_state(|state| {
                 *state += 1;
             });
 
             STATE.with(|f| {
-                f.borrow_mut().push(*ctx.state);
+                f.borrow_mut().push(**ctx);
             });
 
-            BuildResult::empty()
+            Children::none()
         }
     }
 

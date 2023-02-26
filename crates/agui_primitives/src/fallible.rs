@@ -3,7 +3,7 @@ use std::{any::Any, panic::RefUnwindSafe};
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Color, FontStyle, Rect},
-    widget::{BuildContext, BuildResult, PaintContext, WidgetView},
+    widget::{BuildContext, Children, PaintContext, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -14,10 +14,10 @@ const ERROR_BORDER: f32 = 5.0;
 pub struct Fallible<Ok: 'static, Error: 'static> {
     pub func: Box<dyn Fn() -> Result<Ok, Error> + RefUnwindSafe>,
 
-    pub on_ok: Box<dyn Fn(&mut BuildContext<Self>, Ok) -> BuildResult>,
-    pub on_err: Option<Box<dyn Fn(&mut BuildContext<Self>, Error) -> BuildResult>>,
+    pub on_ok: Box<dyn Fn(&mut BuildContext<Self>, Ok) -> Children>,
+    pub on_err: Option<Box<dyn Fn(&mut BuildContext<Self>, Error) -> Children>>,
 
-    pub on_panic: Option<Box<dyn Fn(&mut BuildContext<Self>, Box<dyn Any + Send>) -> BuildResult>>,
+    pub on_panic: Option<Box<dyn Fn(&mut BuildContext<Self>, Box<dyn Any + Send>) -> Children>>,
 }
 
 impl<Ok: 'static, Error: 'static> PartialEq for Fallible<Ok, Error> {
@@ -30,7 +30,7 @@ impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
     pub fn new<F, OkF>(func: F, on_ok: OkF) -> Self
     where
         F: Fn() -> Result<Ok, Error> + RefUnwindSafe + 'static,
-        OkF: Fn(&mut BuildContext<Self>, Ok) -> BuildResult + 'static,
+        OkF: Fn(&mut BuildContext<Self>, Ok) -> Children + 'static,
     {
         Self {
             func: Box::new(func),
@@ -44,7 +44,7 @@ impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
 
     pub fn on_err<ErrF>(mut self, on_err: ErrF) -> Self
     where
-        ErrF: Fn(&mut BuildContext<Self>, Error) -> BuildResult + 'static,
+        ErrF: Fn(&mut BuildContext<Self>, Error) -> Children + 'static,
     {
         self.on_err = Some(Box::new(on_err));
 
@@ -53,7 +53,7 @@ impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
 
     pub fn on_panic<ErrF>(mut self, on_panic: ErrF) -> Self
     where
-        ErrF: Fn(&mut BuildContext<Self>, Box<dyn Any + Send>) -> BuildResult + 'static,
+        ErrF: Fn(&mut BuildContext<Self>, Box<dyn Any + Send>) -> Children + 'static,
     {
         self.on_panic = Some(Box::new(on_panic));
 
@@ -62,7 +62,7 @@ impl<Ok: 'static, Error: 'static> Fallible<Ok, Error> {
 }
 
 impl<Ok: 'static, Error: 'static> WidgetView for Fallible<Ok, Error> {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> BuildResult {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
         let result = std::panic::catch_unwind(&self.func);
 
         match result {
@@ -83,7 +83,7 @@ impl<Ok: 'static, Error: 'static> WidgetView for Fallible<Ok, Error> {
             }
         };
 
-        BuildResult::empty()
+        Children::none()
     }
 
     fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
@@ -120,7 +120,7 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, BuildResult, WidgetView},
+        widget::{BuildContext, Children, WidgetView},
     };
     use agui_macros::StatelessWidget;
 
@@ -130,8 +130,8 @@ mod tests {
     struct TestWidget {}
 
     impl WidgetView for TestWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-            BuildResult::empty()
+        fn build(&self, _: &mut BuildContext<Self>) -> Children {
+            Children::none()
         }
     }
 
@@ -143,7 +143,7 @@ mod tests {
                 |_, ok| {
                     assert_eq!(ok, 42, "should have received the correct value");
 
-                    BuildResult::from([TestWidget::default()])
+                    Children::from([TestWidget::default()])
                 },
             )
             .on_err(|_, _| {
@@ -168,7 +168,7 @@ mod tests {
                     panic!("should not have been called");
                 },
             )
-            .on_err(|_, _| BuildResult::from([TestWidget::default()])),
+            .on_err(|_, _| Children::from([TestWidget::default()])),
         );
 
         manager.update();
@@ -193,7 +193,7 @@ mod tests {
             .on_err(|_, _| {
                 panic!("should not have been called");
             })
-            .on_panic(|_, _| BuildResult::from([TestWidget::default()])),
+            .on_panic(|_, _| Children::from([TestWidget::default()])),
         );
 
         manager.update();

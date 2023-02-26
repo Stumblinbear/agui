@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::element::{Element, ElementLifecycle};
+use agui_core::element::Element;
 
 use crate::Text;
 

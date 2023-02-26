@@ -15,26 +15,14 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
     parse_quote! {
-        impl #impl_generics #agui_core::widget::WidgetDerive for #ident #ty_generics #where_clause {
-            fn get_type_name(&self) -> &str {
-                std::any::type_name::<Self>()
-            }
-
-            fn is_equal(&self, other: &dyn #agui_core::widget::WidgetDerive) -> bool {
-                other
-                    .downcast_ref::<Self>()
-                    .map_or(false, |a| self == a)
-            }
-
-            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
+        impl #impl_generics #agui_core::widget::IntoElementWidget for #ident #ty_generics #where_clause {
+            fn into_element_widget(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::instance::ElementWidget>
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::new_inherited(self)
+                Box::new(#agui_core::widget::instance::StatefulInstance::new(self))
             }
         }
-
-        impl #impl_generics #agui_core::widget::Widget for #ident #ty_generics #where_clause { }
 
         impl #impl_generics #agui_core::widget::InheritedWidget for #ident #ty_generics #where_clause { }
     }

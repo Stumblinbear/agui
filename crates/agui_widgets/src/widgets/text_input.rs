@@ -9,7 +9,7 @@ use agui_core::{
     unit::{Color, FontStyle, Layout, LayoutType, Point, Rect},
     widget::{
         BuildContext, BuildResult, ContextStatefulWidget, ContextWidgetMut, LayoutContext,
-        LayoutResult, PaintContext, WidgetState, WidgetView,
+        LayoutResult, PaintContext, Widget, WidgetState,
     },
 };
 use agui_macros::StatefulWidget;
@@ -152,7 +152,7 @@ where
     }
 }
 
-impl<S> WidgetView for TextInput<S>
+impl<S> Widget for TextInput<S>
 where
     S: EditableText + 'static,
 {

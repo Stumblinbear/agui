@@ -5,7 +5,7 @@ use crate::{
     render::canvas::Canvas,
     unit::{Data, Size},
     widget::{
-        instance::{WidgetDispatch, WidgetInstance},
+        instance::{IntoElementWidget, WidgetInstance},
         BuildResult, LayoutResult, WidgetRef, WidgetView,
     },
 };
@@ -13,7 +13,7 @@ use crate::{
 use super::{context::ElementContext, ElementLifecycle};
 
 pub struct StatefulElement {
-    inner: Box<dyn WidgetDispatch>,
+    inner: Box<dyn IntoElementWidget>,
 }
 
 impl StatefulElement {
@@ -54,7 +54,7 @@ impl ElementLifecycle for StatefulElement {
 }
 
 impl std::ops::Deref for StatefulElement {
-    type Target = dyn WidgetDispatch;
+    type Target = dyn WidgetLifecycle;
 
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()

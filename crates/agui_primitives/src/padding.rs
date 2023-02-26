@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Layout, LayoutType, Margin, Sizing},
-    widget::{BuildContext, BuildResult, LayoutContext, LayoutResult, WidgetRef, WidgetView},
+    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -26,7 +26,7 @@ impl WidgetView for Padding {
         }
     }
 
-    fn build(&self, _: &mut BuildContext<Self>) -> BuildResult {
-        BuildResult::from(&self.child)
+    fn build(&self, _: &mut BuildContext<Self>) -> Children {
+        Children::from(&self.child)
     }
 }

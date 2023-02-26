@@ -60,9 +60,9 @@ impl Default for FontStyle {
     fn default() -> Self {
         Self {
             font: Font(0, None),
-            size: 32.0,
+            size: 16.0,
             color: Color {
-                red: 0.0,
+                red: 1.0,
                 green: 0.0,
                 blue: 0.0,
                 alpha: 1.0,
