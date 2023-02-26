@@ -7,12 +7,6 @@ pub struct Builder {
     pub func: Box<dyn Fn(&mut BuildContext<Self>) -> Children>,
 }
 
-impl PartialEq for Builder {
-    fn eq(&self, _: &Self) -> bool {
-        false
-    }
-}
-
 impl Builder {
     pub fn new<F>(func: F) -> Self
     where

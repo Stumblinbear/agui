@@ -1,30 +1,44 @@
 use agui_core::{
-    unit::{Layout, LayoutType, Units},
-    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetRef, WidgetView},
+    unit::{Axis, ClipBehavior, TextDirection},
+    widget::{BuildContext, Children, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
-#[derive(StatelessWidget, Debug, Default, PartialEq)]
+use crate::{
+    CrossAxisAlignment, Flex, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
+};
+
+#[derive(StatelessWidget, Debug, Default)]
 pub struct Row {
-    pub layout: Layout,
+    pub main_axis_size: MainAxisSize,
 
-    pub spacing: Units,
+    pub main_axis_alignment: MainAxisAlignment,
+    pub cross_axis_alignment: CrossAxisAlignment,
+    pub vertical_direction: VerticalDirection,
 
-    pub children: Vec<WidgetRef>,
+    pub text_direction: Option<TextDirection>,
+
+    pub clip_behavior: ClipBehavior,
+
+    pub children: Vec<Flexible>,
 }
 
 impl WidgetView for Row {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::Row {
-                spacing: self.spacing,
-            },
-
-            layout: Layout::clone(&self.layout),
-        }
-    }
-
     fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::from(&self.children)
+        Children::from([Flex {
+            direction: Axis::Vertical,
+
+            main_axis_size: self.main_axis_size,
+
+            main_axis_alignment: self.main_axis_alignment,
+            cross_axis_alignment: self.cross_axis_alignment,
+            vertical_direction: self.vertical_direction,
+
+            text_direction: self.text_direction,
+
+            clip_behavior: self.clip_behavior,
+
+            children: self.children.clone(),
+        }])
     }
 }

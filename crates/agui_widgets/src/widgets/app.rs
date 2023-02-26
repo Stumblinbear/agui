@@ -1,37 +1,28 @@
 use agui_core::{
-    unit::{Layout, LayoutType, Sizing, Units},
-    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetRef, WidgetView},
+    unit::{Constraints, Point, Size},
+    widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
-use crate::state::window::WindowSize;
-
-#[derive(StatelessWidget, Default, PartialEq)]
+#[derive(StatelessWidget, Default)]
 pub struct App {
     pub child: WidgetRef,
 }
 
 impl WidgetView for App {
-    fn layout(&self, _ctx: &mut LayoutContext<Self>) -> LayoutResult {
-        let window_size = WindowSize {
+    fn layout(&self, ctx: &mut LayoutContext<Self>, _: Constraints) -> Size {
+        let size = Size {
             width: 800.0,
             height: 600.0,
-        }; //ctx.get_global::<WindowSize>();
+        };
 
-        // let window_size = window_size.borrow();
+        if let Some(child_id) = ctx.get_child() {
+            ctx.compute_layout(child_id, size);
 
-        LayoutResult {
-            layout_type: LayoutType::default(),
-
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Pixels(window_size.width),
-                    height: Units::Pixels(window_size.height),
-                },
-
-                ..Layout::default()
-            },
+            ctx.set_offset(0, Point { x: 0.0, y: 0.0 });
         }
+
+        size
     }
 
     fn build(&self, _: &mut BuildContext<Self>) -> Children {

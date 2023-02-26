@@ -1,29 +1,31 @@
 use agui_core::{
-    unit::{Layout, LayoutType, Margin, Sizing},
-    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetRef, WidgetView},
+    unit::{Constraints, EdgeInsets, Point, Size},
+    widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
-#[derive(StatelessWidget, Debug, Default, PartialEq)]
+#[derive(StatelessWidget, Debug, Default)]
 pub struct Padding {
-    pub padding: Margin,
+    pub padding: EdgeInsets,
 
     pub child: WidgetRef,
 }
 
 impl WidgetView for Padding {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::default(),
+    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+        if let Some(child_id) = ctx.get_child() {
+            ctx.compute_layout(child_id, constraints.deflate(self.padding));
 
-            layout: Layout {
-                sizing: Sizing::Fill,
-
-                margin: self.padding,
-
-                ..Layout::default()
-            },
+            ctx.set_offset(
+                0,
+                Point {
+                    x: self.padding.left,
+                    y: self.padding.top,
+                },
+            )
         }
+
+        constraints.biggest()
     }
 
     fn build(&self, _: &mut BuildContext<Self>) -> Children {

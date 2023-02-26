@@ -1,19 +1,18 @@
 use std::{any::Any, rc::Rc};
 
-mod builder;
 mod children;
 mod context;
 mod inherited;
 pub mod instance;
 pub mod key;
-mod result;
 mod state;
+mod view;
 
 use crate::element::Element;
 
 use self::{instance::ElementWidget, key::WidgetKey};
 
-pub use self::{builder::*, children::*, context::*, inherited::*, result::*, state::*};
+pub use self::{children::*, context::*, inherited::*, state::*, view::*};
 
 pub trait AnyWidget: 'static {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
@@ -114,21 +113,6 @@ impl WidgetRef {
     }
 }
 
-// impl Hash for WidgetRef {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.get_type_id().hash(state);
-
-//         if let Self::Some { key, widget, .. } = self {
-//             if let Some(key) = key {
-//                 // The key is effectively the hash of this reference
-//                 key.hash(state);
-//             } else {
-//                 Rc::as_ptr(widget).hash(state);
-//             }
-//         }
-//     }
-// }
-
 impl std::fmt::Debug for WidgetRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Self::Some(key, ..) = self {
@@ -167,17 +151,30 @@ impl std::fmt::Display for WidgetRef {
     }
 }
 
-impl<W> From<W> for WidgetRef
-where
-    W: IntoElementWidget,
-{
-    fn from(widget: W) -> Self {
-        WidgetRef::new(widget)
-    }
-}
-
 impl From<&WidgetRef> for WidgetRef {
     fn from(widget: &WidgetRef) -> Self {
         widget.to_owned()
+    }
+}
+
+pub trait IntoWidget: IntoElementWidget {
+    fn into_widget(self) -> WidgetRef;
+}
+
+impl<W> IntoWidget for W
+where
+    W: IntoElementWidget,
+{
+    fn into_widget(self) -> WidgetRef {
+        WidgetRef::new(self)
+    }
+}
+
+impl<W> From<W> for WidgetRef
+where
+    W: IntoWidget,
+{
+    fn from(widget: W) -> Self {
+        WidgetRef::new(widget)
     }
 }

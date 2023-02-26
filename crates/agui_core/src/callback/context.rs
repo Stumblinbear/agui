@@ -9,7 +9,7 @@ use crate::{
     element::{Element, ElementId},
     unit::Data,
     util::tree::Tree,
-    widget::{ContextStatefulWidget, ContextWidget, WidgetState, WidgetView},
+    widget::{ContextWidget, ContextWidgetState, ContextWidgetStateMut, WidgetState, WidgetView},
 };
 
 pub struct CallbackContext<'ctx, W>
@@ -52,7 +52,7 @@ where
     }
 }
 
-impl<W> ContextStatefulWidget for CallbackContext<'_, W>
+impl<W> ContextWidgetState for CallbackContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {
@@ -61,7 +61,12 @@ where
     fn get_state(&self) -> &W::State {
         self.state.downcast_ref().unwrap()
     }
+}
 
+impl<W> ContextWidgetStateMut for CallbackContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
     fn set_state<F>(&mut self, func: F)
     where
         F: FnOnce(&mut W::State),

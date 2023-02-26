@@ -2,13 +2,24 @@ use std::borrow::Cow;
 
 use agui_core::{
     render::{CanvasPainter, Paint},
-    unit::{FontStyle, Layout, LayoutType, Sizing},
-    widget::{BuildContext, Children, LayoutContext, LayoutResult, PaintContext, WidgetView},
+    unit::{Constraints, FontStyle, IntrinsicDimension, Size},
+    widget::{
+        BuildContext, Children, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetView,
+    },
 };
 use agui_macros::StatelessWidget;
 
 pub mod edit;
 pub mod query;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TextBaseline {
+    /// The horizontal line used to align the bottom of glyphs for alphabetic characters.
+    Alphabetic,
+
+    /// The horizontal line used to align ideographic characters.
+    Ideographic,
+}
 
 #[derive(StatelessWidget, Debug, Default, PartialEq)]
 pub struct Text {
@@ -17,18 +28,26 @@ pub struct Text {
 }
 
 impl WidgetView for Text {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::default(),
+    fn intrinsic_size(
+        &self,
+        _: &mut IntrinsicSizeContext<Self>,
+        dimension: IntrinsicDimension,
+        _: f32,
+    ) -> f32 {
+        match dimension {
+            // Need to do actual text layout to get the correct intrinsic width
+            IntrinsicDimension::MinWidth | IntrinsicDimension::MaxWidth => {
+                self.text.len() as f32 * self.font.size
+            }
 
-            layout: Layout {
-                sizing: Sizing::Fill,
-                min_sizing: Sizing::Axis {
-                    width: 0.0.into(),
-                    height: self.font.size.into(),
-                },
-                ..Layout::default()
-            },
+            IntrinsicDimension::MinHeight | IntrinsicDimension::MaxHeight => self.font.size,
+        }
+    }
+
+    fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
+        Size {
+            width: self.text.len() as f32 * self.font.size,
+            height: self.font.size,
         }
     }
 

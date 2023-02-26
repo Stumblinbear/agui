@@ -1,13 +1,11 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
-    unit::{Color, Layout, LayoutType, Sizing},
-    widget::{
-        BuildContext, Children, LayoutContext, LayoutResult, PaintContext, WidgetRef, WidgetView,
-    },
+    unit::Color,
+    widget::{BuildContext, Children, PaintContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
-#[derive(StatelessWidget, Debug, Default, PartialEq)]
+#[derive(StatelessWidget, Debug, Default)]
 pub struct ColoredBox {
     pub color: Color,
 
@@ -15,18 +13,6 @@ pub struct ColoredBox {
 }
 
 impl WidgetView for ColoredBox {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::default(),
-
-            layout: Layout {
-                sizing: Sizing::Fill,
-
-                ..Layout::default()
-            },
-        }
-    }
-
     fn build(&self, _: &mut BuildContext<Self>) -> Children {
         Children::from(&self.child)
     }

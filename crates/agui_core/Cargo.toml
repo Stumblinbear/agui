@@ -23,8 +23,6 @@ fnv = "1.0"
 slotmap = "1.0"
 parking_lot = "0.12"
 
-morphorm = "0.3"
-
 rand = "0.8"
 lyon = "0.17"
 

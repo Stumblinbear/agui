@@ -1,15 +1,26 @@
+use std::rc::Rc;
+
 use slotmap::new_key_type;
 
 use crate::{
     callback::CallbackId,
     inheritance::Inheritance,
-    manager::context::AguiContext,
     render::canvas::Canvas,
-    unit::{Data, Layout, LayoutType, Rect, Size},
-    widget::{instance::ElementWidget, key::WidgetKey, Children, WidgetRef},
+    unit::{Constraints, Data, IntrinsicDimension, Point, Size},
+    widget::{
+        instance::{
+            ElementWidget, WidgetBuildContext, WidgetCallbackContext, WidgetIntrinsicSizeContext,
+            WidgetLayoutContext,
+        },
+        key::WidgetKey,
+        Children, WidgetRef, WidgetView,
+    },
 };
 
-use self::context::ElementContext;
+use self::context::{
+    ElementBuildContext, ElementCallbackContext, ElementIntrinsicSizeContext, ElementLayoutContext,
+    ElementMountContext, ElementUnmountContext,
+};
 
 pub mod context;
 
@@ -20,14 +31,12 @@ new_key_type! {
 pub struct Element {
     key: Option<WidgetKey>,
 
-    layout_type: LayoutType,
-    layout: Layout,
-
-    rect: Option<Rect>,
-
     widget: Box<dyn ElementWidget>,
 
     inheritance: Inheritance,
+
+    size: Option<Size>,
+    offset: Point,
 }
 
 impl Element {
@@ -35,14 +44,12 @@ impl Element {
         Self {
             key,
 
-            layout_type: LayoutType::default(),
-            layout: Layout::default(),
-
-            rect: None,
-
             widget,
 
             inheritance: Inheritance::default(),
+
+            size: None,
+            offset: Point::ZERO,
         }
     }
 
@@ -54,66 +61,126 @@ impl Element {
         self.key.as_ref()
     }
 
-    pub fn get_layout_type(&self) -> &LayoutType {
-        &self.layout_type
-    }
-
-    pub fn get_layout(&self) -> &Layout {
-        &self.layout
-    }
-
-    pub fn get_rect(&self) -> Option<&Rect> {
-        self.rect.as_ref()
-    }
-
-    pub fn set_rect(&mut self, rect: Option<Rect>) {
-        self.rect = rect;
-    }
-
     pub fn is_similar(&self, other: &WidgetRef) -> bool {
         self.widget.is_similar(other)
     }
 
-    pub fn mount(&mut self, ctx: AguiContext) {
+    pub fn get_widget<T>(&self) -> Option<Rc<T>>
+    where
+        T: WidgetView,
+    {
+        self.widget.get_widget().as_any().downcast().ok()
+    }
+
+    pub fn get_size(&self) -> Option<Size> {
+        self.size
+    }
+
+    pub fn get_offset(&self) -> Point {
+        self.offset
+    }
+
+    pub fn mount(&mut self, _ctx: ElementMountContext) {
         let span = tracing::error_span!("mount");
         let _enter = span.enter();
     }
 
-    pub fn unmount(&mut self, ctx: AguiContext) {
+    pub fn unmount(&mut self, _ctx: ElementUnmountContext) {
         let span = tracing::error_span!("unmount");
         let _enter = span.enter();
     }
 
-    pub fn update(&mut self, other: WidgetRef) -> bool {
-        let span = tracing::error_span!("update");
+    /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
+    /// of the returned value in [`IntrinsicDimension`].
+    ///
+    /// This should _only_ be called on one's direct children, and results in the parent being coupled to the
+    /// child so that when the child's layout changes, the parent's layout will be also be recomputed.
+    ///
+    /// Calling this function is expensive as it can result in O(N^2) behavior.
+    pub fn intrinsic_size(
+        &mut self,
+        ctx: ElementIntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        let span = tracing::error_span!("get_min_extent");
         let _enter = span.enter();
 
-        self.widget.update(other)
+        let children = ctx
+            .element_tree
+            .get_children(ctx.element_id)
+            .cloned()
+            .unwrap_or_default();
+
+        self.widget.intrinsic_size(
+            WidgetIntrinsicSizeContext {
+                element_tree: ctx.element_tree,
+
+                element_id: ctx.element_id,
+
+                children: &children,
+            },
+            dimension,
+            cross_extent,
+        )
     }
 
-    pub fn layout(&mut self, ctx: AguiContext) {
+    pub fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
         let span = tracing::error_span!("layout");
         let _enter = span.enter();
 
-        let layout = self.widget.layout(ElementContext {
-            element_tree: ctx.element_tree,
-            dirty: ctx.dirty,
-            callback_queue: ctx.callback_queue,
+        let children = ctx
+            .element_tree
+            .get_children(ctx.element_id)
+            .cloned()
+            .unwrap_or_default();
 
-            element_id: ctx.element_id,
+        let mut offsets = Vec::with_capacity(children.len());
 
-            inheritance: &mut self.inheritance,
-        });
+        for _ in 0..children.len() {
+            offsets.push(None);
+        }
 
-        self.layout_type = layout.layout_type;
-        self.layout = layout.layout;
+        let size = self.widget.layout(
+            WidgetLayoutContext {
+                element_tree: ctx.element_tree,
+
+                element_id: ctx.element_id,
+
+                children: &children,
+
+                offsets: &mut offsets,
+            },
+            constraints,
+        );
+
+        for (child_id, offset) in children.iter().enumerate().map(|(i, &id)| (id, offsets[i])) {
+            assert!(
+                offset.is_some(),
+                "{} did not position its child element during layout",
+                self.type_name()
+            );
+
+            let offset = offset.unwrap_or_default();
+
+            ctx.element_tree
+                .get_mut(child_id)
+                .expect("child element missing during layout")
+                .offset = offset;
+        }
+
+        // The size of the element may be larger than the constraints (currently, so we can determine intrinsic sizes),
+        // so we have to ensure it's constrained, here.
+        self.size = Some(constraints.constrain(size));
+
+        size
     }
 
-    pub fn build(&mut self, ctx: AguiContext) -> Children {
+    pub fn build(&mut self, ctx: ElementBuildContext) -> Children {
         let span = tracing::error_span!("build");
         let _enter = span.enter();
 
-        self.widget.build(ElementContext {
+        self.widget.build(WidgetBuildContext {
             element_tree: ctx.element_tree,
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
@@ -124,28 +191,36 @@ impl Element {
         })
     }
 
+    pub fn update(&mut self, other: WidgetRef) -> bool {
+        let span = tracing::error_span!("update");
+        let _enter = span.enter();
+
+        self.widget.update(other)
+    }
+
     pub fn paint(&self) -> Option<Canvas> {
         let span = tracing::error_span!("paint");
         let _enter = span.enter();
 
-        self.rect
-            .and_then(|rect| self.widget.paint(Size::from(rect)))
+        self.size.and_then(|size| self.widget.paint(size))
     }
 
     #[allow(clippy::borrowed_box)]
-    pub fn call(&mut self, ctx: AguiContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {
+    pub fn call(
+        &mut self,
+        ctx: ElementCallbackContext,
+        callback_id: CallbackId,
+        arg: &Box<dyn Data>,
+    ) -> bool {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();
 
         self.widget.call(
-            ElementContext {
+            WidgetCallbackContext {
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
-                callback_queue: ctx.callback_queue,
 
                 element_id: ctx.element_id,
-
-                inheritance: &mut self.inheritance,
             },
             callback_id,
             arg,

@@ -1,6 +1,5 @@
 use std::ops::{Index, IndexMut};
 
-use morphorm::Hierarchy;
 use slotmap::Key;
 
 use self::map::{ChildIterator, DownwardIterator, TreeMap, UpwardIterator};
@@ -161,40 +160,6 @@ where
     }
 }
 
-impl<'a, K: 'a, V: 'a> Hierarchy<'a> for Tree<K, V>
-where
-    K: Key + for<'b> morphorm::Node<'b>,
-{
-    type Item = K;
-    type DownIter = DownwardIterator<'a, K, V>;
-    type UpIter = UpwardIterator<'a, K, V>;
-    type ChildIter = ChildIterator<'a, K, V>;
-
-    fn up_iter(&'a self) -> Self::UpIter {
-        self.iter_up()
-    }
-
-    fn down_iter(&'a self) -> Self::DownIter {
-        self.iter_down()
-    }
-
-    fn child_iter(&'a self, node_id: Self::Item) -> Self::ChildIter {
-        self.iter_children(node_id)
-    }
-
-    fn parent(&self, node_id: Self::Item) -> Option<Self::Item> {
-        self.map.get_parent(node_id).copied()
-    }
-
-    fn is_first_child(&self, node_id: Self::Item) -> bool {
-        self.map.is_first_child(node_id)
-    }
-
-    fn is_last_child(&self, node_id: Self::Item) -> bool {
-        self.map.is_last_child(node_id)
-    }
-}
-
 impl<K, V> std::fmt::Debug for Tree<K, V>
 where
     K: Key,
@@ -261,8 +226,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use morphorm::Hierarchy;
-
     use crate::element::ElementId;
 
     use super::Tree;

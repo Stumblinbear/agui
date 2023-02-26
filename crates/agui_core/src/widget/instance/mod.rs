@@ -1,18 +1,21 @@
+use std::rc::Rc;
+
 use downcast_rs::Downcast;
 
 use crate::{
     callback::CallbackId,
-    element::context::ElementContext,
     render::canvas::Canvas,
-    unit::{Data, Size},
-    widget::{Children, LayoutResult, WidgetRef},
+    unit::{Constraints, Data, IntrinsicDimension, Size},
+    widget::{Children, WidgetRef},
 };
 
 use super::AnyWidget;
 
+mod context;
 mod stateful;
 mod stateless;
 
+pub use context::*;
 pub use stateful::StatefulInstance;
 pub use stateless::StatelessInstance;
 
@@ -21,16 +24,30 @@ pub trait ElementWidget: Downcast {
 
     fn is_similar(&self, other: &WidgetRef) -> bool;
 
+    fn get_widget(&self) -> Rc<dyn AnyWidget>;
+
+    fn intrinsic_size(
+        &self,
+        ctx: WidgetIntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32;
+
+    fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size;
+
+    fn build(&mut self, ctx: WidgetBuildContext) -> Children;
+
     fn update(&mut self, other: WidgetRef) -> bool;
-
-    fn layout(&mut self, ctx: ElementContext) -> LayoutResult;
-
-    fn build(&mut self, ctx: ElementContext) -> Children;
 
     fn paint(&self, size: Size) -> Option<Canvas>;
 
     #[allow(clippy::borrowed_box)]
-    fn call(&mut self, ctx: ElementContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool;
+    fn call(
+        &mut self,
+        ctx: WidgetCallbackContext,
+        callback_id: CallbackId,
+        arg: &Box<dyn Data>,
+    ) -> bool;
 }
 
 impl std::fmt::Debug for Box<dyn ElementWidget> {

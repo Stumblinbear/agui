@@ -7,21 +7,22 @@ use std::{
 use fnv::{FnvHashMap, FnvHashSet};
 
 use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
-use morphorm::Cache;
 
 use crate::{
     callback::CallbackQueue,
-    element::{Element, ElementId},
+    element::{
+        context::{
+            ElementBuildContext, ElementCallbackContext, ElementLayoutContext, ElementMountContext,
+            ElementUnmountContext,
+        },
+        Element, ElementId,
+    },
     query::WidgetQuery,
-    unit::{Font, Units},
+    unit::{Constraints, Font},
     util::tree::Tree,
     widget::{key::WidgetKey, IntoElementWidget, WidgetRef},
 };
 
-use self::{cache::LayoutCache, context::AguiContext};
-
-mod cache;
-pub mod context;
 pub mod events;
 
 use events::ElementEvent;
@@ -34,8 +35,6 @@ pub struct WidgetManager {
 
     dirty: FnvHashSet<ElementId>,
     callback_queue: CallbackQueue,
-
-    cache: LayoutCache<ElementId>,
 
     modifications: VecDeque<Modify>,
 
@@ -178,7 +177,7 @@ impl WidgetManager {
                 }
             }
 
-            needs_redraw.extend(self.flush_layout());
+            self.flush_layout(&mut needs_redraw);
 
             needs_redraw.retain(|element_id| self.contains(*element_id));
 
@@ -342,10 +341,9 @@ impl WidgetManager {
                 self.element_tree
                     .with(element_id, |element_tree, element| {
                         let changed = element.call(
-                            AguiContext {
+                            ElementCallbackContext {
                                 element_tree,
                                 dirty: &mut self.dirty,
-                                callback_queue: &self.callback_queue,
 
                                 element_id,
                             },
@@ -368,80 +366,31 @@ impl WidgetManager {
         }
     }
 
-    pub fn flush_layout(&mut self) -> FnvHashSet<ElementId> {
+    pub fn flush_layout(&mut self, needs_redraw: &mut FnvHashSet<ElementId>) {
         let span = tracing::debug_span!("flush_layout");
         let _enter = span.enter();
 
-        morphorm::layout(&mut self.cache, &self.element_tree, &self.element_tree);
+        let Some(root_id) = self.element_tree.get_root() else {
+            return;
+        };
 
-        // Workaround for morphorm ignoring root sizing
-        let mut root_changed = false;
+        // TODO: Only redraw the elements that have changed
+        needs_redraw.extend(self.element_tree.iter().map(|(id, _)| id));
 
-        if let Some(element_id) = self.element_tree.get_root() {
-            let element = self
-                .element_tree
-                .get_mut(element_id)
-                .expect("tree has a root node, but it doesn't exist");
+        // TODO: Layout using a loop rather than deeply recursively
+        self.element_tree
+            .with(root_id, |element_tree, element| {
+                element.layout(
+                    ElementLayoutContext {
+                        element_tree,
 
-            let layout = element.get_layout();
-
-            if let Some(Units::Pixels(px)) = layout.position.get_left() {
-                if (self.cache.posx(element_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
-
-                    self.cache.set_posx(element_id, px);
-                }
-            }
-
-            if let Some(Units::Pixels(px)) = layout.position.get_top() {
-                if (self.cache.posy(element_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
-
-                    self.cache.set_posy(element_id, px);
-                }
-            }
-
-            if let Units::Pixels(px) = layout.sizing.get_width() {
-                if (self.cache.width(element_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
-
-                    self.cache.set_width(element_id, px);
-                }
-            }
-
-            if let Units::Pixels(px) = layout.sizing.get_height() {
-                if (self.cache.height(element_id) - px).abs() > f32::EPSILON {
-                    root_changed = true;
-
-                    self.cache.set_height(element_id, px);
-                }
-            }
-        }
-
-        // Some widgets want to react to their own drawn size (ugh), so we need to notify and possibly loop again
-        let mut newly_changed = self.cache.take_changed();
-
-        newly_changed.retain(|element_id| self.element_tree.contains(*element_id));
-
-        if root_changed {
-            tracing::trace!("root layout updated, applying morphorm fix");
-
-            if let Some(element_id) = self.element_tree.get_root() {
-                newly_changed.insert(element_id);
-            }
-        }
-
-        // Update the element rects in the context
-        for element_id in &newly_changed {
-            let element = self
-                .element_tree
-                .get_mut(*element_id)
-                .expect("newly changed element does not exist in the tree");
-
-            element.set_rect(self.cache.get_rect(element_id).copied());
-        }
-
-        newly_changed
+                        element_id: root_id,
+                    },
+                    // The root element is always unbounded
+                    Constraints::expand(),
+                );
+            })
+            .expect("cannot layout a widget that doesn't exist");
     }
 
     fn process_spawn(
@@ -488,10 +437,8 @@ impl WidgetManager {
                 self.keyed_elements.insert(*widget_key, element_id);
             }
 
-            element.mount(AguiContext {
+            element.mount(ElementMountContext {
                 element_tree,
-                dirty: &mut self.dirty,
-                callback_queue: &self.callback_queue,
 
                 element_id,
             });
@@ -501,8 +448,6 @@ impl WidgetManager {
             parent_id,
             element_id,
         });
-
-        self.cache.add(element_id);
 
         SpawnResult::Created(element_id)
     }
@@ -524,16 +469,8 @@ impl WidgetManager {
             let result = self
                 .element_tree
                 .with(element_id, |element_tree, element| {
-                    element.layout(AguiContext {
-                        element_tree,
-                        dirty: &mut self.dirty,
-                        callback_queue: &self.callback_queue,
-
-                        element_id,
-                    });
-
                     element
-                        .build(AguiContext {
+                        .build(ElementBuildContext {
                             element_tree,
                             dirty: &mut self.dirty,
                             callback_queue: &self.callback_queue,
@@ -579,10 +516,8 @@ impl WidgetManager {
 
                             self.element_tree
                                 .with(keyed_element_id, |element_tree, element| {
-                                    element.mount(AguiContext {
+                                    element.mount(ElementMountContext {
                                         element_tree,
-                                        dirty: &mut self.dirty,
-                                        callback_queue: &self.callback_queue,
 
                                         element_id: keyed_element_id,
                                     });
@@ -667,10 +602,8 @@ impl WidgetManager {
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
-                    element.unmount(AguiContext {
+                    element.unmount(ElementUnmountContext {
                         element_tree,
-                        dirty: &mut self.dirty,
-                        callback_queue: &self.callback_queue,
 
                         element_id,
                     });
@@ -678,8 +611,6 @@ impl WidgetManager {
                 .expect("cannot destroy an element that doesn't exist");
 
             element_events.push(ElementEvent::Destroyed { element_id });
-
-            self.cache.remove(&element_id);
 
             let element = self.element_tree.remove(element_id, false).unwrap();
 
@@ -734,12 +665,6 @@ mod tests {
         pub children: Vec<WidgetRef>,
     }
 
-    impl PartialEq for TestUnretainedWidget {
-        fn eq(&self, _: &Self) -> bool {
-            false
-        }
-    }
-
     impl WidgetView for TestUnretainedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> Children {
             BUILT.with(|built| {
@@ -750,7 +675,7 @@ mod tests {
         }
     }
 
-    #[derive(StatelessWidget, Default, PartialEq)]
+    #[derive(StatelessWidget, Default)]
     struct TestRetainedWidget {
         pub children: Vec<WidgetRef>,
     }
@@ -770,12 +695,6 @@ mod tests {
         pub children: Vec<WidgetRef>,
     }
 
-    impl PartialEq for TestNestedUnretainedWidget {
-        fn eq(&self, _: &Self) -> bool {
-            false
-        }
-    }
-
     impl WidgetView for TestNestedUnretainedWidget {
         fn build(&self, _: &mut BuildContext<Self>) -> Children {
             BUILT.with(|built| {
@@ -788,7 +707,7 @@ mod tests {
         }
     }
 
-    #[derive(StatelessWidget, Default, PartialEq)]
+    #[derive(StatelessWidget, Default)]
     struct TestNestedRetainedWidget {
         pub children: Vec<WidgetRef>,
     }

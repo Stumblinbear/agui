@@ -4,19 +4,21 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    element::context::ElementContext,
     render::canvas::{
         painter::{CanvasPainter, Head},
         Canvas,
     },
-    unit::{Data, Size},
+    unit::{Constraints, Data, IntrinsicDimension, Size},
     widget::{
-        BuildContext, Children, LayoutContext, LayoutResult, PaintContext, WidgetRef, WidgetState,
-        WidgetView,
+        BuildContext, Children, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetRef,
+        WidgetState, WidgetView,
     },
 };
 
-use super::{AnyWidget, ElementWidget};
+use super::{
+    AnyWidget, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+    WidgetIntrinsicSizeContext, WidgetLayoutContext,
+};
 
 pub struct StatelessInstance<W>
 where
@@ -64,25 +66,50 @@ where
         }
     }
 
-    fn update(&mut self, _: WidgetRef) -> bool {
-        false
+    fn get_widget(&self) -> Rc<dyn AnyWidget> {
+        Rc::clone(&self.widget) as Rc<dyn AnyWidget>
     }
 
-    fn layout(&mut self, ctx: ElementContext) -> LayoutResult {
-        let mut ctx = LayoutContext {
-            phantom: PhantomData,
+    fn intrinsic_size(
+        &self,
+        ctx: WidgetIntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        self.widget.intrinsic_size(
+            &mut IntrinsicSizeContext {
+                phantom: PhantomData,
 
-            element_tree: ctx.element_tree,
-            dirty: ctx.dirty,
+                element_tree: ctx.element_tree,
 
-            element_id: ctx.element_id,
-            state: &mut (),
-        };
+                element_id: ctx.element_id,
+                state: &mut (),
 
-        self.widget.layout(&mut ctx)
+                children: ctx.children,
+            },
+            dimension,
+            cross_extent,
+        )
     }
 
-    fn build(&mut self, ctx: ElementContext) -> Children {
+    fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
+        self.widget.layout(
+            &mut LayoutContext {
+                phantom: PhantomData,
+
+                element_tree: ctx.element_tree,
+
+                element_id: ctx.element_id,
+                state: &mut (),
+
+                children: ctx.children,
+                offsets: ctx.offsets,
+            },
+            constraints,
+        )
+    }
+
+    fn build(&mut self, ctx: WidgetBuildContext) -> Children {
         self.callbacks.clear();
 
         let mut ctx = BuildContext {
@@ -104,6 +131,10 @@ where
         };
 
         self.widget.build(&mut ctx)
+    }
+
+    fn update(&mut self, _: WidgetRef) -> bool {
+        false
     }
 
     fn paint(&self, size: Size) -> Option<Canvas> {
@@ -131,7 +162,12 @@ where
         }
     }
 
-    fn call(&mut self, ctx: ElementContext, callback_id: CallbackId, arg: &Box<dyn Data>) -> bool {
+    fn call(
+        &mut self,
+        ctx: WidgetCallbackContext,
+        callback_id: CallbackId,
+        arg: &Box<dyn Data>,
+    ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
                 phantom: PhantomData,

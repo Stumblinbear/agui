@@ -10,7 +10,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
     block_on_wgpu,
     glyph::GlyphContext,
-    kurbo::Affine,
+    kurbo::{Affine, Vec2},
     util::{RenderContext, RenderSurface},
     Renderer, Scene, SceneBuilder,
 };
@@ -87,6 +87,8 @@ impl RenderManager {
                                 }
                             }),
 
+                            offset: Point::default(),
+
                             ..RenderElement::default()
                         },
                     );
@@ -123,6 +125,10 @@ impl RenderManager {
                     self.widgets.remove(element_id);
                 }
 
+                ElementEvent::Layout { element_id } => {
+                    self.update_element(manager, *element_id);
+                }
+
                 ElementEvent::Draw { element_id } => {
                     self.update_element(manager, *element_id);
                 }
@@ -133,36 +139,46 @@ impl RenderManager {
 
         let mut builder = SceneBuilder::for_scene(&mut self.scene);
 
-        let mut element_stack = Vec::<(usize, ElementId)>::new();
+        let mut element_stack = Vec::<(usize, ElementId, Affine)>::new();
 
         for element_id in manager.get_tree().iter_down() {
             let element = self.widgets.get(&element_id).unwrap();
 
             let element_depth = manager.get_tree().get_depth(element_id).unwrap();
 
-            // End any elements in the stack that are deeper than this one
-            while let Some(element_id) = element_stack
+            // End any elements in the stack that are at the same level or deeper than this one
+            while let Some((element_id, transform)) = element_stack
                 .last()
-                .filter(|(depth, _)| *depth >= element_depth)
-                .map(|(_, element_id)| *element_id)
+                .filter(|(depth, ..)| *depth >= element_depth)
+                .map(|(_, element_id, transform)| (*element_id, transform))
             {
                 let element = self.widgets.get(&element_id).unwrap();
 
-                element.canvas.end(&mut builder);
+                element.canvas.end(*transform, &mut builder);
 
                 element_stack.pop();
             }
 
-            element.canvas.begin(Affine::IDENTITY, &mut builder);
+            let transform = element_stack
+                .last()
+                .map(|entry| entry.2)
+                .unwrap_or(Affine::IDENTITY);
 
-            element_stack.push((element_depth, element_id));
+            let offset = element.offset;
+
+            let transform =
+                transform * Affine::translate(Vec2::new(offset.x as f64, offset.y as f64));
+
+            element.canvas.begin(transform, &mut builder);
+
+            element_stack.push((element_depth, element_id, transform));
         }
 
         // End any remaining elements in the stack
-        while let Some((_, element_id)) = element_stack.pop() {
+        while let Some((_, element_id, transform)) = element_stack.pop() {
             let element = self.widgets.get(&element_id).unwrap();
 
-            element.canvas.end(&mut builder);
+            element.canvas.end(transform, &mut builder);
         }
 
         builder.finish();
@@ -180,11 +196,11 @@ impl RenderManager {
 
         let canvas = widget_element.paint();
 
-        render_element.canvas.update(
-            &mut self.glyph_cx,
-            Point::from(widget_element.get_rect().cloned().unwrap()),
-            canvas,
-        );
+        render_element.offset = widget_element.get_offset();
+
+        render_element
+            .canvas
+            .update(&mut self.glyph_cx, Point::ZERO, canvas);
 
         // if let Some(canvas) = canvas {
         //     let pos = Point::from(widget_element.get_rect().cloned().unwrap());

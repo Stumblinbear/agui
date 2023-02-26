@@ -1,18 +1,15 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use crate::{
-    element::{
-        context::{ElementIntrinsicSizeContext, ElementLayoutContext},
-        Element, ElementId,
-    },
-    unit::{Constraints, Data, IntrinsicDimension, Point, Size},
+    element::{context::ElementIntrinsicSizeContext, Element, ElementId},
+    unit::{Data, IntrinsicDimension},
     util::tree::Tree,
     widget::{WidgetState, WidgetView},
 };
 
 use super::{ContextWidget, ContextWidgetLayout, ContextWidgetState};
 
-pub struct LayoutContext<'ctx, W>
+pub struct IntrinsicSizeContext<'ctx, W>
 where
     W: WidgetView,
 {
@@ -24,10 +21,9 @@ where
     pub(crate) state: &'ctx dyn Data,
 
     pub(crate) children: &'ctx [ElementId],
-    pub(crate) offsets: &'ctx mut [Option<Point>],
 }
 
-impl<W> ContextWidget for LayoutContext<'_, W>
+impl<W> ContextWidget for IntrinsicSizeContext<'_, W>
 where
     W: WidgetView,
 {
@@ -42,7 +38,7 @@ where
     }
 }
 
-impl<W> ContextWidgetState for LayoutContext<'_, W>
+impl<W> ContextWidgetState for IntrinsicSizeContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {
@@ -53,7 +49,7 @@ where
     }
 }
 
-impl<'ctx, W> ContextWidgetLayout<'ctx> for LayoutContext<'ctx, W>
+impl<'ctx, W> ContextWidgetLayout<'ctx> for IntrinsicSizeContext<'ctx, W>
 where
     W: WidgetView,
 {
@@ -82,50 +78,8 @@ where
             .expect("child element missing during layout")
     }
 }
-impl<'ctx, W> LayoutContext<'ctx, W>
-where
-    W: WidgetView,
-{
-    pub fn compute_layout(
-        &mut self,
-        child_id: ElementId,
-        constraints: impl Into<Constraints>,
-    ) -> Size {
-        let constraints = constraints.into();
 
-        self.element_tree
-            .with(child_id, |element_tree, element| {
-                element.layout(
-                    ElementLayoutContext {
-                        element_tree,
-
-                        element_id: child_id,
-                    },
-                    constraints,
-                )
-            })
-            .expect("child element missing during layout")
-    }
-
-    pub fn set_offsets(&mut self, offsets: &[Point]) {
-        assert_eq!(
-            self.offsets.len(),
-            offsets.len(),
-            "when using set_offsets, the length must match the number of children"
-        );
-
-        self.offsets
-            .iter_mut()
-            .zip(offsets.iter())
-            .for_each(|(pos, new_pos)| *pos = Some(*new_pos));
-    }
-
-    pub fn set_offset(&mut self, index: usize, offset: Point) {
-        self.offsets[index] = Some(offset);
-    }
-}
-
-impl<W> Deref for LayoutContext<'_, W>
+impl<W> Deref for IntrinsicSizeContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {

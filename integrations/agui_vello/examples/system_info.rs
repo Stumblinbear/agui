@@ -8,7 +8,7 @@ use tracing_subscriber::EnvFilter;
 use agui::{
     prelude::*,
     widgets::{
-        primitives::{Center, Clip, ColoredBox, Column, Text},
+        primitives::{Center, ColoredBox, Column, CrossAxisAlignment, MainAxisAlignment, Text},
         App,
     },
 };
@@ -76,17 +76,6 @@ impl WidgetState for ExampleMain {
 }
 
 impl WidgetView for ExampleMain {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::default(),
-
-            layout: Layout {
-                sizing: Sizing::Fill,
-                ..Layout::default()
-            },
-        }
-    }
-
     fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             ctx.set_state(|state| {
@@ -141,12 +130,8 @@ impl WidgetView for ExampleMain {
                     color: Color::from_rgb((1.0, 1.0, 1.0)),
 
                     child: Column {
-                        layout: Layout {
-                            sizing: Sizing::Axis {
-                                width: Units::Stretch(1.0),
-                                height: Units::Auto,
-                            },
-                        },
+                        main_axis_alignment: MainAxisAlignment::Center,
+
                         children: lines
                             .into_iter()
                             .map(|entry| {

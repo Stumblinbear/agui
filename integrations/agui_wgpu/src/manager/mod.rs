@@ -282,7 +282,7 @@ impl RenderManager {
         let canvas = widget_element.paint();
 
         if let Some(canvas) = canvas {
-            let pos = Point::from(widget_element.get_rect().cloned().unwrap());
+            let pos = widget_element.get_offset();
 
             // If we have or are drawing to the target layer, mark it dirty
             if !canvas.head.is_empty() || render_element.head.is_some() {

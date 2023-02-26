@@ -5,7 +5,7 @@ use tracing_subscriber::EnvFilter;
 use agui::{
     prelude::*,
     widgets::{
-        primitives::{Clip, ColoredBox, Padding, SizedBox, Text},
+        primitives::{Center, Clip, ColoredBox, SizedBox, Text},
         App,
     },
 };
@@ -52,24 +52,12 @@ struct ExampleMain {
 }
 
 impl WidgetView for ExampleMain {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::default(),
-
-            layout: Layout {
-                sizing: Sizing::Fill,
-                ..Layout::default()
-            },
-        }
-    }
-
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
+    fn build(&self, _: &mut BuildContext<Self>) -> Children {
         Children::new(build! {
             ColoredBox {
                 color: Color::from_rgb((1.0, 1.0, 1.0)),
 
-                child: Padding {
-                    padding: Margin::center(),
+                child: Center {
                     child: SizedBox {
                         width: 280.0,
 

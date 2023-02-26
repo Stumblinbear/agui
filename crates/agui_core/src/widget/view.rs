@@ -1,12 +1,59 @@
-use crate::render::CanvasPainter;
+use crate::{
+    render::CanvasPainter,
+    unit::{Constraints, IntrinsicDimension, Point, Size},
+    widget::context::ContextWidgetLayout,
+};
 
-use super::{BuildContext, Children, LayoutContext, LayoutResult, PaintContext};
+use super::{BuildContext, Children, IntrinsicSizeContext, LayoutContext, PaintContext};
 
-/// Implements the widget's `layout()` and `build()` method.
+/// Implements the widget's various lifecycle methods.
 pub trait WidgetView: Sized + 'static {
     #[allow(unused_variables)]
-    fn layout(&self, ctx: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult::default()
+    fn intrinsic_size(
+        &self,
+        ctx: &mut IntrinsicSizeContext<Self>,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        let children = ctx.get_children();
+
+        if !children.is_empty() {
+            assert_eq!(
+                children.len(),
+                1,
+                "widgets that do not define an intrinsic_size function may only have a single child"
+            );
+
+            let child_id = *children.first().unwrap();
+
+            ctx.compute_intrinsic_size(child_id, dimension, cross_extent)
+        } else {
+            0.0
+        }
+    }
+
+    #[allow(unused_variables)]
+    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+        let children = ctx.get_children();
+
+        if !children.is_empty() {
+            assert_eq!(
+                children.len(),
+                1,
+                "widgets that do not define a layout function may only have a single child"
+            );
+
+            let child_id = *children.first().unwrap();
+
+            let child_size = ctx.compute_layout(child_id, constraints);
+
+            ctx.set_offset(0, Point { x: 0.0, y: 0.0 });
+
+            // By default, we take the size of the child.
+            child_size
+        } else {
+            constraints.smallest()
+        }
     }
 
     /// Called whenever this widget is rebuilt.
@@ -27,7 +74,7 @@ mod tests {
 
     use crate::{
         manager::WidgetManager,
-        widget::{BuildContext, Children, ContextStatefulWidget, WidgetState},
+        widget::{BuildContext, Children, ContextWidgetStateMut, WidgetState},
     };
 
     use super::WidgetView;

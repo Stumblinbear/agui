@@ -15,7 +15,7 @@ use crate::{
     widget::{InheritedWidget, IntoElementWidget, WidgetKey, WidgetRef, WidgetState, WidgetView},
 };
 
-use super::{ContextStatefulWidget, ContextWidget, ContextWidgetMut};
+use super::{ContextWidget, ContextWidgetMut, ContextWidgetState, ContextWidgetStateMut};
 
 pub struct BuildContext<'ctx, W>
 where
@@ -23,7 +23,7 @@ where
 {
     pub(crate) phantom: PhantomData<W>,
 
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
@@ -53,7 +53,7 @@ where
     }
 }
 
-impl<W> ContextStatefulWidget for BuildContext<'_, W>
+impl<W> ContextWidgetState for BuildContext<'_, W>
 where
     W: WidgetView + WidgetState,
 {
@@ -62,7 +62,12 @@ where
     fn get_state(&self) -> &W::State {
         self.state.downcast_ref().unwrap()
     }
+}
 
+impl<W> ContextWidgetStateMut for BuildContext<'_, W>
+where
+    W: WidgetView + WidgetState,
+{
     fn set_state<F>(&mut self, func: F)
     where
         F: FnOnce(&mut W::State),

@@ -23,12 +23,14 @@ pub(crate) struct RenderElement {
     /// This is the layer that this render element belongs to
     pub head_target: Option<ElementId>,
 
+    pub offset: Point,
+
     pub canvas: CanvasElement,
 }
 
 #[derive(Default)]
 pub(crate) struct CanvasElement {
-    pub pos: Point,
+    pub offset: Point,
 
     pub fragment: SceneFragment,
 
@@ -37,9 +39,7 @@ pub(crate) struct CanvasElement {
 }
 
 impl CanvasElement {
-    pub fn update(&mut self, gcx: &mut GlyphContext, pos: Point, canvas: Option<Canvas>) {
-        self.pos = pos;
-
+    pub fn update(&mut self, gcx: &mut GlyphContext, offset: Point, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
             self.children.clear();
@@ -68,7 +68,7 @@ impl CanvasElement {
                 },
 
                 canvas: CanvasElement {
-                    pos: tail.offset,
+                    offset: tail.offset,
 
                     fragment: SceneFragment::default(),
 
@@ -77,7 +77,7 @@ impl CanvasElement {
                 },
             };
 
-            layer_element.update(gcx, pos, Some(tail.canvas));
+            layer_element.update(gcx, offset, Some(tail.canvas));
 
             self.tail = Some(Box::new(layer_element));
         }
@@ -199,13 +199,13 @@ impl CanvasElement {
 
     pub fn begin(&self, transform: Affine, sb: &mut SceneBuilder) {
         let transform =
-            transform * Affine::translate(Vec2::new(self.pos.x as f64, self.pos.y as f64));
+            transform * Affine::translate(Vec2::new(self.offset.x as f64, self.offset.y as f64));
 
         sb.append(&self.fragment, Some(transform));
 
         for child in &self.children {
             child.begin(transform, sb);
-            child.end(sb);
+            child.end(transform, sb);
         }
 
         if let Some(tail) = &self.tail {
@@ -213,9 +213,9 @@ impl CanvasElement {
         }
     }
 
-    pub fn end(&self, sb: &mut SceneBuilder) {
+    pub fn end(&self, transform: Affine, sb: &mut SceneBuilder) {
         if let Some(tail) = &self.tail {
-            tail.end(sb);
+            tail.end(transform, sb);
         }
     }
 }
@@ -250,8 +250,8 @@ impl LayerElement {
         self.canvas.begin(transform, sb);
     }
 
-    pub fn end(&self, sb: &mut SceneBuilder) {
-        self.canvas.end(sb);
+    pub fn end(&self, transform: Affine, sb: &mut SceneBuilder) {
+        self.canvas.end(transform, sb);
 
         sb.pop_layer();
     }

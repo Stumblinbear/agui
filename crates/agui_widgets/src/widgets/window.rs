@@ -1,10 +1,10 @@
 use agui_core::{
-    unit::{Layout, LayoutType, Size, Sizing, Units},
-    widget::{BuildContext, Children, LayoutContext, LayoutResult, WidgetRef, WidgetView},
+    unit::{Constraints, Size},
+    widget::{BuildContext, Children, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
-#[derive(StatelessWidget, Default, PartialEq)]
+#[derive(StatelessWidget, Default)]
 pub struct Window {
     pub title: String,
     pub size: Size,
@@ -13,18 +13,10 @@ pub struct Window {
 }
 
 impl WidgetView for Window {
-    fn layout(&self, _: &mut LayoutContext<Self>) -> LayoutResult {
-        LayoutResult {
-            layout_type: LayoutType::default(),
-
-            layout: Layout {
-                sizing: Sizing::Axis {
-                    width: Units::Pixels(self.size.width),
-                    height: Units::Pixels(self.size.height),
-                },
-
-                ..Layout::default()
-            },
+    fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
+        Size {
+            width: self.size.width,
+            height: self.size.height,
         }
     }
 

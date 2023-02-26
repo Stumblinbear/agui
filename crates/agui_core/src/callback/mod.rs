@@ -141,12 +141,6 @@ mod tests {
         children: Vec<WidgetRef>,
     }
 
-    impl PartialEq for TestWidget {
-        fn eq(&self, _: &Self) -> bool {
-            false
-        }
-    }
-
     impl WidgetView for TestWidget {
         fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
             let callback = ctx.callback::<u32, _>(|_ctx, val| {
