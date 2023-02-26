@@ -1,5 +1,5 @@
 use agui_core::{
-    unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Point, Size, TextDirection},
+    unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
     widget::{
         BuildContext, Children, ContextWidgetLayout, IntoWidget, IntrinsicSizeContext,
         LayoutContext, WidgetRef, WidgetView,
@@ -367,11 +367,11 @@ impl WidgetView for Flex {
 
             match self.direction {
                 Axis::Horizontal => {
-                    ctx.set_offset(idx, Point::new(child_main_position, child_cross_position));
+                    ctx.set_offset(idx, Offset::new(child_main_position, child_cross_position));
                 }
 
                 Axis::Vertical => {
-                    ctx.set_offset(idx, Point::new(child_cross_position, child_main_position));
+                    ctx.set_offset(idx, Offset::new(child_cross_position, child_main_position));
                 }
             };
 

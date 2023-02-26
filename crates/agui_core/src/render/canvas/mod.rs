@@ -1,4 +1,4 @@
-use crate::unit::{BlendMode, Point, Shape, Size};
+use crate::unit::{BlendMode, Offset, Shape, Size};
 
 pub mod command;
 pub mod painter;
@@ -18,7 +18,7 @@ pub struct Canvas {
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct CanvasLayer {
-    pub offset: Point,
+    pub offset: Offset,
 
     pub style: LayerStyle,
 

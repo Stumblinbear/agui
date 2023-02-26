@@ -1,6 +1,7 @@
 pub(crate) const POS_MARGIN_OF_ERROR: f32 = 0.01;
 pub(crate) const COLOR_MARGIN_OF_ERROR: f32 = 0.001;
 
+mod alignment;
 mod axis;
 mod blend_mode;
 mod bounds;
@@ -12,12 +13,13 @@ mod edge_insets;
 mod font;
 mod intrinsic_dimension;
 mod key;
-mod point;
+mod offset;
 mod rect;
 mod shape;
 mod size;
 mod text_direction;
 
+pub use self::alignment::*;
 pub use self::axis::*;
 pub use self::blend_mode::*;
 pub use self::bounds::*;
@@ -29,7 +31,7 @@ pub use self::edge_insets::*;
 pub use self::font::*;
 pub use self::intrinsic_dimension::*;
 pub use self::key::*;
-pub use self::point::*;
+pub use self::offset::*;
 pub use self::rect::*;
 pub use self::shape::*;
 pub use self::size::*;

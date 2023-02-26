@@ -6,7 +6,7 @@ use crate::{
     callback::CallbackId,
     inheritance::Inheritance,
     render::canvas::Canvas,
-    unit::{Constraints, Data, IntrinsicDimension, Point, Size},
+    unit::{Constraints, Data, IntrinsicDimension, Offset, Size},
     widget::{
         instance::{
             ElementWidget, WidgetBuildContext, WidgetCallbackContext, WidgetIntrinsicSizeContext,
@@ -36,7 +36,7 @@ pub struct Element {
     inheritance: Inheritance,
 
     size: Option<Size>,
-    offset: Point,
+    offset: Offset,
 }
 
 impl Element {
@@ -49,7 +49,7 @@ impl Element {
             inheritance: Inheritance::default(),
 
             size: None,
-            offset: Point::ZERO,
+            offset: Offset::ZERO,
         }
     }
 
@@ -76,7 +76,7 @@ impl Element {
         self.size
     }
 
-    pub fn get_offset(&self) -> Point {
+    pub fn get_offset(&self) -> Offset {
         self.offset
     }
 

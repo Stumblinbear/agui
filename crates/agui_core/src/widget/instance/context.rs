@@ -4,7 +4,7 @@ use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
     inheritance::Inheritance,
-    unit::Point,
+    unit::Offset,
     util::tree::Tree,
 };
 
@@ -39,5 +39,5 @@ pub struct WidgetLayoutContext<'ctx> {
     pub(crate) element_id: ElementId,
 
     pub(crate) children: &'ctx [ElementId],
-    pub(crate) offsets: &'ctx mut [Option<Point>],
+    pub(crate) offsets: &'ctx mut [Option<Offset>],
 }

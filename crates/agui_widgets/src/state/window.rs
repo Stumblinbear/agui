@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use agui_core::unit::{Point, Size};
+use agui_core::unit::{Offset, Size};
 
 #[derive(Debug, Default, Hash, PartialEq, Eq, Clone, Copy)]
 pub struct WindowFocus(pub bool);
@@ -25,8 +25,8 @@ pub struct WindowPosition {
     pub y: f32,
 }
 
-impl From<Point> for WindowPosition {
-    fn from(point: Point) -> Self {
+impl From<Offset> for WindowPosition {
+    fn from(point: Offset) -> Self {
         Self {
             x: point.x,
             y: point.y,

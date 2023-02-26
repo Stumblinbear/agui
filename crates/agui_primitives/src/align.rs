@@ -1,11 +1,13 @@
 use agui_core::{
-    unit::{Constraints, Offset, Size},
+    unit::{Constraints, Point, Size},
     widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
 #[derive(StatelessWidget, Debug, Default)]
-pub struct Center {
+pub struct Align {
+    pub alignment: Alignment,
+
     pub width_factor: Option<f32>,
     pub height_factor: Option<f32>,
 
@@ -39,7 +41,7 @@ impl WidgetView for Center {
 
             ctx.set_offset(
                 0,
-                Offset {
+                Point {
                     x: (size.width - child_size.width) / 2.0,
                     y: (size.height - child_size.height) / 2.0,
                 },

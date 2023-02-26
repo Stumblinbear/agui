@@ -6,7 +6,7 @@ use std::{
 
 use agui::{
     manager::WidgetManager,
-    unit::{Point, Size},
+    unit::{Offset, Size},
     widgets::state::{
         keyboard::{KeyCode, KeyState},
         mouse::{MouseButtonState, MousePos, Scroll},
@@ -109,7 +109,7 @@ impl AguiProgram {
                         }
 
                         WindowEvent::CursorMoved { position: pos, .. } => {
-                            let mouse_pos = MousePos(Some(Point {
+                            let mouse_pos = MousePos(Some(Offset {
                                 x: pos.x as f32,
                                 y: pos.y as f32,
                             }));
@@ -133,9 +133,9 @@ impl AguiProgram {
 
                         WindowEvent::MouseWheel { delta, .. } => {
                             let scroll = Scroll(match delta {
-                                MouseScrollDelta::LineDelta(x, y) => Point { x, y },
+                                MouseScrollDelta::LineDelta(x, y) => Offset { x, y },
 
-                                MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => Point {
+                                MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => Offset {
                                     x: x as f32,
                                     y: y as f32,
                                 },

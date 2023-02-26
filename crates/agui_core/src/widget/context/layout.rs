@@ -5,7 +5,7 @@ use crate::{
         context::{ElementIntrinsicSizeContext, ElementLayoutContext},
         Element, ElementId,
     },
-    unit::{Constraints, Data, IntrinsicDimension, Point, Size},
+    unit::{Constraints, Data, IntrinsicDimension, Offset, Size},
     util::tree::Tree,
     widget::{WidgetState, WidgetView},
 };
@@ -24,7 +24,7 @@ where
     pub(crate) state: &'ctx dyn Data,
 
     pub(crate) children: &'ctx [ElementId],
-    pub(crate) offsets: &'ctx mut [Option<Point>],
+    pub(crate) offsets: &'ctx mut [Option<Offset>],
 }
 
 impl<W> ContextWidget for LayoutContext<'_, W>
@@ -107,7 +107,7 @@ where
             .expect("child element missing during layout")
     }
 
-    pub fn set_offsets(&mut self, offsets: &[Point]) {
+    pub fn set_offsets(&mut self, offsets: &[Offset]) {
         assert_eq!(
             self.offsets.len(),
             offsets.len(),
@@ -120,8 +120,8 @@ where
             .for_each(|(pos, new_pos)| *pos = Some(*new_pos));
     }
 
-    pub fn set_offset(&mut self, index: usize, offset: Point) {
-        self.offsets[index] = Some(offset);
+    pub fn set_offset(&mut self, index: usize, offset: impl Into<Offset>) {
+        self.offsets[index] = Some(offset.into());
     }
 }
 

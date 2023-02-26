@@ -3,13 +3,13 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use agui_core::unit::Point;
+use agui_core::unit::Offset;
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct MousePos(pub Option<Point>);
+pub struct MousePos(pub Option<Offset>);
 
 impl Deref for MousePos {
-    type Target = Option<Point>;
+    type Target = Option<Offset>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -22,8 +22,8 @@ impl DerefMut for MousePos {
     }
 }
 
-impl From<Point> for MousePos {
-    fn from(point: Point) -> Self {
+impl From<Offset> for MousePos {
+    fn from(point: Offset) -> Self {
         MousePos(Some(point))
     }
 }
@@ -63,10 +63,10 @@ impl Default for MouseButtonState {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct Scroll(pub Point);
+pub struct Scroll(pub Offset);
 
 impl Deref for Scroll {
-    type Target = Point;
+    type Target = Offset;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -79,8 +79,8 @@ impl DerefMut for Scroll {
     }
 }
 
-impl From<Point> for Scroll {
-    fn from(point: Point) -> Self {
+impl From<Offset> for Scroll {
+    fn from(point: Offset) -> Self {
         Scroll(point)
     }
 }

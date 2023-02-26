@@ -1,5 +1,5 @@
 use agui_core::{
-    unit::{Constraints, EdgeInsets, Point, Size},
+    unit::{Constraints, EdgeInsets, Offset, Size},
     widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
@@ -18,7 +18,7 @@ impl WidgetView for Padding {
 
             ctx.set_offset(
                 0,
-                Point {
+                Offset {
                     x: self.padding.left,
                     y: self.padding.top,
                 },

@@ -3,7 +3,7 @@ use std::time::Instant;
 use agui::{
     element::ElementId,
     manager::{events::ElementEvent, WidgetManager},
-    unit::Point,
+    unit::Offset,
 };
 use fnv::FnvHashMap;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -87,7 +87,7 @@ impl RenderManager {
                                 }
                             }),
 
-                            offset: Point::default(),
+                            offset: Offset::ZERO,
 
                             ..RenderElement::default()
                         },
@@ -200,7 +200,7 @@ impl RenderManager {
 
         render_element
             .canvas
-            .update(&mut self.glyph_cx, Point::ZERO, canvas);
+            .update(&mut self.glyph_cx, Offset::ZERO, canvas);
 
         // if let Some(canvas) = canvas {
         //     let pos = Point::from(widget_element.get_rect().cloned().unwrap());

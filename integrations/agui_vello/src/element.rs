@@ -1,7 +1,7 @@
 use agui::{
     element::ElementId,
     render::canvas::{Canvas, CanvasCommand},
-    unit::{Point, Rect},
+    unit::{Offset, Rect},
     util::tree::new_key_type,
 };
 use vello::{
@@ -23,14 +23,14 @@ pub(crate) struct RenderElement {
     /// This is the layer that this render element belongs to
     pub head_target: Option<ElementId>,
 
-    pub offset: Point,
+    pub offset: Offset,
 
     pub canvas: CanvasElement,
 }
 
 #[derive(Default)]
 pub(crate) struct CanvasElement {
-    pub offset: Point,
+    pub offset: Offset,
 
     pub fragment: SceneFragment,
 
@@ -39,7 +39,7 @@ pub(crate) struct CanvasElement {
 }
 
 impl CanvasElement {
-    pub fn update(&mut self, gcx: &mut GlyphContext, offset: Point, canvas: Option<Canvas>) {
+    pub fn update(&mut self, gcx: &mut GlyphContext, offset: Offset, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
             self.children.clear();
@@ -60,12 +60,7 @@ impl CanvasElement {
 
         if let Some(tail) = canvas.tail {
             let mut layer_element = LayerElement {
-                rect: Rect {
-                    x: tail.offset.x,
-                    y: tail.offset.y,
-                    width: tail.canvas.size.width,
-                    height: tail.canvas.size.height,
-                },
+                rect: tail.offset & tail.canvas.size,
 
                 canvas: CanvasElement {
                     offset: tail.offset,
@@ -77,7 +72,7 @@ impl CanvasElement {
                 },
             };
 
-            layer_element.update(gcx, offset, Some(tail.canvas));
+            layer_element.update(gcx, Offset::ZERO, Some(tail.canvas));
 
             self.tail = Some(Box::new(layer_element));
         }
@@ -227,8 +222,8 @@ pub(crate) struct LayerElement {
 }
 
 impl LayerElement {
-    pub fn update(&mut self, gcx: &mut GlyphContext, pos: Point, canvas: Option<Canvas>) {
-        self.canvas.update(gcx, pos, canvas);
+    pub fn update(&mut self, gcx: &mut GlyphContext, offset: Offset, canvas: Option<Canvas>) {
+        self.canvas.update(gcx, offset, canvas);
     }
 
     pub fn begin(&self, transform: Affine, sb: &mut SceneBuilder) {

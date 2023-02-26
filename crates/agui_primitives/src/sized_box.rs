@@ -1,5 +1,5 @@
 use agui_core::{
-    unit::{Axis, Constraints, Point, Size},
+    unit::{Axis, Constraints, Offset, Size},
     widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
@@ -64,7 +64,7 @@ impl WidgetView for SizedBox {
 
             ctx.compute_layout(child_id, size);
 
-            ctx.set_offset(0, Point { x: 0.0, y: 0.0 })
+            ctx.set_offset(0, Offset { x: 0.0, y: 0.0 })
         }
 
         size

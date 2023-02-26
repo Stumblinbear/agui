@@ -1,6 +1,6 @@
 use crate::{
     render::CanvasPainter,
-    unit::{Constraints, IntrinsicDimension, Point, Size},
+    unit::{Constraints, IntrinsicDimension, Offset, Size},
     widget::context::ContextWidgetLayout,
 };
 
@@ -47,7 +47,7 @@ pub trait WidgetView: Sized + 'static {
 
             let child_size = ctx.compute_layout(child_id, constraints);
 
-            ctx.set_offset(0, Point { x: 0.0, y: 0.0 });
+            ctx.set_offset(0, Offset { x: 0.0, y: 0.0 });
 
             // By default, we take the size of the child.
             child_size

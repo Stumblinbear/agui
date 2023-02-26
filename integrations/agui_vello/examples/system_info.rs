@@ -8,7 +8,7 @@ use tracing_subscriber::EnvFilter;
 use agui::{
     prelude::*,
     widgets::{
-        primitives::{Center, ColoredBox, Column, CrossAxisAlignment, MainAxisAlignment, Text},
+        primitives::{Center, ColoredBox, Column, MainAxisAlignment, MainAxisSize, Text},
         App,
     },
 };
@@ -130,6 +130,8 @@ impl WidgetView for ExampleMain {
                     color: Color::from_rgb((1.0, 1.0, 1.0)),
 
                     child: Column {
+                        main_axis_size: MainAxisSize::Min,
+
                         main_axis_alignment: MainAxisAlignment::Center,
 
                         children: lines
