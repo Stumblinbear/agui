@@ -1,6 +1,6 @@
 use super::Axis;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntrinsicDimension {
     /// Calculate the minimum allowable width without failing to correctly paint
     /// its contents within itself without clipping.

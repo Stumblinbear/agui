@@ -155,7 +155,7 @@ impl Element {
         );
 
         for (child_id, offset) in children.iter().enumerate().map(|(i, &id)| (id, offsets[i])) {
-            assert!(
+            debug_assert!(
                 offset.is_some(),
                 "{} did not position its child element during layout",
                 self.widget.type_name()

@@ -4,7 +4,7 @@ use glyph_brush_layout::{
     SectionGeometry, SectionGlyph, SectionText,
 };
 
-use crate::unit::{Color, Rect, POS_MARGIN_OF_ERROR};
+use crate::unit::{Color, Rect};
 
 #[derive(Debug, Clone, Default)]
 pub struct Font(pub(crate) usize, pub(crate) Option<FontArc>);
@@ -35,7 +35,7 @@ impl Font {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FontStyle {
     pub font: Font,
 
@@ -44,16 +44,6 @@ pub struct FontStyle {
 
     pub h_align: HorizontalAlign,
     pub v_align: VerticalAlign,
-}
-
-impl PartialEq for FontStyle {
-    fn eq(&self, other: &Self) -> bool {
-        (self.font == other.font)
-            && ((self.size - other.size).abs() < POS_MARGIN_OF_ERROR)
-            && (self.color == other.color)
-            && (self.h_align == other.h_align)
-            && (self.v_align == other.v_align)
-    }
 }
 
 impl Default for FontStyle {
@@ -122,12 +112,13 @@ impl FontStyle {
                 h_align: match self.h_align {
                     HorizontalAlign::Left => glyph_brush_layout::HorizontalAlign::Left,
                     HorizontalAlign::Center => {
-                        rect.x += rect.width / 2.0;
+                        rect.left += rect.width / 2.0;
 
                         glyph_brush_layout::HorizontalAlign::Center
                     }
+
                     HorizontalAlign::Right => {
-                        rect.x += rect.width;
+                        rect.left += rect.width;
 
                         glyph_brush_layout::HorizontalAlign::Right
                     }
@@ -135,12 +126,13 @@ impl FontStyle {
                 v_align: match self.v_align {
                     VerticalAlign::Top => glyph_brush_layout::VerticalAlign::Top,
                     VerticalAlign::Center => {
-                        rect.y += rect.height / 2.0;
+                        rect.top += rect.height / 2.0;
 
                         glyph_brush_layout::VerticalAlign::Center
                     }
+
                     VerticalAlign::Bottom => {
-                        rect.y += rect.height;
+                        rect.top += rect.height;
 
                         glyph_brush_layout::VerticalAlign::Bottom
                     }
@@ -150,7 +142,7 @@ impl FontStyle {
             glyphs_layout.calculate_glyphs(
                 &[font],
                 &SectionGeometry {
-                    screen_position: (rect.x, rect.y),
+                    screen_position: (rect.left, rect.top),
                     bounds: (rect.width, rect.height),
                 },
                 &[SectionText {

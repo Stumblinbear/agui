@@ -17,7 +17,7 @@ impl Size {
         height: 0.0,
     };
 
-    pub fn new(width: f32, height: f32) -> Self {
+    pub const fn new(width: f32, height: f32) -> Self {
         Self { width, height }
     }
 
@@ -179,10 +179,7 @@ impl RemAssign<f32> for Size {
 
 impl From<Rect> for Size {
     fn from(rect: Rect) -> Self {
-        Self {
-            width: rect.width,
-            height: rect.height,
-        }
+        Self::new(rect.width, rect.height)
     }
 }
 

@@ -6,10 +6,9 @@ use lyon::{
 
 use crate::unit::Rect;
 
-use super::POS_MARGIN_OF_ERROR;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub enum Shape {
+    #[default]
     Rect,
 
     RoundedRect {
@@ -22,12 +21,6 @@ pub enum Shape {
     Circle,
 
     Path(Path),
-}
-
-impl Default for Shape {
-    fn default() -> Self {
-        Self::Rect
-    }
 }
 
 impl PartialEq for Shape {
@@ -47,10 +40,10 @@ impl PartialEq for Shape {
                     bottom_left: r_bottom_left,
                 },
             ) => {
-                ((l_top_left - r_top_left).abs() < POS_MARGIN_OF_ERROR)
-                    && ((l_top_right - r_top_right).abs() < POS_MARGIN_OF_ERROR)
-                    && ((l_bottom_right - r_bottom_right).abs() < POS_MARGIN_OF_ERROR)
-                    && ((l_bottom_left - r_bottom_left).abs() < POS_MARGIN_OF_ERROR)
+                l_top_left == r_top_left
+                    && l_top_right == r_top_right
+                    && l_bottom_right == r_bottom_right
+                    && l_bottom_left == r_bottom_left
             }
 
             (Self::Path(l0), Self::Path(r0)) => l0
@@ -63,36 +56,6 @@ impl PartialEq for Shape {
     }
 }
 
-// impl PartialEq for Shape {
-//     fn eq(&self, other: &Self) -> bool {
-//         match (self, other) {
-//             (
-//                 Self::RoundedRect {
-//                     top_left: l_top_left,
-//                     top_right: l_top_right,
-//                     bottom_right: l_bottom_right,
-//                     bottom_left: l_bottom_left,
-//                 },
-//                 Self::RoundedRect {
-//                     top_left: r_top_left,
-//                     top_right: r_top_right,
-//                     bottom_right: r_bottom_right,
-//                     bottom_left: r_bottom_left,
-//                 },
-//             ) => {
-//                 l_top_left.approx_eq(r_top_left)
-//                     && l_top_right.approx_eq(r_top_right)
-//                     && l_bottom_right.approx_eq(r_bottom_right)
-//                     && l_bottom_left.approx_eq(r_bottom_left)
-//             }
-
-//             (Self::Path(l0), Self::Path(r0)) => l0.iter().eq(r0),
-
-//             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
-//         }
-//     }
-// }
-
 impl Shape {
     pub fn build_path(&self, rect: Rect) -> Path {
         match self {
@@ -101,7 +64,7 @@ impl Shape {
 
                 builder.add_rectangle(
                     &lyon::math::Rect {
-                        origin: Point2D::new(rect.x, rect.y),
+                        origin: Point2D::new(rect.left, rect.top),
                         size: Size2D::new(rect.width, rect.height),
                     },
                     Winding::Positive,
@@ -120,7 +83,7 @@ impl Shape {
 
                 builder.add_rounded_rectangle(
                     &lyon::math::Rect {
-                        origin: Point2D::new(rect.x, rect.y),
+                        origin: Point2D::new(rect.left, rect.top),
                         size: Size2D::new(rect.width, rect.height),
                     },
                     &BorderRadii {
@@ -139,7 +102,7 @@ impl Shape {
                 let mut builder = Path::builder();
 
                 builder.add_ellipse(
-                    Point2D::new(rect.x + rect.width, rect.y + rect.height),
+                    Point2D::new(rect.left + rect.width, rect.top + rect.height),
                     Vector::new(rect.width, rect.height),
                     Angle::radians(0.0),
                     Winding::Positive,

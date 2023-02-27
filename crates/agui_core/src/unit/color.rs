@@ -1,13 +1,22 @@
 use thiserror::Error;
 
-use super::COLOR_MARGIN_OF_ERROR;
-
-#[derive(Debug, Clone, Copy, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Color {
     pub red: f32,
     pub green: f32,
     pub blue: f32,
     pub alpha: f32,
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Self {
+            red: 1.0,
+            green: 1.0,
+            blue: 1.0,
+            alpha: 1.0,
+        }
+    }
 }
 
 impl Color {
@@ -30,26 +39,6 @@ impl Color {
             blue,
             alpha,
         }
-    }
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Self {
-            red: 1.0,
-            green: 1.0,
-            blue: 1.0,
-            alpha: 1.0,
-        }
-    }
-}
-
-impl PartialEq for Color {
-    fn eq(&self, other: &Self) -> bool {
-        (self.red - other.red).abs() < COLOR_MARGIN_OF_ERROR
-            && (self.green - other.green).abs() < COLOR_MARGIN_OF_ERROR
-            && (self.blue - other.blue).abs() < COLOR_MARGIN_OF_ERROR
-            && (self.alpha - other.alpha).abs() < COLOR_MARGIN_OF_ERROR
     }
 }
 

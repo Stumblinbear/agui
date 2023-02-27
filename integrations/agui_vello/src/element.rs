@@ -91,7 +91,7 @@ impl CanvasElement {
                 CanvasCommand::Shape { rect, shape, color } => {
                     sb.fill(
                         Fill::NonZero,
-                        Affine::translate((rect.x as f64, rect.y as f64)),
+                        Affine::translate((rect.left as f64, rect.top as f64)),
                         Color::rgba(
                             color.red as f64,
                             color.green as f64,
@@ -125,7 +125,8 @@ impl CanvasElement {
                     text,
                     ..
                 } => {
-                    let transform = Affine::translate((rect.x as f64, (font.size + rect.y) as f64));
+                    let transform =
+                        Affine::translate((rect.left as f64, (font.size + rect.top) as f64));
 
                     let brush = &Brush::Solid(Color::rgba(
                         color.red as f64,
@@ -227,7 +228,8 @@ impl LayerElement {
     }
 
     pub fn begin(&self, transform: Affine, sb: &mut SceneBuilder) {
-        let transform = transform * Affine::translate((self.rect.x as f64, self.rect.y as f64));
+        let transform =
+            transform * Affine::translate((self.rect.left as f64, self.rect.top as f64));
 
         sb.push_layer(
             Mix::Clip,

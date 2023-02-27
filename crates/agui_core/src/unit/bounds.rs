@@ -1,21 +1,12 @@
-use super::{EdgeInsets, POS_MARGIN_OF_ERROR};
+use super::EdgeInsets;
 
 /// Holds information about each side.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Bounds {
     pub top: f32,
     pub right: f32,
     pub bottom: f32,
     pub left: f32,
-}
-
-impl PartialEq for Bounds {
-    fn eq(&self, other: &Self) -> bool {
-        ((self.top - other.top).abs() < POS_MARGIN_OF_ERROR)
-            && ((self.right - other.right).abs() < POS_MARGIN_OF_ERROR)
-            && ((self.bottom - other.bottom).abs() < POS_MARGIN_OF_ERROR)
-            && ((self.left - other.left).abs() < POS_MARGIN_OF_ERROR)
-    }
 }
 
 impl Bounds {

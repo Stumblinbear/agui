@@ -1,6 +1,3 @@
-pub(crate) const POS_MARGIN_OF_ERROR: f32 = 0.01;
-pub(crate) const COLOR_MARGIN_OF_ERROR: f32 = 0.001;
-
 mod alignment;
 mod axis;
 mod blend_mode;

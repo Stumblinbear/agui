@@ -27,7 +27,7 @@ impl Offset {
     }
 
     pub fn direction(&self) -> f32 {
-        (self.y).atan2(self.x)
+        self.y.atan2(self.x)
     }
 
     pub fn scale(&self, scale_x: f32, scale_y: f32) -> Self {
@@ -177,7 +177,7 @@ impl BitAnd<Size> for Offset {
 
 impl From<Rect> for Offset {
     fn from(rect: Rect) -> Self {
-        Self::new(rect.x, rect.y)
+        Self::new(rect.left, rect.top)
     }
 }
 

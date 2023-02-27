@@ -16,7 +16,6 @@ cfg-if = "1.0"
 
 thiserror = "1.0"
 tracing = "0.1"
-ordered-float = "3.4.0"
 
 fnv = "1.0"
 slotmap = "1.0"

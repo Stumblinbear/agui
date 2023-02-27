@@ -70,8 +70,8 @@ impl Alignment {
         let half_size = Size::from(rect) / 2.0;
 
         Offset::new(
-            rect.x + half_size.width + self.x * half_size.width,
-            rect.y + half_size.height + self.y * half_size.height,
+            rect.left + half_size.width + self.x * half_size.width,
+            rect.top + half_size.height + self.y * half_size.height,
         )
     }
 
@@ -85,8 +85,8 @@ impl Alignment {
         let half_size_delta = (Size::from(rect) - size) / 2.0;
 
         Rect {
-            x: rect.x + half_size_delta.width + self.x * half_size_delta.width,
-            y: rect.y + half_size_delta.height + self.y * half_size_delta.height,
+            left: rect.left + half_size_delta.width + self.x * half_size_delta.width,
+            top: rect.top + half_size_delta.height + self.y * half_size_delta.height,
             width: size.width,
             height: size.height,
         }

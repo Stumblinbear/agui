@@ -12,7 +12,7 @@ use rand::Rng;
 ///
 /// In order for a widget to be persisted across rebuilds, it must be destroyed and recreated in a single
 /// frame, it cannot be delayed or the old state will be lost.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Key {
     /// A local key.
     ///
