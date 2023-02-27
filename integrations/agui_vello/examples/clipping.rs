@@ -61,6 +61,7 @@ impl WidgetView for ExampleMain {
 
                 child: Center {
                     child: SizedBox {
+                        height: 16.0,
                         width: 280.0,
 
                         child: Clip {
