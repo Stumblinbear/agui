@@ -10,7 +10,7 @@ use crate::{
     },
     unit::{Constraints, Data, IntrinsicDimension, Size},
     widget::{
-        BuildContext, Children, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetRef,
+        BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetRef,
         WidgetState, WidgetView,
     },
 };
@@ -109,7 +109,7 @@ where
         )
     }
 
-    fn build(&mut self, ctx: WidgetBuildContext) -> Children {
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
         self.callbacks.clear();
 
         let mut ctx = BuildContext {
@@ -130,7 +130,7 @@ where
             keyed_children: FnvHashSet::default(),
         };
 
-        self.widget.build(&mut ctx)
+        self.widget.build(&mut ctx).into_children()
     }
 
     fn update(&mut self, _: WidgetRef) -> bool {

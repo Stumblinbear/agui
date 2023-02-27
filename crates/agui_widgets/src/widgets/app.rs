@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Constraints, Offset, Size},
-    widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
+    widget::{BuildContext, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -10,6 +10,8 @@ pub struct App {
 }
 
 impl WidgetView for App {
+    type Child = WidgetRef;
+
     fn layout(&self, ctx: &mut LayoutContext<Self>, _: Constraints) -> Size {
         let size = Size {
             width: 800.0,
@@ -25,7 +27,7 @@ impl WidgetView for App {
         size
     }
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::from(&self.child)
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        self.child.clone()
     }
 }

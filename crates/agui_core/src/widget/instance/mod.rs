@@ -6,7 +6,7 @@ use crate::{
     callback::CallbackId,
     render::canvas::Canvas,
     unit::{Constraints, Data, IntrinsicDimension, Size},
-    widget::{Children, WidgetRef},
+    widget::WidgetRef,
 };
 
 use super::AnyWidget;
@@ -35,7 +35,7 @@ pub trait ElementWidget: Downcast {
 
     fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size;
 
-    fn build(&mut self, ctx: WidgetBuildContext) -> Children;
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef>;
 
     fn update(&mut self, other: WidgetRef) -> bool;
 

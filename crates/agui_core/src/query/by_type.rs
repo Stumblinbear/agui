@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
 
-use crate::{element::Element, widget::WidgetView};
+use crate::{element::Element, widget::WidgetBuilder};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
 pub struct QueryByType<I, W>
 where
-    W: WidgetView,
+    W: WidgetBuilder,
 {
     pub(crate) iter: I,
     phantom: PhantomData<W>,
@@ -14,7 +14,7 @@ where
 
 impl<I, W> QueryByType<I, W>
 where
-    W: WidgetView,
+    W: WidgetBuilder,
 {
     pub(super) fn new(iter: I) -> Self {
         Self {
@@ -26,7 +26,7 @@ where
 
 impl<'query, I, W> Iterator for QueryByType<I, W>
 where
-    W: WidgetView + 'query,
+    W: WidgetBuilder + 'query,
     I: Iterator<Item = &'query Element>,
 {
     type Item = &'query Element;
@@ -51,7 +51,7 @@ mod tests {
     use crate::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, Children, WidgetRef, WidgetView},
+        widget::{BuildContext, WidgetRef, WidgetView},
     };
 
     #[derive(Default, StatelessWidget)]
@@ -66,8 +66,10 @@ mod tests {
     }
 
     impl WidgetView for TestWidget1 {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
-            (&self.child).into()
+        type Child = WidgetRef;
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+            self.child.clone()
         }
     }
 
@@ -83,8 +85,10 @@ mod tests {
     }
 
     impl WidgetView for TestWidget2 {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
-            (&self.child).into()
+        type Child = WidgetRef;
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+            self.child.clone()
         }
     }
 

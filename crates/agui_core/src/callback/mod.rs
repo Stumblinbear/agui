@@ -128,7 +128,7 @@ mod tests {
     use crate::{
         callback::Callback,
         manager::WidgetManager,
-        widget::{BuildContext, Children, ContextWidgetMut, WidgetRef, WidgetView},
+        widget::{BuildContext, ContextWidgetMut, WidgetRef, WidgetView},
     };
 
     thread_local! {
@@ -142,7 +142,9 @@ mod tests {
     }
 
     impl WidgetView for TestWidget {
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
+        type Child = Vec<WidgetRef>;
+
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
             let callback = ctx.callback::<u32, _>(|_ctx, val| {
                 RESULT.with(|f| {
                     f.borrow_mut().push(*val);
@@ -153,7 +155,7 @@ mod tests {
                 f.borrow_mut().push(callback);
             });
 
-            Children::from(&self.children)
+            self.children.clone()
         }
     }
 

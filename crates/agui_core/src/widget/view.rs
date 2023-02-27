@@ -4,10 +4,38 @@ use crate::{
     widget::context::ContextWidgetLayout,
 };
 
-use super::{BuildContext, Children, IntrinsicSizeContext, LayoutContext, PaintContext};
+use super::{BuildContext, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetRef};
+
+pub trait IntoChildren {
+    fn into_children(self) -> Vec<WidgetRef>;
+}
+
+impl IntoChildren for () {
+    fn into_children(self) -> Vec<WidgetRef> {
+        Vec::new()
+    }
+}
+
+impl IntoChildren for Vec<WidgetRef> {
+    fn into_children(self) -> Vec<WidgetRef> {
+        self
+    }
+}
+
+impl IntoChildren for WidgetRef {
+    fn into_children(self) -> Vec<WidgetRef> {
+        vec![self]
+    }
+}
 
 /// Implements the widget's various lifecycle methods.
 pub trait WidgetView: Sized + 'static {
+    #[cfg(nightly)]
+    type Child: IntoChildren = super::WidgetRef;
+
+    #[cfg(not(nightly))]
+    type Child: IntoChildren;
+
     #[allow(unused_variables)]
     fn intrinsic_size(
         &self,
@@ -59,7 +87,7 @@ pub trait WidgetView: Sized + 'static {
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Children;
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child;
 
     /// Called whenever this widget is redrawn.
     #[allow(unused_variables)]
@@ -74,7 +102,7 @@ mod tests {
 
     use crate::{
         manager::WidgetManager,
-        widget::{BuildContext, Children, ContextWidgetStateMut, WidgetState},
+        widget::{BuildContext, ContextWidgetStateMut, WidgetState},
     };
 
     use super::WidgetView;
@@ -95,7 +123,9 @@ mod tests {
     }
 
     impl WidgetView for TestWidget {
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
+        type Child = ();
+
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
             ctx.set_state(|state| {
                 *state += 1;
             });
@@ -103,8 +133,6 @@ mod tests {
             STATE.with(|f| {
                 f.borrow_mut().push(**ctx);
             });
-
-            Children::none()
         }
     }
 

@@ -76,7 +76,9 @@ impl WidgetState for ExampleMain {
 }
 
 impl WidgetView for ExampleMain {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
+    type Child = WidgetRef;
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             ctx.set_state(|state| {
                 state.replace(system_info.clone());
@@ -124,7 +126,7 @@ impl WidgetView for ExampleMain {
             ],
         };
 
-        Children::new(build! {
+        build! {
             Center {
                 child: ColoredBox {
                     color: Color::from_rgb((1.0, 1.0, 1.0)),
@@ -147,6 +149,6 @@ impl WidgetView for ExampleMain {
                     }
                 }
             }
-        })
+        }
     }
 }

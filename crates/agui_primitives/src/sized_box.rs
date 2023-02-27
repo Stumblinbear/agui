@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Axis, Constraints, Offset, Size},
-    widget::{BuildContext, Children, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
+    widget::{BuildContext, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -51,6 +51,8 @@ impl SizedBox {
 }
 
 impl WidgetView for SizedBox {
+    type Child = WidgetRef;
+
     fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
         let children = ctx.get_children();
 
@@ -70,7 +72,7 @@ impl WidgetView for SizedBox {
         size
     }
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::from(&self.child)
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        self.child.clone()
     }
 }

@@ -13,7 +13,7 @@ use crate::{
             WidgetLayoutContext,
         },
         key::WidgetKey,
-        Children, WidgetRef, WidgetView,
+        WidgetBuilder, WidgetRef,
     },
 };
 
@@ -67,7 +67,7 @@ impl Element {
 
     pub fn get_widget<T>(&self) -> Option<Rc<T>>
     where
-        T: WidgetView,
+        T: WidgetBuilder,
     {
         self.widget.get_widget().as_any().downcast().ok()
     }
@@ -176,7 +176,7 @@ impl Element {
         size
     }
 
-    pub fn build(&mut self, ctx: ElementBuildContext) -> Children {
+    pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<WidgetRef> {
         let span = tracing::error_span!("build");
         let _enter = span.enter();
 

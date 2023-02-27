@@ -3,9 +3,7 @@ use std::borrow::Cow;
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widget::{
-        BuildContext, Children, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetView,
-    },
+    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetView},
 };
 use agui_macros::StatelessWidget;
 
@@ -28,6 +26,8 @@ pub struct Text {
 }
 
 impl WidgetView for Text {
+    type Child = ();
+
     fn intrinsic_size(
         &self,
         _: &mut IntrinsicSizeContext<Self>,
@@ -51,9 +51,7 @@ impl WidgetView for Text {
         }
     }
 
-    fn build(&self, _ctx: &mut BuildContext<Self>) -> Children {
-        Children::none()
-    }
+    fn build(&self, _ctx: &mut BuildContext<Self>) -> Self::Child {}
 
     fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
         canvas.draw_text(

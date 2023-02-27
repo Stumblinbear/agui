@@ -1,16 +1,16 @@
-use agui_core::widget::{BuildContext, Children, WidgetView};
+use agui_core::widget::{BuildContext, WidgetRef, WidgetView};
 use agui_macros::StatelessWidget;
 
 #[derive(StatelessWidget)]
 pub struct Builder {
     #[allow(clippy::type_complexity)]
-    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> Children>,
+    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> WidgetRef>,
 }
 
 impl Builder {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&mut BuildContext<Self>) -> Children + 'static,
+        F: Fn(&mut BuildContext<Self>) -> WidgetRef + 'static,
     {
         Self {
             func: Box::new(func),
@@ -19,7 +19,9 @@ impl Builder {
 }
 
 impl WidgetView for Builder {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Children {
+    type Child = WidgetRef;
+
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
         (self.func)(ctx)
     }
 }
@@ -29,7 +31,7 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, Children, WidgetView},
+        widget::{BuildContext, WidgetView},
     };
     use agui_macros::StatelessWidget;
 
@@ -39,15 +41,14 @@ mod tests {
     struct TestWidget {}
 
     impl WidgetView for TestWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
-            Children::none()
-        }
+        type Child = ();
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {}
     }
 
     #[test]
     pub fn calls_func() {
-        let mut manager =
-            WidgetManager::with_root(Builder::new(|_| Children::from([TestWidget::default()])));
+        let mut manager = WidgetManager::with_root(Builder::new(|_| TestWidget::default().into()));
 
         manager.update();
 

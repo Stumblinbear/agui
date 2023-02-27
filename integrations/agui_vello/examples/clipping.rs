@@ -52,8 +52,10 @@ struct ExampleMain {
 }
 
 impl WidgetView for ExampleMain {
-    fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::new(build! {
+    type Child = WidgetRef;
+
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        build! {
             ColoredBox {
                 color: Color::from_rgb((1.0, 1.0, 1.0)),
 
@@ -80,6 +82,6 @@ impl WidgetView for ExampleMain {
                     }
                 }
             }
-        })
+        }
     }
 }

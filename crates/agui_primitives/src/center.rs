@@ -1,8 +1,8 @@
 use agui_core::{
     unit::Alignment,
-    widget::{BuildContext, Children, WidgetRef, WidgetView},
+    widget::{BuildContext, WidgetRef, WidgetView},
 };
-use agui_macros::StatelessWidget;
+use agui_macros::{build, StatelessWidget};
 
 use crate::Align;
 
@@ -15,8 +15,11 @@ pub struct Center {
 }
 
 impl WidgetView for Center {
-    fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::new(
+    type Child = WidgetRef;
+
+    #[allow(clippy::needless_update)]
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        build! {
             Align {
                 alignment: Alignment::CENTER,
 
@@ -25,7 +28,6 @@ impl WidgetView for Center {
 
                 child: self.child.clone(),
             }
-            .into(),
-        )
+        }
     }
 }

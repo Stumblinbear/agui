@@ -1,8 +1,8 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
     widget::{
-        BuildContext, Children, ContextWidgetLayout, IntoWidget, IntrinsicSizeContext,
-        LayoutContext, WidgetRef, WidgetView,
+        BuildContext, ContextWidgetLayout, IntoWidget, IntrinsicSizeContext, LayoutContext,
+        WidgetRef, WidgetView,
     },
 };
 use agui_macros::StatelessWidget;
@@ -113,6 +113,8 @@ pub struct Flex {
 }
 
 impl WidgetView for Flex {
+    type Child = Vec<WidgetRef>;
+
     fn intrinsic_size(
         &self,
         ctx: &mut IntrinsicSizeContext<Self>,
@@ -385,14 +387,11 @@ impl WidgetView for Flex {
         size
     }
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::from(
-            &self
-                .children
-                .iter()
-                .map(|entry| entry.child.clone())
-                .collect::<Vec<_>>(),
-        )
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        self.children
+            .iter()
+            .map(|entry| entry.child.clone())
+            .collect::<Vec<_>>()
     }
 }
 

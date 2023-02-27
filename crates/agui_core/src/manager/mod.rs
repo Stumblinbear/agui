@@ -20,7 +20,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{key::WidgetKey, IntoElementWidget, WidgetRef},
+    widget::{key::WidgetKey, WidgetBuilder, WidgetRef},
 };
 
 pub mod events;
@@ -48,7 +48,7 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: IntoElementWidget,
+        W: WidgetBuilder,
     {
         let mut manager = Self::new();
 
@@ -115,7 +115,7 @@ impl WidgetManager {
     /// Queues the widget for addition into the tree
     pub fn set_root<W>(&mut self, widget: W)
     where
-        W: IntoElementWidget,
+        W: WidgetBuilder,
     {
         self.remove_root();
 
@@ -469,15 +469,13 @@ impl WidgetManager {
             let result = self
                 .element_tree
                 .with(element_id, |element_tree, element| {
-                    element
-                        .build(ElementBuildContext {
-                            element_tree,
-                            dirty: &mut self.dirty,
-                            callback_queue: &self.callback_queue,
+                    element.build(ElementBuildContext {
+                        element_tree,
+                        dirty: &mut self.dirty,
+                        callback_queue: &self.callback_queue,
 
-                            element_id,
-                        })
-                        .take()
+                        element_id,
+                    })
                 })
                 .expect("cannot build a widget that doesn't exist");
 
@@ -640,11 +638,11 @@ enum SpawnResult {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::StatelessWidget;
+    use agui_macros::{build, StatelessWidget};
 
     use crate::{
         manager::events::ElementEvent,
-        widget::{BuildContext, Children, WidgetRef, WidgetView},
+        widget::{BuildContext, WidgetRef, WidgetView},
     };
 
     use super::WidgetManager;
@@ -666,12 +664,14 @@ mod tests {
     }
 
     impl WidgetView for TestUnretainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
+        type Child = Vec<WidgetRef>;
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
             BUILT.with(|built| {
                 built.borrow_mut().unretained = true;
             });
 
-            Children::from(&self.children)
+            self.children.clone()
         }
     }
 
@@ -681,12 +681,14 @@ mod tests {
     }
 
     impl WidgetView for TestRetainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
+        type Child = Vec<WidgetRef>;
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
             BUILT.with(|built| {
                 built.borrow_mut().retained = true;
             });
 
-            Children::from(&self.children)
+            self.children.clone()
         }
     }
 
@@ -696,14 +698,19 @@ mod tests {
     }
 
     impl WidgetView for TestNestedUnretainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
+        type Child = WidgetRef;
+
+        #[allow(clippy::needless_update)]
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
             BUILT.with(|built| {
                 built.borrow_mut().nested_unretained = true;
             });
 
-            Children::from([TestUnretainedWidget {
-                children: self.children.clone(),
-            }])
+            build! {
+                TestUnretainedWidget {
+                    children: self.children.clone(),
+                }
+            }
         }
     }
 
@@ -712,11 +719,16 @@ mod tests {
         pub children: Vec<WidgetRef>,
     }
 
+    #[allow(clippy::needless_update)]
     impl WidgetView for TestNestedRetainedWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Children {
-            Children::from([TestUnretainedWidget {
-                children: self.children.clone(),
-            }])
+        type Child = WidgetRef;
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+            build! {
+                TestUnretainedWidget {
+                    children: self.children.clone(),
+                }
+            }
         }
     }
 

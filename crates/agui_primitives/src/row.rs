@@ -1,8 +1,8 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, TextDirection},
-    widget::{BuildContext, Children, WidgetView},
+    widget::{BuildContext, WidgetRef, WidgetView},
 };
-use agui_macros::StatelessWidget;
+use agui_macros::{build, StatelessWidget};
 
 use crate::{
     CrossAxisAlignment, Flex, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
@@ -24,21 +24,26 @@ pub struct Row {
 }
 
 impl WidgetView for Row {
-    fn build(&self, _: &mut BuildContext<Self>) -> Children {
-        Children::from([Flex {
-            direction: Axis::Vertical,
+    type Child = WidgetRef;
 
-            main_axis_size: self.main_axis_size,
+    #[allow(clippy::needless_update)]
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        build! {
+            Flex {
+                direction: Axis::Vertical,
 
-            main_axis_alignment: self.main_axis_alignment,
-            cross_axis_alignment: self.cross_axis_alignment,
-            vertical_direction: self.vertical_direction,
+                main_axis_size: self.main_axis_size,
 
-            text_direction: self.text_direction,
+                main_axis_alignment: self.main_axis_alignment,
+                cross_axis_alignment: self.cross_axis_alignment,
+                vertical_direction: self.vertical_direction,
 
-            clip_behavior: self.clip_behavior,
+                text_direction: self.text_direction,
 
-            children: self.children.clone(),
-        }])
+                clip_behavior: self.clip_behavior,
+
+                children: self.children.clone(),
+            }
+        }
     }
 }
