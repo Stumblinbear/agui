@@ -8,20 +8,20 @@ use super::{key::WidgetKey, AnyWidget, WidgetBuilder};
 pub enum WidgetRef {
     #[default]
     None,
-    Some(Option<WidgetKey>, Rc<dyn WidgetBuilder>),
+    Some(Option<WidgetKey>, Rc<dyn AnyWidget>),
 }
 
 impl WidgetRef {
     pub fn new<W>(widget: W) -> Self
     where
-        W: WidgetBuilder,
+        W: AnyWidget,
     {
         Self::new_with_key(None, widget)
     }
 
     pub fn new_with_key<W>(key: Option<WidgetKey>, widget: W) -> Self
     where
-        W: WidgetBuilder,
+        W: AnyWidget,
     {
         Self::Some(key, Rc::new(widget))
     }
@@ -122,4 +122,8 @@ impl From<&WidgetRef> for WidgetRef {
     fn from(widget: &WidgetRef) -> Self {
         widget.to_owned()
     }
+}
+
+pub trait IntoWidget: WidgetBuilder {
+    fn into_widget(self) -> WidgetRef;
 }

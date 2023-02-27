@@ -12,7 +12,11 @@ use self::{instance::ElementWidget, key::WidgetKey};
 
 pub use self::{context::*, inherited::*, r#ref::*, state::*, view::*};
 
-pub trait AnyWidget: 'static {
+pub trait WidgetBuilder: 'static {
+    fn create_element(self: Rc<Self>) -> Box<dyn ElementWidget>;
+}
+
+pub trait AnyWidget: WidgetBuilder {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
 
     fn type_name(&self) -> &'static str;
@@ -20,7 +24,7 @@ pub trait AnyWidget: 'static {
 
 impl<T> AnyWidget for T
 where
-    T: WidgetView + 'static,
+    T: WidgetBuilder,
 {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any> {
         self
@@ -31,8 +35,10 @@ where
     }
 }
 
-pub trait WidgetBuilder: AnyWidget {
-    fn create_element(self: Rc<Self>) -> Box<dyn ElementWidget>;
+impl dyn AnyWidget {
+    pub fn downcast<T: AnyWidget>(self: Rc<Self>) -> Option<Rc<T>> {
+        AnyWidget::as_any(self).downcast().ok()
+    }
 }
 
 pub trait IntoWidget: WidgetBuilder {

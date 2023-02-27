@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
 
-use crate::{element::Element, widget::WidgetBuilder};
+use crate::{element::Element, widget::AnyWidget};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
 pub struct QueryByType<I, W>
 where
-    W: WidgetBuilder,
+    W: AnyWidget,
 {
     pub(crate) iter: I,
     phantom: PhantomData<W>,
@@ -14,7 +14,7 @@ where
 
 impl<I, W> QueryByType<I, W>
 where
-    W: WidgetBuilder,
+    W: AnyWidget,
 {
     pub(super) fn new(iter: I) -> Self {
         Self {
@@ -26,7 +26,7 @@ where
 
 impl<'query, I, W> Iterator for QueryByType<I, W>
 where
-    W: WidgetBuilder + 'query,
+    W: AnyWidget + 'query,
     I: Iterator<Item = &'query Element>,
 {
     type Item = &'query Element;

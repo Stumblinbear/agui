@@ -13,7 +13,7 @@ use crate::{
             WidgetLayoutContext,
         },
         key::WidgetKey,
-        WidgetBuilder, WidgetRef,
+        AnyWidget, WidgetRef,
     },
 };
 
@@ -67,9 +67,9 @@ impl Element {
 
     pub fn get_widget<T>(&self) -> Option<Rc<T>>
     where
-        T: WidgetBuilder,
+        T: AnyWidget,
     {
-        self.widget.get_widget().as_any().downcast().ok()
+        self.widget.get_widget().downcast()
     }
 
     pub fn get_size(&self) -> Option<Size> {
@@ -158,7 +158,7 @@ impl Element {
             assert!(
                 offset.is_some(),
                 "{} did not position its child element during layout",
-                self.type_name()
+                self.widget.type_name()
             );
 
             let offset = offset.unwrap_or_default();

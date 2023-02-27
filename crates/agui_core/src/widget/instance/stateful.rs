@@ -22,7 +22,7 @@ use super::{
 
 pub struct StatefulInstance<W>
 where
-    W: WidgetView + WidgetState,
+    W: AnyWidget + WidgetView + WidgetState,
 {
     widget: Rc<W>,
     state: W::State,
@@ -32,7 +32,7 @@ where
 
 impl<W> StatefulInstance<W>
 where
-    W: WidgetView + WidgetState,
+    W: AnyWidget + WidgetView + WidgetState,
 {
     pub fn new(widget: Rc<W>) -> Self {
         let state = widget.create_state();
@@ -48,7 +48,7 @@ where
 
 impl<W> ElementWidget for StatefulInstance<W>
 where
-    W: WidgetView + WidgetState,
+    W: AnyWidget + WidgetView + WidgetState,
 {
     fn type_name(&self) -> &'static str {
         let type_name = self.widget.type_name();
@@ -209,7 +209,7 @@ where
 
 impl<W> std::fmt::Debug for StatefulInstance<W>
 where
-    W: WidgetState + WidgetView + std::fmt::Debug,
+    W: AnyWidget + WidgetState + WidgetView + std::fmt::Debug,
     <W as WidgetState>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

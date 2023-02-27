@@ -20,7 +20,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{key::WidgetKey, WidgetBuilder, WidgetRef},
+    widget::{key::WidgetKey, AnyWidget, WidgetRef},
 };
 
 pub mod events;
@@ -48,7 +48,7 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: WidgetBuilder,
+        W: AnyWidget,
     {
         let mut manager = Self::new();
 
@@ -115,7 +115,7 @@ impl WidgetManager {
     /// Queues the widget for addition into the tree
     pub fn set_root<W>(&mut self, widget: W)
     where
-        W: WidgetBuilder,
+        W: AnyWidget,
     {
         self.remove_root();
 

@@ -4,7 +4,7 @@ use crate::{
     element::{Element, ElementId},
     unit::Key,
     util::tree::{Tree, TreeNode},
-    widget::WidgetBuilder,
+    widget::AnyWidget,
 };
 
 pub mod by_key;
@@ -39,7 +39,7 @@ pub trait WidgetQueryExt<'query> {
     fn by_type<W>(self) -> QueryByType<Self, W>
     where
         Self: Sized,
-        W: WidgetBuilder;
+        W: AnyWidget;
 }
 
 impl<'query, I> WidgetQueryExt<'query> for I
@@ -52,7 +52,7 @@ where
 
     fn by_type<W>(self) -> QueryByType<Self, W>
     where
-        W: WidgetBuilder,
+        W: AnyWidget,
     {
         QueryByType::<Self, W>::new(self)
     }

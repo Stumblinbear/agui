@@ -12,7 +12,9 @@ use crate::{
     inheritance::Inheritance,
     unit::{Data, Key},
     util::tree::Tree,
-    widget::{InheritedWidget, WidgetBuilder, WidgetKey, WidgetRef, WidgetState, WidgetView},
+    widget::{
+        AnyWidget, InheritedWidget, WidgetBuilder, WidgetKey, WidgetRef, WidgetState, WidgetView,
+    },
 };
 
 use super::{ContextWidget, ContextWidgetMut, ContextWidgetState, ContextWidgetStateMut};
@@ -150,7 +152,7 @@ where
 
     pub fn key<C>(&mut self, key: Key, widget: C) -> WidgetRef
     where
-        C: WidgetBuilder,
+        C: AnyWidget,
     {
         if self.keyed_children.contains(&key) {
             panic!("cannot use the same key twice in a widget");

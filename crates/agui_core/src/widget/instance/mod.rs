@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use downcast_rs::Downcast;
-
 use crate::{
     callback::CallbackId,
     render::canvas::Canvas,
@@ -19,7 +17,7 @@ pub use context::*;
 pub use stateful::StatefulInstance;
 pub use stateless::StatelessInstance;
 
-pub trait ElementWidget: Downcast {
+pub trait ElementWidget {
     fn type_name(&self) -> &'static str;
 
     fn is_similar(&self, other: &WidgetRef) -> bool;
