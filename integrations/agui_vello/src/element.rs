@@ -125,8 +125,7 @@ impl CanvasElement {
                     text,
                     ..
                 } => {
-                    let transform =
-                        Affine::translate((rect.left as f64, (font.size + rect.top) as f64));
+                    let transform = Affine::translate((rect.left as f64, rect.top as f64));
 
                     let brush = &Brush::Solid(Color::rgba(
                         color.red as f64,
@@ -170,7 +169,7 @@ impl CanvasElement {
 
                                 if let Some(glyph) = provider.get(gid, Some(brush)) {
                                     let xform = transform
-                                        * Affine::translate((pen_x, 0.0))
+                                        * Affine::translate((pen_x, font.size as f64))
                                         * Affine::scale_non_uniform(1.0, -1.0);
 
                                     sb.append(&glyph, Some(xform));
