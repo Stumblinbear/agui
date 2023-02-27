@@ -273,7 +273,7 @@ impl WidgetView for Flex {
         let leading_space: f32;
         let between_space: f32;
 
-        let flip_main_axis = self.does_start_at_top_left(self.direction);
+        let flip_main_axis = !self.does_start_at_top_left(self.direction);
 
         match self.main_axis_alignment {
             MainAxisAlignment::Start => {
