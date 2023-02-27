@@ -401,7 +401,14 @@ impl Flex {
         ctx: &mut LayoutContext<Self>,
         constraints: Constraints,
     ) -> ComputedSizes {
-        let max_main_size = constraints.get_extent_max(self.direction);
+        let main_axis = self.direction;
+        let cross_axis = main_axis.opposite();
+
+        let max_size = constraints.biggest();
+
+        let max_main_size = max_size.get_extent(main_axis);
+        let max_cross_size = max_size.get_extent(cross_axis);
+
         let can_flex = max_main_size < f32::INFINITY;
 
         let mut allocated_size: f32 = 0.0; // Sum of the sizes of the non-flexible children.
@@ -421,14 +428,11 @@ impl Flex {
                 total_flex += flex;
                 last_flexible_child = Some(child_id);
             } else {
-                let main_axis = self.direction;
-                let cross_axis = main_axis.opposite();
-
                 let inner_constraints = if self.cross_axis_alignment == CrossAxisAlignment::Stretch
                 {
-                    Constraints::tight_for(cross_axis, constraints.get_extent_max(cross_axis))
+                    Constraints::tight_for(cross_axis, max_cross_size)
                 } else {
-                    Constraints::loose_for(cross_axis, constraints.get_extent_max(cross_axis))
+                    Constraints::loose_for(cross_axis, max_cross_size)
                 };
 
                 let child_size = ctx.compute_layout(*child_id, inner_constraints);
@@ -470,60 +474,43 @@ impl Flex {
 
                     let min_child_extent: f32 = match fit {
                         FlexFit::Tight => {
-                            assert!(
+                            debug_assert!(
                                 max_child_extent < f32::INFINITY,
                                 "Cannot have a tight-fit child in a flexible widget with infinite size."
                             );
 
-                            max_child_extent
+                            if max_child_extent.is_finite() {
+                                max_child_extent
+                            } else {
+                                0.0
+                            }
                         }
+
                         FlexFit::Loose => 0.0,
                     };
 
-                    let inner_constraints =
+                    let cross_constraints =
                         if self.cross_axis_alignment == CrossAxisAlignment::Stretch {
-                            match self.direction {
-                                Axis::Horizontal => Constraints {
-                                    min_width: min_child_extent,
-                                    max_width: max_child_extent,
-                                    min_height: constraints.max_height,
-                                    max_height: constraints.max_height,
-                                },
-                                Axis::Vertical => Constraints {
-                                    min_width: constraints.max_width,
-                                    max_width: constraints.max_width,
-                                    min_height: min_child_extent,
-                                    max_height: max_child_extent,
-                                },
-                            }
+                            constraints.only_along(cross_axis)
                         } else {
-                            match self.direction {
-                                Axis::Horizontal => Constraints {
-                                    min_width: min_child_extent,
-                                    max_width: max_child_extent,
-                                    max_height: constraints.max_height,
-                                    ..Default::default()
-                                },
-                                Axis::Vertical => Constraints {
-                                    max_width: constraints.max_width,
-                                    min_height: min_child_extent,
-                                    max_height: max_child_extent,
-                                    ..Default::default()
-                                },
-                            }
+                            constraints.only_along(cross_axis).loosen()
                         };
 
-                    let child_size = ctx.compute_layout(*child_id, inner_constraints);
-                    let child_main_size = child_size.get_extent(self.direction);
+                    let inner_constraints =
+                        Constraints::along_axis(main_axis, min_child_extent, max_child_extent)
+                            .enforce(cross_constraints);
 
-                    assert!(
+                    let child_size = ctx.compute_layout(*child_id, inner_constraints);
+                    let child_main_size = child_size.get_extent(main_axis);
+
+                    debug_assert!(
                         child_main_size <= max_child_extent,
                         "Child size exceeds the flex widget's maximum allowed size."
                     );
 
                     allocated_size += child_main_size;
                     allocated_flex_space += max_child_extent;
-                    cross_size = cross_size.max(child_size.get_extent(self.direction.opposite()));
+                    cross_size = cross_size.max(child_size.get_extent(cross_axis));
                 }
             }
         }

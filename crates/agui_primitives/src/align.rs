@@ -20,11 +20,8 @@ impl WidgetView for Align {
     fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
         let children = ctx.get_children();
 
-        let shrink_wrap_width =
-            self.width_factor.is_some() || constraints.max_width == f32::INFINITY;
-
-        let shrink_wrap_height =
-            self.height_factor.is_some() || constraints.max_height == f32::INFINITY;
+        let shrink_wrap_width = self.width_factor.is_some() || !constraints.has_bounded_width();
+        let shrink_wrap_height = self.height_factor.is_some() || !constraints.has_bounded_height();
 
         if !children.is_empty() {
             let child_id = *children.first().unwrap();
