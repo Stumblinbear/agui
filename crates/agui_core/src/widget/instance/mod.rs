@@ -10,10 +10,12 @@ use crate::{
 use super::AnyWidget;
 
 mod context;
+mod inherited;
 mod stateful;
 mod stateless;
 
 pub use context::*;
+pub use inherited::InheritedInstance;
 pub use stateful::StatefulInstance;
 pub use stateless::StatelessInstance;
 
@@ -35,7 +37,7 @@ pub trait ElementWidget {
 
     fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef>;
 
-    fn update(&mut self, other: WidgetRef) -> bool;
+    fn update(&mut self, old: WidgetRef) -> bool;
 
     fn paint(&self, size: Size) -> Option<Canvas>;
 

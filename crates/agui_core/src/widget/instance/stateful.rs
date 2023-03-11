@@ -10,8 +10,8 @@ use crate::{
     },
     unit::{Constraints, Data, IntrinsicDimension, Size},
     widget::{
-        BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetRef,
-        WidgetState, WidgetView,
+        inheritance::Inheritance, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext,
+        PaintContext, WidgetRef, WidgetState, WidgetView,
     },
 };
 
@@ -28,6 +28,8 @@ where
     state: W::State,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+
+    inheritance: Inheritance,
 }
 
 impl<W> StatefulInstance<W>
@@ -42,6 +44,8 @@ where
             state,
 
             callbacks: FnvHashMap::default(),
+
+            inheritance: Inheritance::default(),
         }
     }
 }
@@ -125,11 +129,11 @@ where
 
             element_id: ctx.element_id,
 
-            inheritance: ctx.inheritance,
-
             state: &mut self.state,
 
             callbacks: &mut self.callbacks,
+
+            inheritance: &mut self.inheritance,
 
             keyed_children: FnvHashSet::default(),
         };
@@ -137,14 +141,14 @@ where
         self.widget.build(&mut ctx).into_children()
     }
 
-    fn update(&mut self, other: WidgetRef) -> bool {
-        let other = other
+    fn update(&mut self, old: WidgetRef) -> bool {
+        let old = old
             .downcast::<W>()
             .expect("cannot update a widget instance with a different type");
 
-        let needs_build = self.widget.updated(&other);
+        let needs_build = self.widget.updated(&old);
 
-        self.widget = other;
+        self.widget = old;
 
         needs_build
     }
@@ -213,7 +217,7 @@ where
     <W as WidgetState>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("WidgetInstance");
+        let mut dbg = f.debug_struct("StatefulInstance");
         dbg.field("widget", &self.widget);
         dbg.field("state", &self.state);
         dbg.finish()

@@ -4,7 +4,6 @@ use slotmap::new_key_type;
 
 use crate::{
     callback::CallbackId,
-    inheritance::Inheritance,
     render::canvas::Canvas,
     unit::{Constraints, Data, IntrinsicDimension, Offset, Size},
     widget::{
@@ -30,10 +29,7 @@ new_key_type! {
 
 pub struct Element {
     key: Option<WidgetKey>,
-
     widget: Box<dyn ElementWidget>,
-
-    inheritance: Inheritance,
 
     size: Option<Size>,
     offset: Offset,
@@ -43,10 +39,7 @@ impl Element {
     pub(crate) fn new(key: Option<WidgetKey>, widget: Box<dyn ElementWidget>) -> Self {
         Self {
             key,
-
             widget,
-
-            inheritance: Inheritance::default(),
 
             size: None,
             offset: Offset::ZERO,
@@ -186,16 +179,14 @@ impl Element {
             callback_queue: ctx.callback_queue,
 
             element_id: ctx.element_id,
-
-            inheritance: &mut self.inheritance,
         })
     }
 
-    pub fn update(&mut self, other: WidgetRef) -> bool {
+    pub fn update(&mut self, old: WidgetRef) -> bool {
         let span = tracing::error_span!("update");
         let _enter = span.enter();
 
-        self.widget.update(other)
+        self.widget.update(old)
     }
 
     pub fn paint(&self) -> Option<Canvas> {

@@ -1,14 +1,30 @@
+use core::panic;
+
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{parse2, parse_quote, ItemStruct};
+use syn::{parse2, parse_quote, Field, ItemStruct};
 
 use crate::utils::resolve_agui_path;
 
-pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
+pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
     let agui_core = resolve_agui_path();
 
     let item: ItemStruct = match parse2(input) {
         Ok(item) => item,
         Err(err) => return err.into_compile_error(),
+    };
+
+    // Find the field with the #[child] attribute.
+    let Some(Field { ident: child_field, .. }) = item.fields.iter().find(|field| {
+        field
+            .attrs
+            .iter()
+            .any(|attr| attr.path.is_ident("child"))
+    }) else {
+            return syn::Error::new_spanned(
+                &item,
+                "InheritedWidget must have a field with a #[child] attribute.",
+            )
+            .into_compile_error()
     };
 
     let ident = &item.ident;
@@ -20,10 +36,10 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
             where
                 Self: Sized
             {
-                Box::new(#agui_core::widget::instance::StatefulInstance::new(self))
+                let child = self.#child_field.clone();
+
+                Box::new(#agui_core::widget::instance::InheritedInstance::new(self, child.clone()))
             }
         }
-
-        impl #impl_generics #agui_core::widget::InheritedWidget for #ident #ty_generics #where_clause { }
     }
 }

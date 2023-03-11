@@ -27,7 +27,7 @@ pub trait ContextWidget {
 }
 
 pub trait ContextWidgetMut: ContextWidget {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut <I as WidgetState>::State>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I>
     where
         I: InheritedWidget + 'static;
 

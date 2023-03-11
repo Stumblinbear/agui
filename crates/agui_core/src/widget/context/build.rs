@@ -9,11 +9,11 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
     element::{Element, ElementId},
-    inheritance::Inheritance,
     unit::{Data, Key},
     util::tree::Tree,
     widget::{
-        AnyWidget, InheritedWidget, WidgetBuilder, WidgetKey, WidgetRef, WidgetState, WidgetView,
+        inheritance::Inheritance, AnyWidget, InheritedWidget, WidgetKey, WidgetRef, WidgetState,
+        WidgetView,
     },
 };
 
@@ -31,11 +31,11 @@ where
 
     pub(crate) element_id: ElementId,
 
-    pub(crate) inheritance: &'ctx mut Inheritance,
-
     pub(crate) state: &'ctx mut dyn Data,
 
     pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+
+    pub(crate) inheritance: &'ctx mut Inheritance,
 
     pub(crate) keyed_children: FnvHashSet<Key>,
 }
@@ -82,7 +82,7 @@ impl<W> ContextWidgetMut for BuildContext<'_, W>
 where
     W: WidgetView,
 {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut <I as WidgetState>::State>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I>
     where
         I: InheritedWidget + 'static,
     {

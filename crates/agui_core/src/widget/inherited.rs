@@ -1,3 +1,6 @@
-use super::{WidgetState, WidgetView};
-
-pub trait InheritedWidget: WidgetView + WidgetState {}
+pub trait InheritedWidget: Sized + 'static {
+    #[allow(unused_variables)]
+    fn should_notify(&self, old: &Self) -> bool {
+        true
+    }
+}

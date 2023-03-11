@@ -3,7 +3,6 @@ use fnv::FnvHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
-    inheritance::Inheritance,
     unit::Offset,
     util::tree::Tree,
 };
@@ -14,8 +13,6 @@ pub struct WidgetBuildContext<'ctx> {
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
-
-    pub(crate) inheritance: &'ctx mut Inheritance,
 }
 
 pub struct WidgetCallbackContext<'ctx> {

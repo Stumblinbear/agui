@@ -12,7 +12,6 @@
 
 pub mod callback;
 pub mod element;
-pub mod inheritance;
 pub mod manager;
 pub mod query;
 pub mod render;

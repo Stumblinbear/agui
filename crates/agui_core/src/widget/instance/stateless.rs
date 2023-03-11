@@ -10,8 +10,8 @@ use crate::{
     },
     unit::{Constraints, Data, IntrinsicDimension, Size},
     widget::{
-        BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetRef,
-        WidgetState, WidgetView,
+        inheritance::Inheritance, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext,
+        PaintContext, WidgetRef, WidgetState, WidgetView,
     },
 };
 
@@ -27,6 +27,8 @@ where
     widget: Rc<W>,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+
+    inheritance: Inheritance,
 }
 
 impl<W> StatelessInstance<W>
@@ -38,6 +40,8 @@ where
             widget,
 
             callbacks: FnvHashMap::default(),
+
+            inheritance: Inheritance::default(),
         }
     }
 }
@@ -121,11 +125,11 @@ where
 
             element_id: ctx.element_id,
 
-            inheritance: ctx.inheritance,
-
             state: &mut (),
 
             callbacks: &mut self.callbacks,
+
+            inheritance: &mut self.inheritance,
 
             keyed_children: FnvHashSet::default(),
         };
@@ -200,7 +204,7 @@ where
     W: AnyWidget + WidgetState + WidgetView + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("WidgetInstance");
+        let mut dbg = f.debug_struct("StatelessInstance");
 
         dbg.field("widget", &self.widget);
 

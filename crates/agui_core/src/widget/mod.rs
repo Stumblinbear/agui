@@ -1,6 +1,7 @@
 use std::{any::Any, rc::Rc};
 
 mod context;
+pub mod inheritance;
 mod inherited;
 pub mod instance;
 pub mod key;
