@@ -11,9 +11,11 @@ use vello::{
     block_on_wgpu,
     glyph::GlyphContext,
     kurbo::{Affine, Vec2},
+    peniko::Color,
     util::{RenderContext, RenderSurface},
-    Renderer, Scene, SceneBuilder,
+    Renderer, RendererOptions, Scene, SceneBuilder,
 };
+use wgpu::Queue;
 
 use crate::element::RenderElement;
 
@@ -37,11 +39,21 @@ impl RenderManager {
     {
         let mut render_cx = RenderContext::new().unwrap();
 
-        let surface = render_cx.create_surface(&window, width, height).await;
+        let surface = render_cx
+            .create_surface(&window, width, height)
+            .await
+            .unwrap();
 
         let device_handle = &render_cx.devices[surface.dev_id];
 
-        let renderer = Renderer::new(&device_handle.device).unwrap();
+        let renderer = Renderer::new(
+            &device_handle.device,
+            &RendererOptions {
+                surface_format: Some(surface.config.format),
+                timestamp_period: device_handle.queue.get_timestamp_period(),
+            },
+        )
+        .unwrap();
 
         Self {
             surface,
@@ -181,8 +193,6 @@ impl RenderManager {
             element.canvas.end(transform, &mut builder);
         }
 
-        builder.finish();
-
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
@@ -230,6 +240,12 @@ impl RenderManager {
             .get_current_texture()
             .expect("failed to get surface texture");
 
+        let render_params = vello::RenderParams {
+            base_color: Color::BLACK,
+            width,
+            height,
+        };
+
         #[cfg(not(target_arch = "wasm32"))]
         {
             block_on_wgpu(
@@ -239,8 +255,7 @@ impl RenderManager {
                     &device_handle.queue,
                     &self.scene,
                     &surface_texture,
-                    width,
-                    height,
+                    &render_params,
                 ),
             )
             .expect("failed to render to surface");
@@ -255,8 +270,7 @@ impl RenderManager {
                 &device_handle.queue,
                 &self.scene,
                 &surface_texture,
-                width,
-                height,
+                &render_params,
             )
             .expect("failed to render to surface");
 
