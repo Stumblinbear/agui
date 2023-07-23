@@ -4,7 +4,7 @@ use crate::{
     callback::CallbackId,
     element::context::{ElementIntrinsicSizeContext, ElementLayoutContext},
     render::canvas::Canvas,
-    unit::{Constraints, Data, IntrinsicDimension, Size},
+    unit::{AsAny, Constraints, IntrinsicDimension, Size},
     widget::WidgetRef,
 };
 
@@ -26,7 +26,7 @@ pub enum ElementUpdate {
     Invalid,
 }
 
-pub trait WidgetElement: Data {
+pub trait WidgetElement: AsAny {
     fn widget_name(&self) -> &'static str;
 
     fn get_widget(&self) -> Rc<dyn AnyWidget>;
@@ -121,7 +121,7 @@ pub trait WidgetElement: Data {
         &mut self,
         ctx: WidgetCallbackContext,
         callback_id: CallbackId,
-        arg: &Box<dyn Data>,
+        arg: &Box<dyn AsAny>,
     ) -> bool {
         panic!("callbacks are not supported on this widget type");
     }

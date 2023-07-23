@@ -1,6 +1,6 @@
 use std::any::Any;
 
-pub trait Data: Any {
+pub trait AsAny: Any {
     fn as_any(&self) -> &dyn Any;
 
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -8,7 +8,7 @@ pub trait Data: Any {
     fn type_name(&self) -> &'static str;
 }
 
-impl<T> Data for T
+impl<T> AsAny for T
 where
     T: 'static,
 {
@@ -25,12 +25,12 @@ where
     }
 }
 
-impl dyn Data {
-    pub fn downcast_ref<T: Data>(&self) -> Option<&T> {
-        Data::as_any(self).downcast_ref()
+impl dyn AsAny {
+    pub fn downcast_ref<T: AsAny>(&self) -> Option<&T> {
+        AsAny::as_any(self).downcast_ref()
     }
 
-    pub fn downcast_mut<T: Data>(&mut self) -> Option<&mut T> {
-        Data::as_any_mut(self).downcast_mut()
+    pub fn downcast_mut<T: AsAny>(&mut self) -> Option<&mut T> {
+        AsAny::as_any_mut(self).downcast_mut()
     }
 }

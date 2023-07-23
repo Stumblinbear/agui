@@ -5,7 +5,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
     element::{Element, ElementId},
-    unit::Data,
+    unit::AsAny,
     util::tree::Tree,
     widget::{
         AnyWidget, ContextInheritedMut, ContextWidget, Inheritance, InheritedElement,
@@ -89,7 +89,7 @@ impl<W: 'static> BuildContext<'_, W> {
 
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
-        A: Data,
+        A: AsAny,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
         let callback = Callback::new::<F>(self.element_id, self.callback_queue.clone());

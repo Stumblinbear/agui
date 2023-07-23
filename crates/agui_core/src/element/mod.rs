@@ -5,7 +5,7 @@ use slotmap::new_key_type;
 use crate::{
     callback::CallbackId,
     render::canvas::Canvas,
-    unit::{Constraints, Data, IntrinsicDimension, Offset, Size},
+    unit::{AsAny, Constraints, IntrinsicDimension, Offset, Size},
     widget::{
         element::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
@@ -233,7 +233,7 @@ impl Element {
         &mut self,
         ctx: ElementCallbackContext,
         callback_id: CallbackId,
-        arg: &Box<dyn Data>,
+        arg: &Box<dyn AsAny>,
     ) -> bool {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();

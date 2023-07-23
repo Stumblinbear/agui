@@ -5,7 +5,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue},
     element::{Element, ElementId},
-    unit::{Data, Key},
+    unit::{AsAny, Key},
     util::tree::Tree,
     widget::{
         AnyWidget, ContextInheritedMut, ContextWidget, Inheritance, InheritedWidget, WidgetKey,
@@ -17,7 +17,7 @@ use super::{ContextWidgetState, StatefulCallbackContext};
 
 pub trait StatefulCallbackFunc<W> {
     #[allow(clippy::borrowed_box)]
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: &Box<dyn Data>);
+    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: &Box<dyn AsAny>);
 }
 
 pub struct StatefulCallbackFn<W, A, F>
@@ -46,10 +46,10 @@ where
 
 impl<W, A, F> StatefulCallbackFunc<W> for StatefulCallbackFn<W, A, F>
 where
-    A: Data,
+    A: AsAny,
     F: Fn(&mut StatefulCallbackContext<W>, &A),
 {
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: &Box<dyn Data>) {
+    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: &Box<dyn AsAny>) {
         let args = args
             .downcast_ref::<A>()
             .expect("failed to downcast callback args");
@@ -133,7 +133,7 @@ where
 
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
-        A: Data,
+        A: AsAny,
         F: Fn(&mut StatefulCallbackContext<S>, &A) + 'static,
     {
         let callback = Callback::new::<F>(self.element_id, self.callback_queue.clone());

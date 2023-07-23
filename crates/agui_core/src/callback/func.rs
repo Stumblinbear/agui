@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
 
-use crate::unit::Data;
+use crate::unit::AsAny;
 
 use super::CallbackContext;
 
 pub trait CallbackFunc<W> {
     #[allow(clippy::borrowed_box)]
-    fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn Data>);
+    fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn AsAny>);
 }
 
 pub struct CallbackFn<W, A, F>
@@ -35,10 +35,10 @@ where
 
 impl<W, A, F> CallbackFunc<W> for CallbackFn<W, A, F>
 where
-    A: Data,
+    A: AsAny,
     F: Fn(&mut CallbackContext<W>, &A),
 {
-    fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn Data>) {
+    fn call(&self, ctx: &mut CallbackContext<W>, args: &Box<dyn AsAny>) {
         let args = args
             .downcast_ref::<A>()
             .expect("failed to downcast callback args");

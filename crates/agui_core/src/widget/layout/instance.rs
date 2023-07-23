@@ -4,7 +4,7 @@ use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    unit::{Constraints, Data, IntrinsicDimension, Size},
+    unit::{AsAny, Constraints, IntrinsicDimension, Size},
     widget::{
         element::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
@@ -132,7 +132,7 @@ where
         &mut self,
         ctx: WidgetCallbackContext,
         callback_id: CallbackId,
-        arg: &Box<dyn Data>,
+        arg: &Box<dyn AsAny>,
     ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {

@@ -6,7 +6,7 @@ use crate::{
         painter::{CanvasPainter, Head},
         Canvas,
     },
-    unit::{Data, Size},
+    unit::{AsAny, Size},
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
         AnyWidget, IntoChildren, WidgetChild, WidgetPaint, WidgetRef,
@@ -85,7 +85,7 @@ where
         }
     }
 
-    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: &Box<dyn Data>) -> bool {
+    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: &Box<dyn AsAny>) -> bool {
         unreachable!("paint widgets do not have callbacks")
     }
 }

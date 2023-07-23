@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{element::ElementId, unit::Data};
+use crate::{element::ElementId, unit::AsAny};
 
 mod context;
 mod func;
@@ -29,7 +29,7 @@ impl CallbackId {
 #[derive(Default, Clone)]
 pub struct Callback<A>
 where
-    A: Data,
+    A: AsAny,
 {
     phantom: PhantomData<A>,
 
@@ -40,7 +40,7 @@ where
 
 impl<A> PartialEq for Callback<A>
 where
-    A: Data,
+    A: AsAny,
 {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
@@ -48,12 +48,12 @@ where
 }
 
 // #[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl<A> Send for Callback<A> where A: Data {}
-unsafe impl<A> Sync for Callback<A> where A: Data {}
+unsafe impl<A> Send for Callback<A> where A: AsAny {}
+unsafe impl<A> Sync for Callback<A> where A: AsAny {}
 
 impl<A> std::fmt::Debug for Callback<A>
 where
-    A: Data,
+    A: AsAny,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Callback").field(&self.id).finish()
@@ -62,7 +62,7 @@ where
 
 impl<A> Callback<A>
 where
-    A: Data,
+    A: AsAny,
 {
     pub(crate) fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
         Self {
@@ -92,7 +92,7 @@ where
 
 impl<A> Callback<A>
 where
-    A: Data,
+    A: AsAny,
 {
     pub fn call(&self, arg: A) {
         if let Some(callback_queue) = &self.callback_queue {
@@ -106,7 +106,7 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub fn call_unchecked(&self, arg: Box<dyn Data>) {
+    pub fn call_unchecked(&self, arg: Box<dyn AsAny>) {
         if let Some(callback_queue) = &self.callback_queue {
             if let Some(callback_id) = self.id {
                 callback_queue.call_unchecked(callback_id, arg);
