@@ -1,4 +1,4 @@
-use agui_core::widget::{BuildContext, WidgetRef, WidgetView};
+use agui_core::widget::{BuildContext, WidgetBuild, WidgetRef};
 use agui_macros::StatelessWidget;
 
 #[derive(StatelessWidget)]
@@ -18,7 +18,7 @@ impl Builder {
     }
 }
 
-impl WidgetView for Builder {
+impl WidgetBuild for Builder {
     type Child = WidgetRef;
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
@@ -31,7 +31,7 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, WidgetView},
+        widget::{BuildContext, WidgetBuild},
     };
     use agui_macros::StatelessWidget;
 
@@ -40,7 +40,7 @@ mod tests {
     #[derive(StatelessWidget, Debug, Default, PartialEq)]
     struct TestWidget {}
 
-    impl WidgetView for TestWidget {
+    impl WidgetBuild for TestWidget {
         type Child = ();
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {}

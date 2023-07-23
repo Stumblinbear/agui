@@ -1,4 +1,4 @@
-use super::TextDirection;
+use super::{Axis, TextDirection};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct EdgeInsets {
@@ -53,6 +53,13 @@ impl EdgeInsets {
 
     pub fn vertical(&self) -> f32 {
         self.top + self.bottom
+    }
+
+    pub fn axis(&self, axis: Axis) -> f32 {
+        match axis {
+            Axis::Horizontal => self.horizontal(),
+            Axis::Vertical => self.vertical(),
+        }
     }
 
     pub fn is_zero(&self) -> bool {

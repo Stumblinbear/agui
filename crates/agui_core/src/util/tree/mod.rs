@@ -237,11 +237,11 @@ mod tests {
         let root_id = tree.add(None, 0);
 
         assert!(
-            !tree.is_first_child(root_id),
+            tree.is_first_child(root_id),
             "root should return true for first child checks"
         );
         assert!(
-            !tree.is_last_child(root_id),
+            tree.is_last_child(root_id),
             "root should return true for last child checks"
         );
     }

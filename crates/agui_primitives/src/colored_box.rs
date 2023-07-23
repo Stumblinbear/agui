@@ -1,25 +1,20 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::Color,
-    widget::{BuildContext, PaintContext, WidgetRef, WidgetView},
+    widget::{WidgetPaint, WidgetRef},
 };
-use agui_macros::StatelessWidget;
+use agui_macros::PaintWidget;
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(PaintWidget, Debug, Default)]
 pub struct ColoredBox {
     pub color: Color,
 
+    #[child]
     pub child: WidgetRef,
 }
 
-impl WidgetView for ColoredBox {
-    type Child = WidgetRef;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
-    }
-
-    fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
+impl WidgetPaint for ColoredBox {
+    fn paint(&self, mut canvas: CanvasPainter) {
         canvas.draw_rect(&Paint {
             color: self.color,
 

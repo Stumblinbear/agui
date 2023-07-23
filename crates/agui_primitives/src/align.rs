@@ -1,10 +1,12 @@
 use agui_core::{
     unit::{Alignment, Constraints, Size},
-    widget::{BuildContext, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
+    widget::{
+        BuildContext, ContextWidgetLayoutMut, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
+    },
 };
-use agui_macros::StatelessWidget;
+use agui_macros::LayoutWidget;
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug, Default)]
 pub struct Align {
     pub alignment: Alignment,
 
@@ -14,19 +16,21 @@ pub struct Align {
     pub child: WidgetRef,
 }
 
-impl WidgetView for Align {
+impl WidgetBuild for Align {
     type Child = WidgetRef;
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
-        let children = ctx.get_children();
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        self.child.clone()
+    }
+}
 
+impl WidgetLayout for Align {
+    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
         let shrink_wrap_width = self.width_factor.is_some() || !constraints.has_bounded_width();
         let shrink_wrap_height = self.height_factor.is_some() || !constraints.has_bounded_height();
 
-        if !children.is_empty() {
-            let child_id = *children.first().unwrap();
-
-            let child_size = ctx.compute_layout(child_id, constraints.loosen());
+        if let Some(mut child) = ctx.iter_children_mut().next() {
+            let child_size = child.compute_layout(constraints.loosen());
 
             let size = constraints.constrain(Size {
                 width: shrink_wrap_width
@@ -38,7 +42,7 @@ impl WidgetView for Align {
                     .unwrap_or(f32::INFINITY),
             });
 
-            ctx.set_offset(0, self.alignment.along_size(size - child_size));
+            child.set_offset(self.alignment.along_size(size - child_size));
 
             size
         } else {
@@ -56,9 +60,5 @@ impl WidgetView for Align {
                 },
             })
         }
-    }
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
     }
 }

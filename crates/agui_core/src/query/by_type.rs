@@ -51,7 +51,7 @@ mod tests {
     use crate::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, WidgetRef, WidgetView},
+        widget::{BuildContext, WidgetBuild, WidgetRef},
     };
 
     #[derive(Default, StatelessWidget)]
@@ -65,7 +65,7 @@ mod tests {
         }
     }
 
-    impl WidgetView for TestWidget1 {
+    impl WidgetBuild for TestWidget1 {
         type Child = WidgetRef;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
@@ -84,7 +84,7 @@ mod tests {
         }
     }
 
-    impl WidgetView for TestWidget2 {
+    impl WidgetBuild for TestWidget2 {
         type Child = WidgetRef;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {

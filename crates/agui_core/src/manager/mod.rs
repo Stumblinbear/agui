@@ -20,7 +20,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{key::WidgetKey, AnyWidget, WidgetRef},
+    widget::{instance::ElementUpdate, key::WidgetKey, AnyWidget, WidgetRef},
 };
 
 pub mod events;
@@ -104,7 +104,7 @@ impl WidgetManager {
     pub fn remove_root(&mut self) {
         if let Some(root_id) = self.element_tree.get_root() {
             tracing::info!(
-                element = self.element_tree.get(root_id).unwrap().type_name(),
+                element = self.element_tree.get(root_id).unwrap().widget_name(),
                 "removing root widget"
             );
 
@@ -320,7 +320,7 @@ impl WidgetManager {
         for element_id in changed {
             tracing::trace!(
                 id = format!("{:?}", element_id).as_str(),
-                element = self.element_tree.get(element_id).unwrap().type_name(),
+                element = self.element_tree.get(element_id).unwrap().widget_name(),
                 "queueing widget for rebuild"
             );
 
@@ -354,7 +354,7 @@ impl WidgetManager {
                         if changed {
                             tracing::debug!(
                                 id = &format!("{:?}", element_id),
-                                element = element.type_name(),
+                                element = element.widget_name(),
                                 "element updated, queueing for rebuild"
                             );
 
@@ -408,17 +408,24 @@ impl WidgetManager {
         if let Some(existing_element_id) = existing_element_id {
             let existing_element = self.element_tree.get_mut(existing_element_id).unwrap();
 
-            // Check the existing child against the new child to see what we can safely do about retaining
-            // its state
-            if existing_element.is_similar(&widget_ref) {
-                // Widget is of the same type, so update the widget to see if it needs to be rebuilt. This will retain
-                // the element and the widget's state in the tree, but replace the widget instance with a new one.
-                let needs_rebuild = existing_element.update(widget_ref);
+            // Check the existing element against the new widget to see what we can safely
+            // do about retaining its state
+            match existing_element.update(&widget_ref) {
+                ElementUpdate::Noop => {
+                    return SpawnResult::Retained {
+                        element_id: existing_element_id,
+                        needs_rebuild: false,
+                    };
+                }
 
-                return SpawnResult::Retained {
-                    element_id: existing_element_id,
-                    needs_rebuild,
-                };
+                ElementUpdate::RebuildNecessary => {
+                    return SpawnResult::Retained {
+                        element_id: existing_element_id,
+                        needs_rebuild: true,
+                    };
+                }
+
+                ElementUpdate::Invalid => {}
             }
         }
 
@@ -507,8 +514,11 @@ impl WidgetManager {
                         {
                             tracing::trace!(
                                 parent_id = &format!("{:?}", element_id),
-                                element =
-                                    self.element_tree.get(keyed_element_id).unwrap().type_name(),
+                                element = self
+                                    .element_tree
+                                    .get(keyed_element_id)
+                                    .unwrap()
+                                    .widget_name(),
                                 "reparented widget"
                             );
 
@@ -638,11 +648,15 @@ enum SpawnResult {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::{build, StatelessWidget};
+    use agui_macros::{build, LayoutWidget, StatelessWidget};
 
     use crate::{
         manager::events::ElementEvent,
-        widget::{BuildContext, WidgetRef, WidgetView},
+        unit::{Constraints, Offset, Size},
+        widget::{
+            BuildContext, ContextWidgetLayoutMut, LayoutContext, WidgetBuild, WidgetLayout,
+            WidgetRef,
+        },
     };
 
     use super::WidgetManager;
@@ -658,12 +672,26 @@ mod tests {
         static BUILT: RefCell<Built> = RefCell::default();
     }
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(Default, LayoutWidget)]
     struct TestUnretainedWidget {
         pub children: Vec<WidgetRef>,
     }
 
-    impl WidgetView for TestUnretainedWidget {
+    impl WidgetLayout for TestUnretainedWidget {
+        fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+            let mut children = ctx.iter_children_mut();
+
+            while let Some(mut child) = children.next() {
+                child.compute_layout(constraints.biggest());
+
+                child.set_offset(Offset { x: 0.0, y: 0.0 });
+            }
+
+            Size::ZERO
+        }
+    }
+
+    impl WidgetBuild for TestUnretainedWidget {
         type Child = Vec<WidgetRef>;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
@@ -680,7 +708,7 @@ mod tests {
         pub children: Vec<WidgetRef>,
     }
 
-    impl WidgetView for TestRetainedWidget {
+    impl WidgetBuild for TestRetainedWidget {
         type Child = Vec<WidgetRef>;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
@@ -697,7 +725,7 @@ mod tests {
         pub children: Vec<WidgetRef>,
     }
 
-    impl WidgetView for TestNestedUnretainedWidget {
+    impl WidgetBuild for TestNestedUnretainedWidget {
         type Child = WidgetRef;
 
         #[allow(clippy::needless_update)]
@@ -720,7 +748,7 @@ mod tests {
     }
 
     #[allow(clippy::needless_update)]
-    impl WidgetView for TestNestedRetainedWidget {
+    impl WidgetBuild for TestNestedRetainedWidget {
         type Child = WidgetRef;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {

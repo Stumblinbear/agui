@@ -67,21 +67,30 @@ struct ExampleMain {
     font: Font,
 }
 
-impl WidgetState for ExampleMain {
-    type State = Option<SystemInfo>;
+impl StatefulWidget for ExampleMain {
+    type State = ExampleMainState;
 
     fn create_state(&self) -> Self::State {
-        None
+        ExampleMainState::default()
     }
 }
 
-impl WidgetView for ExampleMain {
+#[derive(Default)]
+struct ExampleMainState {
+    system_info: Option<SystemInfo>,
+}
+
+impl WidgetState for ExampleMainState {
+    type Widget = ExampleMain;
+
     type Child = WidgetRef;
 
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
+    fn build(&self, ctx: &mut StatefulContext<Self>) -> Self::Child {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
+            let system_info = system_info.clone();
+
             ctx.set_state(|state| {
-                state.replace(system_info.clone());
+                state.system_info.replace(system_info);
             });
         });
 
@@ -108,7 +117,7 @@ impl WidgetView for ExampleMain {
             });
         });
 
-        let lines = match ctx.get_state() {
+        let lines = match &self.system_info {
             None => vec!["Collecting system info...".into()],
 
             Some(sys) => vec![
@@ -140,7 +149,7 @@ impl WidgetView for ExampleMain {
                             .into_iter()
                             .map(|entry| {
                                 Text {
-                                    font: self.font.styled().color(Color::from_rgb((0.0, 0.0, 0.0))),
+                                    font: ctx.widget.font.styled().color(Color::from_rgb((0.0, 0.0, 0.0))),
                                     text: entry.into(),
                                 }
                                 .into()

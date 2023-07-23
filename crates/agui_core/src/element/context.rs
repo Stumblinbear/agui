@@ -34,7 +34,7 @@ pub struct ElementCallbackContext<'ctx> {
 }
 
 pub struct ElementIntrinsicSizeContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
     pub(crate) element_id: ElementId,
 }

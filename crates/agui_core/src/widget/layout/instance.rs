@@ -1,47 +1,39 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    render::canvas::{
-        painter::{CanvasPainter, Head},
-        Canvas,
-    },
     unit::{Constraints, Data, IntrinsicDimension, Size},
     widget::{
-        inheritance::Inheritance, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext,
-        PaintContext, WidgetRef, WidgetState, WidgetView,
+        inheritance::Inheritance,
+        instance::{
+            ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+            WidgetIntrinsicSizeContext, WidgetLayoutContext,
+        },
+        AnyWidget, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, WidgetLayout,
+        WidgetRef,
     },
 };
 
-use super::{
-    AnyWidget, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
-    WidgetIntrinsicSizeContext, WidgetLayoutContext,
-};
-
-pub struct StatefulInstance<W>
+pub struct LayoutInstance<W>
 where
-    W: AnyWidget + WidgetView + WidgetState,
+    W: AnyWidget + WidgetLayout,
 {
     widget: Rc<W>,
-    state: W::State,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 
     inheritance: Inheritance,
 }
 
-impl<W> StatefulInstance<W>
+impl<W> LayoutInstance<W>
 where
-    W: AnyWidget + WidgetView + WidgetState,
+    W: AnyWidget + WidgetLayout,
 {
     pub fn new(widget: Rc<W>) -> Self {
-        let state = widget.create_state();
-
         Self {
             widget,
-            state,
 
             callbacks: FnvHashMap::default(),
 
@@ -50,12 +42,12 @@ where
     }
 }
 
-impl<W> ElementWidget for StatefulInstance<W>
+impl<W> ElementWidget for LayoutInstance<W>
 where
-    W: AnyWidget + WidgetView + WidgetState,
+    W: AnyWidget + WidgetLayout,
 {
-    fn type_name(&self) -> &'static str {
-        let type_name = self.widget.type_name();
+    fn widget_name(&self) -> &'static str {
+        let type_name = self.widget.widget_name();
 
         type_name
             .split('<')
@@ -64,14 +56,6 @@ where
             .split("::")
             .last()
             .unwrap_or(type_name)
-    }
-
-    fn is_similar(&self, other: &WidgetRef) -> bool {
-        if let Some(other) = other.downcast::<W>() {
-            Rc::ptr_eq(&self.widget, &other)
-        } else {
-            false
-        }
     }
 
     fn get_widget(&self) -> Rc<dyn AnyWidget> {
@@ -91,7 +75,6 @@ where
                 element_tree: ctx.element_tree,
 
                 element_id: ctx.element_id,
-                state: &mut (),
 
                 children: ctx.children,
             },
@@ -108,7 +91,6 @@ where
                 element_tree: ctx.element_tree,
 
                 element_id: ctx.element_id,
-                state: &mut (),
 
                 children: ctx.children,
                 offsets: ctx.offsets,
@@ -129,52 +111,25 @@ where
 
             element_id: ctx.element_id,
 
-            state: &mut self.state,
-
             callbacks: &mut self.callbacks,
 
             inheritance: &mut self.inheritance,
-
-            keyed_children: FnvHashSet::default(),
         };
 
         self.widget.build(&mut ctx).into_children()
     }
 
-    fn update(&mut self, old: WidgetRef) -> bool {
-        let old = old
-            .downcast::<W>()
-            .expect("cannot update a widget instance with a different type");
+    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+        if let Some(new_widget) = new_widget.downcast::<W>() {
+            if Rc::ptr_eq(&self.widget, &new_widget) {
+                ElementUpdate::Noop
+            } else {
+                self.widget = new_widget;
 
-        let needs_build = self.widget.updated(&old);
-
-        self.widget = old;
-
-        needs_build
-    }
-
-    fn paint(&self, size: Size) -> Option<Canvas> {
-        let mut canvas = Canvas {
-            size,
-
-            head: Vec::default(),
-            children: Vec::default(),
-            tail: None,
-        };
-
-        let mut ctx = PaintContext {
-            phantom: PhantomData,
-
-            state: &self.state,
-        };
-
-        self.widget
-            .paint(&mut ctx, CanvasPainter::<Head>::begin(&mut canvas));
-
-        if !canvas.head.is_empty() || !canvas.children.is_empty() || canvas.tail.is_some() {
-            Some(canvas)
+                ElementUpdate::RebuildNecessary
+            }
         } else {
-            None
+            ElementUpdate::Invalid
         }
     }
 
@@ -192,34 +147,29 @@ where
                 dirty: ctx.dirty,
 
                 element_id: ctx.element_id,
-                state: &mut self.state,
-
-                changed: false,
             };
 
             callback.call(&mut ctx, arg);
-
-            ctx.changed
         } else {
             tracing::warn!(
                 callback_id = format!("{:?}", callback_id).as_str(),
                 "callback not found"
             );
-
-            false
         }
+
+        false
     }
 }
 
-impl<W> std::fmt::Debug for StatefulInstance<W>
+impl<W> std::fmt::Debug for LayoutInstance<W>
 where
-    W: AnyWidget + WidgetState + WidgetView + std::fmt::Debug,
-    <W as WidgetState>::State: std::fmt::Debug,
+    W: AnyWidget + WidgetLayout + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("StatefulInstance");
+        let mut dbg = f.debug_struct("LayoutInstance");
+
         dbg.field("widget", &self.widget);
-        dbg.field("state", &self.state);
+
         dbg.finish()
     }
 }

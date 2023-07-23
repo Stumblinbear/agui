@@ -1,10 +1,13 @@
 use agui_core::{
-    unit::{Axis, Constraints, Offset, Size},
-    widget::{BuildContext, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
+    unit::{Axis, Constraints, IntrinsicDimension, Offset, Size},
+    widget::{
+        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntrinsicSizeContext,
+        LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
+    },
 };
-use agui_macros::StatelessWidget;
+use agui_macros::LayoutWidget;
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug, Default)]
 pub struct SizedBox {
     pub width: Option<f32>,
     pub height: Option<f32>,
@@ -50,29 +53,46 @@ impl SizedBox {
     }
 }
 
-impl WidgetView for SizedBox {
+impl WidgetBuild for SizedBox {
     type Child = WidgetRef;
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
-        let children = ctx.get_children();
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        self.child.clone()
+    }
+}
 
+impl WidgetLayout for SizedBox {
+    fn intrinsic_size(
+        &self,
+        ctx: &mut IntrinsicSizeContext<Self>,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        match (dimension.axis(), self.width, self.height) {
+            (Axis::Horizontal, Some(width), _) => width,
+            (Axis::Vertical, _, Some(height)) => height,
+
+            _ => ctx
+                .iter_children()
+                .next()
+                .map(|child| child.compute_intrinsic_size(dimension, cross_extent))
+                .unwrap_or(0.0),
+        }
+    }
+
+    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
         let size = constraints.constrain(Size {
             width: self.width.unwrap_or(f32::INFINITY),
             height: self.height.unwrap_or(f32::INFINITY),
         });
 
-        if !children.is_empty() {
-            let child_id = *children.first().unwrap();
+        let mut children = ctx.iter_children_mut();
 
-            ctx.compute_layout(child_id, size);
-
-            ctx.set_offset(0, Offset { x: 0.0, y: 0.0 })
+        while let Some(mut child) = children.next() {
+            child.compute_layout(size);
+            child.set_offset(Offset::ZERO)
         }
 
         size
-    }
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
     }
 }

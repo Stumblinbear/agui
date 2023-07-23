@@ -1,11 +1,11 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
     widget::{
-        BuildContext, ContextWidgetLayout, IntoWidget, IntrinsicSizeContext, LayoutContext,
-        WidgetRef, WidgetView,
+        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntoWidget,
+        IntrinsicSizeContext, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
     },
 };
-use agui_macros::StatelessWidget;
+use agui_macros::LayoutWidget;
 
 use crate::TextBaseline;
 
@@ -95,7 +95,7 @@ where
     }
 }
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug, Default)]
 pub struct Flex {
     pub direction: Axis,
 
@@ -112,9 +112,18 @@ pub struct Flex {
     pub children: Vec<Flexible>,
 }
 
-impl WidgetView for Flex {
+impl WidgetBuild for Flex {
     type Child = Vec<WidgetRef>;
 
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        self.children
+            .iter()
+            .map(|entry| entry.child.clone())
+            .collect::<Vec<_>>()
+    }
+}
+
+impl WidgetLayout for Flex {
     fn intrinsic_size(
         &self,
         ctx: &mut IntrinsicSizeContext<Self>,
@@ -129,12 +138,14 @@ impl WidgetView for Flex {
             let mut inflexible_space = 0.0;
             let mut max_flex_fraction_so_far = 0.0_f32;
 
-            for (idx, child) in ctx.get_children().iter().enumerate() {
-                let flex = self.children[idx].flex;
+            let mut children = ctx.iter_children();
+
+            while let Some(child) = children.next() {
+                let flex = self.children[child.index()].flex;
 
                 total_flex += flex;
 
-                let child_size = ctx.compute_intrinsic_size(*child, dimension, cross_extent);
+                let child_size = child.compute_intrinsic_size(dimension, cross_extent);
 
                 if flex > 0.0 {
                     let flex_fraction = child_size / flex;
@@ -156,8 +167,10 @@ impl WidgetView for Flex {
             let mut inflexible_space = 0.0;
             let mut max_cross_size: f32 = 0.0;
 
-            for (idx, child) in ctx.get_children().iter().enumerate() {
-                let flex = self.children[idx].flex;
+            let mut children = ctx.iter_children();
+
+            while let Some(child) = children.next() {
+                let flex = self.children[child.index()].flex;
 
                 total_flex += flex;
 
@@ -168,20 +181,18 @@ impl WidgetView for Flex {
                 if flex == 0.0 {
                     match self.direction {
                         Axis::Horizontal => {
-                            main_size = ctx.compute_intrinsic_size(
-                                *child,
+                            main_size = child.compute_intrinsic_size(
                                 IntrinsicDimension::MaxWidth,
                                 f32::INFINITY,
                             );
-                            cross_size = ctx.compute_intrinsic_size(*child, dimension, main_size);
+                            cross_size = child.compute_intrinsic_size(dimension, main_size);
                         }
                         Axis::Vertical => {
-                            main_size = ctx.compute_intrinsic_size(
-                                *child,
+                            main_size = child.compute_intrinsic_size(
                                 IntrinsicDimension::MaxWidth,
                                 f32::INFINITY,
                             );
-                            cross_size = ctx.compute_intrinsic_size(*child, dimension, main_size);
+                            cross_size = child.compute_intrinsic_size(dimension, main_size);
                         }
                     }
 
@@ -195,15 +206,14 @@ impl WidgetView for Flex {
 
             let space_per_flex = ((available_space - inflexible_space) / total_flex).max(0.0);
 
-            for (idx, child) in ctx.get_children().iter().enumerate() {
-                let flex = self.children[idx].flex;
+            let mut children = ctx.iter_children();
+
+            while let Some(child) = children.next() {
+                let flex = self.children[child.index()].flex;
 
                 if flex > 0.0 {
-                    max_cross_size = max_cross_size.max(ctx.compute_intrinsic_size(
-                        *child,
-                        dimension,
-                        space_per_flex * flex,
-                    ));
+                    max_cross_size = max_cross_size
+                        .max(child.compute_intrinsic_size(dimension, space_per_flex * flex));
                 }
             }
 
@@ -294,16 +304,16 @@ impl WidgetView for Flex {
             MainAxisAlignment::SpaceBetween => {
                 leading_space = 0.0;
 
-                between_space = if !ctx.get_children().is_empty() {
-                    remaining_space / (ctx.get_children().len() - 1) as f32
+                between_space = if ctx.has_children() {
+                    remaining_space / (ctx.child_count() - 1) as f32
                 } else {
                     0.0
                 };
             }
 
             MainAxisAlignment::SpaceAround => {
-                between_space = if !ctx.get_children().is_empty() {
-                    remaining_space / ctx.get_children().len() as f32
+                between_space = if ctx.has_children() {
+                    remaining_space / ctx.child_count() as f32
                 } else {
                     0.0
                 };
@@ -312,8 +322,8 @@ impl WidgetView for Flex {
             }
 
             MainAxisAlignment::SpaceEvenly => {
-                between_space = if !ctx.get_children().is_empty() {
-                    remaining_space / (ctx.get_children().len() + 1) as f32
+                between_space = if ctx.has_children() {
+                    remaining_space / (ctx.child_count() + 1) as f32
                 } else {
                     0.0
                 };
@@ -328,7 +338,12 @@ impl WidgetView for Flex {
             leading_space
         };
 
-        for (idx, child_size) in child_sizes.iter().enumerate() {
+        let mut children = ctx.iter_children_mut();
+
+        for child_size in child_sizes.iter() {
+            // child_sizes is guaranteed to have the same length as the number of children
+            let mut child = children.next().unwrap();
+
             let cross_axis = self.direction.opposite();
 
             let child_cross_position = match self.cross_axis_alignment {
@@ -369,11 +384,11 @@ impl WidgetView for Flex {
 
             match self.direction {
                 Axis::Horizontal => {
-                    ctx.set_offset(idx, Offset::new(child_main_position, child_cross_position));
+                    child.set_offset(Offset::new(child_main_position, child_cross_position));
                 }
 
                 Axis::Vertical => {
-                    ctx.set_offset(idx, Offset::new(child_cross_position, child_main_position));
+                    child.set_offset(Offset::new(child_cross_position, child_main_position));
                 }
             };
 
@@ -385,13 +400,6 @@ impl WidgetView for Flex {
         }
 
         size
-    }
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.children
-            .iter()
-            .map(|entry| entry.child.clone())
-            .collect::<Vec<_>>()
     }
 }
 
@@ -417,16 +425,16 @@ impl Flex {
         let mut total_flex = 0.0;
         let mut last_flexible_child = None;
 
-        let children = ctx.get_children();
+        let mut child_sizes = Vec::with_capacity(ctx.child_count());
 
-        let mut child_sizes = Vec::with_capacity(children.len());
+        let mut children = ctx.iter_children_mut();
 
-        for (idx, child_id) in children.iter().enumerate() {
-            let flex = self.children[idx].flex;
+        while let Some(mut child) = children.next() {
+            let flex = self.children[child.index()].flex;
 
             if flex > 0.0 {
                 total_flex += flex;
-                last_flexible_child = Some(child_id);
+                last_flexible_child = Some(child.get_element_id());
             } else {
                 let inner_constraints = if self.cross_axis_alignment == CrossAxisAlignment::Stretch
                 {
@@ -435,7 +443,7 @@ impl Flex {
                     Constraints::loose_for(cross_axis, max_cross_size)
                 };
 
-                let child_size = ctx.compute_layout(*child_id, inner_constraints);
+                let child_size = child.compute_layout(inner_constraints);
 
                 child_sizes.push(child_size);
 
@@ -457,13 +465,15 @@ impl Flex {
                 f32::NAN
             };
 
-            for (idx, child_id) in ctx.get_children().iter().enumerate() {
-                let flex = self.children[idx].flex;
-                let fit = self.children[idx].fit;
+            let mut children = ctx.iter_children_mut();
+
+            while let Some(mut child) = children.next() {
+                let flex = self.children[child.index()].flex;
+                let fit = self.children[child.index()].fit;
 
                 if flex > 0.0 {
                     let max_child_extent = if can_flex {
-                        if Some(child_id) == last_flexible_child {
+                        if Some(child.get_element_id()) == last_flexible_child {
                             free_space - allocated_flex_space
                         } else {
                             space_per_flex * flex
@@ -500,7 +510,7 @@ impl Flex {
                         Constraints::along_axis(main_axis, min_child_extent, max_child_extent)
                             .enforce(cross_constraints);
 
-                    let child_size = ctx.compute_layout(*child_id, inner_constraints);
+                    let child_size = child.compute_layout(inner_constraints);
                     let child_main_size = child_size.get_extent(main_axis);
 
                     debug_assert!(

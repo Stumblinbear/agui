@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, TextDirection},
-    widget::{BuildContext, WidgetRef, WidgetView},
+    widget::{BuildContext, WidgetBuild, WidgetRef},
 };
 use agui_macros::{build, StatelessWidget};
 
@@ -23,7 +23,7 @@ pub struct Column {
     pub children: Vec<Flexible>,
 }
 
-impl WidgetView for Column {
+impl WidgetBuild for Column {
     type Child = WidgetRef;
 
     #[allow(clippy::needless_update)]

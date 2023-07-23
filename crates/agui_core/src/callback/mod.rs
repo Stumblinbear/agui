@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{element::ElementId, unit::Data, widget::WidgetView};
+use crate::{element::ElementId, unit::Data};
 
 mod context;
 mod func;
@@ -64,11 +64,7 @@ impl<A> Callback<A>
 where
     A: Data,
 {
-    pub(crate) fn new<F, W>(element_id: ElementId, callback_queue: CallbackQueue) -> Self
-    where
-        W: WidgetView,
-        F: Fn(&mut CallbackContext<W>, &A) + 'static,
-    {
+    pub(crate) fn new<F: 'static, W>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
         Self {
             phantom: PhantomData,
 
@@ -128,7 +124,7 @@ mod tests {
     use crate::{
         callback::Callback,
         manager::WidgetManager,
-        widget::{BuildContext, ContextWidgetMut, WidgetRef, WidgetView},
+        widget::{BuildContext, ContextWidgetMut, WidgetBuild, WidgetRef},
     };
 
     thread_local! {
@@ -141,7 +137,7 @@ mod tests {
         children: Vec<WidgetRef>,
     }
 
-    impl WidgetView for TestWidget {
+    impl WidgetBuild for TestWidget {
         type Child = Vec<WidgetRef>;
 
         fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {

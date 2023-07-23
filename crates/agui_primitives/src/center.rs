@@ -1,6 +1,6 @@
 use agui_core::{
     unit::Alignment,
-    widget::{BuildContext, WidgetRef, WidgetView},
+    widget::{BuildContext, WidgetBuild, WidgetRef},
 };
 use agui_macros::{build, StatelessWidget};
 
@@ -14,7 +14,7 @@ pub struct Center {
     pub child: WidgetRef,
 }
 
-impl WidgetView for Center {
+impl WidgetBuild for Center {
     type Child = WidgetRef;
 
     #[allow(clippy::needless_update)]

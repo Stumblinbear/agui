@@ -51,7 +51,7 @@ struct ExampleMain {
     font: Font,
 }
 
-impl WidgetView for ExampleMain {
+impl WidgetBuild for ExampleMain {
     type Child = WidgetRef;
 
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {

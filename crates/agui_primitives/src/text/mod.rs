@@ -2,10 +2,13 @@ use std::borrow::Cow;
 
 use agui_core::{
     render::{CanvasPainter, Paint},
-    unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, PaintContext, WidgetView},
+    unit::{Axis, Constraints, FontStyle, IntrinsicDimension, Size},
+    widget::{
+        BuildContext, ContextWidgetLayoutMut, IntrinsicSizeContext, LayoutContext, WidgetBuild,
+        WidgetLayout, WidgetPaint,
+    },
 };
-use agui_macros::StatelessWidget;
+use agui_macros::{LayoutWidget, PaintWidget};
 
 pub mod edit;
 pub mod query;
@@ -19,41 +22,59 @@ pub enum TextBaseline {
     Ideographic,
 }
 
-#[derive(StatelessWidget, Debug, Default, PartialEq)]
+#[derive(LayoutWidget, Debug, Default, PartialEq)]
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
 }
 
-impl WidgetView for Text {
-    type Child = ();
+impl WidgetBuild for Text {
+    type Child = TextPainter;
 
+    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+        TextPainter {
+            font: self.font.clone(),
+            text: Cow::clone(&self.text),
+        }
+    }
+}
+
+impl WidgetLayout for Text {
     fn intrinsic_size(
         &self,
         _: &mut IntrinsicSizeContext<Self>,
         dimension: IntrinsicDimension,
         _: f32,
     ) -> f32 {
-        match dimension {
-            // Need to do actual text layout to get the correct intrinsic width
-            IntrinsicDimension::MinWidth | IntrinsicDimension::MaxWidth => {
-                self.text.len() as f32 * self.font.size
-            }
-
-            IntrinsicDimension::MinHeight | IntrinsicDimension::MaxHeight => self.font.size,
+        match dimension.axis() {
+            // TODO: Actual text layout to get the correct intrinsic width
+            Axis::Horizontal => self.text.len() as f32 * self.font.size,
+            Axis::Vertical => self.font.size,
         }
     }
 
-    fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
-        Size {
+    fn layout(&self, ctx: &mut LayoutContext<Self>, _: Constraints) -> Size {
+        let size = Size {
             width: self.text.len() as f32 * self.font.size,
             height: self.font.size,
+        };
+
+        if let Some(mut child) = ctx.iter_children_mut().next() {
+            child.compute_layout(size);
         }
+
+        size
     }
+}
 
-    fn build(&self, _ctx: &mut BuildContext<Self>) -> Self::Child {}
+#[derive(PaintWidget, Debug, Default, PartialEq)]
+pub struct TextPainter {
+    pub font: FontStyle,
+    pub text: Cow<'static, str>,
+}
 
-    fn paint(&self, _ctx: &mut PaintContext<Self>, mut canvas: CanvasPainter) {
+impl WidgetPaint for TextPainter {
+    fn paint(&self, mut canvas: CanvasPainter) {
         canvas.draw_text(
             &Paint {
                 color: self.font.color,

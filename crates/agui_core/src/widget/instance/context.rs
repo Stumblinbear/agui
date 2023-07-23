@@ -23,7 +23,7 @@ pub struct WidgetCallbackContext<'ctx> {
 }
 
 pub struct WidgetIntrinsicSizeContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
     pub(crate) element_id: ElementId,
 
@@ -36,5 +36,5 @@ pub struct WidgetLayoutContext<'ctx> {
     pub(crate) element_id: ElementId,
 
     pub(crate) children: &'ctx [ElementId],
-    pub(crate) offsets: &'ctx mut [Option<Offset>],
+    pub(crate) offsets: &'ctx mut [Offset],
 }

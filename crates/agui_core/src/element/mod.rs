@@ -8,8 +8,8 @@ use crate::{
     unit::{Constraints, Data, IntrinsicDimension, Offset, Size},
     widget::{
         instance::{
-            ElementWidget, WidgetBuildContext, WidgetCallbackContext, WidgetIntrinsicSizeContext,
-            WidgetLayoutContext,
+            ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+            WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
         key::WidgetKey,
         AnyWidget, WidgetRef,
@@ -46,16 +46,12 @@ impl Element {
         }
     }
 
-    pub fn type_name(&self) -> &'static str {
-        self.widget.type_name()
+    pub fn widget_name(&self) -> &'static str {
+        self.widget.widget_name()
     }
 
     pub fn get_key(&self) -> Option<&WidgetKey> {
         self.key.as_ref()
-    }
-
-    pub fn is_similar(&self, other: &WidgetRef) -> bool {
-        self.widget.is_similar(other)
     }
 
     pub fn get_widget<T>(&self) -> Option<Rc<T>>
@@ -91,7 +87,7 @@ impl Element {
     ///
     /// Calling this function is expensive as it can result in O(N^2) behavior.
     pub fn intrinsic_size(
-        &mut self,
+        &self,
         ctx: ElementIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
@@ -128,11 +124,7 @@ impl Element {
             .cloned()
             .unwrap_or_default();
 
-        let mut offsets = Vec::with_capacity(children.len());
-
-        for _ in 0..children.len() {
-            offsets.push(None);
-        }
+        let mut offsets = vec![Offset::ZERO; children.len()];
 
         let size = self.widget.layout(
             WidgetLayoutContext {
@@ -147,17 +139,9 @@ impl Element {
             constraints,
         );
 
-        for (child_id, offset) in children.iter().enumerate().map(|(i, &id)| (id, offsets[i])) {
-            debug_assert!(
-                offset.is_some(),
-                "{} did not position its child element during layout",
-                self.widget.type_name()
-            );
-
-            let offset = offset.unwrap_or_default();
-
+        for (child_id, offset) in children.iter().zip(offsets) {
             ctx.element_tree
-                .get_mut(child_id)
+                .get_mut(*child_id)
                 .expect("child element missing during layout")
                 .offset = offset;
         }
@@ -182,11 +166,11 @@ impl Element {
         })
     }
 
-    pub fn update(&mut self, old: WidgetRef) -> bool {
+    pub fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
         let span = tracing::error_span!("update");
         let _enter = span.enter();
 
-        self.widget.update(old)
+        self.widget.update(new_widget)
     }
 
     pub fn paint(&self) -> Option<Canvas> {

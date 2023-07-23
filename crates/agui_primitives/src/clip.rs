@@ -1,28 +1,23 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Rect, Shape},
-    widget::{BuildContext, PaintContext, WidgetRef, WidgetView},
+    widget::{WidgetPaint, WidgetRef},
 };
-use agui_macros::StatelessWidget;
+use agui_macros::PaintWidget;
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(PaintWidget, Debug, Default)]
 pub struct Clip {
     pub rect: Option<Rect>,
 
     pub shape: Shape,
     pub anti_alias: bool,
 
+    #[child]
     pub child: WidgetRef,
 }
 
-impl WidgetView for Clip {
-    type Child = WidgetRef;
-
-    fn build(&self, _ctx: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
-    }
-
-    fn paint(&self, _ctx: &mut PaintContext<Self>, canvas: CanvasPainter) {
+impl WidgetPaint for Clip {
+    fn paint(&self, canvas: CanvasPainter) {
         let paint = Paint {
             anti_alias: self.anti_alias,
             ..Paint::default()

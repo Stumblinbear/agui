@@ -1,49 +1,39 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::rc::Rc;
 
-use crate::{
-    callback::CallbackId,
-    render::canvas::Canvas,
-    unit::{Constraints, Data, IntrinsicDimension, Size},
-    widget::{inheritance::InheritanceScope, InheritedWidget, LayoutContext, WidgetRef},
+use crate::widget::{
+    inheritance::InheritanceScope, InheritedWidget, IntoChildren, WidgetChild, WidgetRef,
 };
 
-use super::{
-    AnyWidget, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
-    WidgetIntrinsicSizeContext, WidgetLayoutContext,
-};
+use super::{AnyWidget, ElementUpdate, ElementWidget, WidgetBuildContext};
 
 pub struct InheritedInstance<W>
 where
-    W: AnyWidget + InheritedWidget,
+    W: AnyWidget + WidgetChild + InheritedWidget,
 {
     widget: Rc<W>,
 
     scope: InheritanceScope,
-
-    child: WidgetRef,
 }
 
 impl<W> InheritedInstance<W>
 where
-    W: AnyWidget + InheritedWidget,
+    W: AnyWidget + WidgetChild + InheritedWidget,
 {
-    pub fn new(widget: Rc<W>, child: WidgetRef) -> Self {
+    pub fn new(widget: Rc<W>) -> Self {
         Self {
             widget,
 
             scope: InheritanceScope::default(),
-
-            child,
         }
     }
 }
 
 impl<W> ElementWidget for InheritedInstance<W>
 where
-    W: AnyWidget + InheritedWidget,
+    W: AnyWidget + WidgetChild + InheritedWidget,
 {
-    fn type_name(&self) -> &'static str {
-        let type_name = self.widget.type_name();
+    fn widget_name(&self) -> &'static str {
+        let type_name = self.widget.widget_name();
 
         type_name
             .split('<')
@@ -54,50 +44,36 @@ where
             .unwrap_or(type_name)
     }
 
-    fn is_similar(&self, other: &WidgetRef) -> bool {
-        if let Some(other) = other.downcast::<W>() {
-            Rc::ptr_eq(&self.widget, &other)
-        } else {
-            false
-        }
-    }
-
     fn get_widget(&self) -> Rc<dyn AnyWidget> {
         Rc::clone(&self.widget) as Rc<dyn AnyWidget>
     }
 
-    fn intrinsic_size(&self, _: WidgetIntrinsicSizeContext, _: IntrinsicDimension, _: f32) -> f32 {
-        0.0
-    }
-
-    fn layout(&self, _: WidgetLayoutContext, _: Constraints) -> Size {
-        Size::new(0.0, 0.0)
-    }
-
     fn build(&mut self, _: WidgetBuildContext) -> Vec<WidgetRef> {
-        vec![self.child.clone()]
+        self.widget.get_child().into_children()
     }
 
-    fn update(&mut self, old: WidgetRef) -> bool {
-        let old = old
-            .downcast::<W>()
-            .expect("cannot update a widget instance with a different type");
+    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+        if let Some(new_widget) = new_widget.downcast::<W>() {
+            if Rc::ptr_eq(&self.widget, &new_widget) {
+                ElementUpdate::Noop
+            } else {
+                let should_notify = new_widget.should_notify(self.widget.as_ref());
 
-        self.widget.should_notify(old.as_ref())
-    }
+                self.widget = new_widget;
 
-    fn paint(&self, _: Size) -> Option<Canvas> {
-        None
-    }
+                // TODO: fire a notification to all children that depend on this widget
 
-    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: &Box<dyn Data>) -> bool {
-        false
+                ElementUpdate::RebuildNecessary
+            }
+        } else {
+            ElementUpdate::Invalid
+        }
     }
 }
 
 impl<W> std::fmt::Debug for InheritedInstance<W>
 where
-    W: AnyWidget + InheritedWidget + std::fmt::Debug,
+    W: AnyWidget + WidgetChild + InheritedWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("InheritedInstance");

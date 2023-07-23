@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::element::Element;
 
-use super::{key::WidgetKey, AnyWidget, WidgetBuilder};
+use super::{key::WidgetKey, AnyWidget};
 
 #[derive(Default, Clone)]
 pub enum WidgetRef {
@@ -28,7 +28,7 @@ impl WidgetRef {
 
     pub fn get_display_name(&self) -> Option<&str> {
         if let Self::Some(.., widget) = self {
-            let type_name = widget.type_name();
+            let type_name = widget.widget_name();
 
             Some(
                 type_name
@@ -71,6 +71,17 @@ impl WidgetRef {
         }
     }
 
+    pub fn is<W>(&self) -> bool
+    where
+        W: AnyWidget,
+    {
+        if let Self::Some(.., widget) = self {
+            Rc::clone(widget).as_any().is::<W>()
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn create(&self) -> Option<Element> {
         if let Self::Some(key, widget) = self {
             Some(Element::new(*key, Rc::clone(widget).create_element()))
@@ -92,6 +103,8 @@ impl std::fmt::Debug for WidgetRef {
                 key.fmt(f)?;
                 f.write_str(">")?;
             }
+
+            f.write_str(")")?;
 
             Ok(())
         } else {
@@ -122,8 +135,4 @@ impl From<&WidgetRef> for WidgetRef {
     fn from(widget: &WidgetRef) -> Self {
         widget.to_owned()
     }
-}
-
-pub trait IntoWidget: WidgetBuilder {
-    fn into_widget(self) -> WidgetRef;
 }

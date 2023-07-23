@@ -89,8 +89,8 @@ impl From<Color> for (f32, f32, f32) {
 }
 
 impl From<[f32; 3]> for Color {
-    fn from([red, green, blue]: [f32; 3]) -> Self {
-        Self::from_rgb((red, green, blue))
+    fn from(rgb: [f32; 3]) -> Self {
+        Self::from_rgb(rgb.into())
     }
 }
 
@@ -113,8 +113,8 @@ impl From<Color> for (f32, f32, f32, f32) {
 }
 
 impl From<[f32; 4]> for Color {
-    fn from([red, green, blue, alpha]: [f32; 4]) -> Self {
-        Self::from_rgba((red, green, blue, alpha))
+    fn from(rgba: [f32; 4]) -> Self {
+        Self::from_rgba(rgba.into())
     }
 }
 

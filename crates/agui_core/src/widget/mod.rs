@@ -5,33 +5,37 @@ pub mod inheritance;
 mod inherited;
 pub mod instance;
 pub mod key;
+mod layout;
+mod paint;
 mod r#ref;
-mod state;
-mod view;
+mod stateful;
+mod stateless;
 
 use self::{instance::ElementWidget, key::WidgetKey};
 
-pub use self::{context::*, inherited::*, r#ref::*, state::*, view::*};
+pub use self::{
+    context::*, inherited::*, layout::*, paint::*, r#ref::*, stateful::*, stateless::*,
+};
 
-pub trait WidgetBuilder: 'static {
+pub trait ElementBuilder: 'static {
     fn create_element(self: Rc<Self>) -> Box<dyn ElementWidget>;
 }
 
-pub trait AnyWidget: WidgetBuilder {
+pub trait AnyWidget: ElementBuilder {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
 
-    fn type_name(&self) -> &'static str;
+    fn widget_name(&self) -> &'static str;
 }
 
 impl<T> AnyWidget for T
 where
-    T: WidgetBuilder,
+    T: ElementBuilder,
 {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any> {
         self
     }
 
-    fn type_name(&self) -> &'static str {
+    fn widget_name(&self) -> &'static str {
         std::any::type_name::<Self>()
     }
 }
@@ -42,13 +46,13 @@ impl dyn AnyWidget {
     }
 }
 
-pub trait IntoWidget: WidgetBuilder {
+pub trait IntoWidget: ElementBuilder {
     fn into_widget(self) -> WidgetRef;
 }
 
 impl<W> IntoWidget for W
 where
-    W: WidgetBuilder,
+    W: ElementBuilder,
 {
     fn into_widget(self) -> WidgetRef {
         WidgetRef::new(self)
@@ -61,5 +65,33 @@ where
 {
     fn from(widget: W) -> Self {
         WidgetRef::new(widget)
+    }
+}
+
+pub trait IntoChildren {
+    fn into_children(self) -> Vec<WidgetRef>;
+}
+
+impl IntoChildren for () {
+    fn into_children(self) -> Vec<WidgetRef> {
+        Vec::new()
+    }
+}
+
+impl IntoChildren for Vec<WidgetRef> {
+    fn into_children(self) -> Vec<WidgetRef> {
+        self
+    }
+}
+
+impl IntoChildren for WidgetRef {
+    fn into_children(self) -> Vec<WidgetRef> {
+        vec![self]
+    }
+}
+
+impl<T: IntoWidget> IntoChildren for T {
+    fn into_children(self) -> Vec<WidgetRef> {
+        vec![self.into_widget()]
     }
 }

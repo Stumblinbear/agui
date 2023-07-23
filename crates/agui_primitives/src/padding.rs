@@ -1,36 +1,54 @@
 use agui_core::{
-    unit::{Constraints, EdgeInsets, Offset, Size},
-    widget::{BuildContext, ContextWidgetLayout, LayoutContext, WidgetRef, WidgetView},
+    unit::{Constraints, EdgeInsets, IntrinsicDimension, Offset, Size},
+    widget::{
+        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntrinsicSizeContext,
+        LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
+    },
 };
-use agui_macros::StatelessWidget;
+use agui_macros::LayoutWidget;
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug, Default)]
 pub struct Padding {
     pub padding: EdgeInsets,
 
     pub child: WidgetRef,
 }
 
-impl WidgetView for Padding {
+impl WidgetBuild for Padding {
     type Child = WidgetRef;
-
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
-        if let Some(child_id) = ctx.get_child() {
-            ctx.compute_layout(child_id, constraints.deflate(self.padding));
-
-            ctx.set_offset(
-                0,
-                Offset {
-                    x: self.padding.left,
-                    y: self.padding.top,
-                },
-            )
-        }
-
-        constraints.biggest()
-    }
 
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         self.child.clone()
+    }
+}
+
+impl WidgetLayout for Padding {
+    fn intrinsic_size(
+        &self,
+        ctx: &mut IntrinsicSizeContext<Self>,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        // TODO: should padding even be included in the intrinsic size?
+        self.padding.axis(dimension.axis())
+            + ctx
+                .iter_children()
+                .next()
+                .map(|child| child.compute_intrinsic_size(dimension, cross_extent))
+                .unwrap_or(0.0)
+    }
+
+    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+        let mut children = ctx.iter_children_mut();
+
+        while let Some(mut child) = children.next() {
+            child.compute_layout(constraints.deflate(self.padding));
+            child.set_offset(Offset {
+                x: self.padding.left,
+                y: self.padding.top,
+            })
+        }
+
+        constraints.biggest()
     }
 }
