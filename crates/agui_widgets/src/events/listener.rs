@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use agui_core::widget::{BuildContext, ContextWidgetMut, WidgetBuild};
+use agui_core::widget::{BuildContext, ContextInheritedMut, WidgetBuild};
 use agui_macros::StatelessWidget;
 
 use crate::EventChannel;

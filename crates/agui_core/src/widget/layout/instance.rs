@@ -6,17 +6,16 @@ use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     unit::{Constraints, Data, IntrinsicDimension, Size},
     widget::{
-        inheritance::Inheritance,
-        instance::{
-            ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+        element::{
+            ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
             WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
-        AnyWidget, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, WidgetLayout,
-        WidgetRef,
+        AnyWidget, BuildContext, Inheritance, IntoChildren, IntrinsicSizeContext, LayoutContext,
+        WidgetLayout, WidgetRef,
     },
 };
 
-pub struct LayoutInstance<W>
+pub struct LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout,
 {
@@ -27,7 +26,7 @@ where
     inheritance: Inheritance,
 }
 
-impl<W> LayoutInstance<W>
+impl<W> LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout,
 {
@@ -42,7 +41,7 @@ where
     }
 }
 
-impl<W> ElementWidget for LayoutInstance<W>
+impl<W> WidgetElement for LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout,
 {
@@ -161,12 +160,12 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for LayoutInstance<W>
+impl<W> std::fmt::Debug for LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("LayoutInstance");
+        let mut dbg = f.debug_struct("LayoutElement");
 
         dbg.field("widget", &self.widget);
 

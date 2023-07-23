@@ -15,7 +15,6 @@ use vello::{
     util::{RenderContext, RenderSurface},
     Renderer, RendererOptions, Scene, SceneBuilder,
 };
-use wgpu::Queue;
 
 use crate::element::RenderElement;
 

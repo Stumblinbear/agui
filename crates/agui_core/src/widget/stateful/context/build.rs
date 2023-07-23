@@ -8,8 +8,8 @@ use crate::{
     unit::{Data, Key},
     util::tree::Tree,
     widget::{
-        inheritance::Inheritance, AnyWidget, ContextWidget, InheritedWidget, WidgetKey, WidgetRef,
-        WidgetState,
+        AnyWidget, ContextInheritedMut, ContextWidget, Inheritance, InheritedWidget, WidgetKey,
+        WidgetRef, WidgetState,
     },
 };
 
@@ -131,7 +131,27 @@ where
         )
     }
 
-    pub fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I>
+    pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
+    where
+        A: Data,
+        F: Fn(&mut StatefulCallbackContext<S>, &A) + 'static,
+    {
+        let callback = Callback::new::<F, S>(self.element_id, self.callback_queue.clone());
+
+        self.callbacks.insert(
+            callback.get_id().unwrap(),
+            Box::new(StatefulCallbackFn::new(func)),
+        );
+
+        callback
+    }
+}
+
+impl<S> ContextInheritedMut for StatefulContext<'_, S>
+where
+    S: WidgetState,
+{
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I>
     where
         I: InheritedWidget + 'static,
     {
@@ -175,20 +195,5 @@ where
         // }
 
         None
-    }
-
-    pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
-    where
-        A: Data,
-        F: Fn(&mut StatefulCallbackContext<S>, &A) + 'static,
-    {
-        let callback = Callback::new::<F, S>(self.element_id, self.callback_queue.clone());
-
-        self.callbacks.insert(
-            callback.get_id().unwrap(),
-            Box::new(StatefulCallbackFn::new(func)),
-        );
-
-        callback
     }
 }

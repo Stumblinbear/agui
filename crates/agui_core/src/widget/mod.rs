@@ -1,24 +1,21 @@
 use std::{any::Any, rc::Rc};
 
 mod context;
-pub mod inheritance;
+pub mod element;
 mod inherited;
-pub mod instance;
-pub mod key;
+mod key;
 mod layout;
 mod paint;
 mod r#ref;
 mod stateful;
 mod stateless;
 
-use self::{instance::ElementWidget, key::WidgetKey};
-
 pub use self::{
-    context::*, inherited::*, layout::*, paint::*, r#ref::*, stateful::*, stateless::*,
+    context::*, inherited::*, key::*, layout::*, paint::*, r#ref::*, stateful::*, stateless::*,
 };
 
 pub trait ElementBuilder: 'static {
-    fn create_element(self: Rc<Self>) -> Box<dyn ElementWidget>;
+    fn create_element(self: Rc<Self>) -> Box<dyn self::element::WidgetElement>;
 }
 
 pub trait AnyWidget: ElementBuilder {

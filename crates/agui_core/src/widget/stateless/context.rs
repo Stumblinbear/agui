@@ -7,7 +7,7 @@ use crate::{
     element::{Element, ElementId},
     unit::Data,
     util::tree::Tree,
-    widget::{inheritance::Inheritance, ContextWidget, ContextWidgetMut, InheritedWidget},
+    widget::{ContextInheritedMut, ContextWidget, Inheritance, InheritedWidget},
 };
 
 pub struct BuildContext<'ctx, W> {
@@ -34,7 +34,7 @@ impl<W> ContextWidget<W> for BuildContext<'_, W> {
     }
 }
 
-impl<W: 'static> ContextWidgetMut<W> for BuildContext<'_, W> {
+impl<W> ContextInheritedMut for BuildContext<'_, W> {
     fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I>
     where
         I: InheritedWidget + 'static,
@@ -80,8 +80,14 @@ impl<W: 'static> ContextWidgetMut<W> for BuildContext<'_, W> {
 
         None
     }
+}
 
-    fn callback<A, F>(&mut self, func: F) -> Callback<A>
+impl<W: 'static> BuildContext<'_, W> {
+    pub fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
+    }
+
+    pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: Data,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
@@ -92,11 +98,5 @@ impl<W: 'static> ContextWidgetMut<W> for BuildContext<'_, W> {
             .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
 
         callback
-    }
-}
-
-impl<W> BuildContext<'_, W> {
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
     }
 }

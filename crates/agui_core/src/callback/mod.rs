@@ -124,7 +124,7 @@ mod tests {
     use crate::{
         callback::Callback,
         manager::WidgetManager,
-        widget::{BuildContext, ContextWidgetMut, WidgetBuild, WidgetRef},
+        widget::{BuildContext, WidgetBuild, WidgetRef},
     };
 
     thread_local! {

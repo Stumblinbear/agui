@@ -1,8 +1,7 @@
 use agui_core::{
-    unit::{Constraints, IntrinsicDimension, Offset, Size},
+    unit::{Constraints, Offset, Size},
     widget::{
-        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntrinsicSizeContext,
-        LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
+        BuildContext, ContextWidgetLayoutMut, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
     },
 };
 use agui_macros::LayoutWidget;

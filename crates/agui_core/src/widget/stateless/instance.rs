@@ -6,15 +6,14 @@ use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     unit::Data,
     widget::{
-        inheritance::Inheritance,
-        instance::{ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext},
-        AnyWidget, BuildContext, IntoChildren, WidgetRef,
+        element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
+        AnyWidget, BuildContext, Inheritance, IntoChildren, WidgetRef,
     },
 };
 
 use super::WidgetBuild;
 
-pub struct StatelessInstance<W>
+pub struct StatelessElement<W>
 where
     W: AnyWidget + WidgetBuild,
 {
@@ -25,7 +24,7 @@ where
     inheritance: Inheritance,
 }
 
-impl<W> StatelessInstance<W>
+impl<W> StatelessElement<W>
 where
     W: AnyWidget + WidgetBuild,
 {
@@ -40,7 +39,7 @@ where
     }
 }
 
-impl<W> ElementWidget for StatelessInstance<W>
+impl<W> WidgetElement for StatelessElement<W>
 where
     W: AnyWidget + WidgetBuild,
 {
@@ -124,12 +123,12 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for StatelessInstance<W>
+impl<W> std::fmt::Debug for StatelessElement<W>
 where
     W: AnyWidget + WidgetBuild + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("StatelessInstance");
+        let mut dbg = f.debug_struct("StatelessElement");
 
         dbg.field("widget", &self.widget);
 

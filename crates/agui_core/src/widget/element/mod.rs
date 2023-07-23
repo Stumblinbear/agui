@@ -11,10 +11,8 @@ use crate::{
 use super::AnyWidget;
 
 mod context;
-mod inherited;
 
 pub use context::*;
-pub use inherited::InheritedInstance;
 
 #[derive(Debug)]
 pub enum ElementUpdate {
@@ -28,7 +26,7 @@ pub enum ElementUpdate {
     Invalid,
 }
 
-pub trait ElementWidget {
+pub trait WidgetElement {
     fn widget_name(&self) -> &'static str;
 
     fn get_widget(&self) -> Rc<dyn AnyWidget>;
@@ -123,7 +121,7 @@ pub trait ElementWidget {
     }
 }
 
-impl std::fmt::Debug for Box<dyn ElementWidget> {
+impl std::fmt::Debug for Box<dyn WidgetElement> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(self.widget_name()).finish_non_exhaustive()
     }

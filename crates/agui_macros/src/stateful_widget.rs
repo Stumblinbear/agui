@@ -16,11 +16,11 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
 
     parse_quote! {
         impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
-            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::instance::ElementWidget>
+            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::element::WidgetElement>
             where
                 Self: Sized
             {
-                Box::new(#agui_core::widget::StatefulInstance::new(self))
+                Box::new(#agui_core::widget::StatefulElement::new(self))
             }
         }
     }

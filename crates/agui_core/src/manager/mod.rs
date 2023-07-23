@@ -20,7 +20,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{instance::ElementUpdate, key::WidgetKey, AnyWidget, WidgetRef},
+    widget::{element::ElementUpdate, AnyWidget, WidgetKey, WidgetRef},
 };
 
 pub mod events;

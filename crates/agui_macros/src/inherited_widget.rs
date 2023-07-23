@@ -41,11 +41,11 @@ pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
         }
 
         impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
-            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::instance::ElementWidget>
+            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::element::WidgetElement>
             where
                 Self: Sized
             {
-                Box::new(#agui_core::widget::instance::InheritedInstance::new(self))
+                Box::new(#agui_core::widget::InheritedElement::new(self))
             }
         }
     }

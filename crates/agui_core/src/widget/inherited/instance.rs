@@ -1,12 +1,11 @@
 use std::rc::Rc;
 
 use crate::widget::{
-    inheritance::InheritanceScope, InheritedWidget, IntoChildren, WidgetChild, WidgetRef,
+    element::{ElementUpdate, WidgetBuildContext, WidgetElement},
+    AnyWidget, InheritanceScope, InheritedWidget, IntoChildren, WidgetChild, WidgetRef,
 };
 
-use super::{AnyWidget, ElementUpdate, ElementWidget, WidgetBuildContext};
-
-pub struct InheritedInstance<W>
+pub struct InheritedElement<W>
 where
     W: AnyWidget + WidgetChild + InheritedWidget,
 {
@@ -15,7 +14,7 @@ where
     scope: InheritanceScope,
 }
 
-impl<W> InheritedInstance<W>
+impl<W> InheritedElement<W>
 where
     W: AnyWidget + WidgetChild + InheritedWidget,
 {
@@ -28,7 +27,7 @@ where
     }
 }
 
-impl<W> ElementWidget for InheritedInstance<W>
+impl<W> WidgetElement for InheritedElement<W>
 where
     W: AnyWidget + WidgetChild + InheritedWidget,
 {
@@ -71,12 +70,12 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for InheritedInstance<W>
+impl<W> std::fmt::Debug for InheritedElement<W>
 where
     W: AnyWidget + WidgetChild + InheritedWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("InheritedInstance");
+        let mut dbg = f.debug_struct("InheritedElement");
 
         dbg.field("widget", &self.widget);
 

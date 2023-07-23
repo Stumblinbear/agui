@@ -6,15 +6,14 @@ use crate::{
     callback::CallbackId,
     unit::Data,
     widget::{
-        inheritance::Inheritance,
-        instance::{ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext},
-        AnyWidget, IntoChildren, StatefulCallbackFunc, WidgetRef,
+        element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
+        AnyWidget, Inheritance, IntoChildren, StatefulCallbackFunc, WidgetRef,
     },
 };
 
 use super::{StatefulCallbackContext, StatefulContext, StatefulWidget, WidgetState};
 
-pub struct StatefulInstance<W>
+pub struct StatefulElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -26,7 +25,7 @@ where
     inheritance: Inheritance,
 }
 
-impl<W> StatefulInstance<W>
+impl<W> StatefulElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -44,7 +43,7 @@ where
     }
 }
 
-impl<W> ElementWidget for StatefulInstance<W>
+impl<W> WidgetElement for StatefulElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -146,13 +145,13 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for StatefulInstance<W>
+impl<W> std::fmt::Debug for StatefulElement<W>
 where
     W: AnyWidget + StatefulWidget + std::fmt::Debug,
     <W as StatefulWidget>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("StatefulInstance");
+        let mut dbg = f.debug_struct("StatefulElement");
         dbg.field("widget", &self.widget);
         dbg.field("state", &self.state);
         dbg.finish()

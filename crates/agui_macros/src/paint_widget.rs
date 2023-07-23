@@ -46,19 +46,15 @@ pub fn impl_paint_widget(input: TokenStream2) -> TokenStream2 {
         },
     };
 
-    // let child = self.#child_field.clone();
-
-    // Box::new(#agui_core::widget::PaintInstance::new(self))
-
     parse_quote! {
         #build_impl
 
         impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
-            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::instance::ElementWidget>
+            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::element::WidgetElement>
             where
                 Self: Sized
             {
-                Box::new(#agui_core::widget::PaintInstance::new(self))
+                Box::new(#agui_core::widget::PaintElement::new(self))
             }
         }
     }

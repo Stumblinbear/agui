@@ -7,12 +7,11 @@ use crate::{
     render::canvas::Canvas,
     unit::{Constraints, Data, IntrinsicDimension, Offset, Size},
     widget::{
-        instance::{
-            ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+        element::{
+            ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
             WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
-        key::WidgetKey,
-        AnyWidget, WidgetRef,
+        AnyWidget, WidgetKey, WidgetRef,
     },
 };
 
@@ -29,14 +28,14 @@ new_key_type! {
 
 pub struct Element {
     key: Option<WidgetKey>,
-    widget: Box<dyn ElementWidget>,
+    widget: Box<dyn WidgetElement>,
 
     size: Option<Size>,
     offset: Offset,
 }
 
 impl Element {
-    pub(crate) fn new(key: Option<WidgetKey>, widget: Box<dyn ElementWidget>) -> Self {
+    pub(crate) fn new(key: Option<WidgetKey>, widget: Box<dyn WidgetElement>) -> Self {
         Self {
             key,
             widget,

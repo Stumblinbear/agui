@@ -8,19 +8,19 @@ use crate::{
     },
     unit::{Data, Size},
     widget::{
-        instance::{ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext},
+        element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
         AnyWidget, IntoChildren, WidgetChild, WidgetPaint, WidgetRef,
     },
 };
 
-pub struct PaintInstance<W>
+pub struct PaintElement<W>
 where
     W: AnyWidget + WidgetChild + WidgetPaint,
 {
     widget: Rc<W>,
 }
 
-impl<W> PaintInstance<W>
+impl<W> PaintElement<W>
 where
     W: AnyWidget + WidgetChild + WidgetPaint,
 {
@@ -29,7 +29,7 @@ where
     }
 }
 
-impl<W> ElementWidget for PaintInstance<W>
+impl<W> WidgetElement for PaintElement<W>
 where
     W: AnyWidget + WidgetChild + WidgetPaint,
 {
@@ -90,12 +90,12 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for PaintInstance<W>
+impl<W> std::fmt::Debug for PaintElement<W>
 where
     W: AnyWidget + WidgetChild + WidgetPaint + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("PaintInstance");
+        let mut dbg = f.debug_struct("PaintElement");
 
         dbg.field("widget", &self.widget);
 
