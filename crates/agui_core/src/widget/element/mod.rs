@@ -26,10 +26,14 @@ pub enum ElementUpdate {
     Invalid,
 }
 
-pub trait WidgetElement {
+pub trait WidgetElement: Data {
     fn widget_name(&self) -> &'static str;
 
     fn get_widget(&self) -> Rc<dyn AnyWidget>;
+
+    fn mount(&self, ctx: WidgetMountContext) {}
+
+    fn unmount(&self, ctx: WidgetUnmountContext) {}
 
     fn intrinsic_size(
         &self,
@@ -106,10 +110,12 @@ pub trait WidgetElement {
     /// Returns true if the widget is of the same type as the other widget.
     fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate;
 
+    #[allow(unused_variables)]
     fn paint(&self, size: Size) -> Option<Canvas> {
         None
     }
 
+    #[allow(unused_variables)]
     #[allow(clippy::borrowed_box)]
     fn call(
         &mut self,

@@ -1,35 +1,33 @@
 use std::rc::Rc;
 
 use crate::widget::{
-    element::{ElementUpdate, WidgetBuildContext, WidgetElement},
-    AnyWidget, InheritanceScope, InheritedWidget, IntoChildren, WidgetChild, WidgetRef,
+    element::{
+        ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext, WidgetUnmountContext,
+    },
+    AnyWidget, InheritedWidget, IntoChildren, WidgetRef,
 };
 
-pub struct InheritedElement<W>
-where
-    W: AnyWidget + WidgetChild + InheritedWidget,
-{
-    widget: Rc<W>,
+use super::Inheritance;
 
-    scope: InheritanceScope,
+pub struct InheritedElement<I>
+where
+    I: AnyWidget + InheritedWidget,
+{
+    widget: Rc<I>,
 }
 
-impl<W> InheritedElement<W>
+impl<I> InheritedElement<I>
 where
-    W: AnyWidget + WidgetChild + InheritedWidget,
+    I: AnyWidget + InheritedWidget,
 {
-    pub fn new(widget: Rc<W>) -> Self {
-        Self {
-            widget,
-
-            scope: InheritanceScope::default(),
-        }
+    pub fn new(widget: Rc<I>) -> Self {
+        Self { widget }
     }
 }
 
-impl<W> WidgetElement for InheritedElement<W>
+impl<I> WidgetElement for InheritedElement<I>
 where
-    W: AnyWidget + WidgetChild + InheritedWidget,
+    I: AnyWidget + InheritedWidget,
 {
     fn widget_name(&self) -> &'static str {
         let type_name = self.widget.widget_name();
@@ -47,12 +45,19 @@ where
         Rc::clone(&self.widget) as Rc<dyn AnyWidget>
     }
 
-    fn build(&mut self, _: WidgetBuildContext) -> Vec<WidgetRef> {
+    fn mount(&self, ctx: WidgetMountContext) {
+        *ctx.inheritance =
+            Inheritance::new_scope::<I>(ctx.inheritance.get_ancestor_scope(), ctx.element_id);
+    }
+
+    fn unmount(&self, ctx: WidgetUnmountContext) {}
+
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
         self.widget.get_child().into_children()
     }
 
     fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
-        if let Some(new_widget) = new_widget.downcast::<W>() {
+        if let Some(new_widget) = new_widget.downcast::<I>() {
             if Rc::ptr_eq(&self.widget, &new_widget) {
                 ElementUpdate::Noop
             } else {
@@ -70,9 +75,18 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for InheritedElement<W>
+impl<I> InheritedElement<I>
 where
-    W: AnyWidget + WidgetChild + InheritedWidget + std::fmt::Debug,
+    I: AnyWidget + InheritedWidget,
+{
+    pub fn get_inherited_widget(&self) -> &I {
+        &self.widget
+    }
+}
+
+impl<I> std::fmt::Debug for InheritedElement<I>
+where
+    I: AnyWidget + InheritedWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("InheritedElement");

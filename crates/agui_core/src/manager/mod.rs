@@ -2,6 +2,7 @@ use std::{
     collections::VecDeque,
     fs::File,
     io::{self, BufReader, Read},
+    rc::Rc,
 };
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -20,7 +21,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{element::ElementUpdate, AnyWidget, WidgetKey, WidgetRef},
+    widget::{element::ElementUpdate, AnyWidget, Inheritance, WidgetKey, WidgetRef},
 };
 
 pub mod events;
@@ -400,9 +401,9 @@ impl WidgetManager {
         widget_ref: WidgetRef,
         existing_element_id: Option<ElementId>,
     ) -> SpawnResult {
-        if widget_ref.is_none() {
+        let WidgetRef::Some(key, widget) = &widget_ref else {
             return SpawnResult::Empty;
-        }
+        };
 
         // Grab the existing element in the tree
         if let Some(existing_element_id) = existing_element_id {
@@ -435,7 +436,22 @@ impl WidgetManager {
             "spawning widget"
         );
 
-        let element = widget_ref.create().unwrap();
+        // Inherit the parent's scope
+        let inheritance_scope = parent_id.and_then(|parent_id| {
+            let inheritance = self.element_tree.get(parent_id).unwrap().get_inheritance();
+
+            if inheritance.is_scope() {
+                Some(parent_id)
+            } else {
+                inheritance.get_ancestor_scope()
+            }
+        });
+
+        let element = Element::new(
+            *key,
+            Rc::clone(widget).create_element(),
+            Inheritance::new_node(inheritance_scope),
+        );
 
         let element_id = self.element_tree.add(parent_id, element);
 

@@ -10,8 +10,8 @@ use crate::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
             WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
-        AnyWidget, BuildContext, Inheritance, IntoChildren, IntrinsicSizeContext, LayoutContext,
-        WidgetLayout, WidgetRef,
+        AnyWidget, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, WidgetLayout,
+        WidgetRef,
     },
 };
 
@@ -22,8 +22,6 @@ where
     widget: Rc<W>,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
-
-    inheritance: Inheritance,
 }
 
 impl<W> LayoutElement<W>
@@ -35,8 +33,6 @@ where
             widget,
 
             callbacks: FnvHashMap::default(),
-
-            inheritance: Inheritance::default(),
         }
     }
 }
@@ -112,7 +108,7 @@ where
 
             callbacks: &mut self.callbacks,
 
-            inheritance: &mut self.inheritance,
+            inheritance: ctx.inheritance,
         };
 
         self.widget.build(&mut ctx).into_children()

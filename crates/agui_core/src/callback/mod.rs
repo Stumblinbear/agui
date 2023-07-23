@@ -64,7 +64,7 @@ impl<A> Callback<A>
 where
     A: Data,
 {
-    pub(crate) fn new<F: 'static, W>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
+    pub(crate) fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
         Self {
             phantom: PhantomData,
 

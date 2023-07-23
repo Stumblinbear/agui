@@ -9,9 +9,10 @@ use crate::{
     widget::{
         element::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
-            WidgetIntrinsicSizeContext, WidgetLayoutContext,
+            WidgetIntrinsicSizeContext, WidgetLayoutContext, WidgetMountContext,
+            WidgetUnmountContext,
         },
-        AnyWidget, WidgetKey, WidgetRef,
+        AnyWidget, Inheritance, WidgetKey, WidgetRef,
     },
 };
 
@@ -28,25 +29,33 @@ new_key_type! {
 
 pub struct Element {
     key: Option<WidgetKey>,
-    widget: Box<dyn WidgetElement>,
+    widget_element: Box<dyn WidgetElement>,
 
     size: Option<Size>,
     offset: Offset,
+
+    inheritance: Inheritance,
 }
 
 impl Element {
-    pub(crate) fn new(key: Option<WidgetKey>, widget: Box<dyn WidgetElement>) -> Self {
+    pub(crate) fn new(
+        key: Option<WidgetKey>,
+        widget_element: Box<dyn WidgetElement>,
+        inheritance: Inheritance,
+    ) -> Self {
         Self {
             key,
-            widget,
+            widget_element,
 
             size: None,
             offset: Offset::ZERO,
+
+            inheritance,
         }
     }
 
     pub fn widget_name(&self) -> &'static str {
-        self.widget.widget_name()
+        self.widget_element.widget_name()
     }
 
     pub fn get_key(&self) -> Option<&WidgetKey> {
@@ -57,7 +66,7 @@ impl Element {
     where
         T: AnyWidget,
     {
-        self.widget.get_widget().downcast()
+        self.widget_element.get_widget().downcast()
     }
 
     pub fn get_size(&self) -> Option<Size> {
@@ -68,14 +77,52 @@ impl Element {
         self.offset
     }
 
-    pub fn mount(&mut self, _ctx: ElementMountContext) {
-        let span = tracing::error_span!("mount");
-        let _enter = span.enter();
+    pub fn get_inheritance(&self) -> &Inheritance {
+        &self.inheritance
     }
 
-    pub fn unmount(&mut self, _ctx: ElementUnmountContext) {
+    pub fn get_inheritance_mut(&mut self) -> &mut Inheritance {
+        &mut self.inheritance
+    }
+
+    pub fn downcast<E>(&self) -> Option<&E>
+    where
+        E: WidgetElement + 'static,
+    {
+        (*self.widget_element).as_any().downcast_ref::<E>()
+    }
+
+    pub fn downcast_mut<E>(&mut self) -> Option<&mut E>
+    where
+        E: WidgetElement + 'static,
+    {
+        (*self.widget_element).as_any_mut().downcast_mut::<E>()
+    }
+
+    pub fn mount(&mut self, ctx: ElementMountContext) {
+        let span = tracing::error_span!("mount");
+        let _enter = span.enter();
+
+        self.widget_element.mount(WidgetMountContext {
+            element_tree: ctx.element_tree,
+
+            element_id: ctx.element_id,
+
+            inheritance: &mut self.inheritance,
+        })
+    }
+
+    pub fn unmount(&mut self, ctx: ElementUnmountContext) {
         let span = tracing::error_span!("unmount");
         let _enter = span.enter();
+
+        self.widget_element.unmount(WidgetUnmountContext {
+            element_tree: ctx.element_tree,
+
+            element_id: ctx.element_id,
+
+            inheritance: &mut self.inheritance,
+        })
     }
 
     /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
@@ -100,7 +147,7 @@ impl Element {
             .cloned()
             .unwrap_or_default();
 
-        self.widget.intrinsic_size(
+        self.widget_element.intrinsic_size(
             WidgetIntrinsicSizeContext {
                 element_tree: ctx.element_tree,
 
@@ -125,7 +172,7 @@ impl Element {
 
         let mut offsets = vec![Offset::ZERO; children.len()];
 
-        let size = self.widget.layout(
+        let size = self.widget_element.layout(
             WidgetLayoutContext {
                 element_tree: ctx.element_tree,
 
@@ -156,12 +203,14 @@ impl Element {
         let span = tracing::error_span!("build");
         let _enter = span.enter();
 
-        self.widget.build(WidgetBuildContext {
+        self.widget_element.build(WidgetBuildContext {
             element_tree: ctx.element_tree,
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
 
             element_id: ctx.element_id,
+
+            inheritance: &mut self.inheritance,
         })
     }
 
@@ -169,14 +218,14 @@ impl Element {
         let span = tracing::error_span!("update");
         let _enter = span.enter();
 
-        self.widget.update(new_widget)
+        self.widget_element.update(new_widget)
     }
 
     pub fn paint(&self) -> Option<Canvas> {
         let span = tracing::error_span!("paint");
         let _enter = span.enter();
 
-        self.size.and_then(|size| self.widget.paint(size))
+        self.size.and_then(|size| self.widget_element.paint(size))
     }
 
     #[allow(clippy::borrowed_box)]
@@ -189,7 +238,7 @@ impl Element {
         let span = tracing::error_span!("callback");
         let _enter = span.enter();
 
-        self.widget.call(
+        self.widget_element.call(
             WidgetCallbackContext {
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
@@ -204,6 +253,6 @@ impl Element {
 
 impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.widget.fmt(f)
+        self.widget_element.fmt(f)
     }
 }

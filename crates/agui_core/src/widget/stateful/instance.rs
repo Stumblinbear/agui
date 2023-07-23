@@ -7,7 +7,7 @@ use crate::{
     unit::Data,
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
-        AnyWidget, Inheritance, IntoChildren, StatefulCallbackFunc, WidgetRef,
+        AnyWidget, IntoChildren, StatefulCallbackFunc, WidgetRef,
     },
 };
 
@@ -21,8 +21,6 @@ where
     state: W::State,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
-
-    inheritance: Inheritance,
 }
 
 impl<W> StatefulElement<W>
@@ -37,8 +35,6 @@ where
             state,
 
             callbacks: FnvHashMap::default(),
-
-            inheritance: Inheritance::default(),
         }
     }
 }
@@ -75,7 +71,7 @@ where
 
             callbacks: &mut self.callbacks,
 
-            inheritance: &mut self.inheritance,
+            inheritance: ctx.inheritance,
 
             keyed_children: FnvHashSet::default(),
 

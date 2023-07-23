@@ -136,7 +136,7 @@ where
         A: Data,
         F: Fn(&mut StatefulCallbackContext<S>, &A) + 'static,
     {
-        let callback = Callback::new::<F, S>(self.element_id, self.callback_queue.clone());
+        let callback = Callback::new::<F>(self.element_id, self.callback_queue.clone());
 
         self.callbacks.insert(
             callback.get_id().unwrap(),
@@ -151,7 +151,7 @@ impl<S> ContextInheritedMut for StatefulContext<'_, S>
 where
     S: WidgetState,
 {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&mut I>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<&I>
     where
         I: InheritedWidget + 'static,
     {

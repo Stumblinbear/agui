@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use crate::element::Element;
-
 use super::{key::WidgetKey, AnyWidget};
 
 #[derive(Default, Clone)]
@@ -79,14 +77,6 @@ impl WidgetRef {
             Rc::clone(widget).as_any().is::<W>()
         } else {
             false
-        }
-    }
-
-    pub(crate) fn create(&self) -> Option<Element> {
-        if let Self::Some(key, widget) = self {
-            Some(Element::new(*key, Rc::clone(widget).create_element()))
-        } else {
-            None
         }
     }
 }
