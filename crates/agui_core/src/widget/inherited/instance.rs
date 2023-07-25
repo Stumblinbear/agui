@@ -46,8 +46,6 @@ where
     }
 
     fn mount(&self, ctx: WidgetMountContext) {
-        println!("Mounting inherited widget: {}", self.widget_name());
-
         *ctx.inheritance =
             Inheritance::new_scope::<I>(ctx.inheritance.get_ancestor_scope(), ctx.element_id);
     }
