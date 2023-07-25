@@ -14,6 +14,8 @@ where
     I: AnyWidget + InheritedWidget,
 {
     widget: Rc<I>,
+
+    needs_notify: bool,
 }
 
 impl<I> InheritedElement<I>
@@ -21,7 +23,11 @@ where
     I: AnyWidget + InheritedWidget,
 {
     pub fn new(widget: Rc<I>) -> Self {
-        Self { widget }
+        Self {
+            widget,
+
+            needs_notify: false,
+        }
     }
 }
 
@@ -57,9 +63,14 @@ where
             panic!("InheritedElement does not have a scope");
         };
 
-        // We've been rebuilt, so we need to notify all listeners that depend on this widget.
-        for listener_id in &scope.listeners {
-            ctx.dirty.insert(*listener_id);
+        if self.needs_notify {
+            self.needs_notify = false;
+
+            // We've been rebuilt and `should_notify` was `true`, so we need to notify all
+            // listeners that depend on this widget.
+            for listener_id in &scope.listeners {
+                ctx.dirty.insert(*listener_id);
+            }
         }
 
         self.widget.get_child().into_children()
@@ -70,11 +81,10 @@ where
             if Rc::ptr_eq(&self.widget, &new_widget) {
                 ElementUpdate::Noop
             } else {
-                let should_notify = new_widget.should_notify(self.widget.as_ref());
+                self.needs_notify =
+                    self.needs_notify || new_widget.should_notify(self.widget.as_ref());
 
                 self.widget = new_widget;
-
-                // TODO: fire a notification to all children that depend on this widget
 
                 ElementUpdate::RebuildNecessary
             }
