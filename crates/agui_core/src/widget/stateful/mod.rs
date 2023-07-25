@@ -26,8 +26,8 @@ pub trait WidgetState: Sized + 'static {
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
     #[cfg(not(nightly))]
-    fn build(&self, ctx: &mut StatefulContext<Self>) -> Self::Child;
+    fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child;
 
     #[cfg(nightly)]
-    fn build(&self, ctx: &mut StatefulContext<Self>) -> impl IntoChildren;
+    fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> impl IntoChildren;
 }

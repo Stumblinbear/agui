@@ -58,7 +58,7 @@ where
     }
 }
 
-pub struct StatefulContext<'ctx, S>
+pub struct StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
@@ -78,7 +78,7 @@ where
     pub(crate) state: &'ctx S,
 }
 
-impl<S> ContextWidget<S> for StatefulContext<'_, S>
+impl<S> ContextWidget<S> for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<S> ContextWidgetState<S> for StatefulContext<'_, S>
+impl<S> ContextWidgetState<S> for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {
@@ -100,7 +100,7 @@ where
     }
 }
 
-impl<'ctx, S: 'static> StatefulContext<'ctx, S>
+impl<'ctx, S: 'static> StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
@@ -147,7 +147,7 @@ where
     }
 }
 
-impl<S> ContextInheritedMut for StatefulContext<'_, S>
+impl<S> ContextInheritedMut for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {

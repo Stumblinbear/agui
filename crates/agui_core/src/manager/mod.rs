@@ -664,7 +664,7 @@ enum SpawnResult {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::{build, LayoutWidget, StatelessWidget};
+    use agui_macros::{LayoutWidget, StatelessWidget};
 
     use crate::{
         manager::events::ElementEvent,
@@ -744,17 +744,15 @@ mod tests {
     impl WidgetBuild for TestNestedUnretainedWidget {
         type Child = WidgetRef;
 
-        #[allow(clippy::needless_update)]
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
             BUILT.with(|built| {
                 built.borrow_mut().nested_unretained = true;
             });
 
-            build! {
-                TestUnretainedWidget {
-                    children: self.children.clone(),
-                }
+            TestUnretainedWidget {
+                children: self.children.clone(),
             }
+            .into()
         }
     }
 
@@ -763,16 +761,14 @@ mod tests {
         pub children: Vec<WidgetRef>,
     }
 
-    #[allow(clippy::needless_update)]
     impl WidgetBuild for TestNestedRetainedWidget {
         type Child = WidgetRef;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            build! {
-                TestUnretainedWidget {
-                    children: self.children.clone(),
-                }
+            TestUnretainedWidget {
+                children: self.children.clone(),
             }
+            .into()
         }
     }
 

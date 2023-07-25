@@ -17,7 +17,6 @@ pub struct Center {
 impl WidgetBuild for Center {
     type Child = WidgetRef;
 
-    #[allow(clippy::needless_update)]
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {
             Align {

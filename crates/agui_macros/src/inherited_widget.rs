@@ -19,7 +19,7 @@ pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
     }) = item
         .fields
         .iter()
-        .find(|field| field.attrs.iter().any(|attr| attr.path.is_ident("child")))
+        .find(|field| field.attrs.iter().any(|attr| attr.path().is_ident("child")))
     else {
         return syn::Error::new_spanned(
             &item,

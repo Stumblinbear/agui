@@ -1,4 +1,5 @@
 #![allow(clippy::needless_update)]
+
 use std::{thread, time::Duration};
 
 use sysinfo::{System, SystemExt};
@@ -85,7 +86,7 @@ impl WidgetState for ExampleMainState {
 
     type Child = WidgetRef;
 
-    fn build(&self, ctx: &mut StatefulContext<Self>) -> Self::Child {
+    fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             let system_info = system_info.clone();
 

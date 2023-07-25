@@ -63,7 +63,7 @@ pub struct InheritanceScope {
     available: TypeMap<ElementId>,
 
     // A set of all widgets that are dependent on this scope.
-    listeners: FnvHashSet<ElementId>,
+    pub(super) listeners: FnvHashSet<ElementId>,
 }
 
 impl InheritanceScope {

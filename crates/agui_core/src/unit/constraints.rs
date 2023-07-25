@@ -82,6 +82,36 @@ impl Constraints {
         Self::along_axis(axis, 0.0, size)
     }
 
+    pub fn min_width(&self) -> f32 {
+        self.min_width
+    }
+
+    pub fn max_width(&self) -> f32 {
+        self.max_width
+    }
+
+    pub fn min_height(&self) -> f32 {
+        self.min_height
+    }
+
+    pub fn max_height(&self) -> f32 {
+        self.max_height
+    }
+
+    pub fn min_axis(&self, axis: Axis) -> f32 {
+        match axis {
+            Axis::Horizontal => self.min_width,
+            Axis::Vertical => self.min_height,
+        }
+    }
+
+    pub fn max_axis(&self, axis: Axis) -> f32 {
+        match axis {
+            Axis::Horizontal => self.max_width,
+            Axis::Vertical => self.max_height,
+        }
+    }
+
     pub fn expand() -> Self {
         Self::new(f32::INFINITY, f32::INFINITY, f32::INFINITY, f32::INFINITY)
     }
@@ -125,16 +155,47 @@ impl Constraints {
         )
     }
 
+    /// Returns new [`Constraints`] with a tight width as close to the given width as
+    /// possible while still respecting the original constraints.
+    pub fn tighten_width(&self, width: f32) -> Self {
+        Self::new(
+            width.clamp(self.min_width, self.max_width),
+            width.clamp(self.min_width, self.max_width),
+            self.min_height,
+            self.max_height,
+        )
+    }
+
+    /// Returns new [`Constraints`] with a tight height as close to the given height as
+    /// possible while still respecting the original constraints.
+    pub fn tighten_height(&self, height: f32) -> Self {
+        Self::new(
+            self.min_width,
+            self.max_width,
+            height.clamp(self.min_height, self.max_height),
+            height.clamp(self.min_height, self.max_height),
+        )
+    }
+
     /// Returns new [`Constraints`] with a tight width and/or height as close to the given
-    /// width and height as possible while still respecting the original constraints.
-    pub fn tighten(self, other: impl Into<Constraints>) -> Self {
+    /// size as possible while still respecting the original constraints.
+    pub fn tighten_axis(&self, axis: Axis, extent: f32) -> Self {
+        match axis {
+            Axis::Horizontal => self.tighten_width(extent),
+            Axis::Vertical => self.tighten_height(extent),
+        }
+    }
+
+    /// Returns new [`Constraints`] with a tight width and/or height as close to the given
+    /// size as possible while still respecting the original constraints.
+    pub fn tighten(self, other: impl Into<Size>) -> Self {
         let other = other.into();
 
         Self::new(
-            other.min_width.clamp(self.min_width, other.max_width),
-            other.max_width.clamp(self.min_width, other.max_width),
-            other.min_height.clamp(self.min_height, other.max_height),
-            other.max_height.clamp(self.min_height, other.max_height),
+            other.width.clamp(self.min_width, other.width),
+            other.width.clamp(self.min_width, other.width),
+            other.height.clamp(self.min_height, other.height),
+            other.height.clamp(self.min_height, other.height),
         )
     }
 
@@ -179,6 +240,15 @@ impl Constraints {
     /// possible to the given height.
     pub fn constrain_height(&self, height: f32) -> f32 {
         height.clamp(self.min_height, self.max_height)
+    }
+
+    /// Returns the height that both satisfies the constraints and is as close as
+    /// possible to the given height.
+    pub fn constrain_axis(&self, axis: Axis, extent: f32) -> f32 {
+        match axis {
+            Axis::Horizontal => self.constrain_width(extent),
+            Axis::Vertical => self.constrain_height(extent),
+        }
     }
 
     /// Returns the [Size] that both satisfies the constraints and is as close as
@@ -248,6 +318,14 @@ impl Constraints {
     /// Whether there is exactly one height value that satisfies the constraints
     pub fn has_tight_height(&self) -> bool {
         self.min_height == self.max_height
+    }
+
+    /// Whether there is exactly one extent on the given axis that satisfies the constraints.
+    pub fn has_tight_axis(&self, axis: Axis) -> bool {
+        match axis {
+            Axis::Horizontal => self.has_tight_width(),
+            Axis::Vertical => self.has_tight_height(),
+        }
     }
 
     /// Whether there is exactly one [Size] that satisfies the constraints.

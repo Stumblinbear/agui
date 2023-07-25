@@ -344,7 +344,7 @@ impl WidgetLayout for Flex {
             // child_sizes is guaranteed to have the same length as the number of children
             let mut child = children.next().unwrap();
 
-            let cross_axis = self.direction.opposite();
+            let cross_axis = self.direction.flip();
 
             let child_cross_position = match self.cross_axis_alignment {
                 CrossAxisAlignment::Start | CrossAxisAlignment::End => {
@@ -410,7 +410,7 @@ impl Flex {
         constraints: Constraints,
     ) -> ComputedSizes {
         let main_axis = self.direction;
-        let cross_axis = main_axis.opposite();
+        let cross_axis = main_axis.flip();
 
         let max_size = constraints.biggest();
 

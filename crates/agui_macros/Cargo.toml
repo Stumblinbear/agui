@@ -6,8 +6,8 @@ resolver = "2"
 description = "The macro utilities of agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
-keywords = [ ]
-categories = [ ]
+keywords = []
+categories = []
 license = "MIT OR Apache-2.0"
 
 [lib]
@@ -20,14 +20,13 @@ internal = []
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-darling = "0.14"
-syn = {version = "1.0", default-features = false, features = [
+syn = { version = "2.0", default-features = false, features = [
   "full",
   "parsing",
   "visit",
   "visit-mut",
   "printing",
-]}
+] }
 heck = "0.4"
 toml = "0.7"
 

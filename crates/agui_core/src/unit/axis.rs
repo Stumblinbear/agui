@@ -6,7 +6,7 @@ pub enum Axis {
 }
 
 impl Axis {
-    pub fn opposite(self) -> Self {
+    pub fn flip(self) -> Self {
         match self {
             Self::Horizontal => Self::Vertical,
             Self::Vertical => Self::Horizontal,

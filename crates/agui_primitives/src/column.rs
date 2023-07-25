@@ -26,7 +26,6 @@ pub struct Column {
 impl WidgetBuild for Column {
     type Child = WidgetRef;
 
-    #[allow(clippy::needless_update)]
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {
             Flex {

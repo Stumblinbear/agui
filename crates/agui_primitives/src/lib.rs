@@ -1,4 +1,5 @@
 #![feature(return_position_impl_trait_in_trait)]
+#![allow(clippy::needless_update)]
 
 mod align;
 mod builder;
@@ -7,6 +8,7 @@ mod clip;
 mod colored_box;
 mod column;
 mod flex;
+mod intrinsic;
 mod padding;
 mod row;
 mod sized_box;
@@ -19,6 +21,7 @@ pub use self::clip::*;
 pub use self::colored_box::*;
 pub use self::column::*;
 pub use self::flex::*;
+pub use self::intrinsic::*;
 pub use self::padding::*;
 pub use self::row::*;
 pub use self::sized_box::*;

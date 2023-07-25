@@ -18,7 +18,7 @@ pub fn impl_paint_widget(input: TokenStream2) -> TokenStream2 {
     let child_field = item
         .fields
         .iter()
-        .find(|field| field.attrs.iter().any(|attr| attr.path.is_ident("child")));
+        .find(|field| field.attrs.iter().any(|attr| attr.path().is_ident("child")));
 
     let build_impl: TokenStream2 = match child_field {
         Some(Field {

@@ -26,7 +26,6 @@ pub struct Row {
 impl WidgetBuild for Row {
     type Child = WidgetRef;
 
-    #[allow(clippy::needless_update)]
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {
             Flex {

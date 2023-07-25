@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use super::{StatefulCallbackContext, StatefulContext, StatefulWidget, WidgetState};
+use super::{StatefulBuildContext, StatefulCallbackContext, StatefulWidget, WidgetState};
 
 pub struct StatefulElement<W>
 where
@@ -62,7 +62,7 @@ where
     fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
         self.callbacks.clear();
 
-        let mut ctx = StatefulContext {
+        let mut ctx = StatefulBuildContext {
             element_tree: ctx.element_tree,
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,

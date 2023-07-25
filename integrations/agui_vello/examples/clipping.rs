@@ -1,4 +1,5 @@
 #![allow(clippy::needless_update)]
+
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 

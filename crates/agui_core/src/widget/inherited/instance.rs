@@ -46,6 +46,8 @@ where
     }
 
     fn mount(&self, ctx: WidgetMountContext) {
+        println!("Mounting inherited widget: {}", self.widget_name());
+
         *ctx.inheritance =
             Inheritance::new_scope::<I>(ctx.inheritance.get_ancestor_scope(), ctx.element_id);
     }
@@ -53,6 +55,15 @@ where
     fn unmount(&self, ctx: WidgetUnmountContext) {}
 
     fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
+        let Inheritance::Scope(scope) = ctx.inheritance else {
+            panic!("InheritedElement does not have a scope");
+        };
+
+        // We've been rebuilt, so we need to notify all listeners that depend on this widget.
+        for listener_id in &scope.listeners {
+            ctx.dirty.insert(*listener_id);
+        }
+
         self.widget.get_child().into_children()
     }
 
