@@ -1,4 +1,3 @@
-#![feature(return_position_impl_trait_in_trait)]
 #![allow(clippy::needless_update)]
 
 mod align;

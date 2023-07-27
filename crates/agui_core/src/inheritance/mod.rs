@@ -260,7 +260,7 @@ mod tests {
 
     use crate::{
         element::ElementId,
-        widget::{InheritedWidget, WidgetRef},
+        widget::{InheritedWidget, Widget},
     };
 
     use super::InheritanceManager;
@@ -272,7 +272,7 @@ mod tests {
     #[derive(InheritedWidget)]
     struct TestWidget1 {
         #[child]
-        child: WidgetRef,
+        child: Option<Widget>,
     }
 
     impl InheritedWidget for TestWidget1 {}
@@ -280,7 +280,7 @@ mod tests {
     #[derive(InheritedWidget)]
     struct TestWidget2 {
         #[child]
-        child: WidgetRef,
+        child: Option<Widget>,
     }
 
     impl InheritedWidget for TestWidget2 {}

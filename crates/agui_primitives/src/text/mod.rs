@@ -4,8 +4,8 @@ use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Axis, Constraints, FontStyle, IntrinsicDimension, Size},
     widget::{
-        BuildContext, ContextWidgetLayoutMut, IntrinsicSizeContext, LayoutContext, WidgetBuild,
-        WidgetLayout, WidgetPaint,
+        BuildContext, ContextWidgetLayoutMut, IntrinsicSizeContext, LayoutContext, WidgetLayout,
+        WidgetPaint,
     },
 };
 use agui_macros::{LayoutWidget, PaintWidget};
@@ -28,18 +28,16 @@ pub struct Text {
     pub text: Cow<'static, str>,
 }
 
-impl WidgetBuild for Text {
-    type Child = TextPainter;
+impl WidgetLayout for Text {
+    type Children = TextPainter;
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        TextPainter {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        vec![TextPainter {
             font: self.font.clone(),
             text: Cow::clone(&self.text),
-        }
+        }]
     }
-}
 
-impl WidgetLayout for Text {
     fn intrinsic_size(
         &self,
         _: &mut IntrinsicSizeContext<Self>,

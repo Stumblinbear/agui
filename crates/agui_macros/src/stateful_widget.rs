@@ -15,6 +15,20 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
     parse_quote! {
+        impl #impl_generics #agui_core::widget::IntoWidget for #ident #ty_generics #where_clause {
+            fn into_widget(self) -> #agui_core::widget::Widget {
+                #agui_core::widget::Widget::new(self)
+            }
+        }
+
+        impl #impl_generics Into<Option<#agui_core::widget::Widget>> for #ident #ty_generics #where_clause {
+            fn into(self) -> Option<#agui_core::widget::Widget> {
+                use #agui_core::widget::IntoWidget;
+
+                Some(self.into_widget())
+            }
+        }
+
         impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
             fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::element::WidgetElement>
             where

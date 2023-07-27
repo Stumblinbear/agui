@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::widget::{
     element::{ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext},
-    AnyWidget, InheritedWidget, IntoChildren, WidgetRef,
+    AnyWidget, InheritedWidget, IntoChild, Widget,
 };
 
 pub struct InheritedElement<I>
@@ -32,19 +32,7 @@ where
     I: AnyWidget + InheritedWidget,
 {
     fn widget_name(&self) -> &'static str {
-        let type_name = self.widget.widget_name();
-
-        type_name
-            .split('<')
-            .next()
-            .unwrap_or(type_name)
-            .split("::")
-            .last()
-            .unwrap_or(type_name)
-    }
-
-    fn get_widget(&self) -> Rc<dyn AnyWidget> {
-        Rc::clone(&self.widget) as Rc<dyn AnyWidget>
+        self.widget.widget_name()
     }
 
     fn mount(&mut self, ctx: WidgetMountContext) {
@@ -52,7 +40,7 @@ where
             .create_scope::<I>(ctx.parent_element_id, ctx.element_id);
     }
 
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
         if self.needs_notify {
             self.needs_notify = false;
 
@@ -63,10 +51,10 @@ where
             }
         }
 
-        self.widget.get_child().into_children()
+        Vec::from_iter(self.widget.get_child().into_child())
     }
 
-    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<I>() {
             if Rc::ptr_eq(&self.widget, &new_widget) {
                 ElementUpdate::Noop

@@ -45,7 +45,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.find_map(|element| {
             element
-                .get_widget::<Text>()
+                .get_widget()
+                .downcast::<Text>()
                 .filter(|text| text.text == self.text)
         })
     }

@@ -2,7 +2,6 @@ use std::{
     collections::VecDeque,
     fs::File,
     io::{self, BufReader, Read},
-    rc::Rc,
 };
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -22,7 +21,7 @@ use crate::{
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{element::ElementUpdate, AnyWidget, WidgetKey, WidgetRef},
+    widget::{element::ElementUpdate, IntoWidget, Widget},
 };
 
 pub mod events;
@@ -35,7 +34,7 @@ pub struct WidgetManager {
     element_tree: Tree<ElementId, Element>,
     inheritance_manager: InheritanceManager,
 
-    keyed_elements: FnvHashMap<WidgetKey, ElementId>,
+    widgets: FnvHashMap<Widget, ElementId>,
 
     dirty: FnvHashSet<ElementId>,
     callback_queue: CallbackQueue,
@@ -52,7 +51,7 @@ impl WidgetManager {
 
     pub fn with_root<W>(widget: W) -> Self
     where
-        W: AnyWidget,
+        W: IntoWidget,
     {
         let mut manager = Self::new();
 
@@ -119,17 +118,24 @@ impl WidgetManager {
     /// Queues the widget for addition into the tree
     pub fn set_root<W>(&mut self, widget: W)
     where
-        W: AnyWidget,
+        W: IntoWidget,
     {
         self.remove_root();
 
         self.modifications
-            .push_back(Modify::Spawn(None, WidgetRef::from(widget)));
+            .push_back(Modify::Spawn(None, widget.into_widget()));
     }
 
     /// Check if a widget exists in the tree.
     pub fn contains(&self, element_id: ElementId) -> bool {
         self.element_tree.contains(element_id)
+    }
+
+    pub fn get_widget_elements(&self, widget: &Widget) -> Vec<ElementId> {
+        self.widgets
+            .get(widget)
+            .map(|element_id| vec![*element_id])
+            .unwrap_or_default()
     }
 
     /// Query widgets from the tree.
@@ -284,7 +290,7 @@ impl WidgetManager {
                     let span = tracing::debug_span!("spawn");
                     let _enter = span.enter();
 
-                    // This `process_spawn` will only ever return `Created` or `Empty` because `existing_element_id` is `None`
+                    // This `process_spawn` will only ever return `Created` because `existing_element_id` is `None`
                     if let SpawnResult::Created(element_id) =
                         self.process_spawn(widget_events, parent_id, widget, None)
                     {
@@ -403,20 +409,16 @@ impl WidgetManager {
         &mut self,
         element_events: &mut Vec<ElementEvent>,
         parent_id: Option<ElementId>,
-        widget_ref: WidgetRef,
+        widget: Widget,
         existing_element_id: Option<ElementId>,
     ) -> SpawnResult {
-        let WidgetRef::Some(key, widget) = &widget_ref else {
-            return SpawnResult::Empty;
-        };
-
         // Grab the existing element in the tree
         if let Some(existing_element_id) = existing_element_id {
             let existing_element = self.element_tree.get_mut(existing_element_id).unwrap();
 
             // Check the existing element against the new widget to see what we can safely
             // do about retaining its state
-            match existing_element.update_widget(&widget_ref) {
+            match existing_element.update_widget(&widget) {
                 ElementUpdate::Noop => {
                     return SpawnResult::Retained {
                         element_id: existing_element_id,
@@ -437,18 +439,16 @@ impl WidgetManager {
 
         tracing::trace!(
             parent_id = &format!("{:?}", parent_id),
-            widget = widget_ref.get_display_name(),
+            widget = widget.widget_name(),
             "spawning widget"
         );
 
-        let element = Element::new(*key, Rc::clone(widget).create_element());
+        let element = Element::new(widget.clone());
 
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
-            if let Some(widget_key) = element.get_key() {
-                self.keyed_elements.insert(*widget_key, element_id);
-            }
+            self.widgets.insert(widget, element_id);
 
             element.mount(ElementMountContext {
                 element_tree,
@@ -503,82 +503,75 @@ impl WidgetManager {
             }
 
             // Spawn the child widgets
-            for (i, child_ref) in result.into_iter().enumerate() {
-                if child_ref.is_some() {
-                    // If the child's key exists in the tree, reparent and retain it
-                    if let Some(keyed_element_id) = child_ref
-                        .get_key()
-                        .and_then(|widget_key| self.keyed_elements.get(widget_key).copied())
-                    {
-                        // If we're trying to reparent an element that has already been retained, panic. The same widget cannot exist twice.
-                        if retained_elements.contains(&keyed_element_id) {
-                            panic!(
-                                "two instances of the same widget cannot exist at one time: {:?}",
-                                child_ref
-                            );
-                        }
-
-                        retained_elements.insert(keyed_element_id);
-
-                        if self
-                            .element_tree
-                            .reparent(Some(element_id), keyed_element_id)
-                        {
-                            tracing::trace!(
-                                parent_id = &format!("{:?}", element_id),
-                                element = self
-                                    .element_tree
-                                    .get(keyed_element_id)
-                                    .unwrap()
-                                    .widget_name(),
-                                "reparented widget"
-                            );
-
-                            self.element_tree
-                                .with(keyed_element_id, |element_tree, element| {
-                                    element.remount(ElementMountContext {
-                                        element_tree,
-                                        inheritance_manager: &mut self.inheritance_manager,
-
-                                        dirty: &mut self.dirty,
-
-                                        parent_element_id: Some(element_id),
-                                        element_id: keyed_element_id,
-                                    });
-                                });
-
-                            element_events.push(ElementEvent::Reparent {
-                                parent_id: Some(element_id),
-                                element_id: keyed_element_id,
-                            });
-                        }
-
-                        continue;
+            for (i, widget) in result.into_iter().enumerate() {
+                // If the child's key exists in the tree, reparent and retain it
+                if let Some(existing_element_id) = self.widgets.get(&widget).copied() {
+                    // If we're trying to reparent an element that has already been retained, panic. The same widget cannot exist twice.
+                    if retained_elements.contains(&existing_element_id) {
+                        panic!(
+                            "two instances of the same widget cannot exist at one time: {:?}",
+                            widget
+                        );
                     }
 
-                    // Spawn the new widget and queue it for building
-                    match self.process_spawn(
-                        element_events,
-                        Some(element_id),
-                        child_ref,
-                        self.element_tree.get_child(element_id, i).cloned(),
-                    ) {
-                        SpawnResult::Retained {
-                            element_id,
-                            needs_rebuild,
-                        } => {
-                            retained_elements.insert(element_id);
+                    retained_elements.insert(existing_element_id);
 
-                            if needs_rebuild {
-                                self.modifications.push_back(Modify::Rebuild(element_id));
-                            }
+                    if self
+                        .element_tree
+                        .reparent(Some(element_id), existing_element_id)
+                    {
+                        tracing::trace!(
+                            parent_id = &format!("{:?}", element_id),
+                            element = self
+                                .element_tree
+                                .get(existing_element_id)
+                                .unwrap()
+                                .widget_name(),
+                            "reparented widget"
+                        );
+
+                        self.element_tree
+                            .with(existing_element_id, |element_tree, element| {
+                                element.remount(ElementMountContext {
+                                    element_tree,
+                                    inheritance_manager: &mut self.inheritance_manager,
+
+                                    dirty: &mut self.dirty,
+
+                                    parent_element_id: Some(element_id),
+                                    element_id: existing_element_id,
+                                });
+                            });
+
+                        element_events.push(ElementEvent::Reparent {
+                            parent_id: Some(element_id),
+                            element_id: existing_element_id,
+                        });
+                    }
+
+                    continue;
+                }
+
+                // Spawn the new widget and queue it for building
+                match self.process_spawn(
+                    element_events,
+                    Some(element_id),
+                    widget,
+                    self.element_tree.get_child(element_id, i).cloned(),
+                ) {
+                    SpawnResult::Retained {
+                        element_id,
+                        needs_rebuild,
+                    } => {
+                        retained_elements.insert(element_id);
+
+                        if needs_rebuild {
+                            self.modifications.push_back(Modify::Rebuild(element_id));
                         }
+                    }
 
-                        SpawnResult::Created(element_id) => {
-                            build_queue.push_back(element_id);
-                        }
-
-                        _ => {}
+                    SpawnResult::Created(element_id) => {
+                        build_queue.push_back(element_id);
                     }
                 }
             }
@@ -641,15 +634,13 @@ impl WidgetManager {
 
             let element = self.element_tree.remove(element_id, false).unwrap();
 
-            if let Some(key) = element.get_key() {
-                self.keyed_elements.remove(key);
-            }
+            self.widgets.remove(element.get_widget());
         }
     }
 }
 
 enum Modify {
-    Spawn(Option<ElementId>, WidgetRef),
+    Spawn(Option<ElementId>, Widget),
     Rebuild(ElementId),
     Destroy(ElementId),
 }
@@ -660,7 +651,6 @@ enum SpawnResult {
         element_id: ElementId,
         needs_rebuild: bool,
     },
-    Empty,
 }
 
 #[cfg(test)]
@@ -671,117 +661,88 @@ mod tests {
 
     use crate::{
         manager::events::ElementEvent,
-        unit::{Constraints, Offset, Size},
-        widget::{
-            BuildContext, ContextWidgetLayoutMut, LayoutContext, WidgetBuild, WidgetLayout,
-            WidgetRef,
-        },
+        unit::{Constraints, Size},
+        widget::{BuildContext, IntoWidget, LayoutContext, Widget, WidgetBuild, WidgetLayout},
     };
 
     use super::WidgetManager;
 
     #[derive(Default)]
-    struct Built {
-        unretained: bool,
-        retained: bool,
-        nested_unretained: bool,
+    struct TestResult {
+        root_child: Option<Widget>,
     }
 
     thread_local! {
-        static BUILT: RefCell<Built> = RefCell::default();
+        static TEST_HOOK: RefCell<TestResult> = RefCell::default();
     }
 
-    #[derive(Default, LayoutWidget)]
-    struct TestUnretainedWidget {
-        pub children: Vec<WidgetRef>,
+    #[derive(Default, StatelessWidget)]
+    struct TestRootWidget;
+
+    impl WidgetBuild for TestRootWidget {
+        type Child = Option<Widget>;
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+            TEST_HOOK.with(|result| result.borrow().root_child.clone())
+        }
     }
 
-    impl WidgetLayout for TestUnretainedWidget {
-        fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
-            let mut children = ctx.iter_children_mut();
+    impl TestRootWidget {
+        fn set_child(child: Widget) {
+            TEST_HOOK.with(|result| {
+                result.borrow_mut().root_child = Some(child);
+            });
+        }
+    }
 
-            while let Some(mut child) = children.next() {
-                child.compute_layout(constraints.biggest());
+    #[derive(LayoutWidget, Default)]
+    struct TestDummyWidget1 {
+        pub children: Vec<Widget>,
+    }
 
-                child.set_offset(Offset { x: 0.0, y: 0.0 });
-            }
+    impl WidgetLayout for TestDummyWidget1 {
+        type Children = Widget;
 
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+            self.children.clone()
+        }
+
+        fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
             Size::ZERO
         }
     }
 
-    impl WidgetBuild for TestUnretainedWidget {
-        type Child = Vec<WidgetRef>;
+    #[derive(LayoutWidget, Default)]
+    struct TestDummyWidget2 {
+        pub children: Vec<Widget>,
+    }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            BUILT.with(|built| {
-                built.borrow_mut().unretained = true;
-            });
+    impl WidgetLayout for TestDummyWidget2 {
+        type Children = Widget;
 
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
             self.children.clone()
         }
-    }
 
-    #[derive(StatelessWidget, Default)]
-    struct TestRetainedWidget {
-        pub children: Vec<WidgetRef>,
-    }
-
-    impl WidgetBuild for TestRetainedWidget {
-        type Child = Vec<WidgetRef>;
-
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            BUILT.with(|built| {
-                built.borrow_mut().retained = true;
-            });
-
-            self.children.clone()
+        fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
+            Size::ZERO
         }
     }
 
-    #[derive(StatelessWidget, Default)]
-    struct TestNestedUnretainedWidget {
-        pub children: Vec<WidgetRef>,
-    }
+    #[test]
+    pub fn root_is_not_set_immediately() {
+        let mut manager = WidgetManager::new();
 
-    impl WidgetBuild for TestNestedUnretainedWidget {
-        type Child = WidgetRef;
+        manager.set_root(TestDummyWidget1::default());
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            BUILT.with(|built| {
-                built.borrow_mut().nested_unretained = true;
-            });
-
-            TestUnretainedWidget {
-                children: self.children.clone(),
-            }
-            .into()
-        }
-    }
-
-    #[derive(StatelessWidget, Default)]
-    struct TestNestedRetainedWidget {
-        pub children: Vec<WidgetRef>,
-    }
-
-    impl WidgetBuild for TestNestedRetainedWidget {
-        type Child = WidgetRef;
-
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            TestUnretainedWidget {
-                children: self.children.clone(),
-            }
-            .into()
-        }
+        assert_eq!(manager.get_root(), None, "should not have added the widget");
     }
 
     #[test]
     pub fn adding_a_root_widget() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestUnretainedWidget::default());
-
-        assert_eq!(manager.get_root(), None, "should not have added the widget");
+        manager.set_root(TestDummyWidget1::default());
 
         let events = manager.update();
 
@@ -807,9 +768,7 @@ mod tests {
     pub fn removing_a_root_widget() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestUnretainedWidget::default());
-
-        assert_eq!(manager.get_root(), None, "should not have added the widget");
+        manager.set_root(TestDummyWidget1::default());
 
         manager.update();
 
@@ -846,7 +805,7 @@ mod tests {
     pub fn rebuilding_widgets() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestUnretainedWidget::default());
+        manager.set_root(TestDummyWidget1::default());
 
         manager.update();
 
@@ -875,28 +834,22 @@ mod tests {
     pub fn spawns_children() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestUnretainedWidget {
+        manager.set_root(TestDummyWidget1 {
             children: vec![
-                TestUnretainedWidget::default().into(),
-                TestUnretainedWidget::default().into(),
+                TestDummyWidget1::default().into_widget(),
+                TestDummyWidget1::default().into_widget(),
             ],
         });
 
         let events = manager.update();
 
-        let root_id = manager.get_root();
-
-        assert_ne!(root_id, None, "root widget should have been added");
-
-        let root_id = root_id.unwrap();
+        let root_id = manager.get_root().unwrap();
 
         assert_eq!(
             manager.get_tree().len(),
             3,
             "children should have been added"
         );
-
-        assert_ne!(events.len(), 0, "should generate events");
 
         assert_eq!(
             events[0],
@@ -934,21 +887,17 @@ mod tests {
     pub fn removes_children() {
         let mut manager = WidgetManager::new();
 
-        let mut widget = TestUnretainedWidget::default();
+        let mut widget = TestDummyWidget1::default();
 
         for _ in 0..1000 {
-            widget.children.push(TestUnretainedWidget::default().into());
+            widget.children.push(TestDummyWidget1::default().into());
         }
 
         manager.set_root(widget);
 
         manager.update();
 
-        let root_id = manager.get_root();
-
-        assert_ne!(root_id, None, "root widget should have been added");
-
-        let root_id = root_id.unwrap();
+        let root_id = manager.get_root().unwrap();
 
         assert_eq!(
             manager.get_tree().len(),
@@ -1001,33 +950,19 @@ mod tests {
     pub fn rebuilds_children() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestNestedUnretainedWidget::default());
+        manager.set_root(TestRootWidget);
+
+        TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
 
         manager.update();
 
-        let root_id = manager.get_root();
-
-        assert_ne!(root_id, None, "root widget should have been added");
-
-        let root_id = root_id.unwrap();
-
-        assert_eq!(manager.get_tree().len(), 2, "child should have been added");
-
-        let old_children = manager.get_tree().get_children(root_id).unwrap().clone();
-
-        assert_eq!(old_children.len(), 1, "root should have one child");
+        let root_id = manager.get_root().unwrap();
 
         manager.mark_dirty(root_id);
 
-        BUILT.with(|built| {
-            *built.borrow_mut() = Built::default();
-        });
+        TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
 
         let events = manager.update();
-
-        assert_eq!(old_children.len(), 1, "root should still have one child");
-
-        assert_ne!(events.len(), 0, "should generate events");
 
         assert_eq!(
             events[0],
@@ -1037,54 +972,78 @@ mod tests {
             "should have generated rebuild event for the root widget"
         );
 
-        BUILT.with(|built| {
-            assert!(
-                built.borrow().nested_unretained,
-                "should have rebuilt the root"
-            );
-
-            assert!(built.borrow().unretained, "should have rebuilt the child");
-        });
+        assert!(
+            matches!(events[1], ElementEvent::Rebuilt { element_id } if element_id != root_id),
+            "should have generated rebuild event for the child"
+        );
     }
 
     #[test]
     pub fn reuses_unchanged_widgets() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestNestedRetainedWidget::default());
+        manager.set_root(TestRootWidget);
+
+        let reparented_widget = TestDummyWidget1::default().into_widget();
+
+        TestRootWidget::set_child(reparented_widget.clone());
 
         manager.update();
 
         let root_id = manager.get_root().unwrap();
-        let root_child_id = *manager
-            .get_tree()
-            .get_children(root_id)
-            .unwrap()
-            .first()
-            .unwrap();
+        let element_id = manager.get_widget_elements(&reparented_widget);
 
-        manager.mark_dirty(root_id);
+        manager.mark_dirty(manager.get_root().unwrap());
 
-        let events = manager.update();
-
-        let new_root_id = manager.get_root().unwrap();
-        let new_root_child_id = *manager
-            .get_tree()
-            .get_children(root_id)
-            .unwrap()
-            .first()
-            .unwrap();
+        manager.update();
 
         assert_eq!(
-            root_id, new_root_id,
+            root_id,
+            manager.get_root().unwrap(),
             "root widget should have remained unchanged"
         );
 
         assert_eq!(
-            root_child_id, new_root_child_id,
-            "root widget should not have regenerated its first child"
+            element_id,
+            manager.get_widget_elements(&reparented_widget),
+            "root widget should not have regenerated its child"
+        );
+    }
+
+    #[test]
+    pub fn reparents_existing_widgets() {
+        let mut manager = WidgetManager::new();
+
+        manager.set_root(TestRootWidget);
+
+        let reparented_widget = TestDummyWidget1::default().into_widget();
+
+        TestRootWidget::set_child(
+            TestDummyWidget1 {
+                children: vec![reparented_widget.clone()],
+            }
+            .into_widget(),
         );
 
-        assert_ne!(events.len(), 0, "should generate events");
+        manager.update();
+
+        let element_id = manager.get_widget_elements(&reparented_widget);
+
+        TestRootWidget::set_child(
+            TestDummyWidget2 {
+                children: vec![reparented_widget.clone()],
+            }
+            .into_widget(),
+        );
+
+        manager.mark_dirty(manager.get_root().unwrap());
+
+        manager.update();
+
+        assert_eq!(
+            element_id,
+            manager.get_widget_elements(&reparented_widget),
+            "should have reparented the widget"
+        );
     }
 }

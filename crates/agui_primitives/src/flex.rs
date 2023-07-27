@@ -2,7 +2,7 @@ use agui_core::{
     unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
     widget::{
         BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntoWidget,
-        IntrinsicSizeContext, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
+        IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
     },
 };
 use agui_macros::LayoutWidget;
@@ -79,7 +79,7 @@ pub struct Flexible {
     pub flex: f32,
     pub fit: FlexFit,
 
-    pub child: WidgetRef,
+    pub child: Option<Widget>,
 }
 
 impl<W> From<W> for Flexible
@@ -88,7 +88,7 @@ where
 {
     fn from(widget: W) -> Self {
         Flexible {
-            child: widget.into_widget(),
+            child: Some(widget.into_widget()),
 
             ..Flexible::default()
         }
@@ -112,18 +112,13 @@ pub struct Flex {
     pub children: Vec<Flexible>,
 }
 
-impl WidgetBuild for Flex {
-    type Child = Vec<WidgetRef>;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.children
-            .iter()
-            .map(|entry| entry.child.clone())
-            .collect::<Vec<_>>()
-    }
-}
-
 impl WidgetLayout for Flex {
+    type Children = Widget;
+
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        Vec::from_iter(self.children.iter().filter_map(|entry| entry.child.clone()))
+    }
+
     fn intrinsic_size(
         &self,
         ctx: &mut IntrinsicSizeContext<Self>,

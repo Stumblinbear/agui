@@ -1,25 +1,21 @@
 use agui_core::{
     unit::{Constraints, Offset, Size},
-    widget::{
-        BuildContext, ContextWidgetLayoutMut, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
-    },
+    widget::{BuildContext, ContextWidgetLayoutMut, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
 #[derive(LayoutWidget, Default)]
 pub struct App {
-    pub child: WidgetRef,
-}
-
-impl WidgetBuild for App {
-    type Child = WidgetRef;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
-    }
+    pub child: Option<Widget>,
 }
 
 impl WidgetLayout for App {
+    type Children = Widget;
+
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        Vec::from_iter(self.child.clone())
+    }
+
     fn layout(&self, ctx: &mut LayoutContext<Self>, _: Constraints) -> Size {
         // let size = constrants.biggest();
 

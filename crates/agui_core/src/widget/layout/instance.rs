@@ -10,8 +10,8 @@ use crate::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
             WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
-        AnyWidget, BuildContext, IntoChildren, IntrinsicSizeContext, LayoutContext, WidgetLayout,
-        WidgetRef,
+        AnyWidget, BuildContext, IntoChild, IntrinsicSizeContext, LayoutContext, Widget,
+        WidgetLayout,
     },
 };
 
@@ -42,19 +42,7 @@ where
     W: AnyWidget + WidgetLayout,
 {
     fn widget_name(&self) -> &'static str {
-        let type_name = self.widget.widget_name();
-
-        type_name
-            .split('<')
-            .next()
-            .unwrap_or(type_name)
-            .split("::")
-            .last()
-            .unwrap_or(type_name)
-    }
-
-    fn get_widget(&self) -> Rc<dyn AnyWidget> {
-        Rc::clone(&self.widget) as Rc<dyn AnyWidget>
+        self.widget.widget_name()
     }
 
     fn intrinsic_size(
@@ -94,7 +82,7 @@ where
         )
     }
 
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
         self.callbacks.clear();
 
         let mut ctx = BuildContext {
@@ -111,10 +99,14 @@ where
             callbacks: &mut self.callbacks,
         };
 
-        self.widget.build(&mut ctx).into_children()
+        self.widget
+            .build(&mut ctx)
+            .into_iter()
+            .filter_map(IntoChild::into_child)
+            .collect()
     }
 
-    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             if Rc::ptr_eq(&self.widget, &new_widget) {
                 ElementUpdate::Noop

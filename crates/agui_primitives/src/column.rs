@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, TextDirection},
-    widget::{BuildContext, WidgetBuild, WidgetRef},
+    widget::{BuildContext, Widget, WidgetBuild},
 };
 use agui_macros::{build, StatelessWidget};
 
@@ -24,7 +24,7 @@ pub struct Column {
 }
 
 impl WidgetBuild for Column {
-    type Child = WidgetRef;
+    type Child = Widget;
 
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {

@@ -9,7 +9,7 @@ use crate::{
     unit::{AsAny, Key},
     util::tree::Tree,
     widget::{
-        AnyWidget, ContextInheritedMut, ContextWidget, InheritedWidget, WidgetKey, WidgetRef,
+        AnyWidget, ContextInheritedMut, ContextWidget, InheritedWidget, Widget, WidgetKey,
         WidgetState,
     },
 };
@@ -113,7 +113,7 @@ where
         self.dirty.insert(element_id);
     }
 
-    pub fn key<C>(&mut self, key: Key, widget: C) -> WidgetRef
+    pub fn key<C>(&mut self, key: Key, widget: C) -> Widget
     where
         C: AnyWidget,
     {
@@ -123,7 +123,7 @@ where
 
         self.keyed_children.insert(key);
 
-        WidgetRef::new_with_key(
+        Widget::new_with_key(
             Some(match key {
                 Key::Local(_) => WidgetKey(Some(self.element_id), key),
                 Key::Global(_) => WidgetKey(None, key),

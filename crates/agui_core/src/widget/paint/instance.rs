@@ -9,7 +9,7 @@ use crate::{
     unit::{AsAny, Size},
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
-        AnyWidget, IntoChildren, WidgetChild, WidgetPaint, WidgetRef,
+        AnyWidget, IntoChild, Widget, WidgetChild, WidgetPaint,
     },
 };
 
@@ -34,26 +34,14 @@ where
     W: AnyWidget + WidgetChild + WidgetPaint,
 {
     fn widget_name(&self) -> &'static str {
-        let type_name = self.widget.widget_name();
-
-        type_name
-            .split('<')
-            .next()
-            .unwrap_or(type_name)
-            .split("::")
-            .last()
-            .unwrap_or(type_name)
+        self.widget.widget_name()
     }
 
-    fn get_widget(&self) -> Rc<dyn AnyWidget> {
-        Rc::clone(&self.widget) as Rc<dyn AnyWidget>
+    fn build(&mut self, _: WidgetBuildContext) -> Vec<Widget> {
+        Vec::from_iter(self.widget.get_child().into_child())
     }
 
-    fn build(&mut self, _: WidgetBuildContext) -> Vec<WidgetRef> {
-        self.widget.get_child().into_children()
-    }
-
-    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             if Rc::ptr_eq(&self.widget, &new_widget) {
                 ElementUpdate::Noop

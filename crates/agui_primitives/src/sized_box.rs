@@ -2,7 +2,7 @@ use agui_core::{
     unit::{Axis, Constraints, IntrinsicDimension, Offset, Size},
     widget::{
         BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntrinsicSizeContext,
-        LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
+        LayoutContext, Widget, WidgetLayout,
     },
 };
 use agui_macros::LayoutWidget;
@@ -12,7 +12,7 @@ pub struct SizedBox {
     pub width: Option<f32>,
     pub height: Option<f32>,
 
-    pub child: WidgetRef,
+    pub child: Option<Widget>,
 }
 
 impl SizedBox {
@@ -53,15 +53,13 @@ impl SizedBox {
     }
 }
 
-impl WidgetBuild for SizedBox {
-    type Child = WidgetRef;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
-    }
-}
-
 impl WidgetLayout for SizedBox {
+    type Children = Widget;
+
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        Vec::from_iter(self.child.clone())
+    }
+
     fn intrinsic_size(
         &self,
         ctx: &mut IntrinsicSizeContext<Self>,

@@ -6,12 +6,13 @@ mod inherited;
 mod key;
 mod layout;
 mod paint;
-mod r#ref;
 mod stateful;
 mod stateless;
+#[allow(clippy::module_inception)]
+mod widget;
 
 pub use self::{
-    context::*, inherited::*, key::*, layout::*, paint::*, r#ref::*, stateful::*, stateless::*,
+    context::*, inherited::*, key::*, layout::*, paint::*, stateful::*, stateless::*, widget::*,
 };
 
 pub trait ElementBuilder: 'static {
@@ -33,62 +34,67 @@ where
     }
 
     fn widget_name(&self) -> &'static str {
-        std::any::type_name::<Self>()
+        let type_name = std::any::type_name::<T>();
+
+        type_name
+            .split('<')
+            .next()
+            .unwrap_or(type_name)
+            .split("::")
+            .last()
+            .unwrap_or(type_name)
     }
 }
 
-impl dyn AnyWidget {
-    pub fn downcast<T: AnyWidget>(self: Rc<Self>) -> Option<Rc<T>> {
-        AnyWidget::as_any(self).downcast().ok()
-    }
+pub trait IntoWidget {
+    fn into_widget(self) -> Widget;
 }
 
-pub trait IntoWidget: ElementBuilder {
-    fn into_widget(self) -> WidgetRef;
-}
-
-impl<W> IntoWidget for W
+impl<W> From<W> for Widget
 where
-    W: ElementBuilder,
-{
-    fn into_widget(self) -> WidgetRef {
-        WidgetRef::new(self)
-    }
-}
-
-impl<W> From<W> for WidgetRef
-where
-    W: IntoWidget,
+    W: IntoWidget + ElementBuilder,
 {
     fn from(widget: W) -> Self {
-        WidgetRef::new(widget)
+        Widget::new(widget)
     }
 }
 
-pub trait IntoChildren {
-    fn into_children(self) -> Vec<WidgetRef>;
+pub trait IntoChild {
+    fn into_child(self) -> Option<Widget>;
 }
 
-impl IntoChildren for () {
-    fn into_children(self) -> Vec<WidgetRef> {
-        Vec::new()
+impl IntoChild for () {
+    fn into_child(self) -> Option<Widget> {
+        None
     }
 }
 
-impl IntoChildren for Vec<WidgetRef> {
-    fn into_children(self) -> Vec<WidgetRef> {
+impl IntoChild for Widget {
+    fn into_child(self) -> Option<Widget> {
+        Some(self)
+    }
+}
+
+impl IntoChild for Option<Widget> {
+    fn into_child(self) -> Option<Widget> {
         self
     }
 }
 
-impl IntoChildren for WidgetRef {
-    fn into_children(self) -> Vec<WidgetRef> {
-        vec![self]
+impl<W> IntoChild for Option<W>
+where
+    W: AnyWidget,
+{
+    fn into_child(self) -> Option<Widget> {
+        self.map(Widget::new)
     }
 }
 
-impl<T: IntoWidget> IntoChildren for T {
-    fn into_children(self) -> Vec<WidgetRef> {
-        vec![self.into_widget()]
+impl<W> IntoChild for W
+where
+    W: AnyWidget,
+{
+    fn into_child(self) -> Option<Widget> {
+        Some(Widget::new(self))
     }
 }

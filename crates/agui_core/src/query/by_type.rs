@@ -34,7 +34,7 @@ where
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
-            .find(|element| element.get_widget::<W>().is_some())
+            .find(|element| element.get_widget().downcast::<W>().is_some())
     }
 
     #[inline]
@@ -51,22 +51,16 @@ mod tests {
     use crate::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, WidgetBuild, WidgetRef},
+        widget::{BuildContext, Widget, WidgetBuild},
     };
 
     #[derive(Default, StatelessWidget)]
     struct TestWidget1 {
-        pub child: WidgetRef,
-    }
-
-    impl PartialEq for TestWidget1 {
-        fn eq(&self, _: &Self) -> bool {
-            false
-        }
+        pub child: Option<Widget>,
     }
 
     impl WidgetBuild for TestWidget1 {
-        type Child = WidgetRef;
+        type Child = Option<Widget>;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
             self.child.clone()
@@ -75,17 +69,11 @@ mod tests {
 
     #[derive(Default, StatelessWidget)]
     struct TestWidget2 {
-        pub child: WidgetRef,
-    }
-
-    impl PartialEq for TestWidget2 {
-        fn eq(&self, _: &Self) -> bool {
-            false
-        }
+        pub child: Option<Widget>,
     }
 
     impl WidgetBuild for TestWidget2 {
-        type Child = WidgetRef;
+        type Child = Option<Widget>;
 
         fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
             self.child.clone()

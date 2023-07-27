@@ -1,14 +1,11 @@
-use std::rc::Rc;
-
 use crate::{
     callback::CallbackId,
     element::context::{ElementIntrinsicSizeContext, ElementLayoutContext},
     render::canvas::Canvas,
     unit::{AsAny, Constraints, IntrinsicDimension, Size},
-    widget::WidgetRef,
 };
 
-use super::AnyWidget;
+use super::widget::Widget;
 
 mod context;
 
@@ -28,8 +25,6 @@ pub enum ElementUpdate {
 
 pub trait WidgetElement: AsAny {
     fn widget_name(&self) -> &'static str;
-
-    fn get_widget(&self) -> Rc<dyn AnyWidget>;
 
     #[allow(unused_variables)]
     fn mount(&mut self, ctx: WidgetMountContext) {}
@@ -107,10 +102,10 @@ pub trait WidgetElement: AsAny {
         }
     }
 
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef>;
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget>;
 
     /// Returns true if the widget is of the same type as the other widget.
-    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate;
+    fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
     #[allow(unused_variables)]
     fn paint(&self, size: Size) -> Option<Canvas> {

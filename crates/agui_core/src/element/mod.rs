@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use slotmap::new_key_type;
 
 use crate::{
@@ -12,7 +10,7 @@ use crate::{
             WidgetIntrinsicSizeContext, WidgetLayoutContext, WidgetMountContext,
             WidgetUnmountContext,
         },
-        AnyWidget, WidgetKey, WidgetRef,
+        Widget, WidgetKey,
     },
 };
 
@@ -28,7 +26,7 @@ new_key_type! {
 }
 
 pub struct Element {
-    key: Option<WidgetKey>,
+    widget: Widget,
     widget_element: Box<dyn WidgetElement>,
 
     size: Option<Size>,
@@ -36,9 +34,11 @@ pub struct Element {
 }
 
 impl Element {
-    pub(crate) fn new(key: Option<WidgetKey>, widget_element: Box<dyn WidgetElement>) -> Self {
+    pub(crate) fn new(widget: Widget) -> Self {
+        let widget_element = Widget::create_element(&widget);
+
         Self {
-            key,
+            widget,
             widget_element,
 
             size: None,
@@ -50,15 +50,12 @@ impl Element {
         self.widget_element.widget_name()
     }
 
-    pub fn get_key(&self) -> Option<&WidgetKey> {
-        self.key.as_ref()
+    pub fn get_key(&self) -> Option<WidgetKey> {
+        self.widget.get_key()
     }
 
-    pub fn get_widget<T>(&self) -> Option<Rc<T>>
-    where
-        T: AnyWidget,
-    {
-        self.widget_element.get_widget().downcast()
+    pub fn get_widget(&self) -> &Widget {
+        &self.widget
     }
 
     pub fn get_size(&self) -> Option<Size> {
@@ -226,7 +223,7 @@ impl Element {
         size
     }
 
-    pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<WidgetRef> {
+    pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<Widget> {
         let span = tracing::error_span!("build");
         let _enter = span.enter();
 
@@ -241,7 +238,7 @@ impl Element {
         })
     }
 
-    pub fn update_widget(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+    pub fn update_widget(&mut self, new_widget: &Widget) -> ElementUpdate {
         let span = tracing::error_span!("update_widget");
         let _enter = span.enter();
 

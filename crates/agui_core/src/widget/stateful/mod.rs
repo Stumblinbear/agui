@@ -4,7 +4,7 @@ mod instance;
 pub use context::*;
 pub use instance::*;
 
-use super::IntoChildren;
+use super::IntoChild;
 
 pub trait StatefulWidget: Sized + 'static {
     type State: WidgetState<Widget = Self>;
@@ -15,8 +15,7 @@ pub trait StatefulWidget: Sized + 'static {
 pub trait WidgetState: Sized + 'static {
     type Widget;
 
-    #[cfg(not(nightly))]
-    type Child: IntoChildren;
+    type Child: IntoChild;
 
     /// Called when the widget is replaced in the tree by a new widget of the same concrete type.
     #[allow(unused_variables)]
@@ -25,9 +24,5 @@ pub trait WidgetState: Sized + 'static {
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
-    #[cfg(not(nightly))]
     fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child;
-
-    #[cfg(nightly)]
-    fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> impl IntoChildren;
 }

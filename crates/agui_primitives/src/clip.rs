@@ -1,7 +1,7 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Rect, Shape},
-    widget::{WidgetPaint, WidgetRef},
+    widget::{Widget, WidgetPaint},
 };
 use agui_macros::PaintWidget;
 
@@ -13,7 +13,7 @@ pub struct Clip {
     pub anti_alias: bool,
 
     #[child]
-    pub child: WidgetRef,
+    pub child: Option<Widget>,
 }
 
 impl WidgetPaint for Clip {

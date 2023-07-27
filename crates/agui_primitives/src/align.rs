@@ -1,8 +1,6 @@
 use agui_core::{
     unit::{Alignment, Constraints, Size},
-    widget::{
-        BuildContext, ContextWidgetLayoutMut, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef,
-    },
+    widget::{BuildContext, ContextWidgetLayoutMut, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -13,18 +11,16 @@ pub struct Align {
     pub width_factor: Option<f32>,
     pub height_factor: Option<f32>,
 
-    pub child: WidgetRef,
-}
-
-impl WidgetBuild for Align {
-    type Child = WidgetRef;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
-    }
+    pub child: Option<Widget>,
 }
 
 impl WidgetLayout for Align {
+    type Children = Widget;
+
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        Vec::from_iter(self.child.clone())
+    }
+
     fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
         let shrink_wrap_width = self.width_factor.is_some() || !constraints.has_bounded_width();
         let shrink_wrap_height = self.height_factor.is_some() || !constraints.has_bounded_height();

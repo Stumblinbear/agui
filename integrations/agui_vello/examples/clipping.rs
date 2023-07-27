@@ -53,7 +53,7 @@ struct ExampleMain {
 }
 
 impl WidgetBuild for ExampleMain {
-    type Child = WidgetRef;
+    type Child = Widget;
 
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {

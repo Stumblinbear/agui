@@ -1,6 +1,6 @@
 use agui_core::{
     unit::Alignment,
-    widget::{BuildContext, WidgetBuild, WidgetRef},
+    widget::{BuildContext, Widget, WidgetBuild},
 };
 use agui_macros::{build, StatelessWidget};
 
@@ -11,11 +11,11 @@ pub struct Center {
     pub width_factor: Option<f32>,
     pub height_factor: Option<f32>,
 
-    pub child: WidgetRef,
+    pub child: Option<Widget>,
 }
 
 impl WidgetBuild for Center {
-    type Child = WidgetRef;
+    type Child = Widget;
 
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {

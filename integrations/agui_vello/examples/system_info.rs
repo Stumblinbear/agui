@@ -84,7 +84,7 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    type Child = WidgetRef;
+    type Child = Widget;
 
     fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {

@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Constraints, Size},
-    widget::{BuildContext, LayoutContext, WidgetBuild, WidgetLayout, WidgetRef},
+    widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -9,18 +9,16 @@ pub struct Window {
     pub title: String,
     pub size: Size,
 
-    pub child: WidgetRef,
-}
-
-impl WidgetBuild for Window {
-    type Child = WidgetRef;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        self.child.clone()
-    }
+    pub child: Option<Widget>,
 }
 
 impl WidgetLayout for Window {
+    type Children = Widget;
+
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        Vec::from_iter(self.child.clone())
+    }
+
     fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
         Size {
             width: self.size.width,

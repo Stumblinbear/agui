@@ -7,7 +7,8 @@ use crate::{
     unit::AsAny,
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
-        AnyWidget, BuildContext, IntoChildren, WidgetRef,
+        widget::Widget,
+        AnyWidget, BuildContext, IntoChild,
     },
 };
 
@@ -40,22 +41,10 @@ where
     W: AnyWidget + WidgetBuild,
 {
     fn widget_name(&self) -> &'static str {
-        let type_name = self.widget.widget_name();
-
-        type_name
-            .split('<')
-            .next()
-            .unwrap_or(type_name)
-            .split("::")
-            .last()
-            .unwrap_or(type_name)
+        self.widget.widget_name()
     }
 
-    fn get_widget(&self) -> Rc<dyn AnyWidget> {
-        Rc::clone(&self.widget) as Rc<dyn AnyWidget>
-    }
-
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
+    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
         self.callbacks.clear();
 
         let mut ctx = BuildContext {
@@ -72,10 +61,10 @@ where
             callbacks: &mut self.callbacks,
         };
 
-        self.widget.build(&mut ctx).into_children()
+        Vec::from_iter(self.widget.build(&mut ctx).into_child())
     }
 
-    fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             if Rc::ptr_eq(&self.widget, &new_widget) {
                 ElementUpdate::Noop

@@ -1,16 +1,16 @@
-use agui_core::widget::{BuildContext, WidgetBuild, WidgetRef};
+use agui_core::widget::{BuildContext, Widget, WidgetBuild};
 use agui_macros::StatelessWidget;
 
 #[derive(StatelessWidget)]
 pub struct Builder {
     #[allow(clippy::type_complexity)]
-    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> WidgetRef>,
+    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> Widget>,
 }
 
 impl Builder {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&mut BuildContext<Self>) -> WidgetRef + 'static,
+        F: Fn(&mut BuildContext<Self>) -> Widget + 'static,
     {
         Self {
             func: Box::new(func),
@@ -19,7 +19,7 @@ impl Builder {
 }
 
 impl WidgetBuild for Builder {
-    type Child = WidgetRef;
+    type Child = Widget;
 
     fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
         (self.func)(ctx)

@@ -376,17 +376,17 @@ mod tests {
 
         assert_eq!(
             Color::try_from("FF000080".to_string()),
-            Ok(Color::from_rgba((1.0, 0.0, 0.0, 0.502)))
+            Ok(Color::from_rgba((1.0, 0.0, 0.0, 0.5019608)))
         );
 
         assert_eq!(
             Color::try_from("#00FF0080".to_string()),
-            Ok(Color::from_rgba((0.0, 1.0, 0.0, 0.502)))
+            Ok(Color::from_rgba((0.0, 1.0, 0.0, 0.5019608)))
         );
 
         assert_eq!(
             Color::try_from("0x0000FF80".to_string()),
-            Ok(Color::from_rgba((0.0, 0.0, 1.0, 0.502)))
+            Ok(Color::from_rgba((0.0, 0.0, 1.0, 0.5019608)))
         );
     }
 }
