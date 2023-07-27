@@ -25,6 +25,7 @@ rand = "0.8"
 lyon = "0.17"
 
 glyph_brush_layout = "0.2"
+im-rc = "15.1.0"
 
 [dev-dependencies]
 agui_macros = { path = "../agui_macros", version = "0.3", features = [ "internal" ] }

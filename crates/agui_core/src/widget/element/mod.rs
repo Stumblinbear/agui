@@ -31,9 +31,11 @@ pub trait WidgetElement: AsAny {
 
     fn get_widget(&self) -> Rc<dyn AnyWidget>;
 
-    fn mount(&self, ctx: WidgetMountContext) {}
+    #[allow(unused_variables)]
+    fn mount(&mut self, ctx: WidgetMountContext) {}
 
-    fn unmount(&self, ctx: WidgetUnmountContext) {}
+    #[allow(unused_variables)]
+    fn unmount(&mut self, ctx: WidgetUnmountContext) {}
 
     fn intrinsic_size(
         &self,

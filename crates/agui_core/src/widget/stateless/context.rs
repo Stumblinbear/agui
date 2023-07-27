@@ -5,26 +5,24 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
     element::{Element, ElementId},
+    inheritance::InheritanceManager,
     unit::AsAny,
     util::tree::Tree,
-    widget::{
-        AnyWidget, ContextInheritedMut, ContextWidget, Inheritance, InheritedElement,
-        InheritedWidget,
-    },
+    widget::{AnyWidget, ContextInheritedMut, ContextWidget, InheritedElement, InheritedWidget},
 };
 
 pub struct BuildContext<'ctx, W> {
     pub(crate) phantom: PhantomData<W>,
 
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
 
     pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
-
-    pub(crate) inheritance: &'ctx mut Inheritance,
 }
 
 impl<W> ContextWidget<W> for BuildContext<'_, W> {
@@ -42,40 +40,18 @@ impl<W> ContextInheritedMut for BuildContext<'_, W> {
     where
         I: AnyWidget + InheritedWidget,
     {
-        // We depend on this type, so add it to our set of dependencies even if it doesn't exist
-        let Inheritance::Node(inheritance_node) = &mut self.inheritance else {
-            panic!("inherited widgets cannot depend on other inherited widgets");
-        };
-
-        inheritance_node.add_dependency::<I>();
-
-        if let Some(inheritance_scope_id) = inheritance_node.get_scope() {
-            // Grab our ancestor inherited node from the tree. This contains the mappings of available
-            // types that we can consume.
-            let Inheritance::Scope(target_inheritance_scope) = self
+        if let Some(element_id) = self
+            .inheritance_manager
+            .depend_on_inherited_element::<I>(self.element_id)
+        {
+            let inherited_element = self
                 .element_tree
-                .get_mut(inheritance_scope_id)
-                .expect("ancestor inherited element does not exist")
-                .get_inheritance_mut()
-            else {
-                panic!("ancestor inherited element was not an inheritance scope")
-            };
-
-            // Listen to the inheritance scope we're inheriting relying on for updates
-            target_inheritance_scope.add_listener(self.element_id);
-
-            let target_inherited_element_id =
-                target_inheritance_scope.find_inherited_widget::<I>(self.element_id)?;
-
-            // Grab the inherited widget we want from the scope
-            let target_inherited_element = self
-                .element_tree
-                .get_mut(target_inherited_element_id)
+                .get(element_id)
                 .expect("found an inherited widget but it does not exist exist in the tree")
-                .downcast_mut::<InheritedElement<I>>()
-                .expect("target inherited element downcast failed");
+                .downcast::<InheritedElement<I>>()
+                .expect("inherited element downcast failed");
 
-            Some(target_inherited_element.get_inherited_widget())
+            Some(inherited_element.get_inherited_widget())
         } else {
             None
         }

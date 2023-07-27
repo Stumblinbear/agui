@@ -1,13 +1,9 @@
 use std::rc::Rc;
 
 use crate::widget::{
-    element::{
-        ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext, WidgetUnmountContext,
-    },
+    element::{ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext},
     AnyWidget, InheritedWidget, IntoChildren, WidgetRef,
 };
-
-use super::Inheritance;
 
 pub struct InheritedElement<I>
 where
@@ -51,25 +47,19 @@ where
         Rc::clone(&self.widget) as Rc<dyn AnyWidget>
     }
 
-    fn mount(&self, ctx: WidgetMountContext) {
-        *ctx.inheritance =
-            Inheritance::new_scope::<I>(ctx.inheritance.get_ancestor_scope(), ctx.element_id);
+    fn mount(&mut self, ctx: WidgetMountContext) {
+        ctx.inheritance_manager
+            .create_scope::<I>(ctx.parent_element_id, ctx.element_id);
     }
 
-    fn unmount(&self, ctx: WidgetUnmountContext) {}
-
     fn build(&mut self, ctx: WidgetBuildContext) -> Vec<WidgetRef> {
-        let Inheritance::Scope(scope) = ctx.inheritance else {
-            panic!("InheritedElement does not have a scope");
-        };
-
         if self.needs_notify {
             self.needs_notify = false;
 
             // We've been rebuilt and `should_notify` was `true`, so we need to notify all
             // listeners that depend on this widget.
-            for listener_id in &scope.listeners {
-                ctx.dirty.insert(*listener_id);
+            for element_id in ctx.inheritance_manager.compute_changes::<I>(ctx.element_id) {
+                ctx.dirty.insert(element_id);
             }
         }
 

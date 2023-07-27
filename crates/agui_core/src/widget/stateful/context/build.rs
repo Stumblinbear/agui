@@ -5,11 +5,12 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue},
     element::{Element, ElementId},
+    inheritance::InheritanceManager,
     unit::{AsAny, Key},
     util::tree::Tree,
     widget::{
-        AnyWidget, ContextInheritedMut, ContextWidget, Inheritance, InheritedWidget, WidgetKey,
-        WidgetRef, WidgetState,
+        AnyWidget, ContextInheritedMut, ContextWidget, InheritedWidget, WidgetKey, WidgetRef,
+        WidgetState,
     },
 };
 
@@ -63,14 +64,14 @@ where
     S: WidgetState,
 {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
 
     pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn StatefulCallbackFunc<S>>>,
-
-    pub(crate) inheritance: &'ctx mut Inheritance,
 
     pub(crate) keyed_children: FnvHashSet<Key>,
 

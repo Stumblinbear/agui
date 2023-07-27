@@ -12,7 +12,7 @@ use crate::{
             WidgetIntrinsicSizeContext, WidgetLayoutContext, WidgetMountContext,
             WidgetUnmountContext,
         },
-        AnyWidget, Inheritance, WidgetKey, WidgetRef,
+        AnyWidget, WidgetKey, WidgetRef,
     },
 };
 
@@ -33,24 +33,16 @@ pub struct Element {
 
     size: Option<Size>,
     offset: Offset,
-
-    inheritance: Inheritance,
 }
 
 impl Element {
-    pub(crate) fn new(
-        key: Option<WidgetKey>,
-        widget_element: Box<dyn WidgetElement>,
-        inheritance: Inheritance,
-    ) -> Self {
+    pub(crate) fn new(key: Option<WidgetKey>, widget_element: Box<dyn WidgetElement>) -> Self {
         Self {
             key,
             widget_element,
 
             size: None,
             offset: Offset::ZERO,
-
-            inheritance,
         }
     }
 
@@ -77,14 +69,6 @@ impl Element {
         self.offset
     }
 
-    pub fn get_inheritance(&self) -> &Inheritance {
-        &self.inheritance
-    }
-
-    pub fn get_inheritance_mut(&mut self) -> &mut Inheritance {
-        &mut self.inheritance
-    }
-
     pub fn downcast<E>(&self) -> Option<&E>
     where
         E: WidgetElement + 'static,
@@ -105,11 +89,51 @@ impl Element {
 
         self.widget_element.mount(WidgetMountContext {
             element_tree: ctx.element_tree,
+            inheritance_manager: ctx.inheritance_manager,
 
+            dirty: ctx.dirty,
+
+            parent_element_id: ctx.parent_element_id,
             element_id: ctx.element_id,
+        });
 
-            inheritance: &mut self.inheritance,
-        })
+        // If the widget did not insert itself into the inheritance tree, we need to do it ourselves.
+        if !ctx.inheritance_manager.contains(ctx.element_id) {
+            ctx.inheritance_manager
+                .create_node(ctx.parent_element_id, ctx.element_id);
+        }
+    }
+
+    pub fn remount(&mut self, ctx: ElementMountContext) {
+        let span = tracing::error_span!("remount");
+        let _enter = span.enter();
+
+        // If this element is a node:
+        // Check if the parent's inherited scope is different from ours. If it is the same, we can
+        // safely assume nothing has changed and we can skip updates entirely. This is because this
+        // function is only called on the root of the subtree when it is remounted. Changes to the
+        // actual scopes will be handled if a scope is remounted, or if a scope detects it was changed
+        // during dependency propagation.
+        //
+        // If so, we need to update our scope to match the parent's. Loop the subtree to do the same.
+
+        // If this element is a scope:
+        // Check if the parent's inherited scope is different from ours. If it's the same, we don't have
+        // to do anything. This is because this function is only called on the root node of a subtree
+        // when it is remounted. Changes would've been propagated to listeners already regardless of a
+        // remount and re-updating them here would be redundant.
+        //
+        // If the parent's scope is different, we need to update our scope to match it. Update our list
+        // of available scopes to match the parent scope (and include ourselves); if any of them are
+        // different, we must determine which (if any) of them we had listeners for so we can notify them
+        // and re-bind our own listener to the new scope from the old one. Finally, we can loop the
+        // subtree to update their scope to the new one.
+
+        // When looping the subtree, we must skip branches where the scope is different from the old one
+        // we had. This is because we only care about updating the scope of elements that were listening
+        // to the old scope, we don't want to overwrite the scope of elements that are descendants of a
+        // different scope. Additionally, we must notify our direct child scopes to inherit the new scope
+        // from us and update their listeners if necessary.
     }
 
     pub fn unmount(&mut self, ctx: ElementUnmountContext) {
@@ -118,11 +142,14 @@ impl Element {
 
         self.widget_element.unmount(WidgetUnmountContext {
             element_tree: ctx.element_tree,
+            inheritance_manager: ctx.inheritance_manager,
+
+            dirty: ctx.dirty,
 
             element_id: ctx.element_id,
+        });
 
-            inheritance: &mut self.inheritance,
-        })
+        ctx.inheritance_manager.remove(ctx.element_id);
     }
 
     /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
@@ -205,21 +232,61 @@ impl Element {
 
         self.widget_element.build(WidgetBuildContext {
             element_tree: ctx.element_tree,
+            inheritance_manager: ctx.inheritance_manager,
+
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
 
             element_id: ctx.element_id,
-
-            inheritance: &mut self.inheritance,
         })
     }
 
-    pub fn update(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
-        let span = tracing::error_span!("update");
+    pub fn update_widget(&mut self, new_widget: &WidgetRef) -> ElementUpdate {
+        let span = tracing::error_span!("update_widget");
         let _enter = span.enter();
 
         self.widget_element.update(new_widget)
     }
+
+    // pub fn update_inheritance_scope(&mut self, ctx: ElementUpdateInheritanceScopeContext) {
+    //     let span = tracing::error_span!("update_inheritance_scope");
+    //     let _enter = span.enter();
+
+    //     ctx.inheritance_manager
+    //         .update_scope(ctx.element_id, ctx.new_scope);
+
+    //     match &mut self.inheritance {
+    //         Inheritance::Scope(scope) => {
+    //             // Our parent scope has changed. This has potentially far-reaching implications.
+    //             // We must check every element that is listening to this scope and determine
+    //             // if it needs to be updated or not.
+    //             //
+    //             // A listener needs to be updated if:
+    //             // - It is a child of this element
+    //             if scope.get_ancestor_scope() != ctx.new_scope {
+    //                 scope.set_ancestor_scope(ctx.new_scope);
+
+    //                 if let Some(element_id) = ctx.new_scope {
+    //                     let new_scope = ctx.element_tree.get_mut(element_id).expect(
+    //                         "cannot update an element with an inheritance scope not in the tree",
+    //                     );
+
+    //                     let Inheritance::Scope(new_scope) = new_scope.get_inheritance_mut() else {
+    //                         panic!(
+    //                             "cannot update an element with an inheritance scope that is not actually a scope"
+    //                         );
+    //                     };
+    //                 }
+    //             }
+    //         }
+
+    //         Inheritance::Node(node) => {
+    //             // Our parent scope has changed. We need to determine if this is a change that
+    //             // affects this element or not.
+    //             if node.get_scope() != ctx.new_scope {}
+    //         }
+    //     }
+    // }
 
     pub fn paint(&self) -> Option<Canvas> {
         let span = tracing::error_span!("paint");
@@ -241,6 +308,8 @@ impl Element {
         self.widget_element.call(
             WidgetCallbackContext {
                 element_tree: ctx.element_tree,
+                inheritance_manager: ctx.inheritance_manager,
+
                 dirty: ctx.dirty,
 
                 element_id: ctx.element_id,

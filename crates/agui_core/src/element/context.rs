@@ -3,23 +3,33 @@ use fnv::FnvHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
+    inheritance::InheritanceManager,
     util::tree::Tree,
 };
 
 pub struct ElementMountContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
+    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+
+    pub(crate) parent_element_id: Option<ElementId>,
     pub(crate) element_id: ElementId,
 }
 
 pub struct ElementUnmountContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+
+    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
 }
 
 pub struct ElementBuildContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
@@ -28,6 +38,8 @@ pub struct ElementBuildContext<'ctx> {
 
 pub struct ElementCallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx InheritanceManager,
+
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,

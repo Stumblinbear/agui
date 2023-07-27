@@ -101,14 +101,14 @@ where
             phantom: PhantomData,
 
             element_tree: ctx.element_tree,
+            inheritance_manager: ctx.inheritance_manager,
+
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
 
             element_id: ctx.element_id,
 
             callbacks: &mut self.callbacks,
-
-            inheritance: ctx.inheritance,
         };
 
         self.widget.build(&mut ctx).into_children()

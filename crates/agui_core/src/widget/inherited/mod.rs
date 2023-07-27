@@ -1,7 +1,5 @@
-mod inheritance;
 mod instance;
 
-pub(crate) use inheritance::*;
 pub use instance::*;
 
 use super::{AnyWidget, WidgetChild};
@@ -64,6 +62,16 @@ mod tests {
 
     impl InheritedWidget for TestInheritedWidget {}
 
+    #[derive(Default, InheritedWidget)]
+    struct TestOtherInheritedWidget {
+        data: usize,
+
+        #[child]
+        pub child: WidgetRef,
+    }
+
+    impl InheritedWidget for TestOtherInheritedWidget {}
+
     #[derive(StatelessWidget, Default)]
     struct TestDependingWidget;
 
@@ -81,9 +89,9 @@ mod tests {
         }
     }
 
-    fn set_inherited_data(data: usize, child: WidgetRef) {
+    fn set_root_child(child: impl IntoWidget) {
         TEST_HOOK.with(|result| {
-            result.borrow_mut().root_child = TestInheritedWidget { data, child }.into_widget();
+            result.borrow_mut().root_child = child.into_widget();
         });
     }
 
@@ -93,32 +101,73 @@ mod tests {
         });
     }
 
-    #[test]
-    pub fn can_reference_inherited_widget() {
-        let mut manager = WidgetManager::new();
-
-        manager.set_root(TestRootWidget);
-
-        set_inherited_data(7, TestDependingWidget.into_widget());
-        manager.update();
-        assert_inherited_data(7, "should have retrieved the inherited widget");
-    }
+    // TODO: Test cases:
+    // - [x] Child can retrieve inherited widget ancestor
+    // - [x] With multiple nested inherited widgets, the child can retrieve the nearest one
+    // - [x] Child receives updates when the inherited widget changes
+    // - [] When the inherited widget is removed from the tree, the child is updated
+    // - [] When the inherited widget is moved in the tree but not removed, the child is updated
+    // - [] When the child is keyed and reparented, it detects if its inherited widget has changed and updates if necessary
+    // - [] When the child is reparented to a different inherited widget, it detects the change and updates if necessary
 
     #[test]
-    pub fn can_receive_updates() {
+    pub fn updates_scoped_children() {
         let mut manager = WidgetManager::new();
 
         manager.set_root(TestRootWidget);
 
         let depending_widget = TestDependingWidget.into_widget();
 
-        set_inherited_data(4, depending_widget.clone());
-        manager.update();
-        assert_inherited_data(4, "should have retrieved the inherited widget");
+        set_root_child(TestInheritedWidget {
+            data: 7,
+            child: depending_widget.clone(),
+        });
 
-        set_inherited_data(9, depending_widget);
+        manager.update();
+
+        assert_inherited_data(7, "should have retrieved the inherited widget");
+
+        set_root_child(TestInheritedWidget {
+            data: 9,
+            child: depending_widget.clone(),
+        });
+
         manager.mark_dirty(manager.get_root().unwrap());
         manager.update();
+
+        assert_inherited_data(9, "should have updated the child widget");
+    }
+
+    #[test]
+    pub fn updates_nested_scope_children() {
+        let mut manager = WidgetManager::new();
+
+        manager.set_root(TestRootWidget);
+
+        let nested_scope = TestOtherInheritedWidget {
+            data: 3,
+
+            child: TestDependingWidget.into_widget(),
+        }
+        .into_widget();
+
+        set_root_child(TestInheritedWidget {
+            data: 7,
+            child: nested_scope.clone(),
+        });
+
+        manager.update();
+
+        assert_inherited_data(7, "should have retrieved the inherited widget");
+
+        set_root_child(TestInheritedWidget {
+            data: 9,
+            child: nested_scope.clone(),
+        });
+
+        manager.mark_dirty(manager.get_root().unwrap());
+        manager.update();
+
         assert_inherited_data(9, "should have updated the child widget");
     }
 }

@@ -18,10 +18,11 @@ use crate::{
         },
         Element, ElementId,
     },
+    inheritance::InheritanceManager,
     query::WidgetQuery,
     unit::{Constraints, Font},
     util::tree::Tree,
-    widget::{element::ElementUpdate, AnyWidget, Inheritance, WidgetKey, WidgetRef},
+    widget::{element::ElementUpdate, AnyWidget, WidgetKey, WidgetRef},
 };
 
 pub mod events;
@@ -32,6 +33,8 @@ use events::ElementEvent;
 #[derive(Default)]
 pub struct WidgetManager {
     element_tree: Tree<ElementId, Element>,
+    inheritance_manager: InheritanceManager,
+
     keyed_elements: FnvHashMap<WidgetKey, ElementId>,
 
     dirty: FnvHashSet<ElementId>,
@@ -344,6 +347,8 @@ impl WidgetManager {
                         let changed = element.call(
                             ElementCallbackContext {
                                 element_tree,
+                                inheritance_manager: &self.inheritance_manager,
+
                                 dirty: &mut self.dirty,
 
                                 element_id,
@@ -411,7 +416,7 @@ impl WidgetManager {
 
             // Check the existing element against the new widget to see what we can safely
             // do about retaining its state
-            match existing_element.update(&widget_ref) {
+            match existing_element.update_widget(&widget_ref) {
                 ElementUpdate::Noop => {
                     return SpawnResult::Retained {
                         element_id: existing_element_id,
@@ -436,22 +441,7 @@ impl WidgetManager {
             "spawning widget"
         );
 
-        // Inherit the parent's scope
-        let inheritance_scope = parent_id.and_then(|parent_id| {
-            let inheritance = self.element_tree.get(parent_id).unwrap().get_inheritance();
-
-            if inheritance.is_scope() {
-                Some(parent_id)
-            } else {
-                inheritance.get_ancestor_scope()
-            }
-        });
-
-        let element = Element::new(
-            *key,
-            Rc::clone(widget).create_element(),
-            Inheritance::new_node(inheritance_scope),
-        );
+        let element = Element::new(*key, Rc::clone(widget).create_element());
 
         let element_id = self.element_tree.add(parent_id, element);
 
@@ -462,7 +452,11 @@ impl WidgetManager {
 
             element.mount(ElementMountContext {
                 element_tree,
+                inheritance_manager: &mut self.inheritance_manager,
 
+                dirty: &mut self.dirty,
+
+                parent_element_id: parent_id,
                 element_id,
             });
         });
@@ -494,6 +488,8 @@ impl WidgetManager {
                 .with(element_id, |element_tree, element| {
                     element.build(ElementBuildContext {
                         element_tree,
+                        inheritance_manager: &mut self.inheritance_manager,
+
                         dirty: &mut self.dirty,
                         callback_queue: &self.callback_queue,
 
@@ -540,9 +536,13 @@ impl WidgetManager {
 
                             self.element_tree
                                 .with(keyed_element_id, |element_tree, element| {
-                                    element.mount(ElementMountContext {
+                                    element.remount(ElementMountContext {
                                         element_tree,
+                                        inheritance_manager: &mut self.inheritance_manager,
 
+                                        dirty: &mut self.dirty,
+
+                                        parent_element_id: Some(element_id),
                                         element_id: keyed_element_id,
                                     });
                                 });
@@ -628,6 +628,9 @@ impl WidgetManager {
                 .with(element_id, |element_tree, element| {
                     element.unmount(ElementUnmountContext {
                         element_tree,
+                        inheritance_manager: &mut self.inheritance_manager,
+
+                        dirty: &mut self.dirty,
 
                         element_id,
                     });

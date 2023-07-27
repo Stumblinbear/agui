@@ -64,14 +64,14 @@ where
 
         let mut ctx = StatefulBuildContext {
             element_tree: ctx.element_tree,
+            inheritance_manager: ctx.inheritance_manager,
+
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
 
             element_id: ctx.element_id,
 
             callbacks: &mut self.callbacks,
-
-            inheritance: ctx.inheritance,
 
             keyed_children: FnvHashSet::default(),
 
@@ -109,6 +109,8 @@ where
             {
                 let mut ctx = StatefulCallbackContext {
                     element_tree: ctx.element_tree,
+                    inheritance_manager: ctx.inheritance_manager,
+
                     dirty: ctx.dirty,
 
                     element_id: ctx.element_id,

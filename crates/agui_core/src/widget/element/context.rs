@@ -3,39 +3,44 @@ use fnv::FnvHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
+    inheritance::InheritanceManager,
     unit::Offset,
     util::tree::Tree,
-    widget::Inheritance,
 };
 
 pub struct WidgetMountContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
+    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+
+    pub(crate) parent_element_id: Option<ElementId>,
     pub(crate) element_id: ElementId,
-
-    pub(crate) inheritance: &'ctx mut Inheritance,
 }
 
 pub struct WidgetUnmountContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+
+    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
-
-    pub(crate) inheritance: &'ctx mut Inheritance,
 }
 
 pub struct WidgetBuildContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
-
-    pub(crate) inheritance: &'ctx mut Inheritance,
 }
 
 pub struct WidgetCallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) inheritance_manager: &'ctx InheritanceManager,
+
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
