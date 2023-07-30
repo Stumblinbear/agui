@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[derive(StatefulWidget, Clone, Debug, Default, PartialEq)]
-    struct TestWidgetReader {}
+    struct TestWidgetReader;
 
     impl WidgetState for TestWidgetReader {
         type State = u32;
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     pub fn tracks_listeners() {
-        let mut manager = WidgetManager::with_root(TestWidgetReader::default());
+        let mut manager = WidgetManager::with_root(TestWidgetReader);
 
         manager.add_plugin(GlobalPlugin::default());
 
@@ -374,13 +374,13 @@ mod tests {
 
     #[test]
     pub fn does_not_leak_memory() {
-        let mut manager = WidgetManager::with_root(TestWidgetReader::default());
+        let mut manager = WidgetManager::with_root(TestWidgetReader);
 
         manager.add_plugin(GlobalPlugin::default());
 
         manager.update();
 
-        manager.set_root(TestWidgetReader::default());
+        manager.set_root(TestWidgetReader);
 
         manager.update();
 
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     pub fn reading_globals() {
-        let mut manager = WidgetManager::with_root(TestWidgetReader::default());
+        let mut manager = WidgetManager::with_root(TestWidgetReader);
 
         manager.add_plugin(GlobalPlugin::default());
 
@@ -438,7 +438,7 @@ mod tests {
         let mut manager = WidgetManager::with_root(Column {
             children: [
                 // Put the reader first so the writer will update the global
-                TestWidgetReader::default().into(),
+                TestWidgetReader.into(),
                 TestWidgetWriter::default().into(),
             ]
             .into(),

@@ -36,9 +36,7 @@ fn main() {
         },
     );
 
-    let deja_vu = ui
-        .load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))
-        .unwrap();
+    let deja_vu = Font::try_from_slice(include_bytes!("./fonts/DejaVuSans.ttf")).unwrap();
 
     ui.set_root(App {
         child: ExampleMain { font: deja_vu }.into(),
@@ -86,7 +84,7 @@ impl WidgetState for ExampleMainState {
 
     type Child = Widget;
 
-    fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             let system_info = system_info.clone();
 

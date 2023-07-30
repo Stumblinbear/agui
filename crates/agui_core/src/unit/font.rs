@@ -1,5 +1,7 @@
+use std::{ops::Deref, sync::Arc};
+
 use glyph_brush_layout::{
-    ab_glyph::{Font as GlyphFont, FontArc, GlyphId, ScaleFont},
+    ab_glyph::{Font as GlyphFont, FontArc, GlyphId, InvalidFont, ScaleFont},
     BuiltInLineBreaker, FontId as GlyphFontId, GlyphPositioner, Layout as GlyphLayout,
     SectionGeometry, SectionGlyph, SectionText,
 };
@@ -7,19 +9,23 @@ use glyph_brush_layout::{
 use crate::unit::{Color, Rect};
 
 #[derive(Debug, Clone, Default)]
-pub struct Font(pub(crate) usize, pub(crate) Option<FontArc>);
+pub struct Font(Option<FontArc>);
 
 impl PartialEq for Font {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        match (&self.0, &other.0) {
+            // war crimes
+            (Some(self_font), Some(other_font)) => std::ptr::eq(
+                Arc::as_ptr(&Arc::from(self_font)) as *const _ as *const (),
+                Arc::as_ptr(&Arc::from(other_font)) as *const _ as *const (),
+            ),
+            (Some(_), None) | (None, Some(_)) => false,
+            (None, None) => true,
+        }
     }
 }
 
 impl Font {
-    pub fn get(&self) -> Option<&FontArc> {
-        self.1.as_ref()
-    }
-
     pub fn styled(&self) -> FontStyle {
         FontStyle {
             font: self.clone(),
@@ -32,6 +38,30 @@ impl Font {
 
             ..FontStyle::default()
         }
+    }
+}
+
+impl Font {
+    pub fn try_from_slice(bytes: &'static [u8]) -> Result<Self, InvalidFont> {
+        FontArc::try_from_slice(bytes).map(Self::from)
+    }
+
+    pub fn try_from_vec(bytes: Vec<u8>) -> Result<Self, InvalidFont> {
+        FontArc::try_from_vec(bytes).map(Self::from)
+    }
+}
+
+impl From<FontArc> for Font {
+    fn from(font: FontArc) -> Self {
+        Self(Some(font))
+    }
+}
+
+impl Deref for Font {
+    type Target = Option<FontArc>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -49,7 +79,7 @@ pub struct FontStyle {
 impl Default for FontStyle {
     fn default() -> Self {
         Self {
-            font: Font(0, None),
+            font: Font(None),
             size: 16.0,
             color: Color {
                 red: 1.0,
@@ -65,6 +95,10 @@ impl Default for FontStyle {
 }
 
 impl FontStyle {
+    pub fn get_font(&self) -> Option<&FontArc> {
+        self.font.as_ref()
+    }
+
     pub fn size(mut self, size: f32) -> Self {
         self.size = size;
         self
@@ -85,18 +119,14 @@ impl FontStyle {
         self
     }
 
-    pub fn get(&self) -> Option<&FontArc> {
-        self.font.get()
-    }
-
     pub fn h_advance(&self, glyph_id: GlyphId) -> f32 {
-        self.get()
+        self.get_font()
             .map(|font| font.as_scaled(self.size).h_advance(glyph_id))
             .unwrap_or(0.0)
     }
 
     pub fn v_advance(&self, glyph_id: GlyphId) -> f32 {
-        self.get()
+        self.get_font()
             .map(|font| font.as_scaled(self.size).v_advance(glyph_id))
             .unwrap_or(0.0)
     }
@@ -106,7 +136,7 @@ impl FontStyle {
             return Vec::new();
         }
 
-        self.font.get().map_or_else(Vec::default, |font| {
+        self.get_font().map_or_else(Vec::default, |font| {
             let glyphs_layout = GlyphLayout::Wrap {
                 line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
                 h_align: match self.h_align {

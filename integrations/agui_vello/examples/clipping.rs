@@ -33,12 +33,7 @@ fn main() {
         },
     );
 
-    // ui.register_default_plugins();
-    // ui.register_default_globals();
-
-    let deja_vu = ui
-        .load_font_bytes(include_bytes!("./fonts/DejaVuSans.ttf"))
-        .unwrap();
+    let deja_vu = Font::try_from_slice(include_bytes!("./fonts/DejaVuSans.ttf")).unwrap();
 
     ui.set_root(App {
         child: ExampleMain { font: deja_vu }.into(),
