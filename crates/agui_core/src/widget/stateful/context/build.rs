@@ -9,8 +9,8 @@ use crate::{
     unit::{AsAny, Key},
     util::tree::Tree,
     widget::{
-        AnyWidget, ContextInheritedMut, ContextWidget, InheritedWidget, Widget, WidgetKey,
-        WidgetState,
+        AnyWidget, ContextInheritedMut, ContextWidget, InheritedElement, InheritedWidget, Widget,
+        WidgetKey, WidgetState,
     },
 };
 
@@ -154,47 +154,22 @@ where
 {
     fn depend_on_inherited_widget<I>(&mut self) -> Option<&I>
     where
-        I: InheritedWidget + 'static,
+        I: AnyWidget + InheritedWidget,
     {
-        let type_id = TypeId::of::<I>();
+        if let Some(element_id) = self
+            .inheritance_manager
+            .depend_on_inherited_element(self.element_id, TypeId::of::<I>())
+        {
+            let inherited_element = self
+                .element_tree
+                .get(element_id)
+                .expect("found an inherited widget but it does not exist exist in the tree")
+                .downcast::<InheritedElement<I>>()
+                .expect("inherited element downcast failed");
 
-        // self.inheritance.listening_to.insert(type_id);
-
-        // if let Some(inheritance_scope_id) = self.inheritance.scope {
-        //     // Grab our ancestor inherited node from the tree. This contains the mappings of available
-        //     // types that we can consume.
-        //     let target_inherited_element_id = self
-        //         .element_tree
-        //         .get(inheritance_scope_id)
-        //         .expect("ancestor inherited node does not exist")
-        //         .inheritance_scope
-        //         .available
-        //         .get(&type_id)
-        //         .copied();
-
-        //     if let Some(target_inherited_element_id) = target_inherited_element_id {
-        //         let target_inherited_element = self
-        //             .element_tree
-        //             .get_mut(target_inherited_element_id)
-        //             .expect("inherited element does not exist");
-
-        //         let inheritance_node = &mut target_inherited_element.inheritance_scope;
-
-        //         // Add this widget as a listener on the element we're inheriting from
-        //         inheritance_node.listeners.insert(self.element_id);
-
-        //         self.inheritance
-        //             .depends_on
-        //             .insert(target_inherited_element_id);
-
-        //         let instance = target_inherited_element
-        //             .downcast_mut::<WidgetInstance<I>>()
-        //             .expect("inherited widget downcast failed");
-
-        //         return Some(&mut instance.state);
-        //     }
-        // }
-
-        None
+            Some(inherited_element.get_inherited_widget())
+        } else {
+            None
+        }
     }
 }
