@@ -3,7 +3,10 @@ use std::{any::TypeId, marker::PhantomData};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::{Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue},
+    callback::{
+        Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue,
+        WidgetCallback,
+    },
     element::{Element, ElementId},
     inheritance::InheritanceManager,
     unit::AsAny,
@@ -68,11 +71,11 @@ impl<W: 'static> BuildContext<'_, W> {
         A: AsAny,
         F: Fn(&mut CallbackContext<W>, &A) + 'static,
     {
-        let callback = Callback::new::<F>(self.element_id, self.callback_queue.clone());
+        let callback = WidgetCallback::new::<F>(self.element_id, self.callback_queue.clone());
 
         self.callbacks
-            .insert(callback.get_id().unwrap(), Box::new(CallbackFn::new(func)));
+            .insert(callback.get_id(), Box::new(CallbackFn::new(func)));
 
-        callback
+        Callback::Widget(callback)
     }
 }

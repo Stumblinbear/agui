@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::CallbackQueue,
+    callback::{CallbackInvoke, CallbackQueue},
     element::{
         context::{
             ElementBuildContext, ElementCallbackContext, ElementLayoutContext, ElementMountContext,
@@ -304,35 +304,43 @@ impl WidgetManager {
         let callback_invokes = self.callback_queue.take();
 
         for invoke in callback_invokes {
-            let callback_id = invoke.callback_id;
-            let element_id = callback_id.get_element_id();
+            match invoke {
+                CallbackInvoke::Func { func } => func(),
 
-            self.element_tree
-                .with(element_id, |element_tree, element| {
-                    let changed = element.call(
-                        ElementCallbackContext {
-                            element_tree,
-                            inheritance_manager: &self.inheritance_manager,
+                CallbackInvoke::Widget {
+                    callback_id,
+                    arg: callback_arg,
+                } => {
+                    let element_id = callback_id.get_element_id();
 
-                            dirty: &mut self.dirty,
+                    self.element_tree
+                        .with(element_id, |element_tree, element| {
+                            let changed = element.call(
+                                ElementCallbackContext {
+                                    element_tree,
+                                    inheritance_manager: &self.inheritance_manager,
 
-                            element_id,
-                        },
-                        callback_id,
-                        invoke.arg,
-                    );
+                                    dirty: &mut self.dirty,
 
-                    if changed {
-                        tracing::debug!(
-                            id = &format!("{:?}", element_id),
-                            element = element.widget_name(),
-                            "element updated, queueing for rebuild"
-                        );
+                                    element_id,
+                                },
+                                callback_id,
+                                callback_arg,
+                            );
 
-                        self.modifications.push_back(Modify::Rebuild(element_id));
-                    }
-                })
-                .expect("cannot call a callback on a widget that does not exist");
+                            if changed {
+                                tracing::debug!(
+                                    id = &format!("{:?}", element_id),
+                                    element = element.widget_name(),
+                                    "element updated, queueing for rebuild"
+                                );
+
+                                self.modifications.push_back(Modify::Rebuild(element_id));
+                            }
+                        })
+                        .expect("cannot call a callback on a widget that does not exist");
+                }
+            }
         }
     }
 

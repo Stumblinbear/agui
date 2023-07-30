@@ -93,6 +93,11 @@ impl VisitMut for BuildVisitor {
                 self.visit_expr_struct_mut(&mut struct_expr);
 
                 value.expr = Expr::MethodCall(parse_quote! { #struct_expr.into() });
+            } else if let Expr::Closure(mut closure_expr) = value.expr.clone() {
+                // Wrap closures in parentheses so that it can `.into()` to Callbacks properly
+                self.visit_expr_closure_mut(&mut closure_expr);
+
+                value.expr = Expr::MethodCall(parse_quote! { (#closure_expr).into() });
             }
         }
     }

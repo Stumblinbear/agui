@@ -5,10 +5,7 @@ use agui::{
     util::tree::new_key_type,
 };
 use vello::{
-    fello::{
-        raw::{FontRef, TableProvider},
-        MetadataProvider,
-    },
+    fello::{raw::FontRef, MetadataProvider},
     glyph::GlyphContext,
     kurbo::{Affine, PathEl, Vec2},
     peniko::{Brush, Color, Fill, Font, Mix},

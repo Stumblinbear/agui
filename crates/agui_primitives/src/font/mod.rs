@@ -6,7 +6,7 @@ use agui_core::{
         Widget, WidgetState,
     },
 };
-use agui_macros::{InheritedWidget, StatefulWidget};
+use agui_macros::{build, InheritedWidget, StatefulWidget};
 
 #[derive(StatefulWidget, Debug, Default)]
 pub struct Fonts {
@@ -59,22 +59,23 @@ impl WidgetState for FontsState {
     type Child = AvailableFonts;
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
-        let add_font = ctx.callback::<(String, Font), _>(|ctx, (name, font)| {
-            ctx.set_state(move |state| {
-                state.added_fonts.insert(name.to_string(), font);
-            });
-        });
+        build! {
+            AvailableFonts {
+                available_fonts: self.added_fonts.clone().union(self.initial_fonts.clone()),
 
-        AvailableFonts {
-            available_fonts: self.added_fonts.clone().union(self.initial_fonts.clone()),
-            add_font,
+                add_font: ctx.callback(move |ctx, (name, font): (String, Font)| {
+                    ctx.set_state(move |state| {
+                        state.added_fonts.insert(name.to_string(), font);
+                    });
+                }),
 
-            child: ctx.widget.child.clone(),
+                child: ctx.widget.child.clone(),
+            }
         }
     }
 }
 
-#[derive(InheritedWidget)]
+#[derive(InheritedWidget, Default)]
 pub struct AvailableFonts {
     available_fonts: im_rc::HashMap<String, Font>,
 

@@ -6,7 +6,7 @@ use std::{
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::{Callback, CallbackId, CallbackQueue},
+    callback::{Callback, CallbackId, CallbackQueue, Notifier, WidgetCallback},
     element::{Element, ElementId},
     inheritance::InheritanceManager,
     unit::{AsAny, Key},
@@ -53,12 +53,12 @@ where
     A: AsAny,
     F: Fn(&mut StatefulCallbackContext<W>, A),
 {
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: Box<dyn Any>) {
-        let args = args
+    fn call(&self, ctx: &mut StatefulCallbackContext<W>, arg: Box<dyn Any>) {
+        let arg = arg
             .downcast::<A>()
-            .expect("failed to downcast callback args");
+            .expect("failed to downcast callback argument");
 
-        (self.func)(ctx, *args)
+        (self.func)(ctx, *arg)
     }
 }
 
@@ -106,6 +106,12 @@ where
         self.dirty.insert(element_id);
     }
 
+    /// Creates a notifier for the current widget, which can be used to rebuild the widget when
+    /// needed.
+    pub fn get_notifier(&mut self) -> Notifier {
+        Notifier::new(self.element_id, self.callback_queue.clone())
+    }
+
     pub fn key<C>(&mut self, key: Key, widget: C) -> Widget
     where
         C: AnyWidget,
@@ -130,14 +136,12 @@ where
         A: AsAny,
         F: Fn(&mut StatefulCallbackContext<S>, A) + 'static,
     {
-        let callback = Callback::new::<F>(self.element_id, self.callback_queue.clone());
+        let callback = WidgetCallback::new::<F>(self.element_id, self.callback_queue.clone());
 
-        self.callbacks.insert(
-            callback.get_id().unwrap(),
-            Box::new(StatefulCallbackFn::new(func)),
-        );
+        self.callbacks
+            .insert(callback.get_id(), Box::new(StatefulCallbackFn::new(func)));
 
-        callback
+        Callback::Widget(callback)
     }
 }
 

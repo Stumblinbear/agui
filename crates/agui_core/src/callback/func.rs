@@ -38,11 +38,11 @@ where
     A: AsAny,
     F: Fn(&mut CallbackContext<W>, A),
 {
-    fn call(&self, ctx: &mut CallbackContext<W>, args: Box<dyn Any>) {
-        let args = args
+    fn call(&self, ctx: &mut CallbackContext<W>, arg: Box<dyn Any>) {
+        let arg = arg
             .downcast::<A>()
-            .expect("failed to downcast callback args");
+            .expect("failed to downcast callback argument");
 
-        (self.func)(ctx, *args)
+        (self.func)(ctx, *arg)
     }
 }
