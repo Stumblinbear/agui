@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 use crate::{
     callback::CallbackId,
@@ -6,7 +6,7 @@ use crate::{
         painter::{CanvasPainter, Head},
         Canvas,
     },
-    unit::{AsAny, Size},
+    unit::Size,
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
         AnyWidget, IntoChild, Widget, WidgetChild, WidgetPaint,
@@ -69,7 +69,7 @@ where
         }
     }
 
-    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: &Box<dyn AsAny>) -> bool {
+    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: Box<dyn Any>) -> bool {
         unreachable!("paint widgets do not have callbacks")
     }
 }

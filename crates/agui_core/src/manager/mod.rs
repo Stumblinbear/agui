@@ -1,12 +1,6 @@
-use std::{
-    collections::VecDeque,
-    fs::File,
-    io::{self, BufReader, Read},
-};
+use std::collections::VecDeque;
 
 use fnv::{FnvHashMap, FnvHashSet};
-
-use glyph_brush_layout::ab_glyph::{FontArc, InvalidFont};
 
 use crate::{
     callback::CallbackQueue,
@@ -19,7 +13,7 @@ use crate::{
     },
     inheritance::InheritanceManager,
     query::WidgetQuery,
-    unit::{Constraints, Font},
+    unit::Constraints,
     util::tree::Tree,
     widget::{element::ElementUpdate, IntoWidget, Widget},
 };
@@ -40,8 +34,6 @@ pub struct WidgetManager {
     callback_queue: CallbackQueue,
 
     modifications: VecDeque<Modify>,
-
-    fonts: Vec<FontArc>,
 }
 
 impl WidgetManager {
@@ -58,39 +50,6 @@ impl WidgetManager {
         manager.set_root(widget);
 
         manager
-    }
-
-    pub fn get_fonts(&self) -> &[FontArc] {
-        &self.fonts
-    }
-
-    pub fn load_font_file(&mut self, filename: &str) -> io::Result<Font> {
-        let f = File::open(filename)?;
-
-        let mut reader = BufReader::new(f);
-
-        let mut bytes = Vec::new();
-
-        reader.read_to_end(&mut bytes)?;
-
-        let font = FontArc::try_from_vec(bytes)
-            .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
-
-        Ok(self.load_font(font))
-    }
-
-    pub fn load_font_bytes(&mut self, bytes: &'static [u8]) -> Result<Font, InvalidFont> {
-        let font = FontArc::try_from_slice(bytes)?;
-
-        Ok(self.load_font(font))
-    }
-
-    pub fn load_font(&mut self, font: FontArc) -> Font {
-        let font_id = self.fonts.len();
-
-        self.fonts.push(font.clone());
-
-        Font(font_id, Some(font))
     }
 
     /// Get the element tree.
@@ -345,36 +304,35 @@ impl WidgetManager {
         let callback_invokes = self.callback_queue.take();
 
         for invoke in callback_invokes {
-            for callback_id in invoke.callback_ids {
-                let element_id = callback_id.get_element_id();
+            let callback_id = invoke.callback_id;
+            let element_id = callback_id.get_element_id();
 
-                self.element_tree
-                    .with(element_id, |element_tree, element| {
-                        let changed = element.call(
-                            ElementCallbackContext {
-                                element_tree,
-                                inheritance_manager: &self.inheritance_manager,
+            self.element_tree
+                .with(element_id, |element_tree, element| {
+                    let changed = element.call(
+                        ElementCallbackContext {
+                            element_tree,
+                            inheritance_manager: &self.inheritance_manager,
 
-                                dirty: &mut self.dirty,
+                            dirty: &mut self.dirty,
 
-                                element_id,
-                            },
-                            callback_id,
-                            &invoke.arg,
+                            element_id,
+                        },
+                        callback_id,
+                        invoke.arg,
+                    );
+
+                    if changed {
+                        tracing::debug!(
+                            id = &format!("{:?}", element_id),
+                            element = element.widget_name(),
+                            "element updated, queueing for rebuild"
                         );
 
-                        if changed {
-                            tracing::debug!(
-                                id = &format!("{:?}", element_id),
-                                element = element.widget_name(),
-                                "element updated, queueing for rebuild"
-                            );
-
-                            self.modifications.push_back(Modify::Rebuild(element_id));
-                        }
-                    })
-                    .expect("cannot call a callback on a widget that does not exist");
-            }
+                        self.modifications.push_back(Modify::Rebuild(element_id));
+                    }
+                })
+                .expect("cannot call a callback on a widget that does not exist");
         }
     }
 

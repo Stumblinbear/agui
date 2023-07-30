@@ -4,7 +4,7 @@ use crate::{
     element::{Element, ElementId},
     inheritance::InheritanceManager,
     util::tree::Tree,
-    widget::{ContextWidget, ContextWidgetState, ContextWidgetStateMut},
+    widget::{ContextWidget, ContextWidgetStateMut},
 };
 
 pub struct StatefulCallbackContext<'ctx, S> {
@@ -15,9 +15,9 @@ pub struct StatefulCallbackContext<'ctx, S> {
 
     pub(crate) element_id: ElementId,
 
-    pub(crate) state: &'ctx S,
+    pub(crate) state: &'ctx mut S,
 
-    pub(crate) set_states: &'ctx mut Vec<Box<dyn FnOnce(&mut S)>>,
+    pub(crate) is_changed: bool,
 }
 
 impl<S> StatefulCallbackContext<'_, S> {
@@ -36,17 +36,13 @@ impl<S> ContextWidget<S> for StatefulCallbackContext<'_, S> {
     }
 }
 
-impl<S> ContextWidgetState<S> for StatefulCallbackContext<'_, S> {
-    fn get_state(&self) -> &S {
-        self.state
-    }
-}
-
 impl<'ctx, S> ContextWidgetStateMut<'ctx, S> for StatefulCallbackContext<'ctx, S> {
     fn set_state<F>(&mut self, func: F)
     where
         F: FnOnce(&mut S) + 'static,
     {
-        self.set_states.push(Box::new(func));
+        func(self.state);
+
+        self.is_changed = true;
     }
 }

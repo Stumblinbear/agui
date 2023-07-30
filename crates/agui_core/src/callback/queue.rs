@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use parking_lot::Mutex;
 
@@ -26,44 +26,61 @@ impl CallbackQueue {
     {
         if let Some(callback_id) = callback.get_id() {
             self.queue.lock().push(CallbackInvoke {
-                callback_ids: vec![callback_id],
+                callback_id,
                 arg: Box::new(arg),
             });
         }
     }
 
-    pub fn call_many<A>(&self, callbacks: &[Callback<A>], arg: A)
+    pub fn call_many<'a, A>(&self, callbacks: impl IntoIterator<Item = &'a Callback<A>>, arg: A)
     where
-        A: AsAny,
+        A: AsAny + Clone,
     {
-        self.queue.lock().push(CallbackInvoke {
-            callback_ids: callbacks.iter().filter_map(|id| id.get_id()).collect(),
-            arg: Box::new(arg),
-        });
+        self.queue
+            .lock()
+            .extend(
+                callbacks
+                    .into_iter()
+                    .filter_map(|id| id.get_id())
+                    .map(|callback_id| CallbackInvoke {
+                        callback_id,
+                        arg: Box::new(arg.clone()),
+                    }),
+            );
     }
 
     /// # Panics
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
-    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn AsAny>) {
-        self.queue.lock().push(CallbackInvoke {
-            callback_ids: vec![callback_id],
-            arg,
-        });
+    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any>) {
+        self.queue.lock().push(CallbackInvoke { callback_id, arg });
     }
 
     /// # Panics
     ///
     /// This function must be called with the expected `arg` for all of the `callback_ids`, or it will panic.
-    pub fn call_many_unchecked(&self, callback_ids: &[CallbackId], arg: Box<dyn AsAny>) {
-        self.queue.lock().push(CallbackInvoke {
-            callback_ids: Vec::from(callback_ids),
-            arg,
-        });
+    pub fn call_many_unchecked<'a, A>(
+        &self,
+        callback_ids: impl IntoIterator<Item = &'a CallbackId>,
+        arg: A,
+    ) where
+        A: AsAny + Clone,
+    {
+        self.queue
+            .lock()
+            .extend(
+                callback_ids
+                    .into_iter()
+                    .copied()
+                    .map(|callback_id| CallbackInvoke {
+                        callback_id,
+                        arg: Box::new(arg.clone()),
+                    }),
+            );
     }
 }
 
 pub(crate) struct CallbackInvoke {
-    pub callback_ids: Vec<CallbackId>,
-    pub arg: Box<dyn AsAny>,
+    pub callback_id: CallbackId,
+    pub arg: Box<dyn Any>,
 }

@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::{
     callback::CallbackId,
     element::context::{ElementIntrinsicSizeContext, ElementLayoutContext},
@@ -118,7 +120,7 @@ pub trait WidgetElement: AsAny {
         &mut self,
         ctx: WidgetCallbackContext,
         callback_id: CallbackId,
-        arg: &Box<dyn AsAny>,
+        arg: Box<dyn Any>,
     ) -> bool {
         panic!("callbacks are not supported on this widget type");
     }

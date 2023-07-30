@@ -1,10 +1,9 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::{any::Any, marker::PhantomData, rc::Rc};
 
 use fnv::FnvHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
-    unit::AsAny,
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
         widget::Widget,
@@ -78,7 +77,7 @@ where
         &mut self,
         ctx: WidgetCallbackContext,
         callback_id: CallbackId,
-        arg: &Box<dyn AsAny>,
+        arg: Box<dyn Any>,
     ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {

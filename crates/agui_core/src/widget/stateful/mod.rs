@@ -19,10 +19,10 @@ pub trait WidgetState: Sized + 'static {
 
     /// Called when the widget is replaced in the tree by a new widget of the same concrete type.
     #[allow(unused_variables)]
-    fn updated(&self, new_widget: &Self::Widget) {}
+    fn updated(&mut self, new_widget: &Self::Widget) {}
 
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
-    fn build(&self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child;
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child;
 }

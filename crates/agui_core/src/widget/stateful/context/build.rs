@@ -1,4 +1,7 @@
-use std::{any::TypeId, marker::PhantomData};
+use std::{
+    any::{Any, TypeId},
+    marker::PhantomData,
+};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -14,17 +17,17 @@ use crate::{
     },
 };
 
-use super::{ContextWidgetState, StatefulCallbackContext};
+use super::StatefulCallbackContext;
 
 pub trait StatefulCallbackFunc<W> {
     #[allow(clippy::borrowed_box)]
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: &Box<dyn AsAny>);
+    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: Box<dyn Any>);
 }
 
 pub struct StatefulCallbackFn<W, A, F>
 where
     A: 'static,
-    F: Fn(&mut StatefulCallbackContext<W>, &A),
+    F: Fn(&mut StatefulCallbackContext<W>, A),
 {
     phantom: PhantomData<(W, A, F)>,
 
@@ -34,7 +37,7 @@ where
 impl<W, A, F> StatefulCallbackFn<W, A, F>
 where
     A: 'static,
-    F: Fn(&mut StatefulCallbackContext<W>, &A),
+    F: Fn(&mut StatefulCallbackContext<W>, A),
 {
     pub fn new(func: F) -> Self {
         Self {
@@ -48,14 +51,14 @@ where
 impl<W, A, F> StatefulCallbackFunc<W> for StatefulCallbackFn<W, A, F>
 where
     A: AsAny,
-    F: Fn(&mut StatefulCallbackContext<W>, &A),
+    F: Fn(&mut StatefulCallbackContext<W>, A),
 {
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: &Box<dyn AsAny>) {
+    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: Box<dyn Any>) {
         let args = args
-            .downcast_ref::<A>()
+            .downcast::<A>()
             .expect("failed to downcast callback args");
 
-        (self.func)(ctx, args)
+        (self.func)(ctx, *args)
     }
 }
 
@@ -76,7 +79,6 @@ where
     pub(crate) keyed_children: FnvHashSet<Key>,
 
     pub widget: &'ctx S::Widget,
-    pub(crate) state: &'ctx S,
 }
 
 impl<S> ContextWidget<S> for StatefulBuildContext<'_, S>
@@ -89,15 +91,6 @@ where
 
     fn get_element_id(&self) -> ElementId {
         self.element_id
-    }
-}
-
-impl<S> ContextWidgetState<S> for StatefulBuildContext<'_, S>
-where
-    S: WidgetState,
-{
-    fn get_state(&self) -> &S {
-        self.state
     }
 }
 
@@ -135,7 +128,7 @@ where
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: AsAny,
-        F: Fn(&mut StatefulCallbackContext<S>, &A) + 'static,
+        F: Fn(&mut StatefulCallbackContext<S>, A) + 'static,
     {
         let callback = Callback::new::<F>(self.element_id, self.callback_queue.clone());
 

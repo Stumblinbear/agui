@@ -1,10 +1,9 @@
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     callback::CallbackId,
-    unit::AsAny,
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
         widget::Widget,
@@ -65,7 +64,6 @@ where
             keyed_children: FnvHashSet::default(),
 
             widget: &self.widget,
-            state: &self.state,
         };
 
         Vec::from_iter(self.state.build(&mut ctx).into_child())
@@ -90,37 +88,25 @@ where
         &mut self,
         ctx: WidgetCallbackContext,
         callback_id: CallbackId,
-        arg: &Box<dyn AsAny>,
+        arg: Box<dyn Any>,
     ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
-            let mut set_states = Vec::new();
+            let mut ctx = StatefulCallbackContext {
+                element_tree: ctx.element_tree,
+                inheritance_manager: ctx.inheritance_manager,
 
-            {
-                let mut ctx = StatefulCallbackContext {
-                    element_tree: ctx.element_tree,
-                    inheritance_manager: ctx.inheritance_manager,
+                dirty: ctx.dirty,
 
-                    dirty: ctx.dirty,
+                element_id: ctx.element_id,
 
-                    element_id: ctx.element_id,
+                state: &mut self.state,
 
-                    state: &mut self.state,
+                is_changed: false,
+            };
 
-                    set_states: &mut set_states,
-                };
+            callback.call(&mut ctx, arg);
 
-                callback.call(&mut ctx, arg);
-            }
-
-            if !set_states.is_empty() {
-                for set_state in set_states {
-                    set_state(&mut self.state);
-                }
-
-                true
-            } else {
-                false
-            }
+            ctx.is_changed
         } else {
             tracing::warn!(
                 callback_id = format!("{:?}", callback_id).as_str(),

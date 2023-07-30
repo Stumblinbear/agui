@@ -1,4 +1,7 @@
-use std::{any::TypeId, marker::PhantomData};
+use std::{
+    any::{Any, TypeId},
+    marker::PhantomData,
+};
 
 use crate::{element::ElementId, unit::AsAny};
 
@@ -106,7 +109,7 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub fn call_unchecked(&self, arg: Box<dyn AsAny>) {
+    pub fn call_unchecked(&self, arg: Box<dyn Any>) {
         if let Some(callback_queue) = &self.callback_queue {
             if let Some(callback_id) = self.id {
                 callback_queue.call_unchecked(callback_id, arg);
@@ -270,7 +273,7 @@ mod tests {
 
         manager
             .get_callback_queue()
-            .call_many_unchecked(&callback_ids, Box::new(53_u32));
+            .call_many_unchecked(&callback_ids, 53_u32);
 
         manager.update();
 
