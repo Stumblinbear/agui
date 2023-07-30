@@ -66,13 +66,9 @@ where
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
-            if Rc::ptr_eq(&self.widget, &new_widget) {
-                ElementUpdate::Noop
-            } else {
-                self.widget = new_widget;
+            self.widget = new_widget;
 
-                ElementUpdate::RebuildNecessary
-            }
+            ElementUpdate::RebuildNecessary
         } else {
             ElementUpdate::Invalid
         }

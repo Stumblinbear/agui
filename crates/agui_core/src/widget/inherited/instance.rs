@@ -46,7 +46,12 @@ where
 
             // We've been rebuilt and `should_notify` was `true`, so we need to notify all
             // listeners that depend on this widget.
-            for element_id in ctx.inheritance_manager.compute_changes::<I>(ctx.element_id) {
+            for element_id in ctx
+                .inheritance_manager
+                .get_as_scope(ctx.element_id)
+                .expect("failed to get the inherited element's scope during build")
+                .iter_listeners()
+            {
                 ctx.dirty.insert(element_id);
             }
         }
@@ -56,15 +61,14 @@ where
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<I>() {
-            if Rc::ptr_eq(&self.widget, &new_widget) {
-                ElementUpdate::Noop
-            } else {
-                self.needs_notify =
-                    self.needs_notify || new_widget.should_notify(self.widget.as_ref());
+            self.needs_notify = self.needs_notify || new_widget.should_notify(self.widget.as_ref());
 
-                self.widget = new_widget;
+            self.widget = new_widget;
 
+            if self.needs_notify {
                 ElementUpdate::RebuildNecessary
+            } else {
+                ElementUpdate::Noop
             }
         } else {
             ElementUpdate::Invalid

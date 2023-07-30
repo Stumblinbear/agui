@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{any::TypeId, marker::PhantomData};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -42,7 +42,7 @@ impl<W> ContextInheritedMut for BuildContext<'_, W> {
     {
         if let Some(element_id) = self
             .inheritance_manager
-            .depend_on_inherited_element::<I>(self.element_id)
+            .depend_on_inherited_element(self.element_id, TypeId::of::<I>())
         {
             let inherited_element = self
                 .element_tree

@@ -8,58 +8,75 @@ use crate::{
     widget::InheritedWidget,
 };
 
-#[derive(Default)]
 pub struct InheritanceScope {
+    type_id: TypeId,
+
     /// The closest ancestor inheritance scope.
     ancestor_scope_id: Option<ElementId>,
-
-    /// A set of all scopes that are direct children of this scope.
-    child_scope_ids: FnvHashSet<ElementId>,
 
     /// The element ID of this scope.
     element_id: ElementId,
 
+    /// A set of all scopes that are direct children of this scope.
+    child_scope_ids: Vec<ElementId>,
+
     /// A map of all available scopes being provided to children.
     available_scopes: im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>>,
 
-    /// A set of all elements that are listening in this scope.
-    listeners: TypeMap<FnvHashSet<ElementId>>,
+    // Keep track of all the elements in our scope that are listening for each type.
+    dependents: TypeMap<FnvHashSet<ElementId>>,
 
-    /// Tracks which ancestor scopes this scope is listening to.
-    listening_to: TypeMap<ElementId>,
+    /// A set of all elements that are listening to this scope.
+    listeners: FnvHashSet<ElementId>,
 }
 
 impl InheritanceScope {
-    pub fn new<I>(ancestor_scope_id: Option<ElementId>, element_id: ElementId) -> Self
+    pub fn new<I>(element_id: ElementId) -> Self
     where
         I: InheritedWidget,
     {
         Self {
-            ancestor_scope_id,
+            type_id: TypeId::of::<I>(),
+
+            ancestor_scope_id: None,
 
             element_id,
+
+            child_scope_ids: Vec::default(),
 
             available_scopes: im_rc::HashMap::from(vec![(TypeId::of::<I>(), element_id)]),
 
-            ..Default::default()
+            dependents: TypeMap::default(),
+
+            listeners: FnvHashSet::default(),
         }
     }
 
-    pub fn derive_scope<I>(&mut self, element_id: ElementId) -> Self
+    pub fn derive_scope<I>(ancestor_scope: &InheritanceScope, element_id: ElementId) -> Self
     where
         I: InheritedWidget,
     {
-        self.child_scope_ids.insert(element_id);
-
         InheritanceScope {
-            ancestor_scope_id: Some(self.element_id),
+            type_id: TypeId::of::<I>(),
+
+            ancestor_scope_id: Some(ancestor_scope.get_element_id()),
 
             element_id,
 
-            available_scopes: self.available_scopes.update(TypeId::of::<I>(), element_id),
+            child_scope_ids: Vec::default(),
 
-            ..InheritanceScope::default()
+            available_scopes: ancestor_scope
+                .get_available_scopes()
+                .update(TypeId::of::<I>(), element_id),
+
+            dependents: TypeMap::default(),
+
+            listeners: FnvHashSet::default(),
         }
+    }
+
+    pub fn get_type_id(&self) -> TypeId {
+        self.type_id
     }
 
     pub fn get_ancestor_scope(&self) -> Option<ElementId> {
@@ -70,96 +87,74 @@ impl InheritanceScope {
         self.ancestor_scope_id = new_ancestor_scope_id;
     }
 
-    pub fn remove_child_scope(&mut self, child_scope_id: ElementId) {
-        self.child_scope_ids.remove(&child_scope_id);
-    }
-
     pub fn get_element_id(&self) -> ElementId {
         self.element_id
     }
 
-    pub fn has_listeners<I>(&self) -> bool
-    where
-        I: InheritedWidget,
-    {
-        self.listeners.contains_key(&TypeId::of::<I>())
+    pub fn get_child_scopes(&self) -> &[ElementId] {
+        &self.child_scope_ids
     }
 
-    pub fn iter_listeners<I>(&self) -> impl Iterator<Item = ElementId> + '_
-    where
-        I: InheritedWidget,
-    {
-        self.listeners
-            .get(&TypeId::of::<I>())
-            .into_iter()
-            .flatten()
-            .copied()
+    pub fn add_child_scope(&mut self, child_scope_id: ElementId) {
+        self.child_scope_ids.push(child_scope_id);
     }
 
-    pub fn find_inherited_element<I>(&self) -> Option<ElementId>
-    where
-        I: InheritedWidget,
-    {
-        self.available_scopes.get(&TypeId::of::<I>()).copied()
+    pub fn remove_child_scope(&mut self, child_scope_id: ElementId) {
+        self.child_scope_ids
+            .retain(|element_id| *element_id != child_scope_id);
     }
 
-    pub fn depend_on_inherited_element<I>(&mut self, listener_id: ElementId) -> Option<ElementId>
-    where
-        I: InheritedWidget,
-    {
-        self.listeners
-            .entry(TypeId::of::<I>())
-            .or_default()
-            .insert(listener_id);
-
-        self.available_scopes.get(&TypeId::of::<I>()).copied()
+    pub fn get_available_scopes(
+        &self,
+    ) -> &im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>> {
+        &self.available_scopes
     }
 
-    pub fn iter_listening_to(&self) -> impl Iterator<Item = (TypeId, ElementId)> + '_ {
-        self.listening_to
+    /// Updates the available scopes for this scope, adding its own scope to the list.
+    pub fn update_available_scopes(
+        &mut self,
+        available_scopes: im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>>,
+    ) -> &im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>> {
+        self.available_scopes = available_scopes.update(self.type_id, self.element_id);
+
+        &self.available_scopes
+    }
+
+    pub fn get_dependents(&self, type_id: &TypeId) -> impl Iterator<Item = ElementId> + '_ {
+        self.dependents.get(type_id).into_iter().flatten().copied()
+    }
+
+    pub fn iter_dependents(
+        &self,
+    ) -> impl Iterator<Item = (TypeId, impl Iterator<Item = ElementId> + '_)> {
+        self.dependents
             .iter()
-            .map(|(type_id, scope_id)| (*type_id, *scope_id))
+            .map(|(type_id, elements)| (*type_id, elements.iter().copied()))
     }
 
-    pub fn iter_listeners_mut(
-        &mut self,
-    ) -> impl Iterator<Item = (&TypeId, &mut FnvHashSet<ElementId>)> + '_ {
-        self.listeners.iter_mut()
+    pub fn add_dependent(&mut self, type_id: TypeId, element_id: ElementId) {
+        self.dependents
+            .entry(type_id)
+            .or_default()
+            .insert(element_id);
     }
 
-    pub(super) fn remove_listener_for_type(
-        &mut self,
-        type_id: TypeId,
-        element_id: ElementId,
-    ) -> Option<ElementId> {
-        if let Some(listeners) = self.listeners.get_mut(&type_id) {
-            listeners.remove(&element_id);
-
-            if listeners.is_empty() {
-                let scope_id = self.listening_to.remove(&type_id).unwrap();
-
-                return Some(scope_id);
-            }
-        }
-
-        None
+    pub fn remove_dependent(&mut self, type_id: &TypeId, element_id: ElementId) -> bool {
+        self.dependents
+            .get_mut(type_id)
+            .map(|elements| elements.remove(&element_id))
+            .unwrap_or(false)
     }
 
-    /// Removes a listener from this scope, returning a list of scopes that this scope should
-    /// stop listening to.
-    pub fn remove_listener(&mut self, element_id: ElementId) -> Vec<(TypeId, ElementId)> {
-        let mut empty_listeners = Vec::new();
+    pub fn iter_listeners(&self) -> impl Iterator<Item = ElementId> + '_ {
+        self.listeners.iter().copied()
+    }
 
-        for (type_id, listeners) in self.listeners.iter_mut() {
-            listeners.remove(&element_id);
+    pub fn add_listener(&mut self, listener_id: ElementId) {
+        self.listeners.insert(listener_id);
+    }
 
-            if listeners.is_empty() {
-                let scope_id = self.listening_to.remove(type_id).unwrap();
-
-                empty_listeners.push((*type_id, scope_id));
-            }
-        }
-
-        empty_listeners
+    pub fn remove_listener(&mut self, element_id: ElementId) -> bool {
+        self.listeners.remove(&element_id)
     }
 }

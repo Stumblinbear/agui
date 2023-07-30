@@ -105,32 +105,19 @@ impl Element {
         let span = tracing::error_span!("remount");
         let _enter = span.enter();
 
-        // If this element is a node:
-        // Check if the parent's inherited scope is different from ours. If it is the same, we can
-        // safely assume nothing has changed and we can skip updates entirely. This is because this
-        // function is only called on the root of the subtree when it is remounted. Changes to the
-        // actual scopes will be handled if a scope is remounted, or if a scope detects it was changed
-        // during dependency propagation.
-        //
-        // If so, we need to update our scope to match the parent's. Loop the subtree to do the same.
+        let parent_scope_id = ctx.parent_element_id.and_then(|parent_element_id| {
+            ctx.inheritance_manager
+                .get(parent_element_id)
+                .expect("failed to get scope from parent")
+                .get_scope()
+        });
 
-        // If this element is a scope:
-        // Check if the parent's inherited scope is different from ours. If it's the same, we don't have
-        // to do anything. This is because this function is only called on the root node of a subtree
-        // when it is remounted. Changes would've been propagated to listeners already regardless of a
-        // remount and re-updating them here would be redundant.
-        //
-        // If the parent's scope is different, we need to update our scope to match it. Update our list
-        // of available scopes to match the parent scope (and include ourselves); if any of them are
-        // different, we must determine which (if any) of them we had listeners for so we can notify them
-        // and re-bind our own listener to the new scope from the old one. Finally, we can loop the
-        // subtree to update their scope to the new one.
-
-        // When looping the subtree, we must skip branches where the scope is different from the old one
-        // we had. This is because we only care about updating the scope of elements that were listening
-        // to the old scope, we don't want to overwrite the scope of elements that are descendants of a
-        // different scope. Additionally, we must notify our direct child scopes to inherit the new scope
-        // from us and update their listeners if necessary.
+        ctx.inheritance_manager.update_inheritance_scope(
+            ctx.element_tree,
+            ctx.dirty,
+            ctx.element_id,
+            parent_scope_id,
+        );
     }
 
     pub fn unmount(&mut self, ctx: ElementUnmountContext) {
@@ -242,48 +229,14 @@ impl Element {
         let span = tracing::error_span!("update_widget");
         let _enter = span.enter();
 
+        if &self.widget == new_widget {
+            return ElementUpdate::Noop;
+        }
+
+        self.widget = new_widget.clone();
+
         self.widget_element.update(new_widget)
     }
-
-    // pub fn update_inheritance_scope(&mut self, ctx: ElementUpdateInheritanceScopeContext) {
-    //     let span = tracing::error_span!("update_inheritance_scope");
-    //     let _enter = span.enter();
-
-    //     ctx.inheritance_manager
-    //         .update_scope(ctx.element_id, ctx.new_scope);
-
-    //     match &mut self.inheritance {
-    //         Inheritance::Scope(scope) => {
-    //             // Our parent scope has changed. This has potentially far-reaching implications.
-    //             // We must check every element that is listening to this scope and determine
-    //             // if it needs to be updated or not.
-    //             //
-    //             // A listener needs to be updated if:
-    //             // - It is a child of this element
-    //             if scope.get_ancestor_scope() != ctx.new_scope {
-    //                 scope.set_ancestor_scope(ctx.new_scope);
-
-    //                 if let Some(element_id) = ctx.new_scope {
-    //                     let new_scope = ctx.element_tree.get_mut(element_id).expect(
-    //                         "cannot update an element with an inheritance scope not in the tree",
-    //                     );
-
-    //                     let Inheritance::Scope(new_scope) = new_scope.get_inheritance_mut() else {
-    //                         panic!(
-    //                             "cannot update an element with an inheritance scope that is not actually a scope"
-    //                         );
-    //                     };
-    //                 }
-    //             }
-    //         }
-
-    //         Inheritance::Node(node) => {
-    //             // Our parent scope has changed. We need to determine if this is a change that
-    //             // affects this element or not.
-    //             if node.get_scope() != ctx.new_scope {}
-    //         }
-    //     }
-    // }
 
     pub fn paint(&self) -> Option<Canvas> {
         let span = tracing::error_span!("paint");
@@ -320,5 +273,205 @@ impl Element {
 impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.widget_element.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agui_macros::{InheritedWidget, StatelessWidget};
+    use fnv::FnvHashSet;
+
+    use crate::{
+        inheritance::InheritanceManager,
+        util::tree::Tree,
+        widget::{BuildContext, InheritedWidget, IntoWidget, WidgetBuild},
+    };
+
+    use super::{context::ElementMountContext, Element, ElementId};
+
+    #[derive(InheritedWidget)]
+    struct TestInheritedWidget {
+        #[child]
+        child: (),
+    }
+
+    impl InheritedWidget for TestInheritedWidget {}
+
+    #[derive(StatelessWidget)]
+    struct TestWidget;
+
+    impl WidgetBuild for TestWidget {
+        type Child = ();
+
+        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {}
+    }
+
+    // TODO: add more test cases
+
+    #[test]
+    fn adds_to_inheritance_manager_on_mount() {
+        let mut element_tree = Tree::<ElementId, Element>::default();
+        let mut inheritance_manager = InheritanceManager::default();
+
+        let element_id1 = element_tree.add(None, Element::new(TestWidget.into_widget()));
+
+        element_tree.with(element_id1, |element_tree, element| {
+            inheritance_manager.create_scope::<TestInheritedWidget>(None, element_id1);
+
+            element.mount(ElementMountContext {
+                element_tree,
+                inheritance_manager: &mut inheritance_manager,
+                dirty: &mut FnvHashSet::<ElementId>::default(),
+                parent_element_id: None,
+                element_id: element_id1,
+            });
+        });
+
+        assert!(
+            inheritance_manager.contains(element_id1),
+            "element 1 not added to inheritance tree"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_scope(element_id1)
+                .expect("failed to get element 1")
+                .get_ancestor_scope(),
+            None,
+            "element 1 should not have a scope"
+        );
+
+        let element_id2 =
+            element_tree.add(Some(element_id1), Element::new(TestWidget.into_widget()));
+
+        element_tree.with(element_id2, |element_tree, element| {
+            element.mount(ElementMountContext {
+                element_tree,
+                inheritance_manager: &mut inheritance_manager,
+                dirty: &mut FnvHashSet::<ElementId>::default(),
+                parent_element_id: Some(element_id1),
+                element_id: element_id2,
+            });
+        });
+
+        assert!(
+            inheritance_manager.contains(element_id2),
+            "element 2 not added to inheritance tree"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id2)
+                .expect("failed to get element 2")
+                .get_scope(),
+            Some(element_id1),
+            "element 2 does not have element 1 as its scope"
+        );
+    }
+
+    #[test]
+    fn remounting_node_updates_scope() {
+        let mut element_tree = Tree::<ElementId, Element>::default();
+        let mut inheritance_manager = InheritanceManager::default();
+
+        let element_id1 = element_tree.add(None, Element::new(TestWidget.into_widget()));
+        let element_id2 =
+            element_tree.add(Some(element_id1), Element::new(TestWidget.into_widget()));
+        let element_id3 =
+            element_tree.add(Some(element_id2), Element::new(TestWidget.into_widget()));
+        let element_id4 =
+            element_tree.add(Some(element_id3), Element::new(TestWidget.into_widget()));
+        let element_id5 =
+            element_tree.add(Some(element_id4), Element::new(TestWidget.into_widget()));
+
+        inheritance_manager.create_scope::<TestInheritedWidget>(None, element_id1);
+        inheritance_manager.create_node(Some(element_id1), element_id2);
+        inheritance_manager.create_node(Some(element_id2), element_id3);
+        inheritance_manager.create_scope::<TestInheritedWidget>(Some(element_id3), element_id4);
+        inheritance_manager.create_node(Some(element_id4), element_id5);
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id2)
+                .expect("failed to get element 2")
+                .get_scope(),
+            Some(element_id1),
+            "element 2 does not have element 1 as its scope"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id3)
+                .expect("failed to get element 3")
+                .get_scope(),
+            Some(element_id1),
+            "element 3 does not have element 1 as its scope"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_scope(element_id4)
+                .expect("failed to get element 4")
+                .get_ancestor_scope(),
+            Some(element_id1),
+            "element 4 does not have element 1 as its ancestor scope"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id5)
+                .expect("failed to get element 5")
+                .get_scope(),
+            Some(element_id4),
+            "element 5 does not have element 4 as its scope"
+        );
+
+        // Move element 2 to be a child of element 1, removing element 2 and 3's
+        // scope (since they're no longer descendants of element 1).
+        element_tree.with(element_id2, |element_tree, element| {
+            element.remount(ElementMountContext {
+                element_tree,
+                inheritance_manager: &mut inheritance_manager,
+                dirty: &mut FnvHashSet::<ElementId>::default(),
+                parent_element_id: None,
+                element_id: element_id2,
+            });
+        });
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id2)
+                .expect("failed to get element 2")
+                .get_scope(),
+            None,
+            "element 2 should not have a scope"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id3)
+                .expect("failed to get element 3")
+                .get_scope(),
+            None,
+            "element 3 should not have a scope"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_scope(element_id4)
+                .expect("failed to get element 4")
+                .get_ancestor_scope(),
+            None,
+            "element 4 should not have an ancestor scope"
+        );
+
+        assert_eq!(
+            inheritance_manager
+                .get_as_node(element_id5)
+                .expect("failed to get element 5")
+                .get_scope(),
+            Some(element_id4),
+            "element 5 should have kept element 4 as its scope"
+        );
     }
 }

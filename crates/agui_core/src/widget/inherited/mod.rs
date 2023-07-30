@@ -110,14 +110,7 @@ mod tests {
         });
     }
 
-    // TODO: Test cases:
-    // - [x] Child can retrieve inherited widget ancestor
-    // - [x] With multiple nested inherited widgets, the child can retrieve the nearest one
-    // - [x] Child receives updates when the inherited widget changes
-    // - [] When the inherited widget is removed from the tree, the child is updated
-    // - [] When the inherited widget is moved in the tree but not removed, the child is updated
-    // - [] When the child is keyed and reparented, it detects if its inherited widget has changed and updates if necessary
-    // - [] When the child is reparented to a different inherited widget, it detects the change and updates if necessary
+    // TODO: add more test cases
 
     #[test]
     pub fn updates_scoped_children() {
