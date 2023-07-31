@@ -8,6 +8,7 @@ use glyph_brush_layout::{
 
 use crate::unit::{Color, Rect};
 
+// TODO: fonts should use a `usize` so that we aren't locked into a single text handling library
 #[derive(Debug, Clone, Default)]
 pub struct Font(Option<FontArc>);
 

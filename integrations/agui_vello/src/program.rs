@@ -9,7 +9,7 @@ use agui::{
     unit::{Offset, Size},
     widget::IntoWidget,
     widgets::{
-        primitives::layout::TextLayoutController,
+        primitives::layout_controller::TextLayoutController,
         state::{
             keyboard::{KeyCode, KeyState},
             mouse::{MouseButtonState, MousePos, Scroll},

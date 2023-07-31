@@ -4,16 +4,16 @@ use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
     widget::{
-        BuildContext, ContextInheritedMut, IntrinsicSizeContext, LayoutContext,
-        StatefulBuildContext, StatefulWidget, WidgetLayout, WidgetPaint, WidgetState,
+        BuildContext, ContextInheritedMut, IntrinsicSizeContext, LayoutContext, WidgetBuild,
+        WidgetLayout, WidgetPaint,
     },
 };
-use agui_macros::{build, LayoutWidget, PaintWidget, StatefulWidget};
+use agui_macros::{build, LayoutWidget, PaintWidget, StatelessWidget};
 
-use crate::layout::{TextLayoutController, TextLayoutDelegate};
+use crate::layout_controller::{TextLayoutController, TextLayoutDelegate};
 
 pub mod edit;
-pub mod layout;
+pub mod layout_controller;
 pub mod query;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,50 +25,25 @@ pub enum TextBaseline {
     Ideographic,
 }
 
-#[derive(StatefulWidget, Debug, Default)]
+#[derive(StatelessWidget, Debug, Default)]
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
 }
 
-impl StatefulWidget for Text {
-    type State = TextState;
-
-    fn create_state(&self) -> Self::State {
-        TextState { delegate: None }
-    }
-}
-
-pub struct TextState {
-    pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
-}
-
-impl WidgetState for TextState {
-    type Widget = Text;
-
+impl WidgetBuild for Text {
     type Child = TextLayout;
 
-    fn dependencies_changed(&mut self, ctx: &mut StatefulBuildContext<Self>) {
-        self.delegate = ctx
-            .depend_on_inherited_widget::<TextLayoutController>()
-            .and_then(|controller| controller.delegate.as_ref())
-            .map(Rc::clone);
-    }
-
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
-        if self.delegate.is_none() {
-            self.delegate = ctx
-                .depend_on_inherited_widget::<TextLayoutController>()
-                .and_then(|controller| controller.delegate.as_ref())
-                .map(Rc::clone);
-        }
-
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
         build! {
             TextLayout {
-                delegate: self.delegate.clone(),
+                delegate: ctx
+                    .depend_on_inherited_widget::<TextLayoutController>()
+                    .and_then(|controller| controller.delegate.as_ref())
+                    .map(Rc::clone),
 
-                font: ctx.widget.font.clone(),
-                text: Cow::clone(&ctx.widget.text),
+                font: self.font.clone(),
+                text: Cow::clone(&self.text),
             }
         }
     }

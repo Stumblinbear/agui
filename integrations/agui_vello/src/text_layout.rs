@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use agui::{
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widgets::primitives::layout::TextLayoutDelegate,
+    widgets::primitives::layout_controller::TextLayoutDelegate,
 };
 use vello::fello::{raw::FontRef, MetadataProvider};
 
@@ -107,6 +107,12 @@ impl TextLayoutDelegate for VelloTextLayoutDelegate {
 
             let gid = charmap.map(ch).unwrap_or_default();
             let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+
+            // Naive wrapping (doesn't account for word boundaries)
+            if pen_x + advance > constraints.max_width() {
+                pen_y += line_height;
+                pen_x = 0.0;
+            }
 
             pen_x += advance;
         }
