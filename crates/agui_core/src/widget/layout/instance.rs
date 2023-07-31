@@ -53,8 +53,6 @@ where
     ) -> f32 {
         self.widget.intrinsic_size(
             &mut IntrinsicSizeContext {
-                phantom: PhantomData,
-
                 element_tree: ctx.element_tree,
 
                 element_id: ctx.element_id,
@@ -69,8 +67,6 @@ where
     fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
         self.widget.layout(
             &mut LayoutContext {
-                phantom: PhantomData,
-
                 element_tree: ctx.element_tree,
 
                 element_id: ctx.element_id,
@@ -124,8 +120,6 @@ where
     ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
-                phantom: PhantomData,
-
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
 

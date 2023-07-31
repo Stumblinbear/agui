@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Constraints, Offset, Size},
-    widget::{BuildContext, ContextWidgetLayoutMut, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -16,7 +16,7 @@ impl WidgetLayout for App {
         Vec::from_iter(self.child.clone())
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, _: Constraints) -> Size {
+    fn layout(&self, ctx: &mut LayoutContext, _: Constraints) -> Size {
         // let size = constrants.biggest();
 
         let size = Size {

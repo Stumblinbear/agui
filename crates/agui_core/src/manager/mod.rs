@@ -673,7 +673,7 @@ mod tests {
             self.children.clone()
         }
 
-        fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
             Size::ZERO
         }
     }
@@ -690,7 +690,7 @@ mod tests {
             self.children.clone()
         }
 
-        fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
             Size::ZERO
         }
     }

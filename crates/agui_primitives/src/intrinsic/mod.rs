@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Axis, Constraints, IntrinsicDimension, Size},
-    widget::{BuildContext, ContextWidgetLayoutMut, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -27,7 +27,7 @@ impl WidgetLayout for IntrinsicAxis {
         Vec::from_iter(self.child.clone())
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, mut constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut LayoutContext, mut constraints: Constraints) -> Size {
         if let Some(mut child) = ctx.iter_children_mut().next() {
             if !constraints.has_tight_axis(self.axis) {
                 let extent = child.compute_intrinsic_size(

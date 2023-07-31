@@ -1,13 +1,14 @@
-use std::any::Any;
+use std::{any::Any, marker::PhantomData};
 
 use crate::{
     callback::CallbackId,
     element::context::{ElementIntrinsicSizeContext, ElementLayoutContext},
+    gestures::hit_test::HitTestEntry,
     render::canvas::Canvas,
-    unit::{AsAny, Constraints, IntrinsicDimension, Size},
+    unit::{AsAny, Constraints, IntrinsicDimension, Offset, Size},
 };
 
-use super::widget::Widget;
+use super::{widget::Widget, HitTestContext};
 
 mod context;
 
@@ -123,6 +124,39 @@ pub trait WidgetElement: AsAny {
         arg: Box<dyn Any>,
     ) -> bool {
         panic!("callbacks are not supported on this widget type");
+    }
+
+    fn hit_test(&self, ctx: WidgetHitTestContext, position: Offset) -> bool {
+        let mut ctx = HitTestContext {
+            element_tree: ctx.element_tree,
+
+            path: ctx.path,
+
+            element_id: ctx.element_id,
+            size: ctx.size,
+            children: ctx.children,
+        };
+
+        let mut hit = false;
+
+        if ctx.size.contains(position) {
+            while let Some(mut child) = ctx.iter_children().next_back() {
+                if child.hit_test(position) {
+                    hit = true;
+
+                    break;
+                }
+            }
+        }
+
+        if hit {
+            ctx.add_result(HitTestEntry {
+                element_id: ctx.element_id,
+                position,
+            });
+        }
+
+        hit
     }
 }
 

@@ -1,7 +1,7 @@
 use lyon::{
-    geom::euclid::{Point2D, Size2D},
+    geom::euclid::Point2D,
     math::{Angle, Vector},
-    path::{builder::BorderRadii, traits::PathBuilder, Path, Winding},
+    path::{builder::BorderRadii, Path, Winding},
 };
 
 use crate::unit::Rect;
@@ -63,9 +63,9 @@ impl Shape {
                 let mut builder = Path::builder();
 
                 builder.add_rectangle(
-                    &lyon::math::Rect {
-                        origin: Point2D::new(rect.left, rect.top),
-                        size: Size2D::new(rect.width, rect.height),
+                    &lyon::math::Box2D {
+                        min: Point2D::new(rect.left, rect.top),
+                        max: Point2D::new(rect.width, rect.height),
                     },
                     Winding::Positive,
                 );
@@ -82,9 +82,9 @@ impl Shape {
                 let mut builder = Path::builder();
 
                 builder.add_rounded_rectangle(
-                    &lyon::math::Rect {
-                        origin: Point2D::new(rect.left, rect.top),
-                        size: Size2D::new(rect.width, rect.height),
+                    &lyon::math::Box2D {
+                        min: Point2D::new(rect.left, rect.top),
+                        max: Point2D::new(rect.width, rect.height),
                     },
                     &BorderRadii {
                         top_left: top_left.max(f32::EPSILON), // Lyon sucks ass

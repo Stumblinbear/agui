@@ -1,16 +1,19 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, rc::Rc};
 
 use agui_core::{
     render::{CanvasPainter, Paint},
-    unit::{Axis, Constraints, FontStyle, IntrinsicDimension, Size},
+    unit::{Constraints, FontStyle, IntrinsicDimension, Size},
     widget::{
-        BuildContext, ContextWidgetLayoutMut, IntrinsicSizeContext, LayoutContext, WidgetLayout,
-        WidgetPaint,
+        BuildContext, ContextInheritedMut, IntrinsicSizeContext, LayoutContext,
+        StatefulBuildContext, StatefulWidget, WidgetLayout, WidgetPaint, WidgetState,
     },
 };
-use agui_macros::{LayoutWidget, PaintWidget};
+use agui_macros::{build, LayoutWidget, PaintWidget, StatefulWidget};
+
+use crate::layout::{TextLayoutController, TextLayoutDelegate};
 
 pub mod edit;
+pub mod layout;
 pub mod query;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,13 +25,64 @@ pub enum TextBaseline {
     Ideographic,
 }
 
-#[derive(LayoutWidget, Debug, Default, PartialEq)]
+#[derive(StatefulWidget, Debug, Default)]
 pub struct Text {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
 }
 
-impl WidgetLayout for Text {
+impl StatefulWidget for Text {
+    type State = TextState;
+
+    fn create_state(&self) -> Self::State {
+        TextState { delegate: None }
+    }
+}
+
+pub struct TextState {
+    pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
+}
+
+impl WidgetState for TextState {
+    type Widget = Text;
+
+    type Child = TextLayout;
+
+    fn dependencies_changed(&mut self, ctx: &mut StatefulBuildContext<Self>) {
+        self.delegate = ctx
+            .depend_on_inherited_widget::<TextLayoutController>()
+            .and_then(|controller| controller.delegate.as_ref())
+            .map(Rc::clone);
+    }
+
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
+        if self.delegate.is_none() {
+            self.delegate = ctx
+                .depend_on_inherited_widget::<TextLayoutController>()
+                .and_then(|controller| controller.delegate.as_ref())
+                .map(Rc::clone);
+        }
+
+        build! {
+            TextLayout {
+                delegate: self.delegate.clone(),
+
+                font: ctx.widget.font.clone(),
+                text: Cow::clone(&ctx.widget.text),
+            }
+        }
+    }
+}
+
+#[derive(LayoutWidget, Default)]
+pub struct TextLayout {
+    pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
+
+    pub font: FontStyle,
+    pub text: Cow<'static, str>,
+}
+
+impl WidgetLayout for TextLayout {
     type Children = TextPainter;
 
     fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
@@ -40,21 +94,27 @@ impl WidgetLayout for Text {
 
     fn intrinsic_size(
         &self,
-        _: &mut IntrinsicSizeContext<Self>,
+        _: &mut IntrinsicSizeContext,
         dimension: IntrinsicDimension,
         _: f32,
     ) -> f32 {
-        match dimension.axis() {
-            // TODO: Actual text layout to get the correct intrinsic width
-            Axis::Horizontal => self.text.len() as f32 * self.font.size,
-            Axis::Vertical => self.font.size,
+        if let Some(delegate) = self.delegate.as_ref() {
+            delegate.compute_intrinsic_size(
+                &self.font,
+                Cow::clone(&self.text),
+                dimension,
+                self.font.size,
+            )
+        } else {
+            0.0
         }
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, _: Constraints) -> Size {
-        let size = Size {
-            width: self.text.len() as f32 * self.font.size,
-            height: self.font.size,
+    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
+        let size = if let Some(delegate) = self.delegate.as_ref() {
+            delegate.compute_layout(&self.font, Cow::clone(&self.text), constraints)
+        } else {
+            constraints.smallest()
         };
 
         if let Some(mut child) = ctx.iter_children_mut().next() {

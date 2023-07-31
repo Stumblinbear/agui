@@ -1,9 +1,6 @@
 use agui_core::{
     unit::{Constraints, EdgeInsets, IntrinsicDimension, Offset, Size},
-    widget::{
-        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntrinsicSizeContext,
-        LayoutContext, Widget, WidgetLayout,
-    },
+    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -23,7 +20,7 @@ impl WidgetLayout for Padding {
 
     fn intrinsic_size(
         &self,
-        ctx: &mut IntrinsicSizeContext<Self>,
+        ctx: &mut IntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -36,7 +33,7 @@ impl WidgetLayout for Padding {
                 .unwrap_or(0.0)
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {

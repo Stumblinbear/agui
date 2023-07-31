@@ -7,7 +7,7 @@ use crate::{
     util::tree::Tree,
 };
 
-pub struct IterChildren<'ctx> {
+pub struct IterChildrenLayout<'ctx> {
     index: usize,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
@@ -15,9 +15,9 @@ pub struct IterChildren<'ctx> {
     pub(crate) children: &'ctx [ElementId],
 }
 
-impl<'ctx> IterChildren<'ctx> {
+impl<'ctx> IterChildrenLayout<'ctx> {
     pub fn new(element_tree: &'ctx Tree<ElementId, Element>, children: &'ctx [ElementId]) -> Self {
-        IterChildren {
+        IterChildrenLayout {
             index: 0,
 
             element_tree,
@@ -27,16 +27,17 @@ impl<'ctx> IterChildren<'ctx> {
     }
 }
 
-// TODO: refactor to LendingIterator once it's available?
-impl IterChildren<'_> {
-    pub fn next(&mut self) -> Option<ChildElement> {
+impl<'ctx> Iterator for IterChildrenLayout<'ctx> {
+    type Item = ChildElementLayout<'ctx>;
+
+    fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.children.len() {
             return None;
         }
 
         self.index += 1;
 
-        Some(ChildElement {
+        Some(ChildElementLayout {
             element_tree: self.element_tree,
 
             index: self.index - 1,
@@ -46,8 +47,7 @@ impl IterChildren<'_> {
     }
 }
 
-#[derive(Debug)]
-pub struct ChildElement<'ctx> {
+pub struct ChildElementLayout<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
     index: usize,
@@ -55,7 +55,7 @@ pub struct ChildElement<'ctx> {
     children: &'ctx [ElementId],
 }
 
-impl ChildElement<'_> {
+impl ChildElementLayout<'_> {
     pub fn index(&self) -> usize {
         self.index
     }
@@ -84,7 +84,7 @@ impl ChildElement<'_> {
     }
 }
 
-pub struct IterChildrenMut<'ctx> {
+pub struct IterChildrenLayoutMut<'ctx> {
     index: usize,
 
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
@@ -93,13 +93,13 @@ pub struct IterChildrenMut<'ctx> {
     pub(crate) offsets: &'ctx mut [Offset],
 }
 
-impl<'ctx> IterChildrenMut<'ctx> {
+impl<'ctx> IterChildrenLayoutMut<'ctx> {
     pub fn new(
         element_tree: &'ctx mut Tree<ElementId, Element>,
         children: &'ctx [ElementId],
         offsets: &'ctx mut [Offset],
     ) -> Self {
-        IterChildrenMut {
+        IterChildrenLayoutMut {
             index: 0,
 
             element_tree,
@@ -110,15 +110,16 @@ impl<'ctx> IterChildrenMut<'ctx> {
     }
 }
 
-impl IterChildrenMut<'_> {
-    pub fn next(&mut self) -> Option<ChildElementMut> {
+// TODO: refactor to LendingIterator when possible
+impl IterChildrenLayoutMut<'_> {
+    pub fn next(&mut self) -> Option<ChildElementLayoutMut> {
         if self.index >= self.children.len() {
             return None;
         }
 
         self.index += 1;
 
-        Some(ChildElementMut {
+        Some(ChildElementLayoutMut {
             element_tree: self.element_tree,
 
             index: self.index - 1,
@@ -129,8 +130,7 @@ impl IterChildrenMut<'_> {
     }
 }
 
-#[derive(Debug)]
-pub struct ChildElementMut<'ctx> {
+pub struct ChildElementLayoutMut<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
     index: usize,
@@ -139,7 +139,7 @@ pub struct ChildElementMut<'ctx> {
     offsets: &'ctx mut [Offset],
 }
 
-impl ChildElementMut<'_> {
+impl ChildElementLayoutMut<'_> {
     pub fn index(&self) -> usize {
         self.index
     }

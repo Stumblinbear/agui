@@ -1,17 +1,11 @@
-use std::marker::PhantomData;
-
 use crate::{
     element::{Element, ElementId},
     unit::Offset,
     util::tree::Tree,
-    widget::{ContextWidget, ContextWidgetLayout, IterChildren, IterChildrenMut},
+    widget::{ContextWidget, IterChildrenLayout, IterChildrenLayoutMut},
 };
 
-use super::ContextWidgetLayoutMut;
-
-pub struct LayoutContext<'ctx, W> {
-    pub(crate) phantom: PhantomData<W>,
-
+pub struct LayoutContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
     pub(crate) element_id: ElementId,
@@ -20,7 +14,7 @@ pub struct LayoutContext<'ctx, W> {
     pub(crate) offsets: &'ctx mut [Offset],
 }
 
-impl<W> ContextWidget<W> for LayoutContext<'_, W> {
+impl ContextWidget for LayoutContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
@@ -30,22 +24,20 @@ impl<W> ContextWidget<W> for LayoutContext<'_, W> {
     }
 }
 
-impl<'ctx, W> ContextWidgetLayout for LayoutContext<'ctx, W> {
-    fn has_children(&self) -> bool {
+impl LayoutContext<'_> {
+    pub fn has_children(&self) -> bool {
         !self.children.is_empty()
     }
 
-    fn child_count(&self) -> usize {
+    pub fn child_count(&self) -> usize {
         self.children.len()
     }
 
-    fn iter_children(&self) -> IterChildren {
-        IterChildren::new(self.element_tree, self.children)
+    pub fn iter_children(&self) -> IterChildrenLayout {
+        IterChildrenLayout::new(self.element_tree, self.children)
     }
-}
 
-impl<'ctx, W> ContextWidgetLayoutMut for LayoutContext<'ctx, W> {
-    fn iter_children_mut(&mut self) -> IterChildrenMut {
-        IterChildrenMut::new(self.element_tree, self.children, self.offsets)
+    pub fn iter_children_mut(&mut self) -> IterChildrenLayoutMut {
+        IterChildrenLayoutMut::new(self.element_tree, self.children, self.offsets)
     }
 }

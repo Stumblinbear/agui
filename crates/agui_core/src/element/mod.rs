@@ -9,16 +9,16 @@ use crate::{
     widget::{
         element::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
-            WidgetIntrinsicSizeContext, WidgetLayoutContext, WidgetMountContext,
-            WidgetUnmountContext,
+            WidgetHitTestContext, WidgetIntrinsicSizeContext, WidgetLayoutContext,
+            WidgetMountContext, WidgetUnmountContext,
         },
         Widget, WidgetKey,
     },
 };
 
 use self::context::{
-    ElementBuildContext, ElementCallbackContext, ElementIntrinsicSizeContext, ElementLayoutContext,
-    ElementMountContext, ElementUnmountContext,
+    ElementBuildContext, ElementCallbackContext, ElementHitTestContext,
+    ElementIntrinsicSizeContext, ElementLayoutContext, ElementMountContext, ElementUnmountContext,
 };
 
 pub mod context;
@@ -268,6 +268,34 @@ impl Element {
             },
             callback_id,
             arg,
+        )
+    }
+
+    pub fn hit_test(&self, ctx: ElementHitTestContext, position: Offset) -> bool {
+        let span = tracing::error_span!("hit_test");
+        let _enter = span.enter();
+
+        let children = ctx
+            .element_tree
+            .get_children(ctx.element_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let size = self.size.expect("cannot hit test an element with no size");
+
+        self.widget_element.hit_test(
+            WidgetHitTestContext {
+                element_tree: ctx.element_tree,
+
+                element_id: ctx.element_id,
+
+                size: &size,
+
+                children: &children,
+
+                path: ctx.path,
+            },
+            position,
         )
     }
 }

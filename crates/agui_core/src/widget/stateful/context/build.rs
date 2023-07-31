@@ -81,7 +81,7 @@ where
     pub widget: &'ctx S::Widget,
 }
 
-impl<S> ContextWidget<S> for StatefulBuildContext<'_, S>
+impl<S> ContextWidget for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {

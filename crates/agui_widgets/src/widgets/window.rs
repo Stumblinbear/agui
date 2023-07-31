@@ -19,7 +19,7 @@ impl WidgetLayout for Window {
         Vec::from_iter(self.child.clone())
     }
 
-    fn layout(&self, _: &mut LayoutContext<Self>, _: Constraints) -> Size {
+    fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
         Size {
             width: self.size.width,
             height: self.size.height,

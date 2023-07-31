@@ -3,6 +3,7 @@ use fnv::FnvHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
+    gestures::hit_test::HitTestEntry,
     inheritance::InheritanceManager,
     util::tree::Tree,
 };
@@ -55,4 +56,12 @@ pub struct ElementLayoutContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
     pub(crate) element_id: ElementId,
+}
+
+pub struct ElementHitTestContext<'ctx> {
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+
+    pub(crate) element_id: ElementId,
+
+    pub(crate) path: &'ctx mut Vec<HitTestEntry>,
 }

@@ -7,10 +7,14 @@ use std::{
 use agui::{
     manager::WidgetManager,
     unit::{Offset, Size},
-    widgets::state::{
-        keyboard::{KeyCode, KeyState},
-        mouse::{MouseButtonState, MousePos, Scroll},
-        window::{WindowFocus, WindowPosition},
+    widget::IntoWidget,
+    widgets::{
+        primitives::layout::TextLayoutController,
+        state::{
+            keyboard::{KeyCode, KeyState},
+            mouse::{MouseButtonState, MousePos, Scroll},
+            window::{WindowFocus, WindowPosition},
+        },
     },
 };
 use futures::executor::block_on;
@@ -21,7 +25,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::manager::RenderManager;
+use crate::{manager::RenderManager, text_layout::VelloTextLayoutDelegate};
 
 pub struct AguiProgram {
     event_loop: EventLoop<()>,
@@ -72,6 +76,17 @@ impl AguiProgram {
             manager: WidgetManager::new(),
             renderer,
         }
+    }
+
+    pub fn set_root<W>(&mut self, widget: W)
+    where
+        W: IntoWidget,
+    {
+        self.manager.set_root(
+            TextLayoutController::new()
+                .with_delegate(VelloTextLayoutDelegate)
+                .with_child(widget),
+        );
     }
 
     pub fn run(mut self) -> ! {

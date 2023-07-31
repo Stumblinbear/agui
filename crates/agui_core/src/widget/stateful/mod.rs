@@ -21,6 +21,10 @@ pub trait WidgetState: Sized + 'static {
     #[allow(unused_variables)]
     fn updated(&mut self, new_widget: &Self::Widget) {}
 
+    /// Called when any of the widget's dependencies have changed.
+    #[allow(unused_variables)]
+    fn dependencies_changed(&mut self, ctx: &mut StatefulBuildContext<Self>) {}
+
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.

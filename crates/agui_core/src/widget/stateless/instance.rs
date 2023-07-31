@@ -81,8 +81,6 @@ where
     ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
-                phantom: PhantomData,
-
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
 

@@ -12,6 +12,7 @@
 
 pub mod callback;
 pub mod element;
+pub mod gestures;
 pub mod inheritance;
 pub mod manager;
 pub mod query;

@@ -1,9 +1,6 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
-    widget::{
-        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntoWidget,
-        IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
-    },
+    widget::{BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -121,7 +118,7 @@ impl WidgetLayout for Flex {
 
     fn intrinsic_size(
         &self,
-        ctx: &mut IntrinsicSizeContext<Self>,
+        ctx: &mut IntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -133,9 +130,7 @@ impl WidgetLayout for Flex {
             let mut inflexible_space = 0.0;
             let mut max_flex_fraction_so_far = 0.0_f32;
 
-            let mut children = ctx.iter_children();
-
-            while let Some(child) = children.next() {
+            for child in ctx.iter_children() {
                 let flex = self.children[child.index()].flex;
 
                 total_flex += flex;
@@ -162,9 +157,7 @@ impl WidgetLayout for Flex {
             let mut inflexible_space = 0.0;
             let mut max_cross_size: f32 = 0.0;
 
-            let mut children = ctx.iter_children();
-
-            while let Some(child) = children.next() {
+            for child in ctx.iter_children() {
                 let flex = self.children[child.index()].flex;
 
                 total_flex += flex;
@@ -201,9 +194,7 @@ impl WidgetLayout for Flex {
 
             let space_per_flex = ((available_space - inflexible_space) / total_flex).max(0.0);
 
-            let mut children = ctx.iter_children();
-
-            while let Some(child) = children.next() {
+            for child in ctx.iter_children() {
                 let flex = self.children[child.index()].flex;
 
                 if flex > 0.0 {
@@ -216,7 +207,7 @@ impl WidgetLayout for Flex {
         }
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
         let ComputedSizes {
             mut main_size,
             mut cross_size,
@@ -399,11 +390,7 @@ impl WidgetLayout for Flex {
 }
 
 impl Flex {
-    fn compute_sizes(
-        &self,
-        ctx: &mut LayoutContext<Self>,
-        constraints: Constraints,
-    ) -> ComputedSizes {
+    fn compute_sizes(&self, ctx: &mut LayoutContext, constraints: Constraints) -> ComputedSizes {
         let main_axis = self.direction;
         let cross_axis = main_axis.flip();
 

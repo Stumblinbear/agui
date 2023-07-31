@@ -2,7 +2,7 @@ use std::ops::{
     Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
 };
 
-use super::{Axis, Rect};
+use super::{Axis, Offset, Rect};
 
 /// Holds width and height values.
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
@@ -46,6 +46,10 @@ impl Size {
             Axis::Horizontal => self.width,
             Axis::Vertical => self.height,
         }
+    }
+
+    pub fn contains(&self, offset: Offset) -> bool {
+        offset.x >= 0.0 && offset.y >= 0.0 && offset.x <= self.width && offset.y <= self.height
     }
 }
 

@@ -3,8 +3,9 @@ use fnv::FnvHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
+    gestures::hit_test::HitTestEntry,
     inheritance::InheritanceManager,
-    unit::Offset,
+    unit::{Offset, Size},
     util::tree::Tree,
 };
 
@@ -61,4 +62,16 @@ pub struct WidgetLayoutContext<'ctx> {
 
     pub(crate) children: &'ctx [ElementId],
     pub(crate) offsets: &'ctx mut [Offset],
+}
+
+pub struct WidgetHitTestContext<'ctx> {
+    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+
+    pub(crate) path: &'ctx mut Vec<HitTestEntry>,
+
+    pub(crate) element_id: ElementId,
+
+    pub(crate) size: &'ctx Size,
+
+    pub(crate) children: &'ctx [ElementId],
 }

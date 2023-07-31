@@ -81,6 +81,7 @@ where
 }
 
 unsafe impl<A> Send for WidgetCallback<A> where A: AsAny {}
+unsafe impl<A> Sync for WidgetCallback<A> where A: AsAny {}
 
 impl<A> PartialEq for WidgetCallback<A>
 where
@@ -130,7 +131,7 @@ pub struct FuncCallback<A>
 where
     A: AsAny,
 {
-    func: Arc<dyn Fn(A)>,
+    func: Arc<dyn Fn(A) + Send + Sync>,
 }
 
 impl<A> FuncCallback<A>
@@ -157,7 +158,7 @@ where
 impl<A, F> From<F> for Callback<A>
 where
     A: AsAny,
-    F: Fn(A) + 'static,
+    F: Fn(A) + Send + Sync + 'static,
 {
     fn from(value: F) -> Self {
         Self::Func(FuncCallback {

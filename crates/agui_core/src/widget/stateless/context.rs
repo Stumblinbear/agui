@@ -28,7 +28,7 @@ pub struct BuildContext<'ctx, W> {
     pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
-impl<W> ContextWidget<W> for BuildContext<'_, W> {
+impl<W> ContextWidget for BuildContext<'_, W> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
@@ -69,7 +69,7 @@ impl<W: 'static> BuildContext<'_, W> {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: AsAny,
-        F: Fn(&mut CallbackContext<W>, &A) + 'static,
+        F: Fn(&mut CallbackContext, &A) + 'static,
     {
         let callback = WidgetCallback::new::<F>(self.element_id, self.callback_queue.clone());
 

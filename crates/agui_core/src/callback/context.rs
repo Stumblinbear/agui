@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use fnv::FnvHashSet;
 
 use crate::{
@@ -8,22 +6,20 @@ use crate::{
     widget::ContextWidget,
 };
 
-pub struct CallbackContext<'ctx, W> {
-    pub(crate) phantom: PhantomData<W>,
-
+pub struct CallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
 }
 
-impl<W> CallbackContext<'_, W> {
+impl CallbackContext<'_> {
     pub fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
     }
 }
 
-impl<W> ContextWidget<W> for CallbackContext<'_, W> {
+impl ContextWidget for CallbackContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }

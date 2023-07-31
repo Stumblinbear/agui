@@ -26,7 +26,7 @@ impl<S> StatefulCallbackContext<'_, S> {
     }
 }
 
-impl<S> ContextWidget<S> for StatefulCallbackContext<'_, S> {
+impl<S> ContextWidget for StatefulCallbackContext<'_, S> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }

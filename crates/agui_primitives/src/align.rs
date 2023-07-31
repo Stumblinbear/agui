@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Alignment, Constraints, Size},
-    widget::{BuildContext, ContextWidgetLayoutMut, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -21,7 +21,7 @@ impl WidgetLayout for Align {
         Vec::from_iter(self.child.clone())
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
         let shrink_wrap_width = self.width_factor.is_some() || !constraints.has_bounded_width();
         let shrink_wrap_height = self.height_factor.is_some() || !constraints.has_bounded_height();
 

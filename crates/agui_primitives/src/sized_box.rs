@@ -1,9 +1,6 @@
 use agui_core::{
     unit::{Axis, Constraints, IntrinsicDimension, Offset, Size},
-    widget::{
-        BuildContext, ContextWidgetLayout, ContextWidgetLayoutMut, IntrinsicSizeContext,
-        LayoutContext, Widget, WidgetLayout,
-    },
+    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -62,7 +59,7 @@ impl WidgetLayout for SizedBox {
 
     fn intrinsic_size(
         &self,
-        ctx: &mut IntrinsicSizeContext<Self>,
+        ctx: &mut IntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -78,7 +75,7 @@ impl WidgetLayout for SizedBox {
         }
     }
 
-    fn layout(&self, ctx: &mut LayoutContext<Self>, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
         let size = constraints.constrain(Size {
             width: self.width.unwrap_or(f32::INFINITY),
             height: self.height.unwrap_or(f32::INFINITY),
