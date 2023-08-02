@@ -4,7 +4,7 @@ use agui_core::{
 };
 use agui_macros::LayoutWidget;
 
-use crate::TextBaseline;
+use crate::text::TextBaseline;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum MainAxisSize {

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use agui_core::element::Element;
 
-use crate::Text;
+use crate::text::Text;
 
 pub trait TextQueryExt<'query> {
     fn with_text(self, text: &str) -> QueryWithText<Self>
@@ -62,7 +62,7 @@ where
 mod tests {
     use agui_core::manager::WidgetManager;
 
-    use crate::{query::TextQueryExt, Column, Text};
+    use crate::{column::Column, text::query::TextQueryExt, text::Text};
 
     #[test]
     pub fn finds_widget_with_text() {

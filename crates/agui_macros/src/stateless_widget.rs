@@ -21,11 +21,11 @@ pub fn impl_stateless_widget(input: TokenStream2) -> TokenStream2 {
             }
         }
 
-        impl #impl_generics Into<Option<#agui_core::widget::Widget>> for #ident #ty_generics #where_clause {
-            fn into(self) -> Option<#agui_core::widget::Widget> {
+        impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::widget::Widget> #where_clause {
+            fn from(val: #ident #ty_generics) -> Self {
                 use #agui_core::widget::IntoWidget;
 
-                Some(self.into_widget())
+                Some(val.into_widget())
             }
         }
 

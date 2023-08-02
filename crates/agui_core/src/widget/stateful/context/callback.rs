@@ -2,7 +2,7 @@ use fnv::FnvHashSet;
 
 use crate::{
     element::{Element, ElementId},
-    inheritance::InheritanceManager,
+    inheritance::manager::InheritanceManager,
     util::tree::Tree,
     widget::{ContextWidget, ContextWidgetStateMut},
 };

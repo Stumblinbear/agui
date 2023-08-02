@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use crate::{element::ElementId, util::map::TypeSet};
 
-#[derive(Default)]
+#[derive(PartialEq, Debug, Default)]
 pub struct InheritanceNode {
     // The inheritance scope that this node belongs to.
     scope_id: Option<ElementId>,

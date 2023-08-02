@@ -1,7 +1,6 @@
 extern crate proc_macro;
 
 mod builder;
-mod functional_widget;
 mod inherited_widget;
 mod layout_widget;
 mod paint_widget;
@@ -9,18 +8,12 @@ mod stateful_widget;
 mod stateless_widget;
 mod utils;
 
-use functional_widget::parse_functional_widget;
 use inherited_widget::impl_inherited_widget;
 use layout_widget::impl_layout_widget;
 use paint_widget::impl_paint_widget;
 use proc_macro::TokenStream;
 use stateful_widget::impl_stateful_widget;
 use stateless_widget::impl_stateless_widget;
-
-#[proc_macro_attribute]
-pub fn functional_widget(args: TokenStream, input: TokenStream) -> TokenStream {
-    parse_functional_widget(args.into(), input.into()).into()
-}
 
 #[proc_macro_derive(StatelessWidget)]
 pub fn stateless_widget(input: TokenStream) -> TokenStream {

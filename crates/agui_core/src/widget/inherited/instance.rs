@@ -80,8 +80,8 @@ impl<I> InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    pub fn get_inherited_widget(&self) -> &I {
-        &self.widget
+    pub fn get_inherited_widget(&self) -> Rc<I> {
+        Rc::clone(&self.widget)
     }
 }
 

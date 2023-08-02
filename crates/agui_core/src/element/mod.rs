@@ -89,6 +89,7 @@ impl Element {
         self.widget_element.mount(WidgetMountContext {
             element_tree: ctx.element_tree,
             inheritance_manager: ctx.inheritance_manager,
+            render_context_manager: ctx.render_context_manager,
 
             dirty: ctx.dirty,
 
@@ -97,9 +98,19 @@ impl Element {
         });
 
         // If the widget did not insert itself into the inheritance tree, we need to do it ourselves.
-        if !ctx.inheritance_manager.contains(ctx.element_id) {
+        if ctx.inheritance_manager.get(ctx.element_id).is_none() {
             ctx.inheritance_manager
                 .create_node(ctx.parent_element_id, ctx.element_id);
+        }
+
+        // If the widget did not create a new render context, add it to the parent's render context.
+        if ctx
+            .render_context_manager
+            .get_context(ctx.element_id)
+            .is_none()
+        {
+            ctx.render_context_manager
+                .add(ctx.parent_element_id, ctx.element_id);
         }
     }
 
@@ -136,6 +147,7 @@ impl Element {
         });
 
         ctx.inheritance_manager.remove(ctx.element_id);
+        ctx.render_context_manager.remove(ctx.element_id);
     }
 
     /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
@@ -312,7 +324,8 @@ mod tests {
     use fnv::FnvHashSet;
 
     use crate::{
-        inheritance::InheritanceManager,
+        inheritance::manager::InheritanceManager,
+        render::manager::RenderContextManager,
         util::tree::Tree,
         widget::{BuildContext, InheritedWidget, IntoWidget, WidgetBuild},
     };
@@ -351,14 +364,16 @@ mod tests {
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
+                render_context_manager: &mut RenderContextManager::default(),
                 dirty: &mut FnvHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id1,
             });
         });
 
-        assert!(
-            inheritance_manager.contains(element_id1),
+        assert_ne!(
+            inheritance_manager.get(element_id1),
+            None,
             "element 1 not added to inheritance tree"
         );
 
@@ -378,14 +393,16 @@ mod tests {
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
+                render_context_manager: &mut RenderContextManager::default(),
                 dirty: &mut FnvHashSet::<ElementId>::default(),
                 parent_element_id: Some(element_id1),
                 element_id: element_id2,
             });
         });
 
-        assert!(
-            inheritance_manager.contains(element_id2),
+        assert_ne!(
+            inheritance_manager.get(element_id2),
+            None,
             "element 2 not added to inheritance tree"
         );
 
@@ -462,6 +479,7 @@ mod tests {
             element.remount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
+                render_context_manager: &mut RenderContextManager::default(),
                 dirty: &mut FnvHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id2,

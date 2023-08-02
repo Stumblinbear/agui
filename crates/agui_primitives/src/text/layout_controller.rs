@@ -2,7 +2,7 @@ use std::{borrow::Cow, rc::Rc};
 
 use agui_core::{
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widget::{InheritedWidget, IntoWidget, Widget},
+    widget::{InheritedWidget, IntoChild, Widget},
 };
 use agui_macros::InheritedWidget;
 
@@ -34,8 +34,8 @@ impl TextLayoutController {
         self
     }
 
-    pub fn with_child(mut self, child: impl IntoWidget) -> Self {
-        self.child = Some(child.into_widget());
+    pub fn with_child(mut self, child: impl IntoChild) -> Self {
+        self.child = child.into_child();
 
         self
     }

@@ -1,4 +1,4 @@
-use crate::element::ElementId;
+use crate::{element::ElementId, render::RenderContextId};
 
 /// Used to indicate a change to elements in the tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,11 +22,11 @@ pub enum ElementEvent {
     /// A element has been destroyed.
     Destroyed { element_id: ElementId },
 
-    /// An element has changed position.
-    Layout { element_id: ElementId },
-
     /// A element needs to be redrawn. This will occur the first time a element is drawn and for subsequent changes.
-    Draw { element_id: ElementId },
+    Draw {
+        render_context_id: RenderContextId,
+        element_id: ElementId,
+    },
 }
 
 impl ElementEvent {
@@ -36,7 +36,6 @@ impl ElementEvent {
             | ElementEvent::Rebuilt { element_id, .. }
             | ElementEvent::Reparent { element_id, .. }
             | ElementEvent::Destroyed { element_id, .. }
-            | ElementEvent::Layout { element_id, .. }
             | ElementEvent::Draw { element_id, .. } => element_id,
         }
     }

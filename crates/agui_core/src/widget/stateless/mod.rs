@@ -9,7 +9,6 @@ use super::IntoChild;
 pub trait WidgetChild: Sized + 'static {
     type Child: IntoChild;
 
-    /// Called whenever this widget is first.
     fn get_child(&self) -> Self::Child;
 }
 

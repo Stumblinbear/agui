@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData};
+use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -8,7 +8,7 @@ use crate::{
         WidgetCallback,
     },
     element::{Element, ElementId},
-    inheritance::InheritanceManager,
+    inheritance::manager::InheritanceManager,
     unit::AsAny,
     util::tree::Tree,
     widget::{AnyWidget, ContextInheritedMut, ContextWidget, InheritedElement, InheritedWidget},
@@ -39,7 +39,7 @@ impl<W> ContextWidget for BuildContext<'_, W> {
 }
 
 impl<W> ContextInheritedMut for BuildContext<'_, W> {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&I>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
     where
         I: AnyWidget + InheritedWidget,
     {
@@ -69,7 +69,7 @@ impl<W: 'static> BuildContext<'_, W> {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: AsAny,
-        F: Fn(&mut CallbackContext, &A) + 'static,
+        F: Fn(&mut CallbackContext, A) + 'static,
     {
         let callback = WidgetCallback::new::<F>(self.element_id, self.callback_queue.clone());
 

@@ -8,6 +8,7 @@ use crate::{
     widget::InheritedWidget,
 };
 
+#[derive(PartialEq, Debug)]
 pub struct InheritanceScope {
     type_id: TypeId,
 

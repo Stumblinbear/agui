@@ -1,5 +1,7 @@
 mod instance;
 
+use std::rc::Rc;
+
 pub use instance::*;
 
 use super::{AnyWidget, WidgetChild};
@@ -12,7 +14,7 @@ pub trait InheritedWidget: WidgetChild {
 }
 
 pub trait ContextInheritedMut {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&I>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
     where
         I: AnyWidget + InheritedWidget;
 }

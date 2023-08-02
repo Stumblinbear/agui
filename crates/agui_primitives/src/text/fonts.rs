@@ -2,7 +2,7 @@ use agui_core::{
     callback::Callback,
     unit::Font,
     widget::{
-        ContextWidgetStateMut, InheritedWidget, IntoWidget, StatefulBuildContext, StatefulWidget,
+        ContextWidgetStateMut, InheritedWidget, IntoChild, StatefulBuildContext, StatefulWidget,
         Widget, WidgetState,
     },
 };
@@ -30,8 +30,8 @@ impl Fonts {
         self
     }
 
-    pub fn with_child(mut self, child: impl IntoWidget) -> Self {
-        self.child = Some(child.into_widget());
+    pub fn with_child(mut self, child: impl IntoChild) -> Self {
+        self.child = child.into_child();
 
         self
     }
@@ -109,7 +109,7 @@ mod tests {
     };
     use agui_macros::StatelessWidget;
 
-    use crate::{AvailableFonts, Fonts};
+    use super::{AvailableFonts, Fonts};
 
     #[derive(Default)]
     struct TestResult {

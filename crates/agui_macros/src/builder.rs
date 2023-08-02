@@ -142,6 +142,9 @@ pub(crate) fn build_impl(item: TokenStream2) -> TokenStream2 {
     let stream = expr.into_token_stream();
 
     parse_quote! {
-        (#stream).into()
+        #[allow(clippy::needless_update)]
+        {
+            (#stream).into()
+        }
     }
 }

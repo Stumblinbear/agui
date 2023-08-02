@@ -195,7 +195,7 @@ mod tests {
         fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
             let callback = ctx.callback::<u32, _>(|_ctx, val| {
                 RESULT.with(|f| {
-                    f.borrow_mut().push(*val);
+                    f.borrow_mut().push(val);
                 });
             });
 

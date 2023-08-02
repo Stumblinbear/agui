@@ -21,6 +21,8 @@ where
     state: W::State,
 
     callbacks: FnvHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
+
+    initialized: bool,
 }
 
 impl<W> StatefulElement<W>
@@ -35,6 +37,8 @@ where
             state,
 
             callbacks: FnvHashMap::default(),
+
+            initialized: false,
         }
     }
 }
@@ -65,6 +69,12 @@ where
 
             widget: &self.widget,
         };
+
+        if !self.initialized {
+            self.state.init_state(&mut ctx);
+
+            self.initialized = true;
+        }
 
         Vec::from_iter(self.state.build(&mut ctx).into_child())
     }

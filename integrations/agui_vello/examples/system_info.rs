@@ -1,19 +1,12 @@
-#![allow(clippy::needless_update)]
-
 use std::{thread, time::Duration};
 
 use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{
-    prelude::*,
-    widgets::{
-        primitives::{Center, ColoredBox, Column, MainAxisAlignment, MainAxisSize, Text},
-        App,
-    },
-};
-use agui_vello::AguiProgram;
+use agui::prelude::*;
+use agui_vello::{widgets::window::Window, AguiProgram};
+use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
     let filter = EnvFilter::from_default_env()
@@ -28,19 +21,18 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    let mut ui = AguiProgram::new(
-        "agui os info",
-        Size {
-            width: 800.0,
-            height: 600.0,
-        },
-    );
-
     let deja_vu = Font::try_from_slice(include_bytes!("./fonts/DejaVuSans.ttf")).unwrap();
 
-    ui.set_root(App {
-        child: ExampleMain { font: deja_vu }.into(),
-    });
+    let mut ui = AguiProgram::new();
+
+    ui.set_root(
+        Window::new(
+            WindowBuilder::new()
+                .with_title("agui os info")
+                .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+        )
+        .with_child(ExampleMain { font: deja_vu }),
+    );
 
     ui.run()
 }

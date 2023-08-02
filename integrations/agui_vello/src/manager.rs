@@ -3,6 +3,7 @@ use std::time::Instant;
 use agui::{
     element::ElementId,
     manager::{events::ElementEvent, WidgetManager},
+    render::RenderContextId,
     unit::Offset,
 };
 use fnv::FnvHashMap;
@@ -19,6 +20,8 @@ use vello::{
 use crate::element::RenderElement;
 
 pub(crate) struct RenderManager {
+    render_context_id: RenderContextId,
+
     surface: RenderSurface,
 
     render_cx: RenderContext,
@@ -32,7 +35,12 @@ pub(crate) struct RenderManager {
 }
 
 impl RenderManager {
-    pub async fn new<W>(window: &W, width: u32, height: u32) -> Self
+    pub async fn new<W>(
+        render_context_id: RenderContextId,
+        window: &W,
+        width: u32,
+        height: u32,
+    ) -> Self
     where
         W: HasRawWindowHandle + HasRawDisplayHandle,
     {
@@ -55,6 +63,8 @@ impl RenderManager {
         .unwrap();
 
         Self {
+            render_context_id,
+
             surface,
 
             render_cx,
@@ -73,6 +83,39 @@ impl RenderManager {
             .resize_surface(&mut self.surface, width, height);
     }
 
+    pub fn init(&mut self, manager: &WidgetManager) {
+        let boundary_element_id = manager
+            .get_render_context_manager()
+            .get_boundary(self.render_context_id)
+            .expect("the required render context boundary does not exist");
+
+        // TODO: make a more efficient iterator for render context trees
+        let redraw_render_context_widgets = manager
+            .get_tree()
+            .iter_down_from(boundary_element_id)
+            .filter(|element_id| {
+                manager
+                    .get_render_context_manager()
+                    .get_context(*element_id)
+                    == Some(self.render_context_id)
+            })
+            .flat_map(|element_id| {
+                [
+                    ElementEvent::Spawned {
+                        parent_id: manager.get_tree().get_parent(element_id).copied(),
+                        element_id,
+                    },
+                    ElementEvent::Draw {
+                        render_context_id: self.render_context_id,
+                        element_id,
+                    },
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        self.redraw(manager, &redraw_render_context_widgets);
+    }
+
     pub fn redraw(&mut self, manager: &WidgetManager, events: &[ElementEvent]) {
         let now = Instant::now();
 
@@ -86,10 +129,13 @@ impl RenderManager {
                         *element_id,
                         RenderElement {
                             head_target: parent_id.and_then(|parent_id| {
-                                let parent = self
-                                    .widgets
-                                    .get(&parent_id)
-                                    .expect("render element spawned to a non-existent parent");
+                                let Some(parent) = self.widgets.get(&parent_id) else {
+                                        if manager.get_render_context_manager().get_context(parent_id) == Some(self.render_context_id) {
+                                            panic!("render element spawned to a non-existent parent");
+                                        }
+
+                                        return None;
+                                    };
 
                                 if parent.canvas.tail.is_some() {
                                     Some(parent_id)
@@ -136,11 +182,14 @@ impl RenderManager {
                     self.widgets.remove(element_id);
                 }
 
-                ElementEvent::Layout { element_id } => {
-                    self.update_element(manager, *element_id);
-                }
+                ElementEvent::Draw {
+                    render_context_id,
+                    element_id,
+                } => {
+                    if *render_context_id != self.render_context_id {
+                        continue;
+                    }
 
-                ElementEvent::Draw { element_id } => {
                     self.update_element(manager, *element_id);
                 }
 
@@ -152,7 +201,21 @@ impl RenderManager {
 
         let mut element_stack = Vec::<(usize, ElementId, Affine)>::new();
 
-        for element_id in manager.get_tree().iter_down() {
+        let boundary_element_id = manager
+            .get_render_context_manager()
+            .get_boundary(self.render_context_id)
+            .expect("the required render context boundary does not exist");
+
+        for element_id in manager
+            .get_tree()
+            .iter_down_from(boundary_element_id)
+            .filter(|element_id| {
+                manager
+                    .get_render_context_manager()
+                    .get_context(*element_id)
+                    == Some(self.render_context_id)
+            })
+        {
             let element = self.widgets.get(&element_id).unwrap();
 
             let element_depth = manager.get_tree().get_depth(element_id).unwrap();

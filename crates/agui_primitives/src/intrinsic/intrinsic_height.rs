@@ -4,7 +4,7 @@ use agui_core::{
 };
 use agui_macros::{build, StatelessWidget};
 
-use crate::IntrinsicAxis;
+use crate::intrinsic::IntrinsicAxis;
 
 /// See [`IntrinsicAxis`] for more information.
 #[derive(StatelessWidget, Debug, Default)]

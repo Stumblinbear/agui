@@ -11,8 +11,9 @@ use crate::{
         },
         Element, ElementId,
     },
-    inheritance::InheritanceManager,
+    inheritance::manager::InheritanceManager,
     query::WidgetQuery,
+    render::manager::RenderContextManager,
     unit::Constraints,
     util::tree::Tree,
     widget::{element::ElementUpdate, IntoWidget, Widget},
@@ -27,6 +28,7 @@ use events::ElementEvent;
 pub struct WidgetManager {
     element_tree: Tree<ElementId, Element>,
     inheritance_manager: InheritanceManager,
+    render_context_manager: RenderContextManager,
 
     widgets: FnvHashMap<Widget, ElementId>,
 
@@ -55,6 +57,10 @@ impl WidgetManager {
     /// Get the element tree.
     pub fn get_tree(&self) -> &Tree<ElementId, Element> {
         &self.element_tree
+    }
+
+    pub fn get_render_context_manager(&self) -> &RenderContextManager {
+        &self.render_context_manager
     }
 
     /// Get the root widget.
@@ -158,7 +164,13 @@ impl WidgetManager {
         self.sanitize_events(&mut widget_events);
 
         for element_id in needs_redraw {
-            widget_events.push(ElementEvent::Draw { element_id });
+            widget_events.push(ElementEvent::Draw {
+                render_context_id: self
+                    .render_context_manager
+                    .get_context(element_id)
+                    .expect("element does not have a render context"),
+                element_id,
+            });
         }
 
         widget_events
@@ -419,6 +431,7 @@ impl WidgetManager {
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut self.inheritance_manager,
+                render_context_manager: &mut self.render_context_manager,
 
                 dirty: &mut self.dirty,
 
@@ -501,6 +514,7 @@ impl WidgetManager {
                                 element.remount(ElementMountContext {
                                     element_tree,
                                     inheritance_manager: &mut self.inheritance_manager,
+                                    render_context_manager: &mut self.render_context_manager,
 
                                     dirty: &mut self.dirty,
 
@@ -588,6 +602,7 @@ impl WidgetManager {
                     element.unmount(ElementUnmountContext {
                         element_tree,
                         inheritance_manager: &mut self.inheritance_manager,
+                        render_context_manager: &mut self.render_context_manager,
 
                         dirty: &mut self.dirty,
 

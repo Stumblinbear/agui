@@ -1,6 +1,7 @@
 use std::{
     any::{Any, TypeId},
     marker::PhantomData,
+    rc::Rc,
 };
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -8,7 +9,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue, Notifier, WidgetCallback},
     element::{Element, ElementId},
-    inheritance::InheritanceManager,
+    inheritance::manager::InheritanceManager,
     unit::{AsAny, Key},
     util::tree::Tree,
     widget::{
@@ -149,7 +150,7 @@ impl<S> ContextInheritedMut for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<&I>
+    fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
     where
         I: AnyWidget + InheritedWidget,
     {

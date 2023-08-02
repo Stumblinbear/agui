@@ -1,6 +1,7 @@
+pub mod bindings;
 mod element;
 mod manager;
 mod program;
-mod text_layout;
+pub mod widgets;
 
 pub use program::AguiProgram;

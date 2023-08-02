@@ -4,7 +4,7 @@ use agui_core::{
 };
 use agui_macros::{build, StatelessWidget};
 
-use crate::Align;
+use crate::align::Align;
 
 #[derive(StatelessWidget, Debug, Default)]
 pub struct Center {

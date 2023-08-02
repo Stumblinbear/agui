@@ -35,7 +35,7 @@ mod tests {
     };
     use agui_macros::StatelessWidget;
 
-    use crate::Builder;
+    use crate::builder::Builder;
 
     #[derive(StatelessWidget, Debug, Default, PartialEq)]
     struct TestWidget {}

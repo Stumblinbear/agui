@@ -10,9 +10,10 @@ use agui_core::{
 };
 use agui_macros::{build, LayoutWidget, PaintWidget, StatelessWidget};
 
-use crate::layout_controller::{TextLayoutController, TextLayoutDelegate};
+use crate::text::layout_controller::{TextLayoutController, TextLayoutDelegate};
 
 pub mod edit;
+pub mod fonts;
 pub mod layout_controller;
 pub mod query;
 
@@ -31,6 +32,20 @@ pub struct Text {
     pub text: Cow<'static, str>,
 }
 
+impl Text {
+    pub fn new(text: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            text: text.into(),
+            ..Self::default()
+        }
+    }
+
+    pub fn with_font(mut self, font: FontStyle) -> Self {
+        self.font = font;
+        self
+    }
+}
+
 impl WidgetBuild for Text {
     type Child = TextLayout;
 
@@ -39,8 +54,7 @@ impl WidgetBuild for Text {
             TextLayout {
                 delegate: ctx
                     .depend_on_inherited_widget::<TextLayoutController>()
-                    .and_then(|controller| controller.delegate.as_ref())
-                    .map(Rc::clone),
+                    .and_then(|controller| controller.delegate.clone()),
 
                 font: self.font.clone(),
                 text: Cow::clone(&self.text),

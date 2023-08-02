@@ -4,7 +4,7 @@ use agui_core::{
 };
 use agui_macros::{build, StatelessWidget};
 
-use crate::{
+use crate::flex::{
     CrossAxisAlignment, Flex, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
 };
 

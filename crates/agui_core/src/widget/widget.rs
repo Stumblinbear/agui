@@ -51,6 +51,17 @@ impl Widget {
         Rc::clone(&self.widget).as_any().is::<W>()
     }
 
+    pub fn is_eq<W1, W2>(widget1: &Rc<W1>, widget2: &Rc<W2>) -> bool
+    where
+        W1: AnyWidget + ?Sized,
+        W2: AnyWidget + ?Sized,
+    {
+        std::ptr::eq(
+            Rc::as_ptr(widget1) as *const _ as *const (),
+            Rc::as_ptr(widget2) as *const _ as *const (),
+        )
+    }
+
     pub(crate) fn create_element(&self) -> Box<dyn WidgetElement> {
         Rc::clone(&self.widget).create_element()
     }
@@ -119,7 +130,7 @@ mod tests {
 
     use agui_macros::StatelessWidget;
 
-    use crate::widget::{BuildContext, IntoWidget, WidgetBuild};
+    use crate::widget::{BuildContext, IntoWidget, Widget, WidgetBuild};
 
     #[derive(StatelessWidget)]
     struct TestWidget;
@@ -174,6 +185,16 @@ mod tests {
 
         assert_eq!(
             widget1, widget1,
+            "widget1 should should always be equal to itself"
+        );
+
+        assert!(
+            !Widget::is_eq(&widget1.widget, &widget2.widget),
+            "widget1 should should never be equal to widget2"
+        );
+
+        assert!(
+            Widget::is_eq(&widget1.widget, &widget1.widget),
             "widget1 should should always be equal to itself"
         );
     }

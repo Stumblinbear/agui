@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use agui::{
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widgets::primitives::layout_controller::TextLayoutDelegate,
+    widgets::primitives::text::layout_controller::TextLayoutDelegate,
 };
 use vello::fello::{raw::FontRef, MetadataProvider};
 
@@ -17,7 +17,7 @@ impl TextLayoutDelegate for VelloTextLayoutDelegate {
         cross_axis: f32,
     ) -> f32 {
         let default_font =
-            FontRef::new(include_bytes!("../examples/fonts/DejaVuSans.ttf")).unwrap();
+            FontRef::new(include_bytes!("../../examples/fonts/DejaVuSans.ttf")).unwrap();
 
         let fello_size = vello::fello::Size::new(font_style.size);
         let charmap = default_font.charmap();
@@ -87,7 +87,7 @@ impl TextLayoutDelegate for VelloTextLayoutDelegate {
         constraints: Constraints,
     ) -> Size {
         let default_font =
-            FontRef::new(include_bytes!("../examples/fonts/DejaVuSans.ttf")).unwrap();
+            FontRef::new(include_bytes!("../../examples/fonts/DejaVuSans.ttf")).unwrap();
 
         let fello_size = vello::fello::Size::new(font_style.size);
         let charmap = default_font.charmap();

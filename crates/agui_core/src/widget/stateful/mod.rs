@@ -17,6 +17,10 @@ pub trait WidgetState: Sized + 'static {
 
     type Child: IntoChild;
 
+    /// Called when the widget is first added to the tree.
+    #[allow(unused_variables)]
+    fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {}
+
     /// Called when the widget is replaced in the tree by a new widget of the same concrete type.
     #[allow(unused_variables)]
     fn updated(&mut self, new_widget: &Self::Widget) {}

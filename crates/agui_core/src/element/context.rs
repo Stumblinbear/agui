@@ -4,13 +4,15 @@ use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
     gestures::hit_test::HitTestEntry,
-    inheritance::InheritanceManager,
+    inheritance::manager::InheritanceManager,
+    render::manager::RenderContextManager,
     util::tree::Tree,
 };
 
 pub struct ElementMountContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+    pub(crate) render_context_manager: &'ctx mut RenderContextManager,
 
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
@@ -21,6 +23,7 @@ pub struct ElementMountContext<'ctx> {
 pub struct ElementUnmountContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
+    pub(crate) render_context_manager: &'ctx mut RenderContextManager,
 
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 

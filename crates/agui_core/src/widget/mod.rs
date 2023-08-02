@@ -6,8 +6,10 @@ mod inherited;
 mod key;
 mod layout;
 mod paint;
+pub mod render_context;
 mod stateful;
 mod stateless;
+
 #[allow(clippy::module_inception)]
 mod widget;
 
@@ -81,12 +83,24 @@ impl IntoChild for Option<Widget> {
     }
 }
 
+impl IntoChild for Option<&Widget> {
+    fn into_child(self) -> Option<Widget> {
+        self.map(Widget::clone)
+    }
+}
+
+impl IntoChild for &Option<Widget> {
+    fn into_child(self) -> Option<Widget> {
+        self.as_ref().map(Widget::clone)
+    }
+}
+
 impl<W> IntoChild for Option<W>
 where
-    W: AnyWidget,
+    W: IntoWidget,
 {
     fn into_child(self) -> Option<Widget> {
-        self.map(Widget::new)
+        self.map(IntoWidget::into_widget)
     }
 }
 
