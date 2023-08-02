@@ -1,3 +1,5 @@
+mod inherited_widgets;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use agui::{element::ElementId, util::tree::Tree};
@@ -14,7 +16,7 @@ fn tree_ops(c: &mut Criterion) {
             },
             |(mut tree, root_id)| {
                 for i in 0..1000 {
-                    black_box(tree.add(Some(root_id), i));
+                    tree.add(Some(root_id), i);
                 }
             },
         )
@@ -39,7 +41,7 @@ fn tree_ops(c: &mut Criterion) {
             },
             |(mut tree, widget_ids)| {
                 for widget_id in widget_ids {
-                    black_box(tree.remove(widget_id, false));
+                    tree.remove(widget_id, false);
                 }
             },
         )

@@ -25,7 +25,7 @@ winit = "0.28"
 bytemuck = { version = "1.12", features = ["derive"] }
 
 wgpu = "0.16"
-vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "459bf0fc98e97e0c176a64a2e900192d08704528" }
+vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "6a827324355178a54e839fa2bef15222a2173b72" }
 raw-window-handle = "0.5.0"
 
 [dev-dependencies]

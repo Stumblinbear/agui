@@ -36,6 +36,7 @@ pub struct Element {
 }
 
 impl Element {
+    #[tracing::instrument(level = "trace", skip(widget))]
     pub(crate) fn new(widget: Widget) -> Self {
         let widget_element = Widget::create_element(&widget);
 
@@ -82,10 +83,8 @@ impl Element {
         (*self.widget_element).as_any_mut().downcast_mut::<E>()
     }
 
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn mount(&mut self, ctx: ElementMountContext) {
-        let span = tracing::error_span!("mount");
-        let _enter = span.enter();
-
         self.widget_element.mount(WidgetMountContext {
             element_tree: ctx.element_tree,
             inheritance_manager: ctx.inheritance_manager,
@@ -114,6 +113,7 @@ impl Element {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn remount(&mut self, ctx: ElementMountContext) {
         let span = tracing::error_span!("remount");
         let _enter = span.enter();
@@ -133,10 +133,8 @@ impl Element {
         );
     }
 
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn unmount(&mut self, ctx: ElementUnmountContext) {
-        let span = tracing::error_span!("unmount");
-        let _enter = span.enter();
-
         self.widget_element.unmount(WidgetUnmountContext {
             element_tree: ctx.element_tree,
             inheritance_manager: ctx.inheritance_manager,
@@ -157,15 +155,13 @@ impl Element {
     /// child so that when the child's layout changes, the parent's layout will be also be recomputed.
     ///
     /// Calling this function is expensive as it can result in O(N^2) behavior.
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn intrinsic_size(
         &self,
         ctx: ElementIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
-        let span = tracing::error_span!("get_min_extent");
-        let _enter = span.enter();
-
         let children = ctx
             .element_tree
             .get_children(ctx.element_id)
@@ -185,10 +181,8 @@ impl Element {
         )
     }
 
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
-        let span = tracing::error_span!("layout");
-        let _enter = span.enter();
-
         let children = ctx
             .element_tree
             .get_children(ctx.element_id)
@@ -224,10 +218,8 @@ impl Element {
         size
     }
 
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<Widget> {
-        let span = tracing::error_span!("build");
-        let _enter = span.enter();
-
         self.widget_element.build(WidgetBuildContext {
             element_tree: ctx.element_tree,
             inheritance_manager: ctx.inheritance_manager,
@@ -239,10 +231,8 @@ impl Element {
         })
     }
 
+    #[tracing::instrument(level = "trace", skip(self, new_widget))]
     pub fn update_widget(&mut self, new_widget: &Widget) -> ElementUpdate {
-        let span = tracing::error_span!("update_widget");
-        let _enter = span.enter();
-
         if &self.widget == new_widget {
             return ElementUpdate::Noop;
         }
@@ -252,14 +242,12 @@ impl Element {
         self.widget_element.update(new_widget)
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn paint(&self) -> Option<Canvas> {
-        let span = tracing::error_span!("paint");
-        let _enter = span.enter();
-
         self.size.and_then(|size| self.widget_element.paint(size))
     }
 
-    #[allow(clippy::borrowed_box)]
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn call(
         &mut self,
         ctx: ElementCallbackContext,
@@ -283,6 +271,7 @@ impl Element {
         )
     }
 
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn hit_test(&self, ctx: ElementHitTestContext, position: Offset) -> bool {
         let span = tracing::error_span!("hit_test");
         let _enter = span.enter();
@@ -338,7 +327,11 @@ mod tests {
         child: (),
     }
 
-    impl InheritedWidget for TestInheritedWidget {}
+    impl InheritedWidget for TestInheritedWidget {
+        fn should_notify(&self, _: &Self) -> bool {
+            true
+        }
+    }
 
     #[derive(StatelessWidget)]
     struct TestWidget;

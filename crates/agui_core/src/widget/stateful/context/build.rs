@@ -21,7 +21,6 @@ use crate::{
 use super::StatefulCallbackContext;
 
 pub trait StatefulCallbackFunc<W> {
-    #[allow(clippy::borrowed_box)]
     fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: Box<dyn Any>);
 }
 

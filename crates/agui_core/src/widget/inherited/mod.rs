@@ -8,9 +8,7 @@ use super::{AnyWidget, WidgetChild};
 
 pub trait InheritedWidget: WidgetChild {
     #[allow(unused_variables)]
-    fn should_notify(&self, old_widget: &Self) -> bool {
-        true
-    }
+    fn should_notify(&self, old_widget: &Self) -> bool;
 }
 
 pub trait ContextInheritedMut {
@@ -59,18 +57,26 @@ mod tests {
         data: usize,
 
         #[child]
-        pub child: Option<Widget>,
+        child: Option<Widget>,
     }
 
-    impl InheritedWidget for TestInheritedWidget {}
+    impl InheritedWidget for TestInheritedWidget {
+        fn should_notify(&self, _: &Self) -> bool {
+            true
+        }
+    }
 
     #[derive(Default, InheritedWidget)]
     struct TestOtherInheritedWidget {
         #[child]
-        pub child: Option<Widget>,
+        child: Option<Widget>,
     }
 
-    impl InheritedWidget for TestOtherInheritedWidget {}
+    impl InheritedWidget for TestOtherInheritedWidget {
+        fn should_notify(&self, _: &Self) -> bool {
+            true
+        }
+    }
 
     #[derive(Default, StatelessWidget)]
     struct TestDummyWidget {

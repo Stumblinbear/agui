@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use crate::element::ElementId;
 
@@ -8,9 +8,9 @@ use super::RenderContextId;
 pub struct RenderContextManager {
     last_render_context_id: usize,
 
-    map: HashMap<ElementId, RenderContextId>,
+    map: FnvHashMap<ElementId, RenderContextId>,
 
-    render_contexts: HashMap<RenderContextId, ElementId>,
+    render_contexts: FnvHashMap<RenderContextId, ElementId>,
 }
 
 impl RenderContextManager {
@@ -39,6 +39,11 @@ impl RenderContextManager {
     }
 
     pub(crate) fn add(&mut self, parent_element_id: Option<ElementId>, element_id: ElementId) {
+        tracing::trace!(
+            element_id = &format!("{:?}", element_id),
+            "attaching render context"
+        );
+
         assert!(
             !self.map.contains_key(&element_id),
             "element already exists in the render context manager"

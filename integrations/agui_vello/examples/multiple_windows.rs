@@ -47,5 +47,7 @@ fn main() {
         ],
     });
 
-    ui.run()
+    ui.run();
+
+    println!("Hello, world!");
 }

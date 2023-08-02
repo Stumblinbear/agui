@@ -11,4 +11,8 @@ pub struct EventChannel<Event: 'static> {
     pub child: Option<Widget>,
 }
 
-impl<Event> InheritedWidget for EventChannel<Event> {}
+impl<Event> InheritedWidget for EventChannel<Event> {
+    fn should_notify(&self, _: &Self) -> bool {
+        true
+    }
+}

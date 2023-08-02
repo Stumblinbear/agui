@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     ops::{Deref, DerefMut},
     sync::mpsc,
     time::Instant,
@@ -15,11 +14,14 @@ use agui::{
         window::WindowPosition,
     },
 };
+use fnv::FnvHashMap;
 use futures::executor::block_on;
+use vello::fello::raw::FontRef;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, Event as WinitEvent, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
+    platform::run_return::EventLoopExtRunReturn,
     window::{Window, WindowBuilder, WindowId},
 };
 
@@ -36,7 +38,7 @@ pub struct AguiProgram {
 
     manager: WidgetManager,
 
-    window_contexts: HashMap<WindowId, WindowContext>,
+    window_contexts: FnvHashMap<WindowId, WindowContext>,
 }
 
 struct WindowContext {
@@ -71,7 +73,7 @@ impl Default for AguiProgram {
 
             manager: WidgetManager::new(),
 
-            window_contexts: HashMap::new(),
+            window_contexts: FnvHashMap::default(),
         }
     }
 }
@@ -88,15 +90,20 @@ impl AguiProgram {
         self.manager.set_root(
             WinitWindowingController::new(self.window_tx.clone()).with_child(
                 TextLayoutController::new()
-                    .with_delegate(VelloTextLayoutDelegate)
+                    .with_delegate(VelloTextLayoutDelegate {
+                        default_font: FontRef::new(include_bytes!(
+                            "../examples/fonts/DejaVuSans.ttf"
+                        ))
+                        .unwrap(),
+                    })
                     .with_child(widget),
             ),
         );
     }
 
-    pub fn run(mut self) -> ! {
+    pub fn run(mut self) {
         self.event_loop
-            .run(move |event, window_target, control_flow| {
+            .run_return(move |event, window_target, control_flow| {
                 while let Ok((element_id, builder, callback)) = self.window_rx.try_recv() {
                     tracing::debug!("creating window for element: {:?}", element_id);
 
@@ -113,12 +120,16 @@ impl AguiProgram {
 
                     renderer.init(&self.manager);
 
+                    let handle = WinitWindowHandle {
+                        window_id,
+
+                        title: window.title(),
+                    };
+
                     self.window_contexts
                         .insert(window_id, WindowContext { window, renderer });
 
-                    callback.call(WinitWindowHandle {
-                        window_id,
-                    });
+                    callback.call(handle);
                 }
 
                 match event {

@@ -5,7 +5,6 @@ use crate::unit::AsAny;
 use super::CallbackContext;
 
 pub trait CallbackFunc<W> {
-    #[allow(clippy::borrowed_box)]
     fn call(&self, ctx: &mut CallbackContext, args: Box<dyn Any>);
 }
 

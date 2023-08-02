@@ -6,7 +6,9 @@ use agui::{
 };
 use vello::fello::{raw::FontRef, MetadataProvider};
 
-pub struct VelloTextLayoutDelegate;
+pub struct VelloTextLayoutDelegate {
+    pub default_font: FontRef<'static>,
+}
 
 impl TextLayoutDelegate for VelloTextLayoutDelegate {
     fn compute_intrinsic_size(
@@ -16,14 +18,13 @@ impl TextLayoutDelegate for VelloTextLayoutDelegate {
         dimension: IntrinsicDimension,
         cross_axis: f32,
     ) -> f32 {
-        let default_font =
-            FontRef::new(include_bytes!("../../examples/fonts/DejaVuSans.ttf")).unwrap();
-
         let fello_size = vello::fello::Size::new(font_style.size);
-        let charmap = default_font.charmap();
-        let metrics = default_font.metrics(fello_size, Default::default());
+        let charmap = self.default_font.charmap();
+        let metrics = self.default_font.metrics(fello_size, Default::default());
         let line_height = metrics.ascent - metrics.descent + metrics.leading;
-        let glyph_metrics = default_font.glyph_metrics(fello_size, Default::default());
+        let glyph_metrics = self
+            .default_font
+            .glyph_metrics(fello_size, Default::default());
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;
@@ -86,14 +87,13 @@ impl TextLayoutDelegate for VelloTextLayoutDelegate {
         text: Cow<'static, str>,
         constraints: Constraints,
     ) -> Size {
-        let default_font =
-            FontRef::new(include_bytes!("../../examples/fonts/DejaVuSans.ttf")).unwrap();
-
         let fello_size = vello::fello::Size::new(font_style.size);
-        let charmap = default_font.charmap();
-        let metrics = default_font.metrics(fello_size, Default::default());
+        let charmap = self.default_font.charmap();
+        let metrics = self.default_font.metrics(fello_size, Default::default());
         let line_height = metrics.ascent - metrics.descent + metrics.leading;
-        let glyph_metrics = default_font.glyph_metrics(fello_size, Default::default());
+        let glyph_metrics = self
+            .default_font
+            .glyph_metrics(fello_size, Default::default());
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;

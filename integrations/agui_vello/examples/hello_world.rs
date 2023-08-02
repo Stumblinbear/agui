@@ -32,5 +32,5 @@ fn main() {
             .into_child(),
     });
 
-    ui.run()
+    ui.run();
 }

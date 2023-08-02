@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use agui::{manager::WidgetManager, widgets::primitives::Column};
+use agui::{manager::WidgetManager, widgets::primitives::column::Column};
 
 fn widget_manager_ops(c: &mut Criterion) {
     let mut group = c.benchmark_group("widget manager");
@@ -80,5 +80,5 @@ fn widget_manager_ops(c: &mut Criterion) {
         });
 }
 
-criterion_group!(benches, widget_manager_ops,);
+criterion_group!(benches, widget_manager_ops);
 criterion_main!(benches);

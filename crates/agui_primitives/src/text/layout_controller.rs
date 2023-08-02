@@ -14,7 +14,20 @@ pub struct TextLayoutController {
     pub child: Option<Widget>,
 }
 
-impl InheritedWidget for TextLayoutController {}
+impl InheritedWidget for TextLayoutController {
+    fn should_notify(&self, other_widget: &Self) -> bool {
+        match (&self.delegate, &other_widget.delegate) {
+            (Some(delegate), Some(other_delegate)) => !std::ptr::eq(
+                Rc::as_ptr(delegate) as *const _ as *const (),
+                Rc::as_ptr(other_delegate) as *const _ as *const (),
+            ),
+
+            (Some(_), None) | (None, Some(_)) => true,
+
+            _ => false,
+        }
+    }
+}
 
 impl TextLayoutController {
     pub fn new() -> Self {

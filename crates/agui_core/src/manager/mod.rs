@@ -126,13 +126,13 @@ impl WidgetManager {
     }
 
     /// Update the UI tree.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn update(&mut self) -> Vec<ElementEvent> {
         if !self.has_changes() {
             return Vec::default();
         }
 
-        let span = tracing::debug_span!("update");
-        let _enter = span.enter();
+        tracing::debug!("updating widget tree");
 
         let mut widget_events = Vec::new();
         let mut needs_redraw = FnvHashSet::default();
@@ -240,6 +240,7 @@ impl WidgetManager {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self, widget_events, needs_redraw))]
     pub fn flush_modifications(
         &mut self,
         widget_events: &mut Vec<ElementEvent>,
@@ -249,18 +250,12 @@ impl WidgetManager {
             return;
         }
 
-        let span = tracing::debug_span!("flush_modifications");
-        let _enter = span.enter();
-
         let mut retained_elements = FnvHashSet::default();
 
         // Apply any queued modifications
         while let Some(modification) = self.modifications.pop_front() {
             match modification {
                 Modify::Spawn(parent_id, widget) => {
-                    let span = tracing::debug_span!("spawn");
-                    let _enter = span.enter();
-
                     // This `process_spawn` will only ever return `Created` because `existing_element_id` is `None`
                     if let SpawnResult::Created(element_id) =
                         self.process_spawn(widget_events, parent_id, widget, None)
@@ -272,31 +267,23 @@ impl WidgetManager {
                 Modify::Rebuild(element_id) => {
                     needs_redraw.insert(element_id);
 
-                    let span = tracing::debug_span!("rebuild");
-                    let _enter = span.enter();
-
                     self.process_rebuild(widget_events, &mut retained_elements, element_id);
                 }
 
                 Modify::Destroy(element_id) => {
-                    let span = tracing::debug_span!("destroy");
-                    let _enter = span.enter();
-
                     self.process_destroy(widget_events, element_id);
                 }
             }
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_changes(&mut self) {
         let changed = self.dirty.drain().collect::<Vec<_>>();
 
         if changed.is_empty() {
             return;
         }
-
-        let span = tracing::debug_span!("flush_changes");
-        let _enter = span.enter();
 
         for element_id in changed {
             tracing::trace!(
@@ -309,10 +296,8 @@ impl WidgetManager {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_callbacks(&mut self) {
-        let span = tracing::debug_span!("flush_callbacks");
-        let _enter = span.enter();
-
         let callback_invokes = self.callback_queue.take();
 
         for invoke in callback_invokes {
@@ -356,10 +341,8 @@ impl WidgetManager {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self, needs_redraw))]
     pub fn flush_layout(&mut self, needs_redraw: &mut FnvHashSet<ElementId>) {
-        let span = tracing::debug_span!("flush_layout");
-        let _enter = span.enter();
-
         let Some(root_id) = self.element_tree.get_root() else {
             return;
         };
@@ -383,6 +366,11 @@ impl WidgetManager {
             .expect("cannot layout a widget that doesn't exist");
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        name = "spawn",
+        skip(self, element_events, widget, existing_element_id)
+    )]
     fn process_spawn(
         &mut self,
         element_events: &mut Vec<ElementEvent>,
@@ -398,6 +386,12 @@ impl WidgetManager {
             // do about retaining its state
             match existing_element.update_widget(&widget) {
                 ElementUpdate::Noop => {
+                    tracing::trace!(
+                        widget = widget.widget_name(),
+                        element_id = &&format!("{:?}", existing_element_id),
+                        "element was retained since it is unchanged"
+                    );
+
                     return SpawnResult::Retained {
                         element_id: existing_element_id,
                         needs_rebuild: false,
@@ -405,6 +399,12 @@ impl WidgetManager {
                 }
 
                 ElementUpdate::RebuildNecessary => {
+                    tracing::trace!(
+                        widget = widget.widget_name(),
+                        element_id = &&format!("{:?}", existing_element_id),
+                        "element was retained, but it must be rebuilt"
+                    );
+
                     return SpawnResult::Retained {
                         element_id: existing_element_id,
                         needs_rebuild: true,
@@ -448,15 +448,17 @@ impl WidgetManager {
         SpawnResult::Created(element_id)
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        name = "build",
+        skip(self, element_events, retained_elements, element_id)
+    )]
     fn process_build(
         &mut self,
         element_events: &mut Vec<ElementEvent>,
         retained_elements: &mut FnvHashSet<ElementId>,
         element_id: ElementId,
     ) {
-        let span = tracing::debug_span!("process_build");
-        let _enter = span.enter();
-
         let mut build_queue = VecDeque::new();
 
         build_queue.push_back(element_id);
@@ -558,6 +560,11 @@ impl WidgetManager {
         }
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        name = "rebuild",
+        skip(self, element_events, retained_elements)
+    )]
     fn process_rebuild(
         &mut self,
         element_events: &mut Vec<ElementEvent>,

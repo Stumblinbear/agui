@@ -86,7 +86,12 @@ pub struct AvailableFonts {
     child: Option<Widget>,
 }
 
-impl InheritedWidget for AvailableFonts {}
+impl InheritedWidget for AvailableFonts {
+    fn should_notify(&self, other_widget: &Self) -> bool {
+        self.available_fonts != other_widget.available_fonts
+            || self.add_font != other_widget.add_font
+    }
+}
 
 impl AvailableFonts {
     pub fn get_font(&self, name: &str) -> Option<&Font> {

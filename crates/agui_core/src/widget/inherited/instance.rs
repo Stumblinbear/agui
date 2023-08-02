@@ -65,11 +65,9 @@ where
 
             self.widget = new_widget;
 
-            if self.needs_notify {
-                ElementUpdate::RebuildNecessary
-            } else {
-                ElementUpdate::Noop
-            }
+            // Since (for example) the child of the inherited widget may have changed, we need to
+            // rebuild the widget even if we don't need to notify listeners.
+            ElementUpdate::RebuildNecessary
         } else {
             ElementUpdate::Invalid
         }

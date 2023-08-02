@@ -31,7 +31,7 @@ fn main() {
         .with_child(ExampleMain { font: deja_vu }),
     );
 
-    ui.run()
+    ui.run();
 }
 
 #[derive(StatelessWidget, PartialEq)]

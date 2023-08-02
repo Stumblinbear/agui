@@ -7,22 +7,43 @@ description = "A reactive GUI project"
 exclude = [".github/**/*", "crates/**/*"]
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
-keywords = [ "gui", "graphics", "gamedev" ]
-categories = [ "gui", "graphics", "rendering", "game-development" ]
+keywords = ["gui", "graphics", "gamedev"]
+categories = ["gui", "graphics", "rendering", "game-development"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [workspace]
-members = [ "benches", "crates/*", "integrations/*" ]
+members = ["crates/*", "integrations/*"]
+
+[profile.release]
+debug = 1
 
 [features]
-default = [ "primitives", "widgets", "macros" ]
-primitives = [ "agui_primitives" ]
-widgets = [ "primitives", "agui_widgets" ]
-macros = [ "agui_macros" ]
+default = ["primitives", "widgets", "macros"]
+primitives = ["agui_primitives"]
+widgets = ["primitives", "agui_widgets"]
+macros = ["agui_macros"]
 
 [dependencies]
 agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3", optional = true }
 agui_primitives = { path = "crates/agui_primitives", version = "0.3", optional = true }
 agui_widgets = { path = "crates/agui_widgets", version = "0.3", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "tree"
+path = "benches/agui_core/tree.rs"
+harness = false
+
+[[bench]]
+name = "widget_manager"
+path = "benches/agui_core/widget_manager.rs"
+harness = false
+
+[[bench]]
+name = "inherited_widgets"
+path = "benches/agui_core/inherited_widgets.rs"
+harness = false

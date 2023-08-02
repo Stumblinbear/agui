@@ -1,5 +1,5 @@
 use agui::{prelude::*, widget::render_context::RenderContextBoundary};
-use winit::window::WindowBuilder;
+use winit::window::{WindowBuilder, WindowId};
 
 use crate::bindings::{WinitWindowHandle, WinitWindowingController};
 
@@ -31,6 +31,7 @@ impl WidgetBuild for Window {
 
     fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
         build! {
+            // Windows must be created within their own render context
             RenderContextBoundary {
                 child: WinitWindow {
                     window: self.window.clone(),
@@ -87,8 +88,6 @@ impl WidgetState for WinitWindowState {
         windowing.create_window(ctx.get_element_id(), ctx.widget.window.clone(), create_cb);
     }
 
-    // TODO: handle window re-creation if the WinitWindowingController is replaced?
-
     fn build(&mut self, _: &mut StatefulBuildContext<Self>) -> Self::Child {
         // TODO: sync the window size
         WinitWindowLayout {
@@ -121,5 +120,34 @@ impl WidgetLayout for WinitWindowLayout {
         }
 
         self.size
+    }
+}
+
+#[derive(InheritedWidget)]
+pub struct CurrentWindow {
+    winit: WinitWindowHandle,
+
+    #[child]
+    child: Option<Widget>,
+}
+
+impl CurrentWindow {
+    pub fn get_id(&self) -> WindowId {
+        self.winit.window_id
+    }
+
+    pub fn get_title(&self) -> &str {
+        &self.winit.title
+    }
+
+    pub fn set_title(&self, title: impl Into<String>) {
+        todo!();
+    }
+}
+
+impl InheritedWidget for CurrentWindow {
+    #[allow(unused_variables)]
+    fn should_notify(&self, old_widget: &Self) -> bool {
+        self.winit != old_widget.winit
     }
 }

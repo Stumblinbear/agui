@@ -11,7 +11,11 @@ pub struct WinitWindowingController {
     pub child: Option<Widget>,
 }
 
-impl InheritedWidget for WinitWindowingController {}
+impl InheritedWidget for WinitWindowingController {
+    fn should_notify(&self, _: &Self) -> bool {
+        true
+    }
+}
 
 impl WinitWindowingController {
     pub fn new(tx: Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>) -> Self {
@@ -36,18 +40,9 @@ impl WinitWindowingController {
     }
 }
 
+#[derive(PartialEq)]
 pub struct WinitWindowHandle {
     pub window_id: winit::window::WindowId,
-}
 
-// let window = WindowBuilder::new()
-//     .with_title(title)
-//     .with_decorations(true)
-//     .with_resizable(true)
-//     .with_transparent(false)
-//     .with_inner_size(winit::dpi::PhysicalSize {
-//         width: size.width,
-//         height: size.height,
-//     })
-//     .build(&event_loop)
-//     .unwrap();
+    pub title: String,
+}

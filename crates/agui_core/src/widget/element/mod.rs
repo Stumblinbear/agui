@@ -1,4 +1,4 @@
-use std::{any::Any, marker::PhantomData};
+use std::any::Any;
 
 use crate::{
     callback::CallbackId,
@@ -116,7 +116,6 @@ pub trait WidgetElement: AsAny {
     }
 
     #[allow(unused_variables)]
-    #[allow(clippy::borrowed_box)]
     fn call(
         &mut self,
         ctx: WidgetCallbackContext,

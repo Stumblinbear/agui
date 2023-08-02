@@ -32,7 +32,7 @@ impl CallbackId {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub enum Callback<A>
 where
     A: AsAny,
@@ -152,6 +152,19 @@ where
             .expect("failed to downcast callback argument");
 
         (self.func)(*arg)
+    }
+}
+
+impl<A> PartialEq for FuncCallback<A>
+where
+    A: AsAny,
+{
+    fn eq(&self, other: &Self) -> bool {
+        // war crimes
+        std::ptr::eq(
+            Arc::as_ptr(&self.func) as *const _ as *const (),
+            Arc::as_ptr(&other.func) as *const _ as *const (),
+        )
     }
 }
 

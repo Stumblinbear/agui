@@ -5,7 +5,7 @@ use crate::{
     element::{Element, ElementId},
     gestures::hit_test::HitTestEntry,
     inheritance::manager::InheritanceManager,
-    render::{manager::RenderContextManager, RenderContextId},
+    render::manager::RenderContextManager,
     unit::{Offset, Size},
     util::tree::Tree,
 };

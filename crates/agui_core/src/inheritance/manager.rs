@@ -12,7 +12,7 @@ use super::scope::InheritanceScope;
 
 #[derive(Default)]
 pub struct InheritanceManager {
-    map: HashMap<ElementId, Inheritance>,
+    map: FnvHashMap<ElementId, Inheritance>,
 }
 
 impl InheritanceManager {
@@ -342,6 +342,11 @@ impl InheritanceManager {
     ) where
         I: InheritedWidget,
     {
+        tracing::trace!(
+            element_id = &format!("{:?}", element_id),
+            "creating new inheritance scope"
+        );
+
         assert!(
             !self.map.contains_key(&element_id),
             "element already exists in the inheritance manager"
@@ -375,6 +380,11 @@ impl InheritanceManager {
         parent_element_id: Option<ElementId>,
         element_id: ElementId,
     ) {
+        tracing::trace!(
+            element_id = &format!("{:?}", element_id),
+            "attaching inheritance node"
+        );
+
         assert!(
             !self.map.contains_key(&element_id),
             "element already exists in the inheritance manager"
@@ -394,6 +404,11 @@ impl InheritanceManager {
 
     pub(crate) fn remove(&mut self, element_id: ElementId) {
         if let Some(inheritance) = self.map.remove(&element_id) {
+            tracing::trace!(
+                element_id = &format!("{:?}", element_id),
+                "removing inheritance entry"
+            );
+
             match inheritance {
                 Inheritance::Scope(scope) => {
                     // Remove this scope from its direct ancestor
@@ -501,7 +516,11 @@ mod tests {
         child: Option<Widget>,
     }
 
-    impl InheritedWidget for TestWidget1 {}
+    impl InheritedWidget for TestWidget1 {
+        fn should_notify(&self, _: &Self) -> bool {
+            true
+        }
+    }
 
     #[derive(InheritedWidget)]
     struct TestWidget2 {
@@ -509,7 +528,11 @@ mod tests {
         child: Option<Widget>,
     }
 
-    impl InheritedWidget for TestWidget2 {}
+    impl InheritedWidget for TestWidget2 {
+        fn should_notify(&self, _: &Self) -> bool {
+            true
+        }
+    }
 
     #[test]
     fn scope_provides_itself() {
