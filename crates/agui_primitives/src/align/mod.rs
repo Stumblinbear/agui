@@ -4,6 +4,10 @@ use agui_core::{
 };
 use agui_macros::LayoutWidget;
 
+mod center;
+
+pub use center::*;
+
 #[derive(LayoutWidget, Debug, Default)]
 pub struct Align {
     pub alignment: Alignment,

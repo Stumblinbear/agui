@@ -62,7 +62,7 @@ where
 mod tests {
     use agui_core::manager::WidgetManager;
 
-    use crate::{column::Column, text::query::TextQueryExt, text::Text};
+    use crate::{flex::Column, text::query::TextQueryExt, text::Text};
 
     #[test]
     pub fn finds_widget_with_text() {

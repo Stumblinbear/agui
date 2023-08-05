@@ -6,6 +6,12 @@ use agui_macros::LayoutWidget;
 
 use crate::text::TextBaseline;
 
+mod column;
+mod row;
+
+pub use column::*;
+pub use row::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum MainAxisSize {
     /// Minimize the amount of free space along the main axis, subject to the incoming layout constraints.

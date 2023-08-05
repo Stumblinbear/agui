@@ -30,7 +30,3 @@ raw-window-handle = "0.5.0"
 
 [dev-dependencies]
 sysinfo = "0.29"
-
-[[example]]
-name = "hello_world"
-path = "examples/hello_world.rs"
