@@ -1,5 +1,4 @@
 pub mod align;
-pub mod binding;
 pub mod builder;
 pub mod clip;
 pub mod colored_box;

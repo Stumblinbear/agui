@@ -12,6 +12,7 @@ pub mod element;
 pub mod gestures;
 pub mod inheritance;
 pub mod manager;
+pub mod plugin;
 pub mod query;
 pub mod render;
 pub mod unit;

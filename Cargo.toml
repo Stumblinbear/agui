@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [workspace]
-members = ["crates/*", "integrations/*"]
+members = ["crates/*"]
 
 [profile.release]
 debug = 1
@@ -24,14 +24,28 @@ primitives = ["agui_primitives"]
 widgets = ["primitives", "agui_widgets"]
 macros = ["agui_macros"]
 
+winit = ["agui_winit"]
+vello = ["agui_vello"]
+
 [dependencies]
 agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3", optional = true }
 agui_primitives = { path = "crates/agui_primitives", version = "0.3", optional = true }
 agui_widgets = { path = "crates/agui_widgets", version = "0.3", optional = true }
 
+agui_winit = { path = "crates/agui_winit", version = "0.1", optional = true }
+agui_vello = { path = "crates/agui_vello", version = "0.1", optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+winit = "0.28"
+vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "6a827324355178a54e839fa2bef15222a2173b72" }
+
+sysinfo = "0.29"
 
 [[bench]]
 name = "tree"

@@ -1,5 +1,4 @@
 use std::any::TypeId;
-use std::collections::HashMap;
 
 use fnv::{FnvHashMap, FnvHashSet};
 

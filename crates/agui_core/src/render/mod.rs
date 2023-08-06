@@ -1,6 +1,7 @@
 pub mod canvas;
 pub(crate) mod manager;
 pub mod paint;
+pub mod renderer;
 pub mod texture;
 
 pub use paint::*;

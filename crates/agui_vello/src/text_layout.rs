@@ -1,9 +1,7 @@
 use std::borrow::Cow;
 
-use agui::{
-    unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widgets::primitives::text::layout_controller::TextLayoutDelegate,
-};
+use agui_core::unit::{Constraints, FontStyle, IntrinsicDimension, Size};
+use agui_primitives::text::layout_controller::TextLayoutDelegate;
 use vello::fello::{raw::FontRef, MetadataProvider};
 
 pub struct VelloTextLayoutDelegate {

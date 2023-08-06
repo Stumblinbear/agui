@@ -1,11 +1,13 @@
 use std::{thread, time::Duration};
 
+use agui_vello::VelloRenderer;
+use agui_winit::{window::Window, App};
 use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::prelude::*;
-use agui_vello::{widgets::window::Window, AguiProgram};
+use vello::fello::raw::FontRef;
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -21,20 +23,22 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    let deja_vu = Font::try_from_slice(include_bytes!("./fonts/DejaVuSans.ttf")).unwrap();
-
-    let mut ui = AguiProgram::new();
-
-    ui.set_root(
+    App::with_renderer(
+        VelloRenderer::new()
+            .expect("failed to init renderer")
+            .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
+                .expect("failed to load font")]),
+    )
+    .run(
         Window::new(
             WindowBuilder::new()
                 .with_title("agui os info")
                 .with_inner_size(PhysicalSize::new(800.0, 600.0)),
         )
-        .with_child(ExampleMain { font: deja_vu }),
+        .with_child(ExampleMain {
+            font: Font::default(),
+        }),
     );
-
-    ui.run();
 }
 
 #[derive(Clone, Debug)]

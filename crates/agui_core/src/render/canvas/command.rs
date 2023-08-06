@@ -28,7 +28,7 @@ pub enum CanvasCommand {
 
         color: Color,
 
-        font: FontStyle,
+        font_style: FontStyle,
         text: Cow<'static, str>,
     },
 }

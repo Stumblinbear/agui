@@ -5,20 +5,8 @@ use agui::{
     prelude::{InheritedWidget, Widget},
 };
 
-#[derive(InheritedWidget, Default)]
-struct TestWidget {
-    #[child]
-    child: Option<Widget>,
-}
-
-impl InheritedWidget for TestWidget {
-    fn should_notify(&self, _: &Self) -> bool {
-        true
-    }
-}
-
-fn inherited_widgets(c: &mut Criterion) {
-    let mut group = c.benchmark_group("inherited widgets");
+fn callbacks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("callbacks");
 
     group.sample_size(500).bench_function("creation", |b| {
         b.iter_with_setup(
@@ -32,5 +20,5 @@ fn inherited_widgets(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, inherited_widgets);
+criterion_group!(benches, callbacks);
 criterion_main!(benches);

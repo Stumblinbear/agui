@@ -1,6 +1,11 @@
 use std::sync::mpsc::Sender;
 
-use agui::{element::ElementId, prelude::*};
+use agui_core::{
+    callback::Callback,
+    element::ElementId,
+    widget::{InheritedWidget, IntoChild, Widget},
+};
+use agui_macros::InheritedWidget;
 use winit::window::WindowBuilder;
 
 #[derive(InheritedWidget)]

@@ -237,7 +237,7 @@ where
         self.nodes.iter_mut()
     }
 
-    pub fn iter_down_from(&self, node_id: K) -> DownwardIterator<K, V> {
+    pub fn iter_down_from(&self, node_id: K) -> impl Iterator<Item = K> + '_ {
         DownwardIterator {
             tree: self,
             node_id: Some(node_id),
@@ -246,7 +246,7 @@ where
     }
 
     #[allow(dead_code)]
-    pub fn iter_up_from(&self, node_id: K) -> UpwardIterator<K, V> {
+    pub fn iter_up_from(&self, node_id: K) -> impl Iterator<Item = K> + '_ {
         UpwardIterator {
             tree: self,
             node_id: Some(node_id),
@@ -254,7 +254,19 @@ where
         }
     }
 
-    pub fn iter_parents(&self, node_id: K) -> ParentIterator<K, V> {
+    pub fn iter_subtree<'a, F>(&'a self, node_id: K, filter: F) -> impl Iterator<Item = K> + 'a
+    where
+        F: Fn(K) -> bool + 'a,
+    {
+        SubtreeIterator {
+            tree: self,
+            node_id: Some(node_id),
+            first: true,
+            filter,
+        }
+    }
+
+    pub fn iter_parents(&self, node_id: K) -> impl Iterator<Item = K> + '_ {
         ParentIterator {
             tree: self,
             node_id: Some(node_id),
@@ -474,30 +486,114 @@ where
                 // Grab the first child node
                 if let Some(child_id) = node.children.first() {
                     self.node_id = Some(*child_id);
-                } else {
-                    let mut current_parent = node.parent;
-                    let mut after_child_id = node_id;
 
-                    loop {
-                        // If we have no children, return the sibling after the node_id
-                        if let Some(parent_node_id) = current_parent {
-                            if let Some(sibling_id) =
-                                self.tree.get_next_sibling(parent_node_id, after_child_id)
-                            {
+                    return self.node_id;
+                }
+
+                let mut current_parent = node.parent;
+                let mut after_child_id = node_id;
+
+                loop {
+                    // If we have no children, return the sibling after the node_id
+                    if let Some(parent_node_id) = current_parent {
+                        if let Some(sibling_id) =
+                            self.tree.get_next_sibling(parent_node_id, after_child_id)
+                        {
+                            self.node_id = Some(sibling_id);
+                            break;
+                        } else {
+                            // Move up to to the parent to check its next child
+                            current_parent = self.tree.nodes[parent_node_id].parent;
+
+                            // Set after_child_id to parent_node_id so it's skipped
+                            after_child_id = parent_node_id;
+                        }
+                    } else {
+                        // Has no parent. Bail.
+                        self.node_id = None;
+                        break;
+                    }
+                }
+            } else {
+                // If the node doesn't exist in the tree, then there's nothing to iterate
+                self.node_id = None;
+            }
+        }
+
+        self.node_id
+    }
+}
+
+pub struct SubtreeIterator<'a, K, V, F>
+where
+    K: Key,
+{
+    pub(super) tree: &'a TreeMap<K, V>,
+    pub(super) node_id: Option<K>,
+    pub(super) first: bool,
+    pub(super) filter: F,
+}
+
+impl<'a, K, V, F> Iterator for SubtreeIterator<'a, K, V, F>
+where
+    K: Key,
+    F: Fn(K) -> bool,
+{
+    type Item = K;
+
+    fn next(&mut self) -> Option<K> {
+        if self.first {
+            self.first = false;
+
+            if let Some(node_id) = self.node_id {
+                if (self.filter)(node_id) {
+                    return self.node_id;
+                } else {
+                    self.node_id = None;
+                }
+            }
+        }
+
+        if let Some(node_id) = self.node_id {
+            // Grab the node from the tree
+            if let Some(node) = self.tree.nodes.get(node_id) {
+                // Grab the first child node
+                if let Some(child_id) = node.children.first() {
+                    // If the child passes the filter, return it
+                    if (self.filter)(*child_id) {
+                        self.node_id = Some(*child_id);
+
+                        return self.node_id;
+                    }
+                }
+
+                let mut current_parent = node.parent;
+                let mut after_child_id = node_id;
+
+                loop {
+                    // If we have no children, return the sibling after the node_id
+                    if let Some(parent_node_id) = current_parent {
+                        // Check each sibling of the parent for ones that pass the filter
+                        while let Some(sibling_id) =
+                            self.tree.get_next_sibling(parent_node_id, after_child_id)
+                        {
+                            if (self.filter)(sibling_id) {
                                 self.node_id = Some(sibling_id);
                                 break;
-                            } else {
-                                // Move up to to the parent to check its next child
-                                current_parent = self.tree.nodes[parent_node_id].parent;
-
-                                // Set after_child_id to parent_node_id so it's skipped
-                                after_child_id = parent_node_id;
                             }
-                        } else {
-                            // Has no parent. Bail.
-                            self.node_id = None;
-                            break;
+
+                            after_child_id = sibling_id;
                         }
+
+                        // Move up to to the parent to check its next child
+                        current_parent = self.tree.nodes[parent_node_id].parent;
+
+                        // Set after_child_id to parent_node_id so it's skipped
+                        after_child_id = parent_node_id;
+                    } else {
+                        // Has no parent. Bail.
+                        self.node_id = None;
+                        break;
                     }
                 }
             } else {

@@ -1,7 +1,15 @@
-use agui::{prelude::*, widget::render_context::RenderContextBoundary};
+use agui_core::{
+    unit::{Constraints, Size},
+    widget::{
+        render_context::RenderContextBoundary, BuildContext, ContextInheritedMut, ContextWidget,
+        ContextWidgetStateMut, InheritedWidget, IntoChild, LayoutContext, StatefulBuildContext,
+        StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
+    },
+};
+use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
 use winit::window::{WindowBuilder, WindowId};
 
-use crate::bindings::{WinitWindowHandle, WinitWindowingController};
+use crate::windowing_controller::{WinitWindowHandle, WinitWindowingController};
 
 #[derive(StatelessWidget, Default)]
 pub struct Window {

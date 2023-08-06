@@ -11,11 +11,17 @@ pub mod widgets {
     pub use agui_widgets::*;
 }
 
+#[cfg(feature = "winit")]
+pub use agui_winit as winit;
+
+#[cfg(feature = "vello")]
+pub use agui_vello as vello;
+
 pub mod prelude {
     pub use agui_core::{callback::*, query::*, render::*, unit::*, widget::*};
     pub use agui_primitives::{
-        align::*, builder::*, center::*, clip::*, colored_box::*, column::*, flex::*, intrinsic::*,
-        padding::*, row::*, sized_box::*, stack::*, text::*,
+        align::*, builder::*, clip::*, colored_box::*, flex::*, intrinsic::*, padding::*,
+        sized_box::*, stack::*, text::*,
     };
 
     #[cfg(feature = "macros")]

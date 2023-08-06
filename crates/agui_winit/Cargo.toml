@@ -1,0 +1,22 @@
+[package]
+name = "agui_winit"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+description = "Provides winit integration for agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui", "gamedev"]
+categories = ["gui", "game-development"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+agui_core = { path = "../agui_core", version = "0.3" }
+agui_macros = { path = "../agui_macros", version = "0.3" }
+
+tracing = "0.1"
+fnv = "1.0"
+
+winit = "0.28"
+raw-window-handle = "0.5"

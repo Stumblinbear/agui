@@ -1,100 +1,45 @@
 use std::time::Instant;
 
-use agui::{
+use agui_core::{
     element::ElementId,
     manager::{events::ElementEvent, WidgetManager},
     render::RenderContextId,
     unit::Offset,
 };
 use fnv::FnvHashMap;
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
     block_on_wgpu,
-    glyph::GlyphContext,
     kurbo::{Affine, Vec2},
     peniko::Color,
     util::{RenderContext, RenderSurface},
-    Renderer, RendererOptions, Scene, SceneBuilder,
+    Scene, SceneBuilder,
 };
 
-use crate::element::RenderElement;
+use crate::{element::RenderElement, fonts::VelloFonts};
 
-pub(crate) struct RenderManager {
-    render_context_id: RenderContextId,
+pub struct VelloSurface {
+    pub render_context_id: RenderContextId,
 
-    surface: RenderSurface,
+    pub surface: RenderSurface,
+    pub renderer: vello::Renderer,
 
-    render_cx: RenderContext,
-    renderer: Renderer,
-
-    glyph_cx: GlyphContext,
-
-    scene: Scene,
-
-    widgets: FnvHashMap<ElementId, RenderElement>,
+    pub scene: Scene,
+    pub widgets: FnvHashMap<ElementId, RenderElement>,
 }
 
-impl RenderManager {
-    pub async fn new<W>(
-        render_context_id: RenderContextId,
-        window: &W,
-        width: u32,
-        height: u32,
-    ) -> Self
-    where
-        W: HasRawWindowHandle + HasRawDisplayHandle,
-    {
-        let mut render_cx = RenderContext::new().unwrap();
-
-        let surface = render_cx
-            .create_surface(&window, width, height)
-            .await
-            .unwrap();
-
-        let device_handle = &render_cx.devices[surface.dev_id];
-
-        let renderer = Renderer::new(
-            &device_handle.device,
-            &RendererOptions {
-                surface_format: Some(surface.config.format),
-                timestamp_period: device_handle.queue.get_timestamp_period(),
-            },
-        )
-        .unwrap();
-
-        Self {
-            render_context_id,
-
-            surface,
-
-            render_cx,
-            renderer,
-
-            glyph_cx: GlyphContext::new(),
-
-            scene: Scene::new(),
-
-            widgets: FnvHashMap::default(),
-        }
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.render_cx
-            .resize_surface(&mut self.surface, width, height);
-    }
-
-    pub fn init(&mut self, manager: &WidgetManager) {
-        let boundary_element_id = manager
+impl VelloSurface {
+    pub fn init(&mut self, widget_manager: &WidgetManager, fonts: &mut VelloFonts<'_>) {
+        let boundary_element_id = widget_manager
             .get_render_context_manager()
             .get_boundary(self.render_context_id)
             .expect("the required render context boundary does not exist");
 
         // TODO: make a more efficient iterator for render context trees
-        let redraw_render_context_widgets = manager
+        let redraw_render_context_widgets = widget_manager
             .get_tree()
             .iter_down_from(boundary_element_id)
             .filter(|element_id| {
-                manager
+                widget_manager
                     .get_render_context_manager()
                     .get_context(*element_id)
                     == Some(self.render_context_id)
@@ -102,7 +47,7 @@ impl RenderManager {
             .flat_map(|element_id| {
                 [
                     ElementEvent::Spawned {
-                        parent_id: manager.get_tree().get_parent(element_id).copied(),
+                        parent_id: widget_manager.get_tree().get_parent(element_id).copied(),
                         element_id,
                     },
                     ElementEvent::Draw {
@@ -113,10 +58,15 @@ impl RenderManager {
             })
             .collect::<Vec<_>>();
 
-        self.redraw(manager, &redraw_render_context_widgets);
+        self.redraw(widget_manager, fonts, &redraw_render_context_widgets);
     }
 
-    pub fn redraw(&mut self, manager: &WidgetManager, events: &[ElementEvent]) {
+    pub fn redraw(
+        &mut self,
+        widget_manager: &WidgetManager,
+        fonts: &mut VelloFonts<'_>,
+        events: &[ElementEvent],
+    ) {
         let now = Instant::now();
 
         for event in events {
@@ -130,7 +80,7 @@ impl RenderManager {
                         RenderElement {
                             head_target: parent_id.and_then(|parent_id| {
                                 let Some(parent) = self.widgets.get(&parent_id) else {
-                                        if manager.get_render_context_manager().get_context(parent_id) == Some(self.render_context_id) {
+                                        if widget_manager.get_render_context_manager().get_context(parent_id) == Some(self.render_context_id) {
                                             panic!("render element spawned to a non-existent parent");
                                         }
 
@@ -190,7 +140,7 @@ impl RenderManager {
                         continue;
                     }
 
-                    self.update_element(manager, *element_id);
+                    self.update_element(widget_manager, fonts, *element_id);
                 }
 
                 _ => todo!(),
@@ -201,16 +151,16 @@ impl RenderManager {
 
         let mut element_stack = Vec::<(usize, ElementId, Affine)>::new();
 
-        let boundary_element_id = manager
+        let boundary_element_id = widget_manager
             .get_render_context_manager()
             .get_boundary(self.render_context_id)
             .expect("the required render context boundary does not exist");
 
-        for element_id in manager
+        for element_id in widget_manager
             .get_tree()
             .iter_down_from(boundary_element_id)
             .filter(|element_id| {
-                manager
+                widget_manager
                     .get_render_context_manager()
                     .get_context(*element_id)
                     == Some(self.render_context_id)
@@ -218,7 +168,7 @@ impl RenderManager {
         {
             let element = self.widgets.get(&element_id).unwrap();
 
-            let element_depth = manager.get_tree().get_depth(element_id).unwrap();
+            let element_depth = widget_manager.get_tree().get_depth(element_id).unwrap();
 
             // End any elements in the stack that are at the same level or deeper than this one
             while let Some((element_id, transform)) = element_stack
@@ -258,7 +208,12 @@ impl RenderManager {
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    fn update_element(&mut self, manager: &WidgetManager, element_id: ElementId) {
+    fn update_element(
+        &mut self,
+        manager: &WidgetManager,
+        fonts: &mut VelloFonts<'_>,
+        element_id: ElementId,
+    ) {
         let render_element = self
             .widgets
             .get_mut(&element_id)
@@ -270,7 +225,7 @@ impl RenderManager {
 
         render_element.offset = widget_element.get_offset();
 
-        render_element.canvas.update(&mut self.glyph_cx, canvas);
+        render_element.canvas.update(fonts, canvas);
 
         // if let Some(canvas) = canvas {
         //     let pos = Point::from(widget_element.get_rect().cloned().unwrap());
@@ -291,10 +246,10 @@ impl RenderManager {
         // }
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, render_context: &RenderContext) {
         let width = self.surface.config.width;
         let height = self.surface.config.height;
-        let device_handle = &self.render_cx.devices[self.surface.dev_id];
+        let device_handle = &render_context.devices[self.surface.dev_id];
 
         let surface_texture = self
             .surface
@@ -338,6 +293,6 @@ impl RenderManager {
 
         surface_texture.present();
 
-        device_handle.device.poll(wgpu::Maintain::Poll);
+        // device_handle.device.poll(wgpu::Maintain::Poll);
     }
 }

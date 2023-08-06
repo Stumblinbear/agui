@@ -1,8 +1,10 @@
+use agui_vello::VelloRenderer;
+use agui_winit::{window::Window, App};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::prelude::*;
-use agui_vello::{widgets::window::Window, AguiProgram};
+use vello::fello::raw::FontRef;
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -18,11 +20,13 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    let deja_vu = Font::try_from_slice(include_bytes!("./fonts/DejaVuSans.ttf")).unwrap();
+    let mut renderer = VelloRenderer::new().expect("failed to init renderer");
 
-    let mut ui = AguiProgram::new();
+    let deja_vu = renderer.add_font(
+        FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf")).expect("failed to load font"),
+    );
 
-    ui.set_root(
+    App::with_renderer(renderer).run(
         Window::new(
             WindowBuilder::new()
                 .with_title("agui clipping")
@@ -30,8 +34,6 @@ fn main() {
         )
         .with_child(ExampleMain { font: deja_vu }),
     );
-
-    ui.run();
 }
 
 #[derive(StatelessWidget, PartialEq)]

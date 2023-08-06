@@ -82,7 +82,9 @@ mod tests {
 
     #[test]
     pub fn finds_widget_by_type() {
-        let mut manager = WidgetManager::with_root(TestWidget1 {
+        let mut manager = WidgetManager::new();
+
+        manager.set_root(TestWidget1 {
             child: TestWidget2 {
                 child: TestWidget1 {
                     ..Default::default()

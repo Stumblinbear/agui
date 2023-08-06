@@ -229,7 +229,7 @@ impl<'paint> CanvasPainter<'paint, Head> {
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
-    pub fn draw_text_at<T>(&mut self, rect: Rect, paint: &Paint, font: FontStyle, text: T)
+    pub fn draw_text_at<T>(&mut self, rect: Rect, paint: &Paint, font_style: FontStyle, text: T)
     where
         T: Into<Cow<'static, str>>,
     {
@@ -240,7 +240,7 @@ impl<'paint> CanvasPainter<'paint, Head> {
 
             color: paint.color,
 
-            font,
+            font_style,
             text: text.into(),
         });
     }
