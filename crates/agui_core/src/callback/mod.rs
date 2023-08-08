@@ -8,12 +8,10 @@ use crate::{element::ElementId, unit::AsAny};
 
 mod context;
 mod func;
-mod notifier;
 mod queue;
 
 pub use context::*;
 pub(crate) use func::*;
-pub use notifier::*;
 pub use queue::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -26,16 +24,12 @@ impl CallbackId {
     pub fn get_element_id(&self) -> ElementId {
         self.element_id
     }
-
-    pub fn get_type_id(&self) -> TypeId {
-        self.type_id
-    }
 }
 
 #[derive(Default, Clone, PartialEq)]
 pub enum Callback<A>
 where
-    A: AsAny,
+    A: 'static,
 {
     #[default]
     None,
@@ -69,10 +63,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct WidgetCallback<A>
-where
-    A: AsAny,
-{
+pub struct WidgetCallback<A> {
     phantom: PhantomData<A>,
 
     id: CallbackId,
@@ -127,10 +118,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct FuncCallback<A>
-where
-    A: AsAny,
-{
+pub struct FuncCallback<A> {
     func: Arc<dyn Fn(A) + Send + Sync>,
 }
 

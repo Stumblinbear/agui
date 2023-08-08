@@ -60,6 +60,4 @@ fn main() {
             .into(),
         ],
     });
-
-    println!("Hello, world!");
 }

@@ -7,7 +7,7 @@ use std::{
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    callback::{Callback, CallbackId, CallbackQueue, Notifier, WidgetCallback},
+    callback::{Callback, CallbackId, CallbackQueue, WidgetCallback},
     element::{Element, ElementId},
     inheritance::manager::InheritanceManager,
     unit::{AsAny, Key},
@@ -104,12 +104,6 @@ where
 
     pub fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
-    }
-
-    /// Creates a notifier for the current widget, which can be used to rebuild the widget when
-    /// needed.
-    pub fn get_notifier(&mut self) -> Notifier {
-        Notifier::new(self.element_id, self.callback_queue.clone())
     }
 
     pub fn key<C>(&mut self, key: Key, widget: C) -> Widget

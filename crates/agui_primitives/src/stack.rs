@@ -1,12 +1,27 @@
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
-    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, IntoChild, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
 #[derive(LayoutWidget, Debug, Default)]
 pub struct Stack {
     pub children: Vec<Widget>,
+}
+
+impl Stack {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_children(mut self, children: impl IntoIterator<Item = impl IntoChild>) -> Self {
+        self.children = children
+            .into_iter()
+            .filter_map(IntoChild::into_child)
+            .collect();
+
+        self
+    }
 }
 
 impl WidgetLayout for Stack {

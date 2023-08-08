@@ -84,8 +84,6 @@ impl WidgetState for ExampleMainState {
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
-            let system_info = system_info.clone();
-
             ctx.set_state(|state| {
                 state.system_info.replace(system_info);
             });

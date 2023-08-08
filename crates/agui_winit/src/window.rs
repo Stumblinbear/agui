@@ -1,4 +1,7 @@
+use std::{cell::RefCell, ops::Deref};
+
 use agui_core::{
+    notifier::ListenerHandle,
     unit::{Constraints, Size},
     widget::{
         render_context::RenderContextBoundary, BuildContext, ContextInheritedMut, ContextWidget,
@@ -7,9 +10,11 @@ use agui_core::{
     },
 };
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
-use winit::window::{WindowBuilder, WindowId};
+use winit::window::WindowBuilder;
 
-use crate::windowing_controller::{WinitWindowHandle, WinitWindowingController};
+use crate::{
+    event::WindowEvent, handle::WinitWindowHandle, windowing_controller::WinitWindowingController,
+};
 
 #[derive(StatelessWidget, Default)]
 pub struct Window {
@@ -63,7 +68,7 @@ impl StatefulWidget for WinitWindow {
 
     fn create_state(&self) -> Self::State {
         WinitWindowState {
-            winit: None,
+            window: None,
 
             child: self.child.clone(),
         }
@@ -71,7 +76,7 @@ impl StatefulWidget for WinitWindow {
 }
 
 struct WinitWindowState {
-    winit: Option<WinitWindowHandle>,
+    window: Option<WinitWindowHandle>,
 
     child: Option<Widget>,
 }
@@ -79,16 +84,16 @@ struct WinitWindowState {
 impl WidgetState for WinitWindowState {
     type Widget = WinitWindow;
 
-    type Child = WinitWindowLayout;
+    type Child = Option<CurrentWindow>;
 
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         let Some(windowing) = ctx.depend_on_inherited_widget::<WinitWindowingController>() else {
             return tracing::error!("Windowing controller not found in the widget tree");
         };
 
-        let create_cb = ctx.callback(|ctx, handle| {
+        let create_cb = ctx.callback(|ctx, window| {
             ctx.set_state(|state| {
-                state.winit.replace(handle);
+                state.window.replace(window);
             });
         });
 
@@ -97,18 +102,53 @@ impl WidgetState for WinitWindowState {
     }
 
     fn build(&mut self, _: &mut StatefulBuildContext<Self>) -> Self::Child {
-        // TODO: sync the window size
-        WinitWindowLayout {
-            size: Size::new(800.0, 600.0),
+        if let Some(current_window) = &self.window {
+            Some(CurrentWindow {
+                handle: current_window.clone(),
 
-            child: self.child.clone(),
+                child: WinitWindowLayout {
+                    handle: current_window.clone(),
+
+                    listener: RefCell::new(None),
+
+                    child: self.child.clone(),
+                }
+                .into_child(),
+            })
+        } else {
+            None
         }
+    }
+}
+
+#[derive(InheritedWidget)]
+pub struct CurrentWindow {
+    handle: WinitWindowHandle,
+
+    #[child]
+    child: Option<Widget>,
+}
+
+impl Deref for CurrentWindow {
+    type Target = winit::window::Window;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handle
+    }
+}
+
+impl InheritedWidget for CurrentWindow {
+    #[allow(unused_variables)]
+    fn should_notify(&self, old_widget: &Self) -> bool {
+        self.handle.id() != old_widget.handle.id()
     }
 }
 
 #[derive(LayoutWidget)]
 struct WinitWindowLayout {
-    size: Size,
+    handle: WinitWindowHandle,
+
+    listener: RefCell<Option<ListenerHandle<WindowEvent>>>,
 
     child: Option<Widget>,
 }
@@ -116,46 +156,30 @@ struct WinitWindowLayout {
 impl WidgetLayout for WinitWindowLayout {
     type Children = Widget;
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        let notifier = ctx.callback(|_, _: ()| {});
+
+        self.listener
+            .borrow_mut()
+            .replace(self.handle.add_listener(move |event| {
+                if let WindowEvent::Resized(..) = event {
+                    notifier.call(());
+                }
+            }));
+
         Vec::from_iter(self.child.iter().cloned())
     }
 
     fn layout(&self, ctx: &mut LayoutContext, _: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
+        let size = self.handle.inner_size();
+        let size = Size::new(size.width as f32, size.height as f32);
+
         while let Some(mut child) = children.next() {
-            child.compute_layout(Constraints::from(self.size));
+            child.compute_layout(Constraints::from(size));
         }
 
-        self.size
-    }
-}
-
-#[derive(InheritedWidget)]
-pub struct CurrentWindow {
-    winit: WinitWindowHandle,
-
-    #[child]
-    child: Option<Widget>,
-}
-
-impl CurrentWindow {
-    pub fn get_id(&self) -> WindowId {
-        self.winit.window_id
-    }
-
-    pub fn get_title(&self) -> &str {
-        &self.winit.title
-    }
-
-    pub fn set_title(&self, title: impl Into<String>) {
-        todo!();
-    }
-}
-
-impl InheritedWidget for CurrentWindow {
-    #[allow(unused_variables)]
-    fn should_notify(&self, old_widget: &Self) -> bool {
-        self.winit != old_widget.winit
+        size
     }
 }

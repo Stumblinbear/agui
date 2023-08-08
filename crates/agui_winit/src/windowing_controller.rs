@@ -8,6 +8,8 @@ use agui_core::{
 use agui_macros::InheritedWidget;
 use winit::window::WindowBuilder;
 
+use crate::handle::WinitWindowHandle;
+
 #[derive(InheritedWidget)]
 pub struct WinitWindowingController {
     pub tx: Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>,
@@ -43,11 +45,4 @@ impl WinitWindowingController {
             .send((window_element_id, builder, callback))
             .unwrap();
     }
-}
-
-#[derive(PartialEq)]
-pub struct WinitWindowHandle {
-    pub window_id: winit::window::WindowId,
-
-    pub title: String,
 }

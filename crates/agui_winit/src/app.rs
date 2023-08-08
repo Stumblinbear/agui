@@ -11,13 +11,15 @@ use agui_core::{
 use fnv::FnvHashMap;
 use winit::{
     dpi::PhysicalPosition,
-    event::{Event as WinitEvent, MouseScrollDelta, WindowEvent},
+    event::{Event as WinitEvent, MouseScrollDelta, WindowEvent as WinitWindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     platform::run_return::EventLoopExtRunReturn,
     window::{Window, WindowBuilder, WindowId},
 };
 
-use crate::windowing_controller::{WinitWindowHandle, WinitWindowingController};
+use crate::{
+    event::WindowEvent, handle::WinitWindowHandle, windowing_controller::WinitWindowingController,
+};
 
 pub struct App<R> {
     event_loop: EventLoop<()>,
@@ -29,7 +31,7 @@ pub struct App<R> {
 
     renderer: R,
 
-    windows: FnvHashMap<WindowId, winit::window::Window>,
+    windows: FnvHashMap<WindowId, WinitWindowHandle>,
     render_context_window: FnvHashMap<RenderContextId, WindowId>,
     window_render_context: FnvHashMap<WindowId, RenderContextId>,
 }
@@ -79,7 +81,7 @@ where
                 while let Ok((element_id, builder, callback)) = self.window_rx.try_recv() {
                     tracing::debug!("creating window for element: {:?}", element_id);
 
-                    let window = builder.build(window_target).unwrap();
+                    let window = WinitWindowHandle::new(builder.build(window_target).unwrap());
 
                     let size = window.inner_size();
 
@@ -89,30 +91,24 @@ where
 
                     self.renderer.create_context(&self.widget_manager, render_context_id, &window, size.width, size.height);
 
-                    let handle = WinitWindowHandle {
-                        window_id,
-
-                        title: window.title(),
-                    };
-
-                    self.windows.insert(window_id, window);
+                    self.windows.insert(window_id, window.clone());
                     self.render_context_window.insert(render_context_id, window_id);
                     self.window_render_context.insert(window_id, render_context_id);
 
-                    callback.call(handle);
+                    callback.call(window);
                 }
 
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
                         match event {
-                            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                            WinitWindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
 
-                            WindowEvent::Destroyed => {
+                            WinitWindowEvent::Destroyed => {
                                 self.windows.remove(&window_id);
                                 self.render_context_window.remove(&self.window_render_context.remove(&window_id).unwrap());
                             }
 
-                            WindowEvent::Resized(size) => {
+                            WinitWindowEvent::Resized(size) => {
                                 if let Some(window) = self.windows.get_mut(&window_id) {
                                     self.renderer.resize(&self.widget_manager, *self.window_render_context.get(&window.id()).unwrap(), size.width, size.height);
                                     window.request_redraw();
@@ -124,7 +120,7 @@ where
                                 }
                             }
 
-                            WindowEvent::Moved(pos) => {
+                            WinitWindowEvent::Moved(pos) => {
                                 let window_pos = Offset {
                                     x: pos.x as f32,
                                     y: pos.y as f32,
@@ -135,7 +131,7 @@ where
                                 //     .set_global::<WindowPosition, _>(move |state| *state = window_pos);
                             }
 
-                            WindowEvent::Focused(focused) => {
+                            WinitWindowEvent::Focused(focused) => {
                                 let window_focused = focused;
 
                                 // self.manager.fire_event(window_focused);
@@ -143,7 +139,7 @@ where
                                 //     .set_global::<WindowFocus, _>(move |state| *state = window_focused);
                             }
 
-                            WindowEvent::CursorMoved { position: pos, .. } => {
+                            WinitWindowEvent::CursorMoved { position: pos, .. } => {
                                 let mouse_pos = Some(Offset {
                                     x: pos.x as f32,
                                     y: pos.y as f32,
@@ -156,7 +152,7 @@ where
                                 //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                             }
 
-                            WindowEvent::CursorLeft { .. } => {
+                            WinitWindowEvent::CursorLeft { .. } => {
                                 // let mouse_pos = None;
 
                                 // self.manager.fire_event(mouse_pos);
@@ -166,7 +162,7 @@ where
                                 //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
                             }
 
-                            WindowEvent::MouseWheel { delta, .. } => {
+                            WinitWindowEvent::MouseWheel { delta, .. } => {
                                 let scroll = match delta {
                                     MouseScrollDelta::LineDelta(x, y) => Offset { x, y },
 
@@ -183,7 +179,7 @@ where
                                 //     .set_global::<Scroll, _>(move |state| *state = scroll);
                             }
 
-                            WindowEvent::MouseInput {
+                            WinitWindowEvent::MouseInput {
                                 button,
                                 state: value,
                                 ..
@@ -227,11 +223,11 @@ where
                                 //     });
                             }
 
-                            WindowEvent::ReceivedCharacter(c) => {
+                            WinitWindowEvent::ReceivedCharacter(c) => {
                                 // self.manager.fire_event(KeyboardCharacter(c));
                             }
 
-                            WindowEvent::KeyboardInput { input, .. } => {
+                            WinitWindowEvent::KeyboardInput { input, .. } => {
                                 if let Some(key) = input.virtual_keycode {
                                     // let key: KeyCode = unsafe { std::mem::transmute(key as u32) };
 
@@ -248,13 +244,17 @@ where
                                 }
                             }
 
-                            WindowEvent::ModifiersChanged(modifiers) => {
+                            WinitWindowEvent::ModifiersChanged(modifiers) => {
                                 // self.manager.set_global::<Keyboard, _>(move |state| {
                                 //     state.modifiers = unsafe { mem::transmute(modifiers) };
                                 // });
                             }
 
                             _ => {}
+                        }
+
+                        if let Some(handle) = self.windows.get_mut(&window_id) {
+                            handle.notify(&WindowEvent::from(event));
                         }
                     }
 
