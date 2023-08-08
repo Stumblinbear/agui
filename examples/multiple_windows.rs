@@ -1,9 +1,11 @@
-use agui_vello::VelloRenderer;
-use agui_winit::{window::Window, App};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{prelude::*, widgets::primitives::text::Text};
+use agui::{
+    prelude::*,
+    vello::VelloRenderer,
+    winit::{window::Window, App},
+};
 use vello::fello::raw::FontRef;
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 

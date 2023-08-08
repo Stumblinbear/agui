@@ -1,12 +1,14 @@
 use std::{thread, time::Duration};
 
-use agui_vello::VelloRenderer;
-use agui_winit::{window::Window, App};
 use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::prelude::*;
+use agui::{
+    prelude::*,
+    vello::VelloRenderer,
+    winit::{window::Window, App},
+};
 use vello::fello::raw::FontRef;
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
