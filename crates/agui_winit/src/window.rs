@@ -159,6 +159,7 @@ impl WidgetLayout for WinitWindowLayout {
     fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Self::Children> {
         let notifier = ctx.callback(|_, _: ()| {});
 
+        // We use interior mutability here to reduce the amount of nested widget fuckery
         self.listener
             .borrow_mut()
             .replace(self.handle.add_listener(move |event| {
