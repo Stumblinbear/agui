@@ -315,7 +315,6 @@ impl WidgetManager {
                             let changed = element.call(
                                 ElementCallbackContext {
                                     element_tree,
-                                    inheritance_manager: &self.inheritance_manager,
 
                                     dirty: &mut self.dirty,
 

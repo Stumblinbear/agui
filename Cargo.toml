@@ -47,6 +47,24 @@ vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", re
 
 sysinfo = "0.29"
 
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.agui_core]
+opt-level = 1
+
+[profile.dev.package.agui_primitives]
+opt-level = 1
+
+[profile.dev.package.agui_widgets]
+opt-level = 1
+
+[profile.dev.package.agui_vello]
+opt-level = 1
+
+[profile.dev.package.agui_winit]
+opt-level = 1
+
 [[bench]]
 name = "tree"
 path = "benches/agui_core/tree.rs"

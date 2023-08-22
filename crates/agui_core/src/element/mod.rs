@@ -260,7 +260,6 @@ impl Element {
         self.widget_element.call(
             WidgetCallbackContext {
                 element_tree: ctx.element_tree,
-                inheritance_manager: ctx.inheritance_manager,
 
                 dirty: ctx.dirty,
 

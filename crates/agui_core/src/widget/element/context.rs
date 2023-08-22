@@ -42,8 +42,6 @@ pub struct WidgetBuildContext<'ctx> {
 
 pub struct WidgetCallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx InheritanceManager,
-
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,

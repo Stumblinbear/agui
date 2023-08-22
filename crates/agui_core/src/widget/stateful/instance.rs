@@ -103,14 +103,11 @@ where
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = StatefulCallbackContext {
                 element_tree: ctx.element_tree,
-                inheritance_manager: ctx.inheritance_manager,
-
                 dirty: ctx.dirty,
 
                 element_id: ctx.element_id,
 
                 state: &mut self.state,
-
                 is_changed: false,
             };
 

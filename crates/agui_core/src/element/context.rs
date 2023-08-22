@@ -42,7 +42,6 @@ pub struct ElementBuildContext<'ctx> {
 
 pub struct ElementCallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx InheritanceManager,
 
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 

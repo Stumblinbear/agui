@@ -2,21 +2,17 @@ use fnv::FnvHashSet;
 
 use crate::{
     element::{Element, ElementId},
-    inheritance::manager::InheritanceManager,
     util::tree::Tree,
     widget::{ContextWidget, ContextWidgetStateMut},
 };
 
 pub struct StatefulCallbackContext<'ctx, S> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx InheritanceManager,
-
     pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
 
     pub(crate) state: &'ctx mut S,
-
     pub(crate) is_changed: bool,
 }
 

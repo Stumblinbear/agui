@@ -76,10 +76,6 @@ impl InheritanceScope {
         }
     }
 
-    pub fn get_type_id(&self) -> TypeId {
-        self.type_id
-    }
-
     pub fn get_ancestor_scope(&self) -> Option<ElementId> {
         self.ancestor_scope_id
     }

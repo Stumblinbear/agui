@@ -64,7 +64,7 @@ impl RenderContextManager {
     pub(crate) fn set_render_context(
         &mut self,
         element_id: ElementId,
-        new_render_context_id: RenderContextId,
+        _new_render_context_id: RenderContextId,
     ) {
         self.map.remove(&element_id);
     }
