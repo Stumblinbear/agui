@@ -55,12 +55,15 @@ where
         let mut canvas = Canvas {
             size,
 
+            paints: Vec::default(),
+
             head: Vec::default(),
             children: Vec::default(),
             tail: None,
         };
 
-        self.widget.paint(CanvasPainter::<Head>::begin(&mut canvas));
+        self.widget
+            .paint(CanvasPainter::<Head<()>>::begin(&mut canvas));
 
         if !canvas.head.is_empty() || !canvas.children.is_empty() || canvas.tail.is_some() {
             Some(canvas)

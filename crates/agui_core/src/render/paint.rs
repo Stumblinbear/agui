@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::unit::{BlendMode, Color};
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
@@ -7,17 +9,15 @@ pub struct Paint {
     pub blend_mode: BlendMode,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Brush(usize);
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct Brush<State> {
+    pub(super) phantom: PhantomData<State>,
 
-impl Brush {
-    pub fn idx(&self) -> usize {
-        self.0
-    }
+    pub(super) idx: usize,
 }
 
-impl From<usize> for Brush {
-    fn from(index: usize) -> Self {
-        Self(index)
+impl<State> Brush<State> {
+    pub fn idx(&self) -> usize {
+        self.idx
     }
 }

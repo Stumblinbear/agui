@@ -17,15 +17,15 @@ pub struct Clip {
 }
 
 impl WidgetPaint for Clip {
-    fn paint(&self, canvas: CanvasPainter) {
-        let paint = Paint {
+    fn paint(&self, mut canvas: CanvasPainter) {
+        let brush = canvas.add_paint(Paint {
             anti_alias: self.anti_alias,
             ..Paint::default()
-        };
+        });
 
         match self.rect {
-            Some(rect) => canvas.start_layer_at(rect, &paint, self.shape.clone()),
-            None => canvas.start_layer(&paint, self.shape.clone()),
+            Some(rect) => canvas.start_layer_at(rect, &brush, self.shape.clone()),
+            None => canvas.start_layer(&brush, self.shape.clone()),
         };
     }
 }

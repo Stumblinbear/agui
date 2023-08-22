@@ -1,14 +1,18 @@
-use crate::unit::{BlendMode, Offset, Shape, Size};
+use crate::unit::{Offset, Shape, Size};
 
 pub mod command;
 pub mod painter;
 
 pub use self::command::*;
 
+use super::Paint;
+
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Canvas {
     pub size: Size,
+
+    pub paints: Vec<Paint>,
 
     pub head: Vec<CanvasCommand>,
     pub children: Vec<CanvasLayer>,
@@ -28,8 +32,7 @@ pub struct CanvasLayer {
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub struct LayerStyle {
-    pub shape: Shape,
+    pub paint_idx: usize,
 
-    pub anti_alias: bool,
-    pub blend_mode: BlendMode,
+    pub shape: Shape,
 }

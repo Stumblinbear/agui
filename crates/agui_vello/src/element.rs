@@ -1,13 +1,19 @@
+use std::hash::Hash;
+
 use agui_core::{
     element::ElementId,
-    render::canvas::{Canvas, CanvasCommand},
+    render::{
+        canvas::{Canvas, CanvasCommand},
+        Paint,
+    },
     unit::{Offset, Rect},
     util::tree::new_key_type,
 };
+use fnv::FnvHashMap;
 use vello::{
-    fello::MetadataProvider,
+    fello::{GlyphId, MetadataProvider},
     kurbo::{Affine, PathEl, Vec2},
-    peniko::{Brush, Color, Fill, Mix},
+    peniko::{Color, Fill, Mix},
     SceneBuilder, SceneFragment,
 };
 
@@ -35,6 +41,9 @@ pub struct CanvasElement {
 
     pub children: Vec<LayerElement>,
     pub tail: Option<Box<LayerElement>>,
+
+    pub paints: Vec<Paint>,
+    pub glyph_cache: FnvHashMap<(GlyphId, usize), Option<SceneFragment>>,
 }
 
 impl CanvasElement {
@@ -44,8 +53,20 @@ impl CanvasElement {
             self.children.clear();
             self.tail = None;
 
+            self.paints.clear();
+            self.glyph_cache.clear();
+
             return;
         };
+
+        // TODO: only invalidate paints that are different
+        if self.paints.len() != canvas.paints.len() || self.paints != canvas.paints {
+            self.paints = canvas.paints;
+
+            // If our paints have changed, we need to invalidate the glyph cache
+            // TODO: only invalidate glpyhs whose paint has changed
+            self.glyph_cache.clear();
+        }
 
         if canvas.head.is_empty() {
             self.fragment = SceneFragment::default();
@@ -68,6 +89,9 @@ impl CanvasElement {
 
                     children: Vec::new(),
                     tail: None,
+
+                    paints: Vec::new(),
+                    glyph_cache: FnvHashMap::default(),
                 },
             };
 
@@ -82,15 +106,21 @@ impl CanvasElement {
 
         for command in commands {
             match command {
-                CanvasCommand::Shape { rect, shape, color } => {
+                CanvasCommand::Shape {
+                    paint_idx,
+                    rect,
+                    shape,
+                } => {
+                    let paint = &self.paints[*paint_idx];
+
                     sb.fill(
                         Fill::NonZero,
                         Affine::translate((rect.left as f64, rect.top as f64)),
                         Color::rgba(
-                            color.red as f64,
-                            color.green as f64,
-                            color.blue as f64,
-                            color.alpha as f64,
+                            paint.color.red as f64,
+                            paint.color.green as f64,
+                            paint.color.blue as f64,
+                            paint.color.alpha as f64,
                         ),
                         None,
                         &[
@@ -113,20 +143,22 @@ impl CanvasElement {
                 }
 
                 CanvasCommand::Text {
+                    paint_idx,
                     rect,
-                    color,
                     font_style,
                     text,
                     ..
                 } => {
+                    let paint = &self.paints[*paint_idx];
+
                     if let Some(font) = fonts.get_or_default(font_style.font) {
                         let transform = Affine::translate((rect.left as f64, rect.top as f64));
 
-                        let brush = &Brush::Solid(Color::rgba(
-                            color.red as f64,
-                            color.green as f64,
-                            color.blue as f64,
-                            color.alpha as f64,
+                        let glyph_brush = &vello::peniko::Brush::Solid(Color::rgba(
+                            paint.color.red as f64,
+                            paint.color.green as f64,
+                            paint.color.blue as f64,
+                            paint.color.alpha as f64,
                         ));
 
                         let fello_size = vello::fello::Size::new(font_style.size);
@@ -146,15 +178,24 @@ impl CanvasElement {
                                 pen_x = 0.0;
                                 continue;
                             }
+
                             let gid = charmap.map(ch).unwrap_or_default();
                             let advance =
                                 glyph_metrics.advance_width(gid).unwrap_or_default() as f64;
-                            if let Some(glyph) = provider.get(gid.to_u16(), Some(brush)) {
+
+                            // Getting the glyph from the provider is expensive
+                            if let Some(glyph) = self
+                                .glyph_cache
+                                .entry((gid, *paint_idx))
+                                .or_insert_with(|| provider.get(gid.to_u16(), Some(glyph_brush)))
+                            {
                                 let xform = transform
                                     * Affine::translate((pen_x, pen_y + font_style.size as f64))
                                     * Affine::scale_non_uniform(1.0, -1.0);
-                                sb.append(&glyph, Some(xform));
+
+                                sb.append(glyph, Some(xform));
                             }
+
                             pen_x += advance;
                         }
                     }

@@ -122,13 +122,12 @@ pub struct TextPainter {
 
 impl WidgetPaint for TextPainter {
     fn paint(&self, mut canvas: CanvasPainter) {
-        canvas.draw_text(
-            &Paint {
-                color: self.font.color,
-                ..Paint::default()
-            },
-            self.font.clone(),
-            Cow::clone(&self.text),
-        );
+        let brush = canvas.add_paint(Paint {
+            color: self.font.color,
+
+            ..Paint::default()
+        });
+
+        canvas.draw_text(&brush, self.font.clone(), Cow::clone(&self.text));
     }
 }

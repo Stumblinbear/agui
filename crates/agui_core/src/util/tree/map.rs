@@ -570,7 +570,7 @@ where
                 let mut current_parent = node.parent;
                 let mut after_child_id = node_id;
 
-                loop {
+                'find_child: loop {
                     // If we have no children, return the sibling after the node_id
                     if let Some(parent_node_id) = current_parent {
                         // Check each sibling of the parent for ones that pass the filter
@@ -579,7 +579,7 @@ where
                         {
                             if (self.filter)(sibling_id) {
                                 self.node_id = Some(sibling_id);
-                                break;
+                                break 'find_child;
                             }
 
                             after_child_id = sibling_id;
@@ -593,7 +593,7 @@ where
                     } else {
                         // Has no parent. Bail.
                         self.node_id = None;
-                        break;
+                        break 'find_child;
                     }
                 }
             } else {

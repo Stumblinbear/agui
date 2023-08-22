@@ -34,15 +34,12 @@ impl VelloSurface {
             .get_boundary(self.render_context_id)
             .expect("the required render context boundary does not exist");
 
-        // TODO: make a more efficient iterator for render context trees
-        let redraw_render_context_widgets = widget_manager
-            .get_tree()
-            .iter_down_from(boundary_element_id)
-            .filter(|element_id| {
-                widget_manager
-                    .get_render_context_manager()
-                    .get_context(*element_id)
-                    == Some(self.render_context_id)
+        let render_context_manager = widget_manager.get_render_context_manager();
+        let tree = widget_manager.get_tree();
+
+        let redraw_render_context_widgets = tree
+            .iter_subtree(boundary_element_id, |element_id| {
+                render_context_manager.get_context(element_id) == Some(self.render_context_id)
             })
             .flat_map(|element_id| {
                 [
@@ -156,16 +153,12 @@ impl VelloSurface {
             .get_boundary(self.render_context_id)
             .expect("the required render context boundary does not exist");
 
-        for element_id in widget_manager
-            .get_tree()
-            .iter_down_from(boundary_element_id)
-            .filter(|element_id| {
-                widget_manager
-                    .get_render_context_manager()
-                    .get_context(*element_id)
-                    == Some(self.render_context_id)
-            })
-        {
+        let render_context_manager = widget_manager.get_render_context_manager();
+        let tree = widget_manager.get_tree();
+
+        for element_id in tree.iter_subtree(boundary_element_id, |element_id| {
+            render_context_manager.get_context(element_id) == Some(self.render_context_id)
+        }) {
             let element = self.widgets.get(&element_id).unwrap();
 
             let element_depth = widget_manager.get_tree().get_depth(element_id).unwrap();

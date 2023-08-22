@@ -15,10 +15,12 @@ pub struct ColoredBox {
 
 impl WidgetPaint for ColoredBox {
     fn paint(&self, mut canvas: CanvasPainter) {
-        canvas.draw_rect(&Paint {
+        let brush = canvas.add_paint(Paint {
             color: self.color,
 
             ..Paint::default()
         });
+
+        canvas.draw_rect(&brush);
     }
 }
