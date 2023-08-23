@@ -82,11 +82,6 @@ impl RenderContextManager {
             }
         }
 
-        println!(
-            "updating render context for {:?} from {:?} to {:?}",
-            element_id, current_render_context_id, new_render_context_id
-        );
-
         if let Some(new_render_context_id) = new_render_context_id {
             self.map.insert(element_id, new_render_context_id);
         } else {
