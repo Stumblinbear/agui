@@ -72,61 +72,75 @@ impl VelloSurface {
                     parent_id,
                     element_id,
                 } => {
-                    self.widgets.insert(
-                        *element_id,
-                        RenderElement {
-                            head_target: parent_id.and_then(|parent_id| {
-                                let Some(parent) = self.widgets.get(&parent_id) else {
-                                        if widget_manager.get_render_context_manager().get_context(parent_id) == Some(self.render_context_id) {
-                                            panic!("render element spawned to a non-existent parent");
-                                        }
-
-                                        return None;
-                                    };
-
-                                if parent.canvas.tail.is_some() {
-                                    Some(parent_id)
-                                } else {
-                                    parent.head_target
-                                }
-                            }),
-
-                            offset: Offset::ZERO,
-
-                            ..RenderElement::default()
-                        },
-                    );
+                    self.create_element(widget_manager, *element_id, *parent_id);
                 }
 
-                ElementEvent::Rebuilt { .. } => {}
+                ElementEvent::Destroyed { element_id } => {
+                    self.widgets.remove(element_id);
+                }
 
                 ElementEvent::Reparent {
                     parent_id,
                     element_id,
                 } => {
-                    let new_head_target = parent_id.and_then(|parent_id| {
-                        let parent = self
-                            .widgets
-                            .get(&parent_id)
-                            .expect("render element spawned to a non-existent parent");
+                    // We need to check if a subtree was moved outside or into this render context
+                    let was_in_render_context = self.widgets.contains_key(element_id);
 
-                        if parent.canvas.tail.is_some() {
-                            Some(parent_id)
-                        } else {
-                            parent.head_target
+                    let is_in_render_context = widget_manager
+                        .get_render_context_manager()
+                        .get_context(*element_id)
+                        == Some(self.render_context_id);
+
+                    if was_in_render_context && !is_in_render_context {
+                        // Remove the subtree from the render context
+                        for element_id in widget_manager
+                            .get_tree()
+                            .iter_subtree(*element_id, |element_id| {
+                                self.widgets.contains_key(&element_id)
+                            })
+                            .collect::<Vec<_>>()
+                        {
+                            self.widgets.remove(&element_id);
                         }
-                    });
+                    } else if !was_in_render_context && is_in_render_context {
+                        let render_context_id = self.render_context_id;
 
-                    let element = self
-                        .widgets
-                        .get_mut(element_id)
-                        .expect("reparented render element not found");
+                        // Add the subtree to the render context
+                        for element_id in
+                            widget_manager
+                                .get_tree()
+                                .iter_subtree(*element_id, |element_id| {
+                                    widget_manager
+                                        .get_render_context_manager()
+                                        .get_context(element_id)
+                                        == Some(render_context_id)
+                                })
+                        {
+                            self.create_element(widget_manager, element_id, *parent_id);
+                        }
+                    }
 
-                    element.head_target = new_head_target;
-                }
+                    if is_in_render_context {
+                        let new_head_target = parent_id.and_then(|parent_id| {
+                            let parent = self
+                                .widgets
+                                .get(&parent_id)
+                                .expect("render element spawned to a non-existent parent");
 
-                ElementEvent::Destroyed { element_id } => {
-                    self.widgets.remove(element_id);
+                            if parent.canvas.tail.is_some() {
+                                Some(parent_id)
+                            } else {
+                                parent.head_target
+                            }
+                        });
+
+                        let element = self
+                            .widgets
+                            .get_mut(element_id)
+                            .expect("reparented render element not found");
+
+                        element.head_target = new_head_target;
+                    }
                 }
 
                 ElementEvent::Draw {
@@ -139,6 +153,8 @@ impl VelloSurface {
 
                     self.update_element(widget_manager, fonts, *element_id);
                 }
+
+                ElementEvent::Rebuilt { .. } => {}
 
                 _ => todo!(),
             }
@@ -199,6 +215,38 @@ impl VelloSurface {
         }
 
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
+    }
+
+    fn create_element(
+        &mut self,
+        widget_manager: &WidgetManager,
+        element_id: ElementId,
+        parent_id: Option<ElementId>,
+    ) {
+        self.widgets.insert(
+            element_id,
+            RenderElement {
+                head_target: parent_id.and_then(|parent_id| {
+                    let Some(parent) = self.widgets.get(&parent_id) else {
+                            if widget_manager.get_render_context_manager().get_context(parent_id) == Some(self.render_context_id) {
+                                panic!("render element spawned to a non-existent parent");
+                            }
+
+                            return None;
+                        };
+
+                    if parent.canvas.tail.is_some() {
+                        Some(parent_id)
+                    } else {
+                        parent.head_target
+                    }
+                }),
+
+                offset: Offset::ZERO,
+
+                ..RenderElement::default()
+            },
+        );
     }
 
     fn update_element(

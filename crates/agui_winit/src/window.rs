@@ -67,18 +67,12 @@ impl StatefulWidget for WinitWindow {
     type State = WinitWindowState;
 
     fn create_state(&self) -> Self::State {
-        WinitWindowState {
-            window: None,
-
-            child: self.child.clone(),
-        }
+        WinitWindowState { window: None }
     }
 }
 
 struct WinitWindowState {
     window: Option<WinitWindowHandle>,
-
-    child: Option<Widget>,
 }
 
 impl WidgetState for WinitWindowState {
@@ -101,7 +95,7 @@ impl WidgetState for WinitWindowState {
         windowing.create_window(ctx.get_element_id(), ctx.widget.window.clone(), create_cb);
     }
 
-    fn build(&mut self, _: &mut StatefulBuildContext<Self>) -> Self::Child {
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
         if let Some(current_window) = &self.window {
             Some(CurrentWindow {
                 handle: current_window.clone(),
@@ -111,7 +105,7 @@ impl WidgetState for WinitWindowState {
 
                     listener: RefCell::new(None),
 
-                    child: self.child.clone(),
+                    child: ctx.widget.child.clone(),
                 }
                 .into_child(),
             })

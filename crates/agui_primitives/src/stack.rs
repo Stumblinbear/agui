@@ -22,6 +22,12 @@ impl Stack {
 
         self
     }
+
+    pub fn add_child(mut self, child: impl IntoChild) -> Self {
+        self.children.extend(child.into_child());
+
+        self
+    }
 }
 
 impl WidgetLayout for Stack {

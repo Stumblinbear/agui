@@ -100,6 +100,13 @@ impl std::fmt::Debug for Widget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.widget_name())?;
 
+        f.write_str("#")?;
+
+        f.write_str(&format!(
+            "{:p}",
+            Rc::as_ptr(&self.widget) as *const _ as *const ()
+        ))?;
+
         if let Some(key) = self.key {
             f.write_str(" <key: ")?;
             key.fmt(f)?;

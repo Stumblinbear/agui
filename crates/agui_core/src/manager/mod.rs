@@ -36,6 +36,8 @@ pub struct WidgetManager {
     callback_queue: CallbackQueue,
 
     modifications: VecDeque<Modify>,
+    retained_elements: FnvHashSet<ElementId>,
+    removal_queue: FnvHashSet<ElementId>,
 }
 
 impl WidgetManager {
@@ -134,14 +136,14 @@ impl WidgetManager {
 
         tracing::debug!("updating widget tree");
 
-        let mut widget_events = Vec::new();
+        let mut element_events = Vec::new();
         let mut needs_redraw = FnvHashSet::default();
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         'layout: loop {
             'changes: loop {
-                self.flush_modifications(&mut widget_events, &mut needs_redraw);
+                self.flush_modifications(&mut element_events, &mut needs_redraw);
 
                 self.flush_changes();
 
@@ -152,6 +154,18 @@ impl WidgetManager {
                 }
             }
 
+            for element_id in self
+                .removal_queue
+                .drain()
+                // Only remove elements that were not retained
+                .filter(|element_id| !self.retained_elements.contains(element_id))
+                .collect::<Vec<_>>()
+            {
+                self.process_destroy(&mut element_events, element_id);
+            }
+
+            self.retained_elements.clear();
+
             self.flush_layout(&mut needs_redraw);
 
             needs_redraw.retain(|element_id| self.contains(*element_id));
@@ -161,10 +175,10 @@ impl WidgetManager {
             }
         }
 
-        self.sanitize_events(&mut widget_events);
+        self.sanitize_events(&mut element_events);
 
         for element_id in needs_redraw {
-            widget_events.push(ElementEvent::Draw {
+            element_events.push(ElementEvent::Draw {
                 render_context_id: self
                     .render_context_manager
                     .get_context(element_id)
@@ -173,19 +187,19 @@ impl WidgetManager {
             });
         }
 
-        widget_events
+        element_events
     }
 
     /// Sanitizes widget events, removing any widgets that were created and subsequently destroyed before the end of the Vec.
-    fn sanitize_events(&self, widget_events: &mut Vec<ElementEvent>) {
+    fn sanitize_events(&self, element_events: &mut Vec<ElementEvent>) {
         let mut i = 0;
 
         // This is exponentially slow, investigate if using a linked hash map is better
-        while widget_events.len() > i {
+        while element_events.len() > i {
             let mut remove_element_id = None;
 
-            if let ElementEvent::Spawned { element_id, .. } = &widget_events[i] {
-                for entry in &widget_events[i + 1..] {
+            if let ElementEvent::Spawned { element_id, .. } = &element_events[i] {
+                for entry in &element_events[i + 1..] {
                     if let ElementEvent::Destroyed {
                         element_id: destroyed_element_id,
                     } = entry
@@ -200,14 +214,14 @@ impl WidgetManager {
 
             if let Some(ref removed_element_id) = remove_element_id {
                 // Remove the first detected event
-                widget_events.remove(i);
+                element_events.remove(i);
 
                 let mut remove_offset = 0;
 
-                for i in i..widget_events.len() {
+                for i in i..element_events.len() {
                     let real_i = i - remove_offset;
 
-                    match &widget_events[real_i] {
+                    match &element_events[real_i] {
                         // Remove all events that are related to the widget
                         ElementEvent::Rebuilt { element_id, .. }
                         | ElementEvent::Reparent { element_id, .. }
@@ -215,7 +229,7 @@ impl WidgetManager {
                             parent_id: Some(element_id),
                             ..
                         } if element_id == removed_element_id => {
-                            widget_events.remove(real_i);
+                            element_events.remove(real_i);
 
                             // Offset the index by one to account for the removed event
                             remove_offset += 1;
@@ -224,7 +238,7 @@ impl WidgetManager {
                         ElementEvent::Destroyed { element_id }
                             if element_id == removed_element_id =>
                         {
-                            widget_events.remove(real_i);
+                            element_events.remove(real_i);
 
                             // This widget won't exist following this event, so break
                             break;
@@ -240,17 +254,15 @@ impl WidgetManager {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, widget_events, needs_redraw))]
+    #[tracing::instrument(level = "trace", skip(self, element_events, needs_redraw))]
     pub fn flush_modifications(
         &mut self,
-        widget_events: &mut Vec<ElementEvent>,
+        element_events: &mut Vec<ElementEvent>,
         needs_redraw: &mut FnvHashSet<ElementId>,
     ) {
         if self.modifications.is_empty() {
             return;
         }
-
-        let mut retained_elements = FnvHashSet::default();
 
         // Apply any queued modifications
         while let Some(modification) = self.modifications.pop_front() {
@@ -258,20 +270,20 @@ impl WidgetManager {
                 Modify::Spawn(parent_id, widget) => {
                     // This `process_spawn` will only ever return `Created` because `existing_element_id` is `None`
                     if let SpawnResult::Created(element_id) =
-                        self.process_spawn(widget_events, parent_id, widget, None)
+                        self.process_spawn(element_events, parent_id, widget, None)
                     {
-                        self.process_build(widget_events, &mut retained_elements, element_id);
+                        self.process_build(element_events, element_id);
                     }
                 }
 
                 Modify::Rebuild(element_id) => {
                     needs_redraw.insert(element_id);
 
-                    self.process_rebuild(widget_events, &mut retained_elements, element_id);
+                    self.process_rebuild(element_events, element_id);
                 }
 
                 Modify::Destroy(element_id) => {
-                    self.process_destroy(widget_events, element_id);
+                    self.process_destroy(element_events, element_id);
                 }
             }
         }
@@ -450,14 +462,9 @@ impl WidgetManager {
     #[tracing::instrument(
         level = "trace",
         name = "build",
-        skip(self, element_events, retained_elements, element_id)
+        skip(self, element_events, element_id)
     )]
-    fn process_build(
-        &mut self,
-        element_events: &mut Vec<ElementEvent>,
-        retained_elements: &mut FnvHashSet<ElementId>,
-        element_id: ElementId,
-    ) {
+    fn process_build(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
         let mut build_queue = VecDeque::new();
 
         build_queue.push_back(element_id);
@@ -487,14 +494,14 @@ impl WidgetManager {
                 // If the child's key exists in the tree, reparent and retain it
                 if let Some(existing_element_id) = self.widgets.get(&widget).copied() {
                     // If we're trying to reparent an element that has already been retained, panic. The same widget cannot exist twice.
-                    if retained_elements.contains(&existing_element_id) {
+                    if self.retained_elements.contains(&existing_element_id) {
                         panic!(
                             "two instances of the same widget cannot exist at one time: {:?}",
                             widget
                         );
                     }
 
-                    retained_elements.insert(existing_element_id);
+                    self.retained_elements.insert(existing_element_id);
 
                     if self
                         .element_tree
@@ -544,7 +551,7 @@ impl WidgetManager {
                         element_id,
                         needs_rebuild,
                     } => {
-                        retained_elements.insert(element_id);
+                        self.retained_elements.insert(element_id);
 
                         if needs_rebuild {
                             self.modifications.push_back(Modify::Rebuild(element_id));
@@ -559,17 +566,8 @@ impl WidgetManager {
         }
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        name = "rebuild",
-        skip(self, element_events, retained_elements)
-    )]
-    fn process_rebuild(
-        &mut self,
-        element_events: &mut Vec<ElementEvent>,
-        retained_elements: &mut FnvHashSet<ElementId>,
-        element_id: ElementId,
-    ) {
+    #[tracing::instrument(level = "trace", name = "rebuild", skip(self, element_events))]
+    fn process_rebuild(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
         element_events.push(ElementEvent::Rebuilt { element_id });
 
         // Grab the current children so we know which ones to remove post-build
@@ -579,14 +577,11 @@ impl WidgetManager {
             .map(Vec::clone)
             .unwrap_or_default();
 
-        self.process_build(element_events, retained_elements, element_id);
+        self.process_build(element_events, element_id);
 
         // Remove the old children
         for child_id in children {
-            // If the child element was not reparented, remove it
-            if !retained_elements.contains(&child_id) {
-                self.process_destroy(element_events, child_id);
-            }
+            self.removal_queue.insert(child_id);
         }
     }
 

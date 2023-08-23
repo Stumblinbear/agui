@@ -77,6 +77,12 @@ impl IntoChild for Widget {
     }
 }
 
+impl IntoChild for &Widget {
+    fn into_child(self) -> Option<Widget> {
+        Some(Widget::clone(self))
+    }
+}
+
 impl IntoChild for Option<Widget> {
     fn into_child(self) -> Option<Widget> {
         self

@@ -88,7 +88,7 @@ where
             self.widget = new_widget;
 
             // Stateful widgets always need to be rebuilt because they likely reference widget data
-            ElementUpdate::Invalid
+            ElementUpdate::RebuildNecessary
         } else {
             ElementUpdate::Invalid
         }

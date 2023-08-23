@@ -32,7 +32,9 @@ impl WidgetElement for RenderContextBoundaryElement {
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
-        if new_widget.is::<RenderContextBoundary>() {
+        if let Some(new_widget) = new_widget.downcast::<RenderContextBoundary>() {
+            self.widget = new_widget;
+
             ElementUpdate::RebuildNecessary
         } else {
             ElementUpdate::Invalid

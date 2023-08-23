@@ -1,7 +1,7 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::Color,
-    widget::{Widget, WidgetPaint},
+    widget::{IntoChild, Widget, WidgetPaint},
 };
 use agui_macros::PaintWidget;
 
@@ -11,6 +11,18 @@ pub struct ColoredBox {
 
     #[child]
     pub child: Option<Widget>,
+}
+
+impl ColoredBox {
+    pub fn new(color: Color) -> Self {
+        Self { color, child: None }
+    }
+
+    pub fn with_child(mut self, child: impl IntoChild) -> Self {
+        self.child = child.into_child();
+
+        self
+    }
 }
 
 impl WidgetPaint for ColoredBox {

@@ -1,6 +1,9 @@
 use fnv::FnvHashMap;
 
-use crate::element::ElementId;
+use crate::{
+    element::{Element, ElementId},
+    util::tree::Tree,
+};
 
 use super::RenderContextId;
 
@@ -60,13 +63,44 @@ impl RenderContextManager {
         self.map.insert(element_id, parent_render_context_id);
     }
 
-    // TODO: handle reparenting properly
-    pub(crate) fn set_render_context(
+    pub(crate) fn update_render_context(
         &mut self,
+        element_tree: &mut Tree<ElementId, Element>,
         element_id: ElementId,
-        _new_render_context_id: RenderContextId,
+        new_render_context_id: Option<RenderContextId>,
     ) {
-        self.map.remove(&element_id);
+        let current_render_context_id = self.map.get(&element_id).copied();
+
+        if new_render_context_id == current_render_context_id {
+            return;
+        }
+
+        // If this element is the creator of a render context, then we don't need to do anything.
+        if let Some(current_render_context_id) = current_render_context_id {
+            if self.render_contexts.get(&current_render_context_id) == Some(&element_id) {
+                return;
+            }
+        }
+
+        println!(
+            "updating render context for {:?} from {:?} to {:?}",
+            element_id, current_render_context_id, new_render_context_id
+        );
+
+        if let Some(new_render_context_id) = new_render_context_id {
+            self.map.insert(element_id, new_render_context_id);
+        } else {
+            // Remove this element from the render context.
+            self.map.remove(&element_id);
+        }
+
+        for child_id in element_tree
+            .get_children(element_id)
+            .cloned()
+            .unwrap_or_default()
+        {
+            self.update_render_context(element_tree, child_id, new_render_context_id);
+        }
     }
 
     pub(crate) fn remove(&mut self, element_id: ElementId) {

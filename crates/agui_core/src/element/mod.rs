@@ -131,6 +131,16 @@ impl Element {
             ctx.element_id,
             parent_scope_id,
         );
+
+        let parent_render_context_id = ctx
+            .parent_element_id
+            .and_then(|element_id| ctx.render_context_manager.get_context(element_id));
+
+        ctx.render_context_manager.update_render_context(
+            ctx.element_tree,
+            ctx.element_id,
+            parent_render_context_id,
+        );
     }
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
