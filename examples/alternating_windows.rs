@@ -23,41 +23,36 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    App::with_renderer(VelloRenderer::new().expect("failed to init renderer")).run(
-        ExampleMain {
-            window1: build! {
-                <ColoredBox> {
-                    color: Color::from_rgb((1.0, 0.0, 0.0)),
+    App::with_renderer(VelloRenderer::new().expect("failed to init renderer")).run(build! {
+        <ExampleMain> {
+            window1: <ColoredBox> {
+                color: Color::from_rgb((1.0, 0.0, 0.0)),
 
-                    child: <Padding> {
-                        padding: EdgeInsets::all(64.0),
+                child: <Padding> {
+                    padding: EdgeInsets::all(64.0),
 
-                        child: <ColoredBox> {
-                            color: Color::from_rgb((0.0, 1.0, 0.0)),
+                    child: <ColoredBox> {
+                        color: Color::from_rgb((0.0, 1.0, 0.0)),
 
-                            child: None,
-                        },
+                        child: None,
                     },
-                }
+                },
             },
-            window2: build! {
-                <ColoredBox> {
-                    color: Color::from_rgb((0.0, 0.0, 1.0)),
+            window2: <ColoredBox> {
+                color: Color::from_rgb((0.0, 0.0, 1.0)),
 
-                    child: <Padding> {
-                        padding: EdgeInsets::all(32.0),
+                child: <Padding> {
+                    padding: EdgeInsets::all(32.0),
 
-                        child: <ColoredBox> {
-                            color: Color::from_rgb((0.0, 1.0, 0.0)),
+                    child: <ColoredBox> {
+                        color: Color::from_rgb((0.0, 1.0, 0.0)),
 
-                            child: None,
-                        },
+                        child: None,
                     },
-                }
+                },
             },
         }
-        .into_widget(),
-    );
+    });
 }
 
 #[derive(StatefulWidget)]
@@ -99,30 +94,26 @@ impl WidgetState for ExampleMainState {
         build! {
             <Stack> {
                 children: [
-                    build! {
-                        <Window> {
-                            window: WindowBuilder::new()
-                                .with_title("agui window 1")
-                                .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+                    <Window> {
+                        window: WindowBuilder::new()
+                            .with_title("agui window 1")
+                            .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
-                            child: if self.flip_windows {
-                                ctx.widget.window2.clone()
-                            } else {
-                                ctx.widget.window1.clone()
-                            }
+                        child: if self.flip_windows {
+                            ctx.widget.window2.clone()
+                        } else {
+                            ctx.widget.window1.clone()
                         }
                     },
-                    build! {
-                        <Window> {
-                            window: WindowBuilder::new()
-                                .with_title("agui window 2")
-                                .with_inner_size(PhysicalSize::new(400.0, 300.0)),
+                    <Window> {
+                        window: WindowBuilder::new()
+                            .with_title("agui window 2")
+                            .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 
-                            child: if self.flip_windows {
-                                ctx.widget.window1.clone()
-                            } else {
-                                ctx.widget.window2.clone()
-                            }
+                        child: if self.flip_windows {
+                            ctx.widget.window1.clone()
+                        } else {
+                            ctx.widget.window2.clone()
                         }
                     },
                 ]

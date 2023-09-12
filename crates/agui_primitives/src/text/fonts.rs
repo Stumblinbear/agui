@@ -95,7 +95,7 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         unit::Font,
-        widget::{BuildContext, ContextInheritedMut, IntoWidget, Widget, WidgetBuild},
+        widget::{BuildContext, ContextInheritedMut, Widget, WidgetBuild},
     };
     use agui_macros::{build, StatelessWidget};
 

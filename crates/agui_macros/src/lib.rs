@@ -1,5 +1,7 @@
 extern crate proc_macro;
 
+use proc_macro::TokenStream;
+
 mod builder;
 mod inherited_widget;
 mod layout_widget;
@@ -12,9 +14,14 @@ mod utils;
 use inherited_widget::impl_inherited_widget;
 use layout_widget::impl_layout_widget;
 use paint_widget::impl_paint_widget;
-use proc_macro::TokenStream;
+use props::impl_widget_props;
 use stateful_widget::impl_stateful_widget;
 use stateless_widget::impl_stateless_widget;
+
+#[proc_macro_derive(WidgetProps, attributes(prop))]
+pub fn widget_props(input: TokenStream) -> TokenStream {
+    impl_widget_props(input.into()).into()
+}
 
 #[proc_macro_derive(StatelessWidget, attributes(prop))]
 pub fn stateless_widget(input: TokenStream) -> TokenStream {

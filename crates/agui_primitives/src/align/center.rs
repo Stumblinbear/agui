@@ -1,12 +1,12 @@
 use agui_core::{
     unit::Alignment,
-    widget::{BuildContext, IntoWidget, Widget, WidgetBuild},
+    widget::{IntoWidget, Widget},
 };
-use agui_macros::StatelessWidget;
+use agui_macros::WidgetProps;
 
 use crate::align::Align;
 
-#[derive(Debug, StatelessWidget)]
+#[derive(Debug, WidgetProps)]
 #[prop(field_defaults(default))]
 pub struct Center {
     #[prop(setter(strip_option))]
@@ -18,8 +18,8 @@ pub struct Center {
     pub child: Option<Widget>,
 }
 
-impl WidgetBuild for Center {
-    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
+impl IntoWidget for Center {
+    fn into_widget(self) -> Widget {
         Align {
             alignment: Alignment::CENTER,
 

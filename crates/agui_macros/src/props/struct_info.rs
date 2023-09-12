@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::parse::Error;
 
 use crate::utils::resolve_agui_path;
@@ -22,7 +22,6 @@ pub struct StructInfo<'a> {
 
     pub builder_attr: TypeBuilderAttr<'a>,
     pub builder_name: syn::Ident,
-    pub core: syn::Ident,
 }
 
 impl<'a> StructInfo<'a> {
@@ -42,6 +41,7 @@ impl<'a> StructInfo<'a> {
             .get_name()
             .map(|name| strip_raw_ident_prefix(name.to_string()))
             .unwrap_or_else(|| strip_raw_ident_prefix(format!("{}Props", ast.ident)));
+
         Ok(StructInfo {
             vis: &ast.vis,
             name: &ast.ident,
@@ -51,11 +51,7 @@ impl<'a> StructInfo<'a> {
                 .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
                 .collect::<Result<_, _>>()?,
             builder_attr,
-            builder_name: syn::Ident::new(&builder_name, proc_macro2::Span::call_site()),
-            core: syn::Ident::new(
-                &format!("{}_core", builder_name),
-                proc_macro2::Span::call_site(),
-            ),
+            builder_name: syn::Ident::new(&builder_name, ast.ident.span()),
         })
     }
 
@@ -69,7 +65,7 @@ impl<'a> StructInfo<'a> {
         let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
         let empties_tuple = type_tuple(self.included_fields().map(|_| empty_type()));
         let mut all_fields_param_type: syn::TypeParam =
-            syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into();
+            syn::Ident::new("TypedBuilderFields", builder_name.span()).into();
         let all_fields_param = syn::GenericParam::Type(all_fields_param_type.clone());
         all_fields_param_type.default = Some(syn::Type::Tuple(empties_tuple.clone()));
         let b_generics = {
@@ -300,13 +296,15 @@ impl<'a> StructInfo<'a> {
                 builder_name,
                 strip_raw_ident_prefix(field_name.to_string())
             ),
-            proc_macro2::Span::call_site(),
+            builder_name.span(),
         );
         let repeated_fields_error_message = format!("Repeated field {}", field_name);
 
         let method_name = field.setter_method_name();
 
-        Ok(quote! {
+        Ok(quote_spanned! {
+            self.builder_name.span() =>
+
             #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                 #deprecated
@@ -407,14 +405,16 @@ impl<'a> StructInfo<'a> {
                 builder_name,
                 strip_raw_ident_prefix(field_name.to_string())
             ),
-            proc_macro2::Span::call_site(),
+            builder_name.span(),
         );
         let early_build_error_message = format!("Missing required field {}", field_name);
 
         let build_method_name = self.build_method_name();
         let build_method_visibility = self.build_method_visibility();
 
-        quote! {
+        quote_spanned! {
+            builder_name.span() =>
+
             #[doc(hidden)]
             #[allow(dead_code, non_camel_case_types, non_snake_case)]
             pub enum #early_build_error_type_name {}
@@ -549,11 +549,13 @@ impl<'a> StructInfo<'a> {
                 }
             };
 
-        quote!(
+        quote_spanned! {
+            self.builder_name.span() =>
+
             #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name #modified_ty_generics #where_clause {
                 #build_method_doc
-                #[allow(clippy::default_trait_access)]
+                #[allow(clippy::let_unit_value, clippy::default_trait_access)]
                 #build_method_visibility fn #build_method_name #build_method_generic (self) -> #output_type #build_method_where_clause {
                     let ( #(#descructuring,)* ) = self.fields;
                     #( #assignments )*
@@ -561,10 +563,10 @@ impl<'a> StructInfo<'a> {
                     #[allow(deprecated)]
                     #name {
                         #( #field_names ),*
-                    }.into()
+                    }
                 }
             }
-        )
+        }
     }
 }
 
@@ -688,7 +690,7 @@ impl BuildMethodSettings {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TypeBuilderAttr<'a> {
     /// Whether to show docs for the `TypeBuilder` type (rather than hiding them).
     pub doc: bool,
@@ -703,18 +705,6 @@ pub struct TypeBuilderAttr<'a> {
     pub build_method: BuildMethodSettings,
 
     pub field_defaults: FieldBuilderAttr<'a>,
-}
-
-impl Default for TypeBuilderAttr<'_> {
-    fn default() -> Self {
-        Self {
-            doc: Default::default(),
-            builder_method: Default::default(),
-            builder_type: Default::default(),
-            build_method: Default::default(),
-            field_defaults: Default::default(),
-        }
-    }
 }
 
 impl<'a> TypeBuilderAttr<'a> {

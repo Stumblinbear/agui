@@ -1,13 +1,23 @@
 // Yoink: idanarye/rust-typed-builder
-use proc_macro2::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse::Error, spanned::Spanned};
+use syn::{parse2, ItemStruct};
 
 mod field_info;
 mod struct_info;
 mod util;
 
-pub fn impl_props_derive(ast: &syn::ItemStruct) -> Result<TokenStream, Error> {
+pub fn impl_widget_props(input: TokenStream2) -> TokenStream2 {
+    let item: ItemStruct = match parse2(input) {
+        Ok(item) => item,
+        Err(err) => return err.into_compile_error(),
+    };
+
+    impl_props_derive(&item).unwrap_or_else(|err| err.into_compile_error())
+}
+
+pub fn impl_props_derive(ast: &syn::ItemStruct) -> Result<TokenStream2, Error> {
     let data = match &ast.fields {
         syn::Fields::Named(fields) => {
             let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
@@ -15,7 +25,7 @@ pub fn impl_props_derive(ast: &syn::ItemStruct) -> Result<TokenStream, Error> {
             let fields = struct_info
                 .included_fields()
                 .map(|f| struct_info.field_impl(f))
-                .collect::<Result<TokenStream, _>>()?;
+                .collect::<Result<TokenStream2, _>>()?;
             let required_fields = struct_info
                 .included_fields()
                 .filter(|f| f.builder_attr.default.is_none())
@@ -44,7 +54,7 @@ pub fn impl_props_derive(ast: &syn::ItemStruct) -> Result<TokenStream, Error> {
             let fields = struct_info
                 .included_fields()
                 .map(|f| struct_info.field_impl(f))
-                .collect::<Result<TokenStream, _>>()?;
+                .collect::<Result<TokenStream2, _>>()?;
             let required_fields = struct_info
                 .included_fields()
                 .filter(|f| f.builder_attr.default.is_none())

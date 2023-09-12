@@ -27,8 +27,8 @@ The smallest program you can start up to render something can be found in `agui_
 
     // Set the root node of the UI
     ui.set_root(build! {
-        App {
-            child: Text {
+        <App> {
+            child: <Text> {
                 font: deja_vu.styled(),
                 text: "Hello, world!"
             }

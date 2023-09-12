@@ -65,7 +65,7 @@ pub struct MyWidget {
 impl WidgetBuild for MyWidget {
     fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
         build! {
-            Button {
+            <Button> {
                 // Widgets are stored as Rcs, so cloning has little overhead
                 child: self.child.clone(),
             }
@@ -82,14 +82,16 @@ The `build!` macro makes it significantly cleaner and easier to init new widgets
 // It allows us to turn this:
 
 fn build(&self, ctx: &mut BuildContext) -> Widget {
-    Widget::new{
-        Button {
-            color: Color::default(),
-            child: Widget::new(Text {
-                text: String::from("A Button")
-            })
-        }
-    )
+    Button::builder()
+        .color(Color::from_rgba((1.0, 0.0, 1.0)))
+        .child(
+                Text::builder()
+                    .text(String::from("A Button"))
+                    .build()
+                    .into_widget()
+        )
+        .build()
+        .into_widget()
 }
 
 // Into this:
@@ -98,16 +100,16 @@ use agui::macros::build;
 
 fn build(&self, ctx: &mut BuildContext) -> Widget {
     build! {
-        Button {
-            child: Text {
+        <Button> {
+            color: Color::from_rgba((1.0, 0.0, 1.0)),
+
+            child: <Text> {
                 text: "A Button"
             }
         }
     }
 }
 ```
-
-A more complex widget implementation (featuring globals and computed values) can be seen in [the Button widget](crates/agui_widgets/src/button.rs).
 
 # 🤝 Contributing
 

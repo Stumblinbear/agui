@@ -136,18 +136,15 @@ impl WidgetState for ExampleMainState {
 
                     child: <Column> {
                         main_axis_size: MainAxisSize::Min,
-
                         main_axis_alignment: MainAxisAlignment::Center,
 
                         children: lines
                             .into_iter()
-                            .map(|entry| {
-                                Text {
-                                    font: ctx.widget.font.styled().color(Color::from_rgb((0.0, 0.0, 0.0))),
-                                    text: entry.into(),
-                                }
-                                .into()
+                            .map(|entry| <Text> {
+                                font: ctx.widget.font.styled().color(Color::from_rgb((0.0, 0.0, 0.0))),
+                                text: entry.into(),
                             })
+                            .map(Into::into)
                             .collect::<Vec<_>>()
                     }
                 }

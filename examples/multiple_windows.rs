@@ -31,33 +31,29 @@ fn main() {
     .run(build! {
         <Stack> {
             children: [
-                build! {
-                    <Window> {
-                        window: WindowBuilder::new()
-                            .with_title("agui hello world")
-                            .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+                <Window> {
+                    window: WindowBuilder::new()
+                        .with_title("agui hello world")
+                        .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
-                        child: <Text> {
-                            text: "Hello, world!".into(),
-                            font: Font::default()
-                                .styled()
-                                .color(Color::from_rgb((1.0, 1.0, 1.0))),
-                        },
-                    }
+                    child: <Text> {
+                        text: "Hello, world!".into(),
+                        font: Font::default()
+                            .styled()
+                            .color(Color::from_rgb((1.0, 1.0, 1.0))),
+                    },
                 },
-                build! {
-                    <Window> {
-                        window: WindowBuilder::new()
-                            .with_title("agui goodbye world")
-                            .with_inner_size(PhysicalSize::new(400.0, 300.0)),
+                <Window> {
+                    window: WindowBuilder::new()
+                        .with_title("agui goodbye world")
+                        .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 
-                        child: <Text> {
-                            text: "Goodbye, world!".into(),
-                            font: Font::default()
-                                .styled()
-                                .color(Color::from_rgb((1.0, 1.0, 1.0))),
-                        },
-                    }
+                    child: <Text> {
+                        text: "Goodbye, world!".into(),
+                        font: Font::default()
+                            .styled()
+                            .color(Color::from_rgb((1.0, 1.0, 1.0))),
+                    },
                 },
             ],
         }

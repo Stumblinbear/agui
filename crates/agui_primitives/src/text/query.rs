@@ -70,17 +70,13 @@ mod tests {
         let mut manager = WidgetManager::with_root(build! {
             <Column> {
                 children: [
-                    build! {
-                        <Text> {
-                            text: "foo".into(),
-                        }
+                    <Text> {
+                        text: "foo".into(),
                     }.into(),
-                    build! {
-                        <Text> {
-                            text: "bar".into(),
-                        }
+                    <Text> {
+                        text: "bar".into(),
                     }.into(),
-                ]
+                ],
             }
         });
 
