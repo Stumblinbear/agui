@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Axis, Constraints, IntrinsicDimension, Offset, Size},
-    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -13,47 +13,76 @@ pub struct SizedBox {
 }
 
 impl SizedBox {
-    pub fn none() -> Self {
-        Self::default()
+    pub const fn new(width: f32, height: f32) -> Self {
+        Self {
+            width: Some(width),
+            height: Some(height),
+
+            child: None,
+        }
     }
 
-    pub fn square(size: f32) -> Self {
+    pub const fn shrink() -> Self {
+        Self {
+            width: None,
+            height: None,
+
+            child: None,
+        }
+    }
+
+    pub const fn expand() -> Self {
+        Self {
+            width: Some(f32::INFINITY),
+            height: Some(f32::INFINITY),
+
+            child: None,
+        }
+    }
+
+    pub const fn square(size: f32) -> Self {
         Self {
             width: Some(size),
             height: Some(size),
 
-            ..Self::default()
+            child: None,
         }
     }
 
-    pub fn axis(axis: Axis, size: f32) -> Self {
+    pub const fn axis(axis: Axis, size: f32) -> Self {
         match axis {
             Axis::Horizontal => Self::horizontal(size),
             Axis::Vertical => Self::vertical(size),
         }
     }
 
-    pub fn horizontal(width: f32) -> Self {
+    pub const fn horizontal(width: f32) -> Self {
         Self {
             width: Some(width),
+            height: None,
 
-            ..Self::default()
+            child: None,
         }
     }
 
-    pub fn vertical(height: f32) -> Self {
+    pub const fn vertical(height: f32) -> Self {
         Self {
+            width: None,
             height: Some(height),
 
-            ..Self::default()
+            child: None,
         }
+    }
+
+    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.child = child.into().map(IntoWidget::into_widget);
+
+        self
     }
 }
 
 impl WidgetLayout for SizedBox {
-    type Children = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 

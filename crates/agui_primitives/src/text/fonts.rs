@@ -2,11 +2,13 @@ use agui_core::{
     callback::Callback,
     unit::Font,
     widget::{
-        ContextWidgetStateMut, InheritedWidget, IntoChild, StatefulBuildContext, StatefulWidget,
+        ContextWidgetStateMut, InheritedWidget, IntoWidget, StatefulBuildContext, StatefulWidget,
         Widget, WidgetState,
     },
 };
-use agui_macros::{build, InheritedWidget, StatefulWidget};
+use agui_macros::{InheritedWidget, StatefulWidget};
+
+use crate::sized_box::SizedBox;
 
 #[derive(StatefulWidget, Debug, Default)]
 pub struct Fonts {
@@ -30,8 +32,8 @@ impl Fonts {
         self
     }
 
-    pub fn with_child(mut self, child: impl IntoChild) -> Self {
-        self.child = child.into_child();
+    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.child = child.into().map(IntoWidget::into_widget);
 
         self
     }
@@ -56,37 +58,41 @@ pub struct FontsState {
 impl WidgetState for FontsState {
     type Widget = Fonts;
 
-    type Child = AvailableFonts;
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
+        AvailableFonts {
+            available_fonts: self.added_fonts.clone().union(self.initial_fonts.clone()),
 
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
-        build! {
-            AvailableFonts {
-                available_fonts: self.added_fonts.clone().union(self.initial_fonts.clone()),
+            add_font: ctx.callback(move |ctx, (name, font): (String, Font)| {
+                ctx.set_state(move |state| {
+                    state.added_fonts.insert(name.to_string(), font);
+                });
+            }),
 
-                add_font: ctx.callback(move |ctx, (name, font): (String, Font)| {
-                    ctx.set_state(move |state| {
-                        state.added_fonts.insert(name.to_string(), font);
-                    });
-                }),
-
-                child: ctx.widget.child.clone(),
-            }
+            child: ctx
+                .widget
+                .child
+                .clone()
+                .unwrap_or_else(|| SizedBox::shrink().into_widget()),
         }
+        .into()
     }
 }
 
-#[derive(InheritedWidget, Default)]
+#[derive(InheritedWidget)]
 pub struct AvailableFonts {
     available_fonts: im_rc::HashMap<String, Font>,
 
     // Allows us to modify the StatefulWidget state
     add_font: Callback<(String, Font)>,
 
-    #[child]
-    child: Option<Widget>,
+    child: Widget,
 }
 
 impl InheritedWidget for AvailableFonts {
+    fn get_child(&self) -> Widget {
+        self.child.clone()
+    }
+
     fn should_notify(&self, other_widget: &Self) -> bool {
         self.available_fonts != other_widget.available_fonts
             || self.add_font != other_widget.add_font
@@ -110,9 +116,11 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         unit::Font,
-        widget::{BuildContext, ContextInheritedMut, WidgetBuild},
+        widget::{BuildContext, ContextInheritedMut, Widget, WidgetBuild},
     };
     use agui_macros::StatelessWidget;
+
+    use crate::sized_box::SizedBox;
 
     use super::{AvailableFonts, Fonts};
 
@@ -129,9 +137,7 @@ mod tests {
     struct TestWidget;
 
     impl WidgetBuild for TestWidget {
-        type Child = ();
-
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
             let available_fonts = ctx
                 .depend_on_inherited_widget::<AvailableFonts>()
                 .expect("failed to get available fonts");
@@ -140,6 +146,8 @@ mod tests {
                 result.borrow_mut().retrieved_font =
                     available_fonts.get_font("test font family").cloned();
             });
+
+            SizedBox::square(0.0).into()
         }
     }
 

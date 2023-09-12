@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
-    widget::{BuildContext, IntoChild, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -10,30 +10,28 @@ pub struct Stack {
 }
 
 impl Stack {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            children: Vec::new(),
+        }
     }
 
-    pub fn with_children(mut self, children: impl IntoIterator<Item = impl IntoChild>) -> Self {
-        self.children = children
-            .into_iter()
-            .filter_map(IntoChild::into_child)
-            .collect();
+    pub fn with_children(mut self, children: impl IntoIterator<Item = impl IntoWidget>) -> Self {
+        self.children = children.into_iter().map(IntoWidget::into_widget).collect();
 
         self
     }
 
-    pub fn add_child(mut self, child: impl IntoChild) -> Self {
-        self.children.extend(child.into_child());
+    pub fn add_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.children
+            .extend(child.into().map(IntoWidget::into_widget));
 
         self
     }
 }
 
 impl WidgetLayout for Stack {
-    type Children = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
         Vec::from_iter(self.children.iter().cloned())
     }
 

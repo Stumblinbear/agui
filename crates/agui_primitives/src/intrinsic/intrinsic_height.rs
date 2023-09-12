@@ -13,11 +13,9 @@ pub struct IntrinsicHeight {
 }
 
 impl WidgetBuild for IntrinsicHeight {
-    type Child = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
         build! {
-            IntrinsicAxis {
+            <IntrinsicAxis> {
                 axis: Axis::Vertical,
                 child: self.child.clone(),
             }

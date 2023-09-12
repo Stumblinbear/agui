@@ -46,37 +46,50 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_macros::StatelessWidget;
+    use agui_macros::LayoutWidget;
 
     use crate::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, Widget, WidgetBuild},
+        unit::Size,
+        widget::{BuildContext, IntoWidget, Widget, WidgetLayout},
     };
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(Default, LayoutWidget)]
     struct TestWidget1 {
         pub child: Option<Widget>,
     }
 
-    impl WidgetBuild for TestWidget1 {
-        type Child = Option<Widget>;
+    impl WidgetLayout for TestWidget1 {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            self.child.clone().into_iter().collect()
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            self.child.clone()
+        fn layout(
+            &self,
+            _: &mut crate::widget::LayoutContext,
+            _: crate::unit::Constraints,
+        ) -> Size {
+            Size::ZERO
         }
     }
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(Default, LayoutWidget)]
     struct TestWidget2 {
         pub child: Option<Widget>,
     }
 
-    impl WidgetBuild for TestWidget2 {
-        type Child = Option<Widget>;
+    impl WidgetLayout for TestWidget2 {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            self.child.clone().into_iter().collect()
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            self.child.clone()
+        fn layout(
+            &self,
+            _: &mut crate::widget::LayoutContext,
+            _: crate::unit::Constraints,
+        ) -> Size {
+            Size::ZERO
         }
     }
 
@@ -85,13 +98,17 @@ mod tests {
         let mut manager = WidgetManager::new();
 
         manager.set_root(TestWidget1 {
-            child: TestWidget2 {
-                child: TestWidget1 {
-                    ..Default::default()
+            child: Some(
+                TestWidget2 {
+                    child: Some(
+                        TestWidget1 {
+                            ..Default::default()
+                        }
+                        .into_widget(),
+                    ),
                 }
-                .into(),
-            }
-            .into(),
+                .into_widget(),
+            ),
         });
 
         manager.update();

@@ -172,12 +172,13 @@ where
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::StatelessWidget;
+    use agui_macros::{LayoutWidget, StatelessWidget};
 
     use crate::{
         callback::Callback,
         manager::WidgetManager,
-        widget::{BuildContext, Widget, WidgetBuild},
+        unit::{Constraints, Size},
+        widget::{BuildContext, LayoutContext, Widget, WidgetBuild, WidgetLayout},
     };
 
     thread_local! {
@@ -185,15 +186,26 @@ mod tests {
         pub static RESULT: RefCell<Vec<u32>> = RefCell::default();
     }
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(LayoutWidget)]
+    struct TestDummyWidget;
+
+    impl WidgetLayout for TestDummyWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            vec![]
+        }
+
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
+            Size::ZERO
+        }
+    }
+
+    #[derive(StatelessWidget)]
     struct TestWidget {
-        child: Option<Widget>,
+        child: Widget,
     }
 
     impl WidgetBuild for TestWidget {
-        type Child = Option<Widget>;
-
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
             let callback = ctx.callback::<u32, _>(|_ctx, val| {
                 RESULT.with(|f| {
                     f.borrow_mut().push(val);
@@ -212,7 +224,9 @@ mod tests {
     pub fn should_not_call_immediately() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestWidget::default());
+        manager.set_root(TestWidget {
+            child: TestDummyWidget.into(),
+        });
 
         manager.update();
 
@@ -233,7 +247,9 @@ mod tests {
     pub fn can_fire_callbacks() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(TestWidget::default());
+        manager.set_root(TestWidget {
+            child: TestDummyWidget.into(),
+        });
 
         manager.update();
 
@@ -289,7 +305,13 @@ mod tests {
         let mut manager = WidgetManager::new();
 
         manager.set_root(TestWidget {
-            child: TestWidget::default().into(),
+            child: TestWidget {
+                child: TestWidget {
+                    child: TestDummyWidget.into(),
+                }
+                .into(),
+            }
+            .into(),
         });
 
         manager.update();

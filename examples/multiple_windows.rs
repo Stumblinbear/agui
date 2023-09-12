@@ -28,36 +28,38 @@ fn main() {
             .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
                 .expect("failed to load font")]),
     )
-    .run(Stack {
-        children: vec![
-            Window {
-                window: WindowBuilder::new()
-                    .with_title("agui hello world")
-                    .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+    .run(build! {
+        <Stack> {
+            children: vec![
+                build! {
+                    <Window> {
+                        window: WindowBuilder::new()
+                            .with_title("agui hello world")
+                            .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
-                child: Text::new("Hello, world!")
-                    .with_font(
-                        Font::default()
-                            .styled()
-                            .color(Color::from_rgb((1.0, 1.0, 1.0))),
-                    )
-                    .into_child(),
-            }
-            .into(),
-            Window {
-                window: WindowBuilder::new()
-                    .with_title("agui goodbye world")
-                    .with_inner_size(PhysicalSize::new(400.0, 300.0)),
+                        child: <Text> {
+                            text: "Hello, world!",
+                            font: Font::default()
+                                .styled()
+                                .color(Color::from_rgb((1.0, 1.0, 1.0))),
+                        },
+                    }
+                },
+                build! {
+                    <Window> {
+                        window: WindowBuilder::new()
+                            .with_title("agui goodbye world")
+                            .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 
-                child: Text::new("Goodbye, world!")
-                    .with_font(
-                        Font::default()
-                            .styled()
-                            .color(Color::from_rgb((1.0, 1.0, 1.0))),
-                    )
-                    .into_child(),
-            }
-            .into(),
-        ],
+                        child: <Text> {
+                            text: "Goodbye, world!",
+                            font: Font::default()
+                                .styled()
+                                .color(Color::from_rgb((1.0, 1.0, 1.0))),
+                        },
+                    }
+                },
+            ],
+        }
     });
 }

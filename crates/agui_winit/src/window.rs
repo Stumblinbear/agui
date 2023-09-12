@@ -5,11 +5,12 @@ use agui_core::{
     unit::{Constraints, Size},
     widget::{
         render_context::RenderContextBoundary, BuildContext, ContextInheritedMut, ContextWidget,
-        ContextWidgetStateMut, InheritedWidget, IntoChild, LayoutContext, StatefulBuildContext,
+        ContextWidgetStateMut, InheritedWidget, IntoWidget, LayoutContext, StatefulBuildContext,
         StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
     },
 };
-use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
+use agui_macros::{InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
+use agui_primitives::sized_box::SizedBox;
 use winit::window::WindowBuilder;
 
 use crate::{
@@ -24,7 +25,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(builder: WindowBuilder) -> Self {
+    pub const fn new(builder: WindowBuilder) -> Self {
         Self {
             window: builder,
 
@@ -32,35 +33,33 @@ impl Window {
         }
     }
 
-    pub fn with_child(mut self, child: impl IntoChild) -> Self {
-        self.child = child.into_child();
+    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.child = child.into().map(IntoWidget::into_widget);
 
         self
     }
 }
 
 impl WidgetBuild for Window {
-    type Child = RenderContextBoundary;
+    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
+        // Windows must be created within their own render context
+        RenderContextBoundary::with_child(WinitWindow {
+            window: self.window.clone(),
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        build! {
-            // Windows must be created within their own render context
-            RenderContextBoundary {
-                child: WinitWindow {
-                    window: self.window.clone(),
-
-                    child: self.child.clone(),
-                }
-            }
-        }
+            child: self
+                .child
+                .clone()
+                .unwrap_or_else(|| SizedBox::shrink().into_widget()),
+        })
+        .into_widget()
     }
 }
 
-#[derive(StatefulWidget, Default)]
+#[derive(StatefulWidget)]
 struct WinitWindow {
     window: WindowBuilder,
 
-    child: Option<Widget>,
+    child: Widget,
 }
 
 impl StatefulWidget for WinitWindow {
@@ -78,8 +77,6 @@ struct WinitWindowState {
 impl WidgetState for WinitWindowState {
     type Widget = WinitWindow;
 
-    type Child = Option<CurrentWindow>;
-
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         let Some(windowing) = ctx.depend_on_inherited_widget::<WinitWindowingController>() else {
             return tracing::error!("Windowing controller not found in the widget tree");
@@ -95,9 +92,9 @@ impl WidgetState for WinitWindowState {
         windowing.create_window(ctx.get_element_id(), ctx.widget.window.clone(), create_cb);
     }
 
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         if let Some(current_window) = &self.window {
-            Some(CurrentWindow {
+            CurrentWindow {
                 handle: current_window.clone(),
 
                 child: WinitWindowLayout {
@@ -107,10 +104,11 @@ impl WidgetState for WinitWindowState {
 
                     child: ctx.widget.child.clone(),
                 }
-                .into_child(),
-            })
+                .into_widget(),
+            }
+            .into_widget()
         } else {
-            None
+            SizedBox::shrink().into_widget()
         }
     }
 }
@@ -119,8 +117,7 @@ impl WidgetState for WinitWindowState {
 pub struct CurrentWindow {
     handle: WinitWindowHandle,
 
-    #[child]
-    child: Option<Widget>,
+    child: Widget,
 }
 
 impl Deref for CurrentWindow {
@@ -132,6 +129,10 @@ impl Deref for CurrentWindow {
 }
 
 impl InheritedWidget for CurrentWindow {
+    fn get_child(&self) -> Widget {
+        self.child.clone()
+    }
+
     #[allow(unused_variables)]
     fn should_notify(&self, old_widget: &Self) -> bool {
         self.handle.id() != old_widget.handle.id()
@@ -144,13 +145,11 @@ struct WinitWindowLayout {
 
     listener: RefCell<Option<ListenerHandle<WindowEvent>>>,
 
-    child: Option<Widget>,
+    child: Widget,
 }
 
 impl WidgetLayout for WinitWindowLayout {
-    type Children = Widget;
-
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Widget> {
         let notifier = ctx.callback(|_, _: ()| {});
 
         let current_size = self.handle.inner_size();
@@ -166,7 +165,7 @@ impl WidgetLayout for WinitWindowLayout {
                 }
             }));
 
-        Vec::from_iter(self.child.iter().cloned())
+        vec![self.child.clone()]
     }
 
     fn layout(&self, ctx: &mut LayoutContext, _: Constraints) -> Size {

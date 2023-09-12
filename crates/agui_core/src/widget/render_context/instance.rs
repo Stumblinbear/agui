@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::widget::{
     element::{ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext},
-    AnyWidget, IntoChild, Widget, WidgetChild,
+    AnyWidget, Widget, WidgetChild,
 };
 
 use super::RenderContextBoundary;
@@ -28,7 +28,7 @@ impl WidgetElement for RenderContextBoundaryElement {
     }
 
     fn build(&mut self, _: WidgetBuildContext) -> Vec<Widget> {
-        Vec::from_iter(self.widget.get_child().into_child())
+        vec![self.widget.get_child()]
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {

@@ -31,16 +31,17 @@ fn main() {
             .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
                 .expect("failed to load font")]),
     )
-    .run(
-        Window::new(
-            WindowBuilder::new()
+    .run(build! {
+        <Window> {
+            window: WindowBuilder::new()
                 .with_title("agui os info")
                 .with_inner_size(PhysicalSize::new(800.0, 600.0)),
-        )
-        .with_child(ExampleMain {
-            font: Font::default(),
-        }),
-    );
+
+            child: <ExampleMain> {
+                font: Font::default(),
+            }
+        }
+    });
 }
 
 #[derive(Clone, Debug)]
@@ -59,7 +60,7 @@ pub struct SystemInfo {
     processors: usize,
 }
 
-#[derive(StatefulWidget, PartialEq)]
+#[derive(Default, StatefulWidget, PartialEq)]
 struct ExampleMain {
     font: Font,
 }
@@ -80,9 +81,7 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    type Child = Widget;
-
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             ctx.set_state(|state| {
                 state.system_info.replace(system_info);
@@ -131,11 +130,11 @@ impl WidgetState for ExampleMainState {
         };
 
         build! {
-            Center {
-                child: ColoredBox {
+            <Center> {
+                child: <ColoredBox> {
                     color: Color::from_rgb((1.0, 1.0, 1.0)),
 
-                    child: Column {
+                    child: <Column> {
                         main_axis_size: MainAxisSize::Min,
 
                         main_axis_alignment: MainAxisAlignment::Center,
@@ -150,8 +149,12 @@ impl WidgetState for ExampleMainState {
                                 .into()
                             })
                             .collect::<Vec<_>>(),
+
+                        ..Default::default()
                     }
-                }
+                },
+
+                ..Default::default()
             }
         }
     }

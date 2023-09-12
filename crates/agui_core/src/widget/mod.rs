@@ -61,60 +61,42 @@ where
     }
 }
 
-pub trait IntoChild {
-    fn into_child(self) -> Option<Widget>;
-}
+// pub trait IntoChild {
+//     fn into_child(self) -> Option<Widget>;
+// }
 
-impl IntoChild for () {
-    fn into_child(self) -> Option<Widget> {
-        None
-    }
-}
+// impl IntoChild for Widget {
+//     fn into_child(self) -> Option<Widget> {
+//         Some(self)
+//     }
+// }
 
-impl IntoChild for Widget {
-    fn into_child(self) -> Option<Widget> {
-        Some(self)
-    }
-}
+// impl IntoChild for &Widget {
+//     fn into_child(self) -> Option<Widget> {
+//         Some(Widget::clone(self))
+//     }
+// }
 
-impl IntoChild for &Widget {
-    fn into_child(self) -> Option<Widget> {
-        Some(Widget::clone(self))
-    }
-}
+// impl<W> IntoChild for Option<W>
+// where
+//     W: IntoWidget,
+// {
+//     fn into_child(self) -> Option<Widget> {
+//         self.map(IntoWidget::into_widget)
+//     }
+// }
 
-impl IntoChild for Option<Widget> {
-    fn into_child(self) -> Option<Widget> {
-        self
-    }
-}
+// impl IntoChild for &Option<Widget> {
+//     fn into_child(self) -> Option<Widget> {
+//         self.as_ref().map(Widget::clone)
+//     }
+// }
 
-impl IntoChild for Option<&Widget> {
-    fn into_child(self) -> Option<Widget> {
-        self.map(Widget::clone)
-    }
-}
-
-impl IntoChild for &Option<Widget> {
-    fn into_child(self) -> Option<Widget> {
-        self.as_ref().map(Widget::clone)
-    }
-}
-
-impl<W> IntoChild for Option<W>
-where
-    W: IntoWidget,
-{
-    fn into_child(self) -> Option<Widget> {
-        self.map(IntoWidget::into_widget)
-    }
-}
-
-impl<W> IntoChild for W
-where
-    W: AnyWidget,
-{
-    fn into_child(self) -> Option<Widget> {
-        Some(Widget::new(self))
-    }
-}
+// impl<W> IntoChild for W
+// where
+//     W: AnyWidget,
+// {
+//     fn into_child(self) -> Option<Widget> {
+//         Some(Widget::new(self))
+//     }
+// }

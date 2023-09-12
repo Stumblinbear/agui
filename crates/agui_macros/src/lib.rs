@@ -30,12 +30,12 @@ pub fn layout_widget(input: TokenStream) -> TokenStream {
     impl_layout_widget(input.into()).into()
 }
 
-#[proc_macro_derive(PaintWidget, attributes(child))]
+#[proc_macro_derive(PaintWidget)]
 pub fn paint_widget(input: TokenStream) -> TokenStream {
     impl_paint_widget(input.into()).into()
 }
 
-#[proc_macro_derive(InheritedWidget, attributes(child))]
+#[proc_macro_derive(InheritedWidget)]
 pub fn inherited_widget(input: TokenStream) -> TokenStream {
     impl_inherited_widget(input.into()).into()
 }

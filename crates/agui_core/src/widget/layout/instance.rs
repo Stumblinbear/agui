@@ -10,8 +10,7 @@ use crate::{
             ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
             WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
-        AnyWidget, BuildContext, IntoChild, IntrinsicSizeContext, LayoutContext, Widget,
-        WidgetLayout,
+        AnyWidget, BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
     },
 };
 
@@ -95,11 +94,7 @@ where
             callbacks: &mut self.callbacks,
         };
 
-        self.widget
-            .build(&mut ctx)
-            .into_iter()
-            .filter_map(IntoChild::into_child)
-            .collect()
+        self.widget.build(&mut ctx)
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {

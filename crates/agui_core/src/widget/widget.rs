@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use super::{element::WidgetElement, AnyWidget, WidgetKey};
+use super::{element::WidgetElement, AnyWidget, IntoWidget, WidgetKey};
 
 #[derive(Clone)]
 pub struct Widget {
@@ -131,21 +131,44 @@ impl std::fmt::Display for Widget {
     }
 }
 
+impl IntoWidget for Widget {
+    fn into_widget(self) -> Widget {
+        self
+    }
+}
+
+impl IntoWidget for &Widget {
+    fn into_widget(self) -> Widget {
+        self.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{ptr, rc::Rc};
 
-    use agui_macros::StatelessWidget;
+    use agui_macros::LayoutWidget;
 
-    use crate::widget::{BuildContext, IntoWidget, Widget, WidgetBuild};
+    use crate::{
+        unit::Size,
+        widget::{BuildContext, IntoWidget, Widget, WidgetLayout},
+    };
 
-    #[derive(StatelessWidget)]
+    #[derive(LayoutWidget)]
     struct TestWidget;
 
-    impl WidgetBuild for TestWidget {
-        type Child = ();
+    impl WidgetLayout for TestWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            vec![]
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {}
+        fn layout(
+            &self,
+            _: &mut crate::widget::LayoutContext,
+            _: crate::unit::Constraints,
+        ) -> Size {
+            Size::ZERO
+        }
     }
 
     #[test]

@@ -21,14 +21,6 @@ pub fn impl_stateless_widget(input: TokenStream2) -> TokenStream2 {
             }
         }
 
-        impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::widget::Widget> #where_clause {
-            fn from(val: #ident #ty_generics) -> Self {
-                use #agui_core::widget::IntoWidget;
-
-                Some(val.into_widget())
-            }
-        }
-
         impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
             fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::element::WidgetElement>
             where

@@ -4,8 +4,8 @@ use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
     widget::{
-        BuildContext, ContextInheritedMut, IntrinsicSizeContext, LayoutContext, WidgetBuild,
-        WidgetLayout, WidgetPaint,
+        BuildContext, ContextInheritedMut, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget,
+        WidgetBuild, WidgetLayout, WidgetPaint,
     },
 };
 use agui_macros::{build, LayoutWidget, PaintWidget, StatelessWidget};
@@ -47,11 +47,9 @@ impl Text {
 }
 
 impl WidgetBuild for Text {
-    type Child = TextLayout;
-
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
         build! {
-            TextLayout {
+            <TextLayout> {
                 delegate: ctx
                     .depend_on_inherited_widget::<TextLayoutController>()
                     .and_then(|controller| controller.delegate.clone()),
@@ -72,13 +70,12 @@ pub struct TextLayout {
 }
 
 impl WidgetLayout for TextLayout {
-    type Children = TextPainter;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
         vec![TextPainter {
             font: self.font.clone(),
             text: Cow::clone(&self.text),
-        }]
+        }
+        .into_widget()]
     }
 
     fn intrinsic_size(
@@ -114,13 +111,17 @@ impl WidgetLayout for TextLayout {
     }
 }
 
-#[derive(PaintWidget, Debug, Default, PartialEq)]
+#[derive(PaintWidget, Debug, PartialEq)]
 pub struct TextPainter {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
 }
 
 impl WidgetPaint for TextPainter {
+    fn get_child(&self) -> Option<Widget> {
+        None
+    }
+
     fn paint(&self, mut canvas: CanvasPainter) {
         let brush = canvas.add_paint(Paint {
             color: self.font.color,

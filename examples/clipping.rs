@@ -28,51 +28,54 @@ fn main() {
         FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf")).expect("failed to load font"),
     );
 
-    App::with_renderer(renderer).run(
-        Window::new(
-            WindowBuilder::new()
+    App::with_renderer(renderer).run(build! {
+        <Window> {
+            window: WindowBuilder::new()
                 .with_title("agui clipping")
                 .with_inner_size(PhysicalSize::new(800.0, 600.0)),
-        )
-        .with_child(ExampleMain { font: deja_vu }),
-    );
+
+            child: <ExampleMain> { font: deja_vu },
+        }
+    });
 }
 
-#[derive(StatelessWidget, PartialEq)]
+#[derive(StatelessWidget, PartialEq, Default)]
 struct ExampleMain {
     font: Font,
 }
 
 impl WidgetBuild for ExampleMain {
-    type Child = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
+    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
         build! {
-            ColoredBox {
+            <ColoredBox> {
                 color: Color::from_rgb((1.0, 1.0, 1.0)),
 
-                child: Center {
-                    child: SizedBox {
+                child: <Center> {
+                    child: <SizedBox> {
                         height: 16.0,
                         width: 280.0,
 
-                        child: Clip {
+                        child: <Clip> {
                             shape: Shape::RoundedRect {
                                 top_left: 8.0,
                                 top_right: 8.0,
                                 bottom_right: 8.0,
-                                bottom_left: 8.0
+                                bottom_left: 8.0,
                             },
 
-                            child: ColoredBox {
+                            child: <ColoredBox> {
                                 color: Color::from_rgb((0.75, 0.75, 0.75)),
-                                child: Text {
+                                child: <Text> {
                                     font: self.font.styled().color(Color::from_rgb((1.0, 0.0, 0.0))),
                                     text: "The Krabby Patty secret formula is one part love, two parts magic, and three parts secret ingredient."
                                 },
-                            }
+                            },
+
+                            ..Default::default()
                         }
-                    }
+                    },
+
+                    ..Default::default()
                 }
             }
         }

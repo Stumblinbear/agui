@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Constraints, EdgeInsets, IntrinsicDimension, Offset, Size},
-    widget::{BuildContext, IntoChild, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -12,25 +12,23 @@ pub struct Padding {
 }
 
 impl Padding {
-    pub fn new(padding: impl Into<EdgeInsets>) -> Self {
+    pub const fn new(padding: EdgeInsets) -> Self {
         Self {
-            padding: padding.into(),
+            padding,
 
             child: None,
         }
     }
 
-    pub fn with_child(mut self, child: impl IntoChild) -> Self {
-        self.child = child.into_child();
+    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.child = child.into().map(IntoWidget::into_widget);
 
         self
     }
 }
 
 impl WidgetLayout for Padding {
-    type Children = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 

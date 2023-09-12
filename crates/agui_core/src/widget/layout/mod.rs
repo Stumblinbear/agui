@@ -11,15 +11,13 @@ pub use context::*;
 pub use instance::*;
 pub use iter::*;
 
-use super::{BuildContext, IntoChild};
+use super::{BuildContext, Widget};
 
 pub trait WidgetLayout: Sized + 'static {
-    type Children: IntoChild;
-
     /// Called whenever this widget is rebuilt.
     ///
     /// This method may be called when any parent is rebuilt or when its internal state changes.
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Self::Children>;
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Widget>;
 
     #[allow(unused_variables)]
     fn intrinsic_size(

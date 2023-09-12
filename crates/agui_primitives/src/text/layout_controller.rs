@@ -2,35 +2,21 @@ use std::{borrow::Cow, rc::Rc};
 
 use agui_core::{
     unit::{Constraints, FontStyle, IntrinsicDimension, Size},
-    widget::{InheritedWidget, IntoChild, Widget},
+    widget::{InheritedWidget, IntoWidget, Widget},
 };
 use agui_macros::InheritedWidget;
+
+use crate::sized_box::SizedBox;
 
 #[derive(InheritedWidget, Default)]
 pub struct TextLayoutController {
     pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
 
-    #[child]
     pub child: Option<Widget>,
 }
 
-impl InheritedWidget for TextLayoutController {
-    fn should_notify(&self, other_widget: &Self) -> bool {
-        match (&self.delegate, &other_widget.delegate) {
-            (Some(delegate), Some(other_delegate)) => !std::ptr::eq(
-                Rc::as_ptr(delegate) as *const _ as *const (),
-                Rc::as_ptr(other_delegate) as *const _ as *const (),
-            ),
-
-            (Some(_), None) | (None, Some(_)) => true,
-
-            _ => false,
-        }
-    }
-}
-
 impl TextLayoutController {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             delegate: None,
 
@@ -47,10 +33,31 @@ impl TextLayoutController {
         self
     }
 
-    pub fn with_child(mut self, child: impl IntoChild) -> Self {
-        self.child = child.into_child();
+    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.child = child.into().map(IntoWidget::into_widget);
 
         self
+    }
+}
+
+impl InheritedWidget for TextLayoutController {
+    fn get_child(&self) -> Widget {
+        self.child
+            .clone()
+            .unwrap_or_else(|| SizedBox::shrink().into_widget())
+    }
+
+    fn should_notify(&self, other_widget: &Self) -> bool {
+        match (&self.delegate, &other_widget.delegate) {
+            (Some(delegate), Some(other_delegate)) => !std::ptr::eq(
+                Rc::as_ptr(delegate) as *const _ as *const (),
+                Rc::as_ptr(other_delegate) as *const _ as *const (),
+            ),
+
+            (Some(_), None) | (None, Some(_)) => true,
+
+            _ => false,
+        }
     }
 }
 

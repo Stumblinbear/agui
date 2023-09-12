@@ -1,14 +1,13 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, TextDirection},
-    widget::{BuildContext, Widget, WidgetBuild},
+    widget::{IntoWidget, Widget},
 };
-use agui_macros::{build, StatelessWidget};
 
 use crate::flex::{
     CrossAxisAlignment, Flex, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
 };
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Row {
     pub main_axis_size: MainAxisSize,
 
@@ -23,26 +22,23 @@ pub struct Row {
     pub children: Vec<Flexible>,
 }
 
-impl WidgetBuild for Row {
-    type Child = Widget;
+impl IntoWidget for Row {
+    fn into_widget(self) -> Widget {
+        Flex {
+            direction: Axis::Vertical,
 
-    fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-        build! {
-            Flex {
-                direction: Axis::Vertical,
+            main_axis_size: self.main_axis_size,
 
-                main_axis_size: self.main_axis_size,
+            main_axis_alignment: self.main_axis_alignment,
+            cross_axis_alignment: self.cross_axis_alignment,
+            vertical_direction: self.vertical_direction,
 
-                main_axis_alignment: self.main_axis_alignment,
-                cross_axis_alignment: self.cross_axis_alignment,
-                vertical_direction: self.vertical_direction,
+            text_direction: self.text_direction,
 
-                text_direction: self.text_direction,
+            clip_behavior: self.clip_behavior,
 
-                clip_behavior: self.clip_behavior,
-
-                children: self.children.clone(),
-            }
+            children: self.children.clone(),
         }
+        .into_widget()
     }
 }

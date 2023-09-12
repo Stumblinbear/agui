@@ -31,19 +31,20 @@ fn main() {
             .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
                 .expect("failed to load font")]),
     )
-    .run(
-        Window::new(
-            WindowBuilder::new()
-                .with_title("agui hello world")
-                .with_inner_size(PhysicalSize::new(800.0, 600.0)),
-        )
-        .with_child(ExampleMain {
-            font: Font::default(),
-        }),
-    );
+    .run(build! {
+        <Window> {
+            window: WindowBuilder::new()
+                    .with_title("agui hello world")
+                    .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+
+            child: <ExampleMain> {
+                font: Font::default(),
+            },
+        }
+    });
 }
 
-#[derive(StatefulWidget, PartialEq)]
+#[derive(StatefulWidget, PartialEq, Default)]
 struct ExampleMain {
     font: Font,
 }
@@ -64,9 +65,7 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    type Child = Text;
-
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         let callback = ctx.callback::<usize, _>(|ctx, update_count| {
             ctx.set_state(move |state| {
                 state.update_count = update_count;
@@ -87,10 +86,12 @@ impl WidgetState for ExampleMainState {
             tracing::error!("CurrentWindow not found in the widget tree");
         }
 
-        Text::new(format!("updated {} times", self.update_count)).with_font(
-            Font::default()
-                .styled()
-                .color(Color::from_rgb((1.0, 1.0, 1.0))),
-        )
+        Text::new(format!("updated {} times", self.update_count))
+            .with_font(
+                Font::default()
+                    .styled()
+                    .color(Color::from_rgb((1.0, 1.0, 1.0))),
+            )
+            .into_widget()
     }
 }

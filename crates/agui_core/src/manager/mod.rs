@@ -639,12 +639,12 @@ enum SpawnResult {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::{LayoutWidget, StatelessWidget};
+    use agui_macros::LayoutWidget;
 
     use crate::{
         manager::events::ElementEvent,
         unit::{Constraints, Size},
-        widget::{BuildContext, IntoWidget, LayoutContext, Widget, WidgetBuild, WidgetLayout},
+        widget::{BuildContext, IntoWidget, LayoutContext, Widget, WidgetLayout},
     };
 
     use super::WidgetManager;
@@ -658,14 +658,16 @@ mod tests {
         static TEST_HOOK: RefCell<TestResult> = RefCell::default();
     }
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(Default, LayoutWidget)]
     struct TestRootWidget;
 
-    impl WidgetBuild for TestRootWidget {
-        type Child = Option<Widget>;
+    impl WidgetLayout for TestRootWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            Vec::from_iter(TEST_HOOK.with(|result| result.borrow().root_child.clone()))
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            TEST_HOOK.with(|result| result.borrow().root_child.clone())
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
+            Size::ZERO
         }
     }
 
@@ -683,9 +685,7 @@ mod tests {
     }
 
     impl WidgetLayout for TestDummyWidget1 {
-        type Children = Widget;
-
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
             self.children.clone()
         }
 
@@ -700,9 +700,7 @@ mod tests {
     }
 
     impl WidgetLayout for TestDummyWidget2 {
-        type Children = Widget;
-
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
             self.children.clone()
         }
 

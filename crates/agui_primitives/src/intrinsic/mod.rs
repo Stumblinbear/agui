@@ -21,9 +21,7 @@ pub struct IntrinsicAxis {
 }
 
 impl WidgetLayout for IntrinsicAxis {
-    type Children = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 

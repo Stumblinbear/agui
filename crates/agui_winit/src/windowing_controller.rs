@@ -3,9 +3,10 @@ use std::sync::mpsc::Sender;
 use agui_core::{
     callback::Callback,
     element::ElementId,
-    widget::{InheritedWidget, IntoChild, Widget},
+    widget::{InheritedWidget, IntoWidget, Widget},
 };
 use agui_macros::InheritedWidget;
+use agui_primitives::sized_box::SizedBox;
 use winit::window::WindowBuilder;
 
 use crate::handle::WinitWindowHandle;
@@ -14,23 +15,28 @@ use crate::handle::WinitWindowHandle;
 pub struct WinitWindowingController {
     pub tx: Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>,
 
-    #[child]
     pub child: Option<Widget>,
 }
 
 impl InheritedWidget for WinitWindowingController {
+    fn get_child(&self) -> Widget {
+        self.child
+            .clone()
+            .unwrap_or_else(|| SizedBox::shrink().into_widget())
+    }
+
     fn should_notify(&self, _: &Self) -> bool {
         true
     }
 }
 
 impl WinitWindowingController {
-    pub fn new(tx: Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>) -> Self {
+    pub const fn new(tx: Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>) -> Self {
         Self { tx, child: None }
     }
 
-    pub fn with_child(mut self, child: impl IntoChild) -> Self {
-        self.child = child.into_child();
+    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
+        self.child = child.into().map(IntoWidget::into_widget);
 
         self
     }

@@ -37,6 +37,8 @@ agui_winit = { path = "crates/agui_winit", version = "0.1", optional = true }
 agui_vello = { path = "crates/agui_vello", version = "0.1", optional = true }
 
 [dev-dependencies]
+agui = { path = ".", features = ["vello", "winit"] }
+
 criterion = { version = "0.5", features = ["html_reports"] }
 
 tracing = "0.1"

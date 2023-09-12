@@ -19,9 +19,7 @@ impl Builder {
 }
 
 impl WidgetBuild for Builder {
-    type Child = Widget;
-
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
+    fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
         (self.func)(ctx)
     }
 }
@@ -31,19 +29,24 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         query::WidgetQueryExt,
-        widget::{BuildContext, WidgetBuild},
+        unit::{Constraints, Size},
+        widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
     };
-    use agui_macros::StatelessWidget;
+    use agui_macros::LayoutWidget;
 
     use crate::builder::Builder;
 
-    #[derive(StatelessWidget, Debug, Default, PartialEq)]
+    #[derive(LayoutWidget, Debug, Default, PartialEq)]
     struct TestWidget {}
 
-    impl WidgetBuild for TestWidget {
-        type Child = ();
+    impl WidgetLayout for TestWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            vec![]
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {}
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
+            Size::ZERO
+        }
     }
 
     #[test]

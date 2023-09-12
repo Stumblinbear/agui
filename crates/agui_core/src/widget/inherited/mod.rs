@@ -4,9 +4,11 @@ use std::rc::Rc;
 
 pub use instance::*;
 
-use super::{AnyWidget, WidgetChild};
+use super::{AnyWidget, Widget};
 
-pub trait InheritedWidget: WidgetChild {
+pub trait InheritedWidget: AnyWidget {
+    fn get_child(&self) -> Widget;
+
     #[allow(unused_variables)]
     fn should_notify(&self, old_widget: &Self) -> bool;
 }
@@ -21,11 +23,15 @@ pub trait ContextInheritedMut {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::{InheritedWidget, StatelessWidget};
+    use agui_macros::{InheritedWidget, LayoutWidget, StatelessWidget};
 
     use crate::{
         manager::WidgetManager,
-        widget::{BuildContext, InheritedWidget, IntoChild, IntoWidget, Widget, WidgetBuild},
+        unit::{Constraints, Size},
+        widget::{
+            BuildContext, InheritedWidget, IntoWidget, LayoutContext, Widget, WidgetBuild,
+            WidgetLayout,
+        },
     };
 
     use super::ContextInheritedMut;
@@ -41,53 +47,67 @@ mod tests {
         static TEST_HOOK: RefCell<TestResult> = RefCell::default();
     }
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(Default, LayoutWidget)]
     struct TestRootWidget;
 
-    impl WidgetBuild for TestRootWidget {
-        type Child = Option<Widget>;
+    impl WidgetLayout for TestRootWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            Vec::from_iter(TEST_HOOK.with(|result| result.borrow().root_child.clone()))
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            TEST_HOOK.with(|result| result.borrow().root_child.clone())
+        fn layout(
+            &self,
+            _: &mut crate::widget::LayoutContext,
+            _: crate::unit::Constraints,
+        ) -> Size {
+            Size::ZERO
         }
     }
 
-    #[derive(Default, InheritedWidget)]
+    #[derive(InheritedWidget)]
     struct TestInheritedWidget {
         data: usize,
 
-        #[child]
-        child: Option<Widget>,
+        child: Widget,
     }
 
     impl InheritedWidget for TestInheritedWidget {
+        fn get_child(&self) -> Widget {
+            self.child.clone()
+        }
+
         fn should_notify(&self, _: &Self) -> bool {
             true
         }
     }
 
-    #[derive(Default, InheritedWidget)]
+    #[derive(InheritedWidget)]
     struct TestOtherInheritedWidget {
-        #[child]
-        child: Option<Widget>,
+        child: Widget,
     }
 
     impl InheritedWidget for TestOtherInheritedWidget {
+        fn get_child(&self) -> Widget {
+            self.child.clone()
+        }
+
         fn should_notify(&self, _: &Self) -> bool {
             true
         }
     }
 
-    #[derive(Default, StatelessWidget)]
+    #[derive(Default, LayoutWidget)]
     struct TestDummyWidget {
         pub child: Option<Widget>,
     }
 
-    impl WidgetBuild for TestDummyWidget {
-        type Child = Option<Widget>;
+    impl WidgetLayout for TestDummyWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            self.child.clone().into_iter().collect()
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {
-            self.child.clone().into_child()
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
+            Size::ZERO
         }
     }
 
@@ -95,14 +115,14 @@ mod tests {
     struct TestDependingWidget;
 
     impl WidgetBuild for TestDependingWidget {
-        type Child = ();
-
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Self::Child {
+        fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
             let widget = ctx.depend_on_inherited_widget::<TestInheritedWidget>();
 
             TEST_HOOK.with(|result| {
                 result.borrow_mut().inherited_data = widget.map(|w| w.data);
             });
+
+            TestDummyWidget { child: None }.into_widget()
         }
     }
 
@@ -130,7 +150,7 @@ mod tests {
 
         set_root_child(TestInheritedWidget {
             data: 7,
-            child: depending_widget.clone().into(),
+            child: depending_widget.clone(),
         });
 
         manager.update();
@@ -139,7 +159,7 @@ mod tests {
 
         set_root_child(TestInheritedWidget {
             data: 9,
-            child: depending_widget.into(),
+            child: depending_widget.clone(),
         });
 
         manager.mark_dirty(manager.get_root().unwrap());
@@ -161,7 +181,7 @@ mod tests {
 
         set_root_child(TestInheritedWidget {
             data: 7,
-            child: nested_scope.clone().into(),
+            child: nested_scope.clone(),
         });
 
         manager.update();
@@ -170,7 +190,7 @@ mod tests {
 
         set_root_child(TestInheritedWidget {
             data: 9,
-            child: nested_scope.into(),
+            child: nested_scope,
         });
 
         manager.mark_dirty(manager.get_root().unwrap());
@@ -189,7 +209,7 @@ mod tests {
 
         set_root_child(TestInheritedWidget {
             data: 7,
-            child: dependent_child.clone().into(),
+            child: dependent_child.clone(),
         });
 
         manager.update();

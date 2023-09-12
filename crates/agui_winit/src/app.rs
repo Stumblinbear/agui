@@ -6,7 +6,7 @@ use agui_core::{
     manager::WidgetManager,
     render::{renderer::Renderer, RenderContextId},
     unit::Offset,
-    widget::IntoChild,
+    widget::{IntoWidget, Widget},
 };
 use fnv::FnvHashMap;
 use winit::{
@@ -67,10 +67,7 @@ where
         }
     }
 
-    pub fn run<W>(mut self, widget: W)
-    where
-        W: IntoChild,
-    {
+    pub fn run(mut self, widget: Widget) {
         self.widget_manager.set_root(
             WinitWindowingController::new(self.window_tx.clone())
                 .with_child(self.renderer.build(widget)),

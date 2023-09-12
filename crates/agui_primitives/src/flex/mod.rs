@@ -116,9 +116,7 @@ pub struct Flex {
 }
 
 impl WidgetLayout for Flex {
-    type Children = Widget;
-
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Self::Children> {
+    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
         Vec::from_iter(self.children.iter().filter_map(|entry| entry.child.clone()))
     }
 

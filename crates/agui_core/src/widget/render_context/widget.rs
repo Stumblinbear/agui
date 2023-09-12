@@ -2,15 +2,20 @@ use crate::widget::{element::WidgetElement, ElementBuilder, IntoWidget, Widget, 
 
 use super::instance::RenderContextBoundaryElement;
 
-#[derive(Default)]
 pub struct RenderContextBoundary {
-    pub child: Option<Widget>,
+    pub child: Widget,
+}
+
+impl RenderContextBoundary {
+    pub fn with_child(child: impl IntoWidget) -> Self {
+        Self {
+            child: child.into_widget(),
+        }
+    }
 }
 
 impl WidgetChild for RenderContextBoundary {
-    type Child = Option<Widget>;
-
-    fn get_child(&self) -> Self::Child {
+    fn get_child(&self) -> Widget {
         self.child.clone()
     }
 }
@@ -18,12 +23,6 @@ impl WidgetChild for RenderContextBoundary {
 impl IntoWidget for RenderContextBoundary {
     fn into_widget(self) -> Widget {
         Widget::new(self)
-    }
-}
-
-impl From<RenderContextBoundary> for Option<Widget> {
-    fn from(val: RenderContextBoundary) -> Self {
-        Some(val.into_widget())
     }
 }
 

@@ -318,37 +318,45 @@ impl std::fmt::Debug for Element {
 
 #[cfg(test)]
 mod tests {
-    use agui_macros::{InheritedWidget, StatelessWidget};
+    use agui_macros::{InheritedWidget, LayoutWidget};
     use fnv::FnvHashSet;
 
     use crate::{
         inheritance::manager::InheritanceManager,
         render::manager::RenderContextManager,
+        unit::{Constraints, Size},
         util::tree::Tree,
-        widget::{BuildContext, InheritedWidget, IntoWidget, WidgetBuild},
+        widget::{BuildContext, InheritedWidget, IntoWidget, LayoutContext, Widget, WidgetLayout},
     };
 
     use super::{context::ElementMountContext, Element, ElementId};
 
     #[derive(InheritedWidget)]
     struct TestInheritedWidget {
-        #[child]
-        child: (),
+        child: Widget,
     }
 
     impl InheritedWidget for TestInheritedWidget {
+        fn get_child(&self) -> Widget {
+            self.child.clone()
+        }
+
         fn should_notify(&self, _: &Self) -> bool {
             true
         }
     }
 
-    #[derive(StatelessWidget)]
+    #[derive(LayoutWidget)]
     struct TestWidget;
 
-    impl WidgetBuild for TestWidget {
-        type Child = ();
+    impl WidgetLayout for TestWidget {
+        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+            vec![]
+        }
 
-        fn build(&self, _: &mut BuildContext<Self>) -> Self::Child {}
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
+            Size::ZERO
+        }
     }
 
     // TODO: add more test cases

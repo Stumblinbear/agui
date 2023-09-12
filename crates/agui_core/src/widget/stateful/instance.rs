@@ -7,7 +7,7 @@ use crate::{
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
         widget::Widget,
-        AnyWidget, IntoChild, StatefulCallbackFunc,
+        AnyWidget, StatefulCallbackFunc,
     },
 };
 
@@ -76,7 +76,7 @@ where
             self.initialized = true;
         }
 
-        Vec::from_iter(self.state.build(&mut ctx).into_child())
+        vec![self.state.build(&mut ctx)]
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {

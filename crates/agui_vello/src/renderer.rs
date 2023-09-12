@@ -3,7 +3,7 @@ use agui_core::{
     plugin::Plugin,
     render::{renderer::Renderer, RenderContextId},
     unit::Font,
-    widget::{IntoChild, IntoWidget, Widget},
+    widget::{IntoWidget, Widget},
 };
 use agui_primitives::text::layout_controller::TextLayoutController;
 use fnv::FnvHashMap;
@@ -24,7 +24,7 @@ pub struct VelloRenderer<'r, W> {
 }
 
 impl<W> Plugin for VelloRenderer<'_, W> {
-    fn build(&self, child: impl IntoChild) -> Widget {
+    fn build<T: IntoWidget>(&self, child: impl Into<Option<T>>) -> Widget {
         TextLayoutController::new()
             .with_delegate(VelloTextLayoutDelegate {
                 default_font: FontRef::new(include_bytes!(

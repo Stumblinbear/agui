@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{parse2, parse_quote, Field, ItemStruct};
+use syn::{parse2, parse_quote, ItemStruct};
 
 use crate::utils::resolve_agui_path;
 
@@ -14,52 +14,10 @@ pub fn impl_paint_widget(input: TokenStream2) -> TokenStream2 {
     let ident = &item.ident;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
-    // Find a field with the #[child] attribute.
-    let child_field = item
-        .fields
-        .iter()
-        .find(|field| field.attrs.iter().any(|attr| attr.path().is_ident("child")));
-
-    let build_impl: TokenStream2 = match child_field {
-        Some(Field {
-            ident: child_field,
-            ty: child_ty,
-            ..
-        }) => {
-            parse_quote! {
-                impl #impl_generics #agui_core::widget::WidgetChild for #ident #ty_generics #where_clause {
-                    type Child = #child_ty;
-
-                    fn get_child(&self) -> Self::Child {
-                        self.#child_field.clone()
-                    }
-                }
-            }
-        }
-
-        None => parse_quote! {
-            impl #impl_generics #agui_core::widget::WidgetChild for #ident #ty_generics #where_clause {
-                type Child = ();
-
-                fn get_child(&self) -> Self::Child {}
-            }
-        },
-    };
-
     parse_quote! {
-        #build_impl
-
         impl #impl_generics #agui_core::widget::IntoWidget for #ident #ty_generics #where_clause {
             fn into_widget(self) -> #agui_core::widget::Widget {
                 #agui_core::widget::Widget::new(self)
-            }
-        }
-
-        impl #impl_generics From<#ident #ty_generics> for Option<#agui_core::widget::Widget> #where_clause {
-            fn from(val: #ident #ty_generics) -> Self {
-                use #agui_core::widget::IntoWidget;
-
-                Some(val.into_widget())
             }
         }
 

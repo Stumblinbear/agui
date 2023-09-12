@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::widget::{
     element::{ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext},
-    AnyWidget, InheritedWidget, IntoChild, Widget,
+    AnyWidget, InheritedWidget, Widget,
 };
 
 pub struct InheritedElement<I>
@@ -56,7 +56,7 @@ where
             }
         }
 
-        Vec::from_iter(self.widget.get_child().into_child())
+        vec![self.widget.get_child()]
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {

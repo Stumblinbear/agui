@@ -9,20 +9,20 @@ use crate::{
     unit::Size,
     widget::{
         element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
-        AnyWidget, IntoChild, Widget, WidgetChild, WidgetPaint,
+        Widget, WidgetPaint,
     },
 };
 
 pub struct PaintElement<W>
 where
-    W: AnyWidget + WidgetChild + WidgetPaint,
+    W: WidgetPaint,
 {
     widget: Rc<W>,
 }
 
 impl<W> PaintElement<W>
 where
-    W: AnyWidget + WidgetChild + WidgetPaint,
+    W: WidgetPaint,
 {
     pub fn new(widget: Rc<W>) -> Self {
         Self { widget }
@@ -31,14 +31,14 @@ where
 
 impl<W> WidgetElement for PaintElement<W>
 where
-    W: AnyWidget + WidgetChild + WidgetPaint,
+    W: WidgetPaint,
 {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
     }
 
     fn build(&mut self, _: WidgetBuildContext) -> Vec<Widget> {
-        Vec::from_iter(self.widget.get_child().into_child())
+        Vec::from_iter(self.widget.get_child())
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
@@ -79,7 +79,7 @@ where
 
 impl<W> std::fmt::Debug for PaintElement<W>
 where
-    W: AnyWidget + WidgetChild + WidgetPaint + std::fmt::Debug,
+    W: WidgetPaint + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("PaintElement");

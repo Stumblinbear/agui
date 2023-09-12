@@ -511,11 +511,14 @@ mod tests {
 
     #[derive(InheritedWidget)]
     struct TestWidget1 {
-        #[child]
-        child: Option<Widget>,
+        child: Widget,
     }
 
     impl InheritedWidget for TestWidget1 {
+        fn get_child(&self) -> Widget {
+            self.child.clone()
+        }
+
         fn should_notify(&self, _: &Self) -> bool {
             true
         }
@@ -523,11 +526,14 @@ mod tests {
 
     #[derive(InheritedWidget)]
     struct TestWidget2 {
-        #[child]
-        child: Option<Widget>,
+        child: Widget,
     }
 
     impl InheritedWidget for TestWidget2 {
+        fn get_child(&self) -> Widget {
+            self.child.clone()
+        }
+
         fn should_notify(&self, _: &Self) -> bool {
             true
         }

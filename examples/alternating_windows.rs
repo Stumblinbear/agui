@@ -23,20 +23,41 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    App::with_renderer(VelloRenderer::new().expect("failed to init renderer")).run(ExampleMain {
-        window1: ColoredBox::new(Color::from_rgb((1.0, 0.0, 0.0)))
-            .with_child(
-                Padding::new(EdgeInsets::all(64.0))
-                    .with_child(ColoredBox::new(Color::from_rgb((0.0, 1.0, 0.0)))),
-            )
-            .into(),
-        window2: ColoredBox::new(Color::from_rgb((0.0, 0.0, 1.0)))
-            .with_child(
-                Padding::new(EdgeInsets::all(32.0))
-                    .with_child(ColoredBox::new(Color::from_rgb((0.0, 1.0, 0.0)))),
-            )
-            .into(),
-    });
+    App::with_renderer(VelloRenderer::new().expect("failed to init renderer")).run(
+        ExampleMain {
+            window1: build! {
+                <ColoredBox> {
+                    color: Color::from_rgb((1.0, 0.0, 0.0)),
+
+                    child: <Padding> {
+                        padding: EdgeInsets::all(64.0),
+
+                        child: <ColoredBox> {
+                            color: Color::from_rgb((0.0, 1.0, 0.0)),
+
+                            child: None,
+                        },
+                    },
+                }
+            },
+            window2: build! {
+                <ColoredBox> {
+                    color: Color::from_rgb((0.0, 0.0, 1.0)),
+
+                    child: <Padding> {
+                        padding: EdgeInsets::all(32.0),
+
+                        child: <ColoredBox> {
+                            color: Color::from_rgb((0.0, 1.0, 0.0)),
+
+                            child: None,
+                        },
+                    },
+                }
+            },
+        }
+        .into_widget(),
+    );
 }
 
 #[derive(StatefulWidget)]
@@ -62,9 +83,7 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    type Child = Stack;
-
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Self::Child {
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         let callback = ctx.callback::<(), _>(|ctx, _| {
             ctx.set_state(|state| {
                 state.flip_windows = !state.flip_windows;
@@ -102,5 +121,6 @@ impl WidgetState for ExampleMainState {
                     &ctx.widget.window2
                 }),
             )
+            .into_widget()
     }
 }

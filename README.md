@@ -63,8 +63,6 @@ pub struct MyWidget {
 }
 
 impl WidgetBuild for MyWidget {
-    type Child = Widget;
-
     fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
         build! {
             Button {
