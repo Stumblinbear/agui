@@ -7,8 +7,10 @@ use agui_macros::{build, StatelessWidget};
 use crate::intrinsic::IntrinsicAxis;
 
 /// See [`IntrinsicAxis`] for more information.
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(StatelessWidget, Debug)]
+#[prop(field_defaults(default))]
 pub struct IntrinsicWidth {
+    #[prop(setter(into))]
     pub child: Option<Widget>,
 }
 

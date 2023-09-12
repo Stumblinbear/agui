@@ -86,12 +86,14 @@ impl WidgetState for ExampleMainState {
             tracing::error!("CurrentWindow not found in the widget tree");
         }
 
-        Text::new(format!("updated {} times", self.update_count))
-            .with_font(
-                Font::default()
+        build! {
+            <Text> {
+                font: Font::default()
                     .styled()
                     .color(Color::from_rgb((1.0, 1.0, 1.0))),
-            )
-            .into_widget()
+
+                text: format!("updated {} times", self.update_count).into(),
+            }
+        }
     }
 }

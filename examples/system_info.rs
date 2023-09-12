@@ -148,13 +148,9 @@ impl WidgetState for ExampleMainState {
                                 }
                                 .into()
                             })
-                            .collect::<Vec<_>>(),
-
-                        ..Default::default()
+                            .collect::<Vec<_>>()
                     }
-                },
-
-                ..Default::default()
+                }
             }
         }
     }

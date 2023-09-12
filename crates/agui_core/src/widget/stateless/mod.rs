@@ -6,10 +6,6 @@ pub use instance::*;
 
 use super::Widget;
 
-pub trait WidgetChild: Sized + 'static {
-    fn get_child(&self) -> Widget;
-}
-
 pub trait WidgetBuild: Sized + 'static {
     /// Called whenever this widget is rebuilt.
     ///

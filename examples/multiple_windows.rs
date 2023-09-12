@@ -30,7 +30,7 @@ fn main() {
     )
     .run(build! {
         <Stack> {
-            children: vec![
+            children: [
                 build! {
                     <Window> {
                         window: WindowBuilder::new()
@@ -38,7 +38,7 @@ fn main() {
                             .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
                         child: <Text> {
-                            text: "Hello, world!",
+                            text: "Hello, world!".into(),
                             font: Font::default()
                                 .styled()
                                 .color(Color::from_rgb((1.0, 1.0, 1.0))),
@@ -52,7 +52,7 @@ fn main() {
                             .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 
                         child: <Text> {
-                            text: "Goodbye, world!",
+                            text: "Goodbye, world!".into(),
                             font: Font::default()
                                 .styled()
                                 .color(Color::from_rgb((1.0, 1.0, 1.0))),

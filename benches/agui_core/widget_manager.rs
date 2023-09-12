@@ -7,7 +7,7 @@ fn widget_manager_ops(c: &mut Criterion) {
 
     group.sample_size(500).bench_function("additions", |b| {
         b.iter_with_setup(
-            || (WidgetManager::new(), Column::default()),
+            || (WidgetManager::new(), Column::builder().build()),
             |(mut manager, widget)| {
                 manager.set_root(widget);
 
@@ -21,10 +21,10 @@ fn widget_manager_ops(c: &mut Criterion) {
         .bench_function("large additions", |b| {
             b.iter_with_setup(
                 || {
-                    let mut column = Column::default();
+                    let mut column = Column::builder().build();
 
                     for _ in 0..1000 {
-                        column.children.push(Column::default().into());
+                        column.children.push(Column::builder().build().into());
                     }
 
                     (WidgetManager::new(), column)
@@ -40,7 +40,7 @@ fn widget_manager_ops(c: &mut Criterion) {
     group.sample_size(500).bench_function("removals", |b| {
         b.iter_with_setup(
             || {
-                let mut manager = WidgetManager::with_root(Column::default());
+                let mut manager = WidgetManager::with_root(Column::builder().build());
 
                 manager.update();
 
@@ -59,10 +59,10 @@ fn widget_manager_ops(c: &mut Criterion) {
         .bench_function("large removals", |b| {
             b.iter_with_setup(
                 || {
-                    let mut column = Column::default();
+                    let mut column = Column::builder().build();
 
                     for _ in 0..1000 {
-                        column.children.push(Column::default().into());
+                        column.children.push(Column::builder().build().into());
                     }
 
                     let mut manager = WidgetManager::with_root(column);

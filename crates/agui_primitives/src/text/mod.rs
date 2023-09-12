@@ -26,33 +26,23 @@ pub enum TextBaseline {
     Ideographic,
 }
 
-#[derive(StatelessWidget, Debug, Default)]
+#[derive(StatelessWidget, Debug)]
 pub struct Text {
+    #[prop(default)]
     pub font: FontStyle,
+
     pub text: Cow<'static, str>,
-}
-
-impl Text {
-    pub fn new(text: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            text: text.into(),
-            ..Self::default()
-        }
-    }
-
-    pub fn with_font(mut self, font: FontStyle) -> Self {
-        self.font = font;
-        self
-    }
 }
 
 impl WidgetBuild for Text {
     fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
+        // TextLayout::builder().delegate().font(font).text(text).build();
+
         build! {
             <TextLayout> {
                 delegate: ctx
                     .depend_on_inherited_widget::<TextLayoutController>()
-                    .and_then(|controller| controller.delegate.clone()),
+                    .map(|controller| controller.delegate.clone()),
 
                 font: self.font.clone(),
                 text: Cow::clone(&self.text),
@@ -61,8 +51,9 @@ impl WidgetBuild for Text {
     }
 }
 
-#[derive(LayoutWidget, Default)]
+#[derive(LayoutWidget)]
 pub struct TextLayout {
+    #[prop(default)]
     pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
 
     pub font: FontStyle,

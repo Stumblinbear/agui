@@ -4,6 +4,7 @@ mod builder;
 mod inherited_widget;
 mod layout_widget;
 mod paint_widget;
+mod props;
 mod stateful_widget;
 mod stateless_widget;
 mod utils;
@@ -15,27 +16,27 @@ use proc_macro::TokenStream;
 use stateful_widget::impl_stateful_widget;
 use stateless_widget::impl_stateless_widget;
 
-#[proc_macro_derive(StatelessWidget)]
+#[proc_macro_derive(StatelessWidget, attributes(prop))]
 pub fn stateless_widget(input: TokenStream) -> TokenStream {
     impl_stateless_widget(input.into()).into()
 }
 
-#[proc_macro_derive(StatefulWidget)]
+#[proc_macro_derive(StatefulWidget, attributes(prop))]
 pub fn stateful_widget(input: TokenStream) -> TokenStream {
     impl_stateful_widget(input.into()).into()
 }
 
-#[proc_macro_derive(LayoutWidget)]
+#[proc_macro_derive(LayoutWidget, attributes(prop))]
 pub fn layout_widget(input: TokenStream) -> TokenStream {
     impl_layout_widget(input.into()).into()
 }
 
-#[proc_macro_derive(PaintWidget)]
+#[proc_macro_derive(PaintWidget, attributes(prop))]
 pub fn paint_widget(input: TokenStream) -> TokenStream {
     impl_paint_widget(input.into()).into()
 }
 
-#[proc_macro_derive(InheritedWidget)]
+#[proc_macro_derive(InheritedWidget, attributes(prop))]
 pub fn inherited_widget(input: TokenStream) -> TokenStream {
     impl_inherited_widget(input.into()).into()
 }

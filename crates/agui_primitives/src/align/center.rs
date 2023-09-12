@@ -1,49 +1,25 @@
 use agui_core::{
     unit::Alignment,
-    widget::{IntoWidget, Widget},
+    widget::{BuildContext, IntoWidget, Widget, WidgetBuild},
 };
+use agui_macros::StatelessWidget;
 
 use crate::align::Align;
 
-#[derive(Debug, Default)]
+#[derive(Debug, StatelessWidget)]
+#[prop(field_defaults(default))]
 pub struct Center {
+    #[prop(setter(strip_option))]
     pub width_factor: Option<f32>,
+    #[prop(setter(strip_option))]
     pub height_factor: Option<f32>,
 
+    #[prop(setter(into))]
     pub child: Option<Widget>,
 }
 
-impl Center {
-    pub const fn new() -> Self {
-        Self {
-            width_factor: None,
-            height_factor: None,
-
-            child: None,
-        }
-    }
-
-    pub const fn with_width_factor(mut self, width_factor: f32) -> Self {
-        self.width_factor = Some(width_factor);
-
-        self
-    }
-
-    pub const fn with_height_factor(mut self, height_factor: f32) -> Self {
-        self.height_factor = Some(height_factor);
-
-        self
-    }
-
-    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
-        self.child = child.into().map(IntoWidget::into_widget);
-
-        self
-    }
-}
-
-impl IntoWidget for Center {
-    fn into_widget(self) -> Widget {
+impl WidgetBuild for Center {
+    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
         Align {
             alignment: Alignment::CENTER,
 

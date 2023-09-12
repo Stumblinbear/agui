@@ -7,7 +7,7 @@ use syn::{
     parse::{Parse, ParseStream},
     parse2, parse_quote,
     punctuated::Punctuated,
-    token::{Comma, DotDot, Paren},
+    token::{Comma, Paren},
     visit_mut::{visit_expr_mut, visit_expr_struct_mut, VisitMut},
     Attribute, Expr, ExprPath, ExprStruct, FieldValue, Member, Path, Token, TypePath,
 };
@@ -173,8 +173,8 @@ impl Parse for WidgetStruct {
                 path: path.path,
                 brace_token,
                 fields,
-                dot2_token: Some(DotDot::default()),
-                rest: Some(parse_quote!(::core::default::Default::default())),
+                dot2_token: None,
+                rest: None,
             })
         } else {
             Err(lookahead.error())
@@ -231,27 +231,40 @@ impl ToTokens for WidgetStruct {
                     segment.to_tokens(tokens);
                 }
             } else {
+                // // Add "Props" to the end of the path
+                // let mut path = self.path.clone();
+
+                // let last_segment = path.segments.last_mut().unwrap();
+
+                // last_segment.ident = Ident::new(
+                //     &format!("{}Props", last_segment.ident),
+                //     last_segment.ident.span(),
+                // );
+
                 self.path.to_tokens(tokens);
             }
 
-            self.brace_token.surround(tokens, |tokens| {
-                self.fields.to_tokens(tokens);
+            // Call `::builder()` on the type
+            Token![::](Span::call_site()).to_tokens(tokens);
+            Ident::new("builder", Span::call_site()).to_tokens(tokens);
+            Paren::default().surround(tokens, |_| {});
 
-                if let Some(dot2_token) = &self.dot2_token {
-                    dot2_token.to_tokens(tokens);
-                } else if self.rest.is_some() {
-                    Token![..](Span::call_site()).to_tokens(tokens);
-                }
+            // Call the builder with the fields
+            for field in &self.fields {
+                field.to_tokens(tokens);
+            }
 
-                self.rest.to_tokens(tokens);
-            });
+            // Call `::build()` on the builder
+            Token![.](Span::call_site()).to_tokens(tokens);
+            Ident::new("build", Span::call_site()).to_tokens(tokens);
+            Paren::default().surround(tokens, |_| {});
         });
     }
 }
 
 struct WidgetFieldValue {
     attrs: Vec<syn::Attribute>,
-    member: syn::Member,
+    member: syn::Ident,
 
     /// The colon in `Struct { x: x }`. If written in shorthand like
     /// `Struct { x }`, there is no colon.
@@ -263,28 +276,32 @@ struct WidgetFieldValue {
 impl Parse for WidgetFieldValue {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         let attrs = input.call(Attribute::parse_outer)?;
-        let member: Member = input.parse()?;
-        let (colon_token, value) = if input.peek(Token![:]) || !matches!(member, Member::Named(_)) {
-            let colon_token: Token![:] = input.parse()?;
-            let value: WidgetFieldExpr = input.parse()?;
-            (Some(colon_token), value)
-        } else if let Member::Named(ident) = &member {
-            let value = WidgetFieldExpr::Expr(Expr::Path(ExprPath {
-                attrs: Vec::new(),
-                qself: None,
-                path: Path::from(ident.clone()),
-            }));
-            (None, value)
-        } else {
-            unreachable!()
-        };
 
-        Ok(Self {
-            attrs,
-            member,
-            colon_token,
-            expr: value,
-        })
+        let member: Member = input.parse()?;
+
+        if let Member::Named(ident) = &member {
+            if input.peek(Token![:]) {
+                return Ok(Self {
+                    attrs,
+                    member: ident.clone(),
+                    colon_token: Some(input.parse()?),
+                    expr: input.parse()?,
+                });
+            } else {
+                return Ok(Self {
+                    attrs,
+                    member: ident.clone(),
+                    colon_token: None,
+                    expr: WidgetFieldExpr::Expr(Expr::Path(ExprPath {
+                        attrs: Vec::new(),
+                        qself: None,
+                        path: Path::from(ident.clone()),
+                    })),
+                });
+            }
+        }
+
+        Err(input.error("expected named field"))
     }
 }
 
@@ -294,28 +311,12 @@ impl ToTokens for WidgetFieldValue {
             attr.to_tokens(tokens);
         }
 
-        match &self.member {
-            Member::Unnamed(_) => {
-                self.member.to_tokens(tokens);
-            }
-
-            Member::Named(ident) => {
-                // Wrap the field in Into::into(this)
-                ident.to_tokens(tokens);
-
-                self.colon_token
-                    .unwrap_or_else(|| Token![:](Span::call_site()))
-                    .to_tokens(tokens);
-
-                Ident::new("Into", Span::call_site()).to_tokens(tokens);
-                Token![::](Span::call_site()).to_tokens(tokens);
-                Ident::new("into", Span::call_site()).to_tokens(tokens);
-
-                Paren::default().surround(tokens, |tokens| {
-                    self.expr.to_tokens(tokens);
-                });
-            }
-        }
+        // Turn the field into a function call
+        Token![.](Span::call_site()).to_tokens(tokens);
+        self.member.to_tokens(tokens);
+        Paren::default().surround(tokens, |tokens| {
+            self.expr.to_tokens(tokens);
+        });
     }
 }
 
@@ -339,7 +340,15 @@ impl Parse for WidgetFieldExpr {
 impl ToTokens for WidgetFieldExpr {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            Self::Widget(widget) => widget.to_tokens(tokens),
+            Self::Widget(widget) => {
+                // Ident::new("Into", Span::call_site()).to_tokens(tokens);
+                // Token![::](Span::call_site()).to_tokens(tokens);
+                // Ident::new("into", Span::call_site()).to_tokens(tokens);
+
+                // Paren::default().surround(tokens, |tokens| widget.to_tokens(tokens));
+
+                widget.to_tokens(tokens)
+            }
             Self::Expr(expr) => expr.to_tokens(tokens),
         }
     }

@@ -67,15 +67,11 @@ impl WidgetBuild for ExampleMain {
                                 color: Color::from_rgb((0.75, 0.75, 0.75)),
                                 child: <Text> {
                                     font: self.font.styled().color(Color::from_rgb((1.0, 0.0, 0.0))),
-                                    text: "The Krabby Patty secret formula is one part love, two parts magic, and three parts secret ingredient."
-                                },
-                            },
-
-                            ..Default::default()
+                                    text: "The Krabby Patty secret formula is one part love, two parts magic, and three parts secret ingredient.".into()
+                                }
+                            }
                         }
-                    },
-
-                    ..Default::default()
+                    }
                 }
             }
         }

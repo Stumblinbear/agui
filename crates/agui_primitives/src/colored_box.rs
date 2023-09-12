@@ -1,27 +1,16 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::Color,
-    widget::{IntoWidget, Widget, WidgetPaint},
+    widget::{Widget, WidgetPaint},
 };
 use agui_macros::PaintWidget;
 
-#[derive(PaintWidget, Debug, Default)]
+#[derive(PaintWidget, Debug)]
 pub struct ColoredBox {
     pub color: Color,
 
+    #[prop(default, setter(into))]
     pub child: Option<Widget>,
-}
-
-impl ColoredBox {
-    pub const fn new(color: Color) -> Self {
-        Self { color, child: None }
-    }
-
-    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
-        self.child = child.into().map(IntoWidget::into_widget);
-
-        self
-    }
 }
 
 impl WidgetPaint for ColoredBox {

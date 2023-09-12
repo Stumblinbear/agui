@@ -2,11 +2,15 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::parse::Error;
 
-use crate::field_info::{FieldBuilderAttr, FieldInfo};
-use crate::util::{
-    apply_subsections, empty_type, empty_type_tuple, expr_to_single_string, first_visibility,
-    modify_types_generics_hack, path_to_single_string, public_visibility, strip_raw_ident_prefix,
-    type_tuple,
+use crate::utils::resolve_agui_path;
+
+use super::{
+    field_info::{FieldBuilderAttr, FieldInfo},
+    util::{
+        apply_subsections, empty_type, empty_type_tuple, expr_to_single_string, first_visibility,
+        modify_types_generics_hack, path_to_single_string, public_visibility,
+        strip_raw_ident_prefix, type_tuple,
+    },
 };
 
 #[derive(Debug)]
@@ -29,7 +33,7 @@ impl<'a> StructInfo<'a> {
     }
 
     pub fn new(
-        ast: &'a syn::DeriveInput,
+        ast: &'a syn::ItemStruct,
         fields: impl Iterator<Item = &'a syn::Field>,
     ) -> Result<StructInfo<'a>, Error> {
         let builder_attr = TypeBuilderAttr::new(&ast.attrs)?;
@@ -37,7 +41,7 @@ impl<'a> StructInfo<'a> {
             .builder_type
             .get_name()
             .map(|name| strip_raw_ident_prefix(name.to_string()))
-            .unwrap_or_else(|| strip_raw_ident_prefix(format!("{}Builder", ast.ident)));
+            .unwrap_or_else(|| strip_raw_ident_prefix(format!("{}Props", ast.ident)));
         Ok(StructInfo {
             vis: &ast.vis,
             name: &ast.ident,
@@ -133,7 +137,7 @@ impl<'a> StructInfo<'a> {
         let builder_type_doc = if self.builder_attr.doc {
             self.builder_attr.builder_type.get_doc_or(|| {
                 format!(
-                    "Builder for [`{name}`] instances.\n\nSee [`{name}::builder()`] for more info.",
+                    "Props for [`{name}`] instances.\n\nSee [`{name}::new()`] for more info.",
                     name = name
                 )
             })
@@ -303,7 +307,7 @@ impl<'a> StructInfo<'a> {
         let method_name = field.setter_method_name();
 
         Ok(quote! {
-            #[allow(dead_code, non_camel_case_types, missing_docs)]
+            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                 #deprecated
                 #doc
@@ -320,7 +324,7 @@ impl<'a> StructInfo<'a> {
             #[allow(dead_code, non_camel_case_types, non_snake_case)]
             pub enum #repeated_fields_error_type_name {}
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, missing_docs)]
+            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #target_generics ),* > #where_clause {
                 #[deprecated(
                     note = #repeated_fields_error_message
@@ -415,7 +419,7 @@ impl<'a> StructInfo<'a> {
             #[allow(dead_code, non_camel_case_types, non_snake_case)]
             pub enum #early_build_error_type_name {}
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic)]
+            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #builder_generics ),* > #where_clause {
                 #[deprecated(
                     note = #early_build_error_message
@@ -443,6 +447,8 @@ impl<'a> StructInfo<'a> {
     }
 
     pub fn build_method_impl(&self) -> TokenStream {
+        let agui_core = resolve_agui_path();
+
         let StructInfo {
             ref name,
             ref builder_name,
@@ -458,7 +464,7 @@ impl<'a> StructInfo<'a> {
                         lifetimes: None,
                         modifier: syn::TraitBoundModifier::None,
                         path: {
-                            let mut path = self.builder_attr.crate_module_path.clone();
+                            let mut path = agui_core.clone();
                             path.segments.push(syn::PathSegment {
                                 ident: Ident::new("Optional", Span::call_site()),
                                 arguments: syn::PathArguments::AngleBracketed(
@@ -512,8 +518,7 @@ impl<'a> StructInfo<'a> {
                 if field.builder_attr.setter.skip.is_some() {
                     quote!(let #name = #default;)
                 } else {
-                    let crate_module_path = &self.builder_attr.crate_module_path;
-                    quote!(let #name = #crate_module_path::Optional::into_value(#name, || #default);)
+                    quote!(let #name = #agui_core::Optional::into_value(#name, || #default);)
                 }
             } else {
                 quote!(let #name = #name.0;)
@@ -545,7 +550,7 @@ impl<'a> StructInfo<'a> {
             };
 
         quote!(
-            #[allow(dead_code, non_camel_case_types, missing_docs)]
+            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name #modified_ty_generics #where_clause {
                 #build_method_doc
                 #[allow(clippy::default_trait_access)]
@@ -698,8 +703,6 @@ pub struct TypeBuilderAttr<'a> {
     pub build_method: BuildMethodSettings,
 
     pub field_defaults: FieldBuilderAttr<'a>,
-
-    pub crate_module_path: syn::Path,
 }
 
 impl Default for TypeBuilderAttr<'_> {
@@ -710,7 +713,6 @@ impl Default for TypeBuilderAttr<'_> {
             builder_type: Default::default(),
             build_method: Default::default(),
             field_defaults: Default::default(),
-            crate_module_path: syn::parse_quote!(::typed_builder),
         }
     }
 }
@@ -722,7 +724,7 @@ impl<'a> TypeBuilderAttr<'a> {
         for attr in attrs {
             let list = match &attr.meta {
                 syn::Meta::List(list) => {
-                    if path_to_single_string(&list.path).as_deref() != Some("builder") {
+                    if path_to_single_string(&list.path).as_deref() != Some("prop") {
                         continue;
                     }
 
@@ -757,17 +759,6 @@ impl<'a> TypeBuilderAttr<'a> {
                     )
                 };
                 match name.as_str() {
-                    "crate_module_path" => {
-                        if let syn::Expr::Path(crate_module_path) = assign.right.as_ref() {
-                            self.crate_module_path = crate_module_path.path.clone();
-                            Ok(())
-                        } else {
-                            Err(Error::new_spanned(
-                                &assign.right,
-                                "crate_module_path must be a path",
-                            ))
-                        }
-                    }
                     "builder_method_doc" => {
                         Err(gen_structure_depracation_error("builder_method", "doc"))
                     }

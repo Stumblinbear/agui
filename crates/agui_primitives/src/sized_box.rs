@@ -1,14 +1,19 @@
 use agui_core::{
     unit::{Axis, Constraints, IntrinsicDimension, Offset, Size},
-    widget::{BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
-#[derive(LayoutWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug)]
+#[prop(field_defaults(default))]
 pub struct SizedBox {
+    #[prop(setter(strip_option))]
     pub width: Option<f32>,
+
+    #[prop(setter(strip_option))]
     pub height: Option<f32>,
 
+    #[prop(setter(into))]
     pub child: Option<Widget>,
 }
 
@@ -72,12 +77,6 @@ impl SizedBox {
 
             child: None,
         }
-    }
-
-    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
-        self.child = child.into().map(IntoWidget::into_widget);
-
-        self
     }
 }
 

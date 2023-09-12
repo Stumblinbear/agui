@@ -9,7 +9,7 @@ use agui_core::{
         StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
     },
 };
-use agui_macros::{InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
+use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
 use agui_primitives::sized_box::SizedBox;
 use winit::window::WindowBuilder;
 
@@ -17,40 +17,25 @@ use crate::{
     event::WindowEvent, handle::WinitWindowHandle, windowing_controller::WinitWindowingController,
 };
 
-#[derive(StatelessWidget, Default)]
+#[derive(StatelessWidget)]
 pub struct Window {
     pub window: WindowBuilder,
 
-    pub child: Option<Widget>,
-}
-
-impl Window {
-    pub const fn new(builder: WindowBuilder) -> Self {
-        Self {
-            window: builder,
-
-            child: None,
-        }
-    }
-
-    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
-        self.child = child.into().map(IntoWidget::into_widget);
-
-        self
-    }
+    pub child: Widget,
 }
 
 impl WidgetBuild for Window {
     fn build(&self, _: &mut BuildContext<Self>) -> Widget {
         // Windows must be created within their own render context
-        RenderContextBoundary::with_child(WinitWindow {
-            window: self.window.clone(),
+        RenderContextBoundary {
+            child: build! {
+                <WinitWindow> {
+                    window: self.window.clone(),
 
-            child: self
-                .child
-                .clone()
-                .unwrap_or_else(|| SizedBox::shrink().into_widget()),
-        })
+                    child: self.child.clone(),
+                }
+            },
+        }
         .into_widget()
     }
 }

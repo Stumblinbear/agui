@@ -8,36 +8,11 @@ use agui_macros::InheritedWidget;
 
 use crate::sized_box::SizedBox;
 
-#[derive(InheritedWidget, Default)]
+#[derive(InheritedWidget)]
 pub struct TextLayoutController {
-    pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
+    pub delegate: Rc<dyn TextLayoutDelegate>,
 
     pub child: Option<Widget>,
-}
-
-impl TextLayoutController {
-    pub const fn new() -> Self {
-        Self {
-            delegate: None,
-
-            child: None,
-        }
-    }
-
-    pub fn with_delegate<D>(mut self, delegate: D) -> Self
-    where
-        D: TextLayoutDelegate + 'static,
-    {
-        self.delegate = Some(Rc::new(delegate));
-
-        self
-    }
-
-    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
-        self.child = child.into().map(IntoWidget::into_widget);
-
-        self
-    }
 }
 
 impl InheritedWidget for TextLayoutController {
@@ -48,16 +23,10 @@ impl InheritedWidget for TextLayoutController {
     }
 
     fn should_notify(&self, other_widget: &Self) -> bool {
-        match (&self.delegate, &other_widget.delegate) {
-            (Some(delegate), Some(other_delegate)) => !std::ptr::eq(
-                Rc::as_ptr(delegate) as *const _ as *const (),
-                Rc::as_ptr(other_delegate) as *const _ as *const (),
-            ),
-
-            (Some(_), None) | (None, Some(_)) => true,
-
-            _ => false,
-        }
+        !std::ptr::eq(
+            Rc::as_ptr(&self.delegate) as *const _ as *const (),
+            Rc::as_ptr(&other_widget.delegate) as *const _ as *const (),
+        )
     }
 }
 

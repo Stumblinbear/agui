@@ -96,31 +96,37 @@ impl WidgetState for ExampleMainState {
             callback.call(());
         });
 
-        Stack::new()
-            .add_child(
-                Window::new(
-                    WindowBuilder::new()
-                        .with_title("agui window 1")
-                        .with_inner_size(PhysicalSize::new(800.0, 600.0)),
-                )
-                .with_child(if self.flip_windows {
-                    &ctx.widget.window2
-                } else {
-                    &ctx.widget.window1
-                }),
-            )
-            .add_child(
-                Window::new(
-                    WindowBuilder::new()
-                        .with_title("agui window 2")
-                        .with_inner_size(PhysicalSize::new(400.0, 300.0)),
-                )
-                .with_child(if self.flip_windows {
-                    &ctx.widget.window1
-                } else {
-                    &ctx.widget.window2
-                }),
-            )
-            .into_widget()
+        build! {
+            <Stack> {
+                children: [
+                    build! {
+                        <Window> {
+                            window: WindowBuilder::new()
+                                .with_title("agui window 1")
+                                .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+
+                            child: if self.flip_windows {
+                                ctx.widget.window2.clone()
+                            } else {
+                                ctx.widget.window1.clone()
+                            }
+                        }
+                    },
+                    build! {
+                        <Window> {
+                            window: WindowBuilder::new()
+                                .with_title("agui window 2")
+                                .with_inner_size(PhysicalSize::new(400.0, 300.0)),
+
+                            child: if self.flip_windows {
+                                ctx.widget.window1.clone()
+                            } else {
+                                ctx.widget.window2.clone()
+                            }
+                        }
+                    },
+                ]
+            }
+        }
     }
 }

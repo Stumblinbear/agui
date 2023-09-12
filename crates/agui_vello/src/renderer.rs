@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use agui_core::{
     manager::{events::ElementEvent, WidgetManager},
     plugin::Plugin,
@@ -5,6 +7,7 @@ use agui_core::{
     unit::Font,
     widget::{IntoWidget, Widget},
 };
+use agui_macros::build;
 use agui_primitives::text::layout_controller::TextLayoutController;
 use fnv::FnvHashMap;
 use futures::executor::block_on;
@@ -25,15 +28,18 @@ pub struct VelloRenderer<'r, W> {
 
 impl<W> Plugin for VelloRenderer<'_, W> {
     fn build<T: IntoWidget>(&self, child: impl Into<Option<T>>) -> Widget {
-        TextLayoutController::new()
-            .with_delegate(VelloTextLayoutDelegate {
-                default_font: FontRef::new(include_bytes!(
-                    "../../../examples/fonts/DejaVuSans.ttf"
-                ))
-                .unwrap(),
-            })
-            .with_child(child)
-            .into_widget()
+        build! {
+            <TextLayoutController> {
+                delegate: Rc::new(VelloTextLayoutDelegate {
+                    default_font: FontRef::new(include_bytes!(
+                        "../../../examples/fonts/DejaVuSans.ttf"
+                    ))
+                    .unwrap(),
+                }),
+
+                child: child.into().map(IntoWidget::into_widget),
+            }
+        }
     }
 }
 

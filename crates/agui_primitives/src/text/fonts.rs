@@ -10,33 +10,12 @@ use agui_macros::{InheritedWidget, StatefulWidget};
 
 use crate::sized_box::SizedBox;
 
-#[derive(StatefulWidget, Debug, Default)]
+#[derive(StatefulWidget, Debug)]
 pub struct Fonts {
     pub fonts: im_rc::HashMap<String, Font>,
 
+    #[prop(default, setter(into))]
     pub child: Option<Widget>,
-}
-
-impl Fonts {
-    pub fn new() -> Self {
-        Self {
-            fonts: im_rc::HashMap::default(),
-
-            child: None,
-        }
-    }
-
-    pub fn with_fonts(mut self, fonts: impl IntoIterator<Item = (String, Font)>) -> Self {
-        self.fonts = im_rc::HashMap::from_iter(fonts);
-
-        self
-    }
-
-    pub fn with_child<T: IntoWidget>(mut self, child: impl Into<Option<T>>) -> Self {
-        self.child = child.into().map(IntoWidget::into_widget);
-
-        self
-    }
 }
 
 impl StatefulWidget for Fonts {
@@ -116,9 +95,9 @@ mod tests {
     use agui_core::{
         manager::WidgetManager,
         unit::Font,
-        widget::{BuildContext, ContextInheritedMut, Widget, WidgetBuild},
+        widget::{BuildContext, ContextInheritedMut, IntoWidget, Widget, WidgetBuild},
     };
-    use agui_macros::StatelessWidget;
+    use agui_macros::{build, StatelessWidget};
 
     use crate::sized_box::SizedBox;
 
@@ -155,11 +134,16 @@ mod tests {
     fn can_retrieve_from_available_fonts() {
         let mut manager = WidgetManager::new();
 
-        manager.set_root(
-            Fonts::new()
-                .with_fonts([(String::from("test font family"), Font::default())])
-                .with_child(TestWidget),
-        );
+        manager.set_root(build! {
+            <Fonts> {
+                fonts: im_rc::HashMap::from_iter([(
+                    String::from("test font family"),
+                    Font::default(),
+                )]),
+
+                child: <TestWidget> {},
+            }
+        });
 
         manager.update();
 

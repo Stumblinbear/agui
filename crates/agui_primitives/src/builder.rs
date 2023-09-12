@@ -4,7 +4,7 @@ use agui_macros::StatelessWidget;
 #[derive(StatelessWidget)]
 pub struct Builder {
     #[allow(clippy::type_complexity)]
-    pub func: Box<dyn Fn(&mut BuildContext<Self>) -> Widget>,
+    pub func: Box<dyn Fn(&mut BuildContext<Builder>) -> Widget>,
 }
 
 impl Builder {

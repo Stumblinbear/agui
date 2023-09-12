@@ -6,8 +6,9 @@ use agui_core::{
     manager::WidgetManager,
     render::{renderer::Renderer, RenderContextId},
     unit::Offset,
-    widget::{IntoWidget, Widget},
+    widget::Widget,
 };
+use agui_macros::build;
 use fnv::FnvHashMap;
 use winit::{
     dpi::PhysicalPosition,
@@ -68,10 +69,12 @@ where
     }
 
     pub fn run(mut self, widget: Widget) {
-        self.widget_manager.set_root(
-            WinitWindowingController::new(self.window_tx.clone())
-                .with_child(self.renderer.build(widget)),
-        );
+        self.widget_manager.set_root(build! {
+            <WinitWindowingController> {
+                tx: self.window_tx.clone(),
+                child: self.renderer.build(widget),
+            }
+        });
 
         self.event_loop
             .run_return(move |event, window_target, control_flow| {

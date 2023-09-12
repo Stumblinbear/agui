@@ -13,10 +13,11 @@ mod intrinsic_width;
 /// This is relatively expensive because it adds a speculative layout pass before
 /// the final layout phase. Avoid using it where possible. In the worst case, this
 /// can result in a layout that is O(N²) in the depth of the tree.
-#[derive(LayoutWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug)]
 pub struct IntrinsicAxis {
     pub axis: Axis,
 
+    #[prop(default, setter(into))]
     pub child: Option<Widget>,
 }
 

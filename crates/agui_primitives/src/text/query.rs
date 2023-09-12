@@ -61,26 +61,27 @@ where
 #[cfg(test)]
 mod tests {
     use agui_core::manager::WidgetManager;
+    use agui_macros::build;
 
     use crate::{flex::Column, text::query::TextQueryExt, text::Text};
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut manager = WidgetManager::with_root(Column {
-            children: [
-                Text {
-                    text: "foo".into(),
-                    ..Default::default()
-                }
-                .into(),
-                Text {
-                    text: "bar".into(),
-                    ..Default::default()
-                }
-                .into(),
-            ]
-            .into(),
-            ..Default::default()
+        let mut manager = WidgetManager::with_root(build! {
+            <Column> {
+                children: [
+                    build! {
+                        <Text> {
+                            text: "foo".into(),
+                        }
+                    }.into(),
+                    build! {
+                        <Text> {
+                            text: "bar".into(),
+                        }
+                    }.into(),
+                ]
+            }
         });
 
         manager.update();

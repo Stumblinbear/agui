@@ -1,13 +1,15 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, TextDirection},
-    widget::{IntoWidget, Widget},
+    widget::{BuildContext, IntoWidget, Widget, WidgetBuild},
 };
+use agui_macros::StatelessWidget;
 
 use crate::flex::{
     CrossAxisAlignment, Flex, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, StatelessWidget)]
+#[prop(field_defaults(default))]
 pub struct Row {
     pub main_axis_size: MainAxisSize,
 
@@ -19,11 +21,12 @@ pub struct Row {
 
     pub clip_behavior: ClipBehavior,
 
+    #[prop(setter(into))]
     pub children: Vec<Flexible>,
 }
 
-impl IntoWidget for Row {
-    fn into_widget(self) -> Widget {
+impl WidgetBuild for Row {
+    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
         Flex {
             direction: Axis::Vertical,
 

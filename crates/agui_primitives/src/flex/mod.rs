@@ -98,8 +98,10 @@ where
     }
 }
 
-#[derive(LayoutWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug)]
+#[prop(field_defaults(default))]
 pub struct Flex {
+    #[prop(!default)]
     pub direction: Axis,
 
     pub main_axis_size: MainAxisSize,

@@ -8,13 +8,16 @@ mod center;
 
 pub use center::*;
 
-#[derive(LayoutWidget, Debug, Default)]
+#[derive(LayoutWidget, Debug)]
 pub struct Align {
     pub alignment: Alignment,
 
+    #[prop(default, setter(strip_option))]
     pub width_factor: Option<f32>,
+    #[prop(default, setter(strip_option))]
     pub height_factor: Option<f32>,
 
+    #[prop(default, setter(into))]
     pub child: Option<Widget>,
 }
 
