@@ -7,14 +7,12 @@ use agui_macros::WidgetProps;
 use crate::align::Align;
 
 #[derive(Debug, WidgetProps)]
-#[prop(field_defaults(default))]
+#[props(default)]
 pub struct Center {
-    #[prop(setter(strip_option))]
     pub width_factor: Option<f32>,
-    #[prop(setter(strip_option))]
     pub height_factor: Option<f32>,
 
-    #[prop(setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

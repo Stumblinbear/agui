@@ -1,5 +1,4 @@
 use quote::ToTokens;
-use syn::{parse::Parser, Error};
 
 pub fn path_to_single_string(path: &syn::Path) -> Option<String> {
     if path.leading_colon.is_some() {
@@ -86,45 +85,4 @@ pub fn strip_raw_ident_prefix(mut name: String) -> String {
         name.replace_range(0..2, "");
     }
     name
-}
-
-pub fn first_visibility(visibilities: &[Option<&syn::Visibility>]) -> proc_macro2::TokenStream {
-    let vis = visibilities
-        .iter()
-        .flatten()
-        .next()
-        .expect("need at least one visibility in the list");
-
-    vis.to_token_stream()
-}
-
-pub fn public_visibility() -> syn::Visibility {
-    syn::Visibility::Public(syn::token::Pub::default())
-}
-
-pub fn apply_subsections(
-    list: &syn::MetaList,
-    mut applier: impl FnMut(syn::Expr) -> Result<(), syn::Error>,
-) -> Result<(), syn::Error> {
-    if list.tokens.is_empty() {
-        return Err(syn::Error::new_spanned(list, "Expected builder(…)"));
-    }
-
-    let parser = syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated;
-    let exprs = parser.parse2(list.tokens.clone())?;
-    for expr in exprs {
-        applier(expr)?;
-    }
-
-    Ok(())
-}
-
-pub fn expr_to_lit_string(expr: &syn::Expr) -> Result<String, Error> {
-    match expr {
-        syn::Expr::Lit(lit) => match &lit.lit {
-            syn::Lit::Str(str) => Ok(str.value()),
-            _ => Err(Error::new_spanned(expr, "attribute only allows str values")),
-        },
-        _ => Err(Error::new_spanned(expr, "attribute only allows str values")),
-    }
 }

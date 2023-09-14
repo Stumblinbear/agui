@@ -8,7 +8,7 @@ use agui_macros::LayoutWidget;
 pub struct Padding {
     pub padding: EdgeInsets,
 
-    #[prop(default, setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

@@ -1,14 +1,13 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
-use syn::parse::Error;
+use syn::parse::{Error, Parser};
 
 use crate::utils::resolve_agui_path;
 
 use super::{
     field_info::{FieldBuilderAttr, FieldInfo},
     util::{
-        apply_subsections, empty_type, empty_type_tuple, expr_to_single_string, first_visibility,
-        modify_types_generics_hack, path_to_single_string, public_visibility,
+        empty_type, empty_type_tuple, modify_types_generics_hack, path_to_single_string,
         strip_raw_ident_prefix, type_tuple,
     },
 };
@@ -26,9 +25,7 @@ pub struct StructInfo<'a> {
 
 impl<'a> StructInfo<'a> {
     pub fn included_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
-        self.fields
-            .iter()
-            .filter(|f| f.builder_attr.setter.skip.is_none())
+        self.fields.iter().filter(|f| f.builder_attr.skip.is_none())
     }
 
     pub fn new(
@@ -36,11 +33,7 @@ impl<'a> StructInfo<'a> {
         fields: impl Iterator<Item = &'a syn::Field>,
     ) -> Result<StructInfo<'a>, Error> {
         let builder_attr = TypeBuilderAttr::new(&ast.attrs)?;
-        let builder_name = builder_attr
-            .builder_type
-            .get_name()
-            .map(|name| strip_raw_ident_prefix(name.to_string()))
-            .unwrap_or_else(|| strip_raw_ident_prefix(format!("{}Props", ast.ident)));
+        let builder_name = strip_raw_ident_prefix(format!("{}Props", ast.ident));
 
         Ok(StructInfo {
             vis: &ast.vis,
@@ -90,62 +83,12 @@ impl<'a> StructInfo<'a> {
             syn::GenericParam::Const(_cnst) => None,
         });
 
-        let builder_method_name = self
-            .builder_attr
-            .builder_method
-            .get_name()
-            .unwrap_or_else(|| quote!(builder));
-        let builder_method_visibility = first_visibility(&[
-            self.builder_attr.builder_method.vis.as_ref(),
-            self.builder_attr.builder_type.vis.as_ref(),
-            Some(vis),
-        ]);
-        let builder_method_doc = self.builder_attr.builder_method.get_doc_or(|| {
-            format!(
-                "
-                Create a builder for building `{name}`.
-                On the builder, call {setters} to set the values of the fields.
-                Finally, call `.build()` to create the instance of `{name}`.
-                ",
-                name = self.name,
-                setters = {
-                    let mut result = String::new();
-                    let mut is_first = true;
-                    for field in self.included_fields() {
-                        use std::fmt::Write;
-                        if is_first {
-                            is_first = false;
-                        } else {
-                            write!(&mut result, ", ").unwrap();
-                        }
-                        write!(&mut result, "`.{}(...)`", field.name).unwrap();
-                        if field.builder_attr.default.is_some() {
-                            write!(&mut result, "(optional)").unwrap();
-                        }
-                    }
-                    result
-                }
-            )
-        });
-
-        let builder_type_visibility =
-            first_visibility(&[self.builder_attr.builder_type.vis.as_ref(), Some(vis)]);
-        let builder_type_doc = if self.builder_attr.doc {
-            self.builder_attr.builder_type.get_doc_or(|| {
-                format!(
-                    "Props for [`{name}`] instances.\n\nSee [`{name}::new()`] for more info.",
-                    name = name
-                )
-            })
-        } else {
-            quote!(#[doc(hidden)])
-        };
-
         let (b_generics_impl, b_generics_ty, b_generics_where_extras_predicates) =
             b_generics.split_for_impl();
         let mut b_generics_where: syn::WhereClause = syn::parse2(quote! {
             where TypedBuilderFields: Clone
         })?;
+
         if let Some(predicates) = b_generics_where_extras_predicates {
             b_generics_where
                 .predicates
@@ -154,9 +97,8 @@ impl<'a> StructInfo<'a> {
 
         Ok(quote! {
             impl #impl_generics #name #ty_generics #where_clause {
-                #builder_method_doc
                 #[allow(dead_code, clippy::default_trait_access)]
-                #builder_method_visibility fn #builder_method_name() -> #builder_name #generics_with_empty {
+                #vis fn builder() -> #builder_name #generics_with_empty {
                     #builder_name {
                         fields: #empties_tuple,
                         phantom: ::core::default::Default::default(),
@@ -165,9 +107,9 @@ impl<'a> StructInfo<'a> {
             }
 
             #[must_use]
-            #builder_type_doc
+            #[doc(hidden)]
             #[allow(dead_code, non_camel_case_types, non_snake_case)]
-            #builder_type_visibility struct #builder_name #b_generics {
+            #vis struct #builder_name #b_generics {
                 fields: #all_fields_param,
                 phantom: ::core::marker::PhantomData<(#( #phantom_generics ),*)>,
             }
@@ -249,27 +191,27 @@ impl<'a> StructInfo<'a> {
         let (impl_generics, _, where_clause) = generics.split_for_impl();
         let doc = field
             .builder_attr
-            .setter
             .doc
             .as_ref()
             .map(|doc| quote!(#[doc = #doc]));
         let deprecated = &field.builder_attr.deprecated;
 
-        // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
-        // nesting is different so we have to do this little dance.
-        let arg_type = if field.builder_attr.setter.strip_option.is_some()
-            && field.builder_attr.setter.transform.is_none()
-        {
-            field.type_from_inside_option().ok_or_else(|| {
-                Error::new_spanned(
-                    field_type,
-                    "can't `strip_option` - field is not `Option<...>`",
-                )
-            })?
-        } else {
-            field_type
-        };
-        let (arg_type, arg_expr) = if field.builder_attr.setter.auto_into.is_some() {
+        // // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
+        // // nesting is different so we have to do this little dance.
+        // let arg_type = if field.builder_attr.strip_option.is_some() {
+        //     field.type_from_inside_option().ok_or_else(|| {
+        //         Error::new_spanned(
+        //             field_type,
+        //             "can't `strip_option` - field is not `Option<...>`",
+        //         )
+        //     })?
+        // } else {
+        //     field_type
+        // };
+
+        let arg_type = field_type;
+
+        let (arg_type, arg_expr) = if field.builder_attr.auto_into.is_some() {
             (
                 quote!(impl ::core::convert::Into<#arg_type>),
                 quote!(#field_name.into()),
@@ -278,17 +220,13 @@ impl<'a> StructInfo<'a> {
             (arg_type.to_token_stream(), field_name.to_token_stream())
         };
 
-        let (param_list, arg_expr) = if field.builder_attr.setter.strip_bool.is_some() {
-            (quote!(), quote!(true))
-        } else if let Some(transform) = &field.builder_attr.setter.transform {
-            let params = transform.params.iter().map(|(pat, ty)| quote!(#pat: #ty));
-            let body = &transform.body;
-            (quote!(#(#params),*), quote!({ #body }))
-        } else if field.builder_attr.setter.strip_option.is_some() {
-            (quote!(#field_name: #arg_type), quote!(Some(#arg_expr)))
-        } else {
-            (quote!(#field_name: #arg_type), arg_expr)
-        };
+        // let (param_list, arg_expr) = if field.builder_attr.strip_option.is_some() {
+        //     (quote!(#field_name: #arg_type), quote!(Some(#arg_expr)))
+        // } else {
+        //     (quote!(#field_name: #arg_type), arg_expr)
+        // };
+
+        let (param_list, arg_expr) = (quote!(#field_name: #arg_type), arg_expr);
 
         let repeated_fields_error_type_name = syn::Ident::new(
             &format!(
@@ -300,7 +238,7 @@ impl<'a> StructInfo<'a> {
         );
         let repeated_fields_error_message = format!("Repeated field {}", field_name);
 
-        let method_name = field.setter_method_name();
+        let method_name = field.name;
 
         Ok(quote_spanned! {
             self.builder_name.span() =>
@@ -335,8 +273,12 @@ impl<'a> StructInfo<'a> {
     }
 
     pub fn required_field_impl(&self, field: &FieldInfo) -> TokenStream {
+        let agui_core = resolve_agui_path();
+
         let StructInfo {
-            ref builder_name, ..
+            vis,
+            ref builder_name,
+            ..
         } = self;
 
         let FieldInfo {
@@ -407,10 +349,15 @@ impl<'a> StructInfo<'a> {
             ),
             builder_name.span(),
         );
-        let early_build_error_message = format!("Missing required field {}", field_name);
 
-        let build_method_name = self.build_method_name();
-        let build_method_visibility = self.build_method_visibility();
+        // Marking build() as deprecated causes the whole `build!()` macro to be struct through visually,
+        // which is extremely annoying. Removing it localizes the warning to the specific widget that is
+        // missing a required field, which is significantly more useful.
+        //
+        // let early_build_error_message = format!("Missing required field {}", field_name);
+        // #[deprecated(
+        //     note = #early_build_error_message
+        // )]
 
         quote_spanned! {
             builder_name.span() =>
@@ -421,35 +368,19 @@ impl<'a> StructInfo<'a> {
             #[doc(hidden)]
             #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #builder_generics ),* > #where_clause {
-                #[deprecated(
-                    note = #early_build_error_message
-                )]
-                #build_method_visibility fn #build_method_name(self, _: #early_build_error_type_name) -> ! {
+
+                #vis fn build(self, _: #early_build_error_type_name) -> #agui_core::widget::Widget {
                     panic!()
                 }
             }
         }
     }
 
-    fn build_method_name(&self) -> TokenStream {
-        self.builder_attr
-            .build_method
-            .common
-            .get_name()
-            .unwrap_or(quote!(build))
-    }
-
-    fn build_method_visibility(&self) -> TokenStream {
-        first_visibility(&[
-            self.builder_attr.build_method.common.vis.as_ref(),
-            Some(&public_visibility()),
-        ])
-    }
-
     pub fn build_method_impl(&self) -> TokenStream {
         let agui_core = resolve_agui_path();
 
         let StructInfo {
+            vis,
             ref name,
             ref builder_name,
             ..
@@ -515,7 +446,7 @@ impl<'a> StructInfo<'a> {
         let assignments = self.fields.iter().map(|field| {
             let name = &field.name;
             if let Some(ref default) = field.builder_attr.default {
-                if field.builder_attr.setter.skip.is_some() {
+                if field.builder_attr.skip.is_some() {
                     quote!(let #name = #default;)
                 } else {
                     quote!(let #name = #agui_core::Optional::into_value(#name, || #default);)
@@ -526,37 +457,13 @@ impl<'a> StructInfo<'a> {
         });
         let field_names = self.fields.iter().map(|field| field.name);
 
-        let build_method_name = self.build_method_name();
-        let build_method_visibility = self.build_method_visibility();
-        let build_method_doc = if self.builder_attr.doc {
-            self.builder_attr
-                .build_method
-                .common
-                .get_doc_or(|| format!("Finalise the builder and create its [`{}`] instance", name))
-        } else {
-            quote!()
-        };
-        let (build_method_generic, output_type, build_method_where_clause) =
-            match &self.builder_attr.build_method.into {
-                IntoSetting::NoConversion => (None, quote!(#name #ty_generics), None),
-                IntoSetting::GenericConversion => (
-                    Some(quote!(<__R>)),
-                    quote!(__R),
-                    Some(quote!(where #name #ty_generics: Into<__R>)),
-                ),
-                IntoSetting::TypeConversionToSpecificType(into) => {
-                    (None, into.to_token_stream(), None)
-                }
-            };
-
         quote_spanned! {
             self.builder_name.span() =>
 
             #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                #build_method_doc
                 #[allow(clippy::let_unit_value, clippy::default_trait_access)]
-                #build_method_visibility fn #build_method_name #build_method_generic (self) -> #output_type #build_method_where_clause {
+                #vis fn build(self) -> #name #ty_generics {
                     let ( #(#descructuring,)* ) = self.fields;
                     #( #assignments )*
 
@@ -570,140 +477,8 @@ impl<'a> StructInfo<'a> {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct CommonDeclarationSettings {
-    pub vis: Option<syn::Visibility>,
-    pub name: Option<syn::Expr>,
-    pub doc: Option<syn::Expr>,
-}
-impl CommonDeclarationSettings {
-    fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
-        match expr {
-            syn::Expr::Assign(assign) => {
-                let name = expr_to_single_string(&assign.left)
-                    .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
-                match name.as_str() {
-                    "vis" => {
-                        if let syn::Expr::Lit(expr_lit) = &*assign.right {
-                            if let syn::Lit::Str(ref s) = expr_lit.lit {
-                                self.vis = Some(
-                                    syn::parse_str(&s.value()).expect("invalid visibility found"),
-                                );
-                            }
-                        }
-                        if self.vis.is_none() {
-                            panic!("invalid visibility found")
-                        }
-                        Ok(())
-                    }
-                    "name" => {
-                        self.name = Some(*assign.right);
-                        Ok(())
-                    }
-                    "doc" => {
-                        self.doc = Some(*assign.right);
-                        Ok(())
-                    }
-                    _ => Err(Error::new_spanned(
-                        &assign,
-                        format!("Unknown parameter {:?}", name),
-                    )),
-                }
-            }
-            _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
-        }
-    }
-
-    fn get_name(&self) -> Option<TokenStream> {
-        self.name.as_ref().map(|name| name.to_token_stream())
-    }
-
-    fn get_doc_or(&self, gen_doc: impl FnOnce() -> String) -> TokenStream {
-        if let Some(ref doc) = self.doc {
-            quote!(#[doc = #doc])
-        } else {
-            let doc = gen_doc();
-            quote!(#[doc = #doc])
-        }
-    }
-}
-
-/// Setting of the `into` argument.
-#[derive(Debug, Clone)]
-pub enum IntoSetting {
-    /// Do not run any conversion on the built value.
-    NoConversion,
-    /// Convert the build value into the generic parameter passed to the `build` method.
-    GenericConversion,
-    /// Convert the build value into a specific type specified in the attribute.
-    TypeConversionToSpecificType(syn::ExprPath),
-}
-
-impl Default for IntoSetting {
-    fn default() -> Self {
-        Self::NoConversion
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct BuildMethodSettings {
-    pub common: CommonDeclarationSettings,
-
-    /// Whether to convert the built type into another while finishing the build.
-    pub into: IntoSetting,
-}
-
-impl BuildMethodSettings {
-    fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
-        match &expr {
-            syn::Expr::Assign(assign) => {
-                let name = expr_to_single_string(&assign.left)
-                    .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
-                if name.as_str() == "into" {
-                    let expr_path = match assign.right.as_ref() {
-                        syn::Expr::Path(expr_path) => expr_path,
-                        _ => {
-                            return Err(Error::new_spanned(
-                                &assign.right,
-                                "Expected path expression type",
-                            ))
-                        }
-                    };
-                    self.into = IntoSetting::TypeConversionToSpecificType(expr_path.clone());
-                    Ok(())
-                } else {
-                    self.common.apply_meta(expr)
-                }
-            }
-            syn::Expr::Path(path) => {
-                let name = path_to_single_string(&path.path)
-                    .ok_or_else(|| Error::new_spanned(path, "Expected identifier"))?;
-                if name.as_str() == "into" {
-                    self.into = IntoSetting::GenericConversion;
-                    Ok(())
-                } else {
-                    self.common.apply_meta(expr)
-                }
-            }
-            _ => self.common.apply_meta(expr),
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct TypeBuilderAttr<'a> {
-    /// Whether to show docs for the `TypeBuilder` type (rather than hiding them).
-    pub doc: bool,
-
-    /// Customize builder method, ex. visibility, name
-    pub builder_method: CommonDeclarationSettings,
-
-    /// Customize builder type, ex. visibility, name
-    pub builder_type: CommonDeclarationSettings,
-
-    /// Customize build method, ex. visibility, name
-    pub build_method: BuildMethodSettings,
-
     pub field_defaults: FieldBuilderAttr<'a>,
 }
 
@@ -714,116 +489,27 @@ impl<'a> TypeBuilderAttr<'a> {
         for attr in attrs {
             let list = match &attr.meta {
                 syn::Meta::List(list) => {
-                    if path_to_single_string(&list.path).as_deref() != Some("prop") {
+                    if path_to_single_string(&list.path).as_deref() != Some("props") {
                         continue;
                     }
 
                     list
                 }
+
                 _ => continue,
             };
 
-            apply_subsections(list, |expr| result.apply_meta(expr))?;
-        }
+            if list.tokens.is_empty() {
+                return Err(syn::Error::new_spanned(list, "Expected props(…)"));
+            }
 
-        if result.builder_type.doc.is_some() || result.build_method.common.doc.is_some() {
-            result.doc = true;
+            let parser = syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated;
+            let exprs = parser.parse2(list.tokens.clone())?;
+            for expr in exprs {
+                result.field_defaults.apply_meta(expr)?;
+            }
         }
 
         Ok(result)
-    }
-
-    fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
-        match expr {
-            syn::Expr::Assign(assign) => {
-                let name = expr_to_single_string(&assign.left)
-                    .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
-
-                let gen_structure_depracation_error = |put_under: &str, new_name: &str| {
-                    Error::new_spanned(
-                        &assign.left,
-                        format!(
-                            "`{} = \"...\"` is deprecated - use `{}({} = \"...\")` instead",
-                            name, put_under, new_name
-                        ),
-                    )
-                };
-                match name.as_str() {
-                    "builder_method_doc" => {
-                        Err(gen_structure_depracation_error("builder_method", "doc"))
-                    }
-                    "builder_type_doc" => {
-                        Err(gen_structure_depracation_error("builder_type", "doc"))
-                    }
-                    "build_method_doc" => {
-                        Err(gen_structure_depracation_error("build_method", "doc"))
-                    }
-                    _ => Err(Error::new_spanned(
-                        &assign,
-                        format!("Unknown parameter {:?}", name),
-                    )),
-                }
-            }
-            syn::Expr::Path(path) => {
-                let name = path_to_single_string(&path.path)
-                    .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
-                match name.as_str() {
-                    "doc" => {
-                        self.doc = true;
-                        Ok(())
-                    }
-                    _ => Err(Error::new_spanned(
-                        &path,
-                        format!("Unknown parameter {:?}", name),
-                    )),
-                }
-            }
-            syn::Expr::Call(call) => {
-                let subsetting_name = if let syn::Expr::Path(path) = &*call.func {
-                    path_to_single_string(&path.path)
-                } else {
-                    None
-                }
-                .ok_or_else(|| {
-                    let call_func = &call.func;
-                    let call_func = call_func.to_token_stream();
-                    Error::new_spanned(
-                        &call.func,
-                        format!("Illegal builder setting group {}", call_func),
-                    )
-                })?;
-                match subsetting_name.as_str() {
-                    "field_defaults" => {
-                        for arg in call.args {
-                            self.field_defaults.apply_meta(arg)?;
-                        }
-                        Ok(())
-                    }
-                    "builder_method" => {
-                        for arg in call.args {
-                            self.builder_method.apply_meta(arg)?;
-                        }
-                        Ok(())
-                    }
-                    "builder_type" => {
-                        for arg in call.args {
-                            self.builder_type.apply_meta(arg)?;
-                        }
-                        Ok(())
-                    }
-                    "build_method" => {
-                        for arg in call.args {
-                            self.build_method.apply_meta(arg)?;
-                        }
-                        Ok(())
-                    }
-                    _ => Err(Error::new_spanned(
-                        &call.func,
-                        format!("Illegal builder setting group name {}", subsetting_name),
-                    )),
-                }
-            }
-            _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
-        }
     }
 }

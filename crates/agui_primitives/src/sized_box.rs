@@ -5,15 +5,12 @@ use agui_core::{
 use agui_macros::LayoutWidget;
 
 #[derive(LayoutWidget, Debug)]
-#[prop(field_defaults(default))]
+#[props(default)]
 pub struct SizedBox {
-    #[prop(setter(strip_option))]
     pub width: Option<f32>,
-
-    #[prop(setter(strip_option))]
     pub height: Option<f32>,
 
-    #[prop(setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

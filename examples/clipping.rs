@@ -52,8 +52,8 @@ impl WidgetBuild for ExampleMain {
 
                 child: <Center> {
                     child: <SizedBox> {
-                        height: 16.0,
-                        width: 280.0,
+                        height: Some(16.0),
+                        width: Some(280.0),
 
                         child: <Clip> {
                             shape: Shape::RoundedRect {
@@ -65,6 +65,7 @@ impl WidgetBuild for ExampleMain {
 
                             child: <ColoredBox> {
                                 color: Color::from_rgb((0.75, 0.75, 0.75)),
+
                                 child: <Text> {
                                     font: self.font.styled().color(Color::from_rgb((1.0, 0.0, 0.0))),
                                     text: "The Krabby Patty secret formula is one part love, two parts magic, and three parts secret ingredient.".into()

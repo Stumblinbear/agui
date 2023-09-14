@@ -9,7 +9,7 @@ use crate::flex::{
 };
 
 #[derive(Debug, WidgetProps)]
-#[prop(field_defaults(default))]
+#[props(default)]
 pub struct Row {
     pub main_axis_size: MainAxisSize,
 
@@ -21,7 +21,7 @@ pub struct Row {
 
     pub clip_behavior: ClipBehavior,
 
-    #[prop(setter(into))]
+    #[prop(into)]
     pub children: Vec<Flexible>,
 }
 

@@ -14,7 +14,7 @@ use crate::sized_box::SizedBox;
 pub struct Fonts {
     pub fonts: im_rc::HashMap<String, Font>,
 
-    #[prop(default, setter(into))]
+    #[prop(default, into)]
     pub child: Option<Widget>,
 }
 

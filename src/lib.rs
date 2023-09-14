@@ -20,8 +20,19 @@ pub use agui_vello as vello;
 pub mod prelude {
     pub use agui_core::{callback::*, query::*, render::*, unit::*, widget::*};
     pub use agui_primitives::{
-        align::*, builder::*, clip::*, colored_box::*, flex::*, intrinsic::*, padding::*,
-        sized_box::*, stack::*, text::*,
+        align::{Align, Center},
+        builder::Builder,
+        clip::Clip,
+        colored_box::ColoredBox,
+        flex::{
+            Column, CrossAxisAlignment, Flex, FlexFit, Flexible, MainAxisAlignment, MainAxisSize,
+            Row, VerticalDirection,
+        },
+        intrinsic::{IntrinsicAxis, IntrinsicHeight, IntrinsicWidth},
+        padding::Padding,
+        sized_box::SizedBox,
+        stack::Stack,
+        text::{Text, TextBaseline},
     };
 
     #[cfg(feature = "macros")]

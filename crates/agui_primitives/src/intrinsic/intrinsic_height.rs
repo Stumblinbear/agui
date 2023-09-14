@@ -8,9 +8,8 @@ use crate::intrinsic::IntrinsicAxis;
 
 /// See [`IntrinsicAxis`] for more information.
 #[derive(StatelessWidget, Debug)]
-#[prop(field_defaults(default))]
 pub struct IntrinsicHeight {
-    #[prop(setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

@@ -106,7 +106,7 @@ impl WidgetLayout for TextLayout {
 }
 
 #[derive(PaintWidget, Debug, PartialEq)]
-pub struct TextPainter {
+struct TextPainter {
     pub font: FontStyle,
     pub text: Cow<'static, str>,
 }

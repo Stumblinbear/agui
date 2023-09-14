@@ -6,15 +6,14 @@ use agui_core::{
 use agui_macros::PaintWidget;
 
 #[derive(PaintWidget, Debug)]
-#[prop(field_defaults(default))]
+#[props(default)]
 pub struct Clip {
-    #[prop(setter(into))]
     pub rect: Option<Rect>,
 
     pub shape: Shape,
     pub anti_alias: bool,
 
-    #[prop(setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

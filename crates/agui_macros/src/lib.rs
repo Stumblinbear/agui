@@ -18,32 +18,32 @@ use props::impl_widget_props;
 use stateful_widget::impl_stateful_widget;
 use stateless_widget::impl_stateless_widget;
 
-#[proc_macro_derive(WidgetProps, attributes(prop))]
+#[proc_macro_derive(WidgetProps, attributes(props, prop))]
 pub fn widget_props(input: TokenStream) -> TokenStream {
     impl_widget_props(input.into()).into()
 }
 
-#[proc_macro_derive(StatelessWidget, attributes(prop))]
+#[proc_macro_derive(StatelessWidget, attributes(props, prop))]
 pub fn stateless_widget(input: TokenStream) -> TokenStream {
     impl_stateless_widget(input.into()).into()
 }
 
-#[proc_macro_derive(StatefulWidget, attributes(prop))]
+#[proc_macro_derive(StatefulWidget, attributes(props, prop))]
 pub fn stateful_widget(input: TokenStream) -> TokenStream {
     impl_stateful_widget(input.into()).into()
 }
 
-#[proc_macro_derive(LayoutWidget, attributes(prop))]
+#[proc_macro_derive(LayoutWidget, attributes(props, prop))]
 pub fn layout_widget(input: TokenStream) -> TokenStream {
     impl_layout_widget(input.into()).into()
 }
 
-#[proc_macro_derive(PaintWidget, attributes(prop))]
+#[proc_macro_derive(PaintWidget, attributes(props, prop))]
 pub fn paint_widget(input: TokenStream) -> TokenStream {
     impl_paint_widget(input.into()).into()
 }
 
-#[proc_macro_derive(InheritedWidget, attributes(prop))]
+#[proc_macro_derive(InheritedWidget, attributes(props, prop))]
 pub fn inherited_widget(input: TokenStream) -> TokenStream {
     impl_inherited_widget(input.into()).into()
 }

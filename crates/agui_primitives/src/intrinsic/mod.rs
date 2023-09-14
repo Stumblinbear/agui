@@ -7,6 +7,9 @@ use agui_macros::LayoutWidget;
 mod intrinsic_height;
 mod intrinsic_width;
 
+pub use intrinsic_height::*;
+pub use intrinsic_width::*;
+
 /// A widget that sizes its child to the child's maximum intrinsic size along the
 /// given axis.
 ///
@@ -17,7 +20,7 @@ mod intrinsic_width;
 pub struct IntrinsicAxis {
     pub axis: Axis,
 
-    #[prop(default, setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

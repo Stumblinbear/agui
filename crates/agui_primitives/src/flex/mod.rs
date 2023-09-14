@@ -99,7 +99,7 @@ where
 }
 
 #[derive(LayoutWidget, Debug)]
-#[prop(field_defaults(default))]
+#[props(default)]
 pub struct Flex {
     #[prop(!default)]
     pub direction: Axis,

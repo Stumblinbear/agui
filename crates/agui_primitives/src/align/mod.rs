@@ -12,12 +12,10 @@ pub use center::*;
 pub struct Align {
     pub alignment: Alignment,
 
-    #[prop(default, setter(strip_option))]
     pub width_factor: Option<f32>,
-    #[prop(default, setter(strip_option))]
     pub height_factor: Option<f32>,
 
-    #[prop(default, setter(into))]
+    #[prop(into)]
     pub child: Option<Widget>,
 }
 

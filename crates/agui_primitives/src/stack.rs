@@ -6,7 +6,7 @@ use agui_macros::LayoutWidget;
 
 #[derive(LayoutWidget, Debug)]
 pub struct Stack {
-    #[prop(setter(into))]
+    #[prop(into)]
     pub children: Vec<Widget>,
 }
 
