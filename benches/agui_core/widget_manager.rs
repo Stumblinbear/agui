@@ -3,7 +3,9 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use agui::{manager::WidgetManager, widgets::primitives::flex::Column};
 
 fn widget_manager_ops(c: &mut Criterion) {
-    let mut group = c.benchmark_group("widget manager");
+    let mut group = c.benchmark_group("widget manager (single)");
+
+    group.throughput(criterion::Throughput::Elements(1));
 
     group.sample_size(500).bench_function("additions", |b| {
         b.iter_with_setup(
@@ -15,27 +17,6 @@ fn widget_manager_ops(c: &mut Criterion) {
             },
         )
     });
-
-    group
-        .sample_size(500)
-        .bench_function("large additions", |b| {
-            b.iter_with_setup(
-                || {
-                    let mut column = Column::builder().build();
-
-                    for _ in 0..1000 {
-                        column.children.push(Column::builder().build().into());
-                    }
-
-                    (WidgetManager::new(), column)
-                },
-                |(mut manager, widget)| {
-                    manager.set_root(widget);
-
-                    manager.update();
-                },
-            )
-        });
 
     group.sample_size(500).bench_function("removals", |b| {
         b.iter_with_setup(
@@ -54,30 +35,55 @@ fn widget_manager_ops(c: &mut Criterion) {
         )
     });
 
-    group
-        .sample_size(200)
-        .bench_function("large removals", |b| {
-            b.iter_with_setup(
-                || {
-                    let mut column = Column::builder().build();
+    group.finish();
 
-                    for _ in 0..1000 {
-                        column.children.push(Column::builder().build().into());
-                    }
+    let mut group = c.benchmark_group("widget manager (large)");
 
-                    let mut manager = WidgetManager::with_root(column);
+    group.throughput(criterion::Throughput::Elements(1000));
 
-                    manager.update();
+    group.sample_size(500).bench_function("additions", |b| {
+        b.iter_with_setup(
+            || {
+                let mut column = Column::builder().build();
 
-                    manager
-                },
-                |mut manager| {
-                    manager.remove_root();
+                for _ in 0..1000 {
+                    column.children.push(Column::builder().build().into());
+                }
 
-                    manager.update();
-                },
-            )
-        });
+                (WidgetManager::new(), column)
+            },
+            |(mut manager, widget)| {
+                manager.set_root(widget);
+
+                manager.update();
+            },
+        )
+    });
+
+    group.sample_size(500).bench_function("removals", |b| {
+        b.iter_with_setup(
+            || {
+                let mut column = Column::builder().build();
+
+                for _ in 0..1000 {
+                    column.children.push(Column::builder().build().into());
+                }
+
+                let mut manager = WidgetManager::with_root(column);
+
+                manager.update();
+
+                manager
+            },
+            |mut manager| {
+                manager.remove_root();
+
+                manager.update();
+            },
+        )
+    });
+
+    group.finish();
 }
 
 criterion_group!(benches, widget_manager_ops);
