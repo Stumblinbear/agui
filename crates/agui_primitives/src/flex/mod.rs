@@ -254,10 +254,11 @@ impl WidgetLayout for Flex {
         };
 
         let mut children = ctx.iter_children_mut();
+        let mut child_sizes = child_sizes.iter();
 
-        for child_size in child_sizes.iter() {
-            // child_sizes is guaranteed to have the same length as the number of children
-            let mut child = children.next().unwrap();
+        while let Some(mut child) = children.next() {
+            // child_sizes should have the same length as the number of children
+            let child_size = child_sizes.next().unwrap();
 
             let cross_axis = self.direction.flip();
 
@@ -336,7 +337,7 @@ impl Flex {
         let mut total_flex = 0.0;
         let mut last_flexible_child = None;
 
-        let mut child_sizes = Vec::with_capacity(ctx.child_count());
+        let mut child_sizes = vec![Size::ZERO; ctx.child_count()];
 
         let mut children = ctx.iter_children_mut();
 
@@ -355,11 +356,10 @@ impl Flex {
                 };
 
                 let child_size = child.compute_layout(inner_constraints);
-
-                child_sizes.push(child_size);
-
                 allocated_size += child_size.get_extent(main_axis);
                 cross_size = cross_size.max(child_size.get_extent(cross_axis));
+
+                child_sizes[child.index()] = child_size;
             }
         }
 
@@ -432,6 +432,8 @@ impl Flex {
                     allocated_size += child_main_size;
                     allocated_flex_space += max_child_extent;
                     cross_size = cross_size.max(child_size.get_extent(cross_axis));
+
+                    child_sizes[child.index()] = child_size;
                 }
             }
         }
@@ -445,7 +447,6 @@ impl Flex {
         ComputedSizes {
             main_size: ideal_size,
             cross_size,
-
             allocated_size,
 
             child_sizes,
@@ -470,7 +471,6 @@ impl Flex {
 struct ComputedSizes {
     main_size: f32,
     cross_size: f32,
-
     allocated_size: f32,
 
     child_sizes: Vec<Size>,
