@@ -9,7 +9,7 @@ use agui_core::{
     widget::Widget,
 };
 use agui_macros::build;
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 use winit::{
     dpi::PhysicalPosition,
     event::{Event as WinitEvent, MouseScrollDelta, WindowEvent as WinitWindowEvent},
@@ -32,9 +32,9 @@ pub struct App<R> {
 
     renderer: R,
 
-    windows: FnvHashMap<WindowId, WinitWindowHandle>,
-    render_context_window: FnvHashMap<RenderContextId, WindowId>,
-    window_render_context: FnvHashMap<WindowId, RenderContextId>,
+    windows: FxHashMap<WindowId, WinitWindowHandle>,
+    render_context_window: FxHashMap<RenderContextId, WindowId>,
+    window_render_context: FxHashMap<WindowId, RenderContextId>,
 }
 
 impl<R> Deref for App<R> {
@@ -62,9 +62,9 @@ where
 
             renderer,
 
-            windows: FnvHashMap::default(),
-            render_context_window: FnvHashMap::default(),
-            window_render_context: FnvHashMap::default(),
+            windows: FxHashMap::default(),
+            render_context_window: FxHashMap::default(),
+            window_render_context: FxHashMap::default(),
         }
     }
 

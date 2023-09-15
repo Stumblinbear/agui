@@ -1,8 +1,8 @@
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 
-type Subscribers<T> = Rc<RefCell<FnvHashMap<usize, Box<dyn Listener<T>>>>>;
+type Subscribers<T> = Rc<RefCell<FxHashMap<usize, Box<dyn Listener<T>>>>>;
 
 pub trait Listener<T> {
     fn on_notified(&self, value: &T);

@@ -1,6 +1,6 @@
 use std::{any::Any, marker::PhantomData, rc::Rc};
 
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
@@ -19,7 +19,7 @@ where
 {
     widget: Rc<W>,
 
-    callbacks: FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+    callbacks: FxHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
 impl<W> StatelessElement<W>
@@ -30,7 +30,7 @@ where
         Self {
             widget,
 
-            callbacks: FnvHashMap::default(),
+            callbacks: FxHashMap::default(),
         }
     }
 }

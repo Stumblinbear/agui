@@ -9,9 +9,9 @@ use agui_core::{
 };
 use agui_macros::build;
 use agui_primitives::text::layout_controller::TextLayoutController;
-use fnv::FnvHashMap;
 use futures::executor::block_on;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use rustc_hash::FxHashMap;
 use vello::{fello::raw::FontRef, util::RenderContext, RendererOptions, Scene};
 
 use crate::{fonts::VelloFonts, surface::VelloSurface, text_layout::VelloTextLayoutDelegate};
@@ -23,7 +23,7 @@ pub struct VelloRenderer<'r, W> {
 
     fonts: VelloFonts<'r>,
 
-    surfaces: FnvHashMap<RenderContextId, VelloSurface>,
+    surfaces: FxHashMap<RenderContextId, VelloSurface>,
 }
 
 impl<W> Plugin for VelloRenderer<'_, W> {
@@ -56,7 +56,7 @@ impl<'r, W> VelloRenderer<'r, W> {
 
             fonts: VelloFonts::default(),
 
-            surfaces: FnvHashMap::default(),
+            surfaces: FxHashMap::default(),
         }
     }
 
@@ -107,7 +107,7 @@ where
             renderer,
 
             scene: Scene::new(),
-            widgets: FnvHashMap::default(),
+            widgets: FxHashMap::default(),
         };
 
         surface.init(widget_manager, &mut self.fonts);

@@ -1,4 +1,4 @@
-use fnv::FnvHashSet;
+use rustc_hash::FxHashSet;
 
 use crate::{
     element::{Element, ElementId},
@@ -8,7 +8,7 @@ use crate::{
 
 pub struct CallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
 }

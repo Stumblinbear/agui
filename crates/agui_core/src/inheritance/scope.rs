@@ -1,6 +1,6 @@
 use std::{any::TypeId, hash::BuildHasherDefault};
 
-use fnv::FnvHashSet;
+use rustc_hash::FxHashSet;
 
 use crate::{
     element::ElementId,
@@ -25,10 +25,10 @@ pub struct InheritanceScope {
     available_scopes: im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>>,
 
     // Keep track of all the elements in our scope that are listening for each type.
-    dependents: TypeMap<FnvHashSet<ElementId>>,
+    dependents: TypeMap<FxHashSet<ElementId>>,
 
     /// A set of all elements that are listening to this scope.
-    listeners: FnvHashSet<ElementId>,
+    listeners: FxHashSet<ElementId>,
 }
 
 impl InheritanceScope {
@@ -49,7 +49,7 @@ impl InheritanceScope {
 
             dependents: TypeMap::default(),
 
-            listeners: FnvHashSet::default(),
+            listeners: FxHashSet::default(),
         }
     }
 
@@ -72,7 +72,7 @@ impl InheritanceScope {
 
             dependents: TypeMap::default(),
 
-            listeners: FnvHashSet::default(),
+            listeners: FxHashSet::default(),
         }
     }
 

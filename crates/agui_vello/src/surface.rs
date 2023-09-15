@@ -6,7 +6,7 @@ use agui_core::{
     render::RenderContextId,
     unit::Offset,
 };
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 use vello::{
     block_on_wgpu,
     kurbo::{Affine, Vec2},
@@ -24,7 +24,7 @@ pub struct VelloSurface {
     pub renderer: vello::Renderer,
 
     pub scene: Scene,
-    pub widgets: FnvHashMap<ElementId, RenderElement>,
+    pub widgets: FxHashMap<ElementId, RenderElement>,
 }
 
 impl VelloSurface {

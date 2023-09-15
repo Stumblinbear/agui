@@ -1,5 +1,5 @@
 use agui_core::unit::Font;
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 use vello::{
     fello::{raw::FontRef, FontKey, Setting},
     glyph::{GlyphContext, GlyphProvider},
@@ -7,7 +7,7 @@ use vello::{
 
 pub struct VelloFonts<'r> {
     glyph_context: GlyphContext,
-    fonts: FnvHashMap<Font, FontRef<'r>>,
+    fonts: FxHashMap<Font, FontRef<'r>>,
 
     default_font: Option<Font>,
 }
@@ -16,7 +16,7 @@ impl Default for VelloFonts<'_> {
     fn default() -> Self {
         Self {
             glyph_context: GlyphContext::new(),
-            fonts: FnvHashMap::default(),
+            fonts: FxHashMap::default(),
 
             default_font: None,
         }

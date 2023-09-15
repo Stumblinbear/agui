@@ -17,7 +17,7 @@ agui_macros = { path = "../agui_macros", version = "0.3", features = [
     "internal",
 ] }
 
-fnv = "1.0"
+rustc-hash = "1.1"
 im-rc = "15.1"
 
 unicode-segmentation = "1.9"

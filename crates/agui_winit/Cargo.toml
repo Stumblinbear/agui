@@ -17,7 +17,8 @@ agui_macros = { path = "../agui_macros", version = "0.3" }
 agui_primitives = { path = "../agui_primitives", version = "0.3" }
 
 tracing = "0.1"
-fnv = "1.0"
+
+rustc-hash = "1.1"
 
 winit = "0.28"
 raw-window-handle = "0.5"

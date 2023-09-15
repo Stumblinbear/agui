@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use fnv::{FnvHashMap, FnvHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::element::Element;
 use crate::util::tree::Tree;
@@ -11,7 +11,7 @@ use super::scope::InheritanceScope;
 
 #[derive(Default)]
 pub struct InheritanceManager {
-    map: FnvHashMap<ElementId, Inheritance>,
+    map: FxHashMap<ElementId, Inheritance>,
 }
 
 impl InheritanceManager {
@@ -138,7 +138,7 @@ impl InheritanceManager {
     pub(crate) fn update_inheritance_scope(
         &mut self,
         element_tree: &mut Tree<ElementId, Element>,
-        dirty: &mut FnvHashSet<ElementId>,
+        dirty: &mut FxHashSet<ElementId>,
         element_id: ElementId,
         new_scope_id: Option<ElementId>,
     ) {
@@ -193,7 +193,7 @@ impl InheritanceManager {
     // must be updated.
     fn update_ancestor_scope(
         &mut self,
-        dirty: &mut FnvHashSet<ElementId>,
+        dirty: &mut FxHashSet<ElementId>,
         element_id: ElementId,
         old_ancestor_scope_id: Option<ElementId>,
         new_ancestor_scope_id: Option<ElementId>,
@@ -240,7 +240,7 @@ impl InheritanceManager {
             let changed_dependencies = old_available_scopes
                 .keys()
                 .chain(new_available_scopes.keys())
-                .collect::<FnvHashSet<_>>()
+                .collect::<FxHashSet<_>>()
                 .into_iter()
                 .filter(|type_id| {
                     old_available_scopes.get(type_id) != new_available_scopes.get(type_id)
@@ -278,7 +278,7 @@ impl InheritanceManager {
     // marking it as dirty if necessary.
     fn update_scope(
         &mut self,
-        dirty: &mut FnvHashSet<ElementId>,
+        dirty: &mut FxHashSet<ElementId>,
         element_id: ElementId,
         old_scope_id: Option<ElementId>,
         new_scope_id: Option<ElementId>,
@@ -288,7 +288,7 @@ impl InheritanceManager {
             .expect("failed to find the node while updating its inheritance scope")
             .iter_dependencies()
             .map(|type_id| (type_id, None))
-            .collect::<FnvHashMap<TypeId, Option<ElementId>>>();
+            .collect::<FxHashMap<TypeId, Option<ElementId>>>();
 
         // Remove the tracked dependencies from the node's old scope
         if let Some(old_scope_id) = old_scope_id {

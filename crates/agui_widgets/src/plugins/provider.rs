@@ -78,7 +78,7 @@ impl StatefulPlugin for ProviderPlugin {
 #[derive(Default)]
 pub struct ProviderPluginState {
     providers: WidgetMap<TypeMap<ProvidedValue>>,
-    provided: TypeMap<FnvHashSet<WidgetId>>,
+    provided: TypeMap<FxHashSet<WidgetId>>,
 
     listening: WidgetMap<WidgetMap<TypeSet>>,
 
@@ -121,7 +121,7 @@ impl ProviderPluginState {
 
         self.provided
             .entry(type_id)
-            .or_insert_with(FnvHashSet::default)
+            .or_insert_with(FxHashSet::default)
             .insert(widget_id);
 
         Provided {

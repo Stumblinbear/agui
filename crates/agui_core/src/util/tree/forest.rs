@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use fnv::FnvHashSet;
+use rustc_hash::FxHashSet;
 
 use slotmap::Key;
 
@@ -10,7 +10,7 @@ pub struct Forest<K, V>
 where
     K: Key,
 {
-    roots: FnvHashSet<K>,
+    roots: FxHashSet<K>,
     map: TreeMap<K, V>,
 }
 
@@ -20,7 +20,7 @@ where
 {
     fn default() -> Self {
         Self {
-            roots: FnvHashSet::default(),
+            roots: FxHashSet::default(),
             map: TreeMap::default(),
         }
     }
@@ -50,7 +50,7 @@ impl<K, V> Forest<K, V>
 where
     K: Key,
 {
-    pub fn get_roots(&self) -> &FnvHashSet<K> {
+    pub fn get_roots(&self) -> &FxHashSet<K> {
         &self.roots
     }
 

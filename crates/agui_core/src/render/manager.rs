@@ -1,4 +1,4 @@
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
     element::{Element, ElementId},
@@ -11,9 +11,9 @@ use super::RenderContextId;
 pub struct RenderContextManager {
     last_render_context_id: usize,
 
-    map: FnvHashMap<ElementId, RenderContextId>,
+    map: FxHashMap<ElementId, RenderContextId>,
 
-    render_contexts: FnvHashMap<RenderContextId, ElementId>,
+    render_contexts: FxHashMap<RenderContextId, ElementId>,
 }
 
 impl RenderContextManager {

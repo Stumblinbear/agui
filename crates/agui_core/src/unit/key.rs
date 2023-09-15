@@ -1,9 +1,7 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use rand::Rng;
+use rustc_hash::FxHasher;
 
 /// The key used for caching a widget.
 ///
@@ -37,7 +35,7 @@ impl Key {
     where
         V: Hash,
     {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = FxHasher::default();
         value.hash(&mut hasher);
         Self::Local(hasher.finish())
     }
@@ -47,7 +45,7 @@ impl Key {
     where
         V: Hash,
     {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = FxHasher::default();
         value.hash(&mut hasher);
         Self::Global(hasher.finish())
     }

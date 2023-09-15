@@ -319,7 +319,7 @@ impl std::fmt::Debug for Element {
 #[cfg(test)]
 mod tests {
     use agui_macros::{InheritedWidget, LayoutWidget};
-    use fnv::FnvHashSet;
+    use rustc_hash::FxHashSet;
 
     use crate::{
         inheritance::manager::InheritanceManager,
@@ -375,7 +375,7 @@ mod tests {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
                 render_context_manager: &mut RenderContextManager::default(),
-                dirty: &mut FnvHashSet::<ElementId>::default(),
+                dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id1,
             });
@@ -404,7 +404,7 @@ mod tests {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
                 render_context_manager: &mut RenderContextManager::default(),
-                dirty: &mut FnvHashSet::<ElementId>::default(),
+                dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: Some(element_id1),
                 element_id: element_id2,
             });
@@ -490,7 +490,7 @@ mod tests {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
                 render_context_manager: &mut RenderContextManager::default(),
-                dirty: &mut FnvHashSet::<ElementId>::default(),
+                dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id2,
             });

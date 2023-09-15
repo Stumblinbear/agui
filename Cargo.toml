@@ -49,6 +49,10 @@ vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", re
 
 sysinfo = "0.29"
 
+fnv = "1.0"
+rustc-hash = "1.1"
+slotmap = "1.0"
+
 [profile.dev.package."*"]
 opt-level = 3
 
@@ -75,4 +79,9 @@ harness = false
 [[bench]]
 name = "widget_manager"
 path = "benches/agui_core/widget_manager.rs"
+harness = false
+
+[[bench]]
+name = "hashers"
+path = "benches/agui_core/hashers.rs"
 harness = false

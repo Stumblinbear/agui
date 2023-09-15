@@ -71,8 +71,8 @@ pub struct WidgetCallback<A> {
     callback_queue: CallbackQueue,
 }
 
-unsafe impl<A> Send for WidgetCallback<A> where A: AsAny {}
-unsafe impl<A> Sync for WidgetCallback<A> where A: AsAny {}
+unsafe impl<A> Send for WidgetCallback<A> {}
+unsafe impl<A> Sync for WidgetCallback<A> {}
 
 impl<A> PartialEq for WidgetCallback<A>
 where

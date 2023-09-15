@@ -9,7 +9,7 @@ use agui_core::{
     unit::{Offset, Rect},
     util::tree::new_key_type,
 };
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 use vello::{
     fello::{GlyphId, MetadataProvider},
     kurbo::{Affine, PathEl, Vec2},
@@ -43,7 +43,7 @@ pub struct CanvasElement {
     pub tail: Option<Box<LayerElement>>,
 
     pub paints: Vec<Paint>,
-    pub glyph_cache: FnvHashMap<(GlyphId, usize), Option<SceneFragment>>,
+    pub glyph_cache: FxHashMap<(GlyphId, usize), Option<SceneFragment>>,
 }
 
 impl CanvasElement {
@@ -91,7 +91,7 @@ impl CanvasElement {
                     tail: None,
 
                     paints: Vec::new(),
-                    glyph_cache: FnvHashMap::default(),
+                    glyph_cache: FxHashMap::default(),
                 },
             };
 

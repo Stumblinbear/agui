@@ -1,4 +1,4 @@
-use fnv::FnvHashSet;
+use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
@@ -15,7 +15,7 @@ pub struct WidgetMountContext<'ctx> {
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
     pub(crate) render_context_manager: &'ctx mut RenderContextManager,
 
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 
     pub(crate) parent_element_id: Option<ElementId>,
     pub(crate) element_id: ElementId,
@@ -25,7 +25,7 @@ pub struct WidgetUnmountContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
 }
@@ -34,7 +34,7 @@ pub struct WidgetBuildContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
@@ -42,7 +42,7 @@ pub struct WidgetBuildContext<'ctx> {
 
 pub struct WidgetCallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 
     pub(crate) element_id: ElementId,
 }

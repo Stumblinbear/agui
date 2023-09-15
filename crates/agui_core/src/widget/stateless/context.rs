@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData, rc::Rc};
 
-use fnv::{FnvHashMap, FnvHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::{
@@ -20,12 +20,12 @@ pub struct BuildContext<'ctx, W> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
 
-    pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
+    pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
 impl<W> ContextWidget for BuildContext<'_, W> {

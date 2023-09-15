@@ -1,6 +1,6 @@
 use std::{any::Any, rc::Rc};
 
-use fnv::{FnvHashMap, FnvHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::CallbackId,
@@ -20,7 +20,7 @@ where
     widget: Rc<W>,
     state: W::State,
 
-    callbacks: FnvHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
+    callbacks: FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
 
     initialized: bool,
 }
@@ -36,7 +36,7 @@ where
             widget,
             state,
 
-            callbacks: FnvHashMap::default(),
+            callbacks: FxHashMap::default(),
 
             initialized: false,
         }
@@ -65,7 +65,7 @@ where
 
             callbacks: &mut self.callbacks,
 
-            keyed_children: FnvHashSet::default(),
+            keyed_children: FxHashSet::default(),
 
             widget: &self.widget,
         };

@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use fnv::{FnvHashMap, FnvHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::{CallbackInvoke, CallbackQueue},
@@ -30,14 +30,14 @@ pub struct WidgetManager {
     inheritance_manager: InheritanceManager,
     render_context_manager: RenderContextManager,
 
-    widgets: FnvHashMap<Widget, ElementId>,
+    widgets: FxHashMap<Widget, ElementId>,
 
-    dirty: FnvHashSet<ElementId>,
+    dirty: FxHashSet<ElementId>,
     callback_queue: CallbackQueue,
 
     modifications: VecDeque<Modify>,
-    retained_elements: FnvHashSet<ElementId>,
-    removal_queue: FnvHashSet<ElementId>,
+    retained_elements: FxHashSet<ElementId>,
+    removal_queue: FxHashSet<ElementId>,
 }
 
 impl WidgetManager {
@@ -137,7 +137,7 @@ impl WidgetManager {
         tracing::debug!("updating widget tree");
 
         let mut element_events = Vec::new();
-        let mut needs_redraw = FnvHashSet::default();
+        let mut needs_redraw = FxHashSet::default();
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
@@ -258,7 +258,7 @@ impl WidgetManager {
     pub fn flush_modifications(
         &mut self,
         element_events: &mut Vec<ElementEvent>,
-        needs_redraw: &mut FnvHashSet<ElementId>,
+        needs_redraw: &mut FxHashSet<ElementId>,
     ) {
         if self.modifications.is_empty() {
             return;
@@ -353,7 +353,7 @@ impl WidgetManager {
     }
 
     #[tracing::instrument(level = "trace", skip(self, needs_redraw))]
-    pub fn flush_layout(&mut self, needs_redraw: &mut FnvHashSet<ElementId>) {
+    pub fn flush_layout(&mut self, needs_redraw: &mut FxHashSet<ElementId>) {
         let Some(root_id) = self.element_tree.get_root() else {
             return;
         };

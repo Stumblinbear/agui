@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use fnv::{FnvHashMap, FnvHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue, WidgetCallback},
@@ -69,14 +69,14 @@ where
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
-    pub(crate) dirty: &'ctx mut FnvHashSet<ElementId>,
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
 
-    pub(crate) callbacks: &'ctx mut FnvHashMap<CallbackId, Box<dyn StatefulCallbackFunc<S>>>,
+    pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<S>>>,
 
-    pub(crate) keyed_children: FnvHashSet<Key>,
+    pub(crate) keyed_children: FxHashSet<Key>,
 
     pub widget: &'ctx S::Widget,
 }
