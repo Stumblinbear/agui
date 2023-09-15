@@ -1,7 +1,0 @@
-error: unexpected end of input, expected expression
- --> tests/compile-fail/build_empty.rs:5:30
-  |
-5 |     let _widget: WidgetRef = build! {};
-  |                              ^^^^^^^^^
-  |
-  = note: this error originates in the macro `build` (in Nightly builds, run with -Z macro-backtrace for more info)

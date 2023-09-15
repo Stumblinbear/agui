@@ -1,102 +1,21 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
-    widget::{BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
-use crate::text::TextBaseline;
+use self::child::FlexChild;
 
+mod child;
 mod column;
+mod flexible;
+mod params;
 mod row;
 
 pub use column::*;
+pub use flexible::*;
+pub use params::*;
 pub use row::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum MainAxisSize {
-    /// Minimize the amount of free space along the main axis, subject to the incoming layout constraints.
-    ///
-    /// If the incoming layout constraints have a large enough minimum width or minimum height, there might
-    /// still be a non-zero amount of free space.
-    ///
-    /// If the incoming layout constraints are unbounded, and any children have a non-zero [FlexParentData.flex]
-    /// and a [FlexFit.tight] fit (as applied by [Expanded]), the [RenderFlex] will assert, because there would
-    /// be infinite remaining free space and boxes cannot be given infinite size.
-    Min,
-
-    /// Maximize the amount of free space along the main axis, subject to the incoming layout constraints.
-    ///
-    /// If the incoming layout constraints have a small enough [BoxConstraints.maxWidth] or [BoxConstraints.maxHeight],
-    /// there might still be no free space.
-    ///
-    /// If the incoming layout constraints are unbounded, the widget will assert during layout, because there would be
-    /// infinite remaining free space and boxes cannot be given infinite size.
-    #[default]
-    Max,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum MainAxisAlignment {
-    Start,
-    #[default]
-    Center,
-    End,
-    SpaceBetween,
-    SpaceAround,
-    SpaceEvenly,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum CrossAxisAlignment {
-    #[default]
-    Start,
-
-    End,
-
-    Center,
-
-    Stretch,
-
-    Baseline(TextBaseline),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum VerticalDirection {
-    Up,
-    #[default]
-    Down,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum FlexFit {
-    #[default]
-    /// The child is forced to fill the available space.
-    Tight,
-
-    /// The child can be at most as large as the available space (but is allowed to be smaller).
-    Loose,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Flexible {
-    pub flex: f32,
-    pub fit: FlexFit,
-
-    pub child: Option<Widget>,
-}
-
-impl<W> From<W> for Flexible
-where
-    W: IntoWidget,
-{
-    fn from(widget: W) -> Self {
-        Flexible {
-            child: Some(widget.into_widget()),
-
-            ..Flexible::default()
-        }
-    }
-}
 
 #[derive(LayoutWidget, Debug)]
 #[props(default)]
@@ -114,12 +33,16 @@ pub struct Flex {
 
     pub clip_behavior: ClipBehavior,
 
-    pub children: Vec<Flexible>,
+    #[prop(into, transform = |widgets: impl IntoIterator<Item = Widget>| widgets.into_iter().map(FlexChild::from).collect())]
+    pub children: Vec<FlexChild>,
 }
 
 impl WidgetLayout for Flex {
     fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
-        Vec::from_iter(self.children.iter().filter_map(|entry| entry.child.clone()))
+        self.children
+            .iter()
+            .map(|data| data.child.clone())
+            .collect()
     }
 
     fn intrinsic_size(

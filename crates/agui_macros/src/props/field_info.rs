@@ -59,31 +59,31 @@ impl<'a> FieldInfo<'a> {
         .into()
     }
 
-    pub fn type_from_inside_option(&self) -> Option<&syn::Type> {
-        let path = if let syn::Type::Path(type_path) = self.ty {
-            if type_path.qself.is_some() {
-                return None;
-            }
-            &type_path.path
-        } else {
-            return None;
-        };
-        let segment = path.segments.last()?;
-        if segment.ident != "Option" {
-            return None;
-        }
-        let generic_params =
-            if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
-                generic_params
-            } else {
-                return None;
-            };
-        if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
-            Some(ty)
-        } else {
-            None
-        }
-    }
+    // pub fn type_from_inside_option(&self) -> Option<&syn::Type> {
+    //     let path = if let syn::Type::Path(type_path) = self.ty {
+    //         if type_path.qself.is_some() {
+    //             return None;
+    //         }
+    //         &type_path.path
+    //     } else {
+    //         return None;
+    //     };
+    //     let segment = path.segments.last()?;
+    //     if segment.ident != "Option" {
+    //         return None;
+    //     }
+    //     let generic_params =
+    //         if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
+    //             generic_params
+    //         } else {
+    //             return None;
+    //         };
+    //     if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
+    //         Some(ty)
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -94,6 +94,7 @@ pub struct FieldBuilderAttr<'a> {
     pub default: Option<syn::Expr>,
     pub skip: Option<Span>,
     pub auto_into: Option<Span>,
+    pub transform: Option<Transform>,
     // It's unclear if stripping options is a good idea for widgets, since many will likely want to be
     // able to conditionally set the value to None. For now, this is disabled.
     // pub strip_option: Option<Span>,
@@ -148,11 +149,18 @@ impl<'a> FieldBuilderAttr<'a> {
             syn::Expr::Assign(assign) => {
                 let name = expr_to_single_string(&assign.left)
                     .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
+
                 match name.as_str() {
+                    "doc" => {
+                        self.doc = Some(*assign.right);
+                        Ok(())
+                    }
+
                     "default" => {
                         self.default = Some(*assign.right);
                         Ok(())
                     }
+
                     "default_code" => {
                         if let syn::Expr::Lit(syn::ExprLit {
                             lit: syn::Lit::Str(code),
@@ -170,10 +178,12 @@ impl<'a> FieldBuilderAttr<'a> {
                         }
                         Ok(())
                     }
-                    "doc" => {
-                        self.doc = Some(*assign.right);
+
+                    "transform" => {
+                        self.transform = Some(parse_transform_closure(*assign.right)?);
                         Ok(())
                     }
+
                     _ => Err(Error::new_spanned(
                         &assign,
                         format!("Unknown parameter {:?}", name),
@@ -200,7 +210,7 @@ impl<'a> FieldBuilderAttr<'a> {
                             )*
                             _ => Err(Error::new_spanned(
                                     &path,
-                                    format!("Unknown setter parameter {:?}", name),
+                                    format!("Unknown parameter {:?}", name),
                             ))
                         }
                     }
@@ -255,4 +265,42 @@ impl<'a> FieldBuilderAttr<'a> {
             _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Transform {
+    pub params: Vec<(syn::Pat, syn::Type)>,
+    pub body: syn::Expr,
+}
+
+fn parse_transform_closure(expr: syn::Expr) -> Result<Transform, Error> {
+    let closure = match expr {
+        syn::Expr::Closure(closure) => closure,
+        _ => return Err(Error::new_spanned(expr, "Expected closure")),
+    };
+
+    if let Some(kw) = &closure.asyncness {
+        return Err(Error::new(kw.span, "Transform closure cannot be async"));
+    }
+
+    if let Some(kw) = &closure.capture {
+        return Err(Error::new(kw.span, "Transform closure cannot be move"));
+    }
+
+    let params = closure
+        .inputs
+        .into_iter()
+        .map(|input| match input {
+            syn::Pat::Type(pat_type) => Ok((*pat_type.pat, *pat_type.ty)),
+            _ => Err(Error::new_spanned(
+                input,
+                "Transform closure must explicitly declare types",
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(Transform {
+        params,
+        body: *closure.body,
+    })
 }

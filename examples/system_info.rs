@@ -144,8 +144,6 @@ impl WidgetState for ExampleMainState {
                                 font: ctx.widget.font.styled().color(Color::from_rgb((0.0, 0.0, 0.0))),
                                 text: entry.into(),
                             })
-                            .map(Into::into)
-                            .collect::<Vec<_>>()
                     }
                 }
             }

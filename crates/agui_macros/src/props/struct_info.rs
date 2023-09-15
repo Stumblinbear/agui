@@ -220,13 +220,13 @@ impl<'a> StructInfo<'a> {
             (arg_type.to_token_stream(), field_name.to_token_stream())
         };
 
-        // let (param_list, arg_expr) = if field.builder_attr.strip_option.is_some() {
-        //     (quote!(#field_name: #arg_type), quote!(Some(#arg_expr)))
-        // } else {
-        //     (quote!(#field_name: #arg_type), arg_expr)
-        // };
-
-        let (param_list, arg_expr) = (quote!(#field_name: #arg_type), arg_expr);
+        let (param_list, arg_expr) = if let Some(transform) = &field.builder_attr.transform {
+            let params = transform.params.iter().map(|(pat, ty)| quote!(#pat: #ty));
+            let body = &transform.body;
+            (quote!(#(#params),*), quote!({ #body }))
+        } else {
+            (quote!(#field_name: #arg_type), arg_expr)
+        };
 
         let repeated_fields_error_type_name = syn::Ident::new(
             &format!(

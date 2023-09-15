@@ -20,15 +20,6 @@ internal = []
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "2.0", default-features = false, features = [
-  "full",
-  "parsing",
-  "visit",
-  "visit-mut",
-  "printing",
-] }
+syn = { version = "2.0", features = ["full"] }
 heck = "0.4"
 toml = "0.7"
-
-[dev-dependencies]
-trybuild = "1.0"

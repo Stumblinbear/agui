@@ -1,3 +1,5 @@
+use agui_core::widget::IntoWidget;
+use agui_primitives::sized_box::SizedBox;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use agui::{manager::WidgetManager, widgets::primitives::flex::Column};
@@ -47,7 +49,9 @@ fn widget_manager_ops(c: &mut Criterion) {
                 let mut column = Column::builder().build();
 
                 for _ in 0..1000 {
-                    column.children.push(Column::builder().build().into());
+                    column
+                        .children
+                        .push(SizedBox::builder().build().into_widget().into());
                 }
 
                 (WidgetManager::new(), column)
@@ -66,7 +70,9 @@ fn widget_manager_ops(c: &mut Criterion) {
                 let mut column = Column::builder().build();
 
                 for _ in 0..1000 {
-                    column.children.push(Column::builder().build().into());
+                    column
+                        .children
+                        .push(SizedBox::builder().build().into_widget().into());
                 }
 
                 let mut manager = WidgetManager::with_root(column);

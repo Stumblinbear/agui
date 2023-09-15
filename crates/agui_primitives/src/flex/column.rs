@@ -5,7 +5,7 @@ use agui_core::{
 use agui_macros::WidgetProps;
 
 use crate::flex::{
-    CrossAxisAlignment, Flex, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
+    child::FlexChild, CrossAxisAlignment, Flex, MainAxisAlignment, MainAxisSize, VerticalDirection,
 };
 
 #[derive(Debug, WidgetProps)]
@@ -21,8 +21,8 @@ pub struct Column {
 
     pub clip_behavior: ClipBehavior,
 
-    #[prop(into)]
-    pub children: Vec<Flexible>,
+    #[prop(into, transform = |widgets: impl IntoIterator<Item = Widget>| widgets.into_iter().map(FlexChild::from).collect())]
+    pub children: Vec<FlexChild>,
 }
 
 impl IntoWidget for Column {
