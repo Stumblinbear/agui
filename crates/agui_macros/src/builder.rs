@@ -23,10 +23,73 @@ fn parse_tree(input: TokenStream2, output: &mut TokenStream2) {
                 match (tokens.next(), tokens.next(), tokens.next()) {
                     (
                         Some(TokenTree::Ident(ident)),
-                        Some(TokenTree::Punct(punct)),
+                        Some(TokenTree::Punct(punct1)),
                         Some(TokenTree::Group(group)),
-                    ) if punct.as_char() == '>' && group.delimiter() == Delimiter::Brace => {
-                        parse_widget_struct(ident, group.stream(), output);
+                    ) if punct1.as_char() == '>' && group.delimiter() == Delimiter::Brace => {
+                        parse_widget_init(
+                            ident,
+                            None,
+                            TokenStream2::default(),
+                            group.stream(),
+                            output,
+                        );
+                    }
+
+                    (
+                        Some(TokenTree::Ident(ident)),
+                        Some(TokenTree::Punct(punct1)),
+                        Some(TokenTree::Punct(punct2)),
+                    ) if punct1.as_char() == '>' && punct2.as_char() == ':' => {
+                        match (tokens.next(), tokens.next(), tokens.next(), tokens.next()) {
+                            // `<Widget>::new() { .. }`
+                            (
+                                Some(TokenTree::Punct(punct3)),
+                                Some(TokenTree::Ident(init_func)),
+                                Some(TokenTree::Group(init_params)),
+                                Some(TokenTree::Group(group)),
+                            ) if punct3.as_char() == ':'
+                                && group.delimiter() == Delimiter::Brace =>
+                            {
+                                parse_widget_init(
+                                    ident,
+                                    Some(init_func),
+                                    init_params.stream(),
+                                    group.stream(),
+                                    output,
+                                );
+                            }
+
+                            // `<Widget>::new()`
+                            (
+                                Some(TokenTree::Punct(punct3)),
+                                Some(TokenTree::Ident(func_ident)),
+                                Some(TokenTree::Group(func_params)),
+                                trailing,
+                            ) if punct3.as_char() == ':' => {
+                                parse_widget_init(
+                                    ident,
+                                    Some(func_ident),
+                                    func_params.stream(),
+                                    TokenStream2::default(),
+                                    output,
+                                );
+
+                                // Make sure to add the trailing token back
+                                output.extend(trailing);
+                            }
+
+                            _ => {
+                                output.extend(
+                                    syn::Error::new(
+                                        punct2.span(),
+                                        format!("expected `<{}>::func(..)`", ident),
+                                    )
+                                    .to_compile_error(),
+                                );
+
+                                continue;
+                            }
+                        };
                     }
 
                     (first, second, third) => {
@@ -45,16 +108,28 @@ fn parse_tree(input: TokenStream2, output: &mut TokenStream2) {
     }
 }
 
-fn parse_widget_struct(ident: Ident, content: TokenStream2, output: &mut TokenStream2) {
-    let span = Span::call_site().located_at(ident.span());
+fn parse_widget_init(
+    widget_ident: Ident,
+    init_func: Option<Ident>,
+    init_params: TokenStream2,
+    content: TokenStream2,
+    output: &mut TokenStream2,
+) {
+    let span = Span::call_site().located_at(widget_ident.span());
 
     let mut builder = TokenStream2::new();
 
+    let is_using_builder = init_func.is_none() || init_func.as_ref().unwrap() == "builder";
+
     {
-        builder.extend(ident.to_token_stream());
+        builder.extend(widget_ident.to_token_stream());
         builder.extend(Token![::](span).to_token_stream());
-        builder.extend(Ident::new("builder", span).to_token_stream());
-        builder.extend(Group::new(Delimiter::Parenthesis, TokenStream2::new()).to_token_stream());
+        builder.extend(
+            init_func
+                .unwrap_or_else(|| Ident::new("builder", span))
+                .to_token_stream(),
+        );
+        builder.extend(Group::new(Delimiter::Parenthesis, init_params).to_token_stream());
 
         let mut content = content.into_iter();
 
@@ -86,8 +161,6 @@ fn parse_widget_struct(ident: Ident, content: TokenStream2, output: &mut TokenSt
                             None => break,
                         }
                     }
-
-                    // parse_tree(expr, output)
                 }
 
                 Some(other) => {
@@ -108,9 +181,12 @@ fn parse_widget_struct(ident: Ident, content: TokenStream2, output: &mut TokenSt
             builder.extend(Group::new(Delimiter::Parenthesis, modified_expr).to_token_stream());
         }
 
-        builder.extend(Token![.](span).to_token_stream());
-        builder.extend(Ident::new("build", span).to_token_stream());
-        builder.extend(Group::new(Delimiter::Parenthesis, TokenStream2::new()).to_token_stream());
+        if is_using_builder {
+            builder.extend(Token![.](span).to_token_stream());
+            builder.extend(Ident::new("build", span).to_token_stream());
+            builder
+                .extend(Group::new(Delimiter::Parenthesis, TokenStream2::new()).to_token_stream());
+        }
     }
 
     // Surround the struct with a call to `agui_core::widget::IntoWidget::into_widget(this)`

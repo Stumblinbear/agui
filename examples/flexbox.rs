@@ -42,7 +42,7 @@ fn main() {
                     <ColoredBox> {
                         color: Color::from_rgb((1.0, 0.0, 0.0)),
 
-                        child: SizedBox::new(10.0, 10.0).into_widget(),
+                        child: <SizedBox>::new(10.0, 10.0),
                     },
                     <Flexible> {
                         flex: Some(2.0),
@@ -50,13 +50,13 @@ fn main() {
                         child: <ColoredBox> {
                             color: Color::from_rgb((0.0, 1.0, 0.0)),
 
-                            child: SizedBox::new(20.0, 10.0).into_widget(),
+                            child: <SizedBox>::new(20.0, 10.0),
                         },
                     },
                     <ColoredBox> {
                         color: Color::from_rgb((0.0, 0.0, 1.0)),
 
-                        child: SizedBox::new(30.0, 10.0).into_widget(),
+                        child: <SizedBox>::new(30.0, 10.0),
                     },
                     <Flexible> {
                         flex: Some(1.0),
@@ -64,7 +64,7 @@ fn main() {
                         child: <ColoredBox> {
                             color: Color::from_rgb((1.0, 1.0, 0.0)),
 
-                            child: SizedBox::new(30.0, 10.0).into_widget(),
+                            child: <SizedBox>::new(30.0, 10.0),
                         },
                     },
                 ]

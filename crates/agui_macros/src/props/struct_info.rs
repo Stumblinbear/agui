@@ -128,7 +128,9 @@ impl<'a> StructInfo<'a> {
 
     pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
         let StructInfo {
-            ref builder_name, ..
+            ref name,
+            ref builder_name,
+            ..
         } = *self;
 
         let descructuring = self.included_fields().map(|f| {
@@ -240,8 +242,21 @@ impl<'a> StructInfo<'a> {
 
         let method_name = field.name;
 
+        let (b_impl_generics, b_ty_generics, b_where_clause) = self.generics.split_for_impl();
+
         Ok(quote_spanned! {
             self.builder_name.span() =>
+
+            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
+            impl #b_impl_generics #name #b_ty_generics #b_where_clause {
+                #deprecated
+                #doc
+                pub fn #method_name (mut self, #param_list) -> #name #b_ty_generics {
+                    self.#field_name = #arg_expr;
+
+                    self
+                }
+            }
 
             #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
@@ -256,6 +271,7 @@ impl<'a> StructInfo<'a> {
                     }
                 }
             }
+
             #[doc(hidden)]
             #[allow(dead_code, non_camel_case_types, non_snake_case)]
             pub enum #repeated_fields_error_type_name {}

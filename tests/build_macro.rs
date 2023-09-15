@@ -3,7 +3,31 @@ use agui_macros::build;
 use agui_primitives::{
     flex::{Column, Row},
     padding::Padding,
+    sized_box::SizedBox,
 };
+
+#[test]
+fn multiple_properties() {
+    let _widget: Widget = build! {
+        <Padding> {
+            padding: EdgeInsets::all(10.0),
+            child: <Row> { }
+        }
+    };
+}
+
+#[test]
+fn alternate_constructors() {
+    let _widget: Widget = build! {
+        <SizedBox>::new(20.0, 10.0)
+    };
+
+    let _widget: Widget = build! {
+        <SizedBox>::new(20.0, 10.0) {
+            child: <Row> { }
+        }
+    };
+}
 
 #[test]
 fn deeply_nested_widgets() {
@@ -17,16 +41,6 @@ fn deeply_nested_widgets() {
                     <Row> { },
                 ]
             }
-        }
-    };
-}
-
-#[test]
-fn multiple_properties() {
-    let _widget: Widget = build! {
-        <Padding> {
-            padding: EdgeInsets::all(10.0),
-            child: <Row> { }
         }
     };
 }

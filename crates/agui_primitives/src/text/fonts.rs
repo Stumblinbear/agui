@@ -44,7 +44,7 @@ impl WidgetState for FontsState {
         AvailableFonts {
             available_fonts: self.added_fonts.clone().union(self.initial_fonts.clone()),
 
-            add_font: ctx.callback(move |ctx, (name, font): (String, Font)| {
+            add_font_cb: ctx.callback(move |ctx, (name, font): (String, Font)| {
                 ctx.set_state(move |state| {
                     state.added_fonts.insert(name.to_string(), font);
                 });
@@ -65,7 +65,7 @@ pub struct AvailableFonts {
     available_fonts: im_rc::HashMap<String, Font, BuildHasherDefault<FxHasher>>,
 
     // Allows us to modify the StatefulWidget state
-    add_font: Callback<(String, Font)>,
+    add_font_cb: Callback<(String, Font)>,
 
     child: Widget,
 }
@@ -77,7 +77,7 @@ impl InheritedWidget for AvailableFonts {
 
     fn should_notify(&self, other_widget: &Self) -> bool {
         self.available_fonts != other_widget.available_fonts
-            || self.add_font != other_widget.add_font
+            || self.add_font_cb != other_widget.add_font_cb
     }
 }
 
@@ -87,7 +87,7 @@ impl AvailableFonts {
     }
 
     pub fn add_font(&self, name: String, font: Font) {
-        self.add_font.call((name, font));
+        self.add_font_cb.call((name, font));
     }
 }
 
