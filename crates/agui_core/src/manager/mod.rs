@@ -312,43 +312,38 @@ impl WidgetManager {
     pub fn flush_callbacks(&mut self) {
         let callback_invokes = self.callback_queue.take();
 
-        for invoke in callback_invokes {
-            match invoke {
-                CallbackInvoke::Func { func } => func(),
+        for CallbackInvoke {
+            callback_id,
+            arg: callback_arg,
+        } in callback_invokes
+        {
+            let element_id = callback_id.get_element_id();
 
-                CallbackInvoke::Widget {
-                    callback_id,
-                    arg: callback_arg,
-                } => {
-                    let element_id = callback_id.get_element_id();
+            self.element_tree
+                .with(element_id, |element_tree, element| {
+                    let changed = element.call(
+                        ElementCallbackContext {
+                            element_tree,
 
-                    self.element_tree
-                        .with(element_id, |element_tree, element| {
-                            let changed = element.call(
-                                ElementCallbackContext {
-                                    element_tree,
+                            dirty: &mut self.dirty,
 
-                                    dirty: &mut self.dirty,
+                            element_id,
+                        },
+                        callback_id,
+                        callback_arg,
+                    );
 
-                                    element_id,
-                                },
-                                callback_id,
-                                callback_arg,
-                            );
+                    if changed {
+                        tracing::debug!(
+                            id = &format!("{:?}", element_id),
+                            element = element.widget_name(),
+                            "element updated, queueing for rebuild"
+                        );
 
-                            if changed {
-                                tracing::debug!(
-                                    id = &format!("{:?}", element_id),
-                                    element = element.widget_name(),
-                                    "element updated, queueing for rebuild"
-                                );
-
-                                self.modifications.push_back(Modify::Rebuild(element_id));
-                            }
-                        })
-                        .expect("cannot call a callback on a widget that does not exist");
-                }
-            }
+                        self.modifications.push_back(Modify::Rebuild(element_id));
+                    }
+                })
+                .expect("cannot call a callback on a widget that does not exist");
         }
     }
 

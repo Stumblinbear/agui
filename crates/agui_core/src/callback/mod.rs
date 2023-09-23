@@ -26,11 +26,8 @@ impl CallbackId {
     }
 }
 
-#[derive(Default, Clone, PartialEq)]
-pub enum Callback<A>
-where
-    A: 'static,
-{
+#[derive(Default, Clone)]
+pub enum Callback<A> {
     #[default]
     None,
     Widget(WidgetCallback<A>),
@@ -62,6 +59,27 @@ where
     }
 }
 
+impl<A: 'static> PartialEq for Callback<A> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::None, Self::None) => true,
+            (Self::Widget(a), Self::Widget(b)) => a == b,
+            (Self::Func(a), Self::Func(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl<A: 'static> std::fmt::Debug for Callback<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Callback::None => f.debug_tuple("None").finish(),
+            Callback::Widget(cb) => f.debug_tuple("Widget").field(cb).finish(),
+            Callback::Func(cb) => f.debug_tuple("Func").field(cb).finish(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct WidgetCallback<A> {
     phantom: PhantomData<A>,
@@ -69,18 +87,6 @@ pub struct WidgetCallback<A> {
     id: CallbackId,
 
     callback_queue: CallbackQueue,
-}
-
-unsafe impl<A> Send for WidgetCallback<A> {}
-unsafe impl<A> Sync for WidgetCallback<A> {}
-
-impl<A> PartialEq for WidgetCallback<A>
-where
-    A: AsAny,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
 }
 
 impl<A> WidgetCallback<A>
@@ -114,6 +120,23 @@ where
     /// is different, it will panic.
     pub fn call_unchecked(&self, arg: Box<dyn Any>) {
         self.callback_queue.call_unchecked(self.id, arg);
+    }
+}
+
+unsafe impl<A> Send for WidgetCallback<A> {}
+unsafe impl<A> Sync for WidgetCallback<A> {}
+
+impl<A> PartialEq for WidgetCallback<A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl<A> std::fmt::Debug for WidgetCallback<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WidgetCallback")
+            .field("id", &self.id)
+            .finish()
     }
 }
 
@@ -153,6 +176,14 @@ where
             Arc::as_ptr(&self.func) as *const _ as *const (),
             Arc::as_ptr(&other.func) as *const _ as *const (),
         )
+    }
+}
+
+impl<A: 'static> std::fmt::Debug for FuncCallback<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FuncCallback")
+            .field("func", &TypeId::of::<A>())
+            .finish()
     }
 }
 
@@ -274,30 +305,6 @@ mod tests {
                 "unsafe callback should have been executed"
             );
         });
-
-        manager.get_callback_queue().call(callback.clone(), 18_u32);
-
-        manager.update();
-
-        RESULT.with(|f| {
-            assert_eq!(
-                f.borrow()[2],
-                18,
-                "callback through queue should have been called during update"
-            );
-        });
-
-        manager.get_callback_queue().call(callback, 31_u32);
-
-        manager.update();
-
-        RESULT.with(|f| {
-            assert_eq!(
-                f.borrow()[3],
-                31,
-                "unsafe callback through queue should have been called during update"
-            );
-        });
     }
 
     #[test]
@@ -306,10 +313,7 @@ mod tests {
 
         manager.set_root(TestWidget {
             child: TestWidget {
-                child: TestWidget {
-                    child: TestDummyWidget.into(),
-                }
-                .into(),
+                child: TestDummyWidget.into(),
             }
             .into(),
         });
@@ -318,9 +322,9 @@ mod tests {
 
         let callbacks = CALLBACK.with(|f| f.borrow().clone());
 
-        let callback_ids = callbacks.iter().collect::<Vec<_>>();
-
-        manager.get_callback_queue().call_many(&callbacks, 47);
+        callbacks.iter().for_each(|callback| {
+            callback.call(47);
+        });
 
         manager.update();
 
@@ -338,7 +342,9 @@ mod tests {
             );
         });
 
-        manager.get_callback_queue().call_many(callback_ids, 53_u32);
+        callbacks.iter().for_each(|callback| {
+            callback.call(53);
+        });
 
         manager.update();
 

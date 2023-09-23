@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 use agui_core::unit::Offset;
 
@@ -47,7 +44,7 @@ pub struct MouseButtons {
     pub left: MouseButtonState,
     pub right: MouseButtonState,
     pub middle: MouseButtonState,
-    pub other: HashMap<u16, MouseButtonState>,
+    // pub other: HashMap<u16, MouseButtonState>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
