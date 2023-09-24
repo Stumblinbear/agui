@@ -1,7 +1,5 @@
 use std::any::Any;
 
-use slotmap::new_key_type;
-
 use crate::{
     callback::CallbackId,
     render::canvas::Canvas,
@@ -23,7 +21,7 @@ use self::context::{
 
 pub mod context;
 
-new_key_type! {
+slotmap::new_key_type! {
     pub struct ElementId;
 }
 
@@ -88,7 +86,7 @@ impl Element {
         self.widget_element.mount(WidgetMountContext {
             element_tree: ctx.element_tree,
             inheritance_manager: ctx.inheritance_manager,
-            render_context_manager: ctx.render_context_manager,
+            render_view_manager: ctx.render_view_manager,
 
             dirty: ctx.dirty,
 
@@ -104,11 +102,11 @@ impl Element {
 
         // If the widget did not create a new render context, add it to the parent's render context.
         if ctx
-            .render_context_manager
+            .render_view_manager
             .get_context(ctx.element_id)
             .is_none()
         {
-            ctx.render_context_manager
+            ctx.render_view_manager
                 .add(ctx.parent_element_id, ctx.element_id);
         }
     }
@@ -132,14 +130,14 @@ impl Element {
             parent_scope_id,
         );
 
-        let parent_render_context_id = ctx
+        let parent_render_view_id = ctx
             .parent_element_id
-            .and_then(|element_id| ctx.render_context_manager.get_context(element_id));
+            .and_then(|element_id| ctx.render_view_manager.get_context(element_id));
 
-        ctx.render_context_manager.update_render_context(
+        ctx.render_view_manager.update_render_view(
             ctx.element_tree,
             ctx.element_id,
-            parent_render_context_id,
+            parent_render_view_id,
         );
     }
 
@@ -155,7 +153,7 @@ impl Element {
         });
 
         ctx.inheritance_manager.remove(ctx.element_id);
-        ctx.render_context_manager.remove(ctx.element_id);
+        ctx.render_view_manager.remove(ctx.element_id);
     }
 
     /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
@@ -323,7 +321,7 @@ mod tests {
 
     use crate::{
         inheritance::manager::InheritanceManager,
-        render::manager::RenderContextManager,
+        render::manager::RenderViewManager,
         unit::{Constraints, Size},
         util::tree::Tree,
         widget::{BuildContext, InheritedWidget, IntoWidget, LayoutContext, Widget, WidgetLayout},
@@ -374,7 +372,7 @@ mod tests {
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
-                render_context_manager: &mut RenderContextManager::default(),
+                render_view_manager: &mut RenderViewManager::default(),
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id1,
@@ -403,7 +401,7 @@ mod tests {
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
-                render_context_manager: &mut RenderContextManager::default(),
+                render_view_manager: &mut RenderViewManager::default(),
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: Some(element_id1),
                 element_id: element_id2,
@@ -489,7 +487,7 @@ mod tests {
             element.remount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
-                render_context_manager: &mut RenderContextManager::default(),
+                render_view_manager: &mut RenderViewManager::default(),
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id2,

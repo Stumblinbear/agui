@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use agui_core::{
-    manager::{events::ElementEvent, WidgetManager},
+    engine::{event::ElementEvent, Engine},
     plugin::Plugin,
-    render::{renderer::Renderer, RenderContextId},
+    render::{renderer::Renderer, RenderViewId},
     unit::Font,
     widget::{IntoWidget, Widget},
 };
@@ -19,11 +19,11 @@ use crate::{fonts::VelloFonts, surface::VelloSurface, text_layout::VelloTextLayo
 pub struct VelloRenderer<'r, W> {
     phantom: std::marker::PhantomData<W>,
 
-    render_context: RenderContext,
+    render_view: RenderContext,
 
     fonts: VelloFonts<'r>,
 
-    surfaces: FxHashMap<RenderContextId, VelloSurface>,
+    surfaces: FxHashMap<RenderViewId, VelloSurface>,
 }
 
 impl<W> Plugin for VelloRenderer<'_, W> {
@@ -52,7 +52,7 @@ impl<'r, W> VelloRenderer<'r, W> {
         Self {
             phantom: std::marker::PhantomData,
 
-            render_context: context,
+            render_view: context,
 
             fonts: VelloFonts::default(),
 
@@ -81,15 +81,15 @@ where
 
     fn create_context(
         &mut self,
-        widget_manager: &WidgetManager,
-        render_context_id: RenderContextId,
+        engine: &Engine,
+        render_view_id: RenderViewId,
         target: &Self::Target,
         width: u32,
         height: u32,
     ) {
-        let surface = block_on(self.render_context.create_surface(&target, width, height)).unwrap();
+        let surface = block_on(self.render_view.create_surface(&target, width, height)).unwrap();
 
-        let device_handle = &self.render_context.devices[surface.dev_id];
+        let device_handle = &self.render_view.devices[surface.dev_id];
 
         let renderer = vello::Renderer::new(
             &device_handle.device,
@@ -101,7 +101,7 @@ where
         .unwrap();
 
         let mut surface = VelloSurface {
-            render_context_id,
+            render_view_id,
 
             surface,
             renderer,
@@ -110,46 +110,34 @@ where
             widgets: FxHashMap::default(),
         };
 
-        surface.init(widget_manager, &mut self.fonts);
+        surface.init(engine, &mut self.fonts);
 
-        self.surfaces.insert(render_context_id, surface);
+        self.surfaces.insert(render_view_id, surface);
     }
 
-    fn remove_context(&mut self, _: &WidgetManager, render_context_id: RenderContextId) {
-        self.surfaces.remove(&render_context_id);
+    fn remove_context(&mut self, _: &Engine, render_view_id: RenderViewId) {
+        self.surfaces.remove(&render_view_id);
     }
 
-    fn resize(
-        &mut self,
-        _: &WidgetManager,
-        render_context_id: RenderContextId,
-        width: u32,
-        height: u32,
-    ) {
-        self.render_context.resize_surface(
-            &mut self.surfaces.get_mut(&render_context_id).unwrap().surface,
+    fn resize(&mut self, _: &Engine, render_view_id: RenderViewId, width: u32, height: u32) {
+        self.render_view.resize_surface(
+            &mut self.surfaces.get_mut(&render_view_id).unwrap().surface,
             width,
             height,
         );
     }
 
-    fn redraw(
-        &mut self,
-        widget_manager: &WidgetManager,
-        render_context_id: RenderContextId,
-        events: &[ElementEvent],
-    ) {
-        self.surfaces.get_mut(&render_context_id).unwrap().redraw(
-            widget_manager,
-            &mut self.fonts,
-            events,
-        );
+    fn redraw(&mut self, engine: &Engine, render_view_id: RenderViewId, events: &[ElementEvent]) {
+        self.surfaces
+            .get_mut(&render_view_id)
+            .unwrap()
+            .redraw(engine, &mut self.fonts, events);
     }
 
-    fn render(&mut self, render_context_id: RenderContextId) {
+    fn render(&mut self, render_view_id: RenderViewId) {
         self.surfaces
-            .get_mut(&render_context_id)
+            .get_mut(&render_view_id)
             .unwrap()
-            .render(&self.render_context);
+            .render(&self.render_view);
     }
 }

@@ -2,20 +2,20 @@ use agui_core::widget::IntoWidget;
 use agui_primitives::sized_box::SizedBox;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use agui::{manager::WidgetManager, widgets::primitives::flex::Column};
+use agui::{engine::Engine, widgets::primitives::flex::Column};
 
-fn widget_manager_ops(c: &mut Criterion) {
-    let mut group = c.benchmark_group("widget manager (single)");
+fn engine_ops(c: &mut Criterion) {
+    let mut group = c.benchmark_group("engine (single)");
 
     group.throughput(criterion::Throughput::Elements(1));
 
     group.sample_size(500).bench_function("additions", |b| {
         b.iter_with_setup(
-            || (WidgetManager::new(), Column::builder().build()),
-            |(mut manager, widget)| {
-                manager.set_root(widget);
+            || (Engine::new(), Column::builder().build()),
+            |(mut engine, widget)| {
+                engine.set_root(widget);
 
-                manager.update();
+                engine.update();
             },
         )
     });
@@ -23,23 +23,23 @@ fn widget_manager_ops(c: &mut Criterion) {
     group.sample_size(500).bench_function("removals", |b| {
         b.iter_with_setup(
             || {
-                let mut manager = WidgetManager::with_root(Column::builder().build());
+                let mut engine = Engine::with_root(Column::builder().build());
 
-                manager.update();
+                engine.update();
 
-                manager
+                engine
             },
-            |mut manager| {
-                manager.remove_root();
+            |mut engine| {
+                engine.remove_root();
 
-                manager.update();
+                engine.update();
             },
         )
     });
 
     group.finish();
 
-    let mut group = c.benchmark_group("widget manager (large)");
+    let mut group = c.benchmark_group("engine (large)");
 
     group.throughput(criterion::Throughput::Elements(1000));
 
@@ -54,12 +54,12 @@ fn widget_manager_ops(c: &mut Criterion) {
                         .push(SizedBox::builder().build().into_widget().into());
                 }
 
-                (WidgetManager::new(), column)
+                (Engine::new(), column)
             },
-            |(mut manager, widget)| {
-                manager.set_root(widget);
+            |(mut engine, widget)| {
+                engine.set_root(widget);
 
-                manager.update();
+                engine.update();
             },
         )
     });
@@ -75,16 +75,16 @@ fn widget_manager_ops(c: &mut Criterion) {
                         .push(SizedBox::builder().build().into_widget().into());
                 }
 
-                let mut manager = WidgetManager::with_root(column);
+                let mut engine = Engine::with_root(column);
 
-                manager.update();
+                engine.update();
 
-                manager
+                engine
             },
-            |mut manager| {
-                manager.remove_root();
+            |mut engine| {
+                engine.remove_root();
 
-                manager.update();
+                engine.update();
             },
         )
     });
@@ -92,5 +92,5 @@ fn widget_manager_ops(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, widget_manager_ops);
+criterion_group!(benches, engine_ops);
 criterion_main!(benches);

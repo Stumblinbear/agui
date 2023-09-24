@@ -5,14 +5,14 @@ use crate::{
     element::{Element, ElementId},
     gestures::hit_test::HitTestEntry,
     inheritance::manager::InheritanceManager,
-    render::manager::RenderContextManager,
+    render::manager::RenderViewManager,
     util::tree::Tree,
 };
 
 pub struct ElementMountContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
-    pub(crate) render_context_manager: &'ctx mut RenderContextManager,
+    pub(crate) render_view_manager: &'ctx mut RenderViewManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 
@@ -23,7 +23,7 @@ pub struct ElementMountContext<'ctx> {
 pub struct ElementUnmountContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
-    pub(crate) render_context_manager: &'ctx mut RenderContextManager,
+    pub(crate) render_view_manager: &'ctx mut RenderViewManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 

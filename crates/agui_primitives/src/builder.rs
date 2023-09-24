@@ -27,7 +27,7 @@ impl WidgetBuild for Builder {
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        manager::WidgetManager,
+        engine::Engine,
         query::WidgetQueryExt,
         unit::{Constraints, Size},
         widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
@@ -51,12 +51,12 @@ mod tests {
 
     #[test]
     pub fn calls_func() {
-        let mut manager = WidgetManager::with_root(Builder::new(|_| TestWidget::default().into()));
+        let mut engine = Engine::with_root(Builder::new(|_| TestWidget::default().into()));
 
-        manager.update();
+        engine.update();
 
         assert!(
-            manager.query().by_type::<TestWidget>().next().is_some(),
+            engine.query().by_type::<TestWidget>().next().is_some(),
             "widget should have been created"
         );
     }

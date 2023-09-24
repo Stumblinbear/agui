@@ -11,7 +11,7 @@ struct CallbackId {
     type_id: TypeId,
 }
 
-fn widget_manager_ops(c: &mut Criterion) {
+fn hashers(c: &mut Criterion) {
     let mut group = c.benchmark_group("hashers (8 bytes)");
 
     group.throughput(criterion::Throughput::Elements(1));
@@ -82,5 +82,5 @@ fn widget_manager_ops(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, widget_manager_ops);
+criterion_group!(benches, hashers);
 criterion_main!(benches);

@@ -10,9 +10,9 @@ pub use texture::*;
 pub type CanvasPainter<'paint> = canvas::painter::CanvasPainter<'paint, canvas::painter::Head<()>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct RenderContextId(Option<usize>);
+pub struct RenderViewId(Option<usize>);
 
-impl RenderContextId {
+impl RenderViewId {
     pub(crate) fn new(id: usize) -> Self {
         Self(Some(id))
     }

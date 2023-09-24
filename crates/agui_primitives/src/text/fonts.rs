@@ -96,7 +96,7 @@ mod tests {
     use std::cell::RefCell;
 
     use agui_core::{
-        manager::WidgetManager,
+        engine::Engine,
         unit::Font,
         widget::{BuildContext, ContextInheritedMut, Widget, WidgetBuild},
     };
@@ -135,9 +135,9 @@ mod tests {
 
     #[test]
     fn can_retrieve_from_available_fonts() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(build! {
+        engine.set_root(build! {
             <Fonts> {
                 fonts: im_rc::HashMap::from_iter([(
                     String::from("test font family"),
@@ -148,7 +148,7 @@ mod tests {
             }
         });
 
-        manager.update();
+        engine.update();
 
         TEST_HOOK.with(|result| {
             assert_ne!(

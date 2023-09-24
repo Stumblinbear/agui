@@ -207,7 +207,7 @@ mod tests {
 
     use crate::{
         callback::Callback,
-        manager::WidgetManager,
+        engine::Engine,
         unit::{Constraints, Size},
         widget::{BuildContext, LayoutContext, Widget, WidgetBuild, WidgetLayout},
     };
@@ -253,13 +253,13 @@ mod tests {
 
     #[test]
     pub fn should_not_call_immediately() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestWidget {
+        engine.set_root(TestWidget {
             child: TestDummyWidget.into(),
         });
 
-        manager.update();
+        engine.update();
 
         let callback = CALLBACK.with(|f| f.borrow()[0].clone());
 
@@ -276,19 +276,19 @@ mod tests {
 
     #[test]
     pub fn can_fire_callbacks() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestWidget {
+        engine.set_root(TestWidget {
             child: TestDummyWidget.into(),
         });
 
-        manager.update();
+        engine.update();
 
         let callback = CALLBACK.with(|f| f.borrow()[0].clone());
 
         callback.call(7);
 
-        manager.update();
+        engine.update();
 
         RESULT.with(|f| {
             assert_eq!(f.borrow()[0], 7, "callback should have been executed");
@@ -296,7 +296,7 @@ mod tests {
 
         callback.call_unchecked(Box::new(10_u32));
 
-        manager.update();
+        engine.update();
 
         RESULT.with(|f| {
             assert_eq!(
@@ -309,16 +309,16 @@ mod tests {
 
     #[test]
     pub fn can_fire_many_callbacks() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestWidget {
+        engine.set_root(TestWidget {
             child: TestWidget {
                 child: TestDummyWidget.into(),
             }
             .into(),
         });
 
-        manager.update();
+        engine.update();
 
         let callbacks = CALLBACK.with(|f| f.borrow().clone());
 
@@ -326,7 +326,7 @@ mod tests {
             callback.call(47);
         });
 
-        manager.update();
+        engine.update();
 
         RESULT.with(|f| {
             assert_eq!(
@@ -346,7 +346,7 @@ mod tests {
             callback.call(53);
         });
 
-        manager.update();
+        engine.update();
 
         RESULT.with(|f| {
             assert_eq!(

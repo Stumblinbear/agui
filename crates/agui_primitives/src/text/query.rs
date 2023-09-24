@@ -60,14 +60,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::manager::WidgetManager;
+    use agui_core::engine::Engine;
     use agui_macros::build;
 
     use crate::{flex::Column, text::query::TextQueryExt, text::Text};
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut manager = WidgetManager::with_root(build! {
+        let mut engine = Engine::with_root(build! {
             <Column> {
                 children: [
                     <Text> {
@@ -80,10 +80,10 @@ mod tests {
             }
         });
 
-        manager.update();
+        engine.update();
 
         assert_eq!(
-            manager
+            engine
                 .query()
                 .with_text("foo")
                 .next()
@@ -94,7 +94,7 @@ mod tests {
         );
 
         assert_eq!(
-            manager
+            engine
                 .query()
                 .with_text("bar")
                 .next()

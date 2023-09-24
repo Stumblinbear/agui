@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 use agui_core::{
     element::ElementId,
     render::{
@@ -7,7 +5,6 @@ use agui_core::{
         Paint,
     },
     unit::{Offset, Rect},
-    util::tree::new_key_type,
 };
 use rustc_hash::FxHashMap;
 use vello::{
@@ -18,10 +15,6 @@ use vello::{
 };
 
 use crate::fonts::VelloFonts;
-
-new_key_type! {
-    pub struct CanvasId;
-}
 
 #[derive(Default)]
 pub struct RenderElement {

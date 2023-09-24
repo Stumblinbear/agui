@@ -26,7 +26,7 @@ mod tests {
     use agui_macros::{InheritedWidget, LayoutWidget, StatelessWidget};
 
     use crate::{
-        manager::WidgetManager,
+        engine::Engine,
         unit::{Constraints, Size},
         widget::{
             BuildContext, InheritedWidget, IntoWidget, LayoutContext, Widget, WidgetBuild,
@@ -142,9 +142,9 @@ mod tests {
 
     #[test]
     pub fn updates_scoped_children() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestRootWidget);
+        engine.set_root(TestRootWidget);
 
         let depending_widget = TestDependingWidget.into_widget();
 
@@ -153,7 +153,7 @@ mod tests {
             child: depending_widget.clone(),
         });
 
-        manager.update();
+        engine.update();
 
         assert_inherited_data(Some(7), "should have retrieved the inherited widget");
 
@@ -162,17 +162,17 @@ mod tests {
             child: depending_widget.clone(),
         });
 
-        manager.mark_dirty(manager.get_root().unwrap());
-        manager.update();
+        engine.mark_dirty(engine.get_root().unwrap());
+        engine.update();
 
         assert_inherited_data(Some(9), "should have updated the child widget");
     }
 
     #[test]
     pub fn updates_nested_scope_children() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestRootWidget);
+        engine.set_root(TestRootWidget);
 
         let nested_scope = TestOtherInheritedWidget {
             child: TestDependingWidget.into(),
@@ -184,7 +184,7 @@ mod tests {
             child: nested_scope.clone(),
         });
 
-        manager.update();
+        engine.update();
 
         assert_inherited_data(Some(7), "should have retrieved the inherited widget");
 
@@ -193,17 +193,17 @@ mod tests {
             child: nested_scope,
         });
 
-        manager.mark_dirty(manager.get_root().unwrap());
-        manager.update();
+        engine.mark_dirty(engine.get_root().unwrap());
+        engine.update();
 
         assert_inherited_data(Some(9), "should have updated the child widget");
     }
 
     #[test]
     pub fn child_updates_when_dependency_unavailable() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestRootWidget);
+        engine.set_root(TestRootWidget);
 
         let dependent_child = TestDependingWidget.into_widget();
 
@@ -212,7 +212,7 @@ mod tests {
             child: dependent_child.clone(),
         });
 
-        manager.update();
+        engine.update();
 
         assert_inherited_data(Some(7), "should have retrieved the inherited widget");
 
@@ -220,8 +220,8 @@ mod tests {
             child: dependent_child.into(),
         });
 
-        manager.mark_dirty(manager.get_root().unwrap());
-        manager.update();
+        engine.mark_dirty(engine.get_root().unwrap());
+        engine.update();
 
         assert_inherited_data(None, "should have updated the child widget");
     }

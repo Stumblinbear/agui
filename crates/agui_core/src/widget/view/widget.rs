@@ -1,22 +1,22 @@
 use crate::widget::{element::WidgetElement, ElementBuilder, IntoWidget, Widget};
 
-use super::instance::RenderContextBoundaryElement;
+use super::instance::RenderViewElement;
 
-pub struct RenderContextBoundary {
+pub struct RenderView {
     pub child: Widget,
 }
 
-impl IntoWidget for RenderContextBoundary {
+impl IntoWidget for RenderView {
     fn into_widget(self) -> Widget {
         Widget::new(self)
     }
 }
 
-impl ElementBuilder for RenderContextBoundary {
+impl ElementBuilder for RenderView {
     fn create_element(self: std::rc::Rc<Self>) -> Box<dyn WidgetElement>
     where
         Self: Sized,
     {
-        Box::new(RenderContextBoundaryElement::new(self))
+        Box::new(RenderViewElement::new(self))
     }
 }

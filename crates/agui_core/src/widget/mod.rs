@@ -6,9 +6,9 @@ mod inherited;
 mod key;
 mod layout;
 mod paint;
-pub mod render_context;
 mod stateful;
 mod stateless;
+pub mod view;
 
 #[allow(clippy::module_inception)]
 mod widget;

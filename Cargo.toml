@@ -77,11 +77,16 @@ path = "benches/agui_core/tree.rs"
 harness = false
 
 [[bench]]
-name = "widget_manager"
-path = "benches/agui_core/widget_manager.rs"
+name = "engine"
+path = "benches/agui_core/engine.rs"
 harness = false
 
 [[bench]]
 name = "hashers"
 path = "benches/agui_core/hashers.rs"
+harness = false
+
+[[bench]]
+name = "rc_vs_thread_local"
+path = "benches/agui_core/rc_vs_thread_local.rs"
 harness = false

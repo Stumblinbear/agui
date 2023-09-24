@@ -4,9 +4,9 @@ use agui_core::{
     notifier::ListenerHandle,
     unit::{Constraints, Size},
     widget::{
-        render_context::RenderContextBoundary, BuildContext, ContextInheritedMut, ContextWidget,
-        ContextWidgetStateMut, InheritedWidget, IntoWidget, LayoutContext, StatefulBuildContext,
-        StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
+        view::RenderView, BuildContext, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
+        InheritedWidget, IntoWidget, LayoutContext, StatefulBuildContext, StatefulWidget, Widget,
+        WidgetBuild, WidgetLayout, WidgetState,
     },
 };
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
@@ -27,7 +27,7 @@ pub struct Window {
 impl WidgetBuild for Window {
     fn build(&self, _: &mut BuildContext<Self>) -> Widget {
         // Windows must be created within their own render context
-        RenderContextBoundary {
+        RenderView {
             child: build! {
                 <WinitWindow> {
                     window: self.window.clone(),

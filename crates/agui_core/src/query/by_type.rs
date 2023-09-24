@@ -49,7 +49,7 @@ mod tests {
     use agui_macros::LayoutWidget;
 
     use crate::{
-        manager::WidgetManager,
+        engine::Engine,
         query::WidgetQueryExt,
         unit::Size,
         widget::{BuildContext, IntoWidget, Widget, WidgetLayout},
@@ -95,9 +95,9 @@ mod tests {
 
     #[test]
     pub fn finds_widget_by_type() {
-        let mut manager = WidgetManager::new();
+        let mut engine = Engine::new();
 
-        manager.set_root(TestWidget1 {
+        engine.set_root(TestWidget1 {
             child: Some(
                 TestWidget2 {
                     child: Some(
@@ -111,16 +111,16 @@ mod tests {
             ),
         });
 
-        manager.update();
+        engine.update();
 
         assert_eq!(
-            manager.query().by_type::<TestWidget1>().count(),
+            engine.query().by_type::<TestWidget1>().count(),
             2,
             "should have found 2 widgets of type TestWidget1"
         );
 
         assert_eq!(
-            manager.query().by_type::<TestWidget2>().count(),
+            engine.query().by_type::<TestWidget2>().count(),
             1,
             "should have found 1 widget of type TestWidget2"
         );

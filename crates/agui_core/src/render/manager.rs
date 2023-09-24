@@ -5,40 +5,40 @@ use crate::{
     util::tree::Tree,
 };
 
-use super::RenderContextId;
+use super::RenderViewId;
 
 #[derive(Default)]
-pub struct RenderContextManager {
-    last_render_context_id: usize,
+pub struct RenderViewManager {
+    last_render_view_id: usize,
 
-    map: FxHashMap<ElementId, RenderContextId>,
+    map: FxHashMap<ElementId, RenderViewId>,
 
-    render_contexts: FxHashMap<RenderContextId, ElementId>,
+    render_views: FxHashMap<RenderViewId, ElementId>,
 }
 
-impl RenderContextManager {
-    pub fn create_render_context(&mut self, element_id: ElementId) -> RenderContextId {
+impl RenderViewManager {
+    pub fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
         assert!(
             !self.map.contains_key(&element_id),
             "element already exists in the render context manager"
         );
 
-        self.last_render_context_id += 1;
+        self.last_render_view_id += 1;
 
-        let render_context_id = RenderContextId::new(self.last_render_context_id);
+        let render_view_id = RenderViewId::new(self.last_render_view_id);
 
-        self.map.insert(element_id, render_context_id);
-        self.render_contexts.insert(render_context_id, element_id);
+        self.map.insert(element_id, render_view_id);
+        self.render_views.insert(render_view_id, element_id);
 
-        render_context_id
+        render_view_id
     }
 
-    pub fn get_context(&self, element_id: ElementId) -> Option<RenderContextId> {
+    pub fn get_context(&self, element_id: ElementId) -> Option<RenderViewId> {
         self.map.get(&element_id).copied()
     }
 
-    pub fn get_boundary(&self, render_context_id: RenderContextId) -> Option<ElementId> {
-        self.render_contexts.get(&render_context_id).copied()
+    pub fn get_boundary(&self, render_view_id: RenderViewId) -> Option<ElementId> {
+        self.render_views.get(&render_view_id).copied()
     }
 
     pub(crate) fn add(&mut self, parent_element_id: Option<ElementId>, element_id: ElementId) {
@@ -52,7 +52,7 @@ impl RenderContextManager {
             "element already exists in the render context manager"
         );
 
-        let parent_render_context_id = parent_element_id
+        let parent_render_view_id = parent_element_id
             .map(|parent_element_id| {
                 self.get_context(parent_element_id).expect(
                     "cannot add element to the render context manager as the parent does not exist",
@@ -60,30 +60,30 @@ impl RenderContextManager {
             })
             .unwrap_or_default();
 
-        self.map.insert(element_id, parent_render_context_id);
+        self.map.insert(element_id, parent_render_view_id);
     }
 
-    pub(crate) fn update_render_context(
+    pub(crate) fn update_render_view(
         &mut self,
         element_tree: &mut Tree<ElementId, Element>,
         element_id: ElementId,
-        new_render_context_id: Option<RenderContextId>,
+        new_render_view_id: Option<RenderViewId>,
     ) {
-        let current_render_context_id = self.map.get(&element_id).copied();
+        let current_render_view_id = self.map.get(&element_id).copied();
 
-        if new_render_context_id == current_render_context_id {
+        if new_render_view_id == current_render_view_id {
             return;
         }
 
         // If this element is the creator of a render context, then we don't need to do anything.
-        if let Some(current_render_context_id) = current_render_context_id {
-            if self.render_contexts.get(&current_render_context_id) == Some(&element_id) {
+        if let Some(current_render_view_id) = current_render_view_id {
+            if self.render_views.get(&current_render_view_id) == Some(&element_id) {
                 return;
             }
         }
 
-        if let Some(new_render_context_id) = new_render_context_id {
-            self.map.insert(element_id, new_render_context_id);
+        if let Some(new_render_view_id) = new_render_view_id {
+            self.map.insert(element_id, new_render_view_id);
         } else {
             // Remove this element from the render context.
             self.map.remove(&element_id);
@@ -94,15 +94,15 @@ impl RenderContextManager {
             .cloned()
             .unwrap_or_default()
         {
-            self.update_render_context(element_tree, child_id, new_render_context_id);
+            self.update_render_view(element_tree, child_id, new_render_view_id);
         }
     }
 
     pub(crate) fn remove(&mut self, element_id: ElementId) {
-        if let Some(render_context_id) = self.map.remove(&element_id) {
+        if let Some(render_view_id) = self.map.remove(&element_id) {
             // If this element is the one that created the render context, remove it from the map.
-            if self.render_contexts.get(&render_context_id) == Some(&element_id) {
-                self.render_contexts.remove(&render_context_id);
+            if self.render_views.get(&render_view_id) == Some(&element_id) {
+                self.render_views.remove(&render_view_id);
             }
         }
     }

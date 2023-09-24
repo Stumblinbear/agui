@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use agui_core::{
     element::ElementId,
-    manager::{events::ElementEvent, WidgetManager},
-    render::RenderContextId,
+    engine::{event::ElementEvent, Engine},
+    render::RenderViewId,
     unit::Offset,
 };
 use rustc_hash::FxHashMap;
@@ -18,7 +18,7 @@ use vello::{
 use crate::{element::RenderElement, fonts::VelloFonts};
 
 pub struct VelloSurface {
-    pub render_context_id: RenderContextId,
+    pub render_view_id: RenderViewId,
 
     pub surface: RenderSurface,
     pub renderer: vello::Renderer,
@@ -28,42 +28,37 @@ pub struct VelloSurface {
 }
 
 impl VelloSurface {
-    pub fn init(&mut self, widget_manager: &WidgetManager, fonts: &mut VelloFonts<'_>) {
-        let boundary_element_id = widget_manager
-            .get_render_context_manager()
-            .get_boundary(self.render_context_id)
+    pub fn init(&mut self, engine: &Engine, fonts: &mut VelloFonts<'_>) {
+        let boundary_element_id = engine
+            .get_render_view_manager()
+            .get_boundary(self.render_view_id)
             .expect("the required render context boundary does not exist");
 
-        let render_context_manager = widget_manager.get_render_context_manager();
-        let tree = widget_manager.get_tree();
+        let render_view_manager = engine.get_render_view_manager();
+        let tree = engine.get_tree();
 
-        let redraw_render_context_widgets = tree
+        let redraw_render_view_widgets = tree
             .iter_subtree(boundary_element_id, |element_id| {
-                render_context_manager.get_context(element_id) == Some(self.render_context_id)
+                render_view_manager.get_context(element_id) == Some(self.render_view_id)
             })
             .flat_map(|element_id| {
                 [
                     ElementEvent::Spawned {
-                        parent_id: widget_manager.get_tree().get_parent(element_id).copied(),
+                        parent_id: engine.get_tree().get_parent(element_id).copied(),
                         element_id,
                     },
                     ElementEvent::Draw {
-                        render_context_id: self.render_context_id,
+                        render_view_id: self.render_view_id,
                         element_id,
                     },
                 ]
             })
             .collect::<Vec<_>>();
 
-        self.redraw(widget_manager, fonts, &redraw_render_context_widgets);
+        self.redraw(engine, fonts, &redraw_render_view_widgets);
     }
 
-    pub fn redraw(
-        &mut self,
-        widget_manager: &WidgetManager,
-        fonts: &mut VelloFonts<'_>,
-        events: &[ElementEvent],
-    ) {
+    pub fn redraw(&mut self, engine: &Engine, fonts: &mut VelloFonts<'_>, events: &[ElementEvent]) {
         let now = Instant::now();
 
         for event in events {
@@ -72,7 +67,7 @@ impl VelloSurface {
                     parent_id,
                     element_id,
                 } => {
-                    self.create_element(widget_manager, *element_id, *parent_id);
+                    self.create_element(engine, *element_id, *parent_id);
                 }
 
                 ElementEvent::Destroyed { element_id } => {
@@ -84,16 +79,15 @@ impl VelloSurface {
                     element_id,
                 } => {
                     // We need to check if a subtree was moved outside or into this render context
-                    let was_in_render_context = self.widgets.contains_key(element_id);
+                    let was_in_render_view = self.widgets.contains_key(element_id);
 
-                    let is_in_render_context = widget_manager
-                        .get_render_context_manager()
-                        .get_context(*element_id)
-                        == Some(self.render_context_id);
+                    let is_in_render_view =
+                        engine.get_render_view_manager().get_context(*element_id)
+                            == Some(self.render_view_id);
 
-                    if was_in_render_context && !is_in_render_context {
+                    if was_in_render_view && !is_in_render_view {
                         // Remove the subtree from the render context
-                        for element_id in widget_manager
+                        for element_id in engine
                             .get_tree()
                             .iter_subtree(*element_id, |element_id| {
                                 self.widgets.contains_key(&element_id)
@@ -102,25 +96,21 @@ impl VelloSurface {
                         {
                             self.widgets.remove(&element_id);
                         }
-                    } else if !was_in_render_context && is_in_render_context {
-                        let render_context_id = self.render_context_id;
+                    } else if !was_in_render_view && is_in_render_view {
+                        let render_view_id = self.render_view_id;
 
                         // Add the subtree to the render context
                         for element_id in
-                            widget_manager
-                                .get_tree()
-                                .iter_subtree(*element_id, |element_id| {
-                                    widget_manager
-                                        .get_render_context_manager()
-                                        .get_context(element_id)
-                                        == Some(render_context_id)
-                                })
+                            engine.get_tree().iter_subtree(*element_id, |element_id| {
+                                engine.get_render_view_manager().get_context(element_id)
+                                    == Some(render_view_id)
+                            })
                         {
-                            self.create_element(widget_manager, element_id, *parent_id);
+                            self.create_element(engine, element_id, *parent_id);
                         }
                     }
 
-                    if is_in_render_context {
+                    if is_in_render_view {
                         let new_head_target = parent_id.and_then(|parent_id| {
                             let parent = self
                                 .widgets
@@ -144,14 +134,14 @@ impl VelloSurface {
                 }
 
                 ElementEvent::Draw {
-                    render_context_id,
+                    render_view_id,
                     element_id,
                 } => {
-                    if *render_context_id != self.render_context_id {
+                    if *render_view_id != self.render_view_id {
                         continue;
                     }
 
-                    self.update_element(widget_manager, fonts, *element_id);
+                    self.update_element(engine, fonts, *element_id);
                 }
 
                 ElementEvent::Rebuilt { .. } => {}
@@ -164,20 +154,20 @@ impl VelloSurface {
 
         let mut element_stack = Vec::<(usize, ElementId, Affine)>::new();
 
-        let boundary_element_id = widget_manager
-            .get_render_context_manager()
-            .get_boundary(self.render_context_id)
+        let boundary_element_id = engine
+            .get_render_view_manager()
+            .get_boundary(self.render_view_id)
             .expect("the required render context boundary does not exist");
 
-        let render_context_manager = widget_manager.get_render_context_manager();
-        let tree = widget_manager.get_tree();
+        let render_view_manager = engine.get_render_view_manager();
+        let tree = engine.get_tree();
 
         for element_id in tree.iter_subtree(boundary_element_id, |element_id| {
-            render_context_manager.get_context(element_id) == Some(self.render_context_id)
+            render_view_manager.get_context(element_id) == Some(self.render_view_id)
         }) {
             let element = self.widgets.get(&element_id).unwrap();
 
-            let element_depth = widget_manager.get_tree().get_depth(element_id).unwrap();
+            let element_depth = engine.get_tree().get_depth(element_id).unwrap();
 
             // End any elements in the stack that are at the same level or deeper than this one
             while let Some((element_id, transform)) = element_stack
@@ -219,7 +209,7 @@ impl VelloSurface {
 
     fn create_element(
         &mut self,
-        widget_manager: &WidgetManager,
+        engine: &Engine,
         element_id: ElementId,
         parent_id: Option<ElementId>,
     ) {
@@ -228,12 +218,14 @@ impl VelloSurface {
             RenderElement {
                 head_target: parent_id.and_then(|parent_id| {
                     let Some(parent) = self.widgets.get(&parent_id) else {
-                            if widget_manager.get_render_context_manager().get_context(parent_id) == Some(self.render_context_id) {
-                                panic!("render element spawned to a non-existent parent");
-                            }
+                        if engine.get_render_view_manager().get_context(parent_id)
+                            == Some(self.render_view_id)
+                        {
+                            panic!("render element spawned to a non-existent parent");
+                        }
 
-                            return None;
-                        };
+                        return None;
+                    };
 
                     if parent.canvas.tail.is_some() {
                         Some(parent_id)
@@ -251,7 +243,7 @@ impl VelloSurface {
 
     fn update_element(
         &mut self,
-        manager: &WidgetManager,
+        engine: &Engine,
         fonts: &mut VelloFonts<'_>,
         element_id: ElementId,
     ) {
@@ -260,7 +252,7 @@ impl VelloSurface {
             .get_mut(&element_id)
             .expect("drawn render element not found");
 
-        let widget_element = manager.get_tree().get(element_id).unwrap();
+        let widget_element = engine.get_tree().get(element_id).unwrap();
 
         let canvas = widget_element.paint();
 
@@ -287,10 +279,10 @@ impl VelloSurface {
         // }
     }
 
-    pub fn render(&mut self, render_context: &RenderContext) {
+    pub fn render(&mut self, render_view: &RenderContext) {
         let width = self.surface.config.width;
         let height = self.surface.config.height;
-        let device_handle = &render_context.devices[self.surface.dev_id];
+        let device_handle = &render_view.devices[self.surface.dev_id];
 
         let surface_texture = self
             .surface

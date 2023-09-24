@@ -3,8 +3,8 @@ use std::{ops::Deref, sync::mpsc, time::Instant};
 use agui_core::{
     callback::Callback,
     element::ElementId,
-    manager::WidgetManager,
-    render::{renderer::Renderer, RenderContextId},
+    engine::Engine,
+    render::{renderer::Renderer, RenderViewId},
     unit::Offset,
     widget::Widget,
 };
@@ -28,20 +28,20 @@ pub struct App<R> {
     window_tx: mpsc::Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>,
     window_rx: mpsc::Receiver<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>,
 
-    widget_manager: WidgetManager,
+    engine: Engine,
 
     renderer: R,
 
     windows: FxHashMap<WindowId, WinitWindowHandle>,
-    render_context_window: FxHashMap<RenderContextId, WindowId>,
-    window_render_context: FxHashMap<WindowId, RenderContextId>,
+    render_view_window: FxHashMap<RenderViewId, WindowId>,
+    window_render_view: FxHashMap<WindowId, RenderViewId>,
 }
 
 impl<R> Deref for App<R> {
-    type Target = WidgetManager;
+    type Target = Engine;
 
     fn deref(&self) -> &Self::Target {
-        &self.widget_manager
+        &self.engine
     }
 }
 
@@ -58,18 +58,18 @@ where
             window_tx,
             window_rx,
 
-            widget_manager: WidgetManager::default(),
+            engine: Engine::default(),
 
             renderer,
 
             windows: FxHashMap::default(),
-            render_context_window: FxHashMap::default(),
-            window_render_context: FxHashMap::default(),
+            render_view_window: FxHashMap::default(),
+            window_render_view: FxHashMap::default(),
         }
     }
 
     pub fn run(mut self, widget: Widget) {
-        self.widget_manager.set_root(build! {
+        self.engine.set_root(build! {
             <WinitWindowingController> {
                 tx: self.window_tx.clone(),
                 child: self.renderer.build(widget),
@@ -87,13 +87,13 @@ where
 
                     let window_id = window.id();
 
-                    let render_context_id = self.widget_manager.get_render_context_manager().get_context(element_id).expect("no render context");
+                    let render_view_id = self.engine.get_render_view_manager().get_context(element_id).expect("no render context");
 
-                    self.renderer.create_context(&self.widget_manager, render_context_id, &window, size.width, size.height);
+                    self.renderer.create_context(&self.engine, render_view_id, &window, size.width, size.height);
 
                     self.windows.insert(window_id, window.clone());
-                    self.render_context_window.insert(render_context_id, window_id);
-                    self.window_render_context.insert(window_id, render_context_id);
+                    self.render_view_window.insert(render_view_id, window_id);
+                    self.window_render_view.insert(window_id, render_view_id);
 
                     callback.call(window);
                 }
@@ -105,12 +105,12 @@ where
 
                             WinitWindowEvent::Destroyed => {
                                 self.windows.remove(&window_id);
-                                self.render_context_window.remove(&self.window_render_context.remove(&window_id).unwrap());
+                                self.render_view_window.remove(&self.window_render_view.remove(&window_id).unwrap());
                             }
 
                             WinitWindowEvent::Resized(size) => {
                                 if let Some(window) = self.windows.get_mut(&window_id) {
-                                    self.renderer.resize(&self.widget_manager, *self.window_render_context.get(&window.id()).unwrap(), size.width, size.height);
+                                    self.renderer.resize(&self.engine, *self.window_render_view.get(&window.id()).unwrap(), size.width, size.height);
                                     window.request_redraw();
                                 } else {
                                     tracing::error!(
@@ -265,8 +265,8 @@ where
                     }
 
                     WinitEvent::RedrawRequested(window_id) => {
-                        if let Some(render_context_id) = self.window_render_context.get(&window_id) {
-                            self.renderer.render(*render_context_id);
+                        if let Some(render_view_id) = self.window_render_view.get(&window_id) {
+                            self.renderer.render(*render_view_id);
                         } else {
                             tracing::error!(
                                 "a redraw was requested, but the window doesn't exist: {:?}",
@@ -280,7 +280,7 @@ where
 
                 let now = Instant::now();
 
-                let events = self.widget_manager.update();
+                let events = self.engine.update();
 
                 if !events.is_empty() {
                     tracing::info!("updated in: {:?}", Instant::now().duration_since(now));
@@ -288,7 +288,7 @@ where
                     // TODO: limit redraws only to the windows that show visual changes
                     // Maybe check if any redrawn widgets have a Window InheritedWidget?
                     self.windows.iter_mut().for_each(|(window_id, window)| {
-                        self.renderer.redraw(&self.widget_manager, *self.window_render_context.get(window_id).unwrap(), &events);
+                        self.renderer.redraw(&self.engine, *self.window_render_view.get(window_id).unwrap(), &events);
 
                         window.request_redraw();
                     });

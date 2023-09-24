@@ -5,7 +5,7 @@ use crate::{
     element::{Element, ElementId},
     gestures::hit_test::HitTestEntry,
     inheritance::manager::InheritanceManager,
-    render::manager::RenderContextManager,
+    render::manager::RenderViewManager,
     unit::{Offset, Size},
     util::tree::Tree,
 };
@@ -13,7 +13,7 @@ use crate::{
 pub struct WidgetMountContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
-    pub(crate) render_context_manager: &'ctx mut RenderContextManager,
+    pub(crate) render_view_manager: &'ctx mut RenderViewManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 
