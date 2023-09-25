@@ -245,9 +245,13 @@ impl Element {
             return ElementUpdate::Noop;
         }
 
-        self.widget = new_widget.clone();
+        let result = self.widget_element.update(new_widget);
 
-        self.widget_element.update(new_widget)
+        if result != ElementUpdate::RebuildNecessary {
+            self.widget = new_widget.clone();
+        }
+
+        result
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
