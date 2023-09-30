@@ -13,12 +13,13 @@ pub mod view;
 #[allow(clippy::module_inception)]
 mod widget;
 
+use self::element::WidgetElement;
 pub use self::{
     context::*, inherited::*, key::*, layout::*, paint::*, stateful::*, stateless::*, widget::*,
 };
 
 pub trait ElementBuilder: 'static {
-    fn create_element(self: Rc<Self>) -> Box<dyn self::element::WidgetElement>;
+    fn create_element(self: Rc<Self>) -> Box<dyn WidgetElement>;
 }
 
 pub trait AnyWidget: ElementBuilder {

@@ -10,12 +10,9 @@ use agui_macros::build;
 #[cfg(feature = "vello")]
 use agui_vello;
 use agui_vello::{VelloBinding, VelloRenderer};
-use agui_winit::event::WinitWindowEvent;
+use agui_winit::WinitBindingEvent;
 #[cfg(feature = "winit")]
-use agui_winit::{
-    binding::{WinitBinding, WinitBindingEvent},
-    handle::WinitWindowHandle,
-};
+use agui_winit::{WinitBinding, WinitWindowHandle};
 use rustc_hash::FxHashMap;
 use vello::glyph::fello::raw::FontRef;
 use winit::{
@@ -114,165 +111,177 @@ pub fn run_app(root: impl IntoWidget) {
 
         match event {
             WinitEvent::WindowEvent { event, window_id } => {
-                match event {
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-
-                    WindowEvent::Destroyed => {
-                        windows.remove(&window_id);
-                        render_view_window.remove(&window_render_view.remove(&window_id).unwrap());
+                // Since this event has a mutable reference which we can influence, we need to handle it a bit differently.
+                if let WindowEvent::ScaleFactorChanged {
+                    scale_factor: _,
+                    new_inner_size: _,
+                } = event
+                {
+                } else if let Some(event) = event.to_static() {
+                    // Emit the event before handling it to give the user a chance to respond to it before
+                    // making changes that may cause further events to be emitted. This ensures they arrive
+                    // in a sensible order.
+                    if let Some(window) = windows.get_mut(&window_id) {
+                        window.events().emit(&event);
                     }
 
-                    WindowEvent::Resized(size) => {
-                        if let Some(window) = windows.get_mut(&window_id) {
-                            renderer.resize(
-                                &engine,
-                                *window_render_view.get(&window.id()).unwrap(),
-                                size.width,
-                                size.height,
-                            );
+                    match event {
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
 
-                            window.request_redraw();
-                        } else {
-                            tracing::error!(
-                                "a redraw was requested, but the window doesn't exist: {:?}",
-                                window_id
-                            );
+                        WindowEvent::Destroyed => {
+                            windows.remove(&window_id);
+                            render_view_window
+                                .remove(&window_render_view.remove(&window_id).unwrap());
                         }
-                    }
 
-                    WindowEvent::Moved(pos) => {
-                        let window_pos = Offset {
-                            x: pos.x as f32,
-                            y: pos.y as f32,
-                        };
+                        WindowEvent::Resized(size) => {
+                            if let Some(window) = windows.get_mut(&window_id) {
+                                renderer.resize(
+                                    &engine,
+                                    *window_render_view.get(&window.id()).unwrap(),
+                                    size.width,
+                                    size.height,
+                                );
 
-                        // self.manager.fire_event(window_pos);
-                        // self.manager
-                        //     .set_global::<WindowPosition, _>(move |state| *state = window_pos);
-                    }
+                                window.request_redraw();
+                            } else {
+                                tracing::error!(
+                                    "a redraw was requested, but the window doesn't exist: {:?}",
+                                    window_id
+                                );
+                            }
+                        }
 
-                    WindowEvent::Focused(focused) => {
-                        let window_focused = focused;
+                        WindowEvent::Moved(pos) => {
+                            let window_pos = Offset {
+                                x: pos.x as f32,
+                                y: pos.y as f32,
+                            };
 
-                        // self.manager.fire_event(window_focused);
-                        // self.manager
-                        //     .set_global::<WindowFocus, _>(move |state| *state = window_focused);
-                    }
+                            // self.manager.fire_event(window_pos);
+                            // self.manager
+                            //     .set_global::<WindowPosition, _>(move |state| *state = window_pos);
+                        }
 
-                    WindowEvent::CursorMoved { position: pos, .. } => {
-                        let mouse_pos = Some(Offset {
-                            x: pos.x as f32,
-                            y: pos.y as f32,
-                        });
+                        WindowEvent::Focused(focused) => {
+                            let window_focused = focused;
 
-                        // self.manager.fire_event(mouse_pos);
-                        // self.manager
-                        //     .set_global::<MousePos, _>(move |state| *state = mouse_pos);
-                        // self.manager
-                        //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
-                    }
+                            // self.manager.fire_event(window_focused);
+                            // self.manager
+                            //     .set_global::<WindowFocus, _>(move |state| *state = window_focused);
+                        }
 
-                    WindowEvent::CursorLeft { .. } => {
-                        // let mouse_pos = None;
+                        WindowEvent::CursorMoved { position: pos, .. } => {
+                            let mouse_pos = Some(Offset {
+                                x: pos.x as f32,
+                                y: pos.y as f32,
+                            });
 
-                        // self.manager.fire_event(mouse_pos);
-                        // self.manager
-                        //     .set_global::<MousePos, _>(move |state| *state = mouse_pos);
-                        // self.manager
-                        //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
-                    }
+                            // self.manager.fire_event(mouse_pos);
+                            // self.manager
+                            //     .set_global::<MousePos, _>(move |state| *state = mouse_pos);
+                            // self.manager
+                            //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
+                        }
 
-                    WindowEvent::MouseWheel { delta, .. } => {
-                        let scroll = match delta {
-                            MouseScrollDelta::LineDelta(x, y) => Offset { x, y },
+                        WindowEvent::CursorLeft { .. } => {
+                            // let mouse_pos = None;
 
-                            MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => Offset {
-                                x: x as f32,
-                                y: y as f32,
-                            },
-                        };
+                            // self.manager.fire_event(mouse_pos);
+                            // self.manager
+                            //     .set_global::<MousePos, _>(move |state| *state = mouse_pos);
+                            // self.manager
+                            //     .set_global::<Mouse, _>(move |state| state.pos = mouse_pos);
+                        }
 
-                        // self.manager.fire_event(scroll);
-                        // self.manager
-                        //     .set_global::<Scroll, _>(move |state| *state = scroll);
-                    }
+                        WindowEvent::MouseWheel { delta, .. } => {
+                            let scroll = match delta {
+                                MouseScrollDelta::LineDelta(x, y) => Offset { x, y },
 
-                    WindowEvent::MouseInput {
-                        button,
-                        state: value,
-                        ..
-                    } => {
-                        // let button_state = match value {
-                        //     ElementState::Pressed => MouseButtonState::Pressed,
-                        //     ElementState::Released => MouseButtonState::Released,
-                        // };
+                                MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => Offset {
+                                    x: x as f32,
+                                    y: y as f32,
+                                },
+                            };
 
-                        // self.manager.fire_event(match button {
-                        //     winit::event::MouseButton::Left => MouseButton::Left(button_state),
-                        //     winit::event::MouseButton::Right => MouseButton::Right(button_state),
-                        //     winit::event::MouseButton::Middle => MouseButton::Middle(button_state),
-                        //     winit::event::MouseButton::Other(i) => {
-                        //         MouseButton::Other(i, button_state)
-                        //     }
-                        // });
+                            // self.manager.fire_event(scroll);
+                            // self.manager
+                            //     .set_global::<Scroll, _>(move |state| *state = scroll);
+                        }
 
-                        // self.manager
-                        //     .set_global::<MouseButtons, _>(move |state| match button {
-                        //         winit::event::MouseButton::Left => state.left = button_state,
-                        //         winit::event::MouseButton::Right => state.right = button_state,
-                        //         winit::event::MouseButton::Middle => state.middle = button_state,
-                        //         winit::event::MouseButton::Other(i) => {
-                        //             state.other.insert(i, button_state);
-                        //         }
-                        //     });
-
-                        // self.manager
-                        //     .set_global::<Mouse, _>(move |state| match button {
-                        //         winit::event::MouseButton::Left => state.button.left = button_state,
-                        //         winit::event::MouseButton::Right => {
-                        //             state.button.right = button_state
-                        //         }
-                        //         winit::event::MouseButton::Middle => {
-                        //             state.button.middle = button_state
-                        //         }
-                        //         winit::event::MouseButton::Other(i) => {
-                        //             state.button.other.insert(i, button_state);
-                        //         }
-                        //     });
-                    }
-
-                    WindowEvent::ReceivedCharacter(c) => {
-                        // self.manager.fire_event(KeyboardCharacter(c));
-                    }
-
-                    WindowEvent::KeyboardInput { input, .. } => {
-                        if let Some(key) = input.virtual_keycode {
-                            // let key: KeyCode = unsafe { std::mem::transmute(key as u32) };
-
-                            // let key_state = match input.state {
-                            //     ElementState::Pressed => KeyState::Pressed,
-                            //     ElementState::Released => KeyState::Released,
+                        WindowEvent::MouseInput {
+                            button,
+                            state: value,
+                            ..
+                        } => {
+                            // let button_state = match value {
+                            //     ElementState::Pressed => MouseButtonState::Pressed,
+                            //     ElementState::Released => MouseButtonState::Released,
                             // };
 
-                            // self.manager.fire_event(KeyboardInput(key, key_state));
+                            // self.manager.fire_event(match button {
+                            //     winit::event::MouseButton::Left => MouseButton::Left(button_state),
+                            //     winit::event::MouseButton::Right => MouseButton::Right(button_state),
+                            //     winit::event::MouseButton::Middle => MouseButton::Middle(button_state),
+                            //     winit::event::MouseButton::Other(i) => {
+                            //         MouseButton::Other(i, button_state)
+                            //     }
+                            // });
 
+                            // self.manager
+                            //     .set_global::<MouseButtons, _>(move |state| match button {
+                            //         winit::event::MouseButton::Left => state.left = button_state,
+                            //         winit::event::MouseButton::Right => state.right = button_state,
+                            //         winit::event::MouseButton::Middle => state.middle = button_state,
+                            //         winit::event::MouseButton::Other(i) => {
+                            //             state.other.insert(i, button_state);
+                            //         }
+                            //     });
+
+                            // self.manager
+                            //     .set_global::<Mouse, _>(move |state| match button {
+                            //         winit::event::MouseButton::Left => state.button.left = button_state,
+                            //         winit::event::MouseButton::Right => {
+                            //             state.button.right = button_state
+                            //         }
+                            //         winit::event::MouseButton::Middle => {
+                            //             state.button.middle = button_state
+                            //         }
+                            //         winit::event::MouseButton::Other(i) => {
+                            //             state.button.other.insert(i, button_state);
+                            //         }
+                            //     });
+                        }
+
+                        WindowEvent::ReceivedCharacter(c) => {
+                            // self.manager.fire_event(KeyboardCharacter(c));
+                        }
+
+                        WindowEvent::KeyboardInput { input, .. } => {
+                            if let Some(key) = input.virtual_keycode {
+                                // let key: KeyCode = unsafe { std::mem::transmute(key as u32) };
+
+                                // let key_state = match input.state {
+                                //     ElementState::Pressed => KeyState::Pressed,
+                                //     ElementState::Released => KeyState::Released,
+                                // };
+
+                                // self.manager.fire_event(KeyboardInput(key, key_state));
+
+                                // self.manager.set_global::<Keyboard, _>(move |state| {
+                                //     state.keys.insert(key, key_state);
+                                // });
+                            }
+                        }
+
+                        WindowEvent::ModifiersChanged(modifiers) => {
                             // self.manager.set_global::<Keyboard, _>(move |state| {
-                            //     state.keys.insert(key, key_state);
+                            //     state.modifiers = unsafe { mem::transmute(modifiers) };
                             // });
                         }
+
+                        _ => {}
                     }
-
-                    WindowEvent::ModifiersChanged(modifiers) => {
-                        // self.manager.set_global::<Keyboard, _>(move |state| {
-                        //     state.modifiers = unsafe { mem::transmute(modifiers) };
-                        // });
-                    }
-
-                    _ => {}
-                }
-
-                if let Some(window) = windows.get_mut(&window_id) {
-                    window.events().emit(&WinitWindowEvent::from(event));
                 }
             }
 
@@ -312,6 +321,8 @@ pub fn run_app(root: impl IntoWidget) {
 
                     window.request_redraw();
                 });
+            } else {
+                tracing::warn!("an update event was received, but no changes were made");
             }
         }
     });

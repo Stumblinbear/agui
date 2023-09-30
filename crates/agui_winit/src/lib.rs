@@ -1,4 +1,7 @@
-pub mod binding;
-pub mod event;
-pub mod handle;
-pub mod window;
+mod binding;
+mod handle;
+mod window;
+
+pub use binding::{WinitBinding, WinitBindingEvent};
+pub use handle::WinitWindowHandle;
+pub use window::{CurrentWindow, Window};

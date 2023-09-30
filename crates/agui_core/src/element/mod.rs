@@ -69,14 +69,14 @@ impl Element {
 
     pub fn downcast<E>(&self) -> Option<&E>
     where
-        E: WidgetElement + 'static,
+        E: WidgetElement,
     {
         (*self.widget_element).as_any().downcast_ref::<E>()
     }
 
     pub fn downcast_mut<E>(&mut self) -> Option<&mut E>
     where
-        E: WidgetElement + 'static,
+        E: WidgetElement,
     {
         (*self.widget_element).as_any_mut().downcast_mut::<E>()
     }

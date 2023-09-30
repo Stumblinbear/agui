@@ -1,13 +1,12 @@
 use std::{ops::Deref, rc::Rc};
 
 use agui_core::listeners::EventEmitter;
-
-use crate::event::WinitWindowEvent;
+use winit::event::WindowEvent;
 
 #[derive(Clone)]
 pub struct WinitWindowHandle {
     handle: Rc<winit::window::Window>,
-    event_emitter: EventEmitter<WinitWindowEvent>,
+    event_emitter: EventEmitter<WindowEvent<'static>>,
 }
 
 impl WinitWindowHandle {
@@ -18,7 +17,7 @@ impl WinitWindowHandle {
         }
     }
 
-    pub fn events(&self) -> &EventEmitter<WinitWindowEvent> {
+    pub fn events(&self) -> &EventEmitter<WindowEvent<'static>> {
         &self.event_emitter
     }
 }

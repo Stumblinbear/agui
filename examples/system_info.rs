@@ -4,7 +4,7 @@ use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*, winit::window::Window};
+use agui::{app::run_app, prelude::*, winit::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {

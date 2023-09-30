@@ -11,9 +11,9 @@ use agui_core::{
 };
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
 use agui_primitives::sized_box::SizedBox;
-use winit::window::WindowBuilder;
+use winit::{event::WindowEvent, window::WindowBuilder};
 
-use crate::{binding::WinitBinding, event::WinitWindowEvent, handle::WinitWindowHandle};
+use crate::{binding::WinitBinding, handle::WinitWindowHandle};
 
 #[derive(StatelessWidget)]
 pub struct Window {
@@ -126,7 +126,7 @@ struct WinitWindowLayout {
     handle: WinitWindowHandle,
     child: Widget,
 
-    listener: RefCell<Option<EventEmitterHandle<WinitWindowEvent>>>,
+    listener: RefCell<Option<EventEmitterHandle<WindowEvent<'static>>>>,
 }
 
 impl WidgetLayout for WinitWindowLayout {
@@ -139,7 +139,7 @@ impl WidgetLayout for WinitWindowLayout {
         self.listener
             .borrow_mut()
             .replace(self.handle.events().add_listener(move |event| {
-                if let WinitWindowEvent::Resized(size) = event {
+                if let WindowEvent::Resized(size) = event {
                     if current_size != *size {
                         notifier.call(());
                     }

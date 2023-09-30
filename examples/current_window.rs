@@ -1,10 +1,13 @@
 use std::{thread, time::Duration};
 
-use agui_winit::window::CurrentWindow;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*, winit::window::Window};
+use agui::{
+    app::run_app,
+    prelude::*,
+    winit::{CurrentWindow, Window},
+};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
