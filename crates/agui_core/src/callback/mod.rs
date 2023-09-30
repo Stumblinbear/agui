@@ -253,11 +253,11 @@ mod tests {
 
     #[test]
     pub fn should_not_call_immediately() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestWidget {
-            child: TestDummyWidget.into(),
-        });
+        let mut engine = Engine::builder()
+            .with_root(TestWidget {
+                child: TestDummyWidget.into(),
+            })
+            .build();
 
         engine.update();
 
@@ -276,11 +276,11 @@ mod tests {
 
     #[test]
     pub fn can_fire_callbacks() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestWidget {
-            child: TestDummyWidget.into(),
-        });
+        let mut engine = Engine::builder()
+            .with_root(TestWidget {
+                child: TestDummyWidget.into(),
+            })
+            .build();
 
         engine.update();
 
@@ -309,14 +309,14 @@ mod tests {
 
     #[test]
     pub fn can_fire_many_callbacks() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestWidget {
-            child: TestWidget {
-                child: TestDummyWidget.into(),
-            }
-            .into(),
-        });
+        let mut engine = Engine::builder()
+            .with_root(TestWidget {
+                child: TestWidget {
+                    child: TestDummyWidget.into(),
+                }
+                .into(),
+            })
+            .build();
 
         engine.update();
 

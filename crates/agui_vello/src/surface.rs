@@ -28,7 +28,7 @@ pub struct VelloSurface {
 }
 
 impl VelloSurface {
-    pub fn init(&mut self, engine: &Engine, fonts: &mut VelloFonts<'_>) {
+    pub fn init(&mut self, engine: &Engine, fonts: &mut VelloFonts) {
         let boundary_element_id = engine
             .get_render_view_manager()
             .get_boundary(self.render_view_id)
@@ -58,7 +58,7 @@ impl VelloSurface {
         self.redraw(engine, fonts, &redraw_render_view_widgets);
     }
 
-    pub fn redraw(&mut self, engine: &Engine, fonts: &mut VelloFonts<'_>, events: &[ElementEvent]) {
+    pub fn redraw(&mut self, engine: &Engine, fonts: &mut VelloFonts, events: &[ElementEvent]) {
         let now = Instant::now();
 
         for event in events {
@@ -241,12 +241,7 @@ impl VelloSurface {
         );
     }
 
-    fn update_element(
-        &mut self,
-        engine: &Engine,
-        fonts: &mut VelloFonts<'_>,
-        element_id: ElementId,
-    ) {
+    fn update_element(&mut self, engine: &Engine, fonts: &mut VelloFonts, element_id: ElementId) {
         let render_element = self
             .widgets
             .get_mut(&element_id)

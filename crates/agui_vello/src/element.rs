@@ -40,7 +40,7 @@ pub struct CanvasElement {
 }
 
 impl CanvasElement {
-    pub fn update(&mut self, fonts: &mut VelloFonts<'_>, canvas: Option<Canvas>) {
+    pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
             self.children.clear();
@@ -94,7 +94,7 @@ impl CanvasElement {
         }
     }
 
-    fn update_head(&mut self, fonts: &mut VelloFonts<'_>, commands: &[CanvasCommand]) {
+    fn update_head(&mut self, fonts: &mut VelloFonts, commands: &[CanvasCommand]) {
         let mut sb = SceneBuilder::for_fragment(&mut self.fragment);
 
         for command in commands {
@@ -138,13 +138,13 @@ impl CanvasElement {
                 CanvasCommand::Text {
                     paint_idx,
                     rect,
-                    font_style,
+                    text_style,
                     text,
                     ..
                 } => {
                     let paint = &self.paints[*paint_idx];
 
-                    if let Some(font) = fonts.get_or_default(font_style.font) {
+                    if let Some(font) = fonts.get_or_default(text_style.font) {
                         let transform = Affine::translate((rect.left as f64, rect.top as f64));
 
                         let glyph_brush = &vello::peniko::Brush::Solid(Color::rgba(
@@ -154,7 +154,7 @@ impl CanvasElement {
                             paint.color.alpha as f64,
                         ));
 
-                        let fello_size = vello::fello::Size::new(font_style.size);
+                        let fello_size = vello::fello::Size::new(text_style.size);
                         let charmap = font.charmap();
                         let metrics = font.metrics(fello_size, Default::default());
                         let line_height = metrics.ascent - metrics.descent + metrics.leading;
@@ -163,7 +163,7 @@ impl CanvasElement {
                         let mut pen_y = 0f64;
                         let vars: [(&str, f32); 0] = [];
                         let mut provider =
-                            fonts.new_provider(&font, None, font_style.size, false, vars);
+                            fonts.new_provider(&font, None, text_style.size, false, vars);
 
                         for ch in text.chars() {
                             if ch == '\n' {
@@ -183,7 +183,7 @@ impl CanvasElement {
                                 .or_insert_with(|| provider.get(gid.to_u16(), Some(glyph_brush)))
                             {
                                 let xform = transform
-                                    * Affine::translate((pen_x, pen_y + font_style.size as f64))
+                                    * Affine::translate((pen_x, pen_y + text_style.size as f64))
                                     * Affine::scale_non_uniform(1.0, -1.0);
 
                                 sb.append(glyph, Some(xform));
@@ -233,7 +233,7 @@ pub struct LayerElement {
 }
 
 impl LayerElement {
-    pub fn update(&mut self, fonts: &mut VelloFonts<'_>, canvas: Option<Canvas>) {
+    pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
         self.canvas.update(fonts, canvas);
     }
 

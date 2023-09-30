@@ -1,49 +1,28 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use agui_core::{
     engine::{event::ElementEvent, Engine},
-    plugin::Plugin,
     render::{renderer::Renderer, RenderViewId},
-    unit::Font,
-    widget::{IntoWidget, Widget},
 };
-use agui_macros::build;
-use agui_primitives::text::layout_controller::TextLayoutController;
 use futures::executor::block_on;
+use parking_lot::Mutex;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use rustc_hash::FxHashMap;
-use vello::{fello::raw::FontRef, util::RenderContext, RendererOptions, Scene};
+use vello::{util::RenderContext, RendererOptions, Scene};
 
-use crate::{fonts::VelloFonts, surface::VelloSurface, text_layout::VelloTextLayoutDelegate};
+use crate::{fonts::VelloFonts, surface::VelloSurface};
 
-pub struct VelloRenderer<'r, W> {
+pub struct VelloRenderer<W> {
     phantom: std::marker::PhantomData<W>,
 
-    render_view: RenderContext,
+    render_context: RenderContext,
 
-    fonts: VelloFonts<'r>,
+    fonts: Arc<Mutex<VelloFonts>>,
 
     surfaces: FxHashMap<RenderViewId, VelloSurface>,
 }
 
-impl<W> Plugin for VelloRenderer<'_, W> {
-    fn build<T: IntoWidget>(&self, child: impl Into<Option<T>>) -> Widget {
-        build! {
-            <TextLayoutController> {
-                delegate: Rc::new(VelloTextLayoutDelegate {
-                    default_font: FontRef::new(include_bytes!(
-                        "../../../examples/fonts/DejaVuSans.ttf"
-                    ))
-                    .unwrap(),
-                }),
-
-                child: child.into().map(IntoWidget::into_widget),
-            }
-        }
-    }
-}
-
-impl<'r, W> VelloRenderer<'r, W> {
+impl<W> VelloRenderer<W> {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self::with_context(RenderContext::new()?))
     }
@@ -52,44 +31,34 @@ impl<'r, W> VelloRenderer<'r, W> {
         Self {
             phantom: std::marker::PhantomData,
 
-            render_view: context,
+            render_context: context,
 
-            fonts: VelloFonts::default(),
+            fonts: Arc::default(),
 
             surfaces: FxHashMap::default(),
         }
     }
 
-    pub fn with_fonts(mut self, fonts: impl IntoIterator<Item = FontRef<'r>>) -> Self {
-        for font in fonts {
-            self.fonts.add_font(font);
-        }
-
-        self
-    }
-
-    pub fn add_font(&mut self, font: FontRef<'r>) -> Font {
-        self.fonts.add_font(font)
+    pub fn get_fonts(&self) -> &Arc<Mutex<VelloFonts>> {
+        &self.fonts
     }
 }
 
-impl<W> Renderer for VelloRenderer<'_, W>
+impl<W> Renderer<W> for VelloRenderer<W>
 where
     W: HasRawWindowHandle + HasRawDisplayHandle,
 {
-    type Target = W;
-
     fn create_context(
         &mut self,
         engine: &Engine,
         render_view_id: RenderViewId,
-        target: &Self::Target,
+        target: &W,
         width: u32,
         height: u32,
     ) {
-        let surface = block_on(self.render_view.create_surface(&target, width, height)).unwrap();
+        let surface = block_on(self.render_context.create_surface(&target, width, height)).unwrap();
 
-        let device_handle = &self.render_view.devices[surface.dev_id];
+        let device_handle = &self.render_context.devices[surface.dev_id];
 
         let renderer = vello::Renderer::new(
             &device_handle.device,
@@ -110,7 +79,7 @@ where
             widgets: FxHashMap::default(),
         };
 
-        surface.init(engine, &mut self.fonts);
+        surface.init(engine, &mut self.fonts.lock());
 
         self.surfaces.insert(render_view_id, surface);
     }
@@ -120,7 +89,7 @@ where
     }
 
     fn resize(&mut self, _: &Engine, render_view_id: RenderViewId, width: u32, height: u32) {
-        self.render_view.resize_surface(
+        self.render_context.resize_surface(
             &mut self.surfaces.get_mut(&render_view_id).unwrap().surface,
             width,
             height,
@@ -128,16 +97,17 @@ where
     }
 
     fn redraw(&mut self, engine: &Engine, render_view_id: RenderViewId, events: &[ElementEvent]) {
-        self.surfaces
-            .get_mut(&render_view_id)
-            .unwrap()
-            .redraw(engine, &mut self.fonts, events);
+        self.surfaces.get_mut(&render_view_id).unwrap().redraw(
+            engine,
+            &mut self.fonts.lock(),
+            events,
+        );
     }
 
     fn render(&mut self, render_view_id: RenderViewId) {
         self.surfaces
             .get_mut(&render_view_id)
             .unwrap()
-            .render(&self.render_view);
+            .render(&self.render_context);
     }
 }

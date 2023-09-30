@@ -14,7 +14,7 @@ mod context;
 
 pub use context::*;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ElementUpdate {
     /// The element was updated, but no rebuild is necessary.
     Noop,

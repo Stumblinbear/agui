@@ -3,11 +3,7 @@ use std::{thread, time::Duration};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{
-    prelude::*,
-    vello::VelloRenderer,
-    winit::{window::Window, App},
-};
+use agui::{app::run_app, prelude::*, winit::window::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -23,7 +19,7 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    App::with_renderer(VelloRenderer::new().expect("failed to init renderer")).run(build! {
+    run_app(build! {
         <ExampleMain> {
             window1: <ColoredBox> {
                 color: Color::from_rgb((1.0, 0.0, 0.0)),
@@ -33,8 +29,6 @@ fn main() {
 
                     child: <ColoredBox> {
                         color: Color::from_rgb((0.0, 1.0, 0.0)),
-
-                        child: None,
                     },
                 },
             },
@@ -46,8 +40,6 @@ fn main() {
 
                     child: <ColoredBox> {
                         color: Color::from_rgb((0.0, 1.0, 0.0)),
-
-                        child: None,
                     },
                 },
             },

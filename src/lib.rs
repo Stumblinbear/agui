@@ -38,3 +38,6 @@ pub mod prelude {
     #[cfg(feature = "macros")]
     pub use agui_macros::*;
 }
+
+#[cfg(feature = "app")]
+pub mod app;

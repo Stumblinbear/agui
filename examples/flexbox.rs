@@ -1,12 +1,7 @@
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{
-    prelude::*,
-    vello::VelloRenderer,
-    winit::{window::Window, App},
-};
-use vello::fello::raw::FontRef;
+use agui::{app::run_app, prelude::*, winit::window::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -22,13 +17,7 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    App::with_renderer(
-        VelloRenderer::new()
-            .expect("failed to init renderer")
-            .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
-                .expect("failed to load font")]),
-    )
-    .run(build! {
+    run_app(build! {
         <Window> {
             window: WindowBuilder::new()
                 .with_title("agui flexbox")

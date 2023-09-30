@@ -15,10 +15,10 @@ use crate::sized_box::SizedBox;
 
 #[derive(StatefulWidget, Debug)]
 pub struct Fonts {
-    pub fonts: im_rc::HashMap<String, Font, BuildHasherDefault<FxHasher>>,
+    fonts: im_rc::HashMap<String, Font, BuildHasherDefault<FxHasher>>,
 
     #[prop(default, into)]
-    pub child: Option<Widget>,
+    child: Option<Widget>,
 }
 
 impl StatefulWidget for Fonts {
@@ -135,18 +135,18 @@ mod tests {
 
     #[test]
     fn can_retrieve_from_available_fonts() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::builder()
+            .with_root(build! {
+                <Fonts> {
+                    fonts: im_rc::HashMap::from_iter([(
+                        String::from("test font family"),
+                        Font::by_id(0),
+                    )]),
 
-        engine.set_root(build! {
-            <Fonts> {
-                fonts: im_rc::HashMap::from_iter([(
-                    String::from("test font family"),
-                    Font::default(),
-                )]),
-
-                child: <TestWidget> {},
-            }
-        });
+                    child: <TestWidget> {},
+                }
+            })
+            .build();
 
         engine.update();
 

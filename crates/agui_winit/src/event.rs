@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::WindowEvent as WinitWindowEvent,
+    event::WindowEvent,
     event::{
         AxisId, DeviceId, ElementState, Ime, KeyboardInput, ModifiersState, MouseButton,
         MouseScrollDelta, Touch, TouchPhase,
@@ -12,7 +12,7 @@ use winit::{
 
 /// Describes an event from a [`Window`].
 #[derive(Debug, PartialEq)]
-pub enum WindowEvent {
+pub enum WinitWindowEvent {
     /// The size of the window has changed. Contains the client area's new dimensions.
     Resized(PhysicalSize<u32>),
 
@@ -225,19 +225,19 @@ pub enum WindowEvent {
     Occluded(bool),
 }
 
-impl From<WinitWindowEvent<'_>> for WindowEvent {
-    fn from(event: WinitWindowEvent) -> Self {
+impl From<WindowEvent<'_>> for WinitWindowEvent {
+    fn from(event: WindowEvent) -> Self {
         match event {
-            WinitWindowEvent::Resized(size) => Self::Resized(size),
-            WinitWindowEvent::Moved(position) => Self::Moved(position),
-            WinitWindowEvent::CloseRequested => Self::CloseRequested,
-            WinitWindowEvent::Destroyed => Self::Destroyed,
-            WinitWindowEvent::DroppedFile(path) => Self::DroppedFile(path),
-            WinitWindowEvent::HoveredFile(path) => Self::HoveredFile(path),
-            WinitWindowEvent::HoveredFileCancelled => Self::HoveredFileCancelled,
-            WinitWindowEvent::ReceivedCharacter(c) => Self::ReceivedCharacter(c),
-            WinitWindowEvent::Focused(focused) => Self::Focused(focused),
-            WinitWindowEvent::KeyboardInput {
+            WindowEvent::Resized(size) => Self::Resized(size),
+            WindowEvent::Moved(position) => Self::Moved(position),
+            WindowEvent::CloseRequested => Self::CloseRequested,
+            WindowEvent::Destroyed => Self::Destroyed,
+            WindowEvent::DroppedFile(path) => Self::DroppedFile(path),
+            WindowEvent::HoveredFile(path) => Self::HoveredFile(path),
+            WindowEvent::HoveredFileCancelled => Self::HoveredFileCancelled,
+            WindowEvent::ReceivedCharacter(c) => Self::ReceivedCharacter(c),
+            WindowEvent::Focused(focused) => Self::Focused(focused),
+            WindowEvent::KeyboardInput {
                 device_id,
                 input,
                 is_synthetic,
@@ -246,9 +246,9 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 input,
                 is_synthetic,
             },
-            WinitWindowEvent::ModifiersChanged(modifiers) => Self::ModifiersChanged(modifiers),
-            WinitWindowEvent::Ime(ime) => Self::Ime(ime),
-            WinitWindowEvent::CursorMoved {
+            WindowEvent::ModifiersChanged(modifiers) => Self::ModifiersChanged(modifiers),
+            WindowEvent::Ime(ime) => Self::Ime(ime),
+            WindowEvent::CursorMoved {
                 device_id,
                 position,
                 ..
@@ -256,9 +256,9 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 device_id,
                 position,
             },
-            WinitWindowEvent::CursorEntered { device_id } => Self::CursorEntered { device_id },
-            WinitWindowEvent::CursorLeft { device_id } => Self::CursorLeft { device_id },
-            WinitWindowEvent::MouseWheel {
+            WindowEvent::CursorEntered { device_id } => Self::CursorEntered { device_id },
+            WindowEvent::CursorLeft { device_id } => Self::CursorLeft { device_id },
+            WindowEvent::MouseWheel {
                 device_id,
                 delta,
                 phase,
@@ -268,7 +268,7 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 delta,
                 phase,
             },
-            WinitWindowEvent::MouseInput {
+            WindowEvent::MouseInput {
                 device_id,
                 state,
                 button,
@@ -278,7 +278,7 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 state,
                 button,
             },
-            WinitWindowEvent::TouchpadMagnify {
+            WindowEvent::TouchpadMagnify {
                 device_id,
                 delta,
                 phase,
@@ -288,8 +288,8 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 delta,
                 phase,
             },
-            WinitWindowEvent::SmartMagnify { device_id } => Self::SmartMagnify { device_id },
-            WinitWindowEvent::TouchpadRotate {
+            WindowEvent::SmartMagnify { device_id } => Self::SmartMagnify { device_id },
+            WindowEvent::TouchpadRotate {
                 device_id,
                 delta,
                 phase,
@@ -299,7 +299,7 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 delta,
                 phase,
             },
-            WinitWindowEvent::TouchpadPressure {
+            WindowEvent::TouchpadPressure {
                 device_id,
                 pressure,
                 stage,
@@ -309,7 +309,7 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 pressure,
                 stage,
             },
-            WinitWindowEvent::AxisMotion {
+            WindowEvent::AxisMotion {
                 device_id,
                 axis,
                 value,
@@ -319,16 +319,16 @@ impl From<WinitWindowEvent<'_>> for WindowEvent {
                 axis,
                 value,
             },
-            WinitWindowEvent::Touch(touch) => Self::Touch(touch),
-            WinitWindowEvent::ScaleFactorChanged {
+            WindowEvent::Touch(touch) => Self::Touch(touch),
+            WindowEvent::ScaleFactorChanged {
                 scale_factor,
                 new_inner_size,
             } => Self::ScaleFactorChanged {
                 scale_factor,
                 new_inner_size: *new_inner_size,
             },
-            WinitWindowEvent::ThemeChanged(theme) => Self::ThemeChanged(theme),
-            WinitWindowEvent::Occluded(occluded) => Self::Occluded(occluded),
+            WindowEvent::ThemeChanged(theme) => Self::ThemeChanged(theme),
+            WindowEvent::Occluded(occluded) => Self::Occluded(occluded),
         }
     }
 }

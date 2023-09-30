@@ -1,28 +1,33 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
-use agui_core::unit::{Constraints, FontStyle, IntrinsicDimension, Size};
+use agui_core::unit::{Constraints, IntrinsicDimension, Size, TextStyle};
 use agui_primitives::text::layout_controller::TextLayoutDelegate;
-use vello::fello::{raw::FontRef, MetadataProvider};
+use parking_lot::Mutex;
+use vello::fello::MetadataProvider;
+
+use crate::fonts::VelloFonts;
 
 pub struct VelloTextLayoutDelegate {
-    pub default_font: FontRef<'static>,
+    pub fonts: Arc<Mutex<VelloFonts>>,
 }
 
 impl TextLayoutDelegate for VelloTextLayoutDelegate {
     fn compute_intrinsic_size(
         &self,
-        font_style: &FontStyle,
+        font_style: &TextStyle,
         text: Cow<'static, str>,
         dimension: IntrinsicDimension,
         cross_axis: f32,
     ) -> f32 {
+        let Some(font) = self.fonts.lock().get_or_default(font_style.font) else {
+            return 0.0;
+        };
+
         let fello_size = vello::fello::Size::new(font_style.size);
-        let charmap = self.default_font.charmap();
-        let metrics = self.default_font.metrics(fello_size, Default::default());
+        let charmap = font.charmap();
+        let metrics = font.metrics(fello_size, Default::default());
         let line_height = metrics.ascent - metrics.descent + metrics.leading;
-        let glyph_metrics = self
-            .default_font
-            .glyph_metrics(fello_size, Default::default());
+        let glyph_metrics = font.glyph_metrics(fello_size, Default::default());
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;
@@ -81,17 +86,19 @@ impl TextLayoutDelegate for VelloTextLayoutDelegate {
 
     fn compute_layout(
         &self,
-        font_style: &FontStyle,
+        font_style: &TextStyle,
         text: Cow<'static, str>,
         constraints: Constraints,
     ) -> Size {
+        let Some(font) = self.fonts.lock().get_or_default(font_style.font) else {
+            return Size::ZERO;
+        };
+
         let fello_size = vello::fello::Size::new(font_style.size);
-        let charmap = self.default_font.charmap();
-        let metrics = self.default_font.metrics(fello_size, Default::default());
+        let charmap = font.charmap();
+        let metrics = font.metrics(fello_size, Default::default());
         let line_height = metrics.ascent - metrics.descent + metrics.leading;
-        let glyph_metrics = self
-            .default_font
-            .glyph_metrics(fello_size, Default::default());
+        let glyph_metrics = font.glyph_metrics(fello_size, Default::default());
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;

@@ -142,9 +142,7 @@ mod tests {
 
     #[test]
     pub fn updates_scoped_children() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestRootWidget);
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         let depending_widget = TestDependingWidget.into_widget();
 
@@ -170,9 +168,7 @@ mod tests {
 
     #[test]
     pub fn updates_nested_scope_children() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestRootWidget);
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         let nested_scope = TestOtherInheritedWidget {
             child: TestDependingWidget.into(),
@@ -201,9 +197,7 @@ mod tests {
 
     #[test]
     pub fn child_updates_when_dependency_unavailable() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestRootWidget);
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         let dependent_child = TestDependingWidget.into_widget();
 

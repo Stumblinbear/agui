@@ -1,12 +1,7 @@
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{
-    prelude::*,
-    vello::VelloRenderer,
-    winit::{window::Window, App},
-};
-use vello::fello::raw::FontRef;
+use agui::{app::run_app, prelude::*, winit::window::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -22,13 +17,7 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    App::with_renderer(
-        VelloRenderer::new()
-            .expect("failed to init renderer")
-            .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
-                .expect("failed to load font")]),
-    )
-    .run(build! {
+    run_app(build! {
         <Stack> {
             children: [
                 <Window> {
@@ -37,10 +26,8 @@ fn main() {
                         .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
                     child: <Text> {
+                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
                         text: "Hello, world!".into(),
-                        font: Font::default()
-                            .styled()
-                            .color(Color::from_rgb((1.0, 1.0, 1.0))),
                     },
                 },
                 <Window> {
@@ -49,10 +36,8 @@ fn main() {
                         .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 
                     child: <Text> {
+                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
                         text: "Goodbye, world!".into(),
-                        font: Font::default()
-                            .styled()
-                            .color(Color::from_rgb((1.0, 1.0, 1.0))),
                     },
                 },
             ],

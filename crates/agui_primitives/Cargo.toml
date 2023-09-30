@@ -12,12 +12,10 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-agui_core = { path = "../agui_core", version = "0.3" }
-agui_macros = { path = "../agui_macros", version = "0.3", features = [
-    "internal",
-] }
+agui_core.workspace = true
+agui_macros.workspace = true
 
-rustc-hash = "1.1"
-im-rc = "15.1"
+rustc-hash.workspace = true
+im-rc.workspace = true
 
 unicode-segmentation = "1.9"

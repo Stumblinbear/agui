@@ -2,7 +2,7 @@ use std::{borrow::Cow, rc::Rc};
 
 use agui_core::{
     render::{CanvasPainter, Paint},
-    unit::{Constraints, FontStyle, IntrinsicDimension, Size},
+    unit::{Constraints, IntrinsicDimension, Size, TextStyle},
     widget::{
         BuildContext, ContextInheritedMut, IntrinsicSizeContext, LayoutContext, Widget,
         WidgetBuild, WidgetLayout, WidgetPaint,
@@ -29,22 +29,20 @@ pub enum TextBaseline {
 #[derive(StatelessWidget, Debug)]
 pub struct Text {
     #[prop(default)]
-    pub font: FontStyle,
+    pub style: TextStyle,
 
     pub text: Cow<'static, str>,
 }
 
 impl WidgetBuild for Text {
     fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
-        // TextLayout::builder().delegate().font(font).text(text).build();
-
         build! {
             <TextLayout> {
                 delegate: ctx
                     .depend_on_inherited_widget::<TextLayoutController>()
                     .map(|controller| controller.delegate.clone()),
 
-                font: self.font.clone(),
+                style: self.style.clone(),
                 text: Cow::clone(&self.text),
             }
         }
@@ -56,7 +54,8 @@ pub struct TextLayout {
     #[prop(default)]
     pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
 
-    pub font: FontStyle,
+    pub style: TextStyle,
+
     pub text: Cow<'static, str>,
 }
 
@@ -65,7 +64,7 @@ impl WidgetLayout for TextLayout {
         build! {
             vec![
                 <TextPainter> {
-                    font: self.font.clone(),
+                    style: self.style.clone(),
                     text: Cow::clone(&self.text),
                 }
             ]
@@ -80,10 +79,10 @@ impl WidgetLayout for TextLayout {
     ) -> f32 {
         if let Some(delegate) = self.delegate.as_ref() {
             delegate.compute_intrinsic_size(
-                &self.font,
+                &self.style,
                 Cow::clone(&self.text),
                 dimension,
-                self.font.size,
+                self.style.size,
             )
         } else {
             0.0
@@ -92,7 +91,7 @@ impl WidgetLayout for TextLayout {
 
     fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
         let size = if let Some(delegate) = self.delegate.as_ref() {
-            delegate.compute_layout(&self.font, Cow::clone(&self.text), constraints)
+            delegate.compute_layout(&self.style, Cow::clone(&self.text), constraints)
         } else {
             constraints.smallest()
         };
@@ -107,8 +106,9 @@ impl WidgetLayout for TextLayout {
 
 #[derive(PaintWidget, Debug, PartialEq)]
 struct TextPainter {
-    pub font: FontStyle,
-    pub text: Cow<'static, str>,
+    style: TextStyle,
+
+    text: Cow<'static, str>,
 }
 
 impl WidgetPaint for TextPainter {
@@ -118,11 +118,11 @@ impl WidgetPaint for TextPainter {
 
     fn paint(&self, mut canvas: CanvasPainter) {
         let brush = canvas.add_paint(Paint {
-            color: self.font.color,
+            color: self.style.color,
 
             ..Paint::default()
         });
 
-        canvas.draw_text(&brush, self.font.clone(), Cow::clone(&self.text));
+        canvas.draw_text(&brush, self.style.clone(), Cow::clone(&self.text));
     }
 }

@@ -12,13 +12,13 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-agui_core = { path = "../agui_core", version = "0.3" }
-agui_macros = { path = "../agui_macros", version = "0.3" }
-agui_primitives = { path = "../agui_primitives", version = "0.3" }
+agui_core.workspace = true
+agui_macros.workspace = true
+agui_primitives.workspace = true
 
-tracing = "0.1"
+tracing.workspace = true
 
-rustc-hash = "1.1"
+rustc-hash.workspace = true
 
-winit = "0.28"
-raw-window-handle = "0.5"
+winit.workspace = true
+raw-window-handle.workspace = true

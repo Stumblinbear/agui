@@ -67,18 +67,20 @@ mod tests {
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut engine = Engine::with_root(build! {
-            <Column> {
-                children: [
-                    <Text> {
-                        text: "foo".into(),
-                    }.into(),
-                    <Text> {
-                        text: "bar".into(),
-                    }.into(),
-                ],
-            }
-        });
+        let mut engine = Engine::builder()
+            .with_root(build! {
+                <Column> {
+                    children: [
+                        <Text> {
+                            text: "foo".into(),
+                        }.into(),
+                        <Text> {
+                            text: "bar".into(),
+                        }.into(),
+                    ],
+                }
+            })
+            .build();
 
         engine.update();
 

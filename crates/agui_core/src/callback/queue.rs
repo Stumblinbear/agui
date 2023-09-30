@@ -1,4 +1,7 @@
-use std::{any::Any, sync::Arc};
+use std::{
+    any::Any,
+    sync::{mpsc, Arc},
+};
 
 use parking_lot::Mutex;
 
@@ -6,25 +9,42 @@ use crate::unit::AsAny;
 
 use super::CallbackId;
 
-#[derive(Default, Clone)]
-pub struct CallbackQueue {
+#[derive(Clone)]
+pub struct CallbackQueue(Arc<InnerCallbackQueue>);
+
+struct InnerCallbackQueue {
     queue: Arc<Mutex<Vec<CallbackInvoke>>>,
+    update_notifier_tx: mpsc::Sender<()>,
 }
 
 impl CallbackQueue {
-    pub(crate) fn take(&mut self) -> Vec<CallbackInvoke> {
-        self.queue.lock().drain(..).collect()
+    #[allow(clippy::arc_with_non_send_sync)]
+    pub(crate) fn new(update_notifier_tx: mpsc::Sender<()>) -> Self {
+        Self(Arc::new(InnerCallbackQueue {
+            queue: Arc::default(),
+
+            update_notifier_tx,
+        }))
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.queue.lock().is_empty()
+    pub(crate) fn take(&mut self) -> Vec<CallbackInvoke> {
+        self.0.queue.lock().drain(..).collect()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.queue.lock().is_empty()
     }
 
     /// # Panics
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
     pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any>) {
-        self.queue.lock().push(CallbackInvoke { callback_id, arg });
+        self.0
+            .queue
+            .lock()
+            .push(CallbackInvoke { callback_id, arg });
+
+        let _ = self.0.update_notifier_tx.send(());
     }
 
     /// # Panics
@@ -37,7 +57,8 @@ impl CallbackQueue {
     ) where
         A: AsAny + Clone,
     {
-        self.queue
+        self.0
+            .queue
             .lock()
             .extend(
                 callback_ids
@@ -48,6 +69,8 @@ impl CallbackQueue {
                         arg: Box::new(arg.clone()),
                     }),
             );
+
+        let _ = self.0.update_notifier_tx.send(());
     }
 }
 

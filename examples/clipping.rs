@@ -1,12 +1,7 @@
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{
-    prelude::*,
-    vello::VelloRenderer,
-    winit::{window::Window, App},
-};
-use vello::fello::raw::FontRef;
+use agui::{app::run_app, prelude::*, winit::window::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -22,27 +17,25 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    let mut renderer = VelloRenderer::new().expect("failed to init renderer");
+    // let mut renderer = VelloRenderer::new().expect("failed to init renderer");
 
-    let deja_vu = renderer.add_font(
-        FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf")).expect("failed to load font"),
-    );
+    // let deja_vu = renderer.add_font(
+    //     FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf")).expect("failed to load font"),
+    // );
 
-    App::with_renderer(renderer).run(build! {
+    run_app(build! {
         <Window> {
             window: WindowBuilder::new()
                 .with_title("agui clipping")
                 .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
-            child: <ExampleMain> { font: deja_vu },
+            child: <ExampleMain>::default(),
         }
     });
 }
 
 #[derive(StatelessWidget, PartialEq, Default)]
-struct ExampleMain {
-    font: Font,
-}
+struct ExampleMain;
 
 impl WidgetBuild for ExampleMain {
     fn build(&self, _: &mut BuildContext<Self>) -> Widget {
@@ -67,7 +60,7 @@ impl WidgetBuild for ExampleMain {
                                 color: Color::from_rgb((0.75, 0.75, 0.75)),
 
                                 child: <Text> {
-                                    font: self.font.styled().color(Color::from_rgb((1.0, 0.0, 0.0))),
+                                    style: TextStyle::default().color(Color::from_rgb((1.0, 0.0, 0.0))),
                                     text: "The Krabby Patty secret formula is one part love, two parts magic, and three parts secret ingredient.".into()
                                 }
                             }

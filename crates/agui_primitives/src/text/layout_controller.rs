@@ -1,7 +1,7 @@
 use std::{borrow::Cow, rc::Rc};
 
 use agui_core::{
-    unit::{Constraints, FontStyle, IntrinsicDimension, Size},
+    unit::{Constraints, IntrinsicDimension, Size, TextStyle},
     widget::{InheritedWidget, IntoWidget, Widget},
 };
 use agui_macros::InheritedWidget;
@@ -33,7 +33,7 @@ impl InheritedWidget for TextLayoutController {
 pub trait TextLayoutDelegate {
     fn compute_intrinsic_size(
         &self,
-        font_style: &FontStyle,
+        font_style: &TextStyle,
         text: Cow<'static, str>,
         dimension: IntrinsicDimension,
         cross_axis: f32,
@@ -41,7 +41,7 @@ pub trait TextLayoutDelegate {
 
     fn compute_layout(
         &self,
-        font_style: &FontStyle,
+        font_style: &TextStyle,
         text: Cow<'static, str>,
         constraints: Constraints,
     ) -> Size;

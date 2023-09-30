@@ -1,31 +1,25 @@
 use crate::unit::Color;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Font(Option<usize>);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Font(usize);
 
 impl Font {
-    pub fn new(font_id: usize) -> Self {
-        Self(Some(font_id))
+    pub fn by_id(font_id: usize) -> Self {
+        Self(font_id)
     }
 
-    pub fn styled(&self) -> FontStyle {
-        FontStyle {
-            font: *self,
-            color: Color {
-                red: 0.0,
-                green: 0.0,
-                blue: 0.0,
-                alpha: 1.0,
-            },
+    pub fn styled(&self) -> TextStyle {
+        TextStyle {
+            font: Some(*self),
 
-            ..FontStyle::default()
+            ..TextStyle::default()
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FontStyle {
-    pub font: Font,
+pub struct TextStyle {
+    pub font: Option<Font>,
 
     pub size: f32,
     pub color: Color,
@@ -34,13 +28,14 @@ pub struct FontStyle {
     pub v_align: VerticalAlign,
 }
 
-impl Default for FontStyle {
+impl Default for TextStyle {
     fn default() -> Self {
         Self {
-            font: Font(None),
+            font: None,
+
             size: 16.0,
             color: Color {
-                red: 1.0,
+                red: 0.0,
                 green: 0.0,
                 blue: 0.0,
                 alpha: 1.0,
@@ -52,7 +47,11 @@ impl Default for FontStyle {
     }
 }
 
-impl FontStyle {
+impl TextStyle {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn size(mut self, size: f32) -> Self {
         self.size = size;
         self
@@ -72,71 +71,6 @@ impl FontStyle {
         self.v_align = v_align;
         self
     }
-
-    // pub fn h_advance(&self, glyph_id: GlyphId) -> f32 {
-    //     self.get_font()
-    //         .map(|font| font.as_scaled(self.size).h_advance(glyph_id))
-    //         .unwrap_or(0.0)
-    // }
-
-    // pub fn v_advance(&self, glyph_id: GlyphId) -> f32 {
-    //     self.get_font()
-    //         .map(|font| font.as_scaled(self.size).v_advance(glyph_id))
-    //         .unwrap_or(0.0)
-    // }
-
-    // pub fn get_glyphs(&self, mut rect: Rect, text: &str) -> Vec<SectionGlyph> {
-    //     if text.is_empty() {
-    //         return Vec::new();
-    //     }
-
-    //     self.get_font().map_or_else(Vec::default, |font| {
-    //         let glyphs_layout = GlyphLayout::Wrap {
-    //             line_breaker: BuiltInLineBreaker::UnicodeLineBreaker,
-    //             h_align: match self.h_align {
-    //                 HorizontalAlign::Left => glyph_brush_layout::HorizontalAlign::Left,
-    //                 HorizontalAlign::Center => {
-    //                     rect.left += rect.width / 2.0;
-
-    //                     glyph_brush_layout::HorizontalAlign::Center
-    //                 }
-
-    //                 HorizontalAlign::Right => {
-    //                     rect.left += rect.width;
-
-    //                     glyph_brush_layout::HorizontalAlign::Right
-    //                 }
-    //             },
-    //             v_align: match self.v_align {
-    //                 VerticalAlign::Top => glyph_brush_layout::VerticalAlign::Top,
-    //                 VerticalAlign::Center => {
-    //                     rect.top += rect.height / 2.0;
-
-    //                     glyph_brush_layout::VerticalAlign::Center
-    //                 }
-
-    //                 VerticalAlign::Bottom => {
-    //                     rect.top += rect.height;
-
-    //                     glyph_brush_layout::VerticalAlign::Bottom
-    //                 }
-    //             },
-    //         };
-
-    //         glyphs_layout.calculate_glyphs(
-    //             &[font],
-    //             &SectionGeometry {
-    //                 screen_position: (rect.left, rect.top),
-    //                 bounds: (rect.width, rect.height),
-    //             },
-    //             &[SectionText {
-    //                 text,
-    //                 scale: self.size.into(),
-    //                 font_id: GlyphFontId(0),
-    //             }],
-    //         )
-    //     })
-    // }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

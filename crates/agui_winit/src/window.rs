@@ -1,7 +1,7 @@
 use std::{cell::RefCell, ops::Deref};
 
 use agui_core::{
-    notifier::ListenerHandle,
+    listeners::EventEmitterHandle,
     unit::{Constraints, Size},
     widget::{
         view::RenderView, BuildContext, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
@@ -13,9 +13,7 @@ use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, Stateles
 use agui_primitives::sized_box::SizedBox;
 use winit::window::WindowBuilder;
 
-use crate::{
-    event::WindowEvent, handle::WinitWindowHandle, windowing_controller::WinitWindowingController,
-};
+use crate::{binding::WinitBinding, event::WinitWindowEvent, handle::WinitWindowHandle};
 
 #[derive(StatelessWidget)]
 pub struct Window {
@@ -63,7 +61,7 @@ impl WidgetState for WinitWindowState {
     type Widget = WinitWindow;
 
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
-        let Some(windowing) = ctx.depend_on_inherited_widget::<WinitWindowingController>() else {
+        let Some(binding) = ctx.depend_on_inherited_widget::<WinitBinding>() else {
             return tracing::error!("Windowing controller not found in the widget tree");
         };
 
@@ -74,7 +72,7 @@ impl WidgetState for WinitWindowState {
         });
 
         // I don't like cloning the window, here.
-        windowing.create_window(ctx.get_element_id(), ctx.widget.window.clone(), create_cb);
+        binding.create_window(ctx.get_element_id(), ctx.widget.window.clone(), create_cb);
     }
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
@@ -84,10 +82,9 @@ impl WidgetState for WinitWindowState {
 
                 child: WinitWindowLayout {
                     handle: current_window.clone(),
+                    child: ctx.widget.child.clone(),
 
                     listener: RefCell::new(None),
-
-                    child: ctx.widget.child.clone(),
                 }
                 .into_widget(),
             }
@@ -106,7 +103,7 @@ pub struct CurrentWindow {
 }
 
 impl Deref for CurrentWindow {
-    type Target = winit::window::Window;
+    type Target = WinitWindowHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.handle
@@ -127,10 +124,9 @@ impl InheritedWidget for CurrentWindow {
 #[derive(LayoutWidget)]
 struct WinitWindowLayout {
     handle: WinitWindowHandle,
-
-    listener: RefCell<Option<ListenerHandle<WindowEvent>>>,
-
     child: Widget,
+
+    listener: RefCell<Option<EventEmitterHandle<WinitWindowEvent>>>,
 }
 
 impl WidgetLayout for WinitWindowLayout {
@@ -142,8 +138,8 @@ impl WidgetLayout for WinitWindowLayout {
         // We use interior mutability here to reduce the amount of nested widget fuckery
         self.listener
             .borrow_mut()
-            .replace(self.handle.add_listener(move |event| {
-                if let WindowEvent::Resized(size) = event {
+            .replace(self.handle.events().add_listener(move |event| {
+                if let WinitWindowEvent::Resized(size) = event {
                     if current_size != *size {
                         notifier.call(());
                     }

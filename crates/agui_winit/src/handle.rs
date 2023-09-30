@@ -1,46 +1,25 @@
 use std::{ops::Deref, rc::Rc};
 
-use agui_core::notifier::{ListenerHandle, Notifier};
+use agui_core::listeners::EventEmitter;
 
-use crate::event::WindowEvent;
+use crate::event::WinitWindowEvent;
 
 #[derive(Clone)]
-pub struct WinitWindowHandle(Rc<InnerHandle>);
-
-struct InnerHandle {
-    handle: winit::window::Window,
-
-    notifier: Notifier<WindowEvent>,
+pub struct WinitWindowHandle {
+    handle: Rc<winit::window::Window>,
+    event_emitter: EventEmitter<WinitWindowEvent>,
 }
 
 impl WinitWindowHandle {
-    pub(crate) fn new(window: winit::window::Window) -> Self {
-        Self(Rc::new(InnerHandle {
-            handle: window,
-
-            notifier: Notifier::new(),
-        }))
+    pub fn new(window: winit::window::Window) -> Self {
+        Self {
+            handle: Rc::new(window),
+            event_emitter: EventEmitter::default(),
+        }
     }
 
-    pub fn notify(&self, event: &WindowEvent) {
-        self.0.notifier.notify(event);
-    }
-
-    pub fn add_listener(
-        &self,
-        func: impl Fn(&WindowEvent) + 'static,
-    ) -> ListenerHandle<WindowEvent> {
-        self.0.notifier.add_listener(func)
-    }
-}
-
-impl PartialEq for WinitWindowHandle {
-    fn eq(&self, other: &Self) -> bool {
-        // war crimes
-        std::ptr::eq(
-            Rc::as_ptr(&self.0) as *const _ as *const (),
-            Rc::as_ptr(&other.0) as *const _ as *const (),
-        )
+    pub fn events(&self) -> &EventEmitter<WinitWindowEvent> {
+        &self.event_emitter
     }
 }
 
@@ -48,6 +27,6 @@ impl Deref for WinitWindowHandle {
     type Target = winit::window::Window;
 
     fn deref(&self) -> &Self::Target {
-        &self.0.handle
+        self.handle.as_ref()
     }
 }

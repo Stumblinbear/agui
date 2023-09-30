@@ -9,7 +9,7 @@ use agui_macros::PaintWidget;
 pub struct ColoredBox {
     pub color: Color,
 
-    #[prop(into)]
+    #[prop(into, default)]
     pub child: Option<Widget>,
 }
 

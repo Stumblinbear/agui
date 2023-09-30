@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     render::texture::TextureId,
-    unit::{Bounds, FontStyle, Rect, Shape},
+    unit::{Bounds, Rect, Shape, TextStyle},
 };
 
 #[derive(Debug, PartialEq)]
@@ -28,7 +28,7 @@ pub enum CanvasCommand {
 
         rect: Rect,
 
-        font_style: FontStyle,
+        text_style: TextStyle,
         text: Cow<'static, str>,
     },
 }

@@ -14,20 +14,17 @@ readme = "README.md"
 [dependencies]
 cfg-if = "1.0"
 
-thiserror = "1.0"
-tracing = "0.1"
+tracing.workspace = true
 
-rustc-hash = "1.1"
-slotmap = "1.0"
-parking_lot = "0.12"
+thiserror.workspace = true
 
-rand = "0.8"
-lyon = "1.0"
+rand.workspace = true
+rustc-hash.workspace = true
+slotmap.workspace = true
+parking_lot.workspace = true
+im-rc.workspace = true
 
-glyph_brush_layout = "0.2"
-im-rc = "15.1"
+lyon.workspace = true
 
 [dev-dependencies]
-agui_macros = { path = "../agui_macros", version = "0.3", features = [
-    "internal",
-] }
+agui_macros.workspace = true

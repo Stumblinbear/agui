@@ -1,18 +1,13 @@
-use crate::{
-    engine::{event::ElementEvent, Engine},
-    plugin::Plugin,
-};
+use crate::engine::{event::ElementEvent, Engine};
 
 use super::RenderViewId;
 
-pub trait Renderer: Plugin {
-    type Target;
-
+pub trait Renderer<T> {
     fn create_context(
         &mut self,
         engine: &Engine,
         render_view_id: RenderViewId,
-        target: &Self::Target,
+        target: &T,
         width: u32,
         height: u32,
     );

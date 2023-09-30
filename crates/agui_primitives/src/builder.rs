@@ -51,7 +51,9 @@ mod tests {
 
     #[test]
     pub fn calls_func() {
-        let mut engine = Engine::with_root(Builder::new(|_| TestWidget::default().into()));
+        let mut engine = Engine::builder()
+            .with_root(Builder::new(|_| TestWidget::default().into()))
+            .build();
 
         engine.update();
 

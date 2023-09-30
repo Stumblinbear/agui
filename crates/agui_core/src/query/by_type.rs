@@ -95,21 +95,21 @@ mod tests {
 
     #[test]
     pub fn finds_widget_by_type() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestWidget1 {
-            child: Some(
-                TestWidget2 {
-                    child: Some(
-                        TestWidget1 {
-                            ..Default::default()
-                        }
-                        .into_widget(),
-                    ),
-                }
-                .into_widget(),
-            ),
-        });
+        let mut engine = Engine::builder()
+            .with_root(TestWidget1 {
+                child: Some(
+                    TestWidget2 {
+                        child: Some(
+                            TestWidget1 {
+                                ..Default::default()
+                            }
+                            .into_widget(),
+                        ),
+                    }
+                    .into_widget(),
+                ),
+            })
+            .build();
 
         engine.update();
 

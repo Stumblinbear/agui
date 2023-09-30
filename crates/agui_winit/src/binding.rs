@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::sync::mpsc;
 
 use agui_core::{
     callback::Callback,
@@ -11,13 +11,14 @@ use winit::window::WindowBuilder;
 use crate::handle::WinitWindowHandle;
 
 #[derive(InheritedWidget)]
-pub struct WinitWindowingController {
-    pub tx: Sender<(ElementId, WindowBuilder, Callback<WinitWindowHandle>)>,
+pub struct WinitBinding {
+    tx: mpsc::Sender<WinitBindingEvent>,
 
-    pub child: Widget,
+    #[prop(into)]
+    child: Widget,
 }
 
-impl InheritedWidget for WinitWindowingController {
+impl InheritedWidget for WinitBinding {
     fn get_child(&self) -> Widget {
         self.child.clone()
     }
@@ -27,15 +28,22 @@ impl InheritedWidget for WinitWindowingController {
     }
 }
 
-impl WinitWindowingController {
+impl WinitBinding {
     pub fn create_window(
         &self,
         window_element_id: ElementId,
-        builder: WindowBuilder,
+        window: WindowBuilder,
         callback: Callback<WinitWindowHandle>,
     ) {
-        self.tx
-            .send((window_element_id, builder, callback))
-            .unwrap();
+        let _ = self.tx.send(WinitBindingEvent::CreateWindow(
+            window_element_id,
+            Box::new(window),
+            callback,
+        ));
     }
+}
+
+pub enum WinitBindingEvent {
+    CreateWindow(ElementId, Box<WindowBuilder>, Callback<WinitWindowHandle>),
+    CloseWindow(ElementId),
 }

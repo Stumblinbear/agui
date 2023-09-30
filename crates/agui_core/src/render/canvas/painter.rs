@@ -8,7 +8,7 @@ use crate::{
         paint::Paint,
         Brush,
     },
-    unit::{FontStyle, Rect, Shape, Size},
+    unit::{Rect, Shape, Size, TextStyle},
 };
 
 pub trait CanvasPainterState {}
@@ -259,11 +259,11 @@ where
     }
 
     /// Draws text on the canvas. It will be wrapped to the `rect` of the canvas.
-    pub fn draw_text<T>(&mut self, brush: &Brush<Head<State>>, font: FontStyle, text: T)
+    pub fn draw_text<T>(&mut self, brush: &Brush<Head<State>>, text_style: TextStyle, text: T)
     where
         T: Into<Cow<'static, str>>,
     {
-        self.draw_text_at(self.canvas.size.into(), brush, font, text);
+        self.draw_text_at(self.canvas.size.into(), brush, text_style, text);
     }
 
     /// Draws text on the canvas, ensuring it remains within the `rect`.
@@ -271,7 +271,7 @@ where
         &mut self,
         rect: Rect,
         brush: &Brush<Head<State>>,
-        font_style: FontStyle,
+        text_style: TextStyle,
         text: T,
     ) where
         T: Into<Cow<'static, str>>,
@@ -283,7 +283,7 @@ where
 
             rect,
 
-            font_style,
+            text_style,
             text: text.into(),
         });
     }

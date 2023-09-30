@@ -247,7 +247,7 @@ impl Element {
 
         let result = self.widget_element.update(new_widget);
 
-        if result != ElementUpdate::RebuildNecessary {
+        if result != ElementUpdate::Invalid {
             self.widget = new_widget.clone();
         }
 

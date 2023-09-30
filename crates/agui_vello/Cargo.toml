@@ -12,14 +12,17 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-agui_core = { path = "../agui_core", version = "0.3" }
-agui_primitives = { path = "../agui_primitives", version = "0.3" }
-agui_macros = { path = "../agui_macros", version = "0.3" }
+agui_core.workspace = true
+agui_macros.workspace = true
+agui_primitives.workspace = true
 
-vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "6a827324355178a54e839fa2bef15222a2173b72" }
+tracing.workspace = true
 
-tracing = "0.1"
+rustc-hash.workspace = true
+parking_lot.workspace = true
 
-rustc-hash = "1.1"
-futures = "0.3"
-raw-window-handle = "0.5"
+futures.workspace = true
+
+raw-window-handle.workspace = true
+
+vello.workspace = true

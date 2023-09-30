@@ -5,14 +5,14 @@ use vello::{
     glyph::{GlyphContext, GlyphProvider},
 };
 
-pub struct VelloFonts<'r> {
+pub struct VelloFonts {
     glyph_context: GlyphContext,
-    fonts: FxHashMap<Font, FontRef<'r>>,
+    fonts: FxHashMap<Font, FontRef<'static>>,
 
     default_font: Option<Font>,
 }
 
-impl Default for VelloFonts<'_> {
+impl Default for VelloFonts {
     fn default() -> Self {
         Self {
             glyph_context: GlyphContext::new(),
@@ -23,7 +23,7 @@ impl Default for VelloFonts<'_> {
     }
 }
 
-impl<'r> VelloFonts<'r> {
+impl VelloFonts {
     pub fn new() -> Self {
         Self::default()
     }
@@ -44,8 +44,8 @@ impl<'r> VelloFonts<'r> {
             .new_provider(font, font_id, ppem, hint, variations)
     }
 
-    pub fn add_font(&mut self, font: FontRef<'r>) -> Font {
-        let font_id = Font::new(self.fonts.len());
+    pub fn add_font(&mut self, font: FontRef<'static>) -> Font {
+        let font_id = Font::by_id(self.fonts.len());
 
         self.fonts.insert(font_id, font);
 
@@ -56,15 +56,19 @@ impl<'r> VelloFonts<'r> {
         font_id
     }
 
-    pub fn get(&self, font: Font) -> Option<FontRef<'r>> {
+    pub fn get(&self, font: Font) -> Option<FontRef<'static>> {
         self.fonts.get(&font).cloned()
     }
 
-    pub fn get_default(&self) -> Option<FontRef<'r>> {
+    pub fn get_default(&self) -> Option<FontRef<'static>> {
         self.default_font.and_then(|font| self.get(font))
     }
 
-    pub fn get_or_default(&self, font: Font) -> Option<FontRef<'r>> {
-        self.get(font).or_else(|| self.get_default())
+    pub fn get_or_default(&self, font: Option<Font>) -> Option<FontRef<'static>> {
+        if let Some(font) = font {
+            self.get(font).or_else(|| self.get_default())
+        } else {
+            self.get_default()
+        }
     }
 }

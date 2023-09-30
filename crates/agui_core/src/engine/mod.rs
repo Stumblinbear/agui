@@ -16,20 +16,20 @@ use crate::{
     render::manager::RenderViewManager,
     unit::Constraints,
     util::tree::Tree,
-    widget::{element::ElementUpdate, IntoWidget, Widget},
+    widget::{element::ElementUpdate, Widget},
 };
 
-use self::event::ElementEvent;
+use self::{builder::EngineBuilder, event::ElementEvent};
 
+pub mod builder;
 pub mod event;
 
-#[derive(Default)]
 pub struct Engine {
     element_tree: Tree<ElementId, Element>,
     inheritance_manager: InheritanceManager,
     render_view_manager: RenderViewManager,
 
-    widgets: FxHashMap<Widget, ElementId>,
+    widgets: FxHashMap<Widget, Vec<ElementId>>,
 
     dirty: FxHashSet<ElementId>,
     callback_queue: CallbackQueue,
@@ -40,19 +40,8 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_root<W>(widget: W) -> Self
-    where
-        W: IntoWidget,
-    {
-        let mut engine = Self::new();
-
-        engine.set_root(widget);
-
-        engine
+    pub fn builder() -> EngineBuilder {
+        EngineBuilder::new()
     }
 
     /// Get the element tree.
@@ -69,39 +58,17 @@ impl Engine {
         self.element_tree.get_root()
     }
 
-    /// Queues the root widget for removal from tree
-    pub fn remove_root(&mut self) {
-        if let Some(root_id) = self.element_tree.get_root() {
-            tracing::info!(
-                element = self.element_tree.get(root_id).unwrap().widget_name(),
-                "removing root widget"
-            );
-
-            self.modifications.push_back(Modify::Destroy(root_id));
-        }
-    }
-
-    /// Queues the widget for addition into the tree
-    pub fn set_root<W>(&mut self, widget: W)
-    where
-        W: IntoWidget,
-    {
-        self.remove_root();
-
-        self.modifications
-            .push_back(Modify::Spawn(None, widget.into_widget()));
-    }
-
     /// Check if a widget exists in the tree.
     pub fn contains(&self, element_id: ElementId) -> bool {
         self.element_tree.contains(element_id)
     }
 
-    pub fn get_widget_elements(&self, widget: &Widget) -> Vec<ElementId> {
-        self.widgets
-            .get(widget)
-            .map(|element_id| vec![*element_id])
-            .unwrap_or_default()
+    pub fn get_widget_elements(&self, widget: &Widget) -> &[ElementId] {
+        if let Some(elements) = self.widgets.get(widget) {
+            elements
+        } else {
+            &[]
+        }
     }
 
     /// Query widgets from the tree.
@@ -275,10 +242,6 @@ impl Engine {
 
                     self.process_rebuild(element_events, element_id);
                 }
-
-                Modify::Destroy(element_id) => {
-                    self.process_destroy(element_events, element_id);
-                }
             }
         }
     }
@@ -382,6 +345,8 @@ impl Engine {
         if let Some(existing_element_id) = existing_element_id {
             let existing_element = self.element_tree.get_mut(existing_element_id).unwrap();
 
+            let existing_widget = existing_element.get_widget().clone();
+
             // Check the existing element against the new widget to see what we can safely
             // do about retaining its state
             match existing_element.update_widget(&widget) {
@@ -405,6 +370,28 @@ impl Engine {
                         "element was retained, but it must be rebuilt"
                     );
 
+                    let elements = self.widgets.get_mut(&existing_widget).expect(
+                        "widget does not exist in the widget list while checking for existing elements",
+                    );
+
+                    // Remove the widget from the element list. It will only exist once.
+                    elements.remove(
+                        elements
+                            .iter()
+                            .position(|e| *e == existing_element_id)
+                            .expect("element should exist in the widget element list"),
+                    );
+
+                    if elements.is_empty() {
+                        self.widgets.remove(&existing_widget);
+                    }
+
+                    // We have to remove and replace the widget in the element list
+                    self.widgets
+                        .entry(widget)
+                        .and_modify(|elements| elements.push(existing_element_id))
+                        .or_insert_with(|| vec![existing_element_id]);
+
                     return SpawnResult::Retained {
                         element_id: existing_element_id,
                         needs_rebuild: true,
@@ -426,7 +413,10 @@ impl Engine {
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
-            self.widgets.insert(widget, element_id);
+            self.widgets
+                .entry(widget)
+                .and_modify(|elements| elements.push(element_id))
+                .or_insert_with(|| vec![element_id]);
 
             element.mount(ElementMountContext {
                 element_tree,
@@ -481,52 +471,51 @@ impl Engine {
             // Spawn the child widgets
             for (i, widget) in result.into_iter().enumerate() {
                 // If the child's key exists in the tree, reparent and retain it
-                if let Some(existing_element_id) = self.widgets.get(&widget).copied() {
-                    // If we're trying to reparent an element that has already been retained, panic. The same widget cannot exist twice.
-                    if self.retained_elements.contains(&existing_element_id) {
-                        panic!(
-                            "two instances of the same widget cannot exist at one time: {:?}",
-                            widget
-                        );
-                    }
-
-                    self.retained_elements.insert(existing_element_id);
-
-                    if self
-                        .element_tree
-                        .reparent(Some(element_id), existing_element_id)
+                if let Some(existing_elements) = self.widgets.get(&widget) {
+                    // Grab the first element in the list that hasn't been retained already
+                    if let Some(existing_element_id) = existing_elements
+                        .iter()
+                        .copied()
+                        .find(|element_id| !self.retained_elements.contains(element_id))
                     {
-                        tracing::trace!(
-                            parent_id = &format!("{:?}", element_id),
-                            element = self
-                                .element_tree
-                                .get(existing_element_id)
-                                .unwrap()
-                                .widget_name(),
-                            "reparented widget"
-                        );
+                        self.retained_elements.insert(existing_element_id);
 
-                        self.element_tree
-                            .with(existing_element_id, |element_tree, element| {
-                                element.remount(ElementMountContext {
-                                    element_tree,
-                                    inheritance_manager: &mut self.inheritance_manager,
-                                    render_view_manager: &mut self.render_view_manager,
+                        if self
+                            .element_tree
+                            .reparent(Some(element_id), existing_element_id)
+                        {
+                            tracing::trace!(
+                                parent_id = &format!("{:?}", element_id),
+                                element = self
+                                    .element_tree
+                                    .get(existing_element_id)
+                                    .unwrap()
+                                    .widget_name(),
+                                "reparented widget"
+                            );
 
-                                    dirty: &mut self.dirty,
+                            self.element_tree
+                                .with(existing_element_id, |element_tree, element| {
+                                    element.remount(ElementMountContext {
+                                        element_tree,
+                                        inheritance_manager: &mut self.inheritance_manager,
+                                        render_view_manager: &mut self.render_view_manager,
 
-                                    parent_element_id: Some(element_id),
-                                    element_id: existing_element_id,
+                                        dirty: &mut self.dirty,
+
+                                        parent_element_id: Some(element_id),
+                                        element_id: existing_element_id,
+                                    });
                                 });
+
+                            element_events.push(ElementEvent::Reparent {
+                                parent_id: Some(element_id),
+                                element_id: existing_element_id,
                             });
+                        }
 
-                        element_events.push(ElementEvent::Reparent {
-                            parent_id: Some(element_id),
-                            element_id: existing_element_id,
-                        });
+                        continue;
                     }
-
-                    continue;
                 }
 
                 // Spawn the new widget and queue it for building
@@ -605,7 +594,21 @@ impl Engine {
 
             let element = self.element_tree.remove(element_id, false).unwrap();
 
-            self.widgets.remove(element.get_widget());
+            let widget = element.get_widget();
+
+            if let Some(elements) = self.widgets.get_mut(widget) {
+                // Remove the widget from the element list. It will only exist once.
+                elements.remove(
+                    elements
+                        .iter()
+                        .position(|e| *e == element_id)
+                        .expect("element should exist in the widget element list"),
+                );
+
+                if elements.is_empty() {
+                    self.widgets.remove(widget);
+                }
+            }
         }
     }
 }
@@ -613,7 +616,6 @@ impl Engine {
 enum Modify {
     Spawn(Option<ElementId>, Widget),
     Rebuild(ElementId),
-    Destroy(ElementId),
 }
 
 enum SpawnResult {
@@ -700,18 +702,18 @@ mod tests {
 
     #[test]
     pub fn root_is_not_set_immediately() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestDummyWidget1::default());
+        let engine = Engine::builder()
+            .with_root(TestDummyWidget1::default())
+            .build();
 
         assert_eq!(engine.get_root(), None, "should not have added the widget");
     }
 
     #[test]
     pub fn adding_a_root_widget() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestDummyWidget1::default());
+        let mut engine = Engine::builder()
+            .with_root(TestDummyWidget1::default())
+            .build();
 
         let events = engine.update();
 
@@ -734,47 +736,10 @@ mod tests {
     }
 
     #[test]
-    pub fn removing_a_root_widget() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestDummyWidget1::default());
-
-        engine.update();
-
-        let root_id = engine.get_root();
-
-        assert_ne!(root_id, None, "root widget should have been added");
-
-        let root_id = root_id.unwrap();
-
-        engine.remove_root();
-
-        let events = engine.update();
-
-        assert_eq!(
-            engine.get_root(),
-            None,
-            "root widget should have been removed"
-        );
-
-        assert_ne!(events.len(), 0, "should generate events");
-
-        assert_eq!(
-            events[0],
-            ElementEvent::Destroyed {
-                element_id: root_id
-            },
-            "should have generated a destroyed event"
-        );
-
-        assert_eq!(events.get(1), None, "should have only generated one event");
-    }
-
-    #[test]
     pub fn rebuilding_widgets() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestDummyWidget1::default());
+        let mut engine = Engine::builder()
+            .with_root(TestDummyWidget1::default())
+            .build();
 
         engine.update();
 
@@ -801,14 +766,14 @@ mod tests {
 
     #[test]
     pub fn spawns_children() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestDummyWidget1 {
-            children: vec![
-                TestDummyWidget1::default().into_widget(),
-                TestDummyWidget1::default().into_widget(),
-            ],
-        });
+        let mut engine = Engine::builder()
+            .with_root(TestDummyWidget1 {
+                children: vec![
+                    TestDummyWidget1::default().into_widget(),
+                    TestDummyWidget1::default().into_widget(),
+                ],
+            })
+            .build();
 
         let events = engine.update();
 
@@ -854,7 +819,7 @@ mod tests {
 
     #[test]
     pub fn removes_children() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         let mut widget = TestDummyWidget1::default();
 
@@ -862,54 +827,39 @@ mod tests {
             widget.children.push(TestDummyWidget1::default().into());
         }
 
-        engine.set_root(widget);
+        let widget = widget.into_widget();
+
+        TestRootWidget::set_child(widget.clone());
 
         engine.update();
 
-        let root_id = engine.get_root().unwrap();
-
         assert_eq!(
             engine.get_tree().len(),
-            1001,
+            1002,
             "children should have been added"
         );
 
-        let children = engine.get_tree().get_children(root_id).unwrap().clone();
+        let widget = TestDummyWidget1::default().into_widget();
 
-        assert_eq!(children.len(), 1000, "root should have all children");
+        TestRootWidget::set_child(widget.clone());
 
-        engine.remove_root();
+        let root_id = engine.get_root().unwrap();
+
+        engine.mark_dirty(root_id);
 
         let events = engine.update();
 
         assert_eq!(
-            engine.get_root(),
-            None,
-            "root widget should have been removed"
-        );
-
-        assert_eq!(
             engine.get_tree().len(),
-            0,
-            "all children should have been removed"
+            2,
+            "nested children should have been removed"
         );
 
         assert_ne!(events.len(), 0, "should generate events");
 
-        assert_eq!(
-            events[0],
-            ElementEvent::Destroyed {
-                element_id: root_id
-            },
-            "should have generated a destroyed event for the root widget"
-        );
-
         for i in 0..1000 {
-            assert_eq!(
-                events[i + 1],
-                ElementEvent::Destroyed {
-                    element_id: children[i]
-                },
+            assert!(
+                matches!(events[i + 2], ElementEvent::Destroyed { .. }),
                 "should have generated a destroyed event for all children"
             );
         }
@@ -917,9 +867,7 @@ mod tests {
 
     #[test]
     pub fn rebuilds_children() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestRootWidget);
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
 
@@ -949,9 +897,7 @@ mod tests {
 
     #[test]
     pub fn reuses_unchanged_widgets() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestRootWidget);
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         let reparented_widget = TestDummyWidget1::default().into_widget();
 
@@ -960,7 +906,7 @@ mod tests {
         engine.update();
 
         let root_id = engine.get_root().unwrap();
-        let element_id = engine.get_widget_elements(&reparented_widget);
+        let element_id = engine.get_widget_elements(&reparented_widget).to_vec();
 
         engine.mark_dirty(engine.get_root().unwrap());
 
@@ -981,9 +927,7 @@ mod tests {
 
     #[test]
     pub fn reparents_existing_widgets() {
-        let mut engine = Engine::new();
-
-        engine.set_root(TestRootWidget);
+        let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
         let reparented_widget = TestDummyWidget1::default().into_widget();
 
@@ -996,7 +940,7 @@ mod tests {
 
         engine.update();
 
-        let element_id = engine.get_widget_elements(&reparented_widget);
+        let element_id = engine.get_widget_elements(&reparented_widget).to_vec();
 
         TestRootWidget::set_child(
             TestDummyWidget2 {

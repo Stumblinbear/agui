@@ -4,12 +4,7 @@ use agui_winit::window::CurrentWindow;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{
-    prelude::*,
-    vello::VelloRenderer,
-    winit::{window::Window, App},
-};
-use vello::fello::raw::FontRef;
+use agui::{app::run_app, prelude::*, winit::window::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
@@ -25,29 +20,19 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    App::with_renderer(
-        VelloRenderer::new()
-            .expect("failed to init renderer")
-            .with_fonts([FontRef::new(include_bytes!("./fonts/DejaVuSans.ttf"))
-                .expect("failed to load font")]),
-    )
-    .run(build! {
+    run_app(build! {
         <Window> {
             window: WindowBuilder::new()
                     .with_title("agui hello world")
                     .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
-            child: <ExampleMain> {
-                font: Font::default(),
-            },
+            child: <ExampleMain>::default(),
         }
     });
 }
 
 #[derive(StatefulWidget, PartialEq, Default)]
-struct ExampleMain {
-    font: Font,
-}
+struct ExampleMain;
 
 impl StatefulWidget for ExampleMain {
     type State = ExampleMainState;
@@ -88,10 +73,7 @@ impl WidgetState for ExampleMainState {
 
         build! {
             <Text> {
-                font: Font::default()
-                    .styled()
-                    .color(Color::from_rgb((1.0, 1.0, 1.0))),
-
+                style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
                 text: format!("updated {} times", self.update_count).into(),
             }
         }

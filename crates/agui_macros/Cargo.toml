@@ -15,11 +15,10 @@ proc-macro = true
 
 [features]
 default = []
-internal = []
 
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full"] }
 heck = "0.4"
-toml = "0.7"
+toml = "0.8"
