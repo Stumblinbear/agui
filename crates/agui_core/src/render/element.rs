@@ -5,7 +5,7 @@ use crate::{
         element::{
             ElementWidget, WidgetHitTestContext, WidgetIntrinsicSizeContext, WidgetLayoutContext,
         },
-        HitTestContext, Widget,
+        Widget,
     },
 };
 
@@ -51,25 +51,16 @@ pub trait ElementRender: ElementWidget {
         }
     }
 
-    fn hit_test(&self, ctx: WidgetHitTestContext, position: Offset) -> HitTest {
-        let mut ctx = HitTestContext {
-            element_tree: ctx.element_tree,
-
-            element_id: ctx.element_id,
-            size: ctx.size,
-
-            children: ctx.children,
-
-            result: ctx.result,
-        };
-
+    fn hit_test<'ctx>(
+        &self,
+        ctx: &'ctx mut WidgetHitTestContext<'ctx>,
+        position: Offset,
+    ) -> HitTest {
         if ctx.size.contains(position) {
             while let Some(mut child) = ctx.iter_children().next_back() {
                 let offset = position - child.get_offset();
 
-                let child_hit = child.hit_test_with_offset(offset, position);
-
-                if child_hit == HitTest::Absorb {
+                if child.hit_test_with_offset(offset, position) == HitTest::Absorb {
                     return HitTest::Absorb;
                 }
             }

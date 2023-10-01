@@ -28,7 +28,7 @@ impl<'ctx> Deref for LayoutContext<'ctx> {
     }
 }
 
-impl<'ctx> DerefMut for LayoutContext<'ctx> {
+impl DerefMut for LayoutContext<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.widget_ctx
     }

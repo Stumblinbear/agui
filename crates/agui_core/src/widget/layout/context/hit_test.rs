@@ -4,57 +4,36 @@ use glam::Mat4;
 
 use crate::{
     element::{context::ElementHitTestContext, Element, ElementId},
-    unit::{HitTest, HitTestResult, Offset, Size},
+    unit::{HitTest, HitTestResult, Offset},
     util::tree::Tree,
-    widget::ContextWidget,
+    widget::{element::WidgetHitTestContext, ContextWidget},
 };
 
 pub struct HitTestContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-
-    pub(crate) element_id: ElementId,
-    pub(crate) size: &'ctx Size,
-
-    pub(crate) children: &'ctx [ElementId],
-
-    pub(crate) result: &'ctx mut HitTestResult,
+    pub(crate) widget_ctx: &'ctx mut WidgetHitTestContext<'ctx>,
 }
 
 impl ContextWidget for HitTestContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.element_tree
+        self.widget_ctx.get_elements()
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        self.widget_ctx.get_element_id()
     }
 }
 
-impl HitTestContext<'_> {
-    pub fn has_children(&self) -> bool {
-        !self.children.is_empty()
-    }
-
-    pub fn child_count(&self) -> usize {
-        self.children.len()
-    }
-
-    pub fn iter_children(&mut self) -> IterChildrenHitTest {
-        IterChildrenHitTest::new(self.element_tree, self.children, self.result)
-    }
-}
-
-impl Deref for HitTestContext<'_> {
-    type Target = HitTestResult;
+impl<'ctx> Deref for HitTestContext<'ctx> {
+    type Target = WidgetHitTestContext<'ctx>;
 
     fn deref(&self) -> &Self::Target {
-        self.result
+        self.widget_ctx
     }
 }
 
 impl DerefMut for HitTestContext<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.result
+        self.widget_ctx
     }
 }
 
@@ -163,6 +142,10 @@ impl ChildElementHitTest<'_> {
             .get_offset()
     }
 
+    /// Check if the given position "hits" this widget or any of its descendants.
+    ///
+    /// The given position must be in the widget's local coordinate space, not the global
+    /// coordinate space.
     pub fn hit_test(&mut self, position: Offset) -> HitTest {
         let element_id = self.get_element_id();
 

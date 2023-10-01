@@ -436,7 +436,7 @@ impl Element {
             .map(|children| children.as_slice())
             .unwrap_or_default();
 
-        match self.inner {
+        let hit = match self.inner {
             ElementType::Widget(_) | ElementType::Inherited(_) | ElementType::View(_) => {
                 assert!(children.len() <= 1, "widgets may only have a single child");
 
@@ -465,28 +465,26 @@ impl Element {
                 }
             }
 
-            ElementType::Render(ref widget) => {
-                let hit = widget.hit_test(
-                    WidgetHitTestContext {
-                        element_tree: ctx.element_tree,
+            ElementType::Render(ref widget) => widget.hit_test(
+                &mut WidgetHitTestContext {
+                    element_tree: ctx.element_tree,
 
-                        element_id: ctx.element_id,
-                        size: &size,
+                    element_id: ctx.element_id,
+                    size: &size,
 
-                        children,
+                    children,
 
-                        result: ctx.result,
-                    },
-                    position,
-                );
+                    result: ctx.result,
+                },
+                position,
+            ),
+        };
 
-                if hit == HitTest::Absorb {
-                    ctx.result.add(ctx.element_id);
-                }
-
-                hit
-            }
+        if hit == HitTest::Absorb {
+            ctx.result.add(ctx.element_id);
         }
+
+        hit
     }
 }
 

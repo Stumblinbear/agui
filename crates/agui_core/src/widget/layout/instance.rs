@@ -2,12 +2,17 @@ use std::rc::Rc;
 
 use crate::{
     render::element::ElementRender,
-    unit::{Constraints, IntrinsicDimension, Size},
+    unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{
-        element::{ElementUpdate, ElementWidget, WidgetIntrinsicSizeContext, WidgetLayoutContext},
+        element::{
+            ElementUpdate, ElementWidget, WidgetHitTestContext, WidgetIntrinsicSizeContext,
+            WidgetLayoutContext,
+        },
         AnyWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
     },
 };
+
+use super::HitTestContext;
 
 pub struct LayoutElement<W>
 where
@@ -68,6 +73,15 @@ where
     fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
         self.widget
             .layout(&mut LayoutContext { widget_ctx: ctx }, constraints)
+    }
+
+    fn hit_test<'ctx>(
+        &self,
+        ctx: &'ctx mut WidgetHitTestContext<'ctx>,
+        position: Offset,
+    ) -> HitTest {
+        self.widget
+            .hit_test(&mut HitTestContext { widget_ctx: ctx }, position)
     }
 }
 

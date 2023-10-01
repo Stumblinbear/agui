@@ -28,7 +28,7 @@ impl<'ctx> Deref for IntrinsicSizeContext<'ctx> {
     }
 }
 
-impl<'ctx> DerefMut for IntrinsicSizeContext<'ctx> {
+impl DerefMut for IntrinsicSizeContext<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.widget_ctx
     }

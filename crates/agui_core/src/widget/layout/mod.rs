@@ -25,32 +25,19 @@ pub trait WidgetLayout: Sized + 'static {
 
     /// Checks if the given position "hits" this widget or any of its descendants.
     ///
-    /// Returns `true` if the given point is contained within this widget or one of its
-    /// descendants. One should make sure to add themselves to the result if its children
-    /// are hit.
-    ///
-    /// The given position should be in the widget's local coordinate space, not the global
+    /// The given position will be in the widget's local coordinate space, not the global
     /// coordinate space.
-    fn hit_test(&self, ctx: &mut HitTestContext, position: Offset) -> bool {
-        let mut hit = false;
-
-        if ctx.size.contains(position) {
+    fn hit_test(&self, ctx: &mut HitTestContext, position: Offset) -> HitTest {
+        if ctx.get_size().contains(position) {
             while let Some(mut child) = ctx.iter_children().next_back() {
-                if child.hit_test(position) == HitTest::Absorb {
-                    hit = true;
+                let offset = position - child.get_offset();
 
-                    break;
+                if child.hit_test_with_offset(offset, position) == HitTest::Absorb {
+                    return HitTest::Absorb;
                 }
             }
         }
 
-        // if hit {
-        //     ctx.add_result(HitTestEntry {
-        //         element_id: ctx.element_id,
-        //         position,
-        //     });
-        // }
-
-        hit
+        HitTest::Pass
     }
 }
