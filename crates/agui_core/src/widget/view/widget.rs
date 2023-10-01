@@ -1,4 +1,7 @@
-use crate::widget::{element::WidgetElement, ElementBuilder, IntoWidget, Widget};
+use crate::{
+    element::ElementType,
+    widget::{ElementBuilder, IntoWidget, Widget},
+};
 
 use super::instance::RenderViewElement;
 
@@ -13,10 +16,10 @@ impl IntoWidget for RenderView {
 }
 
 impl ElementBuilder for RenderView {
-    fn create_element(self: std::rc::Rc<Self>) -> Box<dyn WidgetElement>
+    fn create_element(self: std::rc::Rc<Self>) -> ElementType
     where
         Self: Sized,
     {
-        Box::new(RenderViewElement::new(self))
+        ElementType::View(Box::new(RenderViewElement::new(self)))
     }
 }

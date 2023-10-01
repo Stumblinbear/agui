@@ -1,15 +1,13 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::{
     element::{Element, ElementId},
     util::tree::Tree,
-    widget::{ContextWidget, IterChildrenLayout},
+    widget::{element::WidgetIntrinsicSizeContext, ContextWidget},
 };
 
 pub struct IntrinsicSizeContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-
-    pub(crate) element_id: ElementId,
-
-    pub(crate) children: &'ctx [ElementId],
+    pub(crate) widget_ctx: WidgetIntrinsicSizeContext<'ctx>,
 }
 
 impl ContextWidget for IntrinsicSizeContext<'_> {
@@ -22,16 +20,16 @@ impl ContextWidget for IntrinsicSizeContext<'_> {
     }
 }
 
-impl<'ctx> IntrinsicSizeContext<'ctx> {
-    pub fn has_children(&self) -> bool {
-        !self.children.is_empty()
-    }
+impl<'ctx> Deref for IntrinsicSizeContext<'ctx> {
+    type Target = WidgetIntrinsicSizeContext<'ctx>;
 
-    pub fn child_count(&self) -> usize {
-        self.children.len()
+    fn deref(&self) -> &Self::Target {
+        &self.widget_ctx
     }
+}
 
-    pub fn iter_children(&self) -> IterChildrenLayout {
-        IterChildrenLayout::new(self.element_tree, self.children)
+impl<'ctx> DerefMut for IntrinsicSizeContext<'ctx> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.widget_ctx
     }
 }

@@ -37,6 +37,7 @@ im-rc = "15.1"
 futures = "0.3"
 raw-window-handle = "0.5"
 
+glam = "0.24"
 lyon = "1.0"
 
 winit = { version = "0.28" }

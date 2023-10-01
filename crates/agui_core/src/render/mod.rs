@@ -1,4 +1,5 @@
 pub mod canvas;
+pub mod element;
 pub(crate) mod manager;
 pub mod paint;
 pub mod renderer;

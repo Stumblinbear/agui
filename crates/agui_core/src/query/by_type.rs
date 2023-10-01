@@ -51,8 +51,8 @@ mod tests {
     use crate::{
         engine::Engine,
         query::WidgetQueryExt,
-        unit::Size,
-        widget::{BuildContext, IntoWidget, Widget, WidgetLayout},
+        unit::{IntrinsicDimension, Size},
+        widget::{IntoWidget, IntrinsicSizeContext, Widget, WidgetLayout},
     };
 
     #[derive(Default, LayoutWidget)]
@@ -61,8 +61,17 @@ mod tests {
     }
 
     impl WidgetLayout for TestWidget1 {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             self.child.clone().into_iter().collect()
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(
@@ -80,8 +89,17 @@ mod tests {
     }
 
     impl WidgetLayout for TestWidget2 {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             self.child.clone().into_iter().collect()
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(

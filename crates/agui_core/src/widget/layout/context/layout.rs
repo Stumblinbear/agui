@@ -1,43 +1,35 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::{
     element::{Element, ElementId},
-    unit::Offset,
     util::tree::Tree,
-    widget::{ContextWidget, IterChildrenLayout, IterChildrenLayoutMut},
+    widget::{element::WidgetLayoutContext, ContextWidget},
 };
 
 pub struct LayoutContext<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-
-    pub(crate) element_id: ElementId,
-
-    pub(crate) children: &'ctx [ElementId],
-    pub(crate) offsets: &'ctx mut [Offset],
+    pub(crate) widget_ctx: WidgetLayoutContext<'ctx>,
 }
 
 impl ContextWidget for LayoutContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.element_tree
+        self.widget_ctx.get_elements()
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        self.widget_ctx.get_element_id()
     }
 }
 
-impl LayoutContext<'_> {
-    pub fn has_children(&self) -> bool {
-        !self.children.is_empty()
-    }
+impl<'ctx> Deref for LayoutContext<'ctx> {
+    type Target = WidgetLayoutContext<'ctx>;
 
-    pub fn child_count(&self) -> usize {
-        self.children.len()
+    fn deref(&self) -> &Self::Target {
+        &self.widget_ctx
     }
+}
 
-    pub fn iter_children(&self) -> IterChildrenLayout {
-        IterChildrenLayout::new(self.element_tree, self.children)
-    }
-
-    pub fn iter_children_mut(&mut self) -> IterChildrenLayoutMut {
-        IterChildrenLayoutMut::new(self.element_tree, self.children, self.offsets)
+impl<'ctx> DerefMut for LayoutContext<'ctx> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.widget_ctx
     }
 }

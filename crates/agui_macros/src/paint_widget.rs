@@ -26,11 +26,11 @@ pub fn impl_paint_widget(input: TokenStream2) -> TokenStream2 {
         }
 
         impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
-            fn create_element(self: std::rc::Rc<Self>) -> Box<dyn #agui_core::widget::element::WidgetElement>
+            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where
                 Self: Sized
             {
-                Box::new(#agui_core::widget::PaintElement::new(self))
+                #agui_core::element::ElementType::Render(Box::new(#agui_core::widget::PaintElement::new(self)))
             }
         }
     }

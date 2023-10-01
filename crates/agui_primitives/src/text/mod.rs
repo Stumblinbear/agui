@@ -50,7 +50,7 @@ impl WidgetBuild for Text {
 }
 
 #[derive(LayoutWidget)]
-pub struct TextLayout {
+struct TextLayout {
     #[prop(default)]
     pub delegate: Option<Rc<dyn TextLayoutDelegate>>,
 
@@ -60,7 +60,7 @@ pub struct TextLayout {
 }
 
 impl WidgetLayout for TextLayout {
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+    fn get_children(&self) -> Vec<Widget> {
         build! {
             vec![
                 <TextPainter> {
@@ -77,16 +77,14 @@ impl WidgetLayout for TextLayout {
         dimension: IntrinsicDimension,
         _: f32,
     ) -> f32 {
-        if let Some(delegate) = self.delegate.as_ref() {
+        self.delegate.as_ref().map_or(0.0, |delegate| {
             delegate.compute_intrinsic_size(
                 &self.style,
                 Cow::clone(&self.text),
                 dimension,
                 self.style.size,
             )
-        } else {
-            0.0
-        }
+        })
     }
 
     fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {

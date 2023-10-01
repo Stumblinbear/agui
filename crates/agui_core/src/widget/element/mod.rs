@@ -1,14 +1,8 @@
 use std::any::Any;
 
-use crate::{
-    callback::CallbackId,
-    element::context::{ElementIntrinsicSizeContext, ElementLayoutContext},
-    gestures::hit_test::HitTestEntry,
-    render::canvas::Canvas,
-    unit::{AsAny, Constraints, IntrinsicDimension, Offset, Size},
-};
+use crate::{callback::CallbackId, unit::AsAny};
 
-use super::{widget::Widget, HitTestContext};
+use super::widget::Widget;
 
 mod context;
 
@@ -26,7 +20,7 @@ pub enum ElementUpdate {
     Invalid,
 }
 
-pub trait WidgetElement: AsAny {
+pub trait ElementWidget: AsAny {
     fn widget_name(&self) -> &'static str;
 
     #[allow(unused_variables)]
@@ -35,85 +29,18 @@ pub trait WidgetElement: AsAny {
     #[allow(unused_variables)]
     fn unmount(&mut self, ctx: WidgetUnmountContext) {}
 
-    fn intrinsic_size(
-        &self,
-        ctx: WidgetIntrinsicSizeContext,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32 {
-        // temp until we skip elements that don't lay out
-
-        let children = ctx.children;
-
-        if !children.is_empty() {
-            assert_eq!(
-                children.len(),
-                1,
-                "widgets that do not define an intrinsic_size function may only have a single child"
-            );
-
-            let child_id = *children.first().unwrap();
-
-            let element = ctx
-                .element_tree
-                .get(child_id)
-                .expect("child element missing during layout");
-
-            element.intrinsic_size(
-                ElementIntrinsicSizeContext {
-                    element_tree: ctx.element_tree,
-
-                    element_id: child_id,
-                },
-                dimension,
-                cross_extent,
-            )
-        } else {
-            0.0
-        }
-    }
-
-    fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
-        // temp until we skip elements that don't lay out
-
-        let children = ctx.children;
-
-        if !children.is_empty() {
-            assert_eq!(
-                children.len(),
-                1,
-                "widgets that do not define a layout function may only have a single child"
-            );
-
-            let child_id = *children.first().unwrap();
-
-            // By default, we take the size of the child.
-            ctx.element_tree
-                .with(child_id, |element_tree, element| {
-                    element.layout(
-                        ElementLayoutContext {
-                            element_tree,
-
-                            element_id: child_id,
-                        },
-                        constraints,
-                    )
-                })
-                .expect("child element missing during layout")
-        } else {
-            constraints.smallest()
-        }
-    }
-
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget>;
-
     /// Returns true if the widget is of the same type as the other widget.
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
+}
 
-    #[allow(unused_variables)]
-    fn paint(&self, size: Size) -> Option<Canvas> {
-        None
+impl std::fmt::Debug for Box<dyn ElementWidget> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(self.widget_name()).finish_non_exhaustive()
     }
+}
+
+pub trait ElementBuild: ElementWidget {
+    fn build(&mut self, ctx: WidgetBuildContext) -> Widget;
 
     #[allow(unused_variables)]
     fn call(
@@ -121,45 +48,10 @@ pub trait WidgetElement: AsAny {
         ctx: WidgetCallbackContext,
         callback_id: CallbackId,
         arg: Box<dyn Any>,
-    ) -> bool {
-        panic!("callbacks are not supported on this widget type");
-    }
-
-    fn hit_test(&self, ctx: WidgetHitTestContext, position: Offset) -> bool {
-        let mut ctx = HitTestContext {
-            element_tree: ctx.element_tree,
-
-            path: ctx.path,
-
-            element_id: ctx.element_id,
-            size: ctx.size,
-            children: ctx.children,
-        };
-
-        let mut hit = false;
-
-        if ctx.size.contains(position) {
-            while let Some(mut child) = ctx.iter_children().next_back() {
-                if child.hit_test(position) {
-                    hit = true;
-
-                    break;
-                }
-            }
-        }
-
-        if hit {
-            ctx.add_result(HitTestEntry {
-                element_id: ctx.element_id,
-                position,
-            });
-        }
-
-        hit
-    }
+    ) -> bool;
 }
 
-impl std::fmt::Debug for Box<dyn WidgetElement> {
+impl std::fmt::Debug for Box<dyn ElementBuild> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(self.widget_name()).finish_non_exhaustive()
     }

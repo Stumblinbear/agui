@@ -1,6 +1,6 @@
 use agui_core::{
-    unit::{Alignment, Constraints, Size},
-    widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
+    unit::{Alignment, Constraints, IntrinsicDimension, Size},
+    widget::{IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -20,8 +20,19 @@ pub struct Align {
 }
 
 impl WidgetLayout for Align {
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+    fn get_children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
+    }
+
+    fn intrinsic_size(
+        &self,
+        ctx: &mut IntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        ctx.iter_children().next().map_or(0.0, |child| {
+            child.compute_intrinsic_size(dimension, cross_extent)
+        })
     }
 
     fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {

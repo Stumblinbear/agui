@@ -3,7 +3,9 @@ use std::{
     rc::Rc,
 };
 
-use super::{element::WidgetElement, AnyWidget, IntoWidget, WidgetKey};
+use crate::element::ElementType;
+
+use super::{AnyWidget, IntoWidget, WidgetKey};
 
 #[derive(Clone)]
 pub struct Widget {
@@ -62,7 +64,7 @@ impl Widget {
         )
     }
 
-    pub(crate) fn create_element(&self) -> Box<dyn WidgetElement> {
+    pub(crate) fn create_element(&self) -> ElementType {
         Rc::clone(&self.widget).create_element()
     }
 }
@@ -150,16 +152,25 @@ mod tests {
     use agui_macros::LayoutWidget;
 
     use crate::{
-        unit::Size,
-        widget::{BuildContext, IntoWidget, Widget, WidgetLayout},
+        unit::{IntrinsicDimension, Size},
+        widget::{IntoWidget, IntrinsicSizeContext, Widget, WidgetLayout},
     };
 
     #[derive(LayoutWidget)]
     struct TestWidget;
 
     impl WidgetLayout for TestWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             vec![]
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(

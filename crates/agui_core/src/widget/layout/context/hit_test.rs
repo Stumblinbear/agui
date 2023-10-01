@@ -1,7 +1,10 @@
+use std::ops::{Deref, DerefMut};
+
+use glam::Mat4;
+
 use crate::{
     element::{context::ElementHitTestContext, Element, ElementId},
-    gestures::hit_test::HitTestEntry,
-    unit::{Offset, Size},
+    unit::{HitTest, HitTestResult, Offset, Size},
     util::tree::Tree,
     widget::ContextWidget,
 };
@@ -9,11 +12,12 @@ use crate::{
 pub struct HitTestContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
-    pub(crate) path: &'ctx mut Vec<HitTestEntry>,
-
     pub(crate) element_id: ElementId,
-    pub(crate) children: &'ctx [ElementId],
     pub(crate) size: &'ctx Size,
+
+    pub(crate) children: &'ctx [ElementId],
+
+    pub(crate) result: &'ctx mut HitTestResult,
 }
 
 impl ContextWidget for HitTestContext<'_> {
@@ -36,11 +40,21 @@ impl HitTestContext<'_> {
     }
 
     pub fn iter_children(&mut self) -> IterChildrenHitTest {
-        IterChildrenHitTest::new(self.element_tree, self.children, self.path)
+        IterChildrenHitTest::new(self.element_tree, self.children, self.result)
     }
+}
 
-    pub fn add_result(&mut self, entry: HitTestEntry) {
-        self.path.push(entry);
+impl Deref for HitTestContext<'_> {
+    type Target = HitTestResult;
+
+    fn deref(&self) -> &Self::Target {
+        self.result
+    }
+}
+
+impl DerefMut for HitTestContext<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.result
     }
 }
 
@@ -50,16 +64,16 @@ pub struct IterChildrenHitTest<'ctx> {
 
     element_tree: &'ctx Tree<ElementId, Element>,
 
-    path: &'ctx mut Vec<HitTestEntry>,
-
     children: &'ctx [ElementId],
+
+    result: &'ctx mut HitTestResult,
 }
 
 impl<'ctx> IterChildrenHitTest<'ctx> {
     pub fn new(
         element_tree: &'ctx Tree<ElementId, Element>,
         children: &'ctx [ElementId],
-        path: &'ctx mut Vec<HitTestEntry>,
+        result: &'ctx mut HitTestResult,
     ) -> Self {
         IterChildrenHitTest {
             front_index: 0,
@@ -69,7 +83,7 @@ impl<'ctx> IterChildrenHitTest<'ctx> {
 
             children,
 
-            path,
+            result,
         }
     }
 }
@@ -86,7 +100,7 @@ impl IterChildrenHitTest<'_> {
         Some(ChildElementHitTest {
             element_tree: self.element_tree,
 
-            path: self.path,
+            result: self.result,
 
             index: self.front_index - 1,
 
@@ -104,11 +118,11 @@ impl IterChildrenHitTest<'_> {
         Some(ChildElementHitTest {
             element_tree: self.element_tree,
 
-            path: self.path,
-
             index: self.back_index,
 
             children: self.children,
+
+            result: self.result,
         })
     }
 }
@@ -120,7 +134,7 @@ pub struct ChildElementHitTest<'ctx> {
 
     children: &'ctx [ElementId],
 
-    path: &'ctx mut Vec<HitTestEntry>,
+    result: &'ctx mut HitTestResult,
 }
 
 impl ChildElementHitTest<'_> {
@@ -132,13 +146,30 @@ impl ChildElementHitTest<'_> {
         self.children[self.index]
     }
 
-    pub fn hit_test(&mut self, position: Offset) -> bool {
+    pub fn get_element(&self) -> &Element {
+        let element_id = self.get_element_id();
+
+        self.element_tree
+            .get(element_id)
+            .expect("child element missing during hit test")
+    }
+
+    pub fn get_offset(&self) -> Offset {
+        let element_id = self.get_element_id();
+
+        self.element_tree
+            .get(element_id)
+            .expect("child element missing during hit test")
+            .get_offset()
+    }
+
+    pub fn hit_test(&mut self, position: Offset) -> HitTest {
         let element_id = self.get_element_id();
 
         let element = self
             .element_tree
             .get(element_id)
-            .expect("child element missing during layout");
+            .expect("child element missing during hit test");
 
         element.hit_test(
             ElementHitTestContext {
@@ -146,9 +177,56 @@ impl ChildElementHitTest<'_> {
 
                 element_id,
 
-                path: self.path,
+                result: self.result,
             },
             position,
         )
+    }
+
+    pub fn with_transform(
+        &mut self,
+        transform: Mat4,
+        position: Offset,
+        func: impl FnOnce(&mut ChildElementHitTest<'_>, Offset) -> HitTest,
+    ) -> HitTest {
+        self.result.push_transform(transform);
+
+        let transformed_position = transform.project_point3(position.into());
+        let transformed_position = Offset::new(transformed_position.x, transformed_position.y);
+
+        let hit = func(self, transformed_position);
+
+        self.result.pop_transform();
+
+        hit
+    }
+
+    pub fn hit_test_with_transform(&mut self, transform: Mat4, position: Offset) -> HitTest {
+        self.with_transform(transform, position, |child, position| {
+            child.hit_test(position)
+        })
+    }
+
+    pub fn with_offset(
+        &mut self,
+        offset: Offset,
+        position: Offset,
+        func: impl FnOnce(&mut ChildElementHitTest<'_>, Offset) -> HitTest,
+    ) -> HitTest {
+        self.result.push_offset(offset);
+
+        let child_offset = self.get_offset();
+
+        let transformed_position = position - child_offset;
+
+        let hit = func(self, transformed_position);
+
+        self.result.pop_transform();
+
+        hit
+    }
+
+    pub fn hit_test_with_offset(&mut self, offset: Offset, position: Offset) -> HitTest {
+        self.with_offset(offset, position, |child, position| child.hit_test(position))
     }
 }

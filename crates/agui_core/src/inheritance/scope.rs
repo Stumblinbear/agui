@@ -5,7 +5,6 @@ use rustc_hash::FxHashSet;
 use crate::{
     element::ElementId,
     util::{hasher::TypeIdHasher, map::TypeMap},
-    widget::InheritedWidget,
 };
 
 #[derive(PartialEq, Debug)]
@@ -32,12 +31,9 @@ pub struct InheritanceScope {
 }
 
 impl InheritanceScope {
-    pub fn new<I>(element_id: ElementId) -> Self
-    where
-        I: InheritedWidget,
-    {
+    pub fn new(type_id: TypeId, element_id: ElementId) -> Self {
         Self {
-            type_id: TypeId::of::<I>(),
+            type_id,
 
             ancestor_scope_id: None,
 
@@ -45,7 +41,7 @@ impl InheritanceScope {
 
             child_scope_ids: Vec::default(),
 
-            available_scopes: im_rc::HashMap::from(vec![(TypeId::of::<I>(), element_id)]),
+            available_scopes: im_rc::HashMap::from(vec![(type_id, element_id)]),
 
             dependents: TypeMap::default(),
 
@@ -53,12 +49,13 @@ impl InheritanceScope {
         }
     }
 
-    pub fn derive_scope<I>(ancestor_scope: &InheritanceScope, element_id: ElementId) -> Self
-    where
-        I: InheritedWidget,
-    {
+    pub fn derive_scope(
+        ancestor_scope: &InheritanceScope,
+        type_id: TypeId,
+        element_id: ElementId,
+    ) -> Self {
         InheritanceScope {
-            type_id: TypeId::of::<I>(),
+            type_id,
 
             ancestor_scope_id: Some(ancestor_scope.get_element_id()),
 
@@ -68,7 +65,7 @@ impl InheritanceScope {
 
             available_scopes: ancestor_scope
                 .get_available_scopes()
-                .update(TypeId::of::<I>(), element_id),
+                .update(type_id, element_id),
 
             dependents: TypeMap::default(),
 

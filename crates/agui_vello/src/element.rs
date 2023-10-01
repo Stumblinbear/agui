@@ -17,29 +17,29 @@ use vello::{
 use crate::fonts::VelloFonts;
 
 #[derive(Default)]
-pub struct RenderElement {
+pub struct RenderObject {
     /// This is the layer that this render element belongs to
     pub head_target: Option<ElementId>,
 
     pub offset: Offset,
 
-    pub canvas: CanvasElement,
+    pub canvas: CanvasObject,
 }
 
 #[derive(Default)]
-pub struct CanvasElement {
+pub struct CanvasObject {
     pub offset: Offset,
 
     pub fragment: SceneFragment,
 
-    pub children: Vec<LayerElement>,
-    pub tail: Option<Box<LayerElement>>,
+    pub children: Vec<LayerObject>,
+    pub tail: Option<Box<LayerObject>>,
 
     pub paints: Vec<Paint>,
     pub glyph_cache: FxHashMap<(GlyphId, usize), Option<SceneFragment>>,
 }
 
-impl CanvasElement {
+impl CanvasObject {
     pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
@@ -72,10 +72,10 @@ impl CanvasElement {
         }
 
         if let Some(tail) = canvas.tail {
-            let mut layer_element = LayerElement {
+            let mut layer = LayerObject {
                 rect: tail.offset & tail.canvas.size,
 
-                canvas: CanvasElement {
+                canvas: CanvasObject {
                     offset: tail.offset,
 
                     fragment: SceneFragment::default(),
@@ -88,9 +88,9 @@ impl CanvasElement {
                 },
             };
 
-            layer_element.update(fonts, Some(tail.canvas));
+            layer.update(fonts, Some(tail.canvas));
 
-            self.tail = Some(Box::new(layer_element));
+            self.tail = Some(Box::new(layer));
         }
     }
 
@@ -226,13 +226,13 @@ impl CanvasElement {
     }
 }
 
-pub struct LayerElement {
+pub struct LayerObject {
     pub rect: Rect,
 
-    pub canvas: CanvasElement,
+    pub canvas: CanvasObject,
 }
 
-impl LayerElement {
+impl LayerObject {
     pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
         self.canvas.update(fonts, canvas);
     }

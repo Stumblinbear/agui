@@ -11,10 +11,12 @@ fn engine_ops(c: &mut Criterion) {
 
     group.sample_size(500).bench_function("additions", |b| {
         b.iter_with_setup(
-            || (Engine::new(), Column::builder().build()),
-            |(mut engine, widget)| {
-                engine.set_root(widget);
-
+            || {
+                Engine::builder()
+                    .with_root(Column::builder().build())
+                    .build()
+            },
+            |mut engine| {
                 engine.update();
             },
         )
@@ -23,7 +25,9 @@ fn engine_ops(c: &mut Criterion) {
     group.sample_size(500).bench_function("removals", |b| {
         b.iter_with_setup(
             || {
-                let mut engine = Engine::with_root(Column::builder().build());
+                let mut engine = Engine::builder()
+                    .with_root(Column::builder().build())
+                    .build();
 
                 engine.update();
 
@@ -54,11 +58,9 @@ fn engine_ops(c: &mut Criterion) {
                         .push(SizedBox::builder().build().into_widget().into());
                 }
 
-                (Engine::new(), column)
+                Engine::builder().with_root(column).build()
             },
-            |(mut engine, widget)| {
-                engine.set_root(widget);
-
+            |mut engine| {
                 engine.update();
             },
         )
@@ -75,7 +77,7 @@ fn engine_ops(c: &mut Criterion) {
                         .push(SizedBox::builder().build().into_widget().into());
                 }
 
-                let mut engine = Engine::with_root(column);
+                let mut engine = Engine::builder().with_root(column).build();
 
                 engine.update();
 

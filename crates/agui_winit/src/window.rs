@@ -1,17 +1,20 @@
-use std::{cell::RefCell, ops::Deref};
+use std::ops::Deref;
 
 use agui_core::{
     listeners::EventEmitterHandle,
-    unit::{Constraints, Size},
+    unit::{Constraints, IntrinsicDimension, Size},
     widget::{
         view::RenderView, BuildContext, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
-        InheritedWidget, IntoWidget, LayoutContext, StatefulBuildContext, StatefulWidget, Widget,
-        WidgetBuild, WidgetLayout, WidgetState,
+        InheritedWidget, IntoWidget, IntrinsicSizeContext, LayoutContext, StatefulBuildContext,
+        StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
     },
 };
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
 use agui_primitives::sized_box::SizedBox;
-use winit::{event::WindowEvent, window::WindowBuilder};
+use winit::{
+    event::{DeviceId, ElementState, MouseButton, WindowEvent},
+    window::WindowBuilder,
+};
 
 use crate::{binding::WinitBinding, handle::WinitWindowHandle};
 
@@ -49,12 +52,15 @@ impl StatefulWidget for WinitWindow {
     type State = WinitWindowState;
 
     fn create_state(&self) -> Self::State {
-        WinitWindowState { window: None }
+        WinitWindowState::default()
     }
 }
 
+#[derive(Default)]
 struct WinitWindowState {
     window: Option<WinitWindowHandle>,
+
+    event_listener: Option<EventEmitterHandle<WindowEvent<'static>>>,
 }
 
 impl WidgetState for WinitWindowState {
@@ -65,18 +71,49 @@ impl WidgetState for WinitWindowState {
             return tracing::error!("Windowing controller not found in the widget tree");
         };
 
-        let create_cb = ctx.callback(|ctx, window| {
-            ctx.set_state(|state| {
-                state.window.replace(window);
-            });
-        });
+        let mouse_input_event_cb = ctx.callback(
+            |ctx, (device_id, state, button): (DeviceId, ElementState, MouseButton)| {
+                println!(
+                    "Mouse input event: {:?} {:?} {:?}",
+                    device_id, state, button
+                );
+
+                ctx.get_element_id();
+            },
+        );
 
         // I don't like cloning the window, here.
-        binding.create_window(ctx.get_element_id(), ctx.widget.window.clone(), create_cb);
+        binding.create_window(
+            ctx.get_element_id(),
+            ctx.widget.window.clone(),
+            ctx.callback(move |ctx, window: WinitWindowHandle| {
+                let mouse_input_event_cb = mouse_input_event_cb.clone();
+
+                ctx.set_state(|state| {
+                    state.event_listener = Some(window.events().add_listener(move |event| {
+                        if let WindowEvent::MouseInput {
+                            device_id,
+                            state,
+                            button,
+                            ..
+                        } = event
+                        {
+                            mouse_input_event_cb.call((*device_id, *state, *button));
+                        }
+                    }));
+
+                    state.window.replace(window);
+                });
+            }),
+        );
     }
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         if let Some(current_window) = &self.window {
+            let resize_notifier = ctx.callback(|_, _: ()| {});
+
+            let current_size = current_window.inner_size();
+
             CurrentWindow {
                 handle: current_window.clone(),
 
@@ -84,7 +121,13 @@ impl WidgetState for WinitWindowState {
                     handle: current_window.clone(),
                     child: ctx.widget.child.clone(),
 
-                    listener: RefCell::new(None),
+                    listener: current_window.events().add_listener(move |event| {
+                        if let WindowEvent::Resized(size) = event {
+                            if current_size != *size {
+                                resize_notifier.call(());
+                            }
+                        }
+                    }),
                 }
                 .into_widget(),
             }
@@ -126,27 +169,23 @@ struct WinitWindowLayout {
     handle: WinitWindowHandle,
     child: Widget,
 
-    listener: RefCell<Option<EventEmitterHandle<WindowEvent<'static>>>>,
+    listener: EventEmitterHandle<WindowEvent<'static>>,
 }
 
 impl WidgetLayout for WinitWindowLayout {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Vec<Widget> {
-        let notifier = ctx.callback(|_, _: ()| {});
-
-        let current_size = self.handle.inner_size();
-
-        // We use interior mutability here to reduce the amount of nested widget fuckery
-        self.listener
-            .borrow_mut()
-            .replace(self.handle.events().add_listener(move |event| {
-                if let WindowEvent::Resized(size) = event {
-                    if current_size != *size {
-                        notifier.call(());
-                    }
-                }
-            }));
-
+    fn get_children(&self) -> Vec<Widget> {
         vec![self.child.clone()]
+    }
+
+    fn intrinsic_size(
+        &self,
+        ctx: &mut IntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        ctx.iter_children().next().map_or(0.0, |child| {
+            child.compute_intrinsic_size(dimension, cross_extent)
+        })
     }
 
     fn layout(&self, ctx: &mut LayoutContext, _: Constraints) -> Size {

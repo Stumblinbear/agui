@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
-    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -38,7 +38,7 @@ pub struct Flex {
 }
 
 impl WidgetLayout for Flex {
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+    fn get_children(&self) -> Vec<Widget> {
         self.children
             .iter()
             .map(|data| data.child.clone())

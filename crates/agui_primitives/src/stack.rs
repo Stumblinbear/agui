@@ -1,6 +1,6 @@
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
-    widget::{BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
 use agui_macros::LayoutWidget;
 
@@ -11,7 +11,7 @@ pub struct Stack {
 }
 
 impl WidgetLayout for Stack {
-    fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+    fn get_children(&self) -> Vec<Widget> {
         Vec::from_iter(self.children.iter().cloned())
     }
 

@@ -1,16 +1,11 @@
-use std::{any::Any, marker::PhantomData, rc::Rc};
-
-use rustc_hash::FxHashMap;
+use std::rc::Rc;
 
 use crate::{
-    callback::{CallbackContext, CallbackFunc, CallbackId},
+    render::element::ElementRender,
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{
-        element::{
-            ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement,
-            WidgetIntrinsicSizeContext, WidgetLayoutContext,
-        },
-        AnyWidget, BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
+        element::{ElementUpdate, ElementWidget, WidgetIntrinsicSizeContext, WidgetLayoutContext},
+        AnyWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
     },
 };
 
@@ -19,8 +14,6 @@ where
     W: AnyWidget + WidgetLayout,
 {
     widget: Rc<W>,
-
-    callbacks: FxHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
 impl<W> LayoutElement<W>
@@ -28,73 +21,16 @@ where
     W: AnyWidget + WidgetLayout,
 {
     pub fn new(widget: Rc<W>) -> Self {
-        Self {
-            widget,
-
-            callbacks: FxHashMap::default(),
-        }
+        Self { widget }
     }
 }
 
-impl<W> WidgetElement for LayoutElement<W>
+impl<W> ElementWidget for LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout,
 {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
-    }
-
-    fn intrinsic_size(
-        &self,
-        ctx: WidgetIntrinsicSizeContext,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32 {
-        self.widget.intrinsic_size(
-            &mut IntrinsicSizeContext {
-                element_tree: ctx.element_tree,
-
-                element_id: ctx.element_id,
-
-                children: ctx.children,
-            },
-            dimension,
-            cross_extent,
-        )
-    }
-
-    fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
-        self.widget.layout(
-            &mut LayoutContext {
-                element_tree: ctx.element_tree,
-
-                element_id: ctx.element_id,
-
-                children: ctx.children,
-                offsets: ctx.offsets,
-            },
-            constraints,
-        )
-    }
-
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
-        self.callbacks.clear();
-
-        let mut ctx = BuildContext {
-            phantom: PhantomData,
-
-            element_tree: ctx.element_tree,
-            inheritance_manager: ctx.inheritance_manager,
-
-            dirty: ctx.dirty,
-            callback_queue: ctx.callback_queue,
-
-            element_id: ctx.element_id,
-
-            callbacks: &mut self.callbacks,
-        };
-
-        self.widget.build(&mut ctx)
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
@@ -106,30 +42,32 @@ where
             ElementUpdate::Invalid
         }
     }
+}
 
-    fn call(
-        &mut self,
-        ctx: WidgetCallbackContext,
-        callback_id: CallbackId,
-        arg: Box<dyn Any>,
-    ) -> bool {
-        if let Some(callback) = self.callbacks.get(&callback_id) {
-            let mut ctx = CallbackContext {
-                element_tree: ctx.element_tree,
-                dirty: ctx.dirty,
+impl<W> ElementRender for LayoutElement<W>
+where
+    W: AnyWidget + WidgetLayout,
+{
+    fn get_children(&self) -> Vec<Widget> {
+        self.widget.get_children()
+    }
 
-                element_id: ctx.element_id,
-            };
+    fn intrinsic_size(
+        &self,
+        ctx: WidgetIntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        self.widget.intrinsic_size(
+            &mut IntrinsicSizeContext { widget_ctx: ctx },
+            dimension,
+            cross_extent,
+        )
+    }
 
-            callback.call(&mut ctx, arg);
-        } else {
-            tracing::warn!(
-                callback_id = format!("{:?}", callback_id).as_str(),
-                "callback not found"
-            );
-        }
-
-        false
+    fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
+        self.widget
+            .layout(&mut LayoutContext { widget_ctx: ctx }, constraints)
     }
 }
 

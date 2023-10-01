@@ -1,8 +1,11 @@
-use std::rc::Rc;
+use std::{any::TypeId, rc::Rc};
 
-use crate::widget::{
-    element::{ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext},
-    AnyWidget, InheritedWidget, Widget,
+use crate::{
+    inheritance::element::ElementInherited,
+    widget::{
+        element::{ElementUpdate, ElementWidget},
+        AnyWidget, InheritedWidget, Widget,
+    },
 };
 
 pub struct InheritedElement<I>
@@ -27,36 +30,12 @@ where
     }
 }
 
-impl<I> WidgetElement for InheritedElement<I>
+impl<I> ElementWidget for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
-    }
-
-    fn mount(&mut self, ctx: WidgetMountContext) {
-        ctx.inheritance_manager
-            .create_scope::<I>(ctx.parent_element_id, ctx.element_id);
-    }
-
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
-        if self.needs_notify {
-            self.needs_notify = false;
-
-            // We've been rebuilt and `should_notify` was `true`, so we need to notify all
-            // listeners that depend on this widget.
-            for element_id in ctx
-                .inheritance_manager
-                .get_as_scope(ctx.element_id)
-                .expect("failed to get the inherited element's scope during build")
-                .iter_listeners()
-            {
-                ctx.dirty.insert(element_id);
-            }
-        }
-
-        vec![self.widget.get_child()]
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
@@ -70,6 +49,29 @@ where
             ElementUpdate::RebuildNecessary
         } else {
             ElementUpdate::Invalid
+        }
+    }
+}
+
+impl<I> ElementInherited for InheritedElement<I>
+where
+    I: AnyWidget + InheritedWidget,
+{
+    fn get_inherited_type_id(&self) -> TypeId {
+        TypeId::of::<I>()
+    }
+
+    fn get_child(&self) -> Widget {
+        self.widget.get_child()
+    }
+
+    fn should_notify(&mut self) -> bool {
+        if self.needs_notify {
+            self.needs_notify = false;
+
+            true
+        } else {
+            false
         }
     }
 }

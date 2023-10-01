@@ -29,8 +29,8 @@ mod tests {
     use agui_core::{
         engine::Engine,
         query::WidgetQueryExt,
-        unit::{Constraints, Size},
-        widget::{BuildContext, LayoutContext, Widget, WidgetLayout},
+        unit::{Constraints, IntrinsicDimension, Size},
+        widget::{IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
     };
     use agui_macros::LayoutWidget;
 
@@ -40,8 +40,17 @@ mod tests {
     struct TestWidget {}
 
     impl WidgetLayout for TestWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             vec![]
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {

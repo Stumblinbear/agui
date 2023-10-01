@@ -5,7 +5,9 @@ use rustc_hash::FxHashMap;
 use crate::{
     callback::{CallbackContext, CallbackFunc, CallbackId},
     widget::{
-        element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
+        element::{
+            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+        },
         widget::Widget,
         AnyWidget, BuildContext,
     },
@@ -35,7 +37,7 @@ where
     }
 }
 
-impl<W> WidgetElement for StatelessElement<W>
+impl<W> ElementWidget for StatelessElement<W>
 where
     W: AnyWidget + WidgetBuild,
 {
@@ -43,7 +45,22 @@ where
         self.widget.widget_name()
     }
 
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
+    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+        if let Some(new_widget) = new_widget.downcast::<W>() {
+            self.widget = new_widget;
+
+            ElementUpdate::RebuildNecessary
+        } else {
+            ElementUpdate::Invalid
+        }
+    }
+}
+
+impl<W> ElementBuild for StatelessElement<W>
+where
+    W: AnyWidget + WidgetBuild,
+{
+    fn build(&mut self, ctx: WidgetBuildContext) -> Widget {
         self.callbacks.clear();
 
         let mut ctx = BuildContext {
@@ -60,17 +77,7 @@ where
             callbacks: &mut self.callbacks,
         };
 
-        vec![self.widget.build(&mut ctx)]
-    }
-
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
-        if let Some(new_widget) = new_widget.downcast::<W>() {
-            self.widget = new_widget;
-
-            ElementUpdate::RebuildNecessary
-        } else {
-            ElementUpdate::Invalid
-        }
+        self.widget.build(&mut ctx)
     }
 
     fn call(

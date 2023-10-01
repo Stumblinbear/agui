@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::widget::{
-    element::{ElementUpdate, WidgetBuildContext, WidgetElement, WidgetMountContext},
+    element::{ElementUpdate, ElementWidget},
     AnyWidget, Widget,
 };
 
@@ -15,19 +15,15 @@ impl RenderViewElement {
     pub fn new(widget: Rc<RenderView>) -> Self {
         Self { widget }
     }
+
+    pub fn get_child(&self) -> Widget {
+        self.widget.child.clone()
+    }
 }
 
-impl WidgetElement for RenderViewElement {
+impl ElementWidget for RenderViewElement {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
-    }
-
-    fn mount(&mut self, ctx: WidgetMountContext) {
-        ctx.render_view_manager.create_render_view(ctx.element_id);
-    }
-
-    fn build(&mut self, _: WidgetBuildContext) -> Vec<Widget> {
-        vec![self.widget.child.clone()]
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {

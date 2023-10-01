@@ -3,8 +3,8 @@ use std::any::TypeId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::element::Element;
+use crate::element::ElementId;
 use crate::util::tree::Tree;
-use crate::{element::ElementId, widget::InheritedWidget};
 
 use super::node::InheritanceNode;
 use super::scope::InheritanceScope;
@@ -334,13 +334,12 @@ impl InheritanceManager {
         }
     }
 
-    pub(crate) fn create_scope<I>(
+    pub(crate) fn create_scope(
         &mut self,
+        type_id: TypeId,
         parent_element_id: Option<ElementId>,
         element_id: ElementId,
-    ) where
-        I: InheritedWidget,
-    {
+    ) {
         tracing::trace!(
             element_id = &format!("{:?}", element_id),
             "creating new inheritance scope"
@@ -363,11 +362,11 @@ impl InheritanceManager {
         });
 
         let scope = Inheritance::Scope(ancestor_scope.map_or_else(
-            || InheritanceScope::new::<I>(element_id),
+            || InheritanceScope::new(type_id, element_id),
             |scope| {
                 scope.add_child_scope(element_id);
 
-                InheritanceScope::derive_scope::<I>(scope, element_id)
+                InheritanceScope::derive_scope(scope, type_id, element_id)
             },
         ));
 
@@ -545,7 +544,7 @@ mod tests {
 
         let scope_id = new_element(0);
 
-        inheritance_manager.create_scope::<TestWidget1>(None, scope_id);
+        inheritance_manager.create_scope(TypeId::of::<TestWidget1>(), None, scope_id);
 
         assert_eq!(
             inheritance_manager
@@ -565,8 +564,12 @@ mod tests {
         let scope_id = new_element(0);
         let nested_scope_id = new_element(1);
 
-        inheritance_manager.create_scope::<TestWidget1>(None, scope_id);
-        inheritance_manager.create_scope::<TestWidget2>(Some(scope_id), nested_scope_id);
+        inheritance_manager.create_scope(TypeId::of::<TestWidget1>(), None, scope_id);
+        inheritance_manager.create_scope(
+            TypeId::of::<TestWidget2>(),
+            Some(scope_id),
+            nested_scope_id,
+        );
 
         assert_eq!(
             inheritance_manager
@@ -586,7 +589,7 @@ mod tests {
         let scope_id = new_element(0);
         let element_id = new_element(1);
 
-        inheritance_manager.create_scope::<TestWidget1>(None, scope_id);
+        inheritance_manager.create_scope(TypeId::of::<TestWidget1>(), None, scope_id);
         inheritance_manager.create_node(Some(scope_id), element_id);
 
         assert_eq!(
@@ -614,7 +617,7 @@ mod tests {
         let scope_id = new_element(0);
         let element_id = new_element(1);
 
-        inheritance_manager.create_scope::<TestWidget1>(None, scope_id);
+        inheritance_manager.create_scope(TypeId::of::<TestWidget1>(), None, scope_id);
         inheritance_manager.create_node(Some(scope_id), element_id);
 
         assert_eq!(

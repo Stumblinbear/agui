@@ -15,7 +15,7 @@ use vello::{
     Scene, SceneBuilder,
 };
 
-use crate::{element::RenderElement, fonts::VelloFonts};
+use crate::{element::RenderObject, fonts::VelloFonts};
 
 pub struct VelloSurface {
     pub render_view_id: RenderViewId,
@@ -24,7 +24,7 @@ pub struct VelloSurface {
     pub renderer: vello::Renderer,
 
     pub scene: Scene,
-    pub widgets: FxHashMap<ElementId, RenderElement>,
+    pub widgets: FxHashMap<ElementId, RenderObject>,
 }
 
 impl VelloSurface {
@@ -215,7 +215,7 @@ impl VelloSurface {
     ) {
         self.widgets.insert(
             element_id,
-            RenderElement {
+            RenderObject {
                 head_target: parent_id.and_then(|parent_id| {
                     let Some(parent) = self.widgets.get(&parent_id) else {
                         if engine.get_render_view_manager().get_context(parent_id)
@@ -236,7 +236,7 @@ impl VelloSurface {
 
                 offset: Offset::ZERO,
 
-                ..RenderElement::default()
+                ..RenderObject::default()
             },
         );
     }

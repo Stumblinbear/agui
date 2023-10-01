@@ -5,7 +5,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     callback::CallbackId,
     widget::{
-        element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
+        element::{
+            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+        },
         widget::Widget,
         AnyWidget, StatefulCallbackFunc,
     },
@@ -20,7 +22,8 @@ where
     widget: Rc<W>,
     state: W::State,
 
-    callbacks: FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
+    init_callbacks: FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
+    build_callbacks: FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
 
     initialized: bool,
 }
@@ -36,47 +39,20 @@ where
             widget,
             state,
 
-            callbacks: FxHashMap::default(),
+            init_callbacks: FxHashMap::default(),
+            build_callbacks: FxHashMap::default(),
 
             initialized: false,
         }
     }
 }
 
-impl<W> WidgetElement for StatefulElement<W>
+impl<W> ElementWidget for StatefulElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
-    }
-
-    fn build(&mut self, ctx: WidgetBuildContext) -> Vec<Widget> {
-        self.callbacks.clear();
-
-        let mut ctx = StatefulBuildContext {
-            element_tree: ctx.element_tree,
-            inheritance_manager: ctx.inheritance_manager,
-
-            dirty: ctx.dirty,
-            callback_queue: ctx.callback_queue,
-
-            element_id: ctx.element_id,
-
-            callbacks: &mut self.callbacks,
-
-            keyed_children: FxHashSet::default(),
-
-            widget: &self.widget,
-        };
-
-        if !self.initialized {
-            self.state.init_state(&mut ctx);
-
-            self.initialized = true;
-        }
-
-        vec![self.state.build(&mut ctx)]
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
@@ -93,6 +69,44 @@ where
             ElementUpdate::Invalid
         }
     }
+}
+
+impl<W> ElementBuild for StatefulElement<W>
+where
+    W: AnyWidget + StatefulWidget,
+{
+    fn build(&mut self, ctx: WidgetBuildContext) -> Widget {
+        self.build_callbacks.clear();
+
+        let mut ctx = StatefulBuildContext {
+            element_tree: ctx.element_tree,
+            inheritance_manager: ctx.inheritance_manager,
+
+            dirty: ctx.dirty,
+            callback_queue: ctx.callback_queue,
+
+            element_id: ctx.element_id,
+
+            callbacks: &mut self.build_callbacks,
+
+            keyed_children: FxHashSet::default(),
+
+            widget: &self.widget,
+        };
+
+        if !self.initialized {
+            let old_callbacks = ctx.callbacks;
+            ctx.callbacks = &mut self.init_callbacks;
+            {
+                self.state.init_state(&mut ctx);
+
+                self.initialized = true;
+            }
+            ctx.callbacks = old_callbacks;
+        }
+
+        self.state.build(&mut ctx)
+    }
 
     fn call(
         &mut self,
@@ -100,7 +114,11 @@ where
         callback_id: CallbackId,
         arg: Box<dyn Any>,
     ) -> bool {
-        if let Some(callback) = self.callbacks.get(&callback_id) {
+        if let Some(callback) = self
+            .build_callbacks
+            .get(&callback_id)
+            .or_else(|| self.init_callbacks.get(&callback_id))
+        {
             let mut ctx = StatefulCallbackContext {
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,

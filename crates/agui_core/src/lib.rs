@@ -10,7 +10,6 @@
 pub mod callback;
 pub mod element;
 pub mod engine;
-pub mod gestures;
 pub mod inheritance;
 pub mod listeners;
 pub mod query;

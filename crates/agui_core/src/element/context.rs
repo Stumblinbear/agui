@@ -3,9 +3,9 @@ use rustc_hash::FxHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
-    gestures::hit_test::HitTestEntry,
     inheritance::manager::InheritanceManager,
     render::manager::RenderViewManager,
+    unit::HitTestResult,
     util::tree::Tree,
 };
 
@@ -65,5 +65,5 @@ pub struct ElementHitTestContext<'ctx> {
 
     pub(crate) element_id: ElementId,
 
-    pub(crate) path: &'ctx mut Vec<HitTestEntry>,
+    pub(crate) result: &'ctx mut HitTestResult,
 }

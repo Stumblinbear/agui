@@ -1,14 +1,16 @@
-use std::{any::Any, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
-    callback::CallbackId,
-    render::canvas::{
-        painter::{CanvasPainter, Head},
-        Canvas,
+    render::{
+        canvas::{
+            painter::{CanvasPainter, Head},
+            Canvas,
+        },
+        element::ElementRender,
     },
-    unit::Size,
+    unit::{IntrinsicDimension, Size},
     widget::{
-        element::{ElementUpdate, WidgetBuildContext, WidgetCallbackContext, WidgetElement},
+        element::{ElementUpdate, ElementWidget, WidgetIntrinsicSizeContext},
         Widget, WidgetPaint,
     },
 };
@@ -29,16 +31,12 @@ where
     }
 }
 
-impl<W> WidgetElement for PaintElement<W>
+impl<W> ElementWidget for PaintElement<W>
 where
     W: WidgetPaint,
 {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
-    }
-
-    fn build(&mut self, _: WidgetBuildContext) -> Vec<Widget> {
-        Vec::from_iter(self.widget.get_child())
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
@@ -49,6 +47,26 @@ where
         } else {
             ElementUpdate::Invalid
         }
+    }
+}
+
+impl<W> ElementRender for PaintElement<W>
+where
+    W: WidgetPaint,
+{
+    fn get_children(&self) -> Vec<Widget> {
+        Vec::from_iter(self.widget.get_child())
+    }
+
+    fn intrinsic_size(
+        &self,
+        ctx: WidgetIntrinsicSizeContext,
+        dimension: IntrinsicDimension,
+        cross_extent: f32,
+    ) -> f32 {
+        ctx.iter_children().next().map_or(0.0, |child| {
+            child.compute_intrinsic_size(dimension, cross_extent)
+        })
     }
 
     fn paint(&self, size: Size) -> Option<Canvas> {
@@ -70,10 +88,6 @@ where
         } else {
             None
         }
-    }
-
-    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: Box<dyn Any>) -> bool {
-        unreachable!("paint widgets do not have callbacks")
     }
 }
 

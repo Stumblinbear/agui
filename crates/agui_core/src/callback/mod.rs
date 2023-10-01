@@ -208,8 +208,10 @@ mod tests {
     use crate::{
         callback::Callback,
         engine::Engine,
-        unit::{Constraints, Size},
-        widget::{BuildContext, LayoutContext, Widget, WidgetBuild, WidgetLayout},
+        unit::{Constraints, IntrinsicDimension, Size},
+        widget::{
+            BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetBuild, WidgetLayout,
+        },
     };
 
     thread_local! {
@@ -221,8 +223,17 @@ mod tests {
     struct TestDummyWidget;
 
     impl WidgetLayout for TestDummyWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             vec![]
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {

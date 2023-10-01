@@ -138,6 +138,7 @@ impl Engine {
 
         self.sanitize_events(&mut element_events);
 
+        // TODO: limit this to only the elements that have changed
         for element_id in needs_redraw {
             element_events.push(ElementEvent::Draw {
                 render_view_id: self
@@ -349,7 +350,7 @@ impl Engine {
 
             // Check the existing element against the new widget to see what we can safely
             // do about retaining its state
-            match existing_element.update_widget(&widget) {
+            match existing_element.update(&widget) {
                 ElementUpdate::Noop => {
                     tracing::trace!(
                         widget = widget.widget_name(),
@@ -634,8 +635,8 @@ mod tests {
 
     use crate::{
         engine::event::ElementEvent,
-        unit::{Constraints, Size},
-        widget::{BuildContext, IntoWidget, LayoutContext, Widget, WidgetLayout},
+        unit::{Constraints, IntrinsicDimension, Size},
+        widget::{IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
     };
 
     use super::Engine;
@@ -653,8 +654,17 @@ mod tests {
     struct TestRootWidget;
 
     impl WidgetLayout for TestRootWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             Vec::from_iter(TEST_HOOK.with(|result| result.borrow().root_child.clone()))
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
@@ -676,8 +686,17 @@ mod tests {
     }
 
     impl WidgetLayout for TestDummyWidget1 {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             self.children.clone()
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
@@ -691,8 +710,17 @@ mod tests {
     }
 
     impl WidgetLayout for TestDummyWidget2 {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             self.children.clone()
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {

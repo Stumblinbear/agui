@@ -27,10 +27,10 @@ mod tests {
 
     use crate::{
         engine::Engine,
-        unit::{Constraints, Size},
+        unit::{Constraints, IntrinsicDimension, Size},
         widget::{
-            BuildContext, InheritedWidget, IntoWidget, LayoutContext, Widget, WidgetBuild,
-            WidgetLayout,
+            BuildContext, InheritedWidget, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget,
+            WidgetBuild, WidgetLayout,
         },
     };
 
@@ -51,8 +51,17 @@ mod tests {
     struct TestRootWidget;
 
     impl WidgetLayout for TestRootWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             Vec::from_iter(TEST_HOOK.with(|result| result.borrow().root_child.clone()))
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(
@@ -102,8 +111,17 @@ mod tests {
     }
 
     impl WidgetLayout for TestDummyWidget {
-        fn build(&self, _: &mut BuildContext<Self>) -> Vec<Widget> {
+        fn get_children(&self) -> Vec<Widget> {
             self.child.clone().into_iter().collect()
+        }
+
+        fn intrinsic_size(
+            &self,
+            _: &mut IntrinsicSizeContext,
+            _: IntrinsicDimension,
+            _: f32,
+        ) -> f32 {
+            0.0
         }
 
         fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {

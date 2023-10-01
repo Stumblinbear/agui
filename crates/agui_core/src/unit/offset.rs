@@ -2,6 +2,8 @@ use std::ops::{
     Add, AddAssign, BitAnd, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
 };
 
+use glam::{Vec2, Vec3};
+
 use super::{Rect, Size};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
@@ -184,5 +186,23 @@ impl From<Rect> for Offset {
 impl From<(f32, f32)> for Offset {
     fn from((x, y): (f32, f32)) -> Self {
         Self::new(x, y)
+    }
+}
+
+impl From<Vec2> for Offset {
+    fn from(value: Vec2) -> Self {
+        Self::new(value.x, value.y)
+    }
+}
+
+impl From<Offset> for Vec2 {
+    fn from(val: Offset) -> Self {
+        Vec2::new(val.x, val.y)
+    }
+}
+
+impl From<Offset> for Vec3 {
+    fn from(val: Offset) -> Self {
+        Vec3::new(val.x, val.y, 0.0)
     }
 }
