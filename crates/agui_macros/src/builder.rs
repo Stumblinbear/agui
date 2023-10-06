@@ -135,7 +135,15 @@ fn parse_widget_init(
 
         while let Some(token) = content.next() {
             let member = match token {
-                TokenTree::Ident(ident) => ident,
+                TokenTree::Ident(ident) => {
+                    if !is_using_builder {
+                        // If we used a custom init func, then we need to use the `set_<param>()`
+                        // instead of `<param()` method.
+                        Ident::new(&format!("set_{}", ident), ident.span())
+                    } else {
+                        ident
+                    }
+                }
 
                 _ => {
                     output.extend(

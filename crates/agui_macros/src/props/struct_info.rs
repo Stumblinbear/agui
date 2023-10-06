@@ -240,7 +240,8 @@ impl<'a> StructInfo<'a> {
         );
         let repeated_fields_error_message = format!("Repeated field {}", field_name);
 
-        let method_name = field.name;
+        let method_name = field.name.clone();
+        let setter_method_name = Ident::new(&format!("set_{}", field.name), field.name.span());
 
         let (b_impl_generics, b_ty_generics, b_where_clause) = self.generics.split_for_impl();
 
@@ -251,9 +252,9 @@ impl<'a> StructInfo<'a> {
             impl #b_impl_generics #name #b_ty_generics #b_where_clause {
                 #deprecated
                 #doc
-                pub fn #method_name (mut self, #param_list) -> #name #b_ty_generics {
+                #[doc(hidden)]
+                pub fn #setter_method_name (mut self, #param_list) -> #name #b_ty_generics {
                     self.#field_name = #arg_expr;
-
                     self
                 }
             }
