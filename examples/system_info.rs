@@ -22,7 +22,7 @@ fn main() {
 
     run_app(build! {
         <Window> {
-            window: WindowBuilder::new()
+            window: || WindowBuilder::new()
                 .with_title("agui os info")
                 .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
@@ -66,14 +66,14 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
+    fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         let callback = ctx.callback::<SystemInfo, _>(|ctx, system_info| {
             ctx.set_state(|state| {
                 state.system_info.replace(system_info);
             });
         });
 
-        thread::spawn(move || {
+        thread::spawn(move || loop {
             thread::sleep(Duration::from_millis(1000));
 
             let mut system = System::new_all();
@@ -95,7 +95,9 @@ impl WidgetState for ExampleMainState {
                 processors: system.cpus().len(),
             });
         });
+    }
 
+    fn build(&mut self, _: &mut StatefulBuildContext<Self>) -> Widget {
         let lines = match &self.system_info {
             None => vec!["Collecting system info...".into()],
 

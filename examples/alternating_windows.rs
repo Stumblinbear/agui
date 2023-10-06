@@ -70,24 +70,26 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
+    fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         let callback = ctx.callback::<(), _>(|ctx, _| {
             ctx.set_state(|state| {
                 state.flip_windows = !state.flip_windows;
             });
         });
 
-        thread::spawn(move || {
+        thread::spawn(move || loop {
             thread::sleep(Duration::from_millis(1000));
 
             callback.call(());
         });
+    }
 
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         build! {
             <Stack> {
                 children: [
                     <Window> {
-                        window: WindowBuilder::new()
+                        window: || WindowBuilder::new()
                             .with_title("agui window 1")
                             .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
@@ -98,7 +100,7 @@ impl WidgetState for ExampleMainState {
                         }
                     },
                     <Window> {
-                        window: WindowBuilder::new()
+                        window: || WindowBuilder::new()
                             .with_title("agui window 2")
                             .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 

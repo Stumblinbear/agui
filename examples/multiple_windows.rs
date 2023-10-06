@@ -21,7 +21,7 @@ fn main() {
         <Stack> {
             children: [
                 <Window> {
-                    window: WindowBuilder::new()
+                    window: || WindowBuilder::new()
                         .with_title("agui hello world")
                         .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 
@@ -31,7 +31,7 @@ fn main() {
                     },
                 },
                 <Window> {
-                    window: WindowBuilder::new()
+                    window: || WindowBuilder::new()
                         .with_title("agui goodbye world")
                         .with_inner_size(PhysicalSize::new(400.0, 300.0)),
 

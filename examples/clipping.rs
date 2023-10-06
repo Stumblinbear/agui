@@ -25,7 +25,7 @@ fn main() {
 
     run_app(build! {
         <Window> {
-            window: WindowBuilder::new()
+            window: || WindowBuilder::new()
                 .with_title("agui clipping")
                 .with_inner_size(PhysicalSize::new(800.0, 600.0)),
 

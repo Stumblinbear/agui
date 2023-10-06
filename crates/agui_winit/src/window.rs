@@ -1,15 +1,15 @@
-use std::ops::Deref;
+use std::{marker::PhantomData, ops::Deref};
 
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{
-        view::RenderView, BuildContext, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
+        view::RenderView, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
         InheritedWidget, IntoWidget, IntrinsicSizeContext, LayoutContext, StatefulBuildContext,
-        StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
+        StatefulWidget, Widget, WidgetLayout, WidgetState,
     },
 };
 use agui_listenable::EventEmitterHandle;
-use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
+use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
 use winit::{
     event::{DeviceId, ElementState, MouseButton, WindowEvent},
@@ -18,20 +18,26 @@ use winit::{
 
 use crate::{binding::WinitBinding, handle::WinitWindowHandle};
 
-#[derive(StatelessWidget)]
-pub struct Window {
-    pub window: WindowBuilder,
+#[derive(Debug, WidgetProps)]
+pub struct Window<F>
+where
+    F: Fn() -> WindowBuilder + 'static,
+{
+    pub window: F,
 
     pub child: Widget,
 }
 
-impl WidgetBuild for Window {
-    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
+impl<F> IntoWidget for Window<F>
+where
+    F: Fn() -> WindowBuilder + 'static,
+{
+    fn into_widget(self) -> Widget {
         // Windows must be created within their own render context
         RenderView {
             child: build! {
                 <WinitWindow> {
-                    window: self.window.clone(),
+                    window: self.window,
 
                     child: self.child.clone(),
                 }
@@ -42,29 +48,44 @@ impl WidgetBuild for Window {
 }
 
 #[derive(StatefulWidget)]
-struct WinitWindow {
-    window: WindowBuilder,
+struct WinitWindow<F>
+where
+    F: Fn() -> WindowBuilder + 'static,
+{
+    window: F,
 
     child: Widget,
 }
 
-impl StatefulWidget for WinitWindow {
-    type State = WinitWindowState;
+impl<F> StatefulWidget for WinitWindow<F>
+where
+    F: Fn() -> WindowBuilder + 'static,
+{
+    type State = WinitWindowState<F>;
 
     fn create_state(&self) -> Self::State {
-        WinitWindowState::default()
+        WinitWindowState {
+            phantom: PhantomData,
+
+            window: None,
+            event_listener: None,
+        }
     }
 }
 
-#[derive(Default)]
-struct WinitWindowState {
+struct WinitWindowState<F> {
+    phantom: PhantomData<F>,
+
     window: Option<WinitWindowHandle>,
 
     event_listener: Option<EventEmitterHandle<WindowEvent<'static>>>,
 }
 
-impl WidgetState for WinitWindowState {
-    type Widget = WinitWindow;
+impl<F> WidgetState for WinitWindowState<F>
+where
+    F: Fn() -> WindowBuilder + 'static,
+{
+    type Widget = WinitWindow<F>;
 
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         let Some(binding) = ctx.depend_on_inherited_widget::<WinitBinding>() else {
@@ -72,20 +93,18 @@ impl WidgetState for WinitWindowState {
         };
 
         let mouse_input_event_cb = ctx.callback(
-            |ctx, (device_id, state, button): (DeviceId, ElementState, MouseButton)| {
-                println!(
-                    "Mouse input event: {:?} {:?} {:?}",
-                    device_id, state, button
-                );
-
-                ctx.get_element_id();
+            |_ctx, (device_id, state, button): (DeviceId, ElementState, MouseButton)| {
+                // println!(
+                //     "Mouse input event: {:?} {:?} {:?}",
+                //     device_id, state, button
+                // );
             },
         );
 
         // I don't like cloning the window, here.
         binding.create_window(
             ctx.get_element_id(),
-            ctx.widget.window.clone(),
+            (ctx.widget.window)(),
             ctx.callback(move |ctx, window: WinitWindowHandle| {
                 let mouse_input_event_cb = mouse_input_event_cb.clone();
 
