@@ -260,6 +260,7 @@ where
     {
         SubtreeIterator {
             tree: self,
+            root_node_id: node_id,
             node_id: Some(node_id),
             first: true,
             filter,
@@ -529,6 +530,7 @@ where
     K: Key,
 {
     pub(super) tree: &'a TreeMap<K, V>,
+    pub(super) root_node_id: K,
     pub(super) node_id: Option<K>,
     pub(super) first: bool,
     pub(super) filter: F,
@@ -571,6 +573,12 @@ where
                 let mut after_child_id = node_id;
 
                 'find_child: loop {
+                    // We're iterating a subtree, so we don't want to go above the defined root node
+                    if after_child_id == self.root_node_id {
+                        self.node_id = None;
+                        break 'find_child;
+                    }
+
                     // If we have no children, return the sibling after the node_id
                     if let Some(parent_node_id) = current_parent {
                         // Check each sibling of the parent for ones that pass the filter
@@ -905,6 +913,35 @@ mod tests {
             "downward iterator should have returned None"
         );
 
+        let mut iter = tree.iter_down_from(child_2);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_2),
+            "downward iterator should have returned child_2"
+        );
+
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "downward iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "downward iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+
         let mut iter = tree.iter_down_from(child_3);
 
         assert_eq!(
@@ -1030,6 +1067,88 @@ mod tests {
             iter.next(),
             None,
             "upward iterator should have returned None"
+        );
+    }
+
+    #[test]
+    fn subtree_iter() {
+        let mut tree: TreeMap<ElementId, usize> = TreeMap::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        let mut iter = tree.iter_subtree(child_1, |_| true);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_1),
+            "subtree iterator's first element must be child_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1),
+            "subtree iterator should have returned child_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "subtree iterator should have returned child_1_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_2),
+            "subtree iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_3),
+            "subtree iterator should have returned child_1_3"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "subtree iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_subtree(child_2, |_| true);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_2),
+            "subtree iterator should have returned child_2"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "subtree iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_subtree(child_3, |_| true);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "subtree iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "subtree iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "subtree iterator should have returned None"
         );
     }
 
