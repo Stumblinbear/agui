@@ -218,10 +218,15 @@ impl VelloSurface {
             RenderObject {
                 head_target: parent_id.and_then(|parent_id| {
                     let Some(parent) = self.widgets.get(&parent_id) else {
+                        // If the parent isn't tracked in the render view, but it's in the same context, then
+                        // the something went wrong. The parent should always exist before the child is spawned.
                         if engine.get_render_view_manager().get_context(parent_id)
                             == Some(self.render_view_id)
                         {
-                            panic!("render element spawned to a non-existent parent");
+                            panic!(
+                                "render element {:?} spawned to a non-existent parent {:?} in render view {:?}",
+                                element_id, parent_id, self.render_view_id
+                            );
                         }
 
                         return None;

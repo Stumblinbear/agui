@@ -34,9 +34,11 @@ pub struct Engine {
     dirty: FxHashSet<ElementId>,
     callback_queue: CallbackQueue,
 
-    modifications: VecDeque<Modify>,
+    rebuild_queue: VecDeque<ElementId>,
     retained_elements: FxHashSet<ElementId>,
     removal_queue: FxHashSet<ElementId>,
+
+    element_events: Vec<ElementEvent>,
 }
 
 impl Engine {
@@ -80,7 +82,7 @@ impl Engine {
     }
 
     pub fn has_changes(&self) -> bool {
-        !self.modifications.is_empty() || !self.dirty.is_empty() || !self.callback_queue.is_empty()
+        !self.rebuild_queue.is_empty() || !self.dirty.is_empty() || !self.callback_queue.is_empty()
     }
 
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
@@ -97,16 +99,15 @@ impl Engine {
 
         tracing::debug!("updating widget tree");
 
-        let mut element_events = Vec::new();
         let mut needs_redraw = FxHashSet::default();
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         'layout: loop {
             'changes: loop {
-                self.flush_modifications(&mut element_events, &mut needs_redraw);
+                self.flush_rebuilds(&mut needs_redraw);
 
-                self.flush_changes();
+                self.flush_dirty();
 
                 self.flush_callbacks();
 
@@ -115,22 +116,21 @@ impl Engine {
                 }
             }
 
-            self.flush_removals(&mut element_events);
+            self.flush_removals();
 
-            self.flush_layout(&mut needs_redraw);
-
-            needs_redraw.retain(|element_id| self.contains(*element_id));
+            self.flush_layout();
 
             if !self.has_changes() {
                 break 'layout;
             }
         }
 
-        self.sanitize_events(&mut element_events);
+        // TODO: Only redraw the elements that have changed
+        needs_redraw.extend(self.element_tree.iter().map(|(id, _)| id));
 
         // TODO: limit this to only the elements that have changed
         for element_id in needs_redraw {
-            element_events.push(ElementEvent::Draw {
+            self.element_events.push(ElementEvent::Draw {
                 render_view_id: self
                     .render_view_manager
                     .get_context(element_id)
@@ -139,106 +139,21 @@ impl Engine {
             });
         }
 
-        element_events
+        self.element_events.drain(..).collect()
     }
 
-    /// Sanitizes widget events, removing any widgets that were created and subsequently destroyed before the end of the Vec.
-    fn sanitize_events(&self, element_events: &mut Vec<ElementEvent>) {
-        let mut i = 0;
-
-        // This is exponentially slow, investigate if using a linked hash map is better
-        while element_events.len() > i {
-            let mut remove_element_id = None;
-
-            if let ElementEvent::Spawned { element_id, .. } = &element_events[i] {
-                for entry in &element_events[i + 1..] {
-                    if let ElementEvent::Destroyed {
-                        element_id: destroyed_element_id,
-                    } = entry
-                    {
-                        if element_id == destroyed_element_id {
-                            remove_element_id = Some(*element_id);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if let Some(ref removed_element_id) = remove_element_id {
-                // Remove the first detected event
-                element_events.remove(i);
-
-                let mut remove_offset = 0;
-
-                for i in i..element_events.len() {
-                    let real_i = i - remove_offset;
-
-                    match &element_events[real_i] {
-                        // Remove all events that are related to the widget
-                        ElementEvent::Rebuilt { element_id, .. }
-                        | ElementEvent::Reparent { element_id, .. }
-                        | ElementEvent::Reparent {
-                            parent_id: Some(element_id),
-                            ..
-                        } if element_id == removed_element_id => {
-                            element_events.remove(real_i);
-
-                            // Offset the index by one to account for the removed event
-                            remove_offset += 1;
-                        }
-
-                        ElementEvent::Destroyed { element_id }
-                            if element_id == removed_element_id =>
-                        {
-                            element_events.remove(real_i);
-
-                            // This widget won't exist following this event, so break
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-
-                continue;
-            }
-
-            i += 1;
-        }
-    }
-
-    #[tracing::instrument(level = "trace", skip(self, element_events, needs_redraw))]
-    pub fn flush_modifications(
-        &mut self,
-        element_events: &mut Vec<ElementEvent>,
-        needs_redraw: &mut FxHashSet<ElementId>,
-    ) {
-        if self.modifications.is_empty() {
-            return;
-        }
-
+    #[tracing::instrument(level = "trace", skip(self, needs_redraw))]
+    pub fn flush_rebuilds(&mut self, needs_redraw: &mut FxHashSet<ElementId>) {
         // Apply any queued modifications
-        while let Some(modification) = self.modifications.pop_front() {
-            match modification {
-                Modify::Spawn(parent_id, widget) => {
-                    // This `process_spawn` will only ever return `Created` because `existing_element_id` is `None`
-                    if let SpawnResult::Created(element_id) =
-                        self.process_spawn(element_events, parent_id, widget, None)
-                    {
-                        self.process_build(element_events, element_id);
-                    }
-                }
+        while let Some(element_id) = self.rebuild_queue.pop_front() {
+            needs_redraw.insert(element_id);
 
-                Modify::Rebuild(element_id) => {
-                    needs_redraw.insert(element_id);
-
-                    self.process_rebuild(element_events, element_id);
-                }
-            }
+            self.process_rebuild(element_id);
         }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_changes(&mut self) {
+    pub fn flush_dirty(&mut self) {
         for element_id in self.dirty.drain() {
             tracing::trace!(
                 id = format!("{:?}", element_id).as_str(),
@@ -246,7 +161,7 @@ impl Engine {
                 "queueing widget for rebuild"
             );
 
-            self.modifications.push_back(Modify::Rebuild(element_id));
+            self.rebuild_queue.push_back(element_id);
         }
     }
 
@@ -282,21 +197,18 @@ impl Engine {
                             "element updated, queueing for rebuild"
                         );
 
-                        self.modifications.push_back(Modify::Rebuild(element_id));
+                        self.rebuild_queue.push_back(element_id);
                     }
                 })
                 .expect("cannot call a callback on a widget that does not exist");
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, needs_redraw))]
-    pub fn flush_layout(&mut self, needs_redraw: &mut FxHashSet<ElementId>) {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn flush_layout(&mut self) {
         let Some(root_id) = self.element_tree.get_root() else {
             return;
         };
-
-        // TODO: Only redraw the elements that have changed
-        needs_redraw.extend(self.element_tree.iter().map(|(id, _)| id));
 
         // TODO: Layout using a loop rather than deeply recursively
         self.element_tree
@@ -314,14 +226,26 @@ impl Engine {
             .expect("cannot layout a widget that doesn't exist");
     }
 
+    /// Sets the initial root widget, but does not build it or spawn any children.
+    ///
+    /// This keeps the initial engine creation fast, and allows the user to delay the
+    /// first build until they are ready. This does, however, that the root element has
+    /// slightly different semantics. It will be mounted but not built until the first
+    /// update.
+    fn init_root(&mut self, root: Widget) {
+        self.process_spawn(None, root, None);
+
+        self.rebuild_queue
+            .push_back(self.element_tree.get_root().unwrap());
+    }
+
     #[tracing::instrument(
         level = "trace",
         name = "spawn",
-        skip(self, element_events, widget, existing_element_id)
+        skip(self, widget, existing_element_id)
     )]
     fn process_spawn(
         &mut self,
-        element_events: &mut Vec<ElementEvent>,
         parent_id: Option<ElementId>,
         widget: Widget,
         existing_element_id: Option<ElementId>,
@@ -415,7 +339,7 @@ impl Engine {
             });
         });
 
-        element_events.push(ElementEvent::Spawned {
+        self.element_events.push(ElementEvent::Spawned {
             parent_id,
             element_id,
         });
@@ -423,12 +347,8 @@ impl Engine {
         SpawnResult::Created(element_id)
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        name = "build",
-        skip(self, element_events, element_id)
-    )]
-    fn process_build(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
+    #[tracing::instrument(level = "trace", name = "build", skip(self, element_id))]
+    fn process_build(&mut self, element_id: ElementId) {
         let mut build_queue = VecDeque::new();
 
         build_queue.push_back(element_id);
@@ -493,7 +413,7 @@ impl Engine {
                                     });
                                 });
 
-                            element_events.push(ElementEvent::Reparent {
+                            self.element_events.push(ElementEvent::Reparent {
                                 parent_id: Some(element_id),
                                 element_id: existing_element_id,
                             });
@@ -505,7 +425,6 @@ impl Engine {
 
                 // Spawn the new widget and queue it for building
                 match self.process_spawn(
-                    element_events,
                     Some(element_id),
                     widget,
                     self.element_tree.get_child(element_id, i).cloned(),
@@ -517,7 +436,7 @@ impl Engine {
                         self.retained_elements.insert(element_id);
 
                         if needs_rebuild {
-                            self.modifications.push_back(Modify::Rebuild(element_id));
+                            self.rebuild_queue.push_back(element_id);
                         }
                     }
 
@@ -529,9 +448,10 @@ impl Engine {
         }
     }
 
-    #[tracing::instrument(level = "trace", name = "rebuild", skip(self, element_events))]
-    fn process_rebuild(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
-        element_events.push(ElementEvent::Rebuilt { element_id });
+    #[tracing::instrument(level = "trace", name = "rebuild", skip(self))]
+    fn process_rebuild(&mut self, element_id: ElementId) {
+        self.element_events
+            .push(ElementEvent::Rebuilt { element_id });
 
         // Grab the current children so we know which ones to remove post-build
         let children = self
@@ -540,7 +460,7 @@ impl Engine {
             .map(Vec::clone)
             .unwrap_or_default();
 
-        self.process_build(element_events, element_id);
+        self.process_build(element_id);
 
         // Remove the old children
         for child_id in children {
@@ -548,7 +468,7 @@ impl Engine {
         }
     }
 
-    fn flush_removals(&mut self, element_events: &mut Vec<ElementEvent>) {
+    fn flush_removals(&mut self) {
         let mut destroy_queue = self
             .removal_queue
             .drain()
@@ -578,7 +498,8 @@ impl Engine {
                 })
                 .expect("cannot destroy an element that doesn't exist");
 
-            element_events.push(ElementEvent::Destroyed { element_id });
+            self.element_events
+                .push(ElementEvent::Destroyed { element_id });
 
             let element = self.element_tree.remove(element_id, false).unwrap();
 
@@ -601,11 +522,6 @@ impl Engine {
 
         self.retained_elements.clear();
     }
-}
-
-enum Modify {
-    Spawn(Option<ElementId>, Widget),
-    Rebuild(ElementId),
 }
 
 enum SpawnResult {

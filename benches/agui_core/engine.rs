@@ -8,7 +8,7 @@ use agui_macros::LayoutWidget;
 use agui_primitives::sized_box::SizedBox;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use agui::{engine::Engine, widgets::primitives::flex::Column};
+use agui::engine::Engine;
 
 fn engine_ops(c: &mut Criterion) {
     let mut group = c.benchmark_group("engine (single)");
@@ -19,12 +19,10 @@ fn engine_ops(c: &mut Criterion) {
         b.iter_with_setup(
             || {
                 Engine::builder()
-                    .with_root(Column::builder().build())
+                    .with_root(SizedBox::builder().build())
                     .build()
             },
-            |mut engine| {
-                engine.update();
-            },
+            |mut engine| engine.update(),
         )
     });
 
@@ -35,15 +33,13 @@ fn engine_ops(c: &mut Criterion) {
                     .with_root(TestRootWidget::builder().build())
                     .build();
 
-                TEST_HOOK.with(|children| {
-                    *children.borrow_mut() = Vec::from([SizedBox::builder().build().into_widget()]);
-                });
+                TestRootWidget::set_children(Vec::from([SizedBox::builder()
+                    .build()
+                    .into_widget()]));
 
                 engine.update();
 
-                TEST_HOOK.with(|children| {
-                    *children.borrow_mut() = Vec::new();
-                });
+                TestRootWidget::set_children(Vec::new());
 
                 engine
             },
@@ -60,19 +56,23 @@ fn engine_ops(c: &mut Criterion) {
     group.sample_size(500).bench_function("additions", |b| {
         b.iter_with_setup(
             || {
-                let mut column = Column::builder().build();
+                let engine = Engine::builder()
+                    .with_root(TestRootWidget::builder().build())
+                    .build();
 
-                for _ in 0..1000 {
-                    column
-                        .children
-                        .push(SizedBox::builder().build().into_widget().into());
-                }
+                TestRootWidget::set_children({
+                    let mut children = Vec::new();
 
-                Engine::builder().with_root(column).build()
+                    for _ in 0..1000 {
+                        children.push(SizedBox::builder().build().into_widget());
+                    }
+
+                    children
+                });
+
+                engine
             },
-            |mut engine| {
-                engine.update();
-            },
+            |mut engine| engine.update(),
         )
     });
 
@@ -83,27 +83,23 @@ fn engine_ops(c: &mut Criterion) {
                     .with_root(TestRootWidget::builder().build())
                     .build();
 
-                TEST_HOOK.with(|children| {
-                    let mut arr = Vec::new();
+                TestRootWidget::set_children({
+                    let mut children = Vec::new();
 
                     for _ in 0..1000 {
-                        arr.push(SizedBox::builder().build().into_widget());
+                        children.push(SizedBox::builder().build().into_widget());
                     }
 
-                    *children.borrow_mut() = arr;
+                    children
                 });
 
                 engine.update();
 
-                TEST_HOOK.with(|children| {
-                    *children.borrow_mut() = Vec::new();
-                });
+                TestRootWidget::set_children(Vec::new());
 
                 engine
             },
-            |mut engine| {
-                engine.update();
-            },
+            |mut engine| engine.update(),
         )
     });
 

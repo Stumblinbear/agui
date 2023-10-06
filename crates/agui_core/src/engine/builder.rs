@@ -10,7 +10,7 @@ use crate::{
     widget::{IntoWidget, Widget},
 };
 
-use super::{Engine, Modify};
+use super::Engine;
 
 pub struct EngineBuilder {
     update_notifier_tx: Option<mpsc::Sender<()>>,
@@ -38,7 +38,7 @@ impl EngineBuilder {
     }
 
     pub fn build(self) -> Engine {
-        Engine {
+        let mut engine = Engine {
             element_tree: Tree::default(),
             inheritance_manager: InheritanceManager::default(),
             render_view_manager: RenderViewManager::default(),
@@ -50,12 +50,15 @@ impl EngineBuilder {
                 self.update_notifier_tx.unwrap_or_else(|| mpsc::channel().0),
             ),
 
-            modifications: VecDeque::from([Modify::Spawn(
-                None,
-                self.root.expect("root is not set"),
-            )]),
+            rebuild_queue: VecDeque::default(),
             retained_elements: FxHashSet::default(),
             removal_queue: FxHashSet::default(),
-        }
+
+            element_events: Vec::default(),
+        };
+
+        engine.init_root(self.root.expect("root is not set"));
+
+        engine
     }
 }
