@@ -1,7 +1,7 @@
 use std::{any::TypeId, rc::Rc};
 
 use crate::{
-    inheritance::element::ElementInherited,
+    element::inherited::ElementInherited,
     widget::{
         element::{ElementUpdate, ElementWidget},
         AnyWidget, InheritedWidget, Widget,

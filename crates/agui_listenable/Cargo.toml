@@ -1,9 +1,9 @@
 [package]
-name = "agui_widgets"
+name = "agui_listenable"
 version = "0.3.0"
 edition = "2021"
 resolver = "2"
-description = "Provides basic widgets for agui"
+description = "Provides notifiers and listeners for agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
@@ -13,11 +13,3 @@ readme = "README.md"
 
 [dependencies]
 agui_core.workspace = true
-agui_macros.workspace = true
-agui_primitives.workspace = true
-
-tracing.workspace = true
-
-parking_lot.workspace = true
-
-bitflags = "2.4"

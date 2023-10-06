@@ -115,17 +115,7 @@ impl Engine {
                 }
             }
 
-            for element_id in self
-                .removal_queue
-                .drain()
-                // Only remove elements that were not retained
-                .filter(|element_id| !self.retained_elements.contains(element_id))
-                .collect::<Vec<_>>()
-            {
-                self.process_destroy(&mut element_events, element_id);
-            }
-
-            self.retained_elements.clear();
+            self.flush_removals(&mut element_events);
 
             self.flush_layout(&mut needs_redraw);
 
@@ -249,13 +239,7 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_changes(&mut self) {
-        let changed = self.dirty.drain().collect::<Vec<_>>();
-
-        if changed.is_empty() {
-            return;
-        }
-
-        for element_id in changed {
+        for element_id in self.dirty.drain() {
             tracing::trace!(
                 id = format!("{:?}", element_id).as_str(),
                 element = self.element_tree.get(element_id).unwrap().widget_name(),
@@ -391,7 +375,7 @@ impl Engine {
                     self.widgets
                         .entry(widget)
                         .and_modify(|elements| elements.push(existing_element_id))
-                        .or_insert_with(|| vec![existing_element_id]);
+                        .or_insert_with(|| Vec::from([existing_element_id]));
 
                     return SpawnResult::Retained {
                         element_id: existing_element_id,
@@ -564,10 +548,13 @@ impl Engine {
         }
     }
 
-    fn process_destroy(&mut self, element_events: &mut Vec<ElementEvent>, element_id: ElementId) {
-        let mut destroy_queue = VecDeque::new();
-
-        destroy_queue.push_back(element_id);
+    fn flush_removals(&mut self, element_events: &mut Vec<ElementEvent>) {
+        let mut destroy_queue = self
+            .removal_queue
+            .drain()
+            // Only remove elements that were not retained
+            .filter(|element_id| !self.retained_elements.contains(element_id))
+            .collect::<VecDeque<_>>();
 
         while let Some(element_id) = destroy_queue.pop_front() {
             // Queue the element's children for removal
@@ -611,6 +598,8 @@ impl Engine {
                 }
             }
         }
+
+        self.retained_elements.clear();
     }
 }
 

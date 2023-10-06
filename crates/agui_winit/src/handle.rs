@@ -1,6 +1,6 @@
 use std::{ops::Deref, rc::Rc};
 
-use agui_core::listeners::EventEmitter;
+use agui_listenable::EventEmitter;
 use winit::event::WindowEvent;
 
 #[derive(Clone)]

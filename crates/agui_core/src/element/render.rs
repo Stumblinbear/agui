@@ -1,5 +1,6 @@
 use crate::{
     element::context::ElementLayoutContext,
+    render::canvas::Canvas,
     unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{
         element::{
@@ -8,8 +9,6 @@ use crate::{
         Widget,
     },
 };
-
-use super::canvas::Canvas;
 
 pub trait ElementRender: ElementWidget {
     fn get_children(&self) -> Vec<Widget>;

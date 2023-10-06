@@ -7,8 +7,8 @@ description = "A reactive GUI project"
 exclude = [".github/**/*", "crates/**/*"]
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
-keywords = ["gui", "graphics", "gamedev"]
-categories = ["gui", "graphics", "rendering", "game-development"]
+keywords = ["gui", "graphics"]
+categories = ["gui", "graphics", "rendering"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
@@ -18,9 +18,13 @@ members = ["crates/*"]
 [workspace.dependencies]
 agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
+
 agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
+agui_listenable = { path = "crates/agui_listenable", version = "0.3" }
+agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
 agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
 
+agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
 agui_winit = { path = "crates/agui_winit", version = "0.1" }
 agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
@@ -41,7 +45,7 @@ glam = "0.24"
 lyon = "1.0"
 
 winit = { version = "0.28" }
-vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "6a827324355178a54e839fa2bef15222a2173b72" }
+vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "ee3a076b291d206c361431cc841407adf265c692" }
 
 [features]
 default = ["primitives", "widgets", "macros"]
@@ -50,15 +54,17 @@ widgets = ["primitives", "agui_widgets"]
 macros = ["agui_macros"]
 
 app = ["rustc-hash"]
-winit = ["agui_winit", "dep:winit"]
-vello = ["agui_vello", "dep:vello"]
+winit = ["agui_renderer", "agui_winit", "dep:winit"]
+vello = ["agui_renderer", "agui_vello", "dep:vello"]
 
 [dependencies]
 agui_core.workspace = true
 agui_macros = { workspace = true, optional = true }
+
 agui_primitives = { workspace = true, optional = true }
 agui_widgets = { workspace = true, optional = true }
 
+agui_renderer = { workspace = true, optional = true }
 agui_winit = { workspace = true, optional = true }
 agui_vello = { workspace = true, optional = true }
 
@@ -82,7 +88,10 @@ fnv = "1.0"
 slotmap.workspace = true
 
 [profile.release]
-debug = 1
+debug = true
+
+[profile.release.package."*"]
+debug = true
 
 [profile.dev.package."*"]
 opt-level = 3

@@ -1,12 +1,10 @@
 use std::rc::Rc;
 
 use crate::{
-    render::{
-        canvas::{
-            painter::{CanvasPainter, Head},
-            Canvas,
-        },
-        element::ElementRender,
+    element::render::ElementRender,
+    render::canvas::{
+        painter::{CanvasPainter, Head},
+        Canvas,
     },
     unit::{IntrinsicDimension, Size},
     widget::{

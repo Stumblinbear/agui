@@ -1,7 +1,6 @@
 use std::ops::Deref;
 
 use agui_core::{
-    listeners::EventEmitterHandle,
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{
         view::RenderView, BuildContext, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
@@ -9,6 +8,7 @@ use agui_core::{
         StatefulWidget, Widget, WidgetBuild, WidgetLayout, WidgetState,
     },
 };
+use agui_listenable::EventEmitterHandle;
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, StatelessWidget};
 use agui_primitives::sized_box::SizedBox;
 use winit::{

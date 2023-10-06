@@ -1,9 +1,9 @@
 [package]
-name = "agui_vello"
-version = "0.1.0"
+name = "agui_renderer"
+version = "0.3.0"
 edition = "2021"
 resolver = "2"
-description = "Provides vello integration for agui"
+description = "Provides traits for agui renderer integrations"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui", "graphics"]
@@ -14,16 +14,3 @@ readme = "README.md"
 [dependencies]
 agui_core.workspace = true
 agui_macros.workspace = true
-agui_renderer.workspace = true
-agui_primitives.workspace = true
-
-tracing.workspace = true
-
-rustc-hash.workspace = true
-parking_lot.workspace = true
-
-futures.workspace = true
-
-raw-window-handle.workspace = true
-
-vello.workspace = true

@@ -2,8 +2,7 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
-    inheritance::element::ElementInherited,
-    render::{canvas::Canvas, element::ElementRender},
+    render::canvas::Canvas,
     unit::{AsAny, Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{
         element::{
@@ -16,12 +15,19 @@ use crate::{
     },
 };
 
-use self::context::{
-    ElementBuildContext, ElementCallbackContext, ElementHitTestContext,
-    ElementIntrinsicSizeContext, ElementLayoutContext, ElementMountContext, ElementUnmountContext,
+use self::{
+    context::{
+        ElementBuildContext, ElementCallbackContext, ElementHitTestContext,
+        ElementIntrinsicSizeContext, ElementLayoutContext, ElementMountContext,
+        ElementUnmountContext,
+    },
+    inherited::ElementInherited,
+    render::ElementRender,
 };
 
 pub mod context;
+pub mod inherited;
+pub mod render;
 
 slotmap::new_key_type! {
     pub struct ElementId;

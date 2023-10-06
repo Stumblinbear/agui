@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use agui_core::{
     engine::{event::ElementEvent, Engine},
-    render::{renderer::Renderer, RenderViewId},
+    render::RenderViewId,
 };
+use agui_renderer::Renderer;
 use futures::executor::block_on;
 use parking_lot::Mutex;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -65,6 +66,7 @@ where
             &RendererOptions {
                 surface_format: Some(surface.config.format),
                 timestamp_period: device_handle.queue.get_timestamp_period(),
+                use_cpu: false,
             },
         )
         .unwrap();

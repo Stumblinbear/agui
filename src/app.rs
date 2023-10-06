@@ -1,12 +1,8 @@
 use std::{sync::mpsc, time::Instant};
 
-use agui_core::{
-    engine::Engine,
-    render::{renderer::Renderer, RenderViewId},
-    unit::Offset,
-    widget::IntoWidget,
-};
+use agui_core::{engine::Engine, render::RenderViewId, unit::Offset, widget::IntoWidget};
 use agui_macros::build;
+use agui_renderer::Renderer;
 #[cfg(feature = "vello")]
 use agui_vello;
 use agui_vello::{VelloBinding, VelloRenderer};
