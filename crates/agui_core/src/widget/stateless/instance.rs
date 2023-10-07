@@ -66,8 +66,9 @@ where
         let mut ctx = BuildContext {
             phantom: PhantomData,
 
+            plugins: ctx.plugins,
+
             element_tree: ctx.element_tree,
-            inheritance_manager: ctx.inheritance_manager,
 
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,

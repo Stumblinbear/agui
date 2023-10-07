@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 use agui_core::{
+    plugin::inheritance_plugin::InheritancePlugin,
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
@@ -20,6 +21,7 @@ fn engine_ops(c: &mut Criterion) {
             || {
                 Engine::builder()
                     .with_root(SizedBox::builder().build())
+                    .add_plugin(InheritancePlugin::default())
                     .build()
             },
             |mut engine| engine.update(),
@@ -31,6 +33,7 @@ fn engine_ops(c: &mut Criterion) {
             || {
                 let mut engine = Engine::builder()
                     .with_root(TestRootWidget::builder().build())
+                    .add_plugin(InheritancePlugin::default())
                     .build();
 
                 TestRootWidget::set_children(Vec::from([SizedBox::builder()
@@ -58,6 +61,7 @@ fn engine_ops(c: &mut Criterion) {
             || {
                 let engine = Engine::builder()
                     .with_root(TestRootWidget::builder().build())
+                    .add_plugin(InheritancePlugin::default())
                     .build();
 
                 TestRootWidget::set_children({
@@ -81,6 +85,7 @@ fn engine_ops(c: &mut Criterion) {
             || {
                 let mut engine = Engine::builder()
                     .with_root(TestRootWidget::builder().build())
+                    .add_plugin(InheritancePlugin::default())
                     .build();
 
                 TestRootWidget::set_children({

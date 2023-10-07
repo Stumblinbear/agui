@@ -2,6 +2,7 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
+    plugin::inheritance_plugin::InheritancePlugin,
     render::canvas::Canvas,
     unit::{AsAny, Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{
@@ -109,6 +110,8 @@ impl Element {
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn mount(&mut self, ctx: ElementMountContext) {
         let widget_ctx = WidgetMountContext {
+            plugins: ctx.plugins,
+
             element_tree: ctx.element_tree,
 
             dirty: ctx.dirty,
@@ -120,48 +123,8 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut widget) => widget.mount(widget_ctx),
             ElementType::Render(ref mut widget) => widget.mount(widget_ctx),
-
-            ElementType::Inherited(ref mut widget) => {
-                widget.mount(widget_ctx);
-            }
-
-            ElementType::View(ref mut widget) => {
-                widget.mount(widget_ctx);
-            }
-        }
-
-        match &self.inner {
-            ElementType::Inherited(widget) => {
-                let type_id = widget.get_inherited_type_id();
-
-                #[cfg(test)]
-                if ctx.inheritance_manager.get(ctx.element_id).is_none() {
-                    ctx.inheritance_manager.create_scope(
-                        type_id,
-                        ctx.parent_element_id,
-                        ctx.element_id,
-                    );
-                }
-
-                #[cfg(not(test))]
-                ctx.inheritance_manager.create_scope(
-                    type_id,
-                    ctx.parent_element_id,
-                    ctx.element_id,
-                );
-            }
-
-            _ => {
-                #[cfg(test)]
-                if ctx.inheritance_manager.get(ctx.element_id).is_none() {
-                    ctx.inheritance_manager
-                        .create_node(ctx.parent_element_id, ctx.element_id);
-                }
-
-                #[cfg(not(test))]
-                ctx.inheritance_manager
-                    .create_node(ctx.parent_element_id, ctx.element_id);
-            }
+            ElementType::Inherited(ref mut widget) => widget.mount(widget_ctx),
+            ElementType::View(ref mut widget) => widget.mount(widget_ctx),
         }
 
         match &self.inner {
@@ -191,20 +154,6 @@ impl Element {
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn remount(&mut self, ctx: ElementMountContext) {
-        let parent_scope_id = ctx.parent_element_id.and_then(|parent_element_id| {
-            ctx.inheritance_manager
-                .get(parent_element_id)
-                .expect("failed to get scope from parent")
-                .get_scope()
-        });
-
-        ctx.inheritance_manager.update_inheritance_scope(
-            ctx.element_tree,
-            ctx.dirty,
-            ctx.element_id,
-            parent_scope_id,
-        );
-
         let parent_render_view_id = ctx
             .parent_element_id
             .and_then(|element_id| ctx.render_view_manager.get_view(element_id));
@@ -219,6 +168,8 @@ impl Element {
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn unmount(&mut self, ctx: ElementUnmountContext) {
         let widget_ctx = WidgetUnmountContext {
+            plugins: ctx.plugins,
+
             element_tree: ctx.element_tree,
 
             dirty: ctx.dirty,
@@ -233,7 +184,6 @@ impl Element {
             ElementType::View(ref mut widget) => widget.unmount(widget_ctx),
         }
 
-        ctx.inheritance_manager.remove(ctx.element_id);
         ctx.render_view_manager.remove(ctx.element_id);
     }
 
@@ -369,9 +319,10 @@ impl Element {
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<Widget> {
-        let widget_ctx = WidgetBuildContext {
+        let ctx = WidgetBuildContext {
+            plugins: ctx.plugins,
+
             element_tree: ctx.element_tree,
-            inheritance_manager: ctx.inheritance_manager,
 
             dirty: ctx.dirty,
             callback_queue: ctx.callback_queue,
@@ -380,25 +331,27 @@ impl Element {
         };
 
         match self.inner {
-            ElementType::Widget(ref mut widget) => Vec::from([widget.build(widget_ctx)]),
+            ElementType::Widget(ref mut widget) => Vec::from([widget.build(ctx)]),
             ElementType::Render(ref mut widget) => widget.get_children(),
+
             ElementType::Inherited(ref mut widget) => {
                 let children = Vec::from([widget.get_child()]);
 
                 // If the inherited widget indicates that it should notify its listeners, mark them as dirty.
                 if widget.should_notify() {
-                    for element_id in ctx
-                        .inheritance_manager
-                        .get_as_scope(ctx.element_id)
-                        .expect("failed to get the inherited element's scope during build")
-                        .iter_listeners()
-                    {
-                        ctx.dirty.insert(element_id);
+                    if let Some(inheritance_plugin) = ctx.plugins.get::<InheritancePlugin>() {
+                        for element_id in inheritance_plugin
+                            .iter_listeners(ctx.element_id)
+                            .expect("failed to get the inherited element's scope during build")
+                        {
+                            ctx.dirty.insert(element_id);
+                        }
                     }
                 }
 
                 children
             }
+
             ElementType::View(ref widget) => Vec::from([widget.get_child()]),
         }
     }
@@ -435,6 +388,8 @@ impl Element {
         arg: Box<dyn Any>,
     ) -> bool {
         let widget_ctx = WidgetCallbackContext {
+            plugins: ctx.plugins,
+
             element_tree: ctx.element_tree,
 
             dirty: ctx.dirty,
@@ -546,6 +501,7 @@ mod tests {
 
     use crate::{
         inheritance::manager::InheritanceManager,
+        plugin::Plugins,
         render::manager::RenderViewManager,
         unit::{Constraints, IntrinsicDimension, Size},
         util::tree::Tree,
@@ -613,8 +569,8 @@ mod tests {
             render_view_manager.add(None, element_id1);
 
             element.mount(ElementMountContext {
+                plugins: Plugins::new(&mut []),
                 element_tree,
-                inheritance_manager: &mut inheritance_manager,
                 render_view_manager: &mut render_view_manager,
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,
@@ -642,8 +598,8 @@ mod tests {
 
         element_tree.with(element_id2, |element_tree, element| {
             element.mount(ElementMountContext {
+                plugins: Plugins::new(&mut []),
                 element_tree,
-                inheritance_manager: &mut inheritance_manager,
                 render_view_manager: &mut render_view_manager,
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: Some(element_id1),
@@ -732,8 +688,8 @@ mod tests {
         // scope (since they're no longer descendants of element 1).
         element_tree.with(element_id2, |element_tree, element| {
             element.remount(ElementMountContext {
+                plugins: Plugins::new(&mut []),
                 element_tree,
-                inheritance_manager: &mut inheritance_manager,
                 render_view_manager: &mut RenderViewManager::default(),
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,

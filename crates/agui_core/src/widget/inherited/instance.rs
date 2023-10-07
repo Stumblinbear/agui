@@ -2,8 +2,9 @@ use std::{any::TypeId, rc::Rc};
 
 use crate::{
     element::inherited::ElementInherited,
+    plugin::inheritance_plugin::InheritancePlugin,
     widget::{
-        element::{ElementUpdate, ElementWidget},
+        element::{ElementUpdate, ElementWidget, WidgetMountContext},
         AnyWidget, InheritedWidget, Widget,
     },
 };
@@ -38,6 +39,16 @@ where
         self.widget.widget_name()
     }
 
+    fn mount(&mut self, mut ctx: WidgetMountContext) {
+        if let Some(inheritance_plugin) = ctx.plugins.get_mut::<InheritancePlugin>() {
+            inheritance_plugin.create_scope(
+                ctx.parent_element_id,
+                ctx.element_id,
+                TypeId::of::<I>(),
+            );
+        }
+    }
+
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<I>() {
             self.needs_notify = self.needs_notify || new_widget.should_notify(self.widget.as_ref());
@@ -57,10 +68,6 @@ impl<I> ElementInherited for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    fn get_inherited_type_id(&self) -> TypeId {
-        TypeId::of::<I>()
-    }
-
     fn get_child(&self) -> Widget {
         self.widget.get_child()
     }

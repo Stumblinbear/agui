@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
-    inheritance::manager::InheritanceManager,
+    plugin::Plugins,
     unit::{HitTestResult, Offset, Size},
     util::tree::Tree,
     widget::{ContextWidget, IterChildrenHitTest, IterChildrenLayout, IterChildrenLayoutMut},
@@ -15,6 +15,8 @@ pub use intrinsic_size::*;
 use rustc_hash::FxHashSet;
 
 pub struct WidgetMountContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -24,6 +26,8 @@ pub struct WidgetMountContext<'ctx> {
 }
 
 pub struct WidgetUnmountContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -32,8 +36,9 @@ pub struct WidgetUnmountContext<'ctx> {
 }
 
 pub struct WidgetBuildContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
@@ -48,6 +53,8 @@ impl WidgetBuildContext<'_> {
 }
 
 pub struct WidgetCallbackContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,

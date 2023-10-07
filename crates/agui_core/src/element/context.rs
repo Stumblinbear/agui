@@ -3,15 +3,16 @@ use rustc_hash::FxHashSet;
 use crate::{
     callback::CallbackQueue,
     element::{Element, ElementId},
-    inheritance::manager::InheritanceManager,
+    plugin::Plugins,
     render::manager::RenderViewManager,
     unit::HitTestResult,
     util::tree::Tree,
 };
 
 pub struct ElementMountContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
     pub(crate) render_view_manager: &'ctx mut RenderViewManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -21,8 +22,9 @@ pub struct ElementMountContext<'ctx> {
 }
 
 pub struct ElementUnmountContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
     pub(crate) render_view_manager: &'ctx mut RenderViewManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -31,8 +33,9 @@ pub struct ElementUnmountContext<'ctx> {
 }
 
 pub struct ElementBuildContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
@@ -41,6 +44,8 @@ pub struct ElementBuildContext<'ctx> {
 }
 
 pub struct ElementCallbackContext<'ctx> {
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,

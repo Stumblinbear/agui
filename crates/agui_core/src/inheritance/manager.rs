@@ -345,11 +345,6 @@ impl InheritanceManager {
             "creating new inheritance scope"
         );
 
-        assert!(
-            !self.map.contains_key(&element_id),
-            "element already exists in the inheritance manager"
-        );
-
         let ancestor_scope_id = parent_element_id.and_then(|parent_element_id| {
             self.get(parent_element_id)
                 .expect("cannot create a scope as the parent does not exist")

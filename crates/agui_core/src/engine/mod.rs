@@ -11,7 +11,10 @@ use crate::{
         },
         Element, ElementId,
     },
-    inheritance::manager::InheritanceManager,
+    plugin::{
+        context::{PluginMountContext, PluginUnmountContext},
+        Plugin, Plugins,
+    },
     query::WidgetQuery,
     render::manager::RenderViewManager,
     unit::Constraints,
@@ -25,8 +28,9 @@ pub mod builder;
 pub mod event;
 
 pub struct Engine {
+    plugins: Vec<Box<dyn Plugin>>,
+
     element_tree: Tree<ElementId, Element>,
-    inheritance_manager: InheritanceManager,
     render_view_manager: RenderViewManager,
 
     dirty: FxHashSet<ElementId>,
@@ -170,6 +174,8 @@ impl Engine {
                 .with(element_id, |element_tree, element| {
                     let changed = element.call(
                         ElementCallbackContext {
+                            plugins: Plugins::new(&mut self.plugins),
+
                             element_tree,
 
                             dirty: &mut self.dirty,
@@ -237,9 +243,22 @@ impl Engine {
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
+            self.plugins.iter_mut().for_each(|plugin| {
+                plugin.on_mount(PluginMountContext {
+                    element_tree,
+                    render_view_manager: &mut self.render_view_manager,
+
+                    dirty: &mut self.dirty,
+
+                    parent_element_id: parent_id,
+                    element_id,
+                });
+            });
+
             element.mount(ElementMountContext {
+                plugins: Plugins::new(&mut self.plugins),
+
                 element_tree,
-                inheritance_manager: &mut self.inheritance_manager,
                 render_view_manager: &mut self.render_view_manager,
 
                 dirty: &mut self.dirty,
@@ -268,8 +287,9 @@ impl Engine {
                 .element_tree
                 .with(element_id, |element_tree, element| {
                     element.build(ElementBuildContext {
+                        plugins: Plugins::new(&mut self.plugins),
+
                         element_tree,
-                        inheritance_manager: &mut self.inheritance_manager,
 
                         dirty: &mut self.dirty,
                         callback_queue: &self.callback_queue,
@@ -550,9 +570,21 @@ impl Engine {
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
+                    self.plugins.iter_mut().for_each(|plugin| {
+                        plugin.on_unmount(PluginUnmountContext {
+                            element_tree,
+                            render_view_manager: &mut self.render_view_manager,
+
+                            dirty: &mut self.dirty,
+
+                            element_id,
+                        });
+                    });
+
                     element.unmount(ElementUnmountContext {
+                        plugins: Plugins::new(&mut self.plugins),
+
                         element_tree,
-                        inheritance_manager: &mut self.inheritance_manager,
                         render_view_manager: &mut self.render_view_manager,
 
                         dirty: &mut self.dirty,

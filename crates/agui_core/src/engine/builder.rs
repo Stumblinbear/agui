@@ -4,7 +4,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
-    inheritance::manager::InheritanceManager,
+    plugin::Plugin,
     render::manager::RenderViewManager,
     util::tree::Tree,
     widget::{IntoWidget, Widget},
@@ -16,6 +16,8 @@ pub struct EngineBuilder {
     update_notifier_tx: Option<mpsc::Sender<()>>,
 
     root: Option<Widget>,
+
+    plugins: Vec<Box<dyn Plugin>>,
 }
 
 impl EngineBuilder {
@@ -24,6 +26,8 @@ impl EngineBuilder {
             update_notifier_tx: None,
 
             root: None,
+
+            plugins: Vec::default(),
         }
     }
 
@@ -37,10 +41,16 @@ impl EngineBuilder {
         self
     }
 
+    pub fn add_plugin(mut self, plugin: impl Plugin + 'static) -> Self {
+        self.plugins.push(Box::new(plugin));
+        self
+    }
+
     pub fn build(self) -> Engine {
         let mut engine = Engine {
+            plugins: self.plugins,
+
             element_tree: Tree::default(),
-            inheritance_manager: InheritanceManager::default(),
             render_view_manager: RenderViewManager::default(),
 
             dirty: FxHashSet::default(),

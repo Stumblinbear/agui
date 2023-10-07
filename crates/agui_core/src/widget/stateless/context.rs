@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData, rc::Rc};
+use std::{marker::PhantomData, rc::Rc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -8,7 +8,7 @@ use crate::{
         WidgetCallback,
     },
     element::{Element, ElementId},
-    inheritance::manager::InheritanceManager,
+    plugin::{inheritance_plugin::InheritancePlugin, Plugins},
     unit::AsAny,
     util::tree::Tree,
     widget::{AnyWidget, ContextInheritedMut, ContextWidget, InheritedElement, InheritedWidget},
@@ -17,8 +17,9 @@ use crate::{
 pub struct BuildContext<'ctx, W> {
     pub(crate) phantom: PhantomData<W>,
 
+    pub(crate) plugins: Plugins<'ctx>,
+
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) inheritance_manager: &'ctx mut InheritanceManager,
 
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
@@ -43,9 +44,10 @@ impl<W> ContextInheritedMut for BuildContext<'_, W> {
     where
         I: AnyWidget + InheritedWidget,
     {
-        if let Some(element_id) = self
-            .inheritance_manager
-            .depend_on_inherited_element(self.element_id, TypeId::of::<I>())
+        let inheritance_plugin = self.plugins.get_mut::<InheritancePlugin>()?;
+
+        if let Some(element_id) =
+            inheritance_plugin.depend_on_inherited_element::<I>(self.element_id)
         {
             let inherited_element = self
                 .element_tree
