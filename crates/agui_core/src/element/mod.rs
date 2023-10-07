@@ -3,30 +3,26 @@ use std::any::Any;
 use crate::{
     callback::CallbackId,
     render::canvas::Canvas,
-    unit::{AsAny, Constraints, HitTest, IntrinsicDimension, Offset, Size},
+    unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{
         element::{
-            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+            ElementBuild, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
             WidgetHitTestContext, WidgetIntrinsicSizeContext, WidgetLayoutContext,
             WidgetMountContext, WidgetUnmountContext,
         },
-        view::RenderViewElement,
         Widget,
     },
 };
 
-use self::{
-    context::{
-        ElementBuildContext, ElementCallbackContext, ElementHitTestContext,
-        ElementIntrinsicSizeContext, ElementLayoutContext, ElementMountContext,
-        ElementUnmountContext,
-    },
-    render::ElementRender,
-};
+use self::{proxy::ElementProxy, render::ElementRender};
 
-pub mod context;
-pub mod inherited;
+mod context;
+pub mod proxy;
 pub mod render;
+mod update;
+
+pub use context::*;
+pub use update::*;
 
 slotmap::new_key_type! {
     pub struct ElementId;
@@ -42,9 +38,10 @@ pub struct Element {
 }
 
 pub enum ElementType {
+    Proxy(Box<dyn ElementProxy>),
+
     Widget(Box<dyn ElementBuild>),
     Render(Box<dyn ElementRender>),
-    View(Box<RenderViewElement>),
 }
 
 impl Element {
@@ -61,9 +58,9 @@ impl Element {
 
     pub fn widget_name(&self) -> &'static str {
         match self.inner {
+            ElementType::Proxy(ref widget) => widget.widget_name(),
             ElementType::Widget(ref widget) => widget.widget_name(),
             ElementType::Render(ref widget) => widget.widget_name(),
-            ElementType::View(ref widget) => widget.widget_name(),
         }
     }
 
@@ -84,9 +81,9 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
+            ElementType::Proxy(ref widget) => (**widget).as_any().downcast_ref::<E>(),
             ElementType::Widget(ref widget) => (**widget).as_any().downcast_ref::<E>(),
             ElementType::Render(ref widget) => (**widget).as_any().downcast_ref::<E>(),
-            ElementType::View(ref widget) => (**widget).as_any().downcast_ref::<E>(),
         }
     }
 
@@ -95,9 +92,9 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
+            ElementType::Proxy(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
             ElementType::Widget(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
             ElementType::Render(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
-            ElementType::View(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
         }
     }
 
@@ -115,47 +112,10 @@ impl Element {
         };
 
         match self.inner {
+            ElementType::Proxy(ref mut widget) => widget.mount(widget_ctx),
             ElementType::Widget(ref mut widget) => widget.mount(widget_ctx),
             ElementType::Render(ref mut widget) => widget.mount(widget_ctx),
-            ElementType::View(ref mut widget) => widget.mount(widget_ctx),
         }
-
-        match &self.inner {
-            ElementType::View(_) => {
-                #[cfg(test)]
-                if ctx.render_view_manager.get_view(ctx.element_id).is_none() {
-                    ctx.render_view_manager.create_render_view(ctx.element_id);
-                }
-
-                #[cfg(not(test))]
-                ctx.render_view_manager.create_render_view(ctx.element_id);
-            }
-
-            _ => {
-                #[cfg(test)]
-                if ctx.render_view_manager.get_view(ctx.element_id).is_none() {
-                    ctx.render_view_manager
-                        .add(ctx.parent_element_id, ctx.element_id);
-                }
-
-                #[cfg(not(test))]
-                ctx.render_view_manager
-                    .add(ctx.parent_element_id, ctx.element_id);
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "trace", skip(self, ctx))]
-    pub fn remount(&mut self, ctx: ElementMountContext) {
-        let parent_render_view_id = ctx
-            .parent_element_id
-            .and_then(|element_id| ctx.render_view_manager.get_view(element_id));
-
-        ctx.render_view_manager.update_render_view(
-            ctx.element_tree,
-            ctx.element_id,
-            parent_render_view_id,
-        );
     }
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
@@ -171,12 +131,10 @@ impl Element {
         };
 
         match self.inner {
+            ElementType::Proxy(ref mut widget) => widget.unmount(widget_ctx),
             ElementType::Widget(ref mut widget) => widget.unmount(widget_ctx),
             ElementType::Render(ref mut widget) => widget.unmount(widget_ctx),
-            ElementType::View(ref mut widget) => widget.unmount(widget_ctx),
         }
-
-        ctx.render_view_manager.remove(ctx.element_id);
     }
 
     /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
@@ -200,8 +158,8 @@ impl Element {
             .unwrap_or_default();
 
         match self.inner {
-            ElementType::Widget(_) | ElementType::View(_) => {
-                assert!(children.len() <= 1, "widgets may only have a single child");
+            ElementType::Proxy(_) | ElementType::Widget(_) => {
+                assert!(children.len() <= 1, "element may only have a single child");
 
                 // Proxy the layout call to the child.
                 if let Some(child_id) = children.get(0).copied() {
@@ -243,14 +201,14 @@ impl Element {
         // able to change?
 
         match self.inner {
-            ElementType::Widget(_) | ElementType::View(_) => {
+            ElementType::Proxy(_) | ElementType::Widget(_) => {
                 let children = ctx
                     .element_tree
                     .get_children(ctx.element_id)
                     .map(|children| children.as_slice())
                     .unwrap_or_default();
 
-                assert!(children.len() <= 1, "widgets may only have a single child");
+                assert!(children.len() <= 1, "element may only have a single child");
 
                 // Proxy the layout call to the child.
                 if let Some(child_id) = children.get(0).copied() {
@@ -323,9 +281,9 @@ impl Element {
         };
 
         match self.inner {
+            ElementType::Proxy(ref mut widget) => Vec::from([widget.get_child()]),
             ElementType::Widget(ref mut widget) => Vec::from([widget.build(ctx)]),
             ElementType::Render(ref mut widget) => widget.get_children(),
-            ElementType::View(ref widget) => Vec::from([widget.get_child()]),
         }
     }
 
@@ -336,9 +294,9 @@ impl Element {
         }
 
         let result = match self.inner {
+            ElementType::Proxy(ref mut widget) => widget.update(new_widget),
             ElementType::Widget(ref mut widget) => widget.update(new_widget),
             ElementType::Render(ref mut widget) => widget.update(new_widget),
-            ElementType::View(ref mut widget) => widget.update(new_widget),
         };
 
         match result {
@@ -370,10 +328,16 @@ impl Element {
         };
 
         match self.inner {
+            ElementType::Proxy(_) => {
+                tracing::warn!("attempted to call a callback on a proxy element");
+
+                false
+            }
+
             ElementType::Widget(ref mut widget) => widget.call(widget_ctx, callback_id, arg),
 
-            ElementType::Render(_) | ElementType::View(_) => {
-                tracing::warn!("attempted to call a callback on a view element");
+            ElementType::Render(_) => {
+                tracing::warn!("attempted to call a callback on a render element");
 
                 false
             }
@@ -383,7 +347,7 @@ impl Element {
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn paint(&self) -> Option<Canvas> {
         self.size.and_then(|size| match self.inner {
-            ElementType::Widget(_) | ElementType::View(_) => None,
+            ElementType::Proxy(_) | ElementType::Widget(_) => None,
             ElementType::Render(ref widget) => widget.paint(size),
         })
     }
@@ -402,7 +366,7 @@ impl Element {
             .unwrap_or_default();
 
         let hit = match self.inner {
-            ElementType::Widget(_) | ElementType::View(_) => {
+            ElementType::Proxy(_) | ElementType::Widget(_) => {
                 assert!(children.len() <= 1, "widgets may only have a single child");
 
                 // Proxy the hit test to the child.
@@ -456,9 +420,9 @@ impl Element {
 impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.inner {
+            ElementType::Proxy(ref widget) => widget.fmt(f),
             ElementType::Widget(ref widget) => widget.fmt(f),
             ElementType::Render(ref widget) => widget.fmt(f),
-            ElementType::View(ref widget) => widget.fmt(f),
         }
     }
 }

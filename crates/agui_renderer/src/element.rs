@@ -1,11 +1,15 @@
 use std::rc::Rc;
 
-use crate::widget::{
-    element::{ElementUpdate, ElementWidget},
-    AnyWidget, Widget,
+use agui_core::{
+    element::{proxy::ElementProxy, ContextElement, ElementUpdate},
+    plugin::context::ContextPluginsMut,
+    widget::{
+        element::{ElementWidget, WidgetMountContext},
+        AnyWidget, Widget,
+    },
 };
 
-use super::RenderView;
+use crate::{RenderView, RenderViewPlugin};
 
 pub struct RenderViewElement {
     widget: Rc<RenderView>,
@@ -15,15 +19,20 @@ impl RenderViewElement {
     pub fn new(widget: Rc<RenderView>) -> Self {
         Self { widget }
     }
-
-    pub fn get_child(&self) -> Widget {
-        self.widget.child.clone()
-    }
 }
 
 impl ElementWidget for RenderViewElement {
     fn widget_name(&self) -> &'static str {
         self.widget.widget_name()
+    }
+
+    #[allow(unused_variables)]
+    fn mount(&mut self, mut ctx: WidgetMountContext) {
+        let element_id = ctx.get_element_id();
+
+        if let Some(render_view_plugin) = ctx.get_plugins_mut().get_mut::<RenderViewPlugin>() {
+            render_view_plugin.create_render_view(element_id);
+        }
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
@@ -34,6 +43,12 @@ impl ElementWidget for RenderViewElement {
         } else {
             ElementUpdate::Invalid
         }
+    }
+}
+
+impl ElementProxy for RenderViewElement {
+    fn get_child(&self) -> Widget {
+        self.widget.child.clone()
     }
 }
 

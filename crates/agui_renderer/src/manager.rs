@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::{
+use agui_core::{
     element::{Element, ElementId},
     util::tree::Tree,
 };
@@ -18,11 +18,6 @@ pub struct RenderViewManager {
 
 impl RenderViewManager {
     pub fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
-        assert!(
-            !self.map.contains_key(&element_id),
-            "element already exists in the render view manager"
-        );
-
         self.last_render_view_id += 1;
 
         let render_view_id = RenderViewId::new(self.last_render_view_id);

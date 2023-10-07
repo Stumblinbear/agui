@@ -8,11 +8,12 @@ use crate::{
         Plugins,
     },
     util::tree::Tree,
-    widget::{ContextElement, ContextMarkDirty},
 };
 
+use super::{ContextElement, ContextMarkDirty};
+
 pub struct ElementBuildContext<'ctx> {
-    pub(crate) plugins: Plugins<'ctx>,
+    pub(crate) plugins: &'ctx mut Plugins,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -23,14 +24,14 @@ pub struct ElementBuildContext<'ctx> {
 }
 
 impl<'ctx> ContextPlugins<'ctx> for ElementBuildContext<'ctx> {
-    fn get_plugins(&self) -> &Plugins<'ctx> {
-        &self.plugins
+    fn get_plugins(&self) -> &Plugins {
+        self.plugins
     }
 }
 
 impl<'ctx> ContextPluginsMut<'ctx> for ElementBuildContext<'ctx> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
-        &mut self.plugins
+    fn get_plugins_mut(&mut self) -> &mut Plugins {
+        self.plugins
     }
 }
 

@@ -4,8 +4,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
-    plugin::Plugin,
-    render::manager::RenderViewManager,
+    plugin::{Plugin, Plugins},
     util::tree::Tree,
     widget::{IntoWidget, Widget},
 };
@@ -48,10 +47,9 @@ impl EngineBuilder {
 
     pub fn build(self) -> Engine {
         let mut engine = Engine {
-            plugins: self.plugins,
+            plugins: Plugins::new(self.plugins),
 
             element_tree: Tree::default(),
-            render_view_manager: RenderViewManager::default(),
 
             dirty: FxHashSet::default(),
             callback_queue: CallbackQueue::new(

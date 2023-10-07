@@ -25,7 +25,7 @@ where
             element
                 .get_widget()
                 .get_key()
-                .filter(|key| key.get_key() == self.key)
+                .filter(|key| key == &self.key)
                 .is_some()
         })
     }

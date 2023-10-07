@@ -1,12 +1,12 @@
 use std::any::TypeId;
 
 use agui_core::{
-    element::ElementId,
+    element::{ContextElement, ElementId},
     plugin::{
         context::{PluginMountContext, PluginUnmountContext},
         Plugin,
     },
-    widget::{AnyWidget, ContextElement},
+    widget::AnyWidget,
 };
 
 use crate::{element::InheritedWidget, manager::InheritanceManager};

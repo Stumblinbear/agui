@@ -1,20 +1,17 @@
 use std::{any::Any, rc::Rc};
 
-mod context;
 pub mod element;
-mod key;
 mod layout;
 mod paint;
 mod stateful;
 mod stateless;
-pub mod view;
 
 #[allow(clippy::module_inception)]
 mod widget;
 
 use crate::element::ElementType;
 
-pub use self::{context::*, key::*, layout::*, paint::*, stateful::*, stateless::*, widget::*};
+pub use self::{layout::*, paint::*, stateful::*, stateless::*, widget::*};
 
 pub trait ElementBuilder: 'static {
     fn create_element(self: Rc<Self>) -> ElementType;

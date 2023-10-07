@@ -1,7 +1,7 @@
 use crate::{
-    element::{Element, ElementId},
+    element::{ContextElement, Element, ElementId},
     util::tree::Tree,
-    widget::{ContextElement, IterChildrenLayout},
+    widget::IterChildrenLayout,
 };
 
 pub struct WidgetIntrinsicSizeContext<'ctx> {

@@ -1,12 +1,10 @@
 use crate::widget::{element::ElementWidget, Widget};
 
-pub trait ElementInherited: ElementWidget {
+pub trait ElementProxy: ElementWidget {
     fn get_child(&self) -> Widget;
-
-    fn should_notify(&mut self) -> bool;
 }
 
-impl std::fmt::Debug for Box<dyn ElementInherited> {
+impl std::fmt::Debug for Box<dyn ElementProxy> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(self.widget_name()).finish_non_exhaustive()
     }

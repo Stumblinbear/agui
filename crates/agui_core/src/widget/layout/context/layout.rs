@@ -1,9 +1,9 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
-    element::{Element, ElementId},
+    element::{ContextElement, Element, ElementId},
     util::tree::Tree,
-    widget::{element::WidgetLayoutContext, ContextElement},
+    widget::element::WidgetLayoutContext,
 };
 
 pub struct LayoutContext<'ctx> {

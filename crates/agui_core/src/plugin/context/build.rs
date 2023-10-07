@@ -2,9 +2,8 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
-    element::{Element, ElementId},
+    element::{ContextElement, ContextMarkDirty, Element, ElementId},
     util::tree::Tree,
-    widget::{ContextElement, ContextMarkDirty},
 };
 
 pub struct PluginBuildContext<'ctx> {

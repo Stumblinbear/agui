@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
-use agui_core::{
-    engine::{event::ElementEvent, Engine},
-    render::RenderViewId,
-};
-use agui_renderer::Renderer;
+use agui_core::engine::{event::ElementEvent, Engine};
+use agui_renderer::{RenderViewId, Renderer};
 use futures::executor::block_on;
 use parking_lot::Mutex;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -49,7 +46,7 @@ impl<W> Renderer<W> for VelloRenderer<W>
 where
     W: HasRawWindowHandle + HasRawDisplayHandle,
 {
-    fn create_context(
+    fn create_view(
         &mut self,
         engine: &Engine,
         render_view_id: RenderViewId,
@@ -86,7 +83,7 @@ where
         self.surfaces.insert(render_view_id, surface);
     }
 
-    fn remove_context(&mut self, _: &Engine, render_view_id: RenderViewId) {
+    fn remove_view(&mut self, _: &Engine, render_view_id: RenderViewId) {
         self.surfaces.remove(&render_view_id);
     }
 

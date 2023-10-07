@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use crate::{
-    element::render::ElementRender,
+    element::{render::ElementRender, ElementUpdate},
     render::canvas::{
         painter::{CanvasPainter, Head},
         Canvas,
     },
     unit::{IntrinsicDimension, Size},
     widget::{
-        element::{ElementUpdate, ElementWidget, WidgetIntrinsicSizeContext},
+        element::{ElementWidget, WidgetIntrinsicSizeContext},
         Widget, WidgetPaint,
     },
 };

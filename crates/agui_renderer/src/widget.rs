@@ -1,9 +1,9 @@
-use crate::{
+use agui_core::{
     element::ElementType,
     widget::{ElementBuilder, IntoWidget, Widget},
 };
 
-use super::instance::RenderViewElement;
+use crate::element::RenderViewElement;
 
 pub struct RenderView {
     pub child: Widget,
@@ -20,6 +20,6 @@ impl ElementBuilder for RenderView {
     where
         Self: Sized,
     {
-        ElementType::View(Box::new(RenderViewElement::new(self)))
+        ElementType::Proxy(Box::new(RenderViewElement::new(self)))
     }
 }

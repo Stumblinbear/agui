@@ -1,16 +1,18 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use agui_core::{
+    element::ContextElement,
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{
-        view::RenderView, ContextElement, ContextWidgetStateMut, IntoWidget, IntrinsicSizeContext,
-        LayoutContext, StatefulBuildContext, StatefulWidget, Widget, WidgetLayout, WidgetState,
+        ContextWidgetStateMut, IntoWidget, IntrinsicSizeContext, LayoutContext,
+        StatefulBuildContext, StatefulWidget, Widget, WidgetLayout, WidgetState,
     },
 };
 use agui_inheritance::{ContextInheritedMut, InheritedWidget};
 use agui_listenable::EventEmitterHandle;
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
+use agui_renderer::RenderView;
 use winit::{
     event::{DeviceId, ElementState, MouseButton, WindowEvent},
     window::WindowBuilder,

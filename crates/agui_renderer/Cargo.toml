@@ -14,3 +14,7 @@ readme = "README.md"
 [dependencies]
 agui_core.workspace = true
 agui_macros.workspace = true
+
+tracing.workspace = true
+
+rustc-hash.workspace = true

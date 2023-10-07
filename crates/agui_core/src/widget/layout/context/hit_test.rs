@@ -3,10 +3,10 @@ use std::ops::{Deref, DerefMut};
 use glam::Mat4;
 
 use crate::{
-    element::{context::ElementHitTestContext, Element, ElementId},
+    element::{ContextElement, Element, ElementHitTestContext, ElementId},
     unit::{HitTest, HitTestResult, Offset},
     util::tree::Tree,
-    widget::{element::WidgetHitTestContext, ContextElement},
+    widget::element::WidgetHitTestContext,
 };
 
 pub struct HitTestContext<'ctx> {
@@ -69,6 +69,7 @@ impl<'ctx> IterChildrenHitTest<'ctx> {
 
 // TODO: refactor to LendingIterator when possible
 impl IterChildrenHitTest<'_> {
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<ChildElementHitTest> {
         if self.front_index >= self.back_index {
             return None;

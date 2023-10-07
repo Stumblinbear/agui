@@ -1,17 +1,16 @@
 use rustc_hash::FxHashSet;
 
 use crate::{
-    element::{Element, ElementId},
+    element::{ContextElement, ContextMarkDirty, Element, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
     util::tree::Tree,
-    widget::{ContextElement, ContextMarkDirty},
 };
 
 pub struct ElementCallbackContext<'ctx> {
-    pub(crate) plugins: Plugins<'ctx>,
+    pub(crate) plugins: &'ctx mut Plugins,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -20,14 +19,14 @@ pub struct ElementCallbackContext<'ctx> {
 }
 
 impl<'ctx> ContextPlugins<'ctx> for ElementCallbackContext<'ctx> {
-    fn get_plugins(&self) -> &Plugins<'ctx> {
-        &self.plugins
+    fn get_plugins(&self) -> &Plugins {
+        self.plugins
     }
 }
 
 impl<'ctx> ContextPluginsMut<'ctx> for ElementCallbackContext<'ctx> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
-        &mut self.plugins
+    fn get_plugins_mut(&mut self) -> &mut Plugins {
+        self.plugins
     }
 }
 

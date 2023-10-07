@@ -19,6 +19,8 @@ agui_primitives.workspace = true
 agui_inheritance.workspace = true
 agui_listenable.workspace = true
 
+agui_renderer.workspace = true
+
 tracing.workspace = true
 
 rustc-hash.workspace = true

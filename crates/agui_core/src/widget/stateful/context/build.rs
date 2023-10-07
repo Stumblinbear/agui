@@ -4,14 +4,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue, WidgetCallback},
-    element::{Element, ElementId},
+    element::{ContextElement, ContextMarkDirty, Element, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
     unit::AsAny,
     util::tree::Tree,
-    widget::{ContextElement, ContextMarkDirty, WidgetState},
+    widget::WidgetState,
 };
 
 use super::StatefulCallbackContext;
@@ -62,7 +62,7 @@ pub struct StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
-    pub(crate) plugins: Plugins<'ctx>,
+    pub(crate) plugins: &'ctx mut Plugins,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -92,8 +92,8 @@ impl<'ctx, S> ContextPlugins<'ctx> for StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
-    fn get_plugins(&self) -> &Plugins<'ctx> {
-        &self.plugins
+    fn get_plugins(&self) -> &Plugins {
+        self.plugins
     }
 }
 
@@ -101,8 +101,8 @@ impl<'ctx, S> ContextPluginsMut<'ctx> for StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
-    fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
-        &mut self.plugins
+    fn get_plugins_mut(&mut self) -> &mut Plugins {
+        self.plugins
     }
 }
 

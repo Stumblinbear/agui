@@ -1,9 +1,8 @@
 use std::any::TypeId;
 
 use agui_core::{
-    element::ElementId,
+    element::{ContextElement, ContextMarkDirty, ElementId},
     plugin::context::PluginMountContext,
-    widget::{ContextElement, ContextMarkDirty},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 

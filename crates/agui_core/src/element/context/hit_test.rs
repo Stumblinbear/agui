@@ -1,8 +1,7 @@
 use crate::{
-    element::{Element, ElementId},
+    element::{ContextElement, Element, ElementId},
     unit::HitTestResult,
     util::tree::Tree,
-    widget::ContextElement,
 };
 
 pub struct ElementHitTestContext<'ctx> {

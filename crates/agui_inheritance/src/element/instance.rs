@@ -2,14 +2,14 @@ use std::{any::TypeId, rc::Rc};
 
 use agui_core::{
     callback::CallbackId,
-    element::inherited::ElementInherited,
+    element::{ContextElement, ContextMarkDirty, ElementUpdate},
     plugin::context::ContextPluginsMut,
     widget::{
         element::{
-            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+            ElementBuild, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
             WidgetMountContext,
         },
-        AnyWidget, ContextElement, ContextMarkDirty, Widget,
+        AnyWidget, Widget,
     },
 };
 
@@ -21,7 +21,7 @@ pub struct InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    widget: Rc<I>,
+    pub(crate) widget: Rc<I>,
 
     needs_notify: bool,
 }
@@ -98,34 +98,6 @@ where
 
     fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: Box<dyn std::any::Any>) -> bool {
         unimplemented!("inherited widgets do not support callbacks")
-    }
-}
-
-impl<I> ElementInherited for InheritedElement<I>
-where
-    I: AnyWidget + InheritedWidget,
-{
-    fn get_child(&self) -> Widget {
-        self.widget.get_child()
-    }
-
-    fn should_notify(&mut self) -> bool {
-        if self.needs_notify {
-            self.needs_notify = false;
-
-            true
-        } else {
-            false
-        }
-    }
-}
-
-impl<I> InheritedElement<I>
-where
-    I: AnyWidget + InheritedWidget,
-{
-    pub fn get_inherited_widget(&self) -> Rc<I> {
-        Rc::clone(&self.widget)
     }
 }
 

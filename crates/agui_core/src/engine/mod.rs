@@ -5,21 +5,17 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     callback::{CallbackInvoke, CallbackQueue},
     element::{
-        context::{
-            ElementBuildContext, ElementCallbackContext, ElementLayoutContext, ElementMountContext,
-            ElementUnmountContext,
-        },
-        Element, ElementId,
+        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementLayoutContext,
+        ElementMountContext, ElementUnmountContext, ElementUpdate,
     },
     plugin::{
         context::{PluginMountContext, PluginUnmountContext},
-        Plugin, Plugins,
+        Plugins,
     },
     query::WidgetQuery,
-    render::manager::RenderViewManager,
-    unit::Constraints,
+    unit::{Constraints, Key},
     util::tree::Tree,
-    widget::{element::ElementUpdate, Widget, WidgetKey},
+    widget::Widget,
 };
 
 use self::{builder::EngineBuilder, event::ElementEvent};
@@ -28,10 +24,9 @@ pub mod builder;
 pub mod event;
 
 pub struct Engine {
-    plugins: Vec<Box<dyn Plugin>>,
+    plugins: Plugins,
 
     element_tree: Tree<ElementId, Element>,
-    render_view_manager: RenderViewManager,
 
     dirty: FxHashSet<ElementId>,
     callback_queue: CallbackQueue,
@@ -48,13 +43,17 @@ impl Engine {
         EngineBuilder::new()
     }
 
+    pub fn get_plugins(&self) -> &Plugins {
+        &self.plugins
+    }
+
+    pub fn get_plugins_mut(&mut self) -> &mut Plugins {
+        &mut self.plugins
+    }
+
     /// Get the element tree.
     pub fn get_tree(&self) -> &Tree<ElementId, Element> {
         &self.element_tree
-    }
-
-    pub fn get_render_view_manager(&self) -> &RenderViewManager {
-        &self.render_view_manager
     }
 
     /// Get the root widget.
@@ -124,13 +123,7 @@ impl Engine {
 
         // TODO: limit this to only the elements that have changed
         for element_id in needs_redraw {
-            self.element_events.push(ElementEvent::Draw {
-                render_view_id: self
-                    .render_view_manager
-                    .get_view(element_id)
-                    .expect("element does not have a render view"),
-                element_id,
-            });
+            self.element_events.push(ElementEvent::Draw { element_id });
         }
 
         self.element_events.drain(..).collect()
@@ -174,10 +167,9 @@ impl Engine {
                 .with(element_id, |element_tree, element| {
                     let changed = element.call(
                         ElementCallbackContext {
-                            plugins: Plugins::new(&mut self.plugins),
+                            plugins: &mut self.plugins,
 
                             element_tree,
-
                             dirty: &mut self.dirty,
 
                             element_id,
@@ -246,8 +238,6 @@ impl Engine {
             self.plugins.iter_mut().for_each(|plugin| {
                 plugin.on_mount(PluginMountContext {
                     element_tree,
-                    render_view_manager: &mut self.render_view_manager,
-
                     dirty: &mut self.dirty,
 
                     parent_element_id: parent_id,
@@ -256,11 +246,9 @@ impl Engine {
             });
 
             element.mount(ElementMountContext {
-                plugins: Plugins::new(&mut self.plugins),
+                plugins: &mut self.plugins,
 
                 element_tree,
-                render_view_manager: &mut self.render_view_manager,
-
                 dirty: &mut self.dirty,
 
                 parent_element_id: parent_id,
@@ -287,10 +275,9 @@ impl Engine {
                 .element_tree
                 .with(element_id, |element_tree, element| {
                     element.build(ElementBuildContext {
-                        plugins: Plugins::new(&mut self.plugins),
+                        plugins: &mut self.plugins,
 
                         element_tree,
-
                         dirty: &mut self.dirty,
                         callback_queue: &self.callback_queue,
 
@@ -415,7 +402,7 @@ impl Engine {
 
             // Scan the old children in the middle of the list.
             let have_old_children = old_children_top <= old_children_bottom;
-            let mut old_keyed_children = FxHashMap::<WidgetKey, ElementId>::default();
+            let mut old_keyed_children = FxHashMap::<Key, ElementId>::default();
 
             while old_children_top <= old_children_bottom {
                 if let Some(old_child_id) = old_children.get(old_children_top as usize) {
@@ -573,8 +560,6 @@ impl Engine {
                     self.plugins.iter_mut().for_each(|plugin| {
                         plugin.on_unmount(PluginUnmountContext {
                             element_tree,
-                            render_view_manager: &mut self.render_view_manager,
-
                             dirty: &mut self.dirty,
 
                             element_id,
@@ -582,11 +567,9 @@ impl Engine {
                     });
 
                     element.unmount(ElementUnmountContext {
-                        plugins: Plugins::new(&mut self.plugins),
+                        plugins: &mut self.plugins,
 
                         element_tree,
-                        render_view_manager: &mut self.render_view_manager,
-
                         dirty: &mut self.dirty,
 
                         element_id,

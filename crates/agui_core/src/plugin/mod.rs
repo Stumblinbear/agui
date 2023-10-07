@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::unit::AsAny;
 
 use self::context::{PluginMountContext, PluginUnmountContext};
@@ -5,17 +7,20 @@ use self::context::{PluginMountContext, PluginUnmountContext};
 pub mod context;
 
 pub trait Plugin: AsAny {
+    #[allow(unused_variables)]
     fn on_mount(&mut self, ctx: PluginMountContext) {}
 
+    #[allow(unused_variables)]
     fn on_remount(&mut self, ctx: PluginMountContext) {}
 
+    #[allow(unused_variables)]
     fn on_unmount(&mut self, ctx: PluginUnmountContext) {}
 }
 
-pub struct Plugins<'ctx>(&'ctx mut [Box<dyn Plugin>]);
+pub struct Plugins(Vec<Box<dyn Plugin>>);
 
-impl<'ctx> Plugins<'ctx> {
-    pub(crate) fn new(plugins: &'ctx mut [Box<dyn Plugin>]) -> Self {
+impl Plugins {
+    pub(crate) fn new(plugins: Vec<Box<dyn Plugin>>) -> Self {
         Self(plugins)
     }
 
@@ -43,5 +48,19 @@ impl<'ctx> Plugins<'ctx> {
         }
 
         None
+    }
+}
+
+impl Deref for Plugins {
+    type Target = [Box<dyn Plugin>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Plugins {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

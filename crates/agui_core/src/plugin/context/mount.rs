@@ -1,16 +1,13 @@
 use rustc_hash::FxHashSet;
 
 use crate::{
-    element::{Element, ElementId},
-    render::manager::RenderViewManager,
+    element::{ContextElement, ContextMarkDirty, Element, ElementId},
     util::tree::Tree,
-    widget::{ContextElement, ContextMarkDirty},
 };
 
 pub struct PluginMountContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
-    pub(crate) render_view_manager: &'ctx mut RenderViewManager,
 
     pub(crate) parent_element_id: Option<ElementId>,
     pub(crate) element_id: ElementId,

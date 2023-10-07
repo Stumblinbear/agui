@@ -6,13 +6,13 @@ use std::{
 
 use rustc_hash::FxHashMap;
 
-use crate::element::ElementType;
+use crate::{element::ElementType, unit::Key};
 
-use super::{AnyWidget, IntoWidget, WidgetKey};
+use super::{AnyWidget, IntoWidget};
 
 #[derive(Clone)]
 pub struct Widget {
-    key: Option<WidgetKey>,
+    key: Option<Key>,
     widget: Rc<dyn AnyWidget>,
 }
 
@@ -24,7 +24,7 @@ impl Widget {
         Self::new_with_key(None, widget)
     }
 
-    pub fn new_with_key<W>(key: Option<WidgetKey>, widget: W) -> Self
+    pub fn new_with_key<W>(key: Option<Key>, widget: W) -> Self
     where
         W: AnyWidget,
     {
@@ -38,7 +38,7 @@ impl Widget {
         (*self.widget).widget_name()
     }
 
-    pub fn get_key(&self) -> Option<WidgetKey> {
+    pub fn get_key(&self) -> Option<Key> {
         self.key
     }
 

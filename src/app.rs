@@ -1,9 +1,9 @@
 use std::{sync::mpsc, time::Instant};
 
-use agui_core::{engine::Engine, render::RenderViewId, unit::Offset, widget::IntoWidget};
+use agui_core::{engine::Engine, unit::Offset, widget::IntoWidget};
 use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
-use agui_renderer::Renderer;
+use agui_renderer::{RenderViewId, RenderViewPlugin, Renderer};
 #[cfg(feature = "vello")]
 use agui_vello;
 use agui_vello::{VelloBinding, VelloRenderer};
@@ -37,6 +37,7 @@ pub fn run_app(root: impl IntoWidget) {
     let mut engine = Engine::builder()
         .with_notifier(update_notifier_tx.clone())
         .add_plugin(InheritancePlugin::default())
+        .add_plugin(RenderViewPlugin::default())
         .with_root(build! {
             <WinitBinding> {
                 tx: winit_binding_tx,
@@ -81,12 +82,16 @@ pub fn run_app(root: impl IntoWidget) {
 
                     let window_id = window.id();
 
-                    let render_view_id = engine
-                        .get_render_view_manager()
+                    let render_view_plugin = engine
+                        .get_plugins()
+                        .get::<RenderViewPlugin>()
+                        .expect("no render view plugin");
+
+                    let render_view_id = render_view_plugin
                         .get_view(element_id)
                         .expect("no render view");
 
-                    renderer.create_context(
+                    renderer.create_view(
                         &engine,
                         render_view_id,
                         &*window,

@@ -1,8 +1,5 @@
 use crate::{
-    element::{
-        context::{ElementIntrinsicSizeContext, ElementLayoutContext},
-        Element, ElementId,
-    },
+    element::{Element, ElementId, ElementIntrinsicSizeContext, ElementLayoutContext},
     unit::{Constraints, IntrinsicDimension, Offset, Size},
     util::tree::Tree,
 };
@@ -112,6 +109,7 @@ impl<'ctx> IterChildrenLayoutMut<'ctx> {
 
 // TODO: refactor to LendingIterator when possible
 impl IterChildrenLayoutMut<'_> {
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<ChildElementLayoutMut> {
         if self.index >= self.children.len() {
             return None;

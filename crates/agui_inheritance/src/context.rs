@@ -1,9 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::{
-    plugin::context::ContextPluginsMut,
-    widget::{AnyWidget, ContextElement},
-};
+use agui_core::{element::ContextElement, plugin::context::ContextPluginsMut, widget::AnyWidget};
 
 use crate::{
     element::{InheritedElement, InheritedWidget},
@@ -36,7 +33,7 @@ where
                 .downcast::<InheritedElement<I>>()
                 .expect("inherited element downcast failed");
 
-            Some(inherited_element.get_inherited_widget())
+            Some(Rc::clone(&inherited_element.widget))
         } else {
             None
         }

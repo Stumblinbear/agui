@@ -4,10 +4,9 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     callback::CallbackId,
+    element::ElementUpdate,
     widget::{
-        element::{
-            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
-        },
+        element::{ElementBuild, ElementWidget, WidgetBuildContext, WidgetCallbackContext},
         widget::Widget,
         AnyWidget, StatefulCallbackFunc,
     },

@@ -7,20 +7,19 @@ use crate::{
         Callback, CallbackContext, CallbackFn, CallbackFunc, CallbackId, CallbackQueue,
         WidgetCallback,
     },
-    element::{Element, ElementId},
+    element::{ContextElement, ContextMarkDirty, Element, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
     unit::AsAny,
     util::tree::Tree,
-    widget::{ContextElement, ContextMarkDirty},
 };
 
 pub struct BuildContext<'ctx, W> {
     pub(crate) phantom: PhantomData<W>,
 
-    pub(crate) plugins: Plugins<'ctx>,
+    pub(crate) plugins: &'ctx mut Plugins,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
@@ -42,14 +41,14 @@ impl<W> ContextElement for BuildContext<'_, W> {
 }
 
 impl<'ctx, W> ContextPlugins<'ctx> for BuildContext<'ctx, W> {
-    fn get_plugins(&self) -> &Plugins<'ctx> {
-        &self.plugins
+    fn get_plugins(&self) -> &Plugins {
+        self.plugins
     }
 }
 
 impl<'ctx, W> ContextPluginsMut<'ctx> for BuildContext<'ctx, W> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
-        &mut self.plugins
+    fn get_plugins_mut(&mut self) -> &mut Plugins {
+        self.plugins
     }
 }
 

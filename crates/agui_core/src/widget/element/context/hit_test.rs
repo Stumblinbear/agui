@@ -1,10 +1,10 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
-    element::{Element, ElementId},
+    element::{ContextElement, Element, ElementId},
     unit::{HitTestResult, Size},
     util::tree::Tree,
-    widget::{ContextElement, IterChildrenHitTest},
+    widget::IterChildrenHitTest,
 };
 
 pub struct WidgetHitTestContext<'ctx> {

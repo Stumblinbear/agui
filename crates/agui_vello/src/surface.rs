@@ -3,9 +3,9 @@ use std::time::Instant;
 use agui_core::{
     element::ElementId,
     engine::{event::ElementEvent, Engine},
-    render::RenderViewId,
     unit::Offset,
 };
+use agui_renderer::{RenderViewId, RenderViewPlugin};
 use rustc_hash::FxHashMap;
 use vello::{
     block_on_wgpu,
@@ -29,17 +29,20 @@ pub struct VelloSurface {
 
 impl VelloSurface {
     pub fn init(&mut self, engine: &Engine, fonts: &mut VelloFonts) {
-        let boundary_element_id = engine
-            .get_render_view_manager()
+        let render_view_plugin = engine
+            .get_plugins()
+            .get::<RenderViewPlugin>()
+            .expect("render view plugin not found");
+
+        let boundary_element_id = render_view_plugin
             .get_boundary(self.render_view_id)
             .expect("the required render view boundary does not exist");
 
-        let render_view_manager = engine.get_render_view_manager();
         let tree = engine.get_tree();
 
         let redraw_render_view_widgets = tree
             .iter_subtree(boundary_element_id, |element_id| {
-                render_view_manager.get_view(element_id) == Some(self.render_view_id)
+                render_view_plugin.get_view(element_id) == Some(self.render_view_id)
             })
             .flat_map(|element_id| {
                 [
@@ -47,10 +50,7 @@ impl VelloSurface {
                         parent_id: engine.get_tree().get_parent(element_id).copied(),
                         element_id,
                     },
-                    ElementEvent::Draw {
-                        render_view_id: self.render_view_id,
-                        element_id,
-                    },
+                    ElementEvent::Draw { element_id },
                 ]
             })
             .collect::<Vec<_>>();
@@ -61,13 +61,18 @@ impl VelloSurface {
     pub fn redraw(&mut self, engine: &Engine, fonts: &mut VelloFonts, events: &[ElementEvent]) {
         let now = Instant::now();
 
+        let render_view_plugin = engine
+            .get_plugins()
+            .get::<RenderViewPlugin>()
+            .expect("render view plugin not found");
+
         for event in events {
             match event {
                 ElementEvent::Spawned {
                     parent_id,
                     element_id,
                 } => {
-                    self.create_element(engine, *element_id, *parent_id);
+                    self.create_element(render_view_plugin, *element_id, *parent_id);
                 }
 
                 ElementEvent::Destroyed { element_id } => {
@@ -81,8 +86,8 @@ impl VelloSurface {
                     // We need to check if a subtree was moved outside or into this render view
                     let was_in_render_view = self.widgets.contains_key(element_id);
 
-                    let is_in_render_view = engine.get_render_view_manager().get_view(*element_id)
-                        == Some(self.render_view_id);
+                    let is_in_render_view =
+                        render_view_plugin.get_view(*element_id) == Some(self.render_view_id);
 
                     if was_in_render_view && !is_in_render_view {
                         // Remove the subtree from the render view
@@ -101,11 +106,10 @@ impl VelloSurface {
                         // Add the subtree to the render view
                         for element_id in
                             engine.get_tree().iter_subtree(*element_id, |element_id| {
-                                engine.get_render_view_manager().get_view(element_id)
-                                    == Some(render_view_id)
+                                render_view_plugin.get_view(element_id) == Some(render_view_id)
                             })
                         {
-                            self.create_element(engine, element_id, *parent_id);
+                            self.create_element(render_view_plugin, element_id, *parent_id);
                         }
                     }
 
@@ -132,11 +136,8 @@ impl VelloSurface {
                     }
                 }
 
-                ElementEvent::Draw {
-                    render_view_id,
-                    element_id,
-                } => {
-                    if *render_view_id != self.render_view_id {
+                ElementEvent::Draw { element_id } => {
+                    if render_view_plugin.get_view(*element_id) != Some(self.render_view_id) {
                         continue;
                     }
 
@@ -153,16 +154,14 @@ impl VelloSurface {
 
         let mut element_stack = Vec::<(usize, ElementId, Affine)>::new();
 
-        let boundary_element_id = engine
-            .get_render_view_manager()
+        let boundary_element_id = render_view_plugin
             .get_boundary(self.render_view_id)
             .expect("the required render view boundary does not exist");
 
-        let render_view_manager = engine.get_render_view_manager();
         let tree = engine.get_tree();
 
         for element_id in tree.iter_subtree(boundary_element_id, |element_id| {
-            render_view_manager.get_view(element_id) == Some(self.render_view_id)
+            render_view_plugin.get_view(element_id) == Some(self.render_view_id)
         }) {
             let element = self.widgets.get(&element_id).unwrap();
 
@@ -208,7 +207,7 @@ impl VelloSurface {
 
     fn create_element(
         &mut self,
-        engine: &Engine,
+        render_view_plugin: &RenderViewPlugin,
         element_id: ElementId,
         parent_id: Option<ElementId>,
     ) {
@@ -219,7 +218,7 @@ impl VelloSurface {
                     let Some(parent) = self.widgets.get(&parent_id) else {
                         // If the parent isn't tracked in the render view, but it's in the same context, then
                         // the something went wrong. The parent should always exist before the child is spawned.
-                        if engine.get_render_view_manager().get_view(parent_id)
+                        if render_view_plugin.get_view(parent_id)
                             == Some(self.render_view_id)
                         {
                             panic!(
