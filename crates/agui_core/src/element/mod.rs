@@ -123,9 +123,27 @@ impl Element {
 
             ElementType::Inherited(ref mut widget) => {
                 widget.mount(widget_ctx);
+            }
 
+            ElementType::View(ref mut widget) => {
+                widget.mount(widget_ctx);
+            }
+        }
+
+        match &self.inner {
+            ElementType::Inherited(widget) => {
                 let type_id = widget.get_inherited_type_id();
 
+                #[cfg(test)]
+                if ctx.inheritance_manager.get(ctx.element_id).is_none() {
+                    ctx.inheritance_manager.create_scope(
+                        type_id,
+                        ctx.parent_element_id,
+                        ctx.element_id,
+                    );
+                }
+
+                #[cfg(not(test))]
                 ctx.inheritance_manager.create_scope(
                     type_id,
                     ctx.parent_element_id,
@@ -133,27 +151,41 @@ impl Element {
                 );
             }
 
-            ElementType::View(ref mut widget) => {
-                widget.mount(widget_ctx);
+            _ => {
+                #[cfg(test)]
+                if ctx.inheritance_manager.get(ctx.element_id).is_none() {
+                    ctx.inheritance_manager
+                        .create_node(ctx.parent_element_id, ctx.element_id);
+                }
 
-                ctx.render_view_manager.create_render_view(ctx.element_id);
+                #[cfg(not(test))]
+                ctx.inheritance_manager
+                    .create_node(ctx.parent_element_id, ctx.element_id);
             }
         }
 
-        // If the widget did not insert itself into the inheritance tree, we need to do it ourselves.
-        if ctx.inheritance_manager.get(ctx.element_id).is_none() {
-            ctx.inheritance_manager
-                .create_node(ctx.parent_element_id, ctx.element_id);
-        }
+        match &self.inner {
+            ElementType::View(_) => {
+                #[cfg(test)]
+                if ctx.render_view_manager.get_view(ctx.element_id).is_none() {
+                    ctx.render_view_manager.create_render_view(ctx.element_id);
+                }
 
-        // If the widget did not create a new render context, add it to the parent's render context.
-        if ctx
-            .render_view_manager
-            .get_context(ctx.element_id)
-            .is_none()
-        {
-            ctx.render_view_manager
-                .add(ctx.parent_element_id, ctx.element_id);
+                #[cfg(not(test))]
+                ctx.render_view_manager.create_render_view(ctx.element_id);
+            }
+
+            _ => {
+                #[cfg(test)]
+                if ctx.render_view_manager.get_view(ctx.element_id).is_none() {
+                    ctx.render_view_manager
+                        .add(ctx.parent_element_id, ctx.element_id);
+                }
+
+                #[cfg(not(test))]
+                ctx.render_view_manager
+                    .add(ctx.parent_element_id, ctx.element_id);
+            }
         }
     }
 
@@ -175,7 +207,7 @@ impl Element {
 
         let parent_render_view_id = ctx
             .parent_element_id
-            .and_then(|element_id| ctx.render_view_manager.get_context(element_id));
+            .and_then(|element_id| ctx.render_view_manager.get_view(element_id));
 
         ctx.render_view_manager.update_render_view(
             ctx.element_tree,
@@ -567,6 +599,7 @@ mod tests {
     fn adds_to_inheritance_manager_on_mount() {
         let mut element_tree = Tree::<ElementId, Element>::default();
         let mut inheritance_manager = InheritanceManager::default();
+        let mut render_view_manager = RenderViewManager::default();
 
         let element_id1 = element_tree.add(None, Element::new(TestWidget.into_widget()));
 
@@ -577,10 +610,12 @@ mod tests {
                 element_id1,
             );
 
+            render_view_manager.add(None, element_id1);
+
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
-                render_view_manager: &mut RenderViewManager::default(),
+                render_view_manager: &mut render_view_manager,
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: None,
                 element_id: element_id1,
@@ -609,7 +644,7 @@ mod tests {
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut inheritance_manager,
-                render_view_manager: &mut RenderViewManager::default(),
+                render_view_manager: &mut render_view_manager,
                 dirty: &mut FxHashSet::<ElementId>::default(),
                 parent_element_id: Some(element_id1),
                 element_id: element_id2,

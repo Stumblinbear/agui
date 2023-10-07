@@ -57,6 +57,16 @@ fn widgets_in_nested_vec_macro() {
     };
 }
 
+#[test]
+fn const_widgets() {
+    let _widget: Widget = build! {
+        const <Padding> {
+            padding: EdgeInsets::all(10.0),
+            child: <SizedBox>::new(20.0, 10.0)
+        }
+    };
+}
+
 /// ```compile_fail
 /// use agui_core::widget::Widget;
 /// use agui_macros::build;

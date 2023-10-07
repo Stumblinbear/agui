@@ -178,7 +178,7 @@ mod tests {
             child: depending_widget.clone(),
         });
 
-        engine.mark_dirty(engine.get_root().unwrap());
+        engine.mark_dirty(engine.get_root());
         engine.update();
 
         assert_inherited_data(Some(9), "should have updated the child widget");
@@ -207,7 +207,7 @@ mod tests {
             child: nested_scope,
         });
 
-        engine.mark_dirty(engine.get_root().unwrap());
+        engine.mark_dirty(engine.get_root());
         engine.update();
 
         assert_inherited_data(Some(9), "should have updated the child widget");
@@ -232,7 +232,7 @@ mod tests {
             child: dependent_child.into(),
         });
 
-        engine.mark_dirty(engine.get_root().unwrap());
+        engine.mark_dirty(engine.get_root());
         engine.update();
 
         assert_inherited_data(None, "should have updated the child widget");

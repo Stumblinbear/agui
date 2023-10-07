@@ -81,8 +81,8 @@ pub fn run_app(root: impl IntoWidget) {
 
                     let render_view_id = engine
                         .get_render_view_manager()
-                        .get_context(element_id)
-                        .expect("no render context");
+                        .get_view(element_id)
+                        .expect("no render view");
 
                     renderer.create_context(
                         &engine,

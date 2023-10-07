@@ -32,14 +32,14 @@ impl VelloSurface {
         let boundary_element_id = engine
             .get_render_view_manager()
             .get_boundary(self.render_view_id)
-            .expect("the required render context boundary does not exist");
+            .expect("the required render view boundary does not exist");
 
         let render_view_manager = engine.get_render_view_manager();
         let tree = engine.get_tree();
 
         let redraw_render_view_widgets = tree
             .iter_subtree(boundary_element_id, |element_id| {
-                render_view_manager.get_context(element_id) == Some(self.render_view_id)
+                render_view_manager.get_view(element_id) == Some(self.render_view_id)
             })
             .flat_map(|element_id| {
                 [
@@ -78,15 +78,14 @@ impl VelloSurface {
                     parent_id,
                     element_id,
                 } => {
-                    // We need to check if a subtree was moved outside or into this render context
+                    // We need to check if a subtree was moved outside or into this render view
                     let was_in_render_view = self.widgets.contains_key(element_id);
 
-                    let is_in_render_view =
-                        engine.get_render_view_manager().get_context(*element_id)
-                            == Some(self.render_view_id);
+                    let is_in_render_view = engine.get_render_view_manager().get_view(*element_id)
+                        == Some(self.render_view_id);
 
                     if was_in_render_view && !is_in_render_view {
-                        // Remove the subtree from the render context
+                        // Remove the subtree from the render view
                         for element_id in engine
                             .get_tree()
                             .iter_subtree(*element_id, |element_id| {
@@ -99,10 +98,10 @@ impl VelloSurface {
                     } else if !was_in_render_view && is_in_render_view {
                         let render_view_id = self.render_view_id;
 
-                        // Add the subtree to the render context
+                        // Add the subtree to the render view
                         for element_id in
                             engine.get_tree().iter_subtree(*element_id, |element_id| {
-                                engine.get_render_view_manager().get_context(element_id)
+                                engine.get_render_view_manager().get_view(element_id)
                                     == Some(render_view_id)
                             })
                         {
@@ -157,13 +156,13 @@ impl VelloSurface {
         let boundary_element_id = engine
             .get_render_view_manager()
             .get_boundary(self.render_view_id)
-            .expect("the required render context boundary does not exist");
+            .expect("the required render view boundary does not exist");
 
         let render_view_manager = engine.get_render_view_manager();
         let tree = engine.get_tree();
 
         for element_id in tree.iter_subtree(boundary_element_id, |element_id| {
-            render_view_manager.get_context(element_id) == Some(self.render_view_id)
+            render_view_manager.get_view(element_id) == Some(self.render_view_id)
         }) {
             let element = self.widgets.get(&element_id).unwrap();
 
@@ -220,7 +219,7 @@ impl VelloSurface {
                     let Some(parent) = self.widgets.get(&parent_id) else {
                         // If the parent isn't tracked in the render view, but it's in the same context, then
                         // the something went wrong. The parent should always exist before the child is spawned.
-                        if engine.get_render_view_manager().get_context(parent_id)
+                        if engine.get_render_view_manager().get_view(parent_id)
                             == Some(self.render_view_id)
                         {
                             panic!(

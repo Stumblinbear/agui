@@ -20,7 +20,7 @@ impl RenderViewManager {
     pub fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
         assert!(
             !self.map.contains_key(&element_id),
-            "element already exists in the render context manager"
+            "element already exists in the render view manager"
         );
 
         self.last_render_view_id += 1;
@@ -33,7 +33,7 @@ impl RenderViewManager {
         render_view_id
     }
 
-    pub fn get_context(&self, element_id: ElementId) -> Option<RenderViewId> {
+    pub fn get_view(&self, element_id: ElementId) -> Option<RenderViewId> {
         self.map.get(&element_id).copied()
     }
 
@@ -44,18 +44,18 @@ impl RenderViewManager {
     pub(crate) fn add(&mut self, parent_element_id: Option<ElementId>, element_id: ElementId) {
         tracing::trace!(
             element_id = &format!("{:?}", element_id),
-            "attaching render context"
+            "attaching render view"
         );
 
         assert!(
             !self.map.contains_key(&element_id),
-            "element already exists in the render context manager"
+            "element already exists in the render view manager"
         );
 
         let parent_render_view_id = parent_element_id
             .map(|parent_element_id| {
-                self.get_context(parent_element_id).expect(
-                    "cannot add element to the render context manager as the parent does not exist",
+                self.get_view(parent_element_id).expect(
+                    "cannot add element to the render view manager as the parent does not exist",
                 )
             })
             .unwrap_or_default();
@@ -75,7 +75,7 @@ impl RenderViewManager {
             return;
         }
 
-        // If this element is the creator of a render context, then we don't need to do anything.
+        // If this element is the creator of a render view, then we don't need to do anything.
         if let Some(current_render_view_id) = current_render_view_id {
             if self.render_views.get(&current_render_view_id) == Some(&element_id) {
                 return;
@@ -85,7 +85,7 @@ impl RenderViewManager {
         if let Some(new_render_view_id) = new_render_view_id {
             self.map.insert(element_id, new_render_view_id);
         } else {
-            // Remove this element from the render context.
+            // Remove this element from the render view.
             self.map.remove(&element_id);
         }
 
@@ -100,7 +100,7 @@ impl RenderViewManager {
 
     pub(crate) fn remove(&mut self, element_id: ElementId) {
         if let Some(render_view_id) = self.map.remove(&element_id) {
-            // If this element is the one that created the render context, remove it from the map.
+            // If this element is the one that created the render view, remove it from the map.
             if self.render_views.get(&render_view_id) == Some(&element_id) {
                 self.render_views.remove(&render_view_id);
             }

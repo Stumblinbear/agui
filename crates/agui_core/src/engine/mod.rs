@@ -16,7 +16,7 @@ use crate::{
     render::manager::RenderViewManager,
     unit::Constraints,
     util::tree::Tree,
-    widget::{element::ElementUpdate, Widget},
+    widget::{element::ElementUpdate, Widget, WidgetKey},
 };
 
 use self::{builder::EngineBuilder, event::ElementEvent};
@@ -28,8 +28,6 @@ pub struct Engine {
     element_tree: Tree<ElementId, Element>,
     inheritance_manager: InheritanceManager,
     render_view_manager: RenderViewManager,
-
-    widgets: FxHashMap<Widget, Vec<ElementId>>,
 
     dirty: FxHashSet<ElementId>,
     callback_queue: CallbackQueue,
@@ -56,21 +54,13 @@ impl Engine {
     }
 
     /// Get the root widget.
-    pub fn get_root(&self) -> Option<ElementId> {
-        self.element_tree.get_root()
+    pub fn get_root(&self) -> ElementId {
+        self.element_tree.get_root().expect("root is not set")
     }
 
     /// Check if a widget exists in the tree.
     pub fn contains(&self, element_id: ElementId) -> bool {
         self.element_tree.contains(element_id)
-    }
-
-    pub fn get_widget_elements(&self, widget: &Widget) -> &[ElementId] {
-        if let Some(elements) = self.widgets.get(widget) {
-            elements
-        } else {
-            &[]
-        }
     }
 
     /// Query widgets from the tree.
@@ -133,8 +123,8 @@ impl Engine {
             self.element_events.push(ElementEvent::Draw {
                 render_view_id: self
                     .render_view_manager
-                    .get_context(element_id)
-                    .expect("element does not have a render context"),
+                    .get_view(element_id)
+                    .expect("element does not have a render view"),
                 element_id,
             });
         }
@@ -156,8 +146,8 @@ impl Engine {
     pub fn flush_dirty(&mut self) {
         for element_id in self.dirty.drain() {
             tracing::trace!(
-                id = format!("{:?}", element_id).as_str(),
-                element = self.element_tree.get(element_id).unwrap().widget_name(),
+                element_id = ?element_id,
+                widget = self.element_tree.get(element_id).unwrap().widget_name(),
                 "queueing widget for rebuild"
             );
 
@@ -192,8 +182,8 @@ impl Engine {
 
                     if changed {
                         tracing::debug!(
-                            id = &format!("{:?}", element_id),
-                            element = element.widget_name(),
+                            element_id = ?element_id,
+                            widget = element.widget_name(),
                             "element updated, queueing for rebuild"
                         );
 
@@ -233,100 +223,20 @@ impl Engine {
     /// slightly different semantics. It will be mounted but not built until the first
     /// update.
     fn init_root(&mut self, root: Widget) {
-        self.process_spawn(None, root, None);
+        let root_id = self.process_spawn(None, root);
 
-        self.rebuild_queue
-            .push_back(self.element_tree.get_root().unwrap());
+        self.rebuild_queue.push_back(root_id);
     }
 
-    #[tracing::instrument(
-        level = "trace",
-        name = "spawn",
-        skip(self, widget, existing_element_id)
-    )]
-    fn process_spawn(
-        &mut self,
-        parent_id: Option<ElementId>,
-        widget: Widget,
-        existing_element_id: Option<ElementId>,
-    ) -> SpawnResult {
-        // Grab the existing element in the tree
-        if let Some(existing_element_id) = existing_element_id {
-            let existing_element = self.element_tree.get_mut(existing_element_id).unwrap();
-
-            let existing_widget = existing_element.get_widget().clone();
-
-            // Check the existing element against the new widget to see what we can safely
-            // do about retaining its state
-            match existing_element.update(&widget) {
-                ElementUpdate::Noop => {
-                    tracing::trace!(
-                        widget = widget.widget_name(),
-                        element_id = &&format!("{:?}", existing_element_id),
-                        "element was retained since it is unchanged"
-                    );
-
-                    return SpawnResult::Retained {
-                        element_id: existing_element_id,
-                        needs_rebuild: false,
-                    };
-                }
-
-                ElementUpdate::RebuildNecessary => {
-                    tracing::trace!(
-                        widget = widget.widget_name(),
-                        element_id = &&format!("{:?}", existing_element_id),
-                        "element was retained, but it must be rebuilt"
-                    );
-
-                    let elements = self.widgets.get_mut(&existing_widget).expect(
-                        "widget does not exist in the widget list while checking for existing elements",
-                    );
-
-                    // Remove the widget from the element list. It will only exist once.
-                    elements.remove(
-                        elements
-                            .iter()
-                            .position(|e| *e == existing_element_id)
-                            .expect("element should exist in the widget element list"),
-                    );
-
-                    if elements.is_empty() {
-                        self.widgets.remove(&existing_widget);
-                    }
-
-                    // We have to remove and replace the widget in the element list
-                    self.widgets
-                        .entry(widget)
-                        .and_modify(|elements| elements.push(existing_element_id))
-                        .or_insert_with(|| Vec::from([existing_element_id]));
-
-                    return SpawnResult::Retained {
-                        element_id: existing_element_id,
-                        needs_rebuild: true,
-                    };
-                }
-
-                ElementUpdate::Invalid => {}
-            }
-        }
-
-        tracing::trace!(
-            parent_id = &format!("{:?}", parent_id),
-            widget = widget.widget_name(),
-            "spawning widget"
-        );
-
+    #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
+    fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
         let element = Element::new(widget.clone());
+
+        tracing::trace!("spawning widget");
 
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
-            self.widgets
-                .entry(widget)
-                .and_modify(|elements| elements.push(element_id))
-                .or_insert_with(|| vec![element_id]);
-
             element.mount(ElementMountContext {
                 element_tree,
                 inheritance_manager: &mut self.inheritance_manager,
@@ -344,7 +254,7 @@ impl Engine {
             element_id,
         });
 
-        SpawnResult::Created(element_id)
+        element_id
     }
 
     #[tracing::instrument(level = "trace", name = "build", skip(self, element_id))]
@@ -354,7 +264,7 @@ impl Engine {
         build_queue.push_back(element_id);
 
         while let Some(element_id) = build_queue.pop_front() {
-            let result = self
+            let new_widgets = self
                 .element_tree
                 .with(element_id, |element_tree, element| {
                     element.build(ElementBuildContext {
@@ -369,80 +279,234 @@ impl Engine {
                 })
                 .expect("cannot build a widget that doesn't exist");
 
-            if result.is_empty() {
+            if new_widgets.is_empty() {
                 continue;
             }
 
-            // Spawn the child widgets
-            for (i, widget) in result.into_iter().enumerate() {
-                // If the child's key exists in the tree, reparent and retain it
-                if let Some(existing_elements) = self.widgets.get(&widget) {
-                    // Grab the first element in the list that hasn't been retained already
-                    if let Some(existing_element_id) = existing_elements
-                        .iter()
-                        .copied()
-                        .find(|element_id| !self.retained_elements.contains(element_id))
-                    {
-                        self.retained_elements.insert(existing_element_id);
+            let old_children = self
+                .element_tree
+                .get_children(element_id)
+                .expect("newly created element does not exist in the tree")
+                .clone();
 
-                        if self
-                            .element_tree
-                            .reparent(Some(element_id), existing_element_id)
-                        {
+            let mut new_children_top = 0;
+            let mut old_children_top = 0;
+            let mut new_children_bottom = new_widgets.len() as i32 - 1;
+            let mut old_children_bottom = old_children.len() as i32 - 1;
+
+            let mut new_children = vec![None; new_widgets.len()];
+
+            // Update the top of the list.
+            while (old_children_top <= old_children_bottom)
+                && (new_children_top <= new_children_bottom)
+            {
+                let old_child_id = old_children.get(old_children_top as usize).copied();
+                let new_widget = new_widgets.get(new_children_top as usize);
+
+                if let Some((old_child_id, new_widget)) = old_child_id.zip(new_widget) {
+                    let old_child = self
+                        .element_tree
+                        .get_mut(old_child_id)
+                        .expect("child element does not exist in the tree");
+
+                    match old_child.update(new_widget) {
+                        ElementUpdate::Noop => {
                             tracing::trace!(
-                                parent_id = &format!("{:?}", element_id),
-                                element = self
-                                    .element_tree
-                                    .get(existing_element_id)
-                                    .unwrap()
-                                    .widget_name(),
-                                "reparented widget"
+                                parent_id = ?element_id,
+                                element_id = ?old_child_id,
+                                widget = ?new_widget,
+                                old_position = old_children_top,
+                                new_position = new_children_top,
+                                "element was retained"
                             );
-
-                            self.element_tree
-                                .with(existing_element_id, |element_tree, element| {
-                                    element.remount(ElementMountContext {
-                                        element_tree,
-                                        inheritance_manager: &mut self.inheritance_manager,
-                                        render_view_manager: &mut self.render_view_manager,
-
-                                        dirty: &mut self.dirty,
-
-                                        parent_element_id: Some(element_id),
-                                        element_id: existing_element_id,
-                                    });
-                                });
-
-                            self.element_events.push(ElementEvent::Reparent {
-                                parent_id: Some(element_id),
-                                element_id: existing_element_id,
-                            });
                         }
 
-                        continue;
+                        ElementUpdate::RebuildNecessary => {
+                            tracing::trace!(
+                                parent_id = ?element_id,
+                                element_id = ?old_child_id,
+                                widget = ?new_widget,
+                                old_position = old_children_top,
+                                new_position = new_children_top,
+                                "element was retained but must be rebuilt"
+                            );
+
+                            self.rebuild_queue.push_back(old_child_id);
+                        }
+
+                        ElementUpdate::Invalid => break,
+                    }
+
+                    new_children[new_children_top as usize] = Some(old_child_id);
+                } else {
+                    break;
+                }
+
+                new_children_top += 1;
+                old_children_top += 1;
+            }
+
+            // Scan the bottom of the list.
+            while (old_children_top <= old_children_bottom)
+                && (new_children_top <= new_children_bottom)
+            {
+                let old_child_id = old_children.get(old_children_bottom as usize).copied();
+                let new_widget = new_widgets.get(new_children_bottom as usize);
+
+                if let Some((old_child_id, new_widget)) = old_child_id.zip(new_widget) {
+                    let old_child = self
+                        .element_tree
+                        .get_mut(old_child_id)
+                        .expect("child element does not exist in the tree");
+
+                    match old_child.update(new_widget) {
+                        ElementUpdate::Noop => {
+                            tracing::trace!(
+                                parent_id = ?element_id,
+                                element_id = ?old_child_id,
+                                widget = ?new_widget,
+                                old_position = old_children_bottom,
+                                new_position = new_children_bottom,
+                                "element was retained"
+                            );
+                        }
+
+                        ElementUpdate::RebuildNecessary => {
+                            tracing::trace!(
+                                parent_id = ?element_id,
+                                element_id = ?old_child_id,
+                                widget = ?new_widget,
+                                position = new_children_top,
+                                "element was retained but must be rebuilt"
+                            );
+
+                            self.rebuild_queue.push_back(old_child_id);
+                        }
+
+                        ElementUpdate::Invalid => break,
+                    }
+                } else {
+                    break;
+                }
+
+                old_children_bottom -= 1;
+                new_children_bottom -= 1;
+            }
+
+            // Scan the old children in the middle of the list.
+            let have_old_children = old_children_top <= old_children_bottom;
+            let mut old_keyed_children = FxHashMap::<WidgetKey, ElementId>::default();
+
+            while old_children_top <= old_children_bottom {
+                if let Some(old_child_id) = old_children.get(old_children_top as usize) {
+                    let old_child = self
+                        .element_tree
+                        .get(*old_child_id)
+                        .expect("child element does not exist in the tree");
+
+                    if let Some(key) = old_child.get_widget().get_key() {
+                        old_keyed_children.insert(key, *old_child_id);
+                    } else {
+                        // unmount / deactivate the child
                     }
                 }
 
-                // Spawn the new widget and queue it for building
-                match self.process_spawn(
-                    Some(element_id),
-                    widget,
-                    self.element_tree.get_child(element_id, i).cloned(),
-                ) {
-                    SpawnResult::Retained {
-                        element_id,
-                        needs_rebuild,
-                    } => {
-                        self.retained_elements.insert(element_id);
+                old_children_top += 1;
+            }
 
-                        if needs_rebuild {
-                            self.rebuild_queue.push_back(element_id);
+            // Update the middle of the list.
+            while new_children_top <= new_children_bottom {
+                let new_widget = &new_widgets[new_children_top as usize];
+
+                if have_old_children {
+                    if let Some(key) = new_widget.get_key() {
+                        if let Some(old_child_id) = old_keyed_children.get(&key).copied() {
+                            let old_child = self
+                                .element_tree
+                                .get_mut(old_child_id)
+                                .expect("child element does not exist in the tree");
+
+                            match old_child.update(new_widget) {
+                                ElementUpdate::Noop => {
+                                    tracing::trace!(
+                                        parent_id = ?element_id,
+                                        element_id = ?old_child_id,
+                                        widget = ?new_widget,
+                                        key = ?key,
+                                        new_position = new_children_top,
+                                        "keyed element was retained"
+                                    );
+                                }
+
+                                ElementUpdate::RebuildNecessary => {
+                                    tracing::trace!(
+                                        parent_id = ?element_id,
+                                        element_id = ?old_child_id,
+                                        widget = ?new_widget,
+                                        key = ?key,
+                                        new_position = new_children_top,
+                                        "keyed element was retained but must be rebuilt"
+                                    );
+
+                                    self.rebuild_queue.push_back(old_child_id);
+                                }
+
+                                ElementUpdate::Invalid => break,
+                            }
+
+                            // Remove it from the list so that we don't try to use it again.
+                            old_keyed_children.remove(&key);
+
+                            new_children[new_children_top as usize] = Some(old_child_id);
+                            new_children_top += 1;
+
+                            continue;
                         }
                     }
+                }
 
-                    SpawnResult::Created(element_id) => {
-                        build_queue.push_back(element_id);
-                    }
+                let new_child_id = self.process_spawn(Some(element_id), new_widget.clone());
+
+                new_children[new_children_top as usize] = Some(new_child_id);
+                new_children_top += 1;
+
+                build_queue.push_back(new_child_id);
+            }
+
+            // We've scanned the whole list.
+            assert!(old_children_top == old_children_bottom + 1);
+            assert!(new_children_top == new_children_bottom + 1);
+            assert!(
+                new_widgets.len() as i32 - new_children_top
+                    == old_children.len() as i32 - old_children_top
+            );
+
+            new_children_bottom = new_widgets.len() as i32 - 1;
+            old_children_bottom = old_children.len() as i32 - 1;
+
+            // Update the bottom of the list.
+            while (old_children_top <= old_children_bottom)
+                && (new_children_top <= new_children_bottom)
+            {
+                new_children[new_children_top as usize] =
+                    Some(old_children[old_children_top as usize]);
+                new_children_top += 1;
+                old_children_top += 1;
+            }
+
+            // Clean up any of the remaining middle nodes from the old list.
+            for old_keyed_child_id in old_keyed_children {
+                // deactivate the child
+            }
+
+            for child_id in new_children {
+                let child_id = child_id.expect("child id should not be none");
+
+                self.retained_elements.insert(child_id);
+
+                // reparent each child
+                if self.element_tree.reparent(Some(element_id), child_id) {
+                    panic!("element should have remained as a child of the same parent")
                 }
             }
         }
@@ -505,31 +569,11 @@ impl Engine {
 
             let widget = element.get_widget();
 
-            if let Some(elements) = self.widgets.get_mut(widget) {
-                // Remove the widget from the element list. It will only exist once.
-                elements.remove(
-                    elements
-                        .iter()
-                        .position(|e| *e == element_id)
-                        .expect("element should exist in the widget element list"),
-                );
-
-                if elements.is_empty() {
-                    self.widgets.remove(widget);
-                }
-            }
+            tracing::trace!(?element_id, ?widget, "destroyed widget");
         }
 
         self.retained_elements.clear();
     }
-}
-
-enum SpawnResult {
-    Created(ElementId),
-    Retained {
-        element_id: ElementId,
-        needs_rebuild: bool,
-    },
 }
 
 #[cfg(test)]
@@ -634,15 +678,6 @@ mod tests {
     }
 
     #[test]
-    pub fn root_is_not_set_immediately() {
-        let engine = Engine::builder()
-            .with_root(TestDummyWidget1::default())
-            .build();
-
-        assert_eq!(engine.get_root(), None, "should not have added the widget");
-    }
-
-    #[test]
     pub fn adding_a_root_widget() {
         let mut engine = Engine::builder()
             .with_root(TestDummyWidget1::default())
@@ -651,10 +686,6 @@ mod tests {
         let events = engine.update();
 
         let root_id = engine.get_root();
-
-        assert_ne!(root_id, None, "root widget should have been added");
-
-        let root_id = root_id.unwrap();
 
         assert_ne!(events.len(), 0, "should generate events");
 
@@ -677,10 +708,6 @@ mod tests {
         engine.update();
 
         let root_id = engine.get_root();
-
-        assert_ne!(root_id, None, "root widget should have been added");
-
-        let root_id = root_id.unwrap();
 
         engine.mark_dirty(root_id);
 
@@ -710,7 +737,7 @@ mod tests {
 
         let events = engine.update();
 
-        let root_id = engine.get_root().unwrap();
+        let root_id = engine.get_root();
 
         assert_eq!(
             engine.get_tree().len(),
@@ -732,7 +759,7 @@ mod tests {
         assert_eq!(children.len(), 2, "root should have two children");
 
         assert_eq!(
-            events[1],
+            events[2],
             ElementEvent::Spawned {
                 parent_id: Some(root_id),
                 element_id: children[0]
@@ -741,7 +768,7 @@ mod tests {
         );
 
         assert_eq!(
-            events[2],
+            events[3],
             ElementEvent::Spawned {
                 parent_id: Some(root_id),
                 element_id: children[1]
@@ -776,7 +803,7 @@ mod tests {
 
         TestRootWidget::set_child(widget.clone());
 
-        let root_id = engine.get_root().unwrap();
+        let root_id = engine.get_root();
 
         engine.mark_dirty(root_id);
 
@@ -806,7 +833,7 @@ mod tests {
 
         engine.update();
 
-        let root_id = engine.get_root().unwrap();
+        let root_id = engine.get_root();
 
         engine.mark_dirty(root_id);
 
@@ -832,64 +859,35 @@ mod tests {
     pub fn reuses_unchanged_widgets() {
         let mut engine = Engine::builder().with_root(TestRootWidget).build();
 
-        let reparented_widget = TestDummyWidget1::default().into_widget();
-
-        TestRootWidget::set_child(reparented_widget.clone());
+        TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
 
         engine.update();
 
-        let root_id = engine.get_root().unwrap();
-        let element_id = engine.get_widget_elements(&reparented_widget).to_vec();
+        let root_id = engine.get_root();
+        let element_id = engine
+            .get_tree()
+            .get_children(root_id)
+            .cloned()
+            .expect("no children");
 
-        engine.mark_dirty(engine.get_root().unwrap());
+        engine.mark_dirty(engine.get_root());
 
         engine.update();
 
         assert_eq!(
             root_id,
-            engine.get_root().unwrap(),
+            engine.get_root(),
             "root widget should have remained unchanged"
         );
 
         assert_eq!(
             element_id,
-            engine.get_widget_elements(&reparented_widget),
+            engine
+                .get_tree()
+                .get_children(root_id)
+                .cloned()
+                .expect("no children"),
             "root widget should not have regenerated its child"
-        );
-    }
-
-    #[test]
-    pub fn reparents_existing_widgets() {
-        let mut engine = Engine::builder().with_root(TestRootWidget).build();
-
-        let reparented_widget = TestDummyWidget1::default().into_widget();
-
-        TestRootWidget::set_child(
-            TestDummyWidget1 {
-                children: vec![reparented_widget.clone()],
-            }
-            .into_widget(),
-        );
-
-        engine.update();
-
-        let element_id = engine.get_widget_elements(&reparented_widget).to_vec();
-
-        TestRootWidget::set_child(
-            TestDummyWidget2 {
-                children: vec![reparented_widget.clone()],
-            }
-            .into_widget(),
-        );
-
-        engine.mark_dirty(engine.get_root().unwrap());
-
-        engine.update();
-
-        assert_eq!(
-            element_id,
-            engine.get_widget_elements(&reparented_widget),
-            "should have reparented the widget"
         );
     }
 }

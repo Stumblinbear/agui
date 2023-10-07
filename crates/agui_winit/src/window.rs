@@ -25,6 +25,7 @@ where
 {
     pub window: F,
 
+    #[prop(into)]
     pub child: Widget,
 }
 
@@ -33,7 +34,7 @@ where
     F: Fn() -> WindowBuilder + 'static,
 {
     fn into_widget(self) -> Widget {
-        // Windows must be created within their own render context
+        // Windows must be created within their own render view
         RenderView {
             child: build! {
                 <WinitWindow> {

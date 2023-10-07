@@ -1,5 +1,8 @@
-use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream as TokenStream2, TokenTree};
-use quote::{ToTokens, TokenStreamExt};
+use proc_macro2::{
+    token_stream::IntoIter, Delimiter, Group, Ident, Punct, Span, TokenStream as TokenStream2,
+    TokenTree,
+};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{token::Paren, Token};
 
 use crate::utils::resolve_agui_path;
@@ -17,95 +20,131 @@ fn parse_tree(input: TokenStream2, output: &mut TokenStream2) {
                 group.delimiter(),
                 modified_tokens,
             )));
+        } else if let TokenTree::Ident(ref ident) = token {
+            parse_const_widget(ident.clone(), &mut tokens, output);
         } else if let TokenTree::Punct(punct) = token {
-            // Check for `<$name> {`
-            if punct.as_char() == '<' {
-                match (tokens.next(), tokens.next(), tokens.next()) {
-                    (
-                        Some(TokenTree::Ident(ident)),
-                        Some(TokenTree::Punct(punct1)),
-                        Some(TokenTree::Group(group)),
-                    ) if punct1.as_char() == '>' && group.delimiter() == Delimiter::Brace => {
-                        parse_widget_init(
-                            ident,
-                            None,
-                            TokenStream2::default(),
-                            group.stream(),
-                            output,
-                        );
-                    }
-
-                    (
-                        Some(TokenTree::Ident(ident)),
-                        Some(TokenTree::Punct(punct1)),
-                        Some(TokenTree::Punct(punct2)),
-                    ) if punct1.as_char() == '>' && punct2.as_char() == ':' => {
-                        match (tokens.next(), tokens.next(), tokens.next(), tokens.next()) {
-                            // `<Widget>::new() { .. }`
-                            (
-                                Some(TokenTree::Punct(punct3)),
-                                Some(TokenTree::Ident(init_func)),
-                                Some(TokenTree::Group(init_params)),
-                                Some(TokenTree::Group(group)),
-                            ) if punct3.as_char() == ':'
-                                && group.delimiter() == Delimiter::Brace =>
-                            {
-                                parse_widget_init(
-                                    ident,
-                                    Some(init_func),
-                                    init_params.stream(),
-                                    group.stream(),
-                                    output,
-                                );
-                            }
-
-                            // `<Widget>::new()`
-                            (
-                                Some(TokenTree::Punct(punct3)),
-                                Some(TokenTree::Ident(func_ident)),
-                                Some(TokenTree::Group(func_params)),
-                                trailing,
-                            ) if punct3.as_char() == ':' => {
-                                parse_widget_init(
-                                    ident,
-                                    Some(func_ident),
-                                    func_params.stream(),
-                                    TokenStream2::default(),
-                                    output,
-                                );
-
-                                // Make sure to add the trailing token back
-                                output.extend(trailing);
-                            }
-
-                            _ => {
-                                output.extend(
-                                    syn::Error::new(
-                                        punct2.span(),
-                                        format!("expected `<{}>::func(..)`", ident),
-                                    )
-                                    .to_compile_error(),
-                                );
-
-                                continue;
-                            }
-                        };
-                    }
-
-                    (first, second, third) => {
-                        output.append(TokenTree::Punct(punct));
-                        output.extend(first);
-                        output.extend(second);
-                        output.extend(third);
-                    }
-                }
-            } else {
-                output.append(TokenTree::Punct(punct));
-            }
+            parse_widget(punct, &mut tokens, output);
         } else {
             output.append(token);
         }
     }
+}
+
+fn parse_const_widget(ident: Ident, tokens: &mut IntoIter, output: &mut TokenStream2) -> bool {
+    if ident == "const" {
+        match tokens.next() {
+            Some(TokenTree::Punct(punct)) => {
+                let mut widget_output = TokenStream2::new();
+
+                if parse_widget(punct, tokens, &mut widget_output) {
+                    let agui_core = resolve_agui_path();
+
+                    output.extend(
+                        quote!(#agui_core::widget::IntoWidget::into_widget((|| #widget_output) as fn() -> Widget)),
+                    );
+
+                    return true;
+                } else {
+                    output.append(TokenTree::Ident(ident.clone()));
+                    output.extend(widget_output);
+                }
+            }
+
+            next_token => {
+                output.append(TokenTree::Ident(ident));
+                output.extend(next_token);
+            }
+        }
+    } else {
+        output.append(TokenTree::Ident(ident));
+    }
+
+    false
+}
+
+fn parse_widget(punct: Punct, tokens: &mut IntoIter, output: &mut TokenStream2) -> bool {
+    // Check for `<$name> {`
+    if punct.as_char() == '<' {
+        match (tokens.next(), tokens.next(), tokens.next()) {
+            (
+                Some(TokenTree::Ident(ident)),
+                Some(TokenTree::Punct(punct1)),
+                Some(TokenTree::Group(group)),
+            ) if punct1.as_char() == '>' && group.delimiter() == Delimiter::Brace => {
+                parse_widget_init(ident, None, TokenStream2::default(), group.stream(), output);
+
+                return true;
+            }
+
+            (
+                Some(TokenTree::Ident(ident)),
+                Some(TokenTree::Punct(punct1)),
+                Some(TokenTree::Punct(punct2)),
+            ) if punct1.as_char() == '>' && punct2.as_char() == ':' => {
+                match (tokens.next(), tokens.next(), tokens.next(), tokens.next()) {
+                    // `<Widget>::new() { .. }`
+                    (
+                        Some(TokenTree::Punct(punct3)),
+                        Some(TokenTree::Ident(init_func)),
+                        Some(TokenTree::Group(init_params)),
+                        Some(TokenTree::Group(group)),
+                    ) if punct3.as_char() == ':' && group.delimiter() == Delimiter::Brace => {
+                        parse_widget_init(
+                            ident,
+                            Some(init_func),
+                            init_params.stream(),
+                            group.stream(),
+                            output,
+                        );
+
+                        return true;
+                    }
+
+                    // `<Widget>::new()`
+                    (
+                        Some(TokenTree::Punct(punct3)),
+                        Some(TokenTree::Ident(func_ident)),
+                        Some(TokenTree::Group(func_params)),
+                        trailing,
+                    ) if punct3.as_char() == ':' => {
+                        parse_widget_init(
+                            ident,
+                            Some(func_ident),
+                            func_params.stream(),
+                            TokenStream2::default(),
+                            output,
+                        );
+
+                        // Make sure to add the trailing token back
+                        output.extend(trailing);
+
+                        return true;
+                    }
+
+                    _ => {
+                        output.extend(
+                            syn::Error::new(
+                                punct2.span(),
+                                format!("expected `<{}>::func(..)`", ident),
+                            )
+                            .to_compile_error(),
+                        );
+                    }
+                };
+            }
+
+            (first, second, third) => {
+                output.append(TokenTree::Punct(punct));
+                output.extend(first);
+                output.extend(second);
+                output.extend(third);
+            }
+        }
+    } else {
+        output.append(TokenTree::Punct(punct));
+    }
+
+    false
 }
 
 fn parse_widget_init(

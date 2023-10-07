@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, sync::mpsc};
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
@@ -42,8 +42,6 @@ impl EngineBuilder {
             element_tree: Tree::default(),
             inheritance_manager: InheritanceManager::default(),
             render_view_manager: RenderViewManager::default(),
-
-            widgets: FxHashMap::default(),
 
             dirty: FxHashSet::default(),
             callback_queue: CallbackQueue::new(
