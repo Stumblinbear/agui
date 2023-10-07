@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
-use agui_core::widget::{BuildContext, ContextInheritedMut, Widget, WidgetBuild};
+use agui_core::widget::{BuildContext, Widget, WidgetBuild};
+use agui_inheritance::ContextInheritedMut;
 use agui_macros::StatelessWidget;
 use agui_primitives::sized_box::SizedBox;
 

@@ -2,7 +2,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::parse::{Error, Parser};
 
-use crate::utils::resolve_agui_path;
+use crate::utils::resolve_package_path;
 
 use super::{
     field_info::{FieldBuilderAttr, FieldInfo},
@@ -290,7 +290,7 @@ impl<'a> StructInfo<'a> {
     }
 
     pub fn required_field_impl(&self, field: &FieldInfo) -> TokenStream {
-        let agui_core = resolve_agui_path();
+        let agui_core = resolve_package_path("agui_core");
 
         let StructInfo {
             vis,
@@ -394,7 +394,7 @@ impl<'a> StructInfo<'a> {
     }
 
     pub fn build_method_impl(&self) -> TokenStream {
-        let agui_core = resolve_agui_path();
+        let agui_core = resolve_package_path("agui_core");
 
         let StructInfo {
             vis,

@@ -3,7 +3,6 @@ use crate::unit::AsAny;
 use self::context::{PluginMountContext, PluginUnmountContext};
 
 pub mod context;
-pub mod inheritance_plugin;
 
 pub trait Plugin: AsAny {
     fn on_mount(&mut self, ctx: PluginMountContext) {}

@@ -2,7 +2,6 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
-    plugin::inheritance_plugin::InheritancePlugin,
     render::canvas::Canvas,
     unit::{AsAny, Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{
@@ -22,7 +21,6 @@ use self::{
         ElementIntrinsicSizeContext, ElementLayoutContext, ElementMountContext,
         ElementUnmountContext,
     },
-    inherited::ElementInherited,
     render::ElementRender,
 };
 
@@ -46,7 +44,6 @@ pub struct Element {
 pub enum ElementType {
     Widget(Box<dyn ElementBuild>),
     Render(Box<dyn ElementRender>),
-    Inherited(Box<dyn ElementInherited>),
     View(Box<RenderViewElement>),
 }
 
@@ -66,7 +63,6 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref widget) => widget.widget_name(),
             ElementType::Render(ref widget) => widget.widget_name(),
-            ElementType::Inherited(ref widget) => widget.widget_name(),
             ElementType::View(ref widget) => widget.widget_name(),
         }
     }
@@ -90,7 +86,6 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref widget) => (**widget).as_any().downcast_ref::<E>(),
             ElementType::Render(ref widget) => (**widget).as_any().downcast_ref::<E>(),
-            ElementType::Inherited(ref widget) => (**widget).as_any().downcast_ref::<E>(),
             ElementType::View(ref widget) => (**widget).as_any().downcast_ref::<E>(),
         }
     }
@@ -102,7 +97,6 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
             ElementType::Render(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
-            ElementType::Inherited(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
             ElementType::View(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
         }
     }
@@ -123,7 +117,6 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut widget) => widget.mount(widget_ctx),
             ElementType::Render(ref mut widget) => widget.mount(widget_ctx),
-            ElementType::Inherited(ref mut widget) => widget.mount(widget_ctx),
             ElementType::View(ref mut widget) => widget.mount(widget_ctx),
         }
 
@@ -180,7 +173,6 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut widget) => widget.unmount(widget_ctx),
             ElementType::Render(ref mut widget) => widget.unmount(widget_ctx),
-            ElementType::Inherited(ref mut widget) => widget.unmount(widget_ctx),
             ElementType::View(ref mut widget) => widget.unmount(widget_ctx),
         }
 
@@ -208,7 +200,7 @@ impl Element {
             .unwrap_or_default();
 
         match self.inner {
-            ElementType::Widget(_) | ElementType::Inherited(_) | ElementType::View(_) => {
+            ElementType::Widget(_) | ElementType::View(_) => {
                 assert!(children.len() <= 1, "widgets may only have a single child");
 
                 // Proxy the layout call to the child.
@@ -251,7 +243,7 @@ impl Element {
         // able to change?
 
         match self.inner {
-            ElementType::Widget(_) | ElementType::Inherited(_) | ElementType::View(_) => {
+            ElementType::Widget(_) | ElementType::View(_) => {
                 let children = ctx
                     .element_tree
                     .get_children(ctx.element_id)
@@ -333,25 +325,6 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut widget) => Vec::from([widget.build(ctx)]),
             ElementType::Render(ref mut widget) => widget.get_children(),
-
-            ElementType::Inherited(ref mut widget) => {
-                let children = Vec::from([widget.get_child()]);
-
-                // If the inherited widget indicates that it should notify its listeners, mark them as dirty.
-                if widget.should_notify() {
-                    if let Some(inheritance_plugin) = ctx.plugins.get::<InheritancePlugin>() {
-                        for element_id in inheritance_plugin
-                            .iter_listeners(ctx.element_id)
-                            .expect("failed to get the inherited element's scope during build")
-                        {
-                            ctx.dirty.insert(element_id);
-                        }
-                    }
-                }
-
-                children
-            }
-
             ElementType::View(ref widget) => Vec::from([widget.get_child()]),
         }
     }
@@ -365,7 +338,6 @@ impl Element {
         let result = match self.inner {
             ElementType::Widget(ref mut widget) => widget.update(new_widget),
             ElementType::Render(ref mut widget) => widget.update(new_widget),
-            ElementType::Inherited(ref mut widget) => widget.update(new_widget),
             ElementType::View(ref mut widget) => widget.update(new_widget),
         };
 
@@ -400,7 +372,7 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut widget) => widget.call(widget_ctx, callback_id, arg),
 
-            ElementType::Render(_) | ElementType::Inherited(_) | ElementType::View(_) => {
+            ElementType::Render(_) | ElementType::View(_) => {
                 tracing::warn!("attempted to call a callback on a view element");
 
                 false
@@ -411,7 +383,7 @@ impl Element {
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn paint(&self) -> Option<Canvas> {
         self.size.and_then(|size| match self.inner {
-            ElementType::Widget(_) | ElementType::Inherited(_) | ElementType::View(_) => None,
+            ElementType::Widget(_) | ElementType::View(_) => None,
             ElementType::Render(ref widget) => widget.paint(size),
         })
     }
@@ -430,7 +402,7 @@ impl Element {
             .unwrap_or_default();
 
         let hit = match self.inner {
-            ElementType::Widget(_) | ElementType::Inherited(_) | ElementType::View(_) => {
+            ElementType::Widget(_) | ElementType::View(_) => {
                 assert!(children.len() <= 1, "widgets may only have a single child");
 
                 // Proxy the hit test to the child.
@@ -486,251 +458,7 @@ impl std::fmt::Debug for Element {
         match self.inner {
             ElementType::Widget(ref widget) => widget.fmt(f),
             ElementType::Render(ref widget) => widget.fmt(f),
-            ElementType::Inherited(ref widget) => widget.fmt(f),
             ElementType::View(ref widget) => widget.fmt(f),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::any::TypeId;
-
-    use agui_macros::{InheritedWidget, LayoutWidget};
-    use rustc_hash::FxHashSet;
-
-    use crate::{
-        inheritance::manager::InheritanceManager,
-        plugin::Plugins,
-        render::manager::RenderViewManager,
-        unit::{Constraints, IntrinsicDimension, Size},
-        util::tree::Tree,
-        widget::{
-            InheritedWidget, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout,
-        },
-    };
-
-    use super::{context::ElementMountContext, Element, ElementId};
-
-    #[derive(InheritedWidget)]
-    struct TestInheritedWidget {
-        child: Widget,
-    }
-
-    impl InheritedWidget for TestInheritedWidget {
-        fn get_child(&self) -> Widget {
-            self.child.clone()
-        }
-
-        fn should_notify(&self, _: &Self) -> bool {
-            true
-        }
-    }
-
-    #[derive(LayoutWidget)]
-    struct TestWidget;
-
-    impl WidgetLayout for TestWidget {
-        fn get_children(&self) -> Vec<Widget> {
-            vec![]
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
-            Size::ZERO
-        }
-    }
-
-    // TODO: add more test cases
-
-    #[test]
-    fn adds_to_inheritance_manager_on_mount() {
-        let mut element_tree = Tree::<ElementId, Element>::default();
-        let mut inheritance_manager = InheritanceManager::default();
-        let mut render_view_manager = RenderViewManager::default();
-
-        let element_id1 = element_tree.add(None, Element::new(TestWidget.into_widget()));
-
-        element_tree.with(element_id1, |element_tree, element| {
-            inheritance_manager.create_scope(
-                TypeId::of::<TestInheritedWidget>(),
-                None,
-                element_id1,
-            );
-
-            render_view_manager.add(None, element_id1);
-
-            element.mount(ElementMountContext {
-                plugins: Plugins::new(&mut []),
-                element_tree,
-                render_view_manager: &mut render_view_manager,
-                dirty: &mut FxHashSet::<ElementId>::default(),
-                parent_element_id: None,
-                element_id: element_id1,
-            });
-        });
-
-        assert_ne!(
-            inheritance_manager.get(element_id1),
-            None,
-            "element 1 not added to inheritance tree"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_scope(element_id1)
-                .expect("failed to get element 1")
-                .get_ancestor_scope(),
-            None,
-            "element 1 should not have a scope"
-        );
-
-        let element_id2 =
-            element_tree.add(Some(element_id1), Element::new(TestWidget.into_widget()));
-
-        element_tree.with(element_id2, |element_tree, element| {
-            element.mount(ElementMountContext {
-                plugins: Plugins::new(&mut []),
-                element_tree,
-                render_view_manager: &mut render_view_manager,
-                dirty: &mut FxHashSet::<ElementId>::default(),
-                parent_element_id: Some(element_id1),
-                element_id: element_id2,
-            });
-        });
-
-        assert_ne!(
-            inheritance_manager.get(element_id2),
-            None,
-            "element 2 not added to inheritance tree"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id2)
-                .expect("failed to get element 2")
-                .get_scope(),
-            Some(element_id1),
-            "element 2 does not have element 1 as its scope"
-        );
-    }
-
-    #[test]
-    fn remounting_node_updates_scope() {
-        let mut element_tree = Tree::<ElementId, Element>::default();
-        let mut inheritance_manager = InheritanceManager::default();
-
-        let element_id1 = element_tree.add(None, Element::new(TestWidget.into_widget()));
-        let element_id2 =
-            element_tree.add(Some(element_id1), Element::new(TestWidget.into_widget()));
-        let element_id3 =
-            element_tree.add(Some(element_id2), Element::new(TestWidget.into_widget()));
-        let element_id4 =
-            element_tree.add(Some(element_id3), Element::new(TestWidget.into_widget()));
-        let element_id5 =
-            element_tree.add(Some(element_id4), Element::new(TestWidget.into_widget()));
-
-        inheritance_manager.create_scope(TypeId::of::<TestInheritedWidget>(), None, element_id1);
-        inheritance_manager.create_node(Some(element_id1), element_id2);
-        inheritance_manager.create_node(Some(element_id2), element_id3);
-        inheritance_manager.create_scope(
-            TypeId::of::<TestInheritedWidget>(),
-            Some(element_id3),
-            element_id4,
-        );
-        inheritance_manager.create_node(Some(element_id4), element_id5);
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id2)
-                .expect("failed to get element 2")
-                .get_scope(),
-            Some(element_id1),
-            "element 2 does not have element 1 as its scope"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id3)
-                .expect("failed to get element 3")
-                .get_scope(),
-            Some(element_id1),
-            "element 3 does not have element 1 as its scope"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_scope(element_id4)
-                .expect("failed to get element 4")
-                .get_ancestor_scope(),
-            Some(element_id1),
-            "element 4 does not have element 1 as its ancestor scope"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id5)
-                .expect("failed to get element 5")
-                .get_scope(),
-            Some(element_id4),
-            "element 5 does not have element 4 as its scope"
-        );
-
-        // Move element 2 to be a child of element 1, removing element 2 and 3's
-        // scope (since they're no longer descendants of element 1).
-        element_tree.with(element_id2, |element_tree, element| {
-            element.remount(ElementMountContext {
-                plugins: Plugins::new(&mut []),
-                element_tree,
-                render_view_manager: &mut RenderViewManager::default(),
-                dirty: &mut FxHashSet::<ElementId>::default(),
-                parent_element_id: None,
-                element_id: element_id2,
-            });
-        });
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id2)
-                .expect("failed to get element 2")
-                .get_scope(),
-            None,
-            "element 2 should not have a scope"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id3)
-                .expect("failed to get element 3")
-                .get_scope(),
-            None,
-            "element 3 should not have a scope"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_scope(element_id4)
-                .expect("failed to get element 4")
-                .get_ancestor_scope(),
-            None,
-            "element 4 should not have an ancestor scope"
-        );
-
-        assert_eq!(
-            inheritance_manager
-                .get_as_node(element_id5)
-                .expect("failed to get element 5")
-                .get_scope(),
-            Some(element_id4),
-            "element 5 should have kept element 4 as its scope"
-        );
     }
 }

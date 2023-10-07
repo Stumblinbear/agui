@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use crate::widget::{element::ElementWidget, Widget};
 
 pub trait ElementInherited: ElementWidget {

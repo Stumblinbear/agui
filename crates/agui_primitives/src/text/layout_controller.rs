@@ -2,8 +2,9 @@ use std::{borrow::Cow, rc::Rc};
 
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size, TextStyle},
-    widget::{InheritedWidget, IntoWidget, Widget},
+    widget::{IntoWidget, Widget},
 };
+use agui_inheritance::InheritedWidget;
 use agui_macros::InheritedWidget;
 
 use crate::sized_box::SizedBox;

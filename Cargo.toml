@@ -19,9 +19,11 @@ members = ["crates/*"]
 agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
-agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 agui_listenable = { path = "crates/agui_listenable", version = "0.3" }
+agui_inheritance = { path = "crates/agui_inheritance", version = "0.3" }
 agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
+
+agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
 
 agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
@@ -61,6 +63,7 @@ vello = ["agui_renderer", "agui_vello", "dep:vello"]
 agui_core.workspace = true
 agui_macros = { workspace = true, optional = true }
 
+agui_inheritance.workspace = true
 agui_primitives = { workspace = true, optional = true }
 agui_widgets = { workspace = true, optional = true }
 

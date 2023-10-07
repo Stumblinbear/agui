@@ -53,21 +53,21 @@ struct ExampleMainState {
 impl WidgetState for ExampleMainState {
     type Widget = ExampleMain;
 
-    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
-        let callback = ctx.callback::<usize, _>(|ctx, update_count| {
+    fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
+        let callback = ctx.callback(|ctx, _: ()| {
             ctx.set_state(move |state| {
-                state.update_count = update_count;
+                state.update_count += 1;
             });
         });
 
-        let update_count = self.update_count;
-
-        thread::spawn(move || {
+        thread::spawn(move || loop {
             thread::sleep(Duration::from_millis(1000));
 
-            callback.call(update_count + 1);
+            callback.call(());
         });
+    }
 
+    fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         if let Some(current_window) = ctx.depend_on_inherited_widget::<CurrentWindow>() {
             current_window.set_title(&format!("agui hello world - {}", self.update_count));
         } else {

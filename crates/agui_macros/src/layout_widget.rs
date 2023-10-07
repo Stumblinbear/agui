@@ -1,10 +1,10 @@
 use proc_macro2::TokenStream as TokenStream2;
 use syn::{parse2, parse_quote, ItemStruct};
 
-use crate::{props::impl_props_derive, utils::resolve_agui_path};
+use crate::{props::impl_props_derive, utils::resolve_package_path};
 
 pub fn impl_layout_widget(input: TokenStream2) -> TokenStream2 {
-    let agui_core = resolve_agui_path();
+    let agui_core = resolve_package_path("agui_core");
 
     let item: ItemStruct = match parse2(input) {
         Ok(item) => item,

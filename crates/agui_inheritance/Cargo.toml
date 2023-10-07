@@ -1,9 +1,9 @@
 [package]
-name = "agui_winit"
-version = "0.1.0"
+name = "agui_inheritance"
+version = "0.3.0"
 edition = "2021"
 resolver = "2"
-description = "Provides winit integration for agui"
+description = "Provides inheritance functionality for agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
@@ -15,13 +15,8 @@ readme = "README.md"
 agui_core.workspace = true
 agui_macros.workspace = true
 
-agui_primitives.workspace = true
-agui_inheritance.workspace = true
-agui_listenable.workspace = true
-
 tracing.workspace = true
 
 rustc-hash.workspace = true
-
-winit.workspace = true
-raw-window-handle.workspace = true
+slotmap.workspace = true
+im-rc.workspace = true

@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 
 use agui_core::{
-    plugin::inheritance_plugin::InheritancePlugin,
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
 };
+use agui_inheritance::InheritancePlugin;
 use agui_macros::LayoutWidget;
 use agui_primitives::sized_box::SizedBox;
 use criterion::{criterion_group, criterion_main, Criterion};

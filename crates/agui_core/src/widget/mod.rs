@@ -2,7 +2,6 @@ use std::{any::Any, rc::Rc};
 
 mod context;
 pub mod element;
-mod inherited;
 mod key;
 mod layout;
 mod paint;
@@ -15,9 +14,7 @@ mod widget;
 
 use crate::element::ElementType;
 
-pub use self::{
-    context::*, inherited::*, key::*, layout::*, paint::*, stateful::*, stateless::*, widget::*,
-};
+pub use self::{context::*, key::*, layout::*, paint::*, stateful::*, stateless::*, widget::*};
 
 pub trait ElementBuilder: 'static {
     fn create_element(self: Rc<Self>) -> ElementType;
@@ -62,43 +59,3 @@ where
         Widget::new(widget)
     }
 }
-
-// pub trait IntoChild {
-//     fn into_child(self) -> Option<Widget>;
-// }
-
-// impl IntoChild for Widget {
-//     fn into_child(self) -> Option<Widget> {
-//         Some(self)
-//     }
-// }
-
-// impl IntoChild for &Widget {
-//     fn into_child(self) -> Option<Widget> {
-//         Some(Widget::clone(self))
-//     }
-// }
-
-// impl<W> IntoChild for Option<W>
-// where
-//     W: IntoWidget,
-// {
-//     fn into_child(self) -> Option<Widget> {
-//         self.map(IntoWidget::into_widget)
-//     }
-// }
-
-// impl IntoChild for &Option<Widget> {
-//     fn into_child(self) -> Option<Widget> {
-//         self.as_ref().map(Widget::clone)
-//     }
-// }
-
-// impl<W> IntoChild for W
-// where
-//     W: AnyWidget,
-// {
-//     fn into_child(self) -> Option<Widget> {
-//         Some(Widget::new(self))
-//     }
-// }

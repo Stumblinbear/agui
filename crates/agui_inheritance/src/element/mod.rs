@@ -1,10 +1,8 @@
+use agui_core::widget::{AnyWidget, Widget};
+
 mod instance;
 
-use std::rc::Rc;
-
 pub use instance::*;
-
-use super::{AnyWidget, Widget};
 
 pub trait InheritedWidget: AnyWidget {
     fn get_child(&self) -> Widget;
@@ -13,28 +11,23 @@ pub trait InheritedWidget: AnyWidget {
     fn should_notify(&self, old_widget: &Self) -> bool;
 }
 
-pub trait ContextInheritedMut {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
-    where
-        I: AnyWidget + InheritedWidget;
-}
-
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
 
-    use agui_macros::{InheritedWidget, LayoutWidget, StatelessWidget};
-
-    use crate::{
+    use agui_core::{
         engine::Engine,
         unit::{Constraints, IntrinsicDimension, Size},
         widget::{
-            BuildContext, InheritedWidget, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget,
-            WidgetBuild, WidgetLayout,
+            BuildContext, IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetBuild,
+            WidgetLayout,
         },
     };
+    use agui_macros::{InheritedWidget, LayoutWidget, StatelessWidget};
 
-    use super::ContextInheritedMut;
+    use crate::context::ContextInheritedMut;
+
+    use super::InheritedWidget;
 
     #[derive(Default)]
     struct TestResult {
@@ -64,11 +57,7 @@ mod tests {
             0.0
         }
 
-        fn layout(
-            &self,
-            _: &mut crate::widget::LayoutContext,
-            _: crate::unit::Constraints,
-        ) -> Size {
+        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
             Size::ZERO
         }
     }

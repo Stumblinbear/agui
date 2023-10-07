@@ -1,9 +1,7 @@
 use std::{rc::Rc, sync::Arc};
 
-use agui_core::{
-    unit::Font,
-    widget::{InheritedWidget, Widget},
-};
+use agui_core::{unit::Font, widget::Widget};
+use agui_inheritance::InheritedWidget;
 use agui_macros::{build, InheritedWidget};
 use agui_primitives::text::layout_controller::TextLayoutController;
 use parking_lot::Mutex;

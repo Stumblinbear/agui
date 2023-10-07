@@ -1,13 +1,17 @@
 use std::any::TypeId;
 
+use agui_core::{
+    element::{Element, ElementId},
+    plugin::context::PluginMountContext,
+    util::tree::Tree,
+    widget::{ContextMarkDirty, ContextWidget},
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::element::Element;
-use crate::element::ElementId;
-use crate::util::tree::Tree;
+use self::{node::InheritanceNode, scope::InheritanceScope};
 
-use super::node::InheritanceNode;
-use super::scope::InheritanceScope;
+mod node;
+mod scope;
 
 #[derive(Default)]
 pub struct InheritanceManager {
@@ -137,8 +141,7 @@ impl InheritanceManager {
 
     pub(crate) fn update_inheritance_scope(
         &mut self,
-        element_tree: &mut Tree<ElementId, Element>,
-        dirty: &mut FxHashSet<ElementId>,
+        ctx: &mut PluginMountContext,
         element_id: ElementId,
         new_scope_id: Option<ElementId>,
     ) {
@@ -152,7 +155,7 @@ impl InheritanceManager {
 
                 let child_scope_ids = self
                     .update_ancestor_scope(
-                        dirty,
+                        ctx,
                         element_id,
                         scope.get_ancestor_scope(),
                         new_scope_id,
@@ -160,12 +163,7 @@ impl InheritanceManager {
                     .to_vec();
 
                 for child_scope_id in child_scope_ids {
-                    self.update_inheritance_scope(
-                        element_tree,
-                        dirty,
-                        child_scope_id,
-                        new_scope_id,
-                    );
+                    self.update_inheritance_scope(ctx, child_scope_id, new_scope_id);
                 }
             }
 
@@ -175,14 +173,15 @@ impl InheritanceManager {
                     return;
                 }
 
-                self.update_scope(dirty, element_id, node.get_scope(), new_scope_id);
+                self.update_scope(ctx, element_id, node.get_scope(), new_scope_id);
 
-                for child_id in element_tree
+                for child_id in ctx
+                    .get_elements()
                     .get_children(element_id)
                     .cloned()
                     .unwrap_or_default()
                 {
-                    self.update_inheritance_scope(element_tree, dirty, child_id, new_scope_id);
+                    self.update_inheritance_scope(ctx, child_id, new_scope_id);
                 }
             }
         }
@@ -193,7 +192,7 @@ impl InheritanceManager {
     // must be updated.
     fn update_ancestor_scope(
         &mut self,
-        dirty: &mut FxHashSet<ElementId>,
+        ctx: &mut PluginMountContext,
         element_id: ElementId,
         old_ancestor_scope_id: Option<ElementId>,
         new_ancestor_scope_id: Option<ElementId>,
@@ -266,7 +265,9 @@ impl InheritanceManager {
                 // No need to update the new scope with the listener, as we'll do that when it rebuilds
 
                 // Mark every element that depends on this type dirty
-                dirty.extend(scope.get_dependents(&type_id));
+                scope
+                    .get_dependents(&type_id)
+                    .for_each(|element_id| ctx.mark_dirty(element_id));
             }
 
             scope.get_child_scopes().to_vec()
@@ -278,7 +279,7 @@ impl InheritanceManager {
     // marking it as dirty if necessary.
     fn update_scope(
         &mut self,
-        dirty: &mut FxHashSet<ElementId>,
+        ctx: &mut PluginMountContext,
         element_id: ElementId,
         old_scope_id: Option<ElementId>,
         new_scope_id: Option<ElementId>,
@@ -327,7 +328,7 @@ impl InheritanceManager {
                     .and_then(|available_scopes| available_scopes.get(&type_id).copied())
             {
                 // If the new dependency is different from the old one, mark the node as dirty
-                dirty.insert(element_id);
+                ctx.mark_dirty(element_id);
 
                 break;
             }
@@ -489,15 +490,12 @@ impl Inheritance {
 mod tests {
     use std::any::TypeId;
 
+    use agui_core::{element::ElementId, widget::Widget};
     use agui_macros::InheritedWidget;
     use slotmap::KeyData;
 
-    use crate::{
-        element::ElementId,
-        widget::{InheritedWidget, Widget},
-    };
-
     use super::InheritanceManager;
+    use crate::element::InheritedWidget;
 
     fn new_element(idx: u64) -> ElementId {
         ElementId::from(KeyData::from_ffi(idx))

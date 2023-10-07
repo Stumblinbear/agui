@@ -1,17 +1,17 @@
-use std::{any::Any, marker::PhantomData, rc::Rc};
+use std::{any::Any, marker::PhantomData};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::{Callback, CallbackId, CallbackQueue, WidgetCallback},
     element::{Element, ElementId},
-    plugin::{inheritance_plugin::InheritancePlugin, Plugins},
+    plugin::{
+        context::{ContextPlugins, ContextPluginsMut},
+        Plugins,
+    },
     unit::{AsAny, Key},
     util::tree::Tree,
-    widget::{
-        AnyWidget, ContextInheritedMut, ContextWidget, InheritedElement, InheritedWidget, Widget,
-        WidgetKey, WidgetState,
-    },
+    widget::{AnyWidget, ContextMarkDirty, ContextWidget, Widget, WidgetKey, WidgetState},
 };
 
 use super::StatefulCallbackContext;
@@ -91,16 +91,39 @@ where
     }
 }
 
+impl<'ctx, S> ContextPlugins<'ctx> for StatefulBuildContext<'ctx, S>
+where
+    S: WidgetState,
+{
+    fn get_plugins(&self) -> &Plugins<'ctx> {
+        &self.plugins
+    }
+}
+
+impl<'ctx, S> ContextPluginsMut<'ctx> for StatefulBuildContext<'ctx, S>
+where
+    S: WidgetState,
+{
+    fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
+        &mut self.plugins
+    }
+}
+
+impl<S> ContextMarkDirty for StatefulBuildContext<'_, S>
+where
+    S: WidgetState,
+{
+    fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
+    }
+}
+
 impl<'ctx, S: 'static> StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
     pub fn get_widget(&self) -> &S::Widget {
         self.widget
-    }
-
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
     }
 
     pub fn key<C>(&mut self, key: Key, widget: C) -> Widget
@@ -133,32 +156,5 @@ where
             .insert(callback.get_id(), Box::new(StatefulCallbackFn::new(func)));
 
         Callback::Widget(callback)
-    }
-}
-
-impl<S> ContextInheritedMut for StatefulBuildContext<'_, S>
-where
-    S: WidgetState,
-{
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
-    where
-        I: AnyWidget + InheritedWidget,
-    {
-        let inheritance_plugin = self.plugins.get_mut::<InheritancePlugin>()?;
-
-        if let Some(element_id) =
-            inheritance_plugin.depend_on_inherited_element::<I>(self.element_id)
-        {
-            let inherited_element = self
-                .element_tree
-                .get(element_id)
-                .expect("found an inherited widget but it does not exist exist in the tree")
-                .downcast::<InheritedElement<I>>()
-                .expect("inherited element downcast failed");
-
-            Some(inherited_element.get_inherited_widget())
-        } else {
-            None
-        }
     }
 }

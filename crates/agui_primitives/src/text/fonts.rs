@@ -4,10 +4,11 @@ use agui_core::{
     callback::Callback,
     unit::Font,
     widget::{
-        ContextWidgetStateMut, InheritedWidget, IntoWidget, StatefulBuildContext, StatefulWidget,
-        Widget, WidgetState,
+        ContextWidgetStateMut, IntoWidget, StatefulBuildContext, StatefulWidget, Widget,
+        WidgetState,
     },
 };
+use agui_inheritance::InheritedWidget;
 use agui_macros::{InheritedWidget, StatefulWidget};
 use rustc_hash::FxHasher;
 
@@ -98,8 +99,9 @@ mod tests {
     use agui_core::{
         engine::Engine,
         unit::Font,
-        widget::{BuildContext, ContextInheritedMut, Widget, WidgetBuild},
+        widget::{BuildContext, Widget, WidgetBuild},
     };
+    use agui_inheritance::ContextInheritedMut;
     use agui_macros::{build, StatelessWidget};
 
     use crate::sized_box::SizedBox;

@@ -8,3 +8,7 @@ pub trait ContextWidget {
 
     fn get_element_id(&self) -> ElementId;
 }
+
+pub trait ContextMarkDirty {
+    fn mark_dirty(&mut self, element_id: ElementId);
+}

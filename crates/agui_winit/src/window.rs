@@ -3,11 +3,11 @@ use std::{marker::PhantomData, ops::Deref};
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{
-        view::RenderView, ContextInheritedMut, ContextWidget, ContextWidgetStateMut,
-        InheritedWidget, IntoWidget, IntrinsicSizeContext, LayoutContext, StatefulBuildContext,
-        StatefulWidget, Widget, WidgetLayout, WidgetState,
+        view::RenderView, ContextWidget, ContextWidgetStateMut, IntoWidget, IntrinsicSizeContext,
+        LayoutContext, StatefulBuildContext, StatefulWidget, Widget, WidgetLayout, WidgetState,
     },
 };
+use agui_inheritance::{ContextInheritedMut, InheritedWidget};
 use agui_listenable::EventEmitterHandle;
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;

@@ -3,20 +3,14 @@ use rustc_hash::FxHashSet;
 use crate::{
     element::{Element, ElementId},
     util::tree::Tree,
-    widget::ContextWidget,
+    widget::{ContextMarkDirty, ContextWidget},
 };
 
 pub struct CallbackContext<'ctx> {
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
-
     pub(crate) element_id: ElementId,
-}
 
-impl CallbackContext<'_> {
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
-    }
+    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
 }
 
 impl ContextWidget for CallbackContext<'_> {
@@ -26,5 +20,11 @@ impl ContextWidget for CallbackContext<'_> {
 
     fn get_element_id(&self) -> ElementId {
         self.element_id
+    }
+}
+
+impl ContextMarkDirty for CallbackContext<'_> {
+    fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
     }
 }

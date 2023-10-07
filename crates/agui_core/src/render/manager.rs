@@ -65,7 +65,7 @@ impl RenderViewManager {
 
     pub(crate) fn update_render_view(
         &mut self,
-        element_tree: &mut Tree<ElementId, Element>,
+        element_tree: &Tree<ElementId, Element>,
         element_id: ElementId,
         new_render_view_id: Option<RenderViewId>,
     ) {

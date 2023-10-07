@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::marker::PhantomData;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -8,10 +8,13 @@ use crate::{
         WidgetCallback,
     },
     element::{Element, ElementId},
-    plugin::{inheritance_plugin::InheritancePlugin, Plugins},
+    plugin::{
+        context::{ContextPlugins, ContextPluginsMut},
+        Plugins,
+    },
     unit::AsAny,
     util::tree::Tree,
-    widget::{AnyWidget, ContextInheritedMut, ContextWidget, InheritedElement, InheritedWidget},
+    widget::ContextWidget,
 };
 
 pub struct BuildContext<'ctx, W> {
@@ -39,27 +42,15 @@ impl<W> ContextWidget for BuildContext<'_, W> {
     }
 }
 
-impl<W> ContextInheritedMut for BuildContext<'_, W> {
-    fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
-    where
-        I: AnyWidget + InheritedWidget,
-    {
-        let inheritance_plugin = self.plugins.get_mut::<InheritancePlugin>()?;
+impl<'ctx, W> ContextPlugins<'ctx> for BuildContext<'ctx, W> {
+    fn get_plugins(&self) -> &Plugins<'ctx> {
+        &self.plugins
+    }
+}
 
-        if let Some(element_id) =
-            inheritance_plugin.depend_on_inherited_element::<I>(self.element_id)
-        {
-            let inherited_element = self
-                .element_tree
-                .get(element_id)
-                .expect("found an inherited widget but it does not exist exist in the tree")
-                .downcast::<InheritedElement<I>>()
-                .expect("inherited element downcast failed");
-
-            Some(inherited_element.get_inherited_widget())
-        } else {
-            None
-        }
+impl<'ctx, W> ContextPluginsMut<'ctx> for BuildContext<'ctx, W> {
+    fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
+        &mut self.plugins
     }
 }
 

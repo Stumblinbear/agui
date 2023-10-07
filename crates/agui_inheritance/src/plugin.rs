@@ -1,15 +1,15 @@
 use std::any::TypeId;
 
-use crate::{
+use agui_core::{
     element::ElementId,
-    inheritance::manager::InheritanceManager,
-    widget::{AnyWidget, InheritedWidget},
+    plugin::{
+        context::{PluginMountContext, PluginUnmountContext},
+        Plugin,
+    },
+    widget::{AnyWidget, ContextWidget},
 };
 
-use super::{
-    context::{PluginMountContext, PluginUnmountContext},
-    Plugin,
-};
+use crate::{element::InheritedWidget, manager::InheritanceManager};
 
 #[derive(Default)]
 pub struct InheritancePlugin {
@@ -19,27 +19,25 @@ pub struct InheritancePlugin {
 impl Plugin for InheritancePlugin {
     fn on_mount(&mut self, ctx: PluginMountContext) {
         self.manager
-            .create_node(ctx.parent_element_id, ctx.element_id);
+            .create_node(ctx.get_parent_element_id(), ctx.get_element_id());
     }
 
-    fn on_remount(&mut self, ctx: PluginMountContext) {
-        let parent_scope_id = ctx.parent_element_id.and_then(|parent_element_id| {
+    fn on_remount(&mut self, mut ctx: PluginMountContext) {
+        let parent_scope_id = ctx.get_parent_element_id().and_then(|parent_element_id| {
             self.manager
                 .get(parent_element_id)
                 .expect("failed to get scope from parent")
                 .get_scope()
         });
 
-        self.manager.update_inheritance_scope(
-            ctx.element_tree,
-            ctx.dirty,
-            ctx.element_id,
-            parent_scope_id,
-        );
+        let element_id = ctx.get_element_id();
+
+        self.manager
+            .update_inheritance_scope(&mut ctx, element_id, parent_scope_id);
     }
 
     fn on_unmount(&mut self, ctx: PluginUnmountContext) {
-        self.manager.remove(ctx.element_id);
+        self.manager.remove(ctx.get_element_id());
     }
 }
 

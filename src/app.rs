@@ -1,6 +1,7 @@
 use std::{sync::mpsc, time::Instant};
 
 use agui_core::{engine::Engine, render::RenderViewId, unit::Offset, widget::IntoWidget};
+use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
 use agui_renderer::Renderer;
 #[cfg(feature = "vello")]
@@ -35,6 +36,7 @@ pub fn run_app(root: impl IntoWidget) {
 
     let mut engine = Engine::builder()
         .with_notifier(update_notifier_tx.clone())
+        .add_plugin(InheritancePlugin::default())
         .with_root(build! {
             <WinitBinding> {
                 tx: winit_binding_tx,

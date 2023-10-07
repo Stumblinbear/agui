@@ -1,6 +1,7 @@
 use std::sync::mpsc;
 
-use agui_core::widget::{InheritedWidget, Widget};
+use agui_core::widget::Widget;
+use agui_inheritance::InheritedWidget;
 use agui_macros::InheritedWidget;
 
 #[derive(InheritedWidget)]

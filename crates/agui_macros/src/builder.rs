@@ -5,7 +5,7 @@ use proc_macro2::{
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{token::Paren, Token};
 
-use crate::utils::resolve_agui_path;
+use crate::utils::resolve_package_path;
 
 fn parse_tree(input: TokenStream2, output: &mut TokenStream2) {
     let mut tokens = input.into_iter();
@@ -37,7 +37,7 @@ fn parse_const_widget(ident: Ident, tokens: &mut IntoIter, output: &mut TokenStr
                 let mut widget_output = TokenStream2::new();
 
                 if parse_widget(punct, tokens, &mut widget_output) {
-                    let agui_core = resolve_agui_path();
+                    let agui_core = resolve_package_path("agui_core");
 
                     output.extend(
                         quote!(#agui_core::widget::IntoWidget::into_widget((|| #widget_output) as fn() -> Widget)),
@@ -238,7 +238,7 @@ fn parse_widget_init(
 
     // Surround the struct with a call to `agui_core::widget::IntoWidget::into_widget(this)`
 
-    output.extend(resolve_agui_path().to_token_stream());
+    output.extend(resolve_package_path("agui_core").to_token_stream());
     output.extend(Token![::](span).to_token_stream());
     output.extend(Ident::new("widget", span).to_token_stream());
     output.extend(Token![::](span).to_token_stream());

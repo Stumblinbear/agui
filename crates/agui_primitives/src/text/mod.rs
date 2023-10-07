@@ -4,10 +4,11 @@ use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Constraints, IntrinsicDimension, Size, TextStyle},
     widget::{
-        BuildContext, ContextInheritedMut, IntrinsicSizeContext, LayoutContext, Widget,
-        WidgetBuild, WidgetLayout, WidgetPaint,
+        BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetBuild, WidgetLayout,
+        WidgetPaint,
     },
 };
+use agui_inheritance::ContextInheritedMut;
 use agui_macros::{build, LayoutWidget, PaintWidget, StatelessWidget};
 
 use crate::text::layout_controller::{TextLayoutController, TextLayoutDelegate};

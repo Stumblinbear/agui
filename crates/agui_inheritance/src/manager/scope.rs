@@ -1,11 +1,10 @@
 use std::{any::TypeId, hash::BuildHasherDefault};
 
-use rustc_hash::FxHashSet;
-
-use crate::{
+use agui_core::{
     element::ElementId,
     util::{hasher::TypeIdHasher, map::TypeMap},
 };
+use rustc_hash::FxHashSet;
 
 #[derive(PartialEq, Debug)]
 pub struct InheritanceScope {

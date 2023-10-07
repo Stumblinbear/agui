@@ -1,7 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
+use rustc_hash::FxHashSet;
+
 use crate::{
-    callback::CallbackQueue,
     element::{Element, ElementId},
     plugin::Plugins,
     unit::{HitTestResult, Offset, Size},
@@ -9,48 +10,15 @@ use crate::{
     widget::{ContextWidget, IterChildrenHitTest, IterChildrenLayout, IterChildrenLayoutMut},
 };
 
+mod build;
 mod intrinsic_size;
+mod mount;
+mod unmount;
 
+pub use build::*;
 pub use intrinsic_size::*;
-use rustc_hash::FxHashSet;
-
-pub struct WidgetMountContext<'ctx> {
-    pub(crate) plugins: Plugins<'ctx>,
-
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
-
-    pub(crate) parent_element_id: Option<ElementId>,
-    pub(crate) element_id: ElementId,
-}
-
-pub struct WidgetUnmountContext<'ctx> {
-    pub(crate) plugins: Plugins<'ctx>,
-
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
-
-    pub(crate) element_id: ElementId,
-}
-
-pub struct WidgetBuildContext<'ctx> {
-    pub(crate) plugins: Plugins<'ctx>,
-
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
-    pub(crate) callback_queue: &'ctx CallbackQueue,
-
-    pub(crate) element_id: ElementId,
-}
-
-impl WidgetBuildContext<'_> {
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
-    }
-}
+pub use mount::*;
+pub use unmount::*;
 
 pub struct WidgetCallbackContext<'ctx> {
     pub(crate) plugins: Plugins<'ctx>,
