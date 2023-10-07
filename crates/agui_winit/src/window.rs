@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
     widget::{
-        view::RenderView, ContextWidget, ContextWidgetStateMut, IntoWidget, IntrinsicSizeContext,
+        view::RenderView, ContextElement, ContextWidgetStateMut, IntoWidget, IntrinsicSizeContext,
         LayoutContext, StatefulBuildContext, StatefulWidget, Widget, WidgetLayout, WidgetState,
     },
 };

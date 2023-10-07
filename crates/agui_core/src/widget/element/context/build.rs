@@ -8,28 +8,17 @@ use crate::{
         Plugins,
     },
     util::tree::Tree,
-    widget::ContextWidget,
+    widget::{ContextElement, ContextMarkDirty},
 };
 
 pub struct WidgetBuildContext<'ctx> {
     pub(crate) plugins: Plugins<'ctx>,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
-}
-
-impl ContextWidget for WidgetBuildContext<'_> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.element_tree
-    }
-
-    fn get_element_id(&self) -> ElementId {
-        self.element_id
-    }
 }
 
 impl<'ctx> ContextPlugins<'ctx> for WidgetBuildContext<'ctx> {
@@ -44,8 +33,18 @@ impl<'ctx> ContextPluginsMut<'ctx> for WidgetBuildContext<'ctx> {
     }
 }
 
-impl WidgetBuildContext<'_> {
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
+impl ContextElement for WidgetBuildContext<'_> {
+    fn get_elements(&self) -> &Tree<ElementId, Element> {
+        self.element_tree
+    }
+
+    fn get_element_id(&self) -> ElementId {
+        self.element_id
+    }
+}
+
+impl ContextMarkDirty for WidgetBuildContext<'_> {
+    fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
     }
 }

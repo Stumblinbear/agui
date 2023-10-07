@@ -1,18 +1,20 @@
 use crate::{
     element::{Element, ElementId},
+    unit::Offset,
     util::tree::Tree,
-    widget::{ContextElement, IterChildrenLayout},
+    widget::{ContextElement, IterChildrenLayout, IterChildrenLayoutMut},
 };
 
-pub struct WidgetIntrinsicSizeContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+pub struct WidgetLayoutContext<'ctx> {
+    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
     pub(crate) element_id: ElementId,
 
     pub(crate) children: &'ctx [ElementId],
+    pub(crate) offsets: &'ctx mut [Offset],
 }
 
-impl ContextElement for WidgetIntrinsicSizeContext<'_> {
+impl ContextElement for WidgetLayoutContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
@@ -22,7 +24,7 @@ impl ContextElement for WidgetIntrinsicSizeContext<'_> {
     }
 }
 
-impl<'ctx> WidgetIntrinsicSizeContext<'ctx> {
+impl WidgetLayoutContext<'_> {
     pub fn has_children(&self) -> bool {
         !self.children.is_empty()
     }
@@ -33,5 +35,9 @@ impl<'ctx> WidgetIntrinsicSizeContext<'ctx> {
 
     pub fn iter_children(&self) -> IterChildrenLayout {
         IterChildrenLayout::new(self.element_tree, self.children)
+    }
+
+    pub fn iter_children_mut(&mut self) -> IterChildrenLayoutMut {
+        IterChildrenLayoutMut::new(self.element_tree, self.children, self.offsets)
     }
 }

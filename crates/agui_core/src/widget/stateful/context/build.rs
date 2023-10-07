@@ -9,9 +9,9 @@ use crate::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
-    unit::{AsAny, Key},
+    unit::AsAny,
     util::tree::Tree,
-    widget::{AnyWidget, ContextMarkDirty, ContextWidget, Widget, WidgetKey, WidgetState},
+    widget::{ContextElement, ContextMarkDirty, WidgetState},
 };
 
 use super::StatefulCallbackContext;
@@ -65,7 +65,6 @@ where
     pub(crate) plugins: Plugins<'ctx>,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
@@ -73,12 +72,10 @@ where
 
     pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<S>>>,
 
-    pub(crate) keyed_children: FxHashSet<Key>,
-
     pub widget: &'ctx S::Widget,
 }
 
-impl<S> ContextWidget for StatefulBuildContext<'_, S>
+impl<S> ContextElement for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {
@@ -124,25 +121,6 @@ where
 {
     pub fn get_widget(&self) -> &S::Widget {
         self.widget
-    }
-
-    pub fn key<C>(&mut self, key: Key, widget: C) -> Widget
-    where
-        C: AnyWidget,
-    {
-        if self.keyed_children.contains(&key) {
-            panic!("cannot use the same key twice in a widget");
-        }
-
-        self.keyed_children.insert(key);
-
-        Widget::new_with_key(
-            Some(match key {
-                Key::Local(_) => WidgetKey(Some(self.element_id), key),
-                Key::Global(_) => WidgetKey(None, key),
-            }),
-            widget,
-        )
     }
 
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>

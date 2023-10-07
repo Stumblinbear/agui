@@ -1,13 +1,15 @@
 use std::{any::TypeId, rc::Rc};
 
 use agui_core::{
+    callback::CallbackId,
     element::inherited::ElementInherited,
     plugin::context::ContextPluginsMut,
     widget::{
         element::{
-            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetMountContext,
+            ElementBuild, ElementUpdate, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
+            WidgetMountContext,
         },
-        AnyWidget, ContextWidget, Widget,
+        AnyWidget, ContextElement, ContextMarkDirty, Widget,
     },
 };
 
@@ -94,12 +96,7 @@ where
         self.widget.get_child()
     }
 
-    fn call(
-        &mut self,
-        ctx: agui_core::widget::element::WidgetCallbackContext,
-        callback_id: agui_core::callback::CallbackId,
-        arg: Box<dyn std::any::Any>,
-    ) -> bool {
+    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: Box<dyn std::any::Any>) -> bool {
         unimplemented!("inherited widgets do not support callbacks")
     }
 }

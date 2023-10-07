@@ -14,7 +14,7 @@ use crate::{
     },
     unit::AsAny,
     util::tree::Tree,
-    widget::ContextWidget,
+    widget::{ContextElement, ContextMarkDirty},
 };
 
 pub struct BuildContext<'ctx, W> {
@@ -23,7 +23,6 @@ pub struct BuildContext<'ctx, W> {
     pub(crate) plugins: Plugins<'ctx>,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
     pub(crate) callback_queue: &'ctx CallbackQueue,
 
@@ -32,7 +31,7 @@ pub struct BuildContext<'ctx, W> {
     pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn CallbackFunc<W>>>,
 }
 
-impl<W> ContextWidget for BuildContext<'_, W> {
+impl<W> ContextElement for BuildContext<'_, W> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
@@ -54,11 +53,13 @@ impl<'ctx, W> ContextPluginsMut<'ctx> for BuildContext<'ctx, W> {
     }
 }
 
-impl<W: 'static> BuildContext<'_, W> {
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
+impl<W> ContextMarkDirty for BuildContext<'_, W> {
+    fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
     }
+}
 
+impl<W: 'static> BuildContext<'_, W> {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: AsAny,

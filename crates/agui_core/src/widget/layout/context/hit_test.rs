@@ -6,14 +6,14 @@ use crate::{
     element::{context::ElementHitTestContext, Element, ElementId},
     unit::{HitTest, HitTestResult, Offset},
     util::tree::Tree,
-    widget::{element::WidgetHitTestContext, ContextWidget},
+    widget::{element::WidgetHitTestContext, ContextElement},
 };
 
 pub struct HitTestContext<'ctx> {
     pub(crate) widget_ctx: &'ctx mut WidgetHitTestContext<'ctx>,
 }
 
-impl ContextWidget for HitTestContext<'_> {
+impl ContextElement for HitTestContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.widget_ctx.get_elements()
     }

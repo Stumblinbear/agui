@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use agui_core::{
     plugin::context::ContextPluginsMut,
-    widget::{AnyWidget, ContextWidget},
+    widget::{AnyWidget, ContextElement},
 };
 
 use crate::{
@@ -18,7 +18,7 @@ pub trait ContextInheritedMut {
 
 impl<'ctx, C> ContextInheritedMut for C
 where
-    C: ContextWidget + ContextPluginsMut<'ctx>,
+    C: ContextElement + ContextPluginsMut<'ctx>,
 {
     fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
     where

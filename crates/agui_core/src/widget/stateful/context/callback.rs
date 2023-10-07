@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet;
 use crate::{
     element::{Element, ElementId},
     util::tree::Tree,
-    widget::{ContextWidget, ContextWidgetStateMut},
+    widget::{ContextElement, ContextMarkDirty, ContextWidgetStateMut},
 };
 
 pub struct StatefulCallbackContext<'ctx, S> {
@@ -16,19 +16,19 @@ pub struct StatefulCallbackContext<'ctx, S> {
     pub(crate) is_changed: bool,
 }
 
-impl<S> StatefulCallbackContext<'_, S> {
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
-    }
-}
-
-impl<S> ContextWidget for StatefulCallbackContext<'_, S> {
+impl<S> ContextElement for StatefulCallbackContext<'_, S> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
 
     fn get_element_id(&self) -> ElementId {
         self.element_id
+    }
+}
+
+impl<S> ContextMarkDirty for StatefulCallbackContext<'_, S> {
+    fn mark_dirty(&mut self, element_id: ElementId) {
+        self.dirty.insert(element_id);
     }
 }
 

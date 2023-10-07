@@ -1,6 +1,6 @@
 use std::{any::Any, rc::Rc};
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 use crate::{
     callback::CallbackId,
@@ -89,8 +89,6 @@ where
             element_id: ctx.element_id,
 
             callbacks: &mut self.build_callbacks,
-
-            keyed_children: FxHashSet::default(),
 
             widget: &self.widget,
         };

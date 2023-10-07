@@ -12,6 +12,6 @@ pub trait ContextPlugins<'ctx> {
     fn get_plugins(&self) -> &Plugins<'ctx>;
 }
 
-pub trait ContextPluginsMut<'ctx> {
+pub trait ContextPluginsMut<'ctx>: ContextPlugins<'ctx> {
     fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx>;
 }

@@ -3,14 +3,14 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     element::{Element, ElementId},
     util::tree::Tree,
-    widget::{element::WidgetLayoutContext, ContextWidget},
+    widget::{element::WidgetLayoutContext, ContextElement},
 };
 
 pub struct LayoutContext<'ctx> {
     pub(crate) widget_ctx: WidgetLayoutContext<'ctx>,
 }
 
-impl ContextWidget for LayoutContext<'_> {
+impl ContextElement for LayoutContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.widget_ctx.get_elements()
     }

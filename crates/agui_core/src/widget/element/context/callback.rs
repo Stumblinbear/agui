@@ -10,7 +10,7 @@ use crate::{
     widget::{ContextElement, ContextMarkDirty},
 };
 
-pub struct WidgetUnmountContext<'ctx> {
+pub struct WidgetCallbackContext<'ctx> {
     pub(crate) plugins: Plugins<'ctx>,
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
@@ -19,19 +19,19 @@ pub struct WidgetUnmountContext<'ctx> {
     pub(crate) element_id: ElementId,
 }
 
-impl<'ctx> ContextPlugins<'ctx> for WidgetUnmountContext<'ctx> {
+impl<'ctx> ContextPlugins<'ctx> for WidgetCallbackContext<'ctx> {
     fn get_plugins(&self) -> &Plugins<'ctx> {
         &self.plugins
     }
 }
 
-impl<'ctx> ContextPluginsMut<'ctx> for WidgetUnmountContext<'ctx> {
+impl<'ctx> ContextPluginsMut<'ctx> for WidgetCallbackContext<'ctx> {
     fn get_plugins_mut(&mut self) -> &mut Plugins<'ctx> {
         &mut self.plugins
     }
 }
 
-impl ContextElement for WidgetUnmountContext<'_> {
+impl ContextElement for WidgetCallbackContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
@@ -41,7 +41,7 @@ impl ContextElement for WidgetUnmountContext<'_> {
     }
 }
 
-impl ContextMarkDirty for WidgetUnmountContext<'_> {
+impl ContextMarkDirty for WidgetCallbackContext<'_> {
     fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
     }

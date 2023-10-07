@@ -3,14 +3,14 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     element::{Element, ElementId},
     util::tree::Tree,
-    widget::{element::WidgetIntrinsicSizeContext, ContextWidget},
+    widget::{element::WidgetIntrinsicSizeContext, ContextElement},
 };
 
 pub struct IntrinsicSizeContext<'ctx> {
     pub(crate) widget_ctx: WidgetIntrinsicSizeContext<'ctx>,
 }
 
-impl ContextWidget for IntrinsicSizeContext<'_> {
+impl ContextElement for IntrinsicSizeContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }

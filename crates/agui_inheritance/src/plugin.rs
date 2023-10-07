@@ -6,7 +6,7 @@ use agui_core::{
         context::{PluginMountContext, PluginUnmountContext},
         Plugin,
     },
-    widget::{AnyWidget, ContextWidget},
+    widget::{AnyWidget, ContextElement},
 };
 
 use crate::{element::InheritedWidget, manager::InheritanceManager};

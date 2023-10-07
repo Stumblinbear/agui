@@ -89,6 +89,8 @@ where
     ) -> bool {
         if let Some(callback) = self.callbacks.get(&callback_id) {
             let mut ctx = CallbackContext {
+                plugins: ctx.plugins,
+
                 element_tree: ctx.element_tree,
                 dirty: ctx.dirty,
 
