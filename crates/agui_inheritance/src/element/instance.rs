@@ -3,8 +3,8 @@ use std::{any::TypeId, rc::Rc};
 use agui_core::{
     callback::CallbackId,
     element::{
-        build::ElementBuild, widget::ElementWidget, ContextElement, ContextMarkDirty,
-        ElementBuildContext, ElementCallbackContext, ElementMountContext, ElementUpdate,
+        build::ElementBuild, widget::ElementWidget, ContextElement, ElementBuildContext,
+        ElementCallbackContext, ElementMountContext, ElementUpdate,
     },
     plugin::context::ContextPluginsMut,
     widget::{AnyWidget, Widget},
@@ -72,20 +72,18 @@ impl<I> ElementBuild for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    fn build(&mut self, mut ctx: ElementBuildContext) -> Widget {
+    fn build(&mut self, ctx: ElementBuildContext) -> Widget {
         if self.needs_notify {
             self.needs_notify = false;
 
             let element_id = ctx.get_element_id();
 
-            if let Some(inheritance_plugin) = ctx.get_plugins_mut().get::<InheritancePlugin>() {
-                let listener_ids = inheritance_plugin
+            if let Some(inheritance_plugin) = ctx.plugins.get::<InheritancePlugin>() {
+                for element_id in inheritance_plugin
                     .iter_listeners(element_id)
                     .expect("failed to get the inherited element's scope during build")
-                    .collect::<Vec<_>>();
-
-                for element_id in listener_ids {
-                    ctx.mark_dirty(element_id);
+                {
+                    ctx.dirty.insert(element_id);
                 }
             }
         }

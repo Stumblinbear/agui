@@ -11,13 +11,13 @@ mod iter;
 pub use iter::*;
 
 pub struct ElementHitTestContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub element_tree: &'ctx Tree<ElementId, Element>,
 
-    pub(crate) element_id: ElementId,
+    pub element_id: &'ctx ElementId,
 
-    pub(crate) size: &'ctx Size,
+    pub size: &'ctx Size,
 
-    pub(crate) children: &'ctx [ElementId],
+    pub children: &'ctx [ElementId],
 
     pub(crate) result: &'ctx mut HitTestResult,
 }
@@ -28,7 +28,7 @@ impl ContextElement for ElementHitTestContext<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }
 

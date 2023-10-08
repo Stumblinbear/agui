@@ -1,16 +1,15 @@
-use rustc_hash::FxHashSet;
-
 use crate::{
     element::{ContextElement, ContextMarkDirty, Element, ElementId},
+    engine::DirtyElements,
     util::tree::Tree,
 };
 
 pub struct PluginMountContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
+    pub element_tree: &'ctx Tree<ElementId, Element>,
+    pub dirty: &'ctx mut DirtyElements,
 
-    pub(crate) parent_element_id: Option<ElementId>,
-    pub(crate) element_id: ElementId,
+    pub parent_element_id: Option<&'ctx ElementId>,
+    pub element_id: &'ctx ElementId,
 }
 
 impl ContextElement for PluginMountContext<'_> {
@@ -19,7 +18,7 @@ impl ContextElement for PluginMountContext<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }
 
@@ -31,6 +30,6 @@ impl ContextMarkDirty for PluginMountContext<'_> {
 
 impl PluginMountContext<'_> {
     pub fn get_parent_element_id(&self) -> Option<ElementId> {
-        self.parent_element_id
+        self.parent_element_id.copied()
     }
 }

@@ -20,15 +20,19 @@ use crate::{
 
 use self::{builder::EngineBuilder, event::ElementEvent};
 
+mod dirty;
+
 pub mod builder;
 pub mod event;
+
+pub use dirty::DirtyElements;
 
 pub struct Engine {
     plugins: Plugins,
 
     element_tree: Tree<ElementId, Element>,
 
-    dirty: FxHashSet<ElementId>,
+    dirty: DirtyElements,
     callback_queue: CallbackQueue,
 
     rebuild_queue: VecDeque<ElementId>,
@@ -74,6 +78,10 @@ impl Engine {
         WidgetQuery::new(&self.element_tree)
     }
 
+    pub fn get_callback_queue(&self) -> &CallbackQueue {
+        &self.callback_queue
+    }
+
     pub fn has_changes(&self) -> bool {
         !self.rebuild_queue.is_empty() || !self.dirty.is_empty() || !self.callback_queue.is_empty()
     }
@@ -81,10 +89,6 @@ impl Engine {
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
     pub fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
-    }
-
-    pub fn get_callback_queue(&self) -> &CallbackQueue {
-        &self.callback_queue
     }
 
     /// Update the UI tree.
@@ -176,7 +180,7 @@ impl Engine {
                             element_tree,
                             dirty: &mut self.dirty,
 
-                            element_id,
+                            element_id: &element_id,
                         },
                         callback_id,
                         callback_arg,
@@ -209,7 +213,7 @@ impl Engine {
                     ElementContextMut {
                         element_tree,
 
-                        element_id: root_id,
+                        element_id: &root_id,
                     },
                     // The root element is always unbounded
                     Constraints::expand(),
@@ -244,8 +248,8 @@ impl Engine {
                     element_tree,
                     dirty: &mut self.dirty,
 
-                    parent_element_id: parent_id,
-                    element_id,
+                    parent_element_id: parent_id.as_ref(),
+                    element_id: &element_id,
                 });
             });
 
@@ -255,8 +259,8 @@ impl Engine {
                 element_tree,
                 dirty: &mut self.dirty,
 
-                parent_element_id: parent_id,
-                element_id,
+                parent_element_id: parent_id.as_ref(),
+                element_id: &element_id,
             });
         });
 
@@ -285,7 +289,7 @@ impl Engine {
                         dirty: &mut self.dirty,
                         callback_queue: &self.callback_queue,
 
-                        element_id,
+                        element_id: &element_id,
                     })
                 })
                 .expect("cannot build a widget that doesn't exist");
@@ -566,7 +570,7 @@ impl Engine {
                             element_tree,
                             dirty: &mut self.dirty,
 
-                            element_id,
+                            element_id: &element_id,
                         });
                     });
 
@@ -576,7 +580,7 @@ impl Engine {
                         element_tree,
                         dirty: &mut self.dirty,
 
-                        element_id,
+                        element_id: &element_id,
                     });
                 })
                 .expect("cannot destroy an element that doesn't exist");

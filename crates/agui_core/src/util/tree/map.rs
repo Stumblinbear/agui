@@ -5,19 +5,19 @@ use std::{
 
 use slotmap::{
     hop::{Iter, IterMut},
-    HopSlotMap, Key,
+    HopSlotMap,
 };
 
 pub struct TreeMap<K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     nodes: HopSlotMap<K, TreeNode<K, V>>,
 }
 
 impl<K, V> Default for TreeMap<K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     fn default() -> Self {
         Self {
@@ -29,7 +29,7 @@ where
 #[derive(Debug)]
 pub struct TreeNode<K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     depth: usize,
     pub value: Option<V>,
@@ -40,10 +40,10 @@ where
 
 impl<K, V> TreeMap<K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     pub fn contains(&self, node_id: K) -> bool {
-        self.nodes.contains_key(node_id)
+        self.nodes.contains_key(node_id.into())
     }
 
     pub fn get_depth(&self, node_id: K) -> Option<usize> {
@@ -436,7 +436,7 @@ where
 
 impl<K, V> Index<K> for TreeMap<K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     type Output = V;
 
@@ -450,7 +450,7 @@ where
 
 impl<K, V> IndexMut<K> for TreeMap<K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     fn index_mut(&mut self, key: K) -> &mut Self::Output {
         self.nodes[key]
@@ -462,7 +462,7 @@ where
 
 pub struct DownwardIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     pub(super) tree: &'a TreeMap<K, V>,
     pub(super) node_id: Option<K>,
@@ -471,7 +471,7 @@ where
 
 impl<'a, K, V> Iterator for DownwardIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     type Item = K;
 
@@ -527,7 +527,7 @@ where
 
 pub struct SubtreeIterator<'a, K, V, F>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     pub(super) tree: &'a TreeMap<K, V>,
     pub(super) root_node_id: K,
@@ -538,7 +538,7 @@ where
 
 impl<'a, K, V, F> Iterator for SubtreeIterator<'a, K, V, F>
 where
-    K: Key,
+    K: slotmap::Key,
     F: Fn(K) -> bool,
 {
     type Item = K;
@@ -616,7 +616,7 @@ where
 
 pub struct UpwardIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     pub(super) tree: &'a TreeMap<K, V>,
     pub(super) node_id: Option<K>,
@@ -625,7 +625,7 @@ where
 
 impl<'a, K, V> Iterator for UpwardIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     type Item = K;
 
@@ -660,7 +660,7 @@ where
 
 pub struct ParentIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     tree: &'a TreeMap<K, V>,
     node_id: Option<K>,
@@ -668,7 +668,7 @@ where
 
 impl<'a, K, V> Iterator for ParentIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     type Item = K;
 
@@ -689,7 +689,7 @@ where
 
 pub struct ChildIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     pub(super) tree: &'a TreeMap<K, V>,
     pub(super) node_id: K,
@@ -699,7 +699,7 @@ where
 
 impl<'a, K, V> Iterator for ChildIterator<'a, K, V>
 where
-    K: Key,
+    K: slotmap::Key,
 {
     type Item = K;
 

@@ -1,8 +1,7 @@
-use rustc_hash::FxHashSet;
-
 use crate::{
     callback::{CallbackQueue, ContextCallbackQueue},
     element::{Element, ElementId},
+    engine::DirtyElements,
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -13,13 +12,13 @@ use crate::{
 use super::{ContextElement, ContextMarkDirty};
 
 pub struct ElementBuildContext<'ctx> {
-    pub(crate) plugins: &'ctx mut Plugins,
+    pub plugins: &'ctx mut Plugins,
 
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
-    pub(crate) callback_queue: &'ctx CallbackQueue,
+    pub element_tree: &'ctx Tree<ElementId, Element>,
+    pub dirty: &'ctx mut DirtyElements,
+    pub callback_queue: &'ctx CallbackQueue,
 
-    pub(crate) element_id: ElementId,
+    pub element_id: &'ctx ElementId,
 }
 
 impl<'ctx> ContextPlugins<'ctx> for ElementBuildContext<'ctx> {
@@ -40,7 +39,7 @@ impl ContextElement for ElementBuildContext<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }
 

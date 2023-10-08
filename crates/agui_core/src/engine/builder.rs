@@ -9,7 +9,7 @@ use crate::{
     widget::{IntoWidget, Widget},
 };
 
-use super::Engine;
+use super::{DirtyElements, Engine};
 
 pub struct EngineBuilder {
     update_notifier_tx: Option<mpsc::Sender<()>>,
@@ -51,7 +51,7 @@ impl EngineBuilder {
 
             element_tree: Tree::default(),
 
-            dirty: FxHashSet::default(),
+            dirty: DirtyElements::new(),
             callback_queue: CallbackQueue::new(
                 self.update_notifier_tx.unwrap_or_else(|| mpsc::channel().0),
             ),

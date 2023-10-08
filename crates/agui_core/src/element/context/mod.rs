@@ -30,9 +30,9 @@ pub trait ContextMarkDirty {
 }
 
 pub struct ElementContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+    pub element_tree: &'ctx Tree<ElementId, Element>,
 
-    pub(crate) element_id: ElementId,
+    pub element_id: &'ctx ElementId,
 }
 
 impl ContextElement for ElementContext<'_> {
@@ -41,14 +41,14 @@ impl ContextElement for ElementContext<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }
 
 pub struct ElementContextMut<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
-    pub(crate) element_id: ElementId,
+    pub element_id: &'ctx ElementId,
 }
 
 impl ContextElement for ElementContextMut<'_> {
@@ -57,6 +57,6 @@ impl ContextElement for ElementContextMut<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }

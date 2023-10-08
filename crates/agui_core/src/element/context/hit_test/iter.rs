@@ -127,7 +127,7 @@ impl ChildElementHitTest<'_> {
             ElementContext {
                 element_tree: self.element_tree,
 
-                element_id,
+                element_id: &element_id,
             },
             self.result,
             position,

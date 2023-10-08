@@ -11,10 +11,10 @@ pub use iter::*;
 pub struct ElementLayoutContext<'ctx> {
     pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
 
-    pub(crate) element_id: ElementId,
+    pub element_id: &'ctx ElementId,
 
-    pub(crate) children: &'ctx [ElementId],
-    pub(crate) offsets: &'ctx mut [Offset],
+    pub children: &'ctx [ElementId],
+    pub offsets: &'ctx mut [Offset],
 }
 
 impl ContextElement for ElementLayoutContext<'_> {
@@ -23,7 +23,7 @@ impl ContextElement for ElementLayoutContext<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }
 

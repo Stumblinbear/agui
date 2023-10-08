@@ -36,7 +36,7 @@ pub trait ElementRender: ElementWidget {
                         ElementContextMut {
                             element_tree,
 
-                            element_id: child_id,
+                            element_id: &child_id,
                         },
                         constraints,
                     )

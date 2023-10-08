@@ -133,7 +133,7 @@ impl Element {
     ) -> f32 {
         let children = ctx
             .element_tree
-            .get_children(ctx.element_id)
+            .get_children(*ctx.element_id)
             .map(|children| children.as_slice())
             .unwrap_or_default();
 
@@ -154,7 +154,7 @@ impl Element {
                             ElementContext {
                                 element_tree: ctx.element_tree,
 
-                                element_id: child_id,
+                                element_id: &child_id,
                             },
                             dimension,
                             cross_extent,
@@ -189,7 +189,7 @@ impl Element {
             ElementType::Proxy(_) | ElementType::Widget(_) => {
                 let children = ctx
                     .element_tree
-                    .get_children(ctx.element_id)
+                    .get_children(*ctx.element_id)
                     .map(|children| children.as_slice())
                     .unwrap_or_default();
 
@@ -207,7 +207,7 @@ impl Element {
                                 ElementContextMut {
                                     element_tree,
 
-                                    element_id: child_id,
+                                    element_id: &child_id,
                                 },
                                 constraints,
                             )
@@ -222,7 +222,7 @@ impl Element {
             ElementType::Render(ref mut widget) => {
                 let children = ctx
                     .element_tree
-                    .get_children(ctx.element_id)
+                    .get_children(*ctx.element_id)
                     .cloned()
                     .unwrap_or_default();
 
@@ -334,7 +334,7 @@ impl Element {
 
         let children = ctx
             .element_tree
-            .get_children(ctx.element_id)
+            .get_children(*ctx.element_id)
             .map(|children| children.as_slice())
             .unwrap_or_default();
 
@@ -355,7 +355,7 @@ impl Element {
                             ElementContext {
                                 element_tree: ctx.element_tree,
 
-                                element_id: child_id,
+                                element_id: &child_id,
                             },
                             result,
                             position,
@@ -386,7 +386,7 @@ impl Element {
         };
 
         if hit == HitTest::Absorb {
-            result.add(ctx.element_id);
+            result.add(*ctx.element_id);
         }
 
         hit

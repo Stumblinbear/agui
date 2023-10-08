@@ -1,15 +1,14 @@
-use rustc_hash::FxHashSet;
-
 use crate::{
     element::{ContextElement, ContextMarkDirty, Element, ElementId},
+    engine::DirtyElements,
     util::tree::Tree,
 };
 
 pub struct PluginUnmountContext<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
+    pub element_tree: &'ctx Tree<ElementId, Element>,
+    pub dirty: &'ctx mut DirtyElements,
 
-    pub(crate) element_id: ElementId,
+    pub element_id: &'ctx ElementId,
 }
 
 impl ContextElement for PluginUnmountContext<'_> {
@@ -18,7 +17,7 @@ impl ContextElement for PluginUnmountContext<'_> {
     }
 
     fn get_element_id(&self) -> ElementId {
-        self.element_id
+        *self.element_id
     }
 }
 

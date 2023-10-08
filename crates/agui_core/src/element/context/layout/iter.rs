@@ -73,7 +73,7 @@ impl ChildElementLayout<'_> {
             ElementContext {
                 element_tree: self.element_tree,
 
-                element_id,
+                element_id: &element_id,
             },
             dimension,
             cross_extent,
@@ -158,7 +158,7 @@ impl ChildElementLayoutMut<'_> {
             ElementContext {
                 element_tree: self.element_tree,
 
-                element_id,
+                element_id: &element_id,
             },
             dimension,
             cross_extent,
@@ -176,7 +176,7 @@ impl ChildElementLayoutMut<'_> {
                     ElementContextMut {
                         element_tree,
 
-                        element_id,
+                        element_id: &element_id,
                     },
                     constraints,
                 )
