@@ -202,7 +202,7 @@ agui = &quot;0.3&quot; # ensure this is the latest version
 <h2 id="the-build-macro"><a class="header" href="#the-build-macro">The <code>build!</code> macro</a></h2>
 <p>This is a convenience macro. It's not technically required (in fact it's quite easy to never use it) but it makes our life a bit easier. In exchange for some black-box magic, you get better maintainability and better looking code. It supports pretty much all of Rust syntax, so you can embed logic (such as <code>if</code> or <code>match</code> statements) within it as normal.</p>
 <pre><code class="language-rust noplaypen">// Before:
-fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut StatelessBuildContext) -&gt; BuildResult {
     BuildResult::Some(vec![
         Button {
             layout: Layout {
@@ -215,7 +215,7 @@ fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
 }
 
 // After:
-fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
+fn build(&amp;self, ctx: &amp;mut StatelessBuildContext) -&gt; BuildResult {
     build!{
         Button {
             layout: Layout {
@@ -232,7 +232,7 @@ fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
 // The macro will turn `snake_case` into `PascalCase` for the widget name
 fn example_widget(ctx: &amp;BuildContext, layout: Layout, child: WidgetRef) -&gt; BuildResult {
     ctx.set_layout(Layout::clone(&amp;layout));
-    
+
     build!{
         Button {
             child: child
@@ -246,18 +246,18 @@ fn example_widget(ctx: &amp;BuildContext, layout: Layout, child: WidgetRef) -&gt
 <h2 id="primitives"><a class="header" href="#primitives">Primitives</a></h2>
 <p><code>agui</code> comes with a set of extremely simple widgets that are referred to as Primitives. These generally cover the most basic renderable ~things~ or other extremely useful widgets that don't offer much opinionated functionality, but are still very useful. Render integrations hook into these to draw the actual visual elements, giving a very small barrier to entry to have all features of <code>agui</code>. You can find a full list of them in the <a href="usage/../widgets/primitives.html">Primitive Widget Reference</a>.</p>
 <h2 id="creating-a-widget"><a class="header" href="#creating-a-widget">Creating a Widget</a></h2>
-<p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl WidgetView</code>. We're going to start simple, with a basic box on the screen:</p>
+<p>A widget consists of two things: its settings and a build function. In Rust, this is just a <code>struct</code> with an <code>impl StatelessWidget</code>. We're going to start simple, with a basic box on the screen:</p>
 <pre><code class="language-rust noplaypen">pub struct MyWidget { }
 
-impl WidgetView for MyWidget {
-    fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
+impl StatelessWidget for MyWidget {
+    fn build(&amp;self, ctx: &amp;mut StatelessBuildContext) -&gt; BuildResult {
         BuildResult::None
     }
 }
 </code></pre>
 <p>If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.</p>
-<pre><code class="language-rust noplaypen">impl WidgetView for MyWidget {
-    fn build(&amp;self, ctx: &amp;mut BuildContext) -&gt; BuildResult {
+<pre><code class="language-rust noplaypen">impl StatelessWidget for MyWidget {
+    fn build(&amp;self, ctx: &amp;mut StatelessBuildContext) -&gt; BuildResult {
         build! {
             Button {
                 layout: Layout {
