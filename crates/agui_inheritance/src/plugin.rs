@@ -3,7 +3,7 @@ use std::any::TypeId;
 use agui_core::{
     element::{ContextElement, ElementId},
     plugin::{
-        context::{PluginMountContext, PluginUnmountContext},
+        context::{PluginElementMountContext, PluginElementUnmountContext},
         Plugin,
     },
     widget::AnyWidget,
@@ -17,12 +17,12 @@ pub struct InheritancePlugin {
 }
 
 impl Plugin for InheritancePlugin {
-    fn on_mount(&mut self, ctx: PluginMountContext) {
+    fn on_element_mount(&mut self, ctx: PluginElementMountContext) {
         self.manager
             .create_node(ctx.get_parent_element_id(), ctx.get_element_id());
     }
 
-    fn on_remount(&mut self, mut ctx: PluginMountContext) {
+    fn on_element_remount(&mut self, mut ctx: PluginElementMountContext) {
         let parent_scope_id = ctx.get_parent_element_id().and_then(|parent_element_id| {
             self.manager
                 .get(parent_element_id)
@@ -36,7 +36,7 @@ impl Plugin for InheritancePlugin {
             .update_inheritance_scope(&mut ctx, element_id, parent_scope_id);
     }
 
-    fn on_unmount(&mut self, ctx: PluginUnmountContext) {
+    fn on_element_unmount(&mut self, ctx: PluginElementUnmountContext) {
         self.manager.remove(ctx.get_element_id());
     }
 }

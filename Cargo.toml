@@ -62,6 +62,8 @@ app = ["rustc-hash"]
 winit = ["agui_renderer", "agui_winit", "dep:winit"]
 vello = ["agui_renderer", "agui_vello", "dep:vello"]
 
+mocks = ["agui_core/mocks", "agui_inheritance/mocks"]
+
 [dependencies]
 agui_core.workspace = true
 agui_macros = { workspace = true, optional = true }

@@ -1,10 +1,13 @@
 use crate::{
     element::{ContextElement, ContextMarkDirty, Element, ElementId},
     engine::DirtyElements,
+    plugin::Plugins,
     util::tree::Tree,
 };
 
-pub struct PluginMountContext<'ctx> {
+pub struct PluginElementMountContext<'ctx> {
+    pub plugins: &'ctx mut Plugins,
+
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub dirty: &'ctx mut DirtyElements,
 
@@ -12,7 +15,7 @@ pub struct PluginMountContext<'ctx> {
     pub element_id: &'ctx ElementId,
 }
 
-impl ContextElement for PluginMountContext<'_> {
+impl ContextElement for PluginElementMountContext<'_> {
     fn get_elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
@@ -22,13 +25,13 @@ impl ContextElement for PluginMountContext<'_> {
     }
 }
 
-impl ContextMarkDirty for PluginMountContext<'_> {
+impl ContextMarkDirty for PluginElementMountContext<'_> {
     fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
     }
 }
 
-impl PluginMountContext<'_> {
+impl PluginElementMountContext<'_> {
     pub fn get_parent_element_id(&self) -> Option<ElementId> {
         self.parent_element_id.copied()
     }

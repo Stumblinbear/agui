@@ -1,7 +1,7 @@
 use agui_core::{
     element::{ContextElement, ElementId},
     plugin::{
-        context::{PluginMountContext, PluginUnmountContext},
+        context::{PluginElementMountContext, PluginElementUnmountContext},
         Plugin,
     },
 };
@@ -14,12 +14,12 @@ pub struct RenderViewPlugin {
 }
 
 impl Plugin for RenderViewPlugin {
-    fn on_mount(&mut self, ctx: PluginMountContext) {
+    fn on_element_mount(&mut self, ctx: PluginElementMountContext) {
         self.manager
             .add(ctx.get_parent_element_id(), ctx.get_element_id());
     }
 
-    fn on_remount(&mut self, ctx: PluginMountContext) {
+    fn on_element_remount(&mut self, ctx: PluginElementMountContext) {
         let element_id = ctx.get_element_id();
 
         let parent_render_view_id = ctx
@@ -30,7 +30,7 @@ impl Plugin for RenderViewPlugin {
             .update_render_view(ctx.get_elements(), element_id, parent_render_view_id);
     }
 
-    fn on_unmount(&mut self, ctx: PluginUnmountContext) {
+    fn on_element_unmount(&mut self, ctx: PluginElementUnmountContext) {
         self.manager.remove(ctx.get_element_id());
     }
 }

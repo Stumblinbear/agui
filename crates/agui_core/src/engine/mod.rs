@@ -9,7 +9,10 @@ use crate::{
         ElementMountContext, ElementUnmountContext, ElementUpdate,
     },
     plugin::{
-        context::{PluginMountContext, PluginUnmountContext},
+        context::{
+            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementMountContext,
+            PluginElementUnmountContext,
+        },
         Plugins,
     },
     query::WidgetQuery,
@@ -100,6 +103,14 @@ impl Engine {
 
         tracing::debug!("updating widget tree");
 
+        self.plugins.with(|plugins, plugin| {
+            plugin.on_before_update(PluginBeforeUpdateContext {
+                plugins,
+
+                element_tree: &self.element_tree,
+            });
+        });
+
         let mut needs_redraw = FxHashSet::default();
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
@@ -125,6 +136,16 @@ impl Engine {
                 break 'layout;
             }
         }
+
+        self.plugins.with(|plugins, plugin| {
+            plugin.on_after_update(PluginAfterUpdateContext {
+                plugins,
+
+                element_tree: &self.element_tree,
+
+                events: &self.element_events,
+            });
+        });
 
         // TODO: Only redraw the elements that have changed
         needs_redraw.extend(self.element_tree.iter().map(|(id, _)| id));
@@ -243,8 +264,10 @@ impl Engine {
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
-            self.plugins.iter_mut().for_each(|plugin| {
-                plugin.on_mount(PluginMountContext {
+            self.plugins.with(|plugins, plugin| {
+                plugin.on_element_mount(PluginElementMountContext {
+                    plugins,
+
                     element_tree,
                     dirty: &mut self.dirty,
 
@@ -565,8 +588,10 @@ impl Engine {
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
-                    self.plugins.iter_mut().for_each(|plugin| {
-                        plugin.on_unmount(PluginUnmountContext {
+                    self.plugins.with(|plugins, plugin| {
+                        plugin.on_element_unmount(PluginElementUnmountContext {
+                            plugins,
+
                             element_tree,
                             dirty: &mut self.dirty,
 

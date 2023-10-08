@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use agui_core::{
     element::{ContextElement, ContextMarkDirty, ElementId},
-    plugin::context::PluginMountContext,
+    plugin::context::PluginElementMountContext,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -139,7 +139,7 @@ impl InheritanceManager {
 
     pub(crate) fn update_inheritance_scope(
         &mut self,
-        ctx: &mut PluginMountContext,
+        ctx: &mut PluginElementMountContext,
         element_id: ElementId,
         new_scope_id: Option<ElementId>,
     ) {
@@ -190,7 +190,7 @@ impl InheritanceManager {
     // must be updated.
     fn update_ancestor_scope(
         &mut self,
-        ctx: &mut PluginMountContext,
+        ctx: &mut PluginElementMountContext,
         element_id: ElementId,
         old_ancestor_scope_id: Option<ElementId>,
         new_ancestor_scope_id: Option<ElementId>,
@@ -277,7 +277,7 @@ impl InheritanceManager {
     // marking it as dirty if necessary.
     fn update_scope(
         &mut self,
-        ctx: &mut PluginMountContext,
+        ctx: &mut PluginElementMountContext,
         element_id: ElementId,
         old_scope_id: Option<ElementId>,
         new_scope_id: Option<ElementId>,
