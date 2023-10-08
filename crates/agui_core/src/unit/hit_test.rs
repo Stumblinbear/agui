@@ -17,6 +17,7 @@ pub enum HitTest {
     Pass,
 }
 
+#[derive(Debug)]
 pub struct HitTestEntry {
     pub element_id: ElementId,
     pub data: Option<Box<dyn Any>>,
@@ -29,6 +30,7 @@ impl HitTestEntry {
     }
 }
 
+#[derive(Debug)]
 pub struct HitTestResult {
     path: Vec<HitTestEntry>,
     transforms: Vec<Mat4>,

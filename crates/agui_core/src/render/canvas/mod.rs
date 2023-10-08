@@ -1,14 +1,12 @@
+use super::Paint;
 use crate::unit::{Offset, Shape, Size};
 
 pub mod command;
 pub mod painter;
 
-pub use self::command::*;
-
-use super::Paint;
+pub use command::*;
 
 #[derive(Debug, PartialEq)]
-#[non_exhaustive]
 pub struct Canvas {
     pub size: Size,
 

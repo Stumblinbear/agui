@@ -1,8 +1,9 @@
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Rect, Shape},
-    widget::{Widget, WidgetPaint},
+    widget::Widget,
 };
+use agui_elements::paint::WidgetPaint;
 use agui_macros::PaintWidget;
 
 #[derive(PaintWidget, Debug)]

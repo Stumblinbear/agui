@@ -26,7 +26,7 @@ pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
             }
         }
 
-        impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
+        impl #impl_generics #agui_core::element::ElementBuilder for #ident #ty_generics #where_clause {
             fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where
                 Self: Sized

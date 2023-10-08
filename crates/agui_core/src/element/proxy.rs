@@ -1,4 +1,6 @@
-use crate::widget::{element::ElementWidget, Widget};
+use crate::widget::Widget;
+
+use super::widget::ElementWidget;
 
 pub trait ElementProxy: ElementWidget {
     fn get_child(&self) -> Widget;

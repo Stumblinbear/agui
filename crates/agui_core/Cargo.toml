@@ -11,6 +11,9 @@ categories = ["gui"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
+[features]
+mocks = ["mockall"]
+
 [dependencies]
 cfg-if = "1.0"
 
@@ -27,5 +30,9 @@ im-rc.workspace = true
 glam.workspace = true
 lyon.workspace = true
 
+mockall = { workspace = true, optional = true }
+
 [dev-dependencies]
 agui_macros.workspace = true
+
+mockall.workspace = true

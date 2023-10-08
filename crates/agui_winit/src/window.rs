@@ -3,10 +3,11 @@ use std::{marker::PhantomData, ops::Deref};
 use agui_core::{
     element::ContextElement,
     unit::{Constraints, IntrinsicDimension, Size},
-    widget::{
-        ContextWidgetStateMut, IntoWidget, IntrinsicSizeContext, LayoutContext,
-        StatefulBuildContext, StatefulWidget, Widget, WidgetLayout, WidgetState,
-    },
+    widget::{IntoWidget, Widget},
+};
+use agui_elements::{
+    layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout},
+    stateful::{ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState},
 };
 use agui_inheritance::{ContextInheritedMut, InheritedWidget};
 use agui_listenable::EventEmitterHandle;

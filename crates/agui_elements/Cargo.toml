@@ -1,0 +1,20 @@
+[package]
+name = "agui_elements"
+version = "0.3.0"
+edition = "2021"
+resolver = "2"
+description = "Provides the base elements for agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui"]
+categories = ["gui"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+agui_core.workspace = true
+agui_macros.workspace = true
+
+tracing.workspace = true
+
+rustc-hash.workspace = true

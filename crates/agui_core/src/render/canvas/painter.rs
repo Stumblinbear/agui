@@ -43,7 +43,7 @@ impl<'paint, State> CanvasPainter<'paint, State>
 where
     State: CanvasPainterState,
 {
-    pub(crate) fn begin(canvas: &'paint mut Canvas) -> CanvasPainter<'paint, State> {
+    pub fn begin(canvas: &'paint mut Canvas) -> CanvasPainter<'paint, State> {
         CanvasPainter {
             phantom: PhantomData,
 

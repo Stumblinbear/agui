@@ -8,7 +8,7 @@ This is a convenience macro. It's not technically required (in fact it's quite e
 
 ```rust,noplaypen
 // Before:
-fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+fn build(&self, ctx: &mut StatelessBuildContext) -> BuildResult {
     BuildResult::Some(vec![
         Button {
             layout: Layout {
@@ -21,7 +21,7 @@ fn build(&self, ctx: &mut BuildContext) -> BuildResult {
 }
 
 // After:
-fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+fn build(&self, ctx: &mut StatelessBuildContext) -> BuildResult {
     build!{
         Button {
             layout: Layout {
@@ -43,7 +43,7 @@ The vast majority of widgets are simple fields followed by a single `build()` fu
 // The macro will turn `snake_case` into `PascalCase` for the widget name
 fn example_widget(ctx: &BuildContext, layout: Layout, child: WidgetRef) -> BuildResult {
     ctx.set_layout(Layout::clone(&layout));
-    
+
     build!{
         Button {
             child: child

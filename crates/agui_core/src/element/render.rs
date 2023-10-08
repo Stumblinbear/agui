@@ -1,26 +1,23 @@
 use crate::{
-    element::context::ElementLayoutContext,
+    element::{context::ElementLayoutContext, ElementContextMut},
     render::canvas::Canvas,
     unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
-    widget::{
-        element::{
-            ElementWidget, WidgetHitTestContext, WidgetIntrinsicSizeContext, WidgetLayoutContext,
-        },
-        Widget,
-    },
+    widget::Widget,
 };
+
+use super::{widget::ElementWidget, ElementHitTestContext, ElementIntrinsicSizeContext};
 
 pub trait ElementRender: ElementWidget {
     fn get_children(&self) -> Vec<Widget>;
 
     fn intrinsic_size(
         &self,
-        ctx: WidgetIntrinsicSizeContext,
+        ctx: ElementIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32;
 
-    fn layout(&self, ctx: WidgetLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
         let children = ctx.children;
 
         if !children.is_empty() {
@@ -36,7 +33,7 @@ pub trait ElementRender: ElementWidget {
             ctx.element_tree
                 .with(child_id, |element_tree, element| {
                     element.layout(
-                        ElementLayoutContext {
+                        ElementContextMut {
                             element_tree,
 
                             element_id: child_id,
@@ -52,7 +49,7 @@ pub trait ElementRender: ElementWidget {
 
     fn hit_test<'ctx>(
         &self,
-        ctx: &'ctx mut WidgetHitTestContext<'ctx>,
+        ctx: &'ctx mut ElementHitTestContext<'ctx>,
         position: Offset,
     ) -> HitTest {
         if ctx.size.contains(position) {

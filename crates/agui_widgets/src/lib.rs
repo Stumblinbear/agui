@@ -2,5 +2,5 @@ mod events;
 // pub mod state;
 mod widgets;
 
-pub use self::events::*;
-pub use self::widgets::*;
+pub use events::*;
+pub use widgets::*;

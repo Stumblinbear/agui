@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     callback::{CallbackInvoke, CallbackQueue},
     element::{
-        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementLayoutContext,
+        Element, ElementBuildContext, ElementCallbackContext, ElementContextMut, ElementId,
         ElementMountContext, ElementUnmountContext, ElementUpdate,
     },
     plugin::{
@@ -81,6 +81,10 @@ impl Engine {
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
     pub fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
+    }
+
+    pub fn get_callback_queue(&self) -> &CallbackQueue {
+        &self.callback_queue
     }
 
     /// Update the UI tree.
@@ -202,7 +206,7 @@ impl Engine {
         self.element_tree
             .with(root_id, |element_tree, element| {
                 element.layout(
-                    ElementLayoutContext {
+                    ElementContextMut {
                         element_tree,
 
                         element_id: root_id,
@@ -593,110 +597,20 @@ impl Engine {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-
-    use agui_macros::LayoutWidget;
+    use std::{cell::RefCell, rc::Rc};
 
     use crate::{
+        element::mock::{render::MockRenderWidget, DummyWidget},
         engine::event::ElementEvent,
-        unit::{Constraints, IntrinsicDimension, Size},
-        widget::{IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+        unit::Size,
+        widget::IntoWidget,
     };
 
     use super::Engine;
 
-    #[derive(Default)]
-    struct TestResult {
-        root_child: Option<Widget>,
-    }
-
-    thread_local! {
-        static TEST_HOOK: RefCell<TestResult> = RefCell::default();
-    }
-
-    #[derive(Default, LayoutWidget)]
-    struct TestRootWidget;
-
-    impl WidgetLayout for TestRootWidget {
-        fn get_children(&self) -> Vec<Widget> {
-            Vec::from_iter(TEST_HOOK.with(|result| result.borrow().root_child.clone()))
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
-            Size::ZERO
-        }
-    }
-
-    impl TestRootWidget {
-        fn set_child(child: Widget) {
-            TEST_HOOK.with(|result| {
-                result.borrow_mut().root_child = Some(child);
-            });
-        }
-    }
-
-    #[derive(LayoutWidget, Default)]
-    struct TestDummyWidget1 {
-        pub children: Vec<Widget>,
-    }
-
-    impl WidgetLayout for TestDummyWidget1 {
-        fn get_children(&self) -> Vec<Widget> {
-            self.children.clone()
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
-            Size::ZERO
-        }
-    }
-
-    #[derive(LayoutWidget, Default)]
-    struct TestDummyWidget2 {
-        pub children: Vec<Widget>,
-    }
-
-    impl WidgetLayout for TestDummyWidget2 {
-        fn get_children(&self) -> Vec<Widget> {
-            self.children.clone()
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
-            Size::ZERO
-        }
-    }
-
     #[test]
     pub fn adding_a_root_widget() {
-        let mut engine = Engine::builder()
-            .with_root(TestDummyWidget1::default())
-            .build();
+        let mut engine = Engine::builder().with_root(DummyWidget).build();
 
         let events = engine.update();
 
@@ -716,9 +630,7 @@ mod tests {
 
     #[test]
     pub fn rebuilding_widgets() {
-        let mut engine = Engine::builder()
-            .with_root(TestDummyWidget1::default())
-            .build();
+        let mut engine = Engine::builder().with_root(DummyWidget).build();
 
         engine.update();
 
@@ -741,14 +653,22 @@ mod tests {
 
     #[test]
     pub fn spawns_children() {
-        let mut engine = Engine::builder()
-            .with_root(TestDummyWidget1 {
-                children: vec![
-                    TestDummyWidget1::default().into_widget(),
-                    TestDummyWidget1::default().into_widget(),
-                ],
-            })
-            .build();
+        let widget = MockRenderWidget::default();
+        {
+            widget
+                .mock
+                .borrow_mut()
+                .expect_get_children()
+                .returning(|| vec![DummyWidget.into_widget(), DummyWidget.into_widget()]);
+
+            widget
+                .mock
+                .borrow_mut()
+                .expect_layout()
+                .returning(|_, _| Size::ZERO);
+        }
+
+        let mut engine = Engine::builder().with_root(widget).build();
 
         let events = engine.update();
 
@@ -794,29 +714,46 @@ mod tests {
 
     #[test]
     pub fn removes_children() {
-        let mut engine = Engine::builder().with_root(TestRootWidget).build();
+        let children = Rc::new(RefCell::new({
+            let mut children = Vec::new();
 
-        let mut widget = TestDummyWidget1::default();
+            for _ in 0..1000 {
+                children.push(DummyWidget.into_widget());
+            }
 
-        for _ in 0..1000 {
-            widget.children.push(TestDummyWidget1::default().into());
+            children
+        }));
+
+        let widget = MockRenderWidget::default();
+        {
+            widget
+                .mock
+                .borrow_mut()
+                .expect_get_children()
+                .returning_st({
+                    let children = Rc::clone(&children);
+
+                    move || children.borrow().clone()
+                });
+
+            widget
+                .mock
+                .borrow_mut()
+                .expect_layout()
+                .returning(|_, _| Size::ZERO);
         }
 
-        let widget = widget.into_widget();
-
-        TestRootWidget::set_child(widget.clone());
+        let mut engine = Engine::builder().with_root(widget).build();
 
         engine.update();
 
         assert_eq!(
             engine.get_tree().len(),
-            1002,
+            1001,
             "children should have been added"
         );
 
-        let widget = TestDummyWidget1::default().into_widget();
-
-        TestRootWidget::set_child(widget.clone());
+        children.borrow_mut().clear();
 
         let root_id = engine.get_root();
 
@@ -826,7 +763,7 @@ mod tests {
 
         assert_eq!(
             engine.get_tree().len(),
-            2,
+            1,
             "nested children should have been removed"
         );
 
@@ -834,7 +771,7 @@ mod tests {
 
         for i in 0..1000 {
             assert!(
-                matches!(events[i + 2], ElementEvent::Destroyed { .. }),
+                matches!(events[i + 1], ElementEvent::Destroyed { .. }),
                 "should have generated a destroyed event for all children"
             );
         }
@@ -842,9 +779,28 @@ mod tests {
 
     #[test]
     pub fn rebuilds_children() {
-        let mut engine = Engine::builder().with_root(TestRootWidget).build();
+        let child = Rc::new(RefCell::new(DummyWidget.into_widget()));
 
-        TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
+        let widget = MockRenderWidget::default();
+        {
+            widget
+                .mock
+                .borrow_mut()
+                .expect_get_children()
+                .returning_st({
+                    let child = Rc::clone(&child);
+
+                    move || vec![child.borrow().clone()]
+                });
+
+            widget
+                .mock
+                .borrow_mut()
+                .expect_layout()
+                .returning(|_, _| Size::ZERO);
+        }
+
+        let mut engine = Engine::builder().with_root(widget).build();
 
         engine.update();
 
@@ -852,7 +808,7 @@ mod tests {
 
         engine.mark_dirty(root_id);
 
-        TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
+        *child.borrow_mut() = DummyWidget.into_widget();
 
         let events = engine.update();
 
@@ -872,9 +828,22 @@ mod tests {
 
     #[test]
     pub fn reuses_unchanged_widgets() {
-        let mut engine = Engine::builder().with_root(TestRootWidget).build();
+        let widget = MockRenderWidget::default();
+        {
+            widget
+                .mock
+                .borrow_mut()
+                .expect_get_children()
+                .returning_st(|| vec![DummyWidget.into_widget()]);
 
-        TestRootWidget::set_child(TestDummyWidget1::default().into_widget());
+            widget
+                .mock
+                .borrow_mut()
+                .expect_layout()
+                .returning(|_, _| Size::ZERO);
+        }
+
+        let mut engine = Engine::builder().with_root(widget).build();
 
         engine.update();
 

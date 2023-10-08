@@ -1,7 +1,5 @@
-use agui_core::{
-    unit::Axis,
-    widget::{BuildContext, Widget, WidgetBuild},
-};
+use agui_core::{unit::Axis, widget::Widget};
+use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
 use agui_macros::{build, StatelessWidget};
 
 use crate::intrinsic::IntrinsicAxis;
@@ -13,8 +11,8 @@ pub struct IntrinsicHeight {
     pub child: Option<Widget>,
 }
 
-impl WidgetBuild for IntrinsicHeight {
-    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
+impl StatelessWidget for IntrinsicHeight {
+    fn build(&self, _: &mut StatelessBuildContext<Self>) -> Widget {
         build! {
             <IntrinsicAxis> {
                 axis: Axis::Vertical,

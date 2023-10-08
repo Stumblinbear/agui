@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::{
-    callback::CallbackQueue,
+    callback::{CallbackQueue, ContextCallbackQueue},
     element::{Element, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
@@ -17,10 +17,9 @@ pub struct ElementBuildContext<'ctx> {
 
     pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
     pub(crate) dirty: &'ctx mut FxHashSet<ElementId>,
+    pub(crate) callback_queue: &'ctx CallbackQueue,
 
     pub(crate) element_id: ElementId,
-
-    pub(crate) callback_queue: &'ctx CallbackQueue,
 }
 
 impl<'ctx> ContextPlugins<'ctx> for ElementBuildContext<'ctx> {
@@ -48,5 +47,11 @@ impl ContextElement for ElementBuildContext<'_> {
 impl ContextMarkDirty for ElementBuildContext<'_> {
     fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
+    }
+}
+
+impl ContextCallbackQueue for ElementBuildContext<'_> {
+    fn get_callback_queue(&self) -> &CallbackQueue {
+        self.callback_queue
     }
 }

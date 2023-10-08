@@ -1,4 +1,5 @@
-use agui_core::widget::{BuildContext, Widget, WidgetBuild};
+use agui_core::widget::Widget;
+use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
 use agui_macros::StatelessWidget;
 
 use super::FlexFit;
@@ -13,8 +14,8 @@ pub struct Flexible {
     pub child: Widget,
 }
 
-impl WidgetBuild for Flexible {
-    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
+impl StatelessWidget for Flexible {
+    fn build(&self, _: &mut StatelessBuildContext<Self>) -> Widget {
         self.child.clone()
     }
 }

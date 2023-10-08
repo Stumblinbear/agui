@@ -7,11 +7,9 @@ use std::{
 use crate::{element::ElementId, unit::AsAny};
 
 mod context;
-mod func;
 mod queue;
 
 pub use context::*;
-pub(crate) use func::*;
 pub use queue::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -93,13 +91,21 @@ impl<A> WidgetCallback<A>
 where
     A: AsAny,
 {
-    pub(crate) fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
+    pub fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
+        Self::new_unchecked(element_id, TypeId::of::<F>(), callback_queue)
+    }
+
+    pub fn new_unchecked(
+        element_id: ElementId,
+        type_id: TypeId,
+        callback_queue: CallbackQueue,
+    ) -> Self {
         Self {
             phantom: PhantomData,
 
             id: CallbackId {
                 element_id,
-                type_id: TypeId::of::<F>(),
+                type_id,
             },
 
             callback_queue,
@@ -201,176 +207,66 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-
-    use agui_macros::{LayoutWidget, StatelessWidget};
+    use std::{any::TypeId, rc::Rc};
 
     use crate::{
-        callback::Callback,
+        callback::WidgetCallback,
+        element::mock::{build::MockBuildWidget, DummyWidget},
         engine::Engine,
-        unit::{Constraints, IntrinsicDimension, Size},
-        widget::{
-            BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetBuild, WidgetLayout,
-        },
+        widget::IntoWidget,
     };
-
-    thread_local! {
-        pub static CALLBACK: RefCell<Vec<Callback<u32>>> = RefCell::default();
-        pub static RESULT: RefCell<Vec<u32>> = RefCell::default();
-    }
-
-    #[derive(LayoutWidget)]
-    struct TestDummyWidget;
-
-    impl WidgetLayout for TestDummyWidget {
-        fn get_children(&self) -> Vec<Widget> {
-            vec![]
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
-            Size::ZERO
-        }
-    }
-
-    #[derive(StatelessWidget)]
-    struct TestWidget {
-        child: Widget,
-    }
-
-    impl WidgetBuild for TestWidget {
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
-            let callback = ctx.callback::<u32, _>(|_ctx, val| {
-                RESULT.with(|f| {
-                    f.borrow_mut().push(val);
-                });
-            });
-
-            CALLBACK.with(|f| {
-                f.borrow_mut().push(callback);
-            });
-
-            self.child.clone()
-        }
-    }
 
     #[test]
     pub fn should_not_call_immediately() {
-        let mut engine = Engine::builder()
-            .with_root(TestWidget {
-                child: TestDummyWidget.into(),
-            })
-            .build();
+        let widget = MockBuildWidget::default();
+        let widget_mock = Rc::clone(&widget.mock);
+        {
+            let mut widget_mock = widget_mock.borrow_mut();
+
+            widget_mock
+                .expect_build()
+                .returning(|_| DummyWidget.into_widget());
+
+            widget_mock.expect_call().never();
+        }
+
+        let mut engine = Engine::builder().with_root(widget).build();
 
         engine.update();
 
-        let callback = CALLBACK.with(|f| f.borrow()[0].clone());
-
-        callback.call(3);
-
-        RESULT.with(|f| {
-            assert_ne!(
-                f.borrow().first().copied(),
-                Some(3),
-                "callback should not have been called immediately"
-            );
-        });
+        WidgetCallback::new_unchecked(
+            engine.get_root(),
+            TypeId::of::<()>(),
+            engine.get_callback_queue().clone(),
+        )
+        .call(3);
     }
 
     #[test]
     pub fn can_fire_callbacks() {
-        let mut engine = Engine::builder()
-            .with_root(TestWidget {
-                child: TestDummyWidget.into(),
-            })
-            .build();
+        let widget = MockBuildWidget::default();
+        let widget_mock = Rc::clone(&widget.mock);
+        {
+            let mut widget_mock = widget_mock.borrow_mut();
+
+            widget_mock
+                .expect_build()
+                .returning(|_| DummyWidget.into_widget());
+
+            widget_mock.expect_call().once().returning(|_, _, _| false);
+        }
+
+        let mut engine = Engine::builder().with_root(widget).build();
 
         engine.update();
 
-        let callback = CALLBACK.with(|f| f.borrow()[0].clone());
-
-        callback.call(7);
-
-        engine.update();
-
-        RESULT.with(|f| {
-            assert_eq!(f.borrow()[0], 7, "callback should have been executed");
-        });
-
-        callback.call_unchecked(Box::new(10_u32));
+        WidgetCallback::new_unchecked(
+            engine.get_root(),
+            TypeId::of::<()>(),
+            engine.get_callback_queue().clone(),
+        )
+        .call(7);
 
         engine.update();
-
-        RESULT.with(|f| {
-            assert_eq!(
-                f.borrow()[1],
-                10,
-                "unsafe callback should have been executed"
-            );
-        });
-    }
-
-    #[test]
-    pub fn can_fire_many_callbacks() {
-        let mut engine = Engine::builder()
-            .with_root(TestWidget {
-                child: TestWidget {
-                    child: TestDummyWidget.into(),
-                }
-                .into(),
-            })
-            .build();
-
-        engine.update();
-
-        let callbacks = CALLBACK.with(|f| f.borrow().clone());
-
-        callbacks.iter().for_each(|callback| {
-            callback.call(47);
-        });
-
-        engine.update();
-
-        RESULT.with(|f| {
-            assert_eq!(
-                f.borrow()[0],
-                47,
-                "callback should have been called during update"
-            );
-
-            assert_eq!(
-                f.borrow()[1],
-                47,
-                "callback should have been called during update"
-            );
-        });
-
-        callbacks.iter().for_each(|callback| {
-            callback.call(53);
-        });
-
-        engine.update();
-
-        RESULT.with(|f| {
-            assert_eq!(
-                f.borrow()[2],
-                53,
-                "callback should have been called during update"
-            );
-
-            assert_eq!(
-                f.borrow()[3],
-                53,
-                "callback should have been called during update"
-            );
-        });
     }
 }

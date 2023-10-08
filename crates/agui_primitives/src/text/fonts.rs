@@ -3,10 +3,10 @@ use std::hash::BuildHasherDefault;
 use agui_core::{
     callback::Callback,
     unit::Font,
-    widget::{
-        ContextWidgetStateMut, IntoWidget, StatefulBuildContext, StatefulWidget, Widget,
-        WidgetState,
-    },
+    widget::{IntoWidget, Widget},
+};
+use agui_elements::stateful::{
+    ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState,
 };
 use agui_inheritance::InheritedWidget;
 use agui_macros::{InheritedWidget, StatefulWidget};
@@ -96,12 +96,9 @@ impl AvailableFonts {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{
-        engine::Engine,
-        unit::Font,
-        widget::{BuildContext, Widget, WidgetBuild},
-    };
-    use agui_inheritance::ContextInheritedMut;
+    use agui_core::{engine::Engine, unit::Font, widget::Widget};
+    use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
+    use agui_inheritance::{ContextInheritedMut, InheritancePlugin};
     use agui_macros::{build, StatelessWidget};
 
     use crate::sized_box::SizedBox;
@@ -120,8 +117,8 @@ mod tests {
     #[derive(Default, StatelessWidget)]
     struct TestWidget;
 
-    impl WidgetBuild for TestWidget {
-        fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
+    impl StatelessWidget for TestWidget {
+        fn build(&self, ctx: &mut StatelessBuildContext<Self>) -> Widget {
             let available_fonts = ctx
                 .depend_on_inherited_widget::<AvailableFonts>()
                 .expect("failed to get available fonts");
@@ -138,6 +135,7 @@ mod tests {
     #[test]
     fn can_retrieve_from_available_fonts() {
         let mut engine = Engine::builder()
+            .add_plugin(InheritancePlugin::default())
             .with_root(build! {
                 <Fonts> {
                     fonts: im_rc::HashMap::from_iter([(

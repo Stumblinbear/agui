@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 
 use crate::{
-    callback::CallbackQueue,
+    callback::{CallbackQueue, ContextCallbackQueue},
     element::{ContextElement, ContextMarkDirty, Element, ElementId},
     util::tree::Tree,
 };
@@ -28,5 +28,11 @@ impl ContextElement for PluginBuildContext<'_> {
 impl ContextMarkDirty for PluginBuildContext<'_> {
     fn mark_dirty(&mut self, element_id: ElementId) {
         self.dirty.insert(element_id);
+    }
+}
+
+impl ContextCallbackQueue for PluginBuildContext<'_> {
+    fn get_callback_queue(&self) -> &CallbackQueue {
+        self.callback_queue
     }
 }

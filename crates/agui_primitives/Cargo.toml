@@ -15,6 +15,7 @@ readme = "README.md"
 agui_core.workspace = true
 agui_macros.workspace = true
 
+agui_elements.workspace = true
 agui_inheritance.workspace = true
 
 rustc-hash.workspace = true

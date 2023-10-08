@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use agui_core::{
-    element::ElementType,
-    widget::{ElementBuilder, IntoWidget, Widget},
+    element::{ElementBuilder, ElementType},
+    widget::{IntoWidget, Widget},
 };
 
 use crate::element::RenderViewElement;
@@ -16,7 +18,7 @@ impl IntoWidget for RenderView {
 }
 
 impl ElementBuilder for RenderView {
-    fn create_element(self: std::rc::Rc<Self>) -> ElementType
+    fn create_element(self: Rc<Self>) -> ElementType
     where
         Self: Sized,
     {

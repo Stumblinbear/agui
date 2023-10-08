@@ -5,6 +5,7 @@ use crate::{props::impl_props_derive, utils::resolve_package_path};
 
 pub fn impl_paint_widget(input: TokenStream2) -> TokenStream2 {
     let agui_core = resolve_package_path("agui_core");
+    let agui_elements = resolve_package_path("agui_elements");
 
     let item: ItemStruct = match parse2(input) {
         Ok(item) => item,
@@ -25,12 +26,12 @@ pub fn impl_paint_widget(input: TokenStream2) -> TokenStream2 {
             }
         }
 
-        impl #impl_generics #agui_core::widget::ElementBuilder for #ident #ty_generics #where_clause {
+        impl #impl_generics #agui_core::element::ElementBuilder for #ident #ty_generics #where_clause {
             fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::Render(Box::new(#agui_core::widget::PaintElement::new(self)))
+                #agui_core::element::ElementType::Render(Box::new(#agui_elements::paint::PaintElement::new(self)))
             }
         }
     }

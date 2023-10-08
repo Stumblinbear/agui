@@ -8,13 +8,13 @@ A widget is anything that _exists_ in the UI tree. It could be a visual element,
 
 ## Creating a Widget
 
-A widget consists of two things: its settings and a build function. In Rust, this is just a `struct` with an `impl WidgetView`. We're going to start simple, with a basic box on the screen:
+A widget consists of two things: its settings and a build function. In Rust, this is just a `struct` with an `impl StatelessWidget`. We're going to start simple, with a basic box on the screen:
 
 ```rust,noplaypen
 pub struct MyWidget { }
 
-impl WidgetView for MyWidget {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+impl StatelessWidget for MyWidget {
+    fn build(&self, ctx: &mut StatelessBuildContext) -> BuildResult {
         BuildResult::None
     }
 }
@@ -23,8 +23,8 @@ impl WidgetView for MyWidget {
 If you run this... Nothing will happen. Which makes sense, as we don't have any widgets that actually render anything. Lets add one and give it a size.
 
 ```rust,noplaypen
-impl WidgetView for MyWidget {
-    fn build(&self, ctx: &mut BuildContext) -> BuildResult {
+impl StatelessWidget for MyWidget {
+    fn build(&self, ctx: &mut StatelessBuildContext) -> BuildResult {
         build! {
             Button {
                 layout: Layout {

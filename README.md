@@ -62,8 +62,8 @@ pub struct MyWidget {
     pub child: Widget,
 }
 
-impl WidgetBuild for MyWidget {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
+impl StatelessWidget for MyWidget {
+    fn build(&self, ctx: &mut StatelessBuildContext<Self>) -> Widget {
         build! {
             <Button> {
                 // Widgets are stored as Rcs, so cloning has little overhead
@@ -81,7 +81,7 @@ The `build!` macro makes it significantly cleaner and easier to init new widgets
 ```rust
 // It allows us to turn this:
 
-fn build(&self, ctx: &mut BuildContext) -> Widget {
+fn build(&self, ctx: &mut StatelessBuildContext) -> Widget {
     Button::builder()
         .color(Color::from_rgba((1.0, 0.0, 1.0)))
         .child(
@@ -98,7 +98,7 @@ fn build(&self, ctx: &mut BuildContext) -> Widget {
 
 use agui::macros::build;
 
-fn build(&self, ctx: &mut BuildContext) -> Widget {
+fn build(&self, ctx: &mut StatelessBuildContext) -> Widget {
     build! {
         <Button> {
             color: Color::from_rgba((1.0, 0.0, 1.0)),

@@ -20,6 +20,7 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
 agui_listenable = { path = "crates/agui_listenable", version = "0.3" }
+agui_elements = { path = "crates/agui_elements", version = "0.3" }
 agui_inheritance = { path = "crates/agui_inheritance", version = "0.3" }
 agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
 
@@ -39,6 +40,8 @@ rustc-hash = "1.1"
 slotmap = "1.0"
 parking_lot = "0.12"
 im-rc = "15.1"
+
+mockall = "0.11"
 
 futures = "0.3"
 raw-window-handle = "0.5"
@@ -63,6 +66,7 @@ vello = ["agui_renderer", "agui_vello", "dep:vello"]
 agui_core.workspace = true
 agui_macros = { workspace = true, optional = true }
 
+agui_elements.workspace = true
 agui_inheritance.workspace = true
 agui_primitives = { workspace = true, optional = true }
 agui_widgets = { workspace = true, optional = true }

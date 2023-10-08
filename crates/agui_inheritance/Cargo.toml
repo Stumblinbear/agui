@@ -11,6 +11,9 @@ categories = ["gui"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
+[features]
+mocks = ["mockall"]
+
 [dependencies]
 agui_core.workspace = true
 agui_macros.workspace = true
@@ -20,3 +23,10 @@ tracing.workspace = true
 rustc-hash.workspace = true
 slotmap.workspace = true
 im-rc.workspace = true
+
+mockall = { workspace = true, optional = true }
+
+[dev-dependencies]
+agui_core = { workspace = true, features = ["mocks"] }
+
+mockall.workspace = true

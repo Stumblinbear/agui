@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use agui_core::{
-    element::{proxy::ElementProxy, ContextElement, ElementUpdate},
-    plugin::context::ContextPluginsMut,
-    widget::{
-        element::{ElementWidget, WidgetMountContext},
-        AnyWidget, Widget,
+    element::{
+        proxy::ElementProxy, widget::ElementWidget, ContextElement, ElementMountContext,
+        ElementUpdate,
     },
+    plugin::context::ContextPluginsMut,
+    widget::{AnyWidget, Widget},
 };
 
 use crate::{RenderView, RenderViewPlugin};
@@ -27,7 +27,7 @@ impl ElementWidget for RenderViewElement {
     }
 
     #[allow(unused_variables)]
-    fn mount(&mut self, mut ctx: WidgetMountContext) {
+    fn mount(&mut self, mut ctx: ElementMountContext) {
         let element_id = ctx.get_element_id();
 
         if let Some(render_view_plugin) = ctx.get_plugins_mut().get_mut::<RenderViewPlugin>() {

@@ -37,8 +37,8 @@ fn main() {
 #[derive(StatelessWidget, PartialEq, Default)]
 struct ExampleMain;
 
-impl WidgetBuild for ExampleMain {
-    fn build(&self, _: &mut BuildContext<Self>) -> Widget {
+impl StatelessWidget for ExampleMain {
+    fn build(&self, _: &mut StatelessBuildContext<Self>) -> Widget {
         build! {
             <ColoredBox> {
                 color: Color::from_rgb((1.0, 1.0, 1.0)),

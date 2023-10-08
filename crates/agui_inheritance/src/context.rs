@@ -23,7 +23,11 @@ where
     {
         let element_id = self.get_element_id();
 
-        let inheritance_plugin = self.get_plugins_mut().get_mut::<InheritancePlugin>()?;
+        let Some(inheritance_plugin) = self.get_plugins_mut().get_mut::<InheritancePlugin>() else {
+            tracing::warn!("InheritancePlugin not found in the context");
+
+            return None;
+        };
 
         if let Some(element_id) = inheritance_plugin.depend_on_inherited_element::<I>(element_id) {
             let inherited_element = self

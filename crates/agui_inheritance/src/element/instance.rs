@@ -2,15 +2,12 @@ use std::{any::TypeId, rc::Rc};
 
 use agui_core::{
     callback::CallbackId,
-    element::{ContextElement, ContextMarkDirty, ElementUpdate},
-    plugin::context::ContextPluginsMut,
-    widget::{
-        element::{
-            ElementBuild, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
-            WidgetMountContext,
-        },
-        AnyWidget, Widget,
+    element::{
+        build::ElementBuild, widget::ElementWidget, ContextElement, ContextMarkDirty,
+        ElementBuildContext, ElementCallbackContext, ElementMountContext, ElementUpdate,
     },
+    plugin::context::ContextPluginsMut,
+    widget::{AnyWidget, Widget},
 };
 
 use crate::plugin::InheritancePlugin;
@@ -47,7 +44,7 @@ where
         self.widget.widget_name()
     }
 
-    fn mount(&mut self, mut ctx: WidgetMountContext) {
+    fn mount(&mut self, mut ctx: ElementMountContext) {
         let parent_element_id = ctx.get_parent_element_id();
         let element_id = ctx.get_element_id();
 
@@ -75,7 +72,7 @@ impl<I> ElementBuild for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    fn build(&mut self, mut ctx: WidgetBuildContext) -> Widget {
+    fn build(&mut self, mut ctx: ElementBuildContext) -> Widget {
         if self.needs_notify {
             self.needs_notify = false;
 
@@ -96,7 +93,12 @@ where
         self.widget.get_child()
     }
 
-    fn call(&mut self, _: WidgetCallbackContext, _: CallbackId, _: Box<dyn std::any::Any>) -> bool {
+    fn call(
+        &mut self,
+        _: ElementCallbackContext,
+        _: CallbackId,
+        _: Box<dyn std::any::Any>,
+    ) -> bool {
         unimplemented!("inherited widgets do not support callbacks")
     }
 }

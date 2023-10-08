@@ -3,10 +3,12 @@ use std::{borrow::Cow, rc::Rc};
 use agui_core::{
     render::{CanvasPainter, Paint},
     unit::{Constraints, IntrinsicDimension, Size, TextStyle},
-    widget::{
-        BuildContext, IntrinsicSizeContext, LayoutContext, Widget, WidgetBuild, WidgetLayout,
-        WidgetPaint,
-    },
+    widget::Widget,
+};
+use agui_elements::{
+    layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout},
+    paint::WidgetPaint,
+    stateless::{StatelessBuildContext, StatelessWidget},
 };
 use agui_inheritance::ContextInheritedMut;
 use agui_macros::{build, LayoutWidget, PaintWidget, StatelessWidget};
@@ -35,8 +37,8 @@ pub struct Text {
     pub text: Cow<'static, str>,
 }
 
-impl WidgetBuild for Text {
-    fn build(&self, ctx: &mut BuildContext<Self>) -> Widget {
+impl StatelessWidget for Text {
+    fn build(&self, ctx: &mut StatelessBuildContext<Self>) -> Widget {
         build! {
             <TextLayout> {
                 delegate: ctx

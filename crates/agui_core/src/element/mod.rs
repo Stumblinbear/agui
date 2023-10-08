@@ -3,24 +3,25 @@ use std::any::Any;
 use crate::{
     callback::CallbackId,
     render::canvas::Canvas,
-    unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
-    widget::{
-        element::{
-            ElementBuild, ElementWidget, WidgetBuildContext, WidgetCallbackContext,
-            WidgetHitTestContext, WidgetIntrinsicSizeContext, WidgetLayoutContext,
-            WidgetMountContext, WidgetUnmountContext,
-        },
-        Widget,
-    },
+    unit::{Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
+    widget::Widget,
 };
 
-use self::{proxy::ElementProxy, render::ElementRender};
+use self::{
+    build::ElementBuild, proxy::ElementProxy, render::ElementRender, widget::ElementWidget,
+};
 
+pub mod build;
+mod builder;
 mod context;
+#[cfg(any(test, feature = "mocks"))]
+pub mod mock;
 pub mod proxy;
 pub mod render;
 mod update;
+pub mod widget;
 
+pub use builder::*;
 pub use context::*;
 pub use update::*;
 
@@ -100,40 +101,19 @@ impl Element {
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn mount(&mut self, ctx: ElementMountContext) {
-        let widget_ctx = WidgetMountContext {
-            plugins: ctx.plugins,
-
-            element_tree: ctx.element_tree,
-
-            dirty: ctx.dirty,
-
-            parent_element_id: ctx.parent_element_id,
-            element_id: ctx.element_id,
-        };
-
         match self.inner {
-            ElementType::Proxy(ref mut widget) => widget.mount(widget_ctx),
-            ElementType::Widget(ref mut widget) => widget.mount(widget_ctx),
-            ElementType::Render(ref mut widget) => widget.mount(widget_ctx),
+            ElementType::Proxy(ref mut widget) => widget.mount(ctx),
+            ElementType::Widget(ref mut widget) => widget.mount(ctx),
+            ElementType::Render(ref mut widget) => widget.mount(ctx),
         }
     }
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn unmount(&mut self, ctx: ElementUnmountContext) {
-        let widget_ctx = WidgetUnmountContext {
-            plugins: ctx.plugins,
-
-            element_tree: ctx.element_tree,
-
-            dirty: ctx.dirty,
-
-            element_id: ctx.element_id,
-        };
-
         match self.inner {
-            ElementType::Proxy(ref mut widget) => widget.unmount(widget_ctx),
-            ElementType::Widget(ref mut widget) => widget.unmount(widget_ctx),
-            ElementType::Render(ref mut widget) => widget.unmount(widget_ctx),
+            ElementType::Proxy(ref mut widget) => widget.unmount(ctx),
+            ElementType::Widget(ref mut widget) => widget.unmount(ctx),
+            ElementType::Render(ref mut widget) => widget.unmount(ctx),
         }
     }
 
@@ -147,7 +127,7 @@ impl Element {
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn intrinsic_size(
         &self,
-        ctx: ElementIntrinsicSizeContext,
+        ctx: ElementContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -159,7 +139,11 @@ impl Element {
 
         match self.inner {
             ElementType::Proxy(_) | ElementType::Widget(_) => {
-                assert!(children.len() <= 1, "element may only have a single child");
+                assert!(
+                    children.len() <= 1,
+                    "{} may only have a single child",
+                    self.widget_name()
+                );
 
                 // Proxy the layout call to the child.
                 if let Some(child_id) = children.get(0).copied() {
@@ -167,8 +151,9 @@ impl Element {
                         .get(child_id)
                         .expect("child element missing during layout")
                         .intrinsic_size(
-                            ElementIntrinsicSizeContext {
+                            ElementContext {
                                 element_tree: ctx.element_tree,
+
                                 element_id: child_id,
                             },
                             dimension,
@@ -181,7 +166,7 @@ impl Element {
             }
 
             ElementType::Render(ref widget) => widget.intrinsic_size(
-                WidgetIntrinsicSizeContext {
+                ElementIntrinsicSizeContext {
                     element_tree: ctx.element_tree,
 
                     element_id: ctx.element_id,
@@ -195,7 +180,7 @@ impl Element {
     }
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
-    pub fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
+    pub fn layout(&mut self, ctx: ElementContextMut, constraints: Constraints) -> Size {
         // TODO: technically if the constraints didn't change from the last layout, we shouldn't need to
         // recompute. Is this assumption correct? if the child hasn't rebuilt, will their layout _ever_ be
         // able to change?
@@ -208,15 +193,20 @@ impl Element {
                     .map(|children| children.as_slice())
                     .unwrap_or_default();
 
-                assert!(children.len() <= 1, "element may only have a single child");
+                assert!(
+                    children.len() <= 1,
+                    "{} may only have a single child",
+                    self.widget_name()
+                );
 
                 // Proxy the layout call to the child.
                 if let Some(child_id) = children.get(0).copied() {
                     ctx.element_tree
                         .with(child_id, |element_tree, element| {
                             element.layout(
-                                ElementLayoutContext {
+                                ElementContextMut {
                                     element_tree,
+
                                     element_id: child_id,
                                 },
                                 constraints,
@@ -239,13 +229,12 @@ impl Element {
                 let mut offsets = vec![Offset::ZERO; children.len()];
 
                 let size = widget.layout(
-                    WidgetLayoutContext {
+                    ElementLayoutContext {
                         element_tree: ctx.element_tree,
 
                         element_id: ctx.element_id,
 
                         children: &children,
-
                         offsets: &mut offsets,
                     },
                     constraints,
@@ -269,17 +258,6 @@ impl Element {
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<Widget> {
-        let ctx = WidgetBuildContext {
-            plugins: ctx.plugins,
-
-            element_tree: ctx.element_tree,
-
-            dirty: ctx.dirty,
-            callback_queue: ctx.callback_queue,
-
-            element_id: ctx.element_id,
-        };
-
         match self.inner {
             ElementType::Proxy(ref mut widget) => Vec::from([widget.get_child()]),
             ElementType::Widget(ref mut widget) => Vec::from([widget.build(ctx)]),
@@ -317,16 +295,6 @@ impl Element {
         callback_id: CallbackId,
         arg: Box<dyn Any>,
     ) -> bool {
-        let widget_ctx = WidgetCallbackContext {
-            plugins: ctx.plugins,
-
-            element_tree: ctx.element_tree,
-
-            dirty: ctx.dirty,
-
-            element_id: ctx.element_id,
-        };
-
         match self.inner {
             ElementType::Proxy(_) => {
                 tracing::warn!("attempted to call a callback on a proxy element");
@@ -334,7 +302,7 @@ impl Element {
                 false
             }
 
-            ElementType::Widget(ref mut widget) => widget.call(widget_ctx, callback_id, arg),
+            ElementType::Widget(ref mut widget) => widget.call(ctx, callback_id, arg),
 
             ElementType::Render(_) => {
                 tracing::warn!("attempted to call a callback on a render element");
@@ -353,7 +321,12 @@ impl Element {
     }
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
-    pub fn hit_test(&self, ctx: ElementHitTestContext, position: Offset) -> HitTest {
+    pub fn hit_test(
+        &self,
+        ctx: ElementContext,
+        result: &mut HitTestResult,
+        position: Offset,
+    ) -> HitTest {
         let Some(size) = self.size else {
             tracing::warn!("cannot hit test an element before layout");
             return HitTest::Pass;
@@ -367,7 +340,11 @@ impl Element {
 
         let hit = match self.inner {
             ElementType::Proxy(_) | ElementType::Widget(_) => {
-                assert!(children.len() <= 1, "widgets may only have a single child");
+                assert!(
+                    children.len() <= 1,
+                    "{} may only have a single child",
+                    self.widget_name()
+                );
 
                 // Proxy the hit test to the child.
                 if let Some(child_id) = children.get(0).copied() {
@@ -375,13 +352,12 @@ impl Element {
                         .get(child_id)
                         .expect("child element missing during hit test")
                         .hit_test(
-                            ElementHitTestContext {
+                            ElementContext {
                                 element_tree: ctx.element_tree,
 
                                 element_id: child_id,
-
-                                result: ctx.result,
                             },
+                            result,
                             position,
                         )
                 } else {
@@ -395,7 +371,7 @@ impl Element {
             }
 
             ElementType::Render(ref widget) => widget.hit_test(
-                &mut WidgetHitTestContext {
+                &mut ElementHitTestContext {
                     element_tree: ctx.element_tree,
 
                     element_id: ctx.element_id,
@@ -403,14 +379,14 @@ impl Element {
 
                     children,
 
-                    result: ctx.result,
+                    result,
                 },
                 position,
             ),
         };
 
         if hit == HitTest::Absorb {
-            ctx.result.add(ctx.element_id);
+            result.add(ctx.element_id);
         }
 
         hit

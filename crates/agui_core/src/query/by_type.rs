@@ -46,101 +46,64 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_macros::LayoutWidget;
-
     use crate::{
+        element::mock::{build::MockBuildWidget, proxy::MockProxyWidget, DummyWidget},
         engine::Engine,
         query::WidgetQueryExt,
-        unit::{IntrinsicDimension, Size},
-        widget::{IntoWidget, IntrinsicSizeContext, Widget, WidgetLayout},
+        widget::IntoWidget,
     };
-
-    #[derive(Default, LayoutWidget)]
-    struct TestWidget1 {
-        pub child: Option<Widget>,
-    }
-
-    impl WidgetLayout for TestWidget1 {
-        fn get_children(&self) -> Vec<Widget> {
-            self.child.clone().into_iter().collect()
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(
-            &self,
-            _: &mut crate::widget::LayoutContext,
-            _: crate::unit::Constraints,
-        ) -> Size {
-            Size::ZERO
-        }
-    }
-
-    #[derive(Default, LayoutWidget)]
-    struct TestWidget2 {
-        pub child: Option<Widget>,
-    }
-
-    impl WidgetLayout for TestWidget2 {
-        fn get_children(&self) -> Vec<Widget> {
-            self.child.clone().into_iter().collect()
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(
-            &self,
-            _: &mut crate::widget::LayoutContext,
-            _: crate::unit::Constraints,
-        ) -> Size {
-            Size::ZERO
-        }
-    }
 
     #[test]
     pub fn finds_widget_by_type() {
-        let mut engine = Engine::builder()
-            .with_root(TestWidget1 {
-                child: Some(
-                    TestWidget2 {
-                        child: Some(
-                            TestWidget1 {
-                                ..Default::default()
-                            }
-                            .into_widget(),
-                        ),
+        let proxy_widget = MockProxyWidget::default();
+        {
+            proxy_widget
+                .mock
+                .borrow_mut()
+                .expect_get_child()
+                .returning(|| {
+                    let build_widget = MockBuildWidget::default();
+                    {
+                        build_widget
+                            .mock
+                            .borrow_mut()
+                            .expect_build()
+                            .returning(|_| {
+                                let build_widget = MockBuildWidget::default();
+                                {
+                                    build_widget
+                                        .mock
+                                        .borrow_mut()
+                                        .expect_build()
+                                        .returning(|_| DummyWidget.into_widget());
+                                }
+                                build_widget.into_widget()
+                            });
                     }
-                    .into_widget(),
-                ),
-            })
-            .build();
+                    build_widget.into_widget()
+                });
+        }
+
+        let mut engine = Engine::builder().with_root(proxy_widget).build();
 
         engine.update();
 
         assert_eq!(
-            engine.query().by_type::<TestWidget1>().count(),
-            2,
-            "should have found 2 widgets of type TestWidget1"
+            engine.query().by_type::<MockProxyWidget>().count(),
+            1,
+            "should have found 1 widget of type MockProxyWidget"
         );
 
         assert_eq!(
-            engine.query().by_type::<TestWidget2>().count(),
+            engine.query().by_type::<MockBuildWidget>().count(),
+            2,
+            "should have found 2 widgets of type MockBuildWidget"
+        );
+
+        assert_eq!(
+            engine.query().by_type::<DummyWidget>().count(),
             1,
-            "should have found 1 widget of type TestWidget2"
+            "should have found 1 widget of type DummyWidget"
         );
     }
 }
