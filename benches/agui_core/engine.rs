@@ -2,8 +2,9 @@ use std::cell::RefCell;
 
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size},
-    widget::{IntoWidget, IntrinsicSizeContext, LayoutContext, Widget, WidgetLayout},
+    widget::{IntoWidget, Widget},
 };
+use agui_elements::layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout};
 use agui_inheritance::InheritancePlugin;
 use agui_macros::LayoutWidget;
 use agui_primitives::sized_box::SizedBox;
