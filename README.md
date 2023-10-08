@@ -76,10 +76,24 @@ impl StatelessWidget for MyWidget {
 
 ## What's `build!`?
 
-The `build!` macro makes it significantly cleaner and easier to init new widgets. All it does is initialize unset fields in a struct to their `Default::default()`, and add `.into()` to the struct itself.
+The `build!` macro makes it significantly cleaner and easier to init new widgets. It gives a struct-like syntax for widget creation, and is the recommended way to build interfaces.
 
 ```rust
-// It allows us to turn this:
+use agui::macros::build;
+
+fn build(&self, ctx: &mut StatelessBuildContext) -> Widget {
+    build! {
+        <Button> {
+            color: Color::from_rgba((1.0, 0.0, 1.0)),
+
+            child: <Text> {
+                text: "A Button"
+            }
+        }
+    }
+}
+
+// is equivalent to:
 
 fn build(&self, ctx: &mut StatelessBuildContext) -> Widget {
     Button::builder()
@@ -94,21 +108,6 @@ fn build(&self, ctx: &mut StatelessBuildContext) -> Widget {
         .into_widget()
 }
 
-// Into this:
-
-use agui::macros::build;
-
-fn build(&self, ctx: &mut StatelessBuildContext) -> Widget {
-    build! {
-        <Button> {
-            color: Color::from_rgba((1.0, 0.0, 1.0)),
-
-            child: <Text> {
-                text: "A Button"
-            }
-        }
-    }
-}
 ```
 
 # 🤝 Contributing
