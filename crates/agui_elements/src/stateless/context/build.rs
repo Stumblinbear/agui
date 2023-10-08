@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use agui_core::{
     callback::{Callback, CallbackId, CallbackQueue, ContextCallbackQueue, WidgetCallback},
     element::{ContextElement, ContextMarkDirty, Element, ElementBuildContext, ElementId},
@@ -52,6 +54,20 @@ impl<W> ContextMarkDirty for StatelessBuildContext<'_, W> {
 impl<W> ContextCallbackQueue for StatelessBuildContext<'_, W> {
     fn get_callback_queue(&self) -> &CallbackQueue {
         self.inner.get_callback_queue()
+    }
+}
+
+impl<'ctx, W> Deref for StatelessBuildContext<'ctx, W> {
+    type Target = ElementBuildContext<'ctx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'ctx, W> DerefMut for StatelessBuildContext<'ctx, W> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
