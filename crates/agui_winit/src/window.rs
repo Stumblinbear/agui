@@ -9,7 +9,7 @@ use agui_elements::{
     layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout},
     stateful::{ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState},
 };
-use agui_inheritance::{ContextInheritedMut, InheritedWidget};
+use agui_inheritance::InheritedWidget;
 use agui_listenable::EventEmitterHandle;
 use agui_macros::{build, InheritedWidget, LayoutWidget, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
@@ -19,7 +19,7 @@ use winit::{
     window::WindowBuilder,
 };
 
-use crate::{binding::WinitBinding, handle::WinitWindowHandle};
+use crate::{handle::WinitWindowHandle, WinitPlugin};
 
 #[derive(Debug, WidgetProps)]
 pub struct Window<F>
@@ -92,10 +92,6 @@ where
     type Widget = WinitWindow<F>;
 
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
-        let Some(binding) = ctx.depend_on_inherited_widget::<WinitBinding>() else {
-            return tracing::error!("Windowing controller not found in the widget tree");
-        };
-
         let mouse_input_event_cb = ctx.callback(
             |_ctx, (device_id, state, button): (DeviceId, ElementState, MouseButton)| {
                 // println!(
@@ -105,29 +101,34 @@ where
             },
         );
 
-        // I don't like cloning the window, here.
+        let on_window_created = ctx.callback(move |ctx, window: WinitWindowHandle| {
+            let mouse_input_event_cb = mouse_input_event_cb.clone();
+
+            ctx.set_state(|state| {
+                state.event_listener = Some(window.events().add_listener(move |event| {
+                    if let WindowEvent::MouseInput {
+                        device_id,
+                        state,
+                        button,
+                        ..
+                    } = event
+                    {
+                        mouse_input_event_cb.call((*device_id, *state, *button));
+                    }
+                }));
+
+                state.window.replace(window);
+            });
+        });
+
+        let Some(binding) = ctx.plugins.get::<WinitPlugin>() else {
+            return tracing::error!("Windowing plugin not found");
+        };
+
         binding.create_window(
             ctx.get_element_id(),
             (ctx.widget.window)(),
-            ctx.callback(move |ctx, window: WinitWindowHandle| {
-                let mouse_input_event_cb = mouse_input_event_cb.clone();
-
-                ctx.set_state(|state| {
-                    state.event_listener = Some(window.events().add_listener(move |event| {
-                        if let WindowEvent::MouseInput {
-                            device_id,
-                            state,
-                            button,
-                            ..
-                        } = event
-                        {
-                            mouse_input_event_cb.call((*device_id, *state, *button));
-                        }
-                    }));
-
-                    state.window.replace(window);
-                });
-            }),
+            on_window_created,
         );
     }
 

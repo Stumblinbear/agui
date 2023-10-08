@@ -1,32 +1,24 @@
 use std::sync::mpsc;
 
-use agui_core::{callback::Callback, element::ElementId, widget::Widget};
-use agui_inheritance::InheritedWidget;
-use agui_macros::InheritedWidget;
+use agui_core::{callback::Callback, element::ElementId, plugin::Plugin};
 use winit::window::WindowBuilder;
 
-use crate::handle::WinitWindowHandle;
+use crate::WinitWindowHandle;
 
-#[derive(InheritedWidget)]
-pub struct WinitBinding {
+pub struct WinitPlugin {
     tx: mpsc::Sender<WinitBindingEvent>,
-
-    #[prop(into)]
-    child: Widget,
 }
 
-impl InheritedWidget for WinitBinding {
-    fn get_child(&self) -> Widget {
-        self.child.clone()
-    }
-
-    fn should_notify(&self, _: &Self) -> bool {
-        true
+impl WinitPlugin {
+    pub fn new(tx: mpsc::Sender<WinitBindingEvent>) -> Self {
+        Self { tx }
     }
 }
 
-impl WinitBinding {
-    pub fn create_window(
+impl Plugin for WinitPlugin {}
+
+impl WinitPlugin {
+    pub(crate) fn create_window(
         &self,
         window_element_id: ElementId,
         window: WindowBuilder,

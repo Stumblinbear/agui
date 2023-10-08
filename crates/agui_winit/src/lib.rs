@@ -1,7 +1,7 @@
-mod binding;
 mod handle;
+mod plugin;
 mod window;
 
-pub use binding::{WinitBinding, WinitBindingEvent};
 pub use handle::WinitWindowHandle;
+pub use plugin::{WinitBindingEvent, WinitPlugin};
 pub use window::{CurrentWindow, Window};

@@ -9,7 +9,7 @@ use agui_vello;
 use agui_vello::{VelloBinding, VelloRenderer};
 use agui_winit::WinitBindingEvent;
 #[cfg(feature = "winit")]
-use agui_winit::{WinitBinding, WinitWindowHandle};
+use agui_winit::{WinitPlugin, WinitWindowHandle};
 use rustc_hash::FxHashMap;
 use vello::glyph::fello::raw::FontRef;
 use winit::{
@@ -34,19 +34,20 @@ pub fn run_app(root: impl IntoWidget) {
 
     let (winit_binding_tx, winit_binding_rx) = mpsc::channel();
 
-    let mut engine = Engine::builder()
+    let engine = Engine::builder()
         .with_notifier(update_notifier_tx.clone())
         .add_plugin(InheritancePlugin::default())
-        .add_plugin(RenderViewPlugin::default())
+        .add_plugin(RenderViewPlugin::default());
+
+    #[cfg(feature = "winit")]
+    let engine = { engine.add_plugin(WinitPlugin::new(winit_binding_tx)) };
+
+    let mut engine = engine
         .with_root(build! {
-            <WinitBinding> {
-                tx: winit_binding_tx,
+            <VelloBinding> {
+                fonts: renderer.get_fonts().clone(),
 
-                child: <VelloBinding> {
-                    fonts: renderer.get_fonts().clone(),
-
-                    child: root.into_widget(),
-                },
+                child: root.into_widget(),
             }
         })
         .build();
