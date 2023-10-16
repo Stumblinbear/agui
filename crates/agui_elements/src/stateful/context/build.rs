@@ -21,7 +21,7 @@ use super::{
 
 pub struct StatefulBuildContext<'ctx, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     pub(crate) inner: ElementBuildContext<'ctx>,
 

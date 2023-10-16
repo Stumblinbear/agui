@@ -19,7 +19,6 @@ members = ["crates/*"]
 agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
-agui_listenable = { path = "crates/agui_listenable", version = "0.3" }
 agui_elements = { path = "crates/agui_elements", version = "0.3" }
 agui_inheritance = { path = "crates/agui_inheritance", version = "0.3" }
 agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
@@ -40,8 +39,10 @@ rustc-hash = "1.1"
 slotmap = "1.0"
 parking_lot = "0.12"
 im-rc = "15.1"
+bitflags = "2.4"
 
 mockall = "0.11"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 futures = "0.3"
 raw-window-handle = "0.5"
@@ -87,13 +88,10 @@ vello = { workspace = true, optional = true }
 [dev-dependencies]
 agui = { path = ".", features = ["app", "vello", "winit"] }
 
-criterion = { version = "0.5", features = ["html_reports"] }
-
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 sysinfo = "0.29"
 
-fnv = "1.0"
 slotmap.workspace = true
 
 [profile.release]
@@ -119,23 +117,3 @@ opt-level = 1
 
 [profile.dev.package.agui_winit]
 opt-level = 1
-
-[[bench]]
-name = "tree"
-path = "benches/agui_core/tree.rs"
-harness = false
-
-[[bench]]
-name = "engine"
-path = "benches/agui_core/engine.rs"
-harness = false
-
-[[bench]]
-name = "hashers"
-path = "benches/agui_core/hashers.rs"
-harness = false
-
-[[bench]]
-name = "rc_vs_thread_local"
-path = "benches/agui_core/rc_vs_thread_local.rs"
-harness = false

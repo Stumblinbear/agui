@@ -1,23 +1,28 @@
 use std::rc::Rc;
 
 use agui_core::{
-    element::{
-        proxy::ElementProxy, widget::ElementWidget, ContextElement, ElementMountContext,
-        ElementUpdate,
-    },
-    plugin::context::ContextPluginsMut,
-    widget::{AnyWidget, Widget},
+    element::{proxy::ElementProxy, widget::ElementWidget, ElementMountContext, ElementUpdate},
+    widget::{AnyWidget, IntoWidget, Widget},
 };
 
-use crate::{RenderView, RenderViewPlugin};
+use crate::{CurrentRenderView, RenderView, RenderViewId, RenderViewPlugin};
 
 pub struct RenderViewElement {
     widget: Rc<RenderView>,
+
+    child: Widget,
 }
 
 impl RenderViewElement {
     pub fn new(widget: Rc<RenderView>) -> Self {
-        Self { widget }
+        let child = CurrentRenderView {
+            id: RenderViewId::default(),
+
+            child: widget.child.clone(),
+        }
+        .into_widget();
+
+        Self { widget, child }
     }
 }
 
@@ -28,10 +33,13 @@ impl ElementWidget for RenderViewElement {
 
     #[allow(unused_variables)]
     fn mount(&mut self, mut ctx: ElementMountContext) {
-        let element_id = ctx.get_element_id();
+        if let Some(render_view_plugin) = ctx.plugins.get_mut::<RenderViewPlugin>() {
+            self.child = CurrentRenderView {
+                id: render_view_plugin.create_render_view(*ctx.element_id),
 
-        if let Some(render_view_plugin) = ctx.get_plugins_mut().get_mut::<RenderViewPlugin>() {
-            render_view_plugin.create_render_view(element_id);
+                child: self.widget.child.clone(),
+            }
+            .into_widget();
         }
     }
 
@@ -48,7 +56,7 @@ impl ElementWidget for RenderViewElement {
 
 impl ElementProxy for RenderViewElement {
     fn get_child(&self) -> Widget {
-        self.widget.child.clone()
+        self.child.clone()
     }
 }
 

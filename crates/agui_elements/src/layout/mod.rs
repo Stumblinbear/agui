@@ -9,7 +9,7 @@ mod instance;
 pub use context::*;
 pub use instance::*;
 
-pub trait WidgetLayout: Sized + 'static {
+pub trait WidgetLayout: 'static {
     fn get_children(&self) -> Vec<Widget>;
 
     fn intrinsic_size(

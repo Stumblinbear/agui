@@ -1,3 +1,5 @@
+use agui_core::plugin::context::{PluginAfterUpdateContext, PluginElementRemountContext};
+use agui_core::plugin::Capabilities;
 use agui_core::{
     element::{ContextElement, ElementId},
     plugin::{
@@ -14,12 +16,20 @@ pub struct RenderViewPlugin {
 }
 
 impl Plugin for RenderViewPlugin {
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::ELEMENT_MOUNT | Capabilities::ELEMENT_UNMOUNT
+    }
+
+    fn on_after_update(&mut self, ctx: PluginAfterUpdateContext) {
+        // TODO: collect elements into a map of render view id -> elements
+    }
+
     fn on_element_mount(&mut self, ctx: PluginElementMountContext) {
         self.manager
             .add(ctx.get_parent_element_id(), ctx.get_element_id());
     }
 
-    fn on_element_remount(&mut self, ctx: PluginElementMountContext) {
+    fn on_element_remount(&mut self, ctx: PluginElementRemountContext) {
         let element_id = ctx.get_element_id();
 
         let parent_render_view_id = ctx
@@ -36,8 +46,8 @@ impl Plugin for RenderViewPlugin {
 }
 
 impl RenderViewPlugin {
-    pub(crate) fn create_render_view(&mut self, element_id: ElementId) {
-        self.manager.create_render_view(element_id);
+    pub(crate) fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
+        self.manager.create_render_view(element_id)
     }
 
     pub fn get_boundary(&self, render_view_id: RenderViewId) -> Option<ElementId> {

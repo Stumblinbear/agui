@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use crate::listenable::Event;
+
 #[allow(clippy::type_complexity)]
 pub struct EventEmitter<T> {
     listeners: Rc<RefCell<Vec<Weak<dyn Fn(&T)>>>>,
@@ -29,17 +31,21 @@ impl<T> EventEmitter<T> {
     pub fn new() -> Self {
         Self::default()
     }
+}
 
+impl<T: Event> EventEmitter<T> {
     pub fn emit(&self, value: &T) {
-        let mut listeners = self.listeners.borrow_mut();
-
-        listeners.retain(|handle| handle.upgrade().is_some());
-
-        for handle in listeners.iter().filter_map(|handle| handle.upgrade()) {
-            (handle)(value);
-        }
+        self.listeners.borrow_mut().retain(|handle| {
+            if let Some(handle) = handle.upgrade() {
+                (handle)(value);
+                true
+            } else {
+                false
+            }
+        });
     }
 
+    #[must_use]
     pub fn add_listener(&self, func: impl Fn(&T) + 'static) -> EventEmitterHandle<T> {
         let func = Arc::new(func) as Arc<dyn Fn(&T)>;
 
@@ -49,7 +55,8 @@ impl<T> EventEmitter<T> {
     }
 }
 
-impl<T: PartialEq + 'static> EventEmitter<T> {
+impl<T: Event + PartialEq> EventEmitter<T> {
+    #[must_use]
     pub fn on(&self, value: T, func: impl Fn() + 'static) -> EventEmitterHandle<T> {
         self.add_listener(move |received_value| {
             if received_value == &value {

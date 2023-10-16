@@ -1,44 +1,50 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::unit::AsAny;
 
 use self::context::{
-    PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementMountContext,
-    PluginElementUnmountContext,
+    PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
+    PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
+    PluginInitContext,
 };
 
 pub mod context;
 
+#[allow(unused_variables)]
 pub trait Plugin: AsAny {
+    fn capabilities(&self) -> Capabilities;
+
+    /// Called when the engine is initialized.
+    fn on_init(&mut self, ctx: PluginInitContext) {}
+
     /// Called before each engine update, before any changes have been processed.
-    #[allow(unused_variables)]
     fn on_before_update(&mut self, ctx: PluginBeforeUpdateContext) {}
 
     /// Called after each engine update, after all changes have been processed and the tree
     /// has settled.
-    #[allow(unused_variables)]
     fn on_after_update(&mut self, ctx: PluginAfterUpdateContext) {}
 
-    #[allow(unused_variables)]
     fn on_element_mount(&mut self, ctx: PluginElementMountContext) {}
 
-    #[allow(unused_variables)]
-    fn on_element_remount(&mut self, ctx: PluginElementMountContext) {}
+    fn on_element_remount(&mut self, ctx: PluginElementRemountContext) {}
 
-    #[allow(unused_variables)]
     fn on_element_unmount(&mut self, ctx: PluginElementUnmountContext) {}
+
+    fn on_element_build(&mut self, ctx: PluginElementBuildContext) {}
 }
 
 pub struct Plugins {
-    inner: Vec<Box<dyn Plugin>>,
+    inner: Vec<PluginObject>,
 
-    plugin_in_use: Option<Box<dyn Plugin>>,
+    plugin_in_use: Option<PluginObject>,
 }
 
 impl Plugins {
     pub(crate) fn new(plugins: Vec<Box<dyn Plugin>>) -> Self {
         Self {
-            inner: plugins,
+            inner: plugins.into_iter().map(PluginObject::new).collect(),
 
-            plugin_in_use: Some(Box::new(PlaceholderPlugin)),
+            plugin_in_use: Some(PluginObject::new(Box::new(PlaceholderPlugin))),
         }
     }
 
@@ -51,7 +57,7 @@ impl Plugins {
         P: Plugin,
     {
         for plugin in self.inner.iter() {
-            if let Some(plugin) = plugin.as_ref().as_any().downcast_ref::<P>() {
+            if let Some(plugin) = (*plugin).as_any().downcast_ref::<P>() {
                 return Some(plugin);
             }
         }
@@ -68,7 +74,7 @@ impl Plugins {
         P: Plugin,
     {
         for plugin in self.inner.iter_mut() {
-            if let Some(plugin) = plugin.as_mut().as_any_mut().downcast_mut::<P>() {
+            if let Some(plugin) = (*plugin).as_any_mut().downcast_mut::<P>() {
                 return Some(plugin);
             }
         }
@@ -78,26 +84,80 @@ impl Plugins {
 
     pub(crate) fn with<F>(&mut self, mut f: F)
     where
-        F: FnMut(&mut Self, &mut dyn Plugin),
+        F: FnMut(&mut Self, &mut PluginObject),
     {
-        for i in 0..self.inner.len() {
-            let mut plugin_in_use = self
-                .plugin_in_use
-                .take()
-                .expect("can only have one plugin in use at any given time");
+        let num_plugins = self.inner.len();
 
-            std::mem::swap(&mut self.inner[i], &mut plugin_in_use);
-
-            f(self, plugin_in_use.as_mut());
-
-            std::mem::swap(&mut self.inner[i], &mut plugin_in_use);
-
-            self.plugin_in_use = Some(plugin_in_use);
+        if num_plugins == 0 {
+            return;
         }
+
+        let mut plugin_in_use = self
+            .plugin_in_use
+            .take()
+            .expect("cannot use plugins while they are being iterated over");
+
+        for i in 0..num_plugins {
+            std::mem::swap(&mut self.inner[i], &mut plugin_in_use);
+
+            f(self, &mut plugin_in_use);
+
+            std::mem::swap(&mut self.inner[i], &mut plugin_in_use);
+        }
+
+        self.plugin_in_use = Some(plugin_in_use);
+    }
+}
+
+pub struct PluginObject {
+    pub inner: Box<dyn Plugin>,
+
+    pub capabilities: Capabilities,
+}
+
+impl PluginObject {
+    pub fn new(plugin: Box<dyn Plugin>) -> Self {
+        Self {
+            inner: plugin,
+
+            capabilities: Capabilities::default(),
+        }
+    }
+}
+
+impl Deref for PluginObject {
+    type Target = dyn Plugin;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
+    }
+}
+
+impl DerefMut for PluginObject {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.as_mut()
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Default)]
+    pub struct Capabilities: u8 {
+        const BEFORE_UPDATE = 0b0000_0001;
+        const AFTER_UPDATE  = 0b0000_0010;
+
+        const ELEMENT_MOUNT  = 0b0000_0100;
+        const ELEMENT_UNMOUNT  = 0b0000_1000;
+        const ELEMENT_BUILD  = 0b0001_0000;
+
+        const ELEMENT_LIFECYCLE = Capabilities::ELEMENT_MOUNT.bits() | Capabilities::ELEMENT_UNMOUNT.bits() | Capabilities::ELEMENT_BUILD.bits();
     }
 }
 
 /// Exists as a stand-in for plugins that are currently being iterated over.
 struct PlaceholderPlugin;
 
-impl Plugin for PlaceholderPlugin {}
+impl Plugin for PlaceholderPlugin {
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::default()
+    }
+}

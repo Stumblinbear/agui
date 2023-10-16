@@ -1,39 +1,35 @@
-use crate::element::ElementId;
+use crate::{element::ElementId, listenable::Event};
 
-/// Used to indicate a change to elements in the tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// A element has been spawned.
 #[non_exhaustive]
-pub enum ElementEvent {
-    /// A element has been spawned.
-    Spawned {
-        parent_id: Option<ElementId>,
-        element_id: ElementId,
-    },
-
-    /// A element has been rebuilt.
-    Rebuilt { element_id: ElementId },
-
-    /// A element has been reparented.
-    Reparent {
-        parent_id: Option<ElementId>,
-        element_id: ElementId,
-    },
-
-    /// A element has been destroyed.
-    Destroyed { element_id: ElementId },
-
-    /// A element needs to be redrawn. This will occur the first time a element is drawn and for subsequent changes.
-    Draw { element_id: ElementId },
+pub struct ElementSpawnedEvent {
+    pub parent_id: Option<ElementId>,
+    pub element_id: ElementId,
 }
 
-impl ElementEvent {
-    pub fn element_id(&self) -> &ElementId {
-        match self {
-            ElementEvent::Spawned { element_id, .. }
-            | ElementEvent::Rebuilt { element_id, .. }
-            | ElementEvent::Reparent { element_id, .. }
-            | ElementEvent::Destroyed { element_id, .. }
-            | ElementEvent::Draw { element_id, .. } => element_id,
-        }
-    }
+impl Event for ElementSpawnedEvent {}
+
+/// A element has been rebuilt.
+#[non_exhaustive]
+pub struct ElementRebuiltEvent {
+    pub element_id: ElementId,
 }
+
+impl Event for ElementRebuiltEvent {}
+
+/// A element has been reparented.
+#[non_exhaustive]
+pub struct ElementReparentEvent {
+    pub parent_id: Option<ElementId>,
+    pub element_id: ElementId,
+}
+
+impl Event for ElementReparentEvent {}
+
+/// A element has been destroyed.
+#[non_exhaustive]
+pub struct ElementDestroyedEvent {
+    pub element_id: ElementId,
+}
+
+impl Event for ElementDestroyedEvent {}

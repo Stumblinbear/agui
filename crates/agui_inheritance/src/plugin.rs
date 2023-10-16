@@ -3,10 +3,11 @@ use std::any::TypeId;
 use agui_core::{
     element::{ContextElement, ElementId},
     plugin::{
-        context::{PluginElementMountContext, PluginElementUnmountContext},
-        Plugin,
+        context::{
+            PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
+        },
+        Capabilities, Plugin,
     },
-    widget::AnyWidget,
 };
 
 use crate::{element::InheritedWidget, manager::InheritanceManager};
@@ -17,12 +18,16 @@ pub struct InheritancePlugin {
 }
 
 impl Plugin for InheritancePlugin {
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::ELEMENT_MOUNT | Capabilities::ELEMENT_UNMOUNT
+    }
+
     fn on_element_mount(&mut self, ctx: PluginElementMountContext) {
         self.manager
             .create_node(ctx.get_parent_element_id(), ctx.get_element_id());
     }
 
-    fn on_element_remount(&mut self, mut ctx: PluginElementMountContext) {
+    fn on_element_remount(&mut self, mut ctx: PluginElementRemountContext) {
         let parent_scope_id = ctx.get_parent_element_id().and_then(|parent_element_id| {
             self.manager
                 .get(parent_element_id)
@@ -42,9 +47,17 @@ impl Plugin for InheritancePlugin {
 }
 
 impl InheritancePlugin {
+    pub fn find_inherited_element<I>(&self, element_id: ElementId) -> Option<ElementId>
+    where
+        I: InheritedWidget,
+    {
+        self.manager
+            .find_inherited_element(element_id, &TypeId::of::<I>())
+    }
+
     pub fn depend_on_inherited_element<I>(&mut self, element_id: ElementId) -> Option<ElementId>
     where
-        I: AnyWidget + InheritedWidget,
+        I: InheritedWidget,
     {
         self.manager
             .depend_on_inherited_element(element_id, TypeId::of::<I>())
@@ -59,13 +72,14 @@ impl InheritancePlugin {
             .map(|scope| scope.iter_listeners())
     }
 
-    pub(crate) fn create_scope(
+    pub(crate) fn create_scope<I>(
         &mut self,
         parent_element_id: Option<ElementId>,
         element_id: ElementId,
-        type_id: TypeId,
-    ) {
+    ) where
+        I: InheritedWidget,
+    {
         self.manager
-            .create_scope(type_id, parent_element_id, element_id);
+            .create_scope(TypeId::of::<I>(), parent_element_id, element_id);
     }
 }

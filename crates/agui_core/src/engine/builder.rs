@@ -4,6 +4,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
+    listenable::EventBus,
     plugin::{Plugin, Plugins},
     util::tree::Tree,
     widget::{IntoWidget, Widget},
@@ -47,6 +48,8 @@ impl EngineBuilder {
 
     pub fn build(self) -> Engine {
         let mut engine = Engine {
+            bus: EventBus::default(),
+
             plugins: Plugins::new(self.plugins),
 
             element_tree: Tree::default(),
@@ -59,11 +62,9 @@ impl EngineBuilder {
             rebuild_queue: VecDeque::default(),
             retained_elements: FxHashSet::default(),
             removal_queue: FxHashSet::default(),
-
-            element_events: Vec::default(),
         };
 
-        engine.init_root(self.root.expect("root is not set"));
+        engine.init(self.root.expect("root is not set"));
 
         engine
     }

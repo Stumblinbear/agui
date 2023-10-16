@@ -23,10 +23,10 @@ impl InheritedWidget for TextLayoutController {
             .unwrap_or_else(|| SizedBox::shrink().into_widget())
     }
 
-    fn should_notify(&self, other_widget: &Self) -> bool {
+    fn should_notify(&self, old_widget: &Self) -> bool {
         !std::ptr::eq(
             Rc::as_ptr(&self.delegate) as *const _ as *const (),
-            Rc::as_ptr(&other_widget.delegate) as *const _ as *const (),
+            Rc::as_ptr(&old_widget.delegate) as *const _ as *const (),
         )
     }
 }

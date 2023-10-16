@@ -69,7 +69,7 @@ where
         )
     }
 
-    fn layout(&self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
         self.widget
             .layout(&mut LayoutContext { inner: ctx }, constraints)
     }

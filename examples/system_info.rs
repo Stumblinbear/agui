@@ -7,10 +7,10 @@ use tracing_subscriber::EnvFilter;
 use agui::{app::run_app, prelude::*, winit::Window};
 use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
-        .add_directive(format!("agui={}", LevelFilter::INFO).parse().unwrap());
+        .add_directive(format!("agui={}", LevelFilter::DEBUG).parse().unwrap());
 
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
@@ -28,7 +28,7 @@ fn main() {
 
             child: <ExampleMain>::default(),
         }
-    });
+    })
 }
 
 #[derive(Clone, Debug)]

@@ -76,9 +76,9 @@ impl InheritedWidget for AvailableFonts {
         self.child.clone()
     }
 
-    fn should_notify(&self, other_widget: &Self) -> bool {
-        self.available_fonts != other_widget.available_fonts
-            || self.add_font_cb != other_widget.add_font_cb
+    fn should_notify(&self, old_widget: &Self) -> bool {
+        self.available_fonts != old_widget.available_fonts
+            || self.add_font_cb != old_widget.add_font_cb
     }
 }
 

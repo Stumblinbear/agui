@@ -109,7 +109,7 @@ impl ElementRender for MockElement {
             .intrinsic_size(ctx, dimension, cross_extent)
     }
 
-    fn layout(&self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
         self.widget.mock.borrow().layout(ctx, constraints)
     }
 

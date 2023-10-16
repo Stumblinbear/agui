@@ -1,12 +1,13 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use agui_core::{
     element::ElementId,
-    engine::{event::ElementEvent, Engine},
-    unit::Offset,
+    engine::Engine,
+    unit::{Offset, Size},
+    util::map::ElementMap,
 };
-use agui_renderer::{RenderViewId, RenderViewPlugin};
-use rustc_hash::FxHashMap;
+use agui_renderer::{RenderViewId, RenderViewPlugin, ViewRenderer};
+use parking_lot::Mutex;
 use vello::{
     block_on_wgpu,
     kurbo::{Affine, Vec2},
@@ -15,19 +16,46 @@ use vello::{
     Scene, SceneBuilder,
 };
 
-use crate::{element::RenderObject, fonts::VelloFonts};
+use crate::fonts::VelloFonts;
+use crate::render::RenderObject;
 
-pub struct VelloSurface {
+pub struct VelloViewRendererHandle {
+    inner: Mutex<VelloViewRenderer>,
+}
+
+impl VelloViewRendererHandle {
+    pub fn new(renderer: VelloViewRenderer) -> Self {
+        Self {
+            inner: Mutex::new(renderer),
+        }
+    }
+}
+
+impl ViewRenderer for VelloViewRendererHandle {
+    fn resize(&self, size: Size) {
+        self.inner.lock().resize(size);
+    }
+
+    fn render(&self) {
+        self.inner.lock().render();
+    }
+}
+
+pub struct VelloViewRenderer {
+    pub fonts: Arc<Mutex<VelloFonts>>,
+
+    pub render_context: RenderContext,
+
     pub render_view_id: RenderViewId,
 
     pub surface: RenderSurface,
     pub renderer: vello::Renderer,
 
     pub scene: Scene,
-    pub widgets: FxHashMap<ElementId, RenderObject>,
+    pub widgets: ElementMap<RenderObject>,
 }
 
-impl VelloSurface {
+impl VelloViewRenderer {
     pub fn init(&mut self, engine: &Engine, fonts: &mut VelloFonts) {
         let render_view_plugin = engine
             .get_plugins()
@@ -50,7 +78,7 @@ impl VelloSurface {
                         parent_id: engine.get_tree().get_parent(element_id).copied(),
                         element_id,
                     },
-                    ElementEvent::Draw { element_id },
+                    // ElementEvent::Draw { element_id },
                 ]
             })
             .collect::<Vec<_>>();
@@ -136,14 +164,13 @@ impl VelloSurface {
                     }
                 }
 
-                ElementEvent::Draw { element_id } => {
-                    if render_view_plugin.get_view(*element_id) != Some(self.render_view_id) {
-                        continue;
-                    }
-
-                    self.update_element(engine, fonts, *element_id);
-                }
-
+                // ElementEvent::Draw { element_id } => {
+                //     if render_view_plugin.get_view(*element_id) != Some(self.render_view_id) {
+                //         continue;
+                //     }
+                //
+                //     self.update_element(engine, fonts, *element_id);
+                // }
                 ElementEvent::Rebuilt { .. } => {}
 
                 _ => todo!(),
@@ -277,10 +304,18 @@ impl VelloSurface {
         // }
     }
 
-    pub fn render(&mut self, render_view: &RenderContext) {
+    fn resize(&mut self, size: Size) {
+        self.render_context.resize_surface(
+            &mut self.surface,
+            size.width as u32,
+            size.height as u32,
+        );
+    }
+
+    fn render(&mut self) {
         let width = self.surface.config.width;
         let height = self.surface.config.height;
-        let device_handle = &render_view.devices[self.surface.dev_id];
+        let device_handle = &self.render_context.devices[self.surface.dev_id];
 
         let surface_texture = self
             .surface

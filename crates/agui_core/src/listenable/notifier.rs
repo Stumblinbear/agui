@@ -22,13 +22,14 @@ impl Listenable for Notifier {
     type Handle = NotifierHandle;
 
     fn notify_listeners(&self) {
-        let mut listeners = self.listeners.borrow_mut();
-
-        listeners.retain(|handle| handle.upgrade().is_some());
-
-        for handle in listeners.iter().filter_map(|handle| handle.upgrade()) {
-            (handle)();
-        }
+        self.listeners.borrow_mut().retain(|handle| {
+            if let Some(handle) = handle.upgrade() {
+                (handle)();
+                true
+            } else {
+                false
+            }
+        });
     }
 
     fn add_listener(&self, func: impl Fn() + 'static) -> Self::Handle {

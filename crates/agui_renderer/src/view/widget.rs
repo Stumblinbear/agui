@@ -4,10 +4,13 @@ use agui_core::{
     element::{ElementBuilder, ElementType},
     widget::{IntoWidget, Widget},
 };
+use agui_macros::WidgetProps;
 
-use crate::element::RenderViewElement;
+use super::element::RenderViewElement;
 
+#[derive(WidgetProps)]
 pub struct RenderView {
+    #[props(into)]
     pub child: Widget,
 }
 

@@ -2,9 +2,9 @@ use std::any::TypeId;
 
 use agui_core::{
     element::{ContextElement, ContextMarkDirty, ElementId},
-    plugin::context::PluginElementMountContext,
+    plugin::context::PluginElementRemountContext,
+    util::map::{ElementMap, TypeMap, TypeSet},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
 
 use self::{node::InheritanceNode, scope::InheritanceScope};
 
@@ -13,7 +13,7 @@ mod scope;
 
 #[derive(Default)]
 pub struct InheritanceManager {
-    map: FxHashMap<ElementId, Inheritance>,
+    map: ElementMap<Inheritance>,
 }
 
 impl InheritanceManager {
@@ -81,7 +81,7 @@ impl InheritanceManager {
     }
 
     pub fn find_inherited_element(
-        &mut self,
+        &self,
         element_id: ElementId,
         type_id: &TypeId,
     ) -> Option<ElementId> {
@@ -139,7 +139,7 @@ impl InheritanceManager {
 
     pub(crate) fn update_inheritance_scope(
         &mut self,
-        ctx: &mut PluginElementMountContext,
+        ctx: &mut PluginElementRemountContext,
         element_id: ElementId,
         new_scope_id: Option<ElementId>,
     ) {
@@ -186,11 +186,11 @@ impl InheritanceManager {
     }
 
     // Updates a scopes's ancestor scope. This removes it from the old ancestor scope and adds it to the new one,
-    // updating t he available scopes and any dependents as necessary. Returns the list of child scopes that
+    // updating the available scopes and any dependents as necessary. Returns the list of child scopes that
     // must be updated.
     fn update_ancestor_scope(
         &mut self,
-        ctx: &mut PluginElementMountContext,
+        ctx: &mut PluginElementRemountContext,
         element_id: ElementId,
         old_ancestor_scope_id: Option<ElementId>,
         new_ancestor_scope_id: Option<ElementId>,
@@ -237,12 +237,12 @@ impl InheritanceManager {
             let changed_dependencies = old_available_scopes
                 .keys()
                 .chain(new_available_scopes.keys())
-                .collect::<FxHashSet<_>>()
+                .copied()
+                .collect::<TypeSet>()
                 .into_iter()
                 .filter(|type_id| {
                     old_available_scopes.get(type_id) != new_available_scopes.get(type_id)
                 })
-                .copied()
                 .collect::<Vec<_>>();
 
             // If the scopes that are available are the same, then we don't need to update anything.
@@ -277,7 +277,7 @@ impl InheritanceManager {
     // marking it as dirty if necessary.
     fn update_scope(
         &mut self,
-        ctx: &mut PluginElementMountContext,
+        ctx: &mut PluginElementRemountContext,
         element_id: ElementId,
         old_scope_id: Option<ElementId>,
         new_scope_id: Option<ElementId>,
@@ -287,7 +287,7 @@ impl InheritanceManager {
             .expect("failed to find the node while updating its inheritance scope")
             .iter_dependencies()
             .map(|type_id| (type_id, None))
-            .collect::<FxHashMap<TypeId, Option<ElementId>>>();
+            .collect::<TypeMap<Option<ElementId>>>();
 
         // Remove the tracked dependencies from the node's old scope
         if let Some(old_scope_id) = old_scope_id {

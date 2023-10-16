@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 use crate::{
     callback::{CallbackInvoke, CallbackQueue},
@@ -8,29 +8,33 @@ use crate::{
         Element, ElementBuildContext, ElementCallbackContext, ElementContextMut, ElementId,
         ElementMountContext, ElementUnmountContext, ElementUpdate,
     },
+    engine::event::{ElementDestroyedEvent, ElementSpawnedEvent},
+    listenable::EventBus,
     plugin::{
         context::{
-            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementMountContext,
-            PluginElementUnmountContext,
+            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
+            PluginElementMountContext, PluginElementUnmountContext, PluginInitContext,
         },
-        Plugins,
+        Capabilities, Plugins,
     },
     query::WidgetQuery,
     unit::{Constraints, Key},
-    util::tree::Tree,
+    util::{map::ElementSet, tree::Tree},
     widget::Widget,
 };
 
-use self::{builder::EngineBuilder, event::ElementEvent};
-
-mod dirty;
+use self::{builder::EngineBuilder, event::ElementRebuiltEvent};
 
 pub mod builder;
+mod dirty;
 pub mod event;
+mod middleware;
 
 pub use dirty::DirtyElements;
 
 pub struct Engine {
+    bus: EventBus,
+
     plugins: Plugins,
 
     element_tree: Tree<ElementId, Element>,
@@ -39,15 +43,17 @@ pub struct Engine {
     callback_queue: CallbackQueue,
 
     rebuild_queue: VecDeque<ElementId>,
-    retained_elements: FxHashSet<ElementId>,
-    removal_queue: FxHashSet<ElementId>,
-
-    element_events: Vec<ElementEvent>,
+    retained_elements: ElementSet,
+    removal_queue: ElementSet,
 }
 
 impl Engine {
     pub fn builder() -> EngineBuilder {
         EngineBuilder::new()
+    }
+
+    pub fn events(&self) -> &EventBus {
+        &self.bus
     }
 
     pub fn get_plugins(&self) -> &Plugins {
@@ -94,16 +100,41 @@ impl Engine {
         self.dirty.insert(element_id);
     }
 
+    /// Initializes plugins and sets the initial root widget, but does not build it or spawn
+    /// any children.
+    ///
+    /// This keeps the initial engine creation fast, and allows the user to delay the
+    /// first build until they are ready. This does, however, that the root element has
+    /// slightly different semantics. It will be mounted but not built until the first
+    /// update.
+    fn init(&mut self, root: Widget) {
+        self.plugins.with(|plugins, plugin| {
+            plugin.capabilities = plugin.inner.capabilities();
+
+            plugin.inner.on_init(PluginInitContext {
+                bus: &self.bus,
+
+                plugins,
+
+                element_tree: &self.element_tree,
+            });
+        });
+
+        let root_id = self.process_spawn(None, root);
+
+        self.rebuild_queue.push_back(root_id);
+    }
+
     /// Update the UI tree.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn update(&mut self) -> Vec<ElementEvent> {
-        if !self.has_changes() {
-            return Vec::default();
-        }
-
+    pub fn update(&mut self) {
         tracing::debug!("updating widget tree");
 
         self.plugins.with(|plugins, plugin| {
+            if !plugin.capabilities.contains(Capabilities::BEFORE_UPDATE) {
+                return;
+            }
+
             plugin.on_before_update(PluginBeforeUpdateContext {
                 plugins,
 
@@ -111,13 +142,11 @@ impl Engine {
             });
         });
 
-        let mut needs_redraw = FxHashSet::default();
-
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         'layout: loop {
             'changes: loop {
-                self.flush_rebuilds(&mut needs_redraw);
+                self.flush_rebuilds();
 
                 self.flush_dirty();
 
@@ -138,32 +167,22 @@ impl Engine {
         }
 
         self.plugins.with(|plugins, plugin| {
+            if !plugin.capabilities.contains(Capabilities::AFTER_UPDATE) {
+                return;
+            }
+
             plugin.on_after_update(PluginAfterUpdateContext {
                 plugins,
 
                 element_tree: &self.element_tree,
-
-                events: &self.element_events,
             });
         });
-
-        // TODO: Only redraw the elements that have changed
-        needs_redraw.extend(self.element_tree.iter().map(|(id, _)| id));
-
-        // TODO: limit this to only the elements that have changed
-        for element_id in needs_redraw {
-            self.element_events.push(ElementEvent::Draw { element_id });
-        }
-
-        self.element_events.drain(..).collect()
     }
 
-    #[tracing::instrument(level = "trace", skip(self, needs_redraw))]
-    pub fn flush_rebuilds(&mut self, needs_redraw: &mut FxHashSet<ElementId>) {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn flush_rebuilds(&mut self) {
         // Apply any queued modifications
         while let Some(element_id) = self.rebuild_queue.pop_front() {
-            needs_redraw.insert(element_id);
-
             self.process_rebuild(element_id);
         }
     }
@@ -172,7 +191,7 @@ impl Engine {
     pub fn flush_dirty(&mut self) {
         for element_id in self.dirty.drain() {
             tracing::trace!(
-                element_id = ?element_id,
+                ?element_id,
                 widget = self.element_tree.get(element_id).unwrap().widget_name(),
                 "queueing widget for rebuild"
             );
@@ -209,7 +228,7 @@ impl Engine {
 
                     if changed {
                         tracing::debug!(
-                            element_id = ?element_id,
+                            ?element_id,
                             widget = element.widget_name(),
                             "element updated, queueing for rebuild"
                         );
@@ -243,18 +262,6 @@ impl Engine {
             .expect("cannot layout a widget that doesn't exist");
     }
 
-    /// Sets the initial root widget, but does not build it or spawn any children.
-    ///
-    /// This keeps the initial engine creation fast, and allows the user to delay the
-    /// first build until they are ready. This does, however, that the root element has
-    /// slightly different semantics. It will be mounted but not built until the first
-    /// update.
-    fn init_root(&mut self, root: Widget) {
-        let root_id = self.process_spawn(None, root);
-
-        self.rebuild_queue.push_back(root_id);
-    }
-
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
     fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
         let element = Element::new(widget.clone());
@@ -265,6 +272,10 @@ impl Engine {
 
         self.element_tree.with(element_id, |element_tree, element| {
             self.plugins.with(|plugins, plugin| {
+                if !plugin.capabilities.contains(Capabilities::ELEMENT_MOUNT) {
+                    return;
+                }
+
                 plugin.on_element_mount(PluginElementMountContext {
                     plugins,
 
@@ -287,7 +298,7 @@ impl Engine {
             });
         });
 
-        self.element_events.push(ElementEvent::Spawned {
+        self.bus.emit(&ElementSpawnedEvent {
             parent_id,
             element_id,
         });
@@ -305,6 +316,22 @@ impl Engine {
             let new_widgets = self
                 .element_tree
                 .with(element_id, |element_tree, element| {
+                    self.plugins.with(|plugins, plugin| {
+                        if !plugin.capabilities.contains(Capabilities::ELEMENT_BUILD) {
+                            return;
+                        }
+
+                        plugin.on_element_build(PluginElementBuildContext {
+                            plugins,
+
+                            element_tree,
+                            dirty: &mut self.dirty,
+                            callback_queue: &self.callback_queue,
+
+                            element_id: &element_id,
+                        });
+                    });
+
                     element.build(ElementBuildContext {
                         plugins: &mut self.plugins,
 
@@ -316,6 +343,8 @@ impl Engine {
                     })
                 })
                 .expect("cannot build a widget that doesn't exist");
+
+            self.bus.emit(&ElementRebuiltEvent { element_id });
 
             if new_widgets.is_empty() {
                 continue;
@@ -533,9 +562,9 @@ impl Engine {
             }
 
             // Clean up any of the remaining middle nodes from the old list.
-            for old_keyed_child_id in old_keyed_children {
-                // deactivate the child
-            }
+            // for old_keyed_child_id in old_keyed_children {
+            //     // deactivate the child
+            // }
 
             for child_id in new_children {
                 let child_id = child_id.expect("child id should not be none");
@@ -552,9 +581,6 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", name = "rebuild", skip(self))]
     fn process_rebuild(&mut self, element_id: ElementId) {
-        self.element_events
-            .push(ElementEvent::Rebuilt { element_id });
-
         // Grab the current children so we know which ones to remove post-build
         let children = self
             .element_tree
@@ -589,6 +615,10 @@ impl Engine {
             self.element_tree
                 .with(element_id, |element_tree, element| {
                     self.plugins.with(|plugins, plugin| {
+                        if !plugin.capabilities.contains(Capabilities::ELEMENT_UNMOUNT) {
+                            return;
+                        }
+
                         plugin.on_element_unmount(PluginElementUnmountContext {
                             plugins,
 
@@ -610,8 +640,7 @@ impl Engine {
                 })
                 .expect("cannot destroy an element that doesn't exist");
 
-            self.element_events
-                .push(ElementEvent::Destroyed { element_id });
+            self.bus.emit(&ElementDestroyedEvent { element_id });
 
             let element = self.element_tree.remove(element_id, false).unwrap();
 
@@ -628,9 +657,11 @@ impl Engine {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
+    use rustc_hash::FxHashSet;
+
     use crate::{
         element::mock::{render::MockRenderWidget, DummyWidget},
-        engine::event::ElementEvent,
+        engine::event::{ElementDestroyedEvent, ElementRebuiltEvent, ElementSpawnedEvent},
         unit::Size,
         widget::IntoWidget,
     };
@@ -641,19 +672,24 @@ mod tests {
     pub fn adding_a_root_widget() {
         let mut engine = Engine::builder().with_root(DummyWidget).build();
 
-        let events = engine.update();
+        let did_rebuilt = Rc::new(RefCell::new(None));
+
+        let _handler = engine.events().add_listener::<ElementRebuiltEvent>({
+            let did_rebuilt = Rc::clone(&did_rebuilt);
+
+            move |event| {
+                *did_rebuilt.borrow_mut() = Some(event.element_id);
+            }
+        });
+
+        engine.update();
 
         let root_id = engine.get_root();
 
-        assert_ne!(events.len(), 0, "should generate events");
-
         assert_eq!(
-            events[0],
-            ElementEvent::Spawned {
-                parent_id: None,
-                element_id: root_id,
-            },
-            "should have generated a spawn event"
+            *did_rebuilt.borrow(),
+            Some(root_id),
+            "should have emitted a rebuild event for the root"
         );
     }
 
@@ -665,19 +701,25 @@ mod tests {
 
         let root_id = engine.get_root();
 
+        let did_rebuild = Rc::new(RefCell::new(false));
+
+        let _handler = engine.events().add_listener::<ElementRebuiltEvent>({
+            let did_rebuild = Rc::clone(&did_rebuild);
+
+            move |event| {
+                if event.element_id != root_id {
+                    return;
+                }
+
+                *did_rebuild.borrow_mut() = true;
+            }
+        });
+
         engine.mark_dirty(root_id);
 
-        let events = engine.update();
+        engine.update();
 
-        assert_ne!(events.len(), 0, "should generate events");
-
-        assert_eq!(
-            events[0],
-            ElementEvent::Rebuilt {
-                element_id: root_id
-            },
-            "should have generated rebuild event for the widget"
-        );
+        assert!(*did_rebuild.borrow(), "should have emitted a rebuild event");
     }
 
     #[test]
@@ -699,7 +741,17 @@ mod tests {
 
         let mut engine = Engine::builder().with_root(widget).build();
 
-        let events = engine.update();
+        let widgets_spawned = Rc::new(RefCell::new(FxHashSet::default()));
+
+        let _handler = engine.events().add_listener::<ElementSpawnedEvent>({
+            let widgets_spawned = Rc::clone(&widgets_spawned);
+
+            move |event| {
+                widgets_spawned.borrow_mut().insert(event.element_id);
+            }
+        });
+
+        engine.update();
 
         let root_id = engine.get_root();
 
@@ -709,35 +761,18 @@ mod tests {
             "children should have been added"
         );
 
-        assert_eq!(
-            events[0],
-            ElementEvent::Spawned {
-                parent_id: None,
-                element_id: root_id
-            },
-            "should have generated spawn event for the root widget"
-        );
-
         let children = engine.get_tree().get_children(root_id).unwrap();
 
         assert_eq!(children.len(), 2, "root should have two children");
 
-        assert_eq!(
-            events[2],
-            ElementEvent::Spawned {
-                parent_id: Some(root_id),
-                element_id: children[0]
-            },
-            "should have generated spawn event for the first child"
+        assert!(
+            widgets_spawned.borrow().contains(&children[0]),
+            "should have emitted a spawn event for the first child"
         );
 
-        assert_eq!(
-            events[3],
-            ElementEvent::Spawned {
-                parent_id: Some(root_id),
-                element_id: children[1]
-            },
-            "should have generated spawn event for the second child"
+        assert!(
+            widgets_spawned.borrow().contains(&children[1]),
+            "should have emitted a spawn event for the second child"
         );
     }
 
@@ -786,9 +821,19 @@ mod tests {
 
         let root_id = engine.get_root();
 
+        let widgets_destroyed = Rc::new(RefCell::new(FxHashSet::default()));
+
+        let _handler = engine.events().add_listener::<ElementDestroyedEvent>({
+            let widgets_destroyed = Rc::clone(&widgets_destroyed);
+
+            move |event| {
+                widgets_destroyed.borrow_mut().insert(event.element_id);
+            }
+        });
+
         engine.mark_dirty(root_id);
 
-        let events = engine.update();
+        engine.update();
 
         assert_eq!(
             engine.get_tree().len(),
@@ -796,14 +841,11 @@ mod tests {
             "nested children should have been removed"
         );
 
-        assert_ne!(events.len(), 0, "should generate events");
-
-        for i in 0..1000 {
-            assert!(
-                matches!(events[i + 1], ElementEvent::Destroyed { .. }),
-                "should have generated a destroyed event for all children"
-            );
-        }
+        assert_eq!(
+            widgets_destroyed.borrow().len(),
+            1000,
+            "should have emitted a destroyed event for all children"
+        );
     }
 
     #[test]
@@ -835,22 +877,30 @@ mod tests {
 
         let root_id = engine.get_root();
 
+        let widgets_rebuilt = Rc::new(RefCell::new(FxHashSet::default()));
+
+        let _handler = engine.events().add_listener::<ElementRebuiltEvent>({
+            let widgets_rebuilt = Rc::clone(&widgets_rebuilt);
+
+            move |event| {
+                widgets_rebuilt.borrow_mut().insert(event.element_id);
+            }
+        });
+
         engine.mark_dirty(root_id);
 
         *child.borrow_mut() = DummyWidget.into_widget();
 
-        let events = engine.update();
-
-        assert_eq!(
-            events[0],
-            ElementEvent::Rebuilt {
-                element_id: root_id
-            },
-            "should have generated rebuild event for the root widget"
-        );
+        engine.update();
 
         assert!(
-            matches!(events[1], ElementEvent::Rebuilt { element_id } if element_id != root_id),
+            widgets_rebuilt.borrow().contains(&root_id),
+            "should have emitted a rebuild event for the root widget"
+        );
+
+        assert_eq!(
+            widgets_rebuilt.borrow().len(),
+            2,
             "should have generated rebuild event for the child"
         );
     }

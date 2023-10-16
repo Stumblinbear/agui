@@ -26,6 +26,7 @@ rustc-hash.workspace = true
 slotmap.workspace = true
 parking_lot.workspace = true
 im-rc.workspace = true
+bitflags.workspace = true
 
 glam.workspace = true
 lyon.workspace = true
@@ -36,3 +37,31 @@ mockall = { workspace = true, optional = true }
 agui_macros.workspace = true
 
 mockall.workspace = true
+criterion.workspace = true
+
+fnv = "1.0"
+
+[[bench]]
+name = "engine"
+path = "benches/engine.rs"
+harness = false
+
+[[bench]]
+name = "hashers"
+path = "benches/hashers.rs"
+harness = false
+
+[[bench]]
+name = "rc_vs_thread_local"
+path = "benches/rc_vs_thread_local.rs"
+harness = false
+
+[[bench]]
+name = "tree"
+path = "benches/tree.rs"
+harness = false
+
+[[bench]]
+name = "events"
+path = "benches/events.rs"
+harness = false

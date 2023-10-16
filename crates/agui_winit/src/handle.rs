@@ -1,24 +1,31 @@
-use std::{ops::Deref, rc::Rc};
+use std::{
+    ops::Deref,
+    sync::{mpsc, Arc},
+};
 
-use agui_listenable::EventEmitter;
-use winit::event::WindowEvent;
+use agui_core::listenable::EventEmitter;
+
+use crate::{
+    plugin::{WinitBindingAction, WinitSendError},
+    WinitWindowEvent,
+};
 
 #[derive(Clone)]
 pub struct WinitWindowHandle {
-    handle: Rc<winit::window::Window>,
-    event_emitter: EventEmitter<WindowEvent<'static>>,
+    pub(crate) handle: Arc<winit::window::Window>,
+    pub(crate) event_emitter: EventEmitter<WinitWindowEvent>,
+    pub(crate) action_queue_tx: mpsc::Sender<WinitBindingAction>,
 }
 
 impl WinitWindowHandle {
-    pub fn new(window: winit::window::Window) -> Self {
-        Self {
-            handle: Rc::new(window),
-            event_emitter: EventEmitter::default(),
-        }
+    pub fn events(&self) -> &EventEmitter<WinitWindowEvent> {
+        &self.event_emitter
     }
 
-    pub fn events(&self) -> &EventEmitter<WindowEvent<'static>> {
-        &self.event_emitter
+    pub(crate) fn close(&self) -> Result<(), WinitSendError> {
+        Ok(self
+            .action_queue_tx
+            .send(WinitBindingAction::CloseWindow(self.handle.id()))?)
     }
 }
 

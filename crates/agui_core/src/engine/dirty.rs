@@ -1,9 +1,9 @@
 use rustc_hash::FxHashSet;
 
-use crate::element::ElementId;
+use crate::{element::ElementId, util::map::ElementSet};
 
 pub struct DirtyElements {
-    inner: FxHashSet<ElementId>,
+    inner: ElementSet,
 }
 
 impl DirtyElements {

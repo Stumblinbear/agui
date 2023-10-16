@@ -1,4 +1,4 @@
-use std::{any::TypeId, rc::Rc};
+use std::rc::Rc;
 
 use agui_core::{
     callback::CallbackId,
@@ -6,7 +6,6 @@ use agui_core::{
         build::ElementBuild, widget::ElementWidget, ContextElement, ElementBuildContext,
         ElementCallbackContext, ElementMountContext, ElementUpdate,
     },
-    plugin::context::ContextPluginsMut,
     widget::{AnyWidget, Widget},
 };
 
@@ -44,12 +43,9 @@ where
         self.widget.widget_name()
     }
 
-    fn mount(&mut self, mut ctx: ElementMountContext) {
-        let parent_element_id = ctx.get_parent_element_id();
-        let element_id = ctx.get_element_id();
-
-        if let Some(inheritance_plugin) = ctx.get_plugins_mut().get_mut::<InheritancePlugin>() {
-            inheritance_plugin.create_scope(parent_element_id, element_id, TypeId::of::<I>());
+    fn mount(&mut self, ctx: ElementMountContext) {
+        if let Some(inheritance_plugin) = ctx.plugins.get_mut::<InheritancePlugin>() {
+            inheritance_plugin.create_scope::<I>(ctx.parent_element_id.copied(), *ctx.element_id);
         }
     }
 

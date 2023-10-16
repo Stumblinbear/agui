@@ -20,6 +20,8 @@ where
     W: AnyWidget + StatefulWidget,
 {
     widget: Rc<W>,
+    old_widget: Option<Rc<W>>,
+
     state: W::State,
 
     init_callbacks: FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<W::State>>>,
@@ -37,6 +39,8 @@ where
 
         Self {
             widget,
+            old_widget: None,
+
             state,
 
             init_callbacks: FxHashMap::default(),
@@ -57,8 +61,8 @@ where
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
-            if Rc::ptr_eq(&self.widget, &new_widget) {
-                self.state.updated(&new_widget);
+            if !Rc::ptr_eq(&self.widget, &new_widget) {
+                self.old_widget = Some(new_widget.clone());
             }
 
             self.widget = new_widget;
@@ -86,13 +90,17 @@ where
             widget: &self.widget,
         };
 
-        if !self.initialized {
+        if !self.initialized || self.old_widget.is_some() {
             let old_callbacks = ctx.callbacks;
             ctx.callbacks = &mut self.init_callbacks;
             {
-                self.state.init_state(&mut ctx);
+                if !self.initialized {
+                    self.state.init_state(&mut ctx);
 
-                self.initialized = true;
+                    self.initialized = true;
+                } else if let Some(old_widget) = self.old_widget.take() {
+                    self.state.updated(&mut ctx, &old_widget);
+                }
             }
             ctx.callbacks = old_callbacks;
         }

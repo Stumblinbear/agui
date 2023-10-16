@@ -209,18 +209,24 @@ mod tests {
     fn widget_fn_usage() {
         let test1 = IntoWidget::into_widget(widget_test as fn() -> Widget);
         let test2 = IntoWidget::into_widget(widget_test as fn() -> Widget);
-        let test3 = IntoWidget::into_widget(
-            (|| MockProxyWidget::default().into_widget()) as fn() -> Widget,
-        );
 
         assert_eq!(
             test1, test2,
             "widgets derived from the same function should be equal"
         );
-        assert_eq!(
-            test1, test3,
-            "widgets derived from different functions should not be equal"
-        );
+
+        // This assert isn't true! At higher levels of optimization, the compiler
+        // may combine the two functions into one, and therefore the widgets
+        // will be equal.
+        //
+        // let test3 = IntoWidget::into_widget(
+        //     (|| MockProxyWidget::default().into_widget()) as fn() -> Widget,
+        // );
+        //
+        // assert_eq!(
+        //     test1, test3,
+        //     "widgets derived from different functions should not be equal"
+        // );
     }
 
     fn widget_test() -> Widget {

@@ -1,5 +1,5 @@
 use crate::{
-    element::{context::ElementLayoutContext, ElementContextMut},
+    element::{context::ElementLayoutContext, ElementContext, ElementContextMut},
     render::canvas::Canvas,
     unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::Widget,
@@ -15,19 +15,43 @@ pub trait ElementRender: ElementWidget {
         ctx: ElementIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
-    ) -> f32;
-
-    fn layout(&self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
-        let children = ctx.children;
-
-        if !children.is_empty() {
+    ) -> f32 {
+        if !ctx.children.is_empty() {
             assert_eq!(
-                children.len(),
+                ctx.children.len(),
                 1,
-                "widgets that do not define a layout function may only have a single child"
+                "elements that do not define a intrinsic_size function may only have a single child"
             );
 
-            let child_id = *children.first().unwrap();
+            let child_id = *ctx.children.first().unwrap();
+
+            // By default, we take the intrinsic size of the child.
+            ctx.element_tree
+                .get(child_id)
+                .expect("child element missing while computing intrinsic size")
+                .intrinsic_size(
+                    ElementContext {
+                        element_tree: ctx.element_tree,
+
+                        element_id: &child_id,
+                    },
+                    dimension,
+                    cross_extent,
+                )
+        } else {
+            0.0
+        }
+    }
+
+    fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
+        if !ctx.children.is_empty() {
+            assert_eq!(
+                ctx.children.len(),
+                1,
+                "elements that do not define a layout function may only have a single child"
+            );
+
+            let child_id = *ctx.children.first().unwrap();
 
             // By default, we take the size of the child.
             ctx.element_tree

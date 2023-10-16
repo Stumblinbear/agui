@@ -22,5 +22,4 @@ agui_primitives.workspace = true
 tracing.workspace = true
 
 parking_lot.workspace = true
-
-bitflags = "2.4"
+bitflags.workspace = true

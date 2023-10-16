@@ -43,7 +43,7 @@ where
     K: slotmap::Key,
 {
     pub fn contains(&self, node_id: K) -> bool {
-        self.nodes.contains_key(node_id.into())
+        self.nodes.contains_key(node_id)
     }
 
     pub fn get_depth(&self, node_id: K) -> Option<usize> {
