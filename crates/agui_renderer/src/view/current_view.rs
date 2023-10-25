@@ -23,7 +23,7 @@ impl Deref for CurrentRenderView {
 }
 
 impl InheritedWidget for CurrentRenderView {
-    fn get_child(&self) -> Widget {
+    fn child(&self) -> Widget {
         self.child.clone()
     }
 

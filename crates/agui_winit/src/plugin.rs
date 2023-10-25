@@ -8,7 +8,7 @@ use agui_core::{
     callback::Callback,
     element::ElementId,
     listenable::EventEmitter,
-    plugin::{Capabilities, Plugin},
+    plugin::Plugin,
     unit::{Offset, Size},
 };
 use agui_renderer::{RenderViewId, Renderer, ViewRenderer};
@@ -48,11 +48,7 @@ impl WinitPlugin {
     }
 }
 
-impl Plugin for WinitPlugin {
-    fn capabilities(&self) -> Capabilities {
-        Capabilities::default()
-    }
-}
+impl Plugin for WinitPlugin {}
 
 impl WinitPlugin {
     pub fn get_window(&self, window_id: WindowId) -> Option<&WinitWindowHandle> {

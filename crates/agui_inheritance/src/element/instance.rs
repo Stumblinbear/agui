@@ -72,7 +72,7 @@ where
         if self.needs_notify {
             self.needs_notify = false;
 
-            let element_id = ctx.get_element_id();
+            let element_id = ctx.element_id();
 
             if let Some(inheritance_plugin) = ctx.plugins.get::<InheritancePlugin>() {
                 for element_id in inheritance_plugin
@@ -84,7 +84,7 @@ where
             }
         }
 
-        self.widget.get_child()
+        self.widget.child()
     }
 
     fn call(

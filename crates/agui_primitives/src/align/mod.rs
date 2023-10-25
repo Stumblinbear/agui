@@ -21,7 +21,7 @@ pub struct Align {
 }
 
 impl WidgetLayout for Align {
-    fn get_children(&self) -> Vec<Widget> {
+    fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 

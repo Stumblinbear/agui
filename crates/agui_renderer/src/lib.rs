@@ -3,6 +3,6 @@ mod plugin;
 mod renderer;
 mod view;
 
-pub use plugin::*;
+pub use manager::*;
 pub use renderer::*;
 pub use view::*;

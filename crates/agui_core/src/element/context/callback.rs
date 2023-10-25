@@ -8,6 +8,8 @@ use crate::{
     util::tree::Tree,
 };
 
+use super::ContextElements;
+
 pub struct ElementCallbackContext<'ctx> {
     pub plugins: &'ctx mut Plugins,
 
@@ -18,23 +20,25 @@ pub struct ElementCallbackContext<'ctx> {
 }
 
 impl<'ctx> ContextPlugins<'ctx> for ElementCallbackContext<'ctx> {
-    fn get_plugins(&self) -> &Plugins {
+    fn plugins(&self) -> &Plugins {
         self.plugins
     }
 }
 
 impl<'ctx> ContextPluginsMut<'ctx> for ElementCallbackContext<'ctx> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins {
+    fn plugins_mut(&mut self) -> &mut Plugins {
         self.plugins
     }
 }
 
-impl ContextElement for ElementCallbackContext<'_> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
+impl ContextElements for ElementCallbackContext<'_> {
+    fn elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
+}
 
-    fn get_element_id(&self) -> ElementId {
+impl ContextElement for ElementCallbackContext<'_> {
+    fn element_id(&self) -> ElementId {
         *self.element_id
     }
 }

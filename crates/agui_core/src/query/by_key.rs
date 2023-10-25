@@ -23,8 +23,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.find(|element| {
             element
-                .get_widget()
-                .get_key()
+                .widget()
+                .key()
                 .filter(|key| key == &self.key)
                 .is_some()
         })

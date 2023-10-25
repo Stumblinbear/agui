@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 use std::sync::{mpsc, Arc};
 
 use agui_core::plugin::context::{PluginAfterUpdateContext, PluginBeforeUpdateContext};
-use agui_core::plugin::Capabilities;
 use agui_core::{plugin::Plugin, unit::Font};
 use agui_renderer::RenderViewId;
 use parking_lot::Mutex;
@@ -63,11 +62,7 @@ impl VelloPlugin {
 }
 
 impl Plugin for VelloPlugin {
-    fn capabilities(&self) -> Capabilities {
-        Capabilities::BEFORE_UPDATE | Capabilities::AFTER_UPDATE
-    }
-
-    fn on_before_update(&mut self, ctx: PluginBeforeUpdateContext) {
+    fn on_before_update(&mut self, ctx: &mut PluginBeforeUpdateContext) {
         for event in self.events_rx.try_iter() {
             match event {
                 VelloPluginEvent::ViewBind {
@@ -84,8 +79,10 @@ impl Plugin for VelloPlugin {
         }
     }
 
-    fn on_after_update(&mut self, ctx: PluginAfterUpdateContext) {
-        for (render_view_id, renderer) in &self.views {}
+    fn on_after_update(&mut self, ctx: &mut PluginAfterUpdateContext) {
+        for (render_view_id, renderer) in &self.views {
+            renderer.redraw(ctx.element_tree);
+        }
     }
 }
 

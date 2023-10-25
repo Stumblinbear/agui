@@ -14,7 +14,7 @@ pub struct Padding {
 }
 
 impl WidgetLayout for Padding {
-    fn get_children(&self) -> Vec<Widget> {
+    fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 

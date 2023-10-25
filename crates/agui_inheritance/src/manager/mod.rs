@@ -89,14 +89,14 @@ impl InheritanceManager {
             .get(element_id)
             .expect("cannot find an inherited element from one that doesn't exist")
         {
-            Inheritance::Scope(scope) => scope.get_ancestor_scope(),
-            Inheritance::Node(node) => node.get_scope(),
+            Inheritance::Scope(scope) => scope.ancestor_scope(),
+            Inheritance::Node(node) => node.scope(),
         };
 
         scope_id.and_then(|scope_id| {
             self.get_as_scope(scope_id)
                 .expect("failed to find the element's scope while finding an inherited element")
-                .get_available_scopes()
+                .available_scopes()
                 .get(type_id)
                 .copied()
         })
@@ -115,7 +115,7 @@ impl InheritanceManager {
         node.add_dependency(type_id);
 
         // Track the dependency in the node's scope
-        if let Some(scope_id) = node.get_scope() {
+        if let Some(scope_id) = node.scope() {
             let scope = self
                 .get_as_scope_mut(scope_id)
                 .expect("failed to find the node's scope while depending on an inherited element");
@@ -152,12 +152,7 @@ impl InheritanceManager {
                 // since it may be that its available scopes have changed.
 
                 let child_scope_ids = self
-                    .update_ancestor_scope(
-                        ctx,
-                        element_id,
-                        scope.get_ancestor_scope(),
-                        new_scope_id,
-                    )
+                    .update_ancestor_scope(ctx, element_id, scope.ancestor_scope(), new_scope_id)
                     .to_vec();
 
                 for child_scope_id in child_scope_ids {
@@ -167,14 +162,14 @@ impl InheritanceManager {
 
             Inheritance::Node(node) => {
                 // If our scope is already the same as the new scope, we can skip updating.
-                if node.get_scope() == new_scope_id {
+                if node.scope() == new_scope_id {
                     return;
                 }
 
-                self.update_scope(ctx, element_id, node.get_scope(), new_scope_id);
+                self.update_scope(ctx, element_id, node.scope(), new_scope_id);
 
                 for child_id in ctx
-                    .get_elements()
+                    .elements()
                     .get_children(element_id)
                     .cloned()
                     .unwrap_or_default()
@@ -216,7 +211,7 @@ impl InheritanceManager {
                 new_ancestor_scope.add_child_scope(element_id);
             }
 
-            new_ancestor_scope.get_available_scopes().clone()
+            new_ancestor_scope.available_scopes().clone()
         } else {
             Default::default()
         };
@@ -230,7 +225,7 @@ impl InheritanceManager {
 
             scope.set_ancestor_scope(new_ancestor_scope_id);
 
-            let old_available_scopes = scope.get_available_scopes().clone();
+            let old_available_scopes = scope.available_scopes().clone();
 
             let new_available_scopes = scope.update_available_scopes(new_available_scopes);
 
@@ -268,7 +263,7 @@ impl InheritanceManager {
                     .for_each(|element_id| ctx.mark_dirty(element_id));
             }
 
-            scope.get_child_scopes().to_vec()
+            scope.child_scopes().to_vec()
         })
         .expect("failed to find the scope while updating its ancestor scope")
     }
@@ -297,7 +292,7 @@ impl InheritanceManager {
 
             for (type_id, old_dependency_id) in &mut dependencies {
                 // Grab the old dependency from the old scope so we can cross-reference it with the new scope
-                *old_dependency_id = old_scope.get_available_scopes().get(type_id).copied();
+                *old_dependency_id = old_scope.available_scopes().get(type_id).copied();
 
                 // We've changed scopes, so we need to remove the node from the old scope's dependents
                 old_scope.remove_dependent(type_id, element_id);
@@ -316,7 +311,7 @@ impl InheritanceManager {
         let available_scopes = new_scope_id.map(|new_scope_id| {
             self.get_as_scope(new_scope_id)
                 .expect("failed to find the node's new scope while updating its inheritance scope")
-                .get_available_scopes()
+                .available_scopes()
         });
 
         // Check if any dependencies changed
@@ -347,7 +342,7 @@ impl InheritanceManager {
         let ancestor_scope_id = parent_element_id.and_then(|parent_element_id| {
             self.get(parent_element_id)
                 .expect("cannot create a scope as the parent does not exist")
-                .get_scope()
+                .scope()
         });
 
         let ancestor_scope = ancestor_scope_id.map(|ancestor_scope_id| {
@@ -385,7 +380,7 @@ impl InheritanceManager {
         let ancestor_scope_id = parent_element_id.and_then(|parent_element_id| {
             self.get(parent_element_id)
                 .expect("cannot create a node as the parent does not exist")
-                .get_scope()
+                .scope()
         });
 
         self.map.insert(
@@ -405,7 +400,7 @@ impl InheritanceManager {
                 Inheritance::Scope(scope) => {
                     // Remove this scope from its direct ancestor
                     if let Some(ancestor_scope) = scope
-                        .get_ancestor_scope()
+                        .ancestor_scope()
                         .and_then(|ancestor_scope_id| self.get_as_scope_mut(ancestor_scope_id))
                     {
                         ancestor_scope.remove_child_scope(element_id);
@@ -419,7 +414,7 @@ impl InheritanceManager {
                     // those scopes
                     for (type_id, dependents) in scope.iter_dependents() {
                         if let Some(target_scope) = scope
-                            .get_available_scopes()
+                            .available_scopes()
                             .get(&type_id)
                             .and_then(|target_scope_id| self.get_as_scope_mut(*target_scope_id))
                         {
@@ -432,7 +427,7 @@ impl InheritanceManager {
 
                 Inheritance::Node(node) => {
                     if let Some(scope) = node
-                        .get_scope()
+                        .scope()
                         // During removal, the node's scope may no longer exist. If it was removed, it has
                         // already cleaned up our listeners.
                         .and_then(|scope_id| self.get_as_scope_mut(scope_id))
@@ -440,8 +435,7 @@ impl InheritanceManager {
                         let mut listening_to = Vec::new();
 
                         for type_id in node.iter_dependencies() {
-                            listening_to
-                                .extend(scope.get_available_scopes().get(&type_id).copied());
+                            listening_to.extend(scope.available_scopes().get(&type_id).copied());
 
                             // Remove the tracked dependencies from the node's scope
                             scope.remove_dependent(&type_id, element_id);
@@ -476,10 +470,10 @@ impl Default for Inheritance {
 impl Inheritance {
     /// Returns the scope of this inheritance. If this is a node, this will return the scope that the
     /// node is in. If this is a scope, this will return itself.
-    pub fn get_scope(&self) -> Option<ElementId> {
+    pub fn scope(&self) -> Option<ElementId> {
         match self {
-            Inheritance::Scope(scope) => Some(scope.get_element_id()),
-            Inheritance::Node(node) => node.get_scope(),
+            Inheritance::Scope(scope) => Some(scope.element_id()),
+            Inheritance::Node(node) => node.scope(),
         }
     }
 }
@@ -505,7 +499,7 @@ mod tests {
     }
 
     impl InheritedWidget for TestWidget1 {
-        fn get_child(&self) -> Widget {
+        fn child(&self) -> Widget {
             self.child.clone()
         }
 
@@ -520,7 +514,7 @@ mod tests {
     }
 
     impl InheritedWidget for TestWidget2 {
-        fn get_child(&self) -> Widget {
+        fn child(&self) -> Widget {
             self.child.clone()
         }
 
@@ -541,7 +535,7 @@ mod tests {
             inheritance_manager
                 .get_as_scope(scope_id)
                 .expect("failed to find the scope")
-                .get_available_scopes()
+                .available_scopes()
                 .get(&TypeId::of::<TestWidget1>())
                 .copied(),
             Some(scope_id)
@@ -566,7 +560,7 @@ mod tests {
             inheritance_manager
                 .get_as_scope(nested_scope_id)
                 .expect("failed to find the scope")
-                .get_available_scopes()
+                .available_scopes()
                 .get(&TypeId::of::<TestWidget1>())
                 .copied(),
             Some(scope_id)
@@ -587,7 +581,7 @@ mod tests {
             inheritance_manager
                 .get_as_scope(scope_id)
                 .expect("failed to find the scope")
-                .get_ancestor_scope(),
+                .ancestor_scope(),
             None
         );
 
@@ -595,7 +589,7 @@ mod tests {
             inheritance_manager
                 .get_as_node(element_id)
                 .expect("failed to find the node")
-                .get_scope(),
+                .scope(),
             Some(scope_id),
             "node should be in the scope"
         );

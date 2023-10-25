@@ -1,8 +1,8 @@
 pub mod canvas;
-pub mod paint;
-pub mod texture;
+mod object;
+mod paint;
 
+pub use object::*;
 pub use paint::*;
-pub use texture::*;
 
 pub type CanvasPainter<'paint> = canvas::painter::CanvasPainter<'paint, canvas::painter::Head<()>>;

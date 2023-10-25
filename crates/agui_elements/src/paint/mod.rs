@@ -7,7 +7,7 @@ use agui_core::{
 pub use instance::*;
 
 pub trait WidgetPaint: AnyWidget {
-    fn get_child(&self) -> Option<Widget> {
+    fn child(&self) -> Option<Widget> {
         None
     }
 

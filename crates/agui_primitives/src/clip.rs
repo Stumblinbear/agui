@@ -19,7 +19,7 @@ pub struct Clip {
 }
 
 impl WidgetPaint for Clip {
-    fn get_child(&self) -> Option<Widget> {
+    fn child(&self) -> Option<Widget> {
         self.child.clone()
     }
 

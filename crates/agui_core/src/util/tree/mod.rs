@@ -55,7 +55,7 @@ impl<K, V> Tree<K, V>
 where
     K: Key,
 {
-    pub fn get_root(&self) -> Option<K> {
+    pub fn root(&self) -> Option<K> {
         self.root
     }
 

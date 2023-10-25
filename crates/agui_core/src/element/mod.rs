@@ -2,8 +2,7 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
-    render::canvas::Canvas,
-    unit::{Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
+    render::{RenderBox, RenderObject, RenderObjectId},
     widget::Widget,
 };
 
@@ -34,8 +33,7 @@ pub struct Element {
 
     widget: Widget,
 
-    size: Option<Size>,
-    offset: Offset,
+    render_object_id: Option<RenderObjectId>,
 }
 
 pub enum ElementType {
@@ -52,8 +50,7 @@ impl Element {
 
             widget,
 
-            size: None,
-            offset: Offset::ZERO,
+            render_object_id: None,
         }
     }
 
@@ -65,16 +62,12 @@ impl Element {
         }
     }
 
-    pub fn get_widget(&self) -> &Widget {
+    pub fn widget(&self) -> &Widget {
         &self.widget
     }
 
-    pub fn get_size(&self) -> Option<Size> {
-        self.size
-    }
-
-    pub fn get_offset(&self) -> Offset {
-        self.offset
+    pub fn render_object_id(&self) -> Option<RenderObjectId> {
+        self.render_object_id
     }
 
     pub fn downcast<E>(&self) -> Option<&E>
@@ -117,151 +110,23 @@ impl Element {
         }
     }
 
-    /// Calculate the intrinsic size of this element based on the given `dimension`. See further explanation
-    /// of the returned value in [`IntrinsicDimension`].
-    ///
-    /// This should _only_ be called on one's direct children, and results in the parent being coupled to the
-    /// child so that when the child's layout changes, the parent's layout will be also be recomputed.
-    ///
-    /// Calling this function is expensive as it can result in O(N^2) behavior.
-    #[tracing::instrument(level = "trace", skip(self, ctx))]
-    pub fn intrinsic_size(
-        &self,
-        ctx: ElementContext,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32 {
-        let children = ctx
-            .element_tree
-            .get_children(*ctx.element_id)
-            .map(|children| children.as_slice())
-            .unwrap_or_default();
-
+    pub fn create_render_object(&self) -> RenderObject {
         match self.inner {
+            // Use the default render object for proxies and widgets
             ElementType::Proxy(_) | ElementType::Widget(_) => {
-                assert!(
-                    children.len() <= 1,
-                    "{} may only have a single child",
-                    self.widget_name()
-                );
-
-                // Proxy the layout call to the child.
-                if let Some(child_id) = children.get(0).copied() {
-                    ctx.element_tree
-                        .get(child_id)
-                        .expect("child element missing during layout")
-                        .intrinsic_size(
-                            ElementContext {
-                                element_tree: ctx.element_tree,
-
-                                element_id: &child_id,
-                            },
-                            dimension,
-                            cross_extent,
-                        )
-                } else {
-                    // If we have no child, then our size is the smallest size that satisfies the constraints.
-                    0.0
-                }
+                RenderObject::new(RenderBox::default())
             }
 
-            ElementType::Render(ref widget) => widget.intrinsic_size(
-                ElementIntrinsicSizeContext {
-                    element_tree: ctx.element_tree,
-
-                    element_id: ctx.element_id,
-
-                    children,
-                },
-                dimension,
-                cross_extent,
-            ),
-        }
-    }
-
-    #[tracing::instrument(level = "trace", skip(self, ctx))]
-    pub fn layout(&mut self, ctx: ElementContextMut, constraints: Constraints) -> Size {
-        // TODO: technically if the constraints didn't change from the last layout, we shouldn't need to
-        // recompute. Is this assumption correct? if the child hasn't rebuilt, will their layout _ever_ be
-        // able to change?
-
-        match self.inner {
-            ElementType::Proxy(_) | ElementType::Widget(_) => {
-                let children = ctx
-                    .element_tree
-                    .get_children(*ctx.element_id)
-                    .map(|children| children.as_slice())
-                    .unwrap_or_default();
-
-                assert!(
-                    children.len() <= 1,
-                    "{} may only have a single child",
-                    self.widget_name()
-                );
-
-                // Proxy the layout call to the child.
-                if let Some(child_id) = children.get(0).copied() {
-                    ctx.element_tree
-                        .with(child_id, |element_tree, element| {
-                            element.layout(
-                                ElementContextMut {
-                                    element_tree,
-
-                                    element_id: &child_id,
-                                },
-                                constraints,
-                            )
-                        })
-                        .expect("child element missing during layout")
-                } else {
-                    // If we have no child, then our size is the smallest size that satisfies the constraints.
-                    constraints.smallest()
-                }
-            }
-
-            ElementType::Render(ref mut widget) => {
-                let children = ctx
-                    .element_tree
-                    .get_children(*ctx.element_id)
-                    .cloned()
-                    .unwrap_or_default();
-
-                let mut offsets = vec![Offset::ZERO; children.len()];
-
-                let size = widget.layout(
-                    ElementLayoutContext {
-                        element_tree: ctx.element_tree,
-
-                        element_id: ctx.element_id,
-
-                        children: &children,
-                        offsets: &mut offsets,
-                    },
-                    constraints,
-                );
-
-                for (child_id, offset) in children.iter().zip(offsets) {
-                    ctx.element_tree
-                        .get_mut(*child_id)
-                        .expect("child element missing during layout")
-                        .offset = offset;
-                }
-
-                // The size of the element may be larger than the constraints (currently, so we can determine intrinsic sizes),
-                // so we have to ensure it's constrained, here.
-                self.size = Some(constraints.constrain(size));
-
-                size
-            }
+            ElementType::Render(ref widget) => widget.create_render_object(),
         }
     }
 
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn build(&mut self, ctx: ElementBuildContext) -> Vec<Widget> {
         match self.inner {
-            ElementType::Proxy(ref mut widget) => Vec::from([widget.get_child()]),
+            ElementType::Proxy(ref mut widget) => Vec::from([widget.child()]),
             ElementType::Widget(ref mut widget) => Vec::from([widget.build(ctx)]),
-            ElementType::Render(ref mut widget) => widget.get_children(),
+            ElementType::Render(ref mut widget) => widget.children(),
         }
     }
 
@@ -312,84 +177,14 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn paint(&self) -> Option<Canvas> {
-        self.size.and_then(|size| match self.inner {
-            ElementType::Proxy(_) | ElementType::Widget(_) => None,
-            ElementType::Render(ref widget) => widget.paint(size),
-        })
+    pub(crate) fn set_render_object_id(&mut self, id: RenderObjectId) {
+        self.render_object_id = Some(id);
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx))]
-    pub fn hit_test(
-        &self,
-        ctx: ElementContext,
-        result: &mut HitTestResult,
-        position: Offset,
-    ) -> HitTest {
-        let Some(size) = self.size else {
-            tracing::warn!("cannot hit test an element before layout");
-            return HitTest::Pass;
-        };
-
-        let children = ctx
-            .element_tree
-            .get_children(*ctx.element_id)
-            .map(|children| children.as_slice())
-            .unwrap_or_default();
-
-        let hit = match self.inner {
-            ElementType::Proxy(_) | ElementType::Widget(_) => {
-                assert!(
-                    children.len() <= 1,
-                    "{} may only have a single child",
-                    self.widget_name()
-                );
-
-                // Proxy the hit test to the child.
-                if let Some(child_id) = children.get(0).copied() {
-                    ctx.element_tree
-                        .get(child_id)
-                        .expect("child element missing during hit test")
-                        .hit_test(
-                            ElementContext {
-                                element_tree: ctx.element_tree,
-
-                                element_id: &child_id,
-                            },
-                            result,
-                            position,
-                        )
-                } else {
-                    // If we have no child, then our size is used for the hit test.
-                    if size.contains(position) {
-                        HitTest::Absorb
-                    } else {
-                        HitTest::Pass
-                    }
-                }
-            }
-
-            ElementType::Render(ref widget) => widget.hit_test(
-                &mut ElementHitTestContext {
-                    element_tree: ctx.element_tree,
-
-                    element_id: ctx.element_id,
-                    size: &size,
-
-                    children,
-
-                    result,
-                },
-                position,
-            ),
-        };
-
-        if hit == HitTest::Absorb {
-            result.add(*ctx.element_id);
+    pub(crate) fn update_render_object(&self, render_object: &mut RenderObject) {
+        if let ElementType::Render(ref widget) = self.inner {
+            widget.update_render_object(render_object);
         }
-
-        hit
     }
 }
 

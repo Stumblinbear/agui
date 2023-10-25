@@ -34,12 +34,12 @@ impl<S> ContextElement for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.get_elements()
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.inner.elements()
     }
 
-    fn get_element_id(&self) -> ElementId {
-        self.inner.get_element_id()
+    fn element_id(&self) -> ElementId {
+        self.inner.element_id()
     }
 }
 
@@ -47,8 +47,8 @@ impl<'ctx, S> ContextPlugins<'ctx> for StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
-    fn get_plugins(&self) -> &Plugins {
-        self.inner.get_plugins()
+    fn plugins(&self) -> &Plugins {
+        self.inner.plugins()
     }
 }
 
@@ -56,8 +56,8 @@ impl<'ctx, S> ContextPluginsMut<'ctx> for StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
-    fn get_plugins_mut(&mut self) -> &mut Plugins {
-        self.inner.get_plugins_mut()
+    fn plugins_mut(&mut self) -> &mut Plugins {
+        self.inner.plugins_mut()
     }
 }
 
@@ -74,8 +74,8 @@ impl<S> ContextCallbackQueue for StatefulBuildContext<'_, S>
 where
     S: WidgetState,
 {
-    fn get_callback_queue(&self) -> &CallbackQueue {
-        self.inner.get_callback_queue()
+    fn callback_queue(&self) -> &CallbackQueue {
+        self.inner.callback_queue()
     }
 }
 
@@ -103,7 +103,7 @@ impl<'ctx, S: 'static> StatefulBuildContext<'ctx, S>
 where
     S: WidgetState,
 {
-    pub fn get_widget(&self) -> &S::Widget {
+    pub fn widget(&self) -> &S::Widget {
         self.widget
     }
 
@@ -112,11 +112,10 @@ where
         A: AsAny,
         F: Fn(&mut StatefulCallbackContext<S>, A) + 'static,
     {
-        let callback =
-            WidgetCallback::new::<F>(self.get_element_id(), self.get_callback_queue().clone());
+        let callback = WidgetCallback::new::<F>(self.element_id(), self.callback_queue().clone());
 
         self.callbacks
-            .insert(callback.get_id(), Box::new(StatefulCallbackFn::new(func)));
+            .insert(callback.id(), Box::new(StatefulCallbackFn::new(func)));
 
         Callback::Widget(callback)
     }

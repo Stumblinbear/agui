@@ -17,7 +17,7 @@ pub struct TextLayoutController {
 }
 
 impl InheritedWidget for TextLayoutController {
-    fn get_child(&self) -> Widget {
+    fn child(&self) -> Widget {
         self.child
             .clone()
             .unwrap_or_else(|| SizedBox::shrink().into_widget())

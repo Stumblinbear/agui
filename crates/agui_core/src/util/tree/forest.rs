@@ -50,7 +50,7 @@ impl<K, V> Forest<K, V>
 where
     K: Key,
 {
-    pub fn get_roots(&self) -> &FxHashSet<K> {
+    pub fn roots(&self) -> &FxHashSet<K> {
         &self.roots
     }
 

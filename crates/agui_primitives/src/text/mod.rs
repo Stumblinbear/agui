@@ -63,7 +63,7 @@ struct TextLayout {
 }
 
 impl WidgetLayout for TextLayout {
-    fn get_children(&self) -> Vec<Widget> {
+    fn children(&self) -> Vec<Widget> {
         build! {
             vec![
                 <TextPainter> {
@@ -113,7 +113,7 @@ struct TextPainter {
 }
 
 impl WidgetPaint for TextPainter {
-    fn get_child(&self) -> Option<Widget> {
+    fn child(&self) -> Option<Widget> {
         None
     }
 

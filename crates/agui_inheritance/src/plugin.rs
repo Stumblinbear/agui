@@ -6,7 +6,7 @@ use agui_core::{
         context::{
             PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
         },
-        Capabilities, Plugin,
+        Plugin,
     },
 };
 
@@ -18,31 +18,27 @@ pub struct InheritancePlugin {
 }
 
 impl Plugin for InheritancePlugin {
-    fn capabilities(&self) -> Capabilities {
-        Capabilities::ELEMENT_MOUNT | Capabilities::ELEMENT_UNMOUNT
-    }
-
-    fn on_element_mount(&mut self, ctx: PluginElementMountContext) {
+    fn on_element_mount(&mut self, ctx: &mut PluginElementMountContext) {
         self.manager
-            .create_node(ctx.get_parent_element_id(), ctx.get_element_id());
+            .create_node(ctx.parent_element_id(), ctx.element_id());
     }
 
-    fn on_element_remount(&mut self, mut ctx: PluginElementRemountContext) {
-        let parent_scope_id = ctx.get_parent_element_id().and_then(|parent_element_id| {
+    fn on_element_remount(&mut self, ctx: &mut PluginElementRemountContext) {
+        let parent_scope_id = ctx.parent_element_id().and_then(|parent_element_id| {
             self.manager
                 .get(parent_element_id)
                 .expect("failed to get scope from parent")
-                .get_scope()
+                .scope()
         });
 
-        let element_id = ctx.get_element_id();
+        let element_id = ctx.element_id();
 
         self.manager
-            .update_inheritance_scope(&mut ctx, element_id, parent_scope_id);
+            .update_inheritance_scope(ctx, element_id, parent_scope_id);
     }
 
-    fn on_element_unmount(&mut self, ctx: PluginElementUnmountContext) {
-        self.manager.remove(ctx.get_element_id());
+    fn on_element_unmount(&mut self, ctx: &mut PluginElementUnmountContext) {
+        self.manager.remove(ctx.element_id());
     }
 }
 

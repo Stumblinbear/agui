@@ -47,6 +47,11 @@ path = "benches/engine.rs"
 harness = false
 
 [[bench]]
+name = "plugins"
+path = "benches/plugins.rs"
+harness = false
+
+[[bench]]
 name = "hashers"
 path = "benches/hashers.rs"
 harness = false

@@ -2,8 +2,11 @@ use rustc_hash::FxHashMap;
 
 use agui_core::{
     element::{Element, ElementId},
-    util::tree::Tree,
+    plugin::context::{ContextPlugins, ContextPluginsMut},
+    util::{map::ElementMap, tree::Tree},
 };
+
+use crate::plugin::RenderViewPlugin;
 
 use super::RenderViewId;
 
@@ -11,21 +14,22 @@ use super::RenderViewId;
 pub struct RenderViewManager {
     last_render_view_id: usize,
 
-    map: FxHashMap<ElementId, RenderViewId>,
+    map: ElementMap<RenderViewId>,
 
     render_views: FxHashMap<RenderViewId, ElementId>,
 }
 
 impl RenderViewManager {
-    pub fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
-        self.last_render_view_id += 1;
+    pub fn of<'ctx>(ctx: &impl ContextPlugins<'ctx>) -> Option<&Self> {
+        ctx.plugins()
+            .get::<RenderViewPlugin>()
+            .map(|plugin| &plugin.manager)
+    }
 
-        let render_view_id = RenderViewId::new(self.last_render_view_id);
-
-        self.map.insert(element_id, render_view_id);
-        self.render_views.insert(render_view_id, element_id);
-
-        render_view_id
+    pub fn of_mut<'ctx>(ctx: &mut impl ContextPluginsMut<'ctx>) -> Option<&mut Self> {
+        ctx.plugins_mut()
+            .get_mut::<RenderViewPlugin>()
+            .map(|plugin| &mut plugin.manager)
     }
 
     pub fn get_view(&self, element_id: ElementId) -> Option<RenderViewId> {
@@ -34,6 +38,17 @@ impl RenderViewManager {
 
     pub fn get_boundary(&self, render_view_id: RenderViewId) -> Option<ElementId> {
         self.render_views.get(&render_view_id).copied()
+    }
+
+    pub(crate) fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
+        self.last_render_view_id += 1;
+
+        let render_view_id = RenderViewId::new(self.last_render_view_id);
+
+        self.map.insert(element_id, render_view_id);
+        self.render_views.insert(render_view_id, element_id);
+
+        render_view_id
     }
 
     pub(crate) fn add(&mut self, parent_element_id: Option<ElementId>, element_id: ElementId) {

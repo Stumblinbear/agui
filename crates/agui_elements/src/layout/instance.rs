@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementHitTestContext,
-        ElementIntrinsicSizeContext, ElementLayoutContext, ElementUpdate,
+        render::ElementRender, widget::ElementWidget, ElementUpdate, RenderObjectHitTestContext,
+        RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext,
     },
     unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
     widget::{AnyWidget, Widget},
@@ -52,13 +52,13 @@ impl<W> ElementRender for LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout,
 {
-    fn get_children(&self) -> Vec<Widget> {
-        self.widget.get_children()
+    fn children(&self) -> Vec<Widget> {
+        self.widget.children()
     }
 
     fn intrinsic_size(
         &self,
-        ctx: ElementIntrinsicSizeContext,
+        ctx: RenderObjectIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -69,14 +69,14 @@ where
         )
     }
 
-    fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: RenderObjectLayoutContext, constraints: Constraints) -> Size {
         self.widget
             .layout(&mut LayoutContext { inner: ctx }, constraints)
     }
 
     fn hit_test<'ctx>(
         &self,
-        ctx: &'ctx mut ElementHitTestContext<'ctx>,
+        ctx: &'ctx mut RenderObjectHitTestContext<'ctx>,
         position: Offset,
     ) -> HitTest {
         self.widget

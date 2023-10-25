@@ -2,7 +2,8 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementIntrinsicSizeContext, ElementUpdate,
+        render::ElementRender, widget::ElementWidget, ElementUpdate,
+        RenderObjectIntrinsicSizeContext,
     },
     render::canvas::{
         painter::{CanvasPainter, Head},
@@ -53,13 +54,13 @@ impl<W> ElementRender for PaintElement<W>
 where
     W: WidgetPaint,
 {
-    fn get_children(&self) -> Vec<Widget> {
-        Vec::from_iter(self.widget.get_child())
+    fn children(&self) -> Vec<Widget> {
+        Vec::from_iter(self.widget.child())
     }
 
     fn intrinsic_size(
         &self,
-        ctx: ElementIntrinsicSizeContext,
+        ctx: RenderObjectIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {

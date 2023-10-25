@@ -1,52 +1,39 @@
 use glam::Mat4;
 
 use crate::{
-    element::{Element, ElementContext, ElementId},
+    plugin::Plugins,
+    render::{RenderObject, RenderObjectContext, RenderObjectId},
     unit::{HitTest, HitTestResult, Offset},
     util::tree::Tree,
 };
+
 pub struct IterChildrenHitTest<'ctx> {
-    front_index: usize,
-    back_index: usize,
+    pub(crate) front_index: usize,
+    pub(crate) back_index: usize,
 
-    element_tree: &'ctx Tree<ElementId, Element>,
+    pub(crate) plugins: &'ctx Plugins,
 
-    children: &'ctx [ElementId],
+    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
-    result: &'ctx mut HitTestResult,
-}
+    pub(crate) children: &'ctx [RenderObjectId],
 
-impl<'ctx> IterChildrenHitTest<'ctx> {
-    pub fn new(
-        element_tree: &'ctx Tree<ElementId, Element>,
-        children: &'ctx [ElementId],
-        result: &'ctx mut HitTestResult,
-    ) -> Self {
-        IterChildrenHitTest {
-            front_index: 0,
-            back_index: children.len(),
-
-            element_tree,
-
-            children,
-
-            result,
-        }
-    }
+    pub(crate) result: &'ctx mut HitTestResult,
 }
 
 // TODO: refactor to LendingIterator when possible
 impl IterChildrenHitTest<'_> {
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> Option<ChildElementHitTest> {
+    pub fn next(&mut self) -> Option<ChildHitTest> {
         if self.front_index >= self.back_index {
             return None;
         }
 
         self.front_index += 1;
 
-        Some(ChildElementHitTest {
-            element_tree: self.element_tree,
+        Some(ChildHitTest {
+            plugins: self.plugins,
+
+            render_object_tree: self.render_object_tree,
 
             result: self.result,
 
@@ -56,15 +43,17 @@ impl IterChildrenHitTest<'_> {
         })
     }
 
-    pub fn next_back(&mut self) -> Option<ChildElementHitTest> {
+    pub fn next_back(&mut self) -> Option<ChildHitTest> {
         if self.front_index >= self.back_index {
             return None;
         }
 
         self.back_index -= 1;
 
-        Some(ChildElementHitTest {
-            element_tree: self.element_tree,
+        Some(ChildHitTest {
+            plugins: self.plugins,
+
+            render_object_tree: self.render_object_tree,
 
             index: self.back_index,
 
@@ -75,40 +64,42 @@ impl IterChildrenHitTest<'_> {
     }
 }
 
-pub struct ChildElementHitTest<'ctx> {
-    pub(crate) element_tree: &'ctx Tree<ElementId, Element>,
+pub struct ChildHitTest<'ctx> {
+    plugins: &'ctx Plugins,
+
+    render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     index: usize,
 
-    children: &'ctx [ElementId],
+    children: &'ctx [RenderObjectId],
 
     result: &'ctx mut HitTestResult,
 }
 
-impl ChildElementHitTest<'_> {
+impl ChildHitTest<'_> {
     pub fn index(&self) -> usize {
         self.index
     }
 
-    pub fn get_element_id(&self) -> ElementId {
+    pub fn render_object_id(&self) -> RenderObjectId {
         self.children[self.index]
     }
 
-    pub fn get_element(&self) -> &Element {
-        let element_id = self.get_element_id();
+    pub fn render_object(&self) -> &RenderObject {
+        let render_object_id = self.render_object_id();
 
-        self.element_tree
-            .get(element_id)
-            .expect("child element missing during hit test")
+        self.render_object_tree
+            .get(render_object_id)
+            .expect("child  render object missing during hit test")
     }
 
-    pub fn get_offset(&self) -> Offset {
-        let element_id = self.get_element_id();
+    pub fn offset(&self) -> Offset {
+        let render_object_id = self.render_object_id();
 
-        self.element_tree
-            .get(element_id)
-            .expect("child element missing during hit test")
-            .get_offset()
+        self.render_object_tree
+            .get(render_object_id)
+            .expect("child render object missing during hit test")
+            .offset()
     }
 
     /// Check if the given position "hits" this widget or any of its descendants.
@@ -116,18 +107,20 @@ impl ChildElementHitTest<'_> {
     /// The given position must be in the widget's local coordinate space, not the global
     /// coordinate space.
     pub fn hit_test(&mut self, position: Offset) -> HitTest {
-        let element_id = self.get_element_id();
+        let render_object_id = self.render_object_id();
 
-        let element = self
-            .element_tree
-            .get(element_id)
-            .expect("child element missing during hit test");
+        let render_object = self
+            .render_object_tree
+            .get(render_object_id)
+            .expect("child render object missing during hit test");
 
-        element.hit_test(
-            ElementContext {
-                element_tree: self.element_tree,
+        render_object.hit_test(
+            RenderObjectContext {
+                plugins: self.plugins,
 
-                element_id: &element_id,
+                render_object_tree: self.render_object_tree,
+
+                render_object_id: &render_object_id,
             },
             self.result,
             position,
@@ -138,7 +131,7 @@ impl ChildElementHitTest<'_> {
         &mut self,
         transform: Mat4,
         position: Offset,
-        func: impl FnOnce(&mut ChildElementHitTest<'_>, Offset) -> HitTest,
+        func: impl FnOnce(&mut ChildHitTest<'_>, Offset) -> HitTest,
     ) -> HitTest {
         self.result.push_transform(transform);
 
@@ -162,11 +155,11 @@ impl ChildElementHitTest<'_> {
         &mut self,
         offset: Offset,
         position: Offset,
-        func: impl FnOnce(&mut ChildElementHitTest<'_>, Offset) -> HitTest,
+        func: impl FnOnce(&mut ChildHitTest<'_>, Offset) -> HitTest,
     ) -> HitTest {
         self.result.push_offset(offset);
 
-        let child_offset = self.get_offset();
+        let child_offset = self.offset();
 
         let transformed_position = position - child_offset;
 

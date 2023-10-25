@@ -1,26 +1,26 @@
 use std::ops::{Deref, DerefMut};
 
 use agui_core::{
-    element::{ContextElement, Element, ElementHitTestContext, ElementId},
+    element::{ContextElement, Element, ElementId, RenderObjectHitTestContext},
     util::tree::Tree,
 };
 
 pub struct HitTestContext<'ctx> {
-    pub(crate) inner: &'ctx mut ElementHitTestContext<'ctx>,
+    pub(crate) inner: &'ctx mut RenderObjectHitTestContext<'ctx>,
 }
 
 impl ContextElement for HitTestContext<'_> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.get_elements()
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.inner.elements()
     }
 
-    fn get_element_id(&self) -> ElementId {
-        self.inner.get_element_id()
+    fn element_id(&self) -> ElementId {
+        self.inner.element_id()
     }
 }
 
 impl<'ctx> Deref for HitTestContext<'ctx> {
-    type Target = ElementHitTestContext<'ctx>;
+    type Target = RenderObjectHitTestContext<'ctx>;
 
     fn deref(&self) -> &Self::Target {
         self.inner

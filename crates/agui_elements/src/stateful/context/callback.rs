@@ -15,12 +15,12 @@ pub struct StatefulCallbackContext<'ctx, S> {
 }
 
 impl<S> ContextElement for StatefulCallbackContext<'_, S> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.get_elements()
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.inner.elements()
     }
 
-    fn get_element_id(&self) -> ElementId {
-        self.inner.get_element_id()
+    fn element_id(&self) -> ElementId {
+        self.inner.element_id()
     }
 }
 

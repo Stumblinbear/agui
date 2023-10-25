@@ -5,19 +5,21 @@ use rustc_hash::FxHashMap;
 use crate::{
     callback::{CallbackInvoke, CallbackQueue},
     element::{
-        Element, ElementBuildContext, ElementCallbackContext, ElementContextMut, ElementId,
-        ElementMountContext, ElementUnmountContext, ElementUpdate,
+        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
+        ElementUnmountContext, ElementUpdate,
     },
     engine::event::{ElementDestroyedEvent, ElementSpawnedEvent},
     listenable::EventBus,
     plugin::{
         context::{
-            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
-            PluginElementMountContext, PluginElementUnmountContext, PluginInitContext,
+            ContextPlugins, PluginAfterUpdateContext, PluginBeforeUpdateContext,
+            PluginElementBuildContext, PluginElementMountContext, PluginElementUnmountContext,
+            PluginInitContext,
         },
-        Capabilities, Plugins,
+        Plugins,
     },
     query::WidgetQuery,
+    render::{RenderObject, RenderObjectContextMut, RenderObjectId},
     unit::{Constraints, Key},
     util::{map::ElementSet, tree::Tree},
     widget::Widget,
@@ -28,27 +30,36 @@ use self::{builder::EngineBuilder, event::ElementRebuiltEvent};
 pub mod builder;
 mod dirty;
 pub mod event;
-mod middleware;
 
 pub use dirty::DirtyElements;
 
 pub struct Engine {
-    bus: EventBus,
-
     plugins: Plugins,
 
+    bus: EventBus,
+
     element_tree: Tree<ElementId, Element>,
+    render_object_tree: Tree<RenderObjectId, RenderObject>,
 
     dirty: DirtyElements,
     callback_queue: CallbackQueue,
 
     rebuild_queue: VecDeque<ElementId>,
-    retained_elements: ElementSet,
     removal_queue: ElementSet,
+
+    sync_render_object_children: ElementSet,
+    create_render_object: VecDeque<ElementId>,
+    update_render_object: ElementSet,
+}
+
+impl ContextPlugins<'_> for Engine {
+    fn plugins(&self) -> &Plugins {
+        &self.plugins
+    }
 }
 
 impl Engine {
-    pub fn builder() -> EngineBuilder {
+    pub fn builder() -> EngineBuilder<()> {
         EngineBuilder::new()
     }
 
@@ -56,22 +67,19 @@ impl Engine {
         &self.bus
     }
 
-    pub fn get_plugins(&self) -> &Plugins {
-        &self.plugins
-    }
-
-    pub fn get_plugins_mut(&mut self) -> &mut Plugins {
-        &mut self.plugins
-    }
-
     /// Get the element tree.
-    pub fn get_tree(&self) -> &Tree<ElementId, Element> {
+    pub fn elements(&self) -> &Tree<ElementId, Element> {
         &self.element_tree
     }
 
+    /// Get the render object tree.
+    pub fn render_objects(&self) -> &Tree<RenderObjectId, RenderObject> {
+        &self.render_object_tree
+    }
+
     /// Get the root widget.
-    pub fn get_root(&self) -> ElementId {
-        self.element_tree.get_root().expect("root is not set")
+    pub fn root(&self) -> ElementId {
+        self.element_tree.root().expect("root is not set")
     }
 
     /// Check if a widget exists in the tree.
@@ -87,7 +95,7 @@ impl Engine {
         WidgetQuery::new(&self.element_tree)
     }
 
-    pub fn get_callback_queue(&self) -> &CallbackQueue {
+    pub fn callback_queue(&self) -> &CallbackQueue {
         &self.callback_queue
     }
 
@@ -108,16 +116,10 @@ impl Engine {
     /// slightly different semantics. It will be mounted but not built until the first
     /// update.
     fn init(&mut self, root: Widget) {
-        self.plugins.with(|plugins, plugin| {
-            plugin.capabilities = plugin.inner.capabilities();
+        self.plugins.on_init(&mut PluginInitContext {
+            bus: &self.bus,
 
-            plugin.inner.on_init(PluginInitContext {
-                bus: &self.bus,
-
-                plugins,
-
-                element_tree: &self.element_tree,
-            });
+            element_tree: &self.element_tree,
         });
 
         let root_id = self.process_spawn(None, root);
@@ -130,17 +132,10 @@ impl Engine {
     pub fn update(&mut self) {
         tracing::debug!("updating widget tree");
 
-        self.plugins.with(|plugins, plugin| {
-            if !plugin.capabilities.contains(Capabilities::BEFORE_UPDATE) {
-                return;
-            }
-
-            plugin.on_before_update(PluginBeforeUpdateContext {
-                plugins,
-
+        self.plugins
+            .on_before_update(&mut PluginBeforeUpdateContext {
                 element_tree: &self.element_tree,
             });
-        });
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
@@ -157,6 +152,11 @@ impl Engine {
                 }
             }
 
+            // We sync render after the rebuild loop to prevent unnecessary work keeping the render
+            // tree up-to-date. This is done before `flush_removals` so that we can steal any render
+            // objects that would otherwise be removed.
+            self.sync_render_objects();
+
             self.flush_removals();
 
             self.flush_layout();
@@ -166,16 +166,8 @@ impl Engine {
             }
         }
 
-        self.plugins.with(|plugins, plugin| {
-            if !plugin.capabilities.contains(Capabilities::AFTER_UPDATE) {
-                return;
-            }
-
-            plugin.on_after_update(PluginAfterUpdateContext {
-                plugins,
-
-                element_tree: &self.element_tree,
-            });
+        self.plugins.on_after_update(&mut PluginAfterUpdateContext {
+            element_tree: &self.element_tree,
         });
     }
 
@@ -209,7 +201,7 @@ impl Engine {
             arg: callback_arg,
         } in callback_invokes
         {
-            let element_id = callback_id.get_element_id();
+            let element_id = callback_id.element_id();
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
@@ -242,18 +234,20 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_layout(&mut self) {
-        let Some(root_id) = self.element_tree.get_root() else {
+        let Some(root_id) = self.render_object_tree.root() else {
             return;
         };
 
         // TODO: Layout using a loop rather than deeply recursively
-        self.element_tree
-            .with(root_id, |element_tree, element| {
-                element.layout(
-                    ElementContextMut {
-                        element_tree,
+        self.render_object_tree
+            .with(root_id, |render_object_tree, render_object| {
+                render_object.layout(
+                    RenderObjectContextMut {
+                        plugins: &mut self.plugins,
 
-                        element_id: &root_id,
+                        render_object_tree,
+
+                        render_object_id: &root_id,
                     },
                     // The root element is always unbounded
                     Constraints::expand(),
@@ -271,21 +265,15 @@ impl Engine {
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
-            self.plugins.with(|plugins, plugin| {
-                if !plugin.capabilities.contains(Capabilities::ELEMENT_MOUNT) {
-                    return;
-                }
-
-                plugin.on_element_mount(PluginElementMountContext {
-                    plugins,
-
+            self.plugins
+                .on_element_mount(&mut PluginElementMountContext {
                     element_tree,
                     dirty: &mut self.dirty,
 
                     parent_element_id: parent_id.as_ref(),
                     element_id: &element_id,
+                    element,
                 });
-            });
 
             element.mount(ElementMountContext {
                 plugins: &mut self.plugins,
@@ -297,6 +285,8 @@ impl Engine {
                 element_id: &element_id,
             });
         });
+
+        self.create_render_object.push_back(element_id);
 
         self.bus.emit(&ElementSpawnedEvent {
             parent_id,
@@ -316,21 +306,15 @@ impl Engine {
             let new_widgets = self
                 .element_tree
                 .with(element_id, |element_tree, element| {
-                    self.plugins.with(|plugins, plugin| {
-                        if !plugin.capabilities.contains(Capabilities::ELEMENT_BUILD) {
-                            return;
-                        }
-
-                        plugin.on_element_build(PluginElementBuildContext {
-                            plugins,
-
+                    self.plugins
+                        .on_element_build(&mut PluginElementBuildContext {
                             element_tree,
                             dirty: &mut self.dirty,
                             callback_queue: &self.callback_queue,
 
                             element_id: &element_id,
+                            element,
                         });
-                    });
 
                     element.build(ElementBuildContext {
                         plugins: &mut self.plugins,
@@ -399,6 +383,7 @@ impl Engine {
                             );
 
                             self.rebuild_queue.push_back(old_child_id);
+                            self.update_render_object.insert(old_child_id);
                         }
 
                         ElementUpdate::Invalid => break,
@@ -448,6 +433,11 @@ impl Engine {
                             );
 
                             self.rebuild_queue.push_back(old_child_id);
+
+                            // If the child has a render object, we need to update it.
+                            if old_child.render_object_id().is_some() {
+                                self.update_render_object.insert(old_child_id);
+                            }
                         }
 
                         ElementUpdate::Invalid => break,
@@ -471,7 +461,7 @@ impl Engine {
                         .get(*old_child_id)
                         .expect("child element does not exist in the tree");
 
-                    if let Some(key) = old_child.get_widget().get_key() {
+                    if let Some(key) = old_child.widget().key() {
                         old_keyed_children.insert(key, *old_child_id);
                     } else {
                         // unmount / deactivate the child
@@ -486,7 +476,7 @@ impl Engine {
                 let new_widget = &new_widgets[new_children_top as usize];
 
                 if have_old_children {
-                    if let Some(key) = new_widget.get_key() {
+                    if let Some(key) = new_widget.key() {
                         if let Some(old_child_id) = old_keyed_children.get(&key).copied() {
                             let old_child = self
                                 .element_tree
@@ -516,6 +506,11 @@ impl Engine {
                                     );
 
                                     self.rebuild_queue.push_back(old_child_id);
+
+                                    // If the child has a render object, we need to update it.
+                                    if old_child.render_object_id().is_some() {
+                                        self.update_render_object.insert(old_child_id);
+                                    }
                                 }
 
                                 ElementUpdate::Invalid => break,
@@ -566,10 +561,20 @@ impl Engine {
             //     // deactivate the child
             // }
 
-            for child_id in new_children {
-                let child_id = child_id.expect("child id should not be none");
+            // The list of new children should never have any holes in it.
+            let new_children = new_children
+                .into_iter()
+                .map(Option::unwrap)
+                .collect::<Vec<_>>();
 
-                self.retained_elements.insert(child_id);
+            // If the list of children has changed, we need to make sure the parent has its
+            // render object child order updated as well.
+            if old_children != new_children {
+                self.sync_render_object_children.insert(element_id);
+            }
+
+            for child_id in new_children {
+                self.removal_queue.remove(&child_id);
 
                 // reparent each child
                 if self.element_tree.reparent(Some(element_id), child_id) {
@@ -588,21 +593,18 @@ impl Engine {
             .map(Vec::clone)
             .unwrap_or_default();
 
-        self.process_build(element_id);
-
-        // Remove the old children
+        // Add the children to the removal queue. If any wish to be retained, they will be
+        // removed from the queue during `process_build`.
         for child_id in children {
             self.removal_queue.insert(child_id);
         }
+
+        self.process_build(element_id);
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     fn flush_removals(&mut self) {
-        let mut destroy_queue = self
-            .removal_queue
-            .drain()
-            // Only remove elements that were not retained
-            .filter(|element_id| !self.retained_elements.contains(element_id))
-            .collect::<VecDeque<_>>();
+        let mut destroy_queue = self.removal_queue.drain().collect::<VecDeque<_>>();
 
         while let Some(element_id) = destroy_queue.pop_front() {
             // Queue the element's children for removal
@@ -614,20 +616,14 @@ impl Engine {
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
-                    self.plugins.with(|plugins, plugin| {
-                        if !plugin.capabilities.contains(Capabilities::ELEMENT_UNMOUNT) {
-                            return;
-                        }
-
-                        plugin.on_element_unmount(PluginElementUnmountContext {
-                            plugins,
-
+                    self.plugins
+                        .on_element_unmount(&mut PluginElementUnmountContext {
                             element_tree,
                             dirty: &mut self.dirty,
 
                             element_id: &element_id,
+                            element,
                         });
-                    });
 
                     element.unmount(ElementUnmountContext {
                         plugins: &mut self.plugins,
@@ -644,12 +640,153 @@ impl Engine {
 
             let element = self.element_tree.remove(element_id, false).unwrap();
 
-            let widget = element.get_widget();
+            let widget = element.widget();
 
             tracing::trace!(?element_id, ?widget, "destroyed widget");
         }
+    }
 
-        self.retained_elements.clear();
+    #[tracing::instrument(level = "trace", skip(self))]
+    fn create_render_object(&mut self, element_id: ElementId) -> Option<RenderObjectId> {
+        // No point in creating a render object for an element that is being removed.
+        if self.removal_queue.contains(&element_id) {
+            return None;
+        }
+
+        let parent_render_object_id =
+            self.element_tree
+                .get_parent(element_id)
+                .map(|parent_element_id| {
+                    self.element_tree
+                        .get(parent_element_id)
+                        .expect("parent element missing while creating render objects")
+                        .render_object_id()
+                        .expect("parent element has no render object")
+                });
+
+        let element = self
+            .element_tree
+            .get_mut(element_id)
+            .expect("element missing while creating render objects");
+
+        // If we've already created a render object for this element, skip it.
+        if let Some(render_object_id) = element.render_object_id() {
+            return Some(render_object_id);
+        }
+
+        let render_object_id = self
+            .render_object_tree
+            .add(parent_render_object_id, element.create_render_object());
+
+        element.set_render_object_id(render_object_id);
+
+        Some(render_object_id)
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    fn sync_render_objects(&mut self) {
+        let mut sync_render_object_queue = self
+            .sync_render_object_children
+            .drain()
+            .filter(|element_id| !self.removal_queue.contains(element_id))
+            .collect::<VecDeque<_>>();
+
+        while let Some(element_id) = sync_render_object_queue.pop_front() {
+            // Elements that were removed should still be available in the tree, so this should
+            // never fail.
+            let element_node = self
+                .element_tree
+                .get_node(element_id)
+                .expect("element missing while syncing render object children");
+
+            if let Some(render_object_id) = element_node.value().render_object_id() {
+                let mut first_child_render_object_id = None;
+
+                let children = element_node.children().to_vec();
+
+                // Yank the render objects of the element's children from wheverever they are in
+                // the tree to the end of the list.
+                for child_id in children {
+                    let child_render_object_id = self
+                        .element_tree
+                        .get(child_id)
+                        .expect("child element missing while syncing render object children")
+                        .render_object_id();
+
+                    let child_render_object_id =
+                        if let Some(child_render_object_id) = child_render_object_id {
+                            self.render_object_tree
+                                .reparent(Some(render_object_id), child_render_object_id);
+
+                            child_render_object_id
+                        } else {
+                            // If they don't already have a render object, create it.
+                            if let Some(render_object_id) = self.create_render_object(child_id) {
+                                render_object_id
+                            } else {
+                                // If the child is being removed, it won't have a render object.
+                                continue;
+                            }
+                        };
+
+                    if first_child_render_object_id.is_none() {
+                        first_child_render_object_id = Some(child_render_object_id);
+                    }
+                }
+
+                let children = self
+                    .render_object_tree
+                    .get_children(render_object_id)
+                    .expect("element has a render object but the render object is missing")
+                    .clone();
+
+                // Remove any render objects that were previously children but are no longer.
+                // Since the `reparent` call reorders them to the end of the list, we can remove
+                // every child from the beginning of the list until we reach the first child
+                // that is still a child of the element.
+                for child_id in children {
+                    if first_child_render_object_id == Some(child_id) {
+                        break;
+                    }
+
+                    self.render_object_tree.remove(child_id, false);
+                }
+            }
+        }
+
+        while let Some(element_id) = self.create_render_object.pop_front() {
+            self.create_render_object(element_id);
+        }
+
+        // Remove any render objects owned by elements that are being removed.
+        for element_id in self.removal_queue.iter().copied() {
+            if let Some(render_object_id) = self
+                .element_tree
+                .get(element_id)
+                .expect("element missing while syncing render object children")
+                .render_object_id()
+            {
+                self.render_object_tree.remove(render_object_id, false);
+            }
+        }
+
+        for element_id in self.update_render_object.drain() {
+            let element = self
+                .element_tree
+                .get(element_id)
+                .expect("element missing while updating render objects");
+
+            let render_object_id = element
+                .render_object_id()
+                .expect("element has no render object to update");
+
+            let render_object = self
+                .render_object_tree
+                .get_mut(render_object_id)
+                .expect("render object missing while updating");
+
+            element.update_render_object(render_object);
+        }
     }
 }
 
@@ -660,9 +797,9 @@ mod tests {
     use rustc_hash::FxHashSet;
 
     use crate::{
-        element::mock::{render::MockRenderWidget, DummyWidget},
+        element::mock::{render::MockRenderWidget, DummyRenderObject, DummyWidget},
         engine::event::{ElementDestroyedEvent, ElementRebuiltEvent, ElementSpawnedEvent},
-        unit::Size,
+        plugin::{context::ContextPlugins, Plugin},
         widget::IntoWidget,
     };
 
@@ -672,25 +809,44 @@ mod tests {
     pub fn adding_a_root_widget() {
         let mut engine = Engine::builder().with_root(DummyWidget).build();
 
-        let did_rebuilt = Rc::new(RefCell::new(None));
+        let did_rebuild = Rc::new(RefCell::new(None));
 
         let _handler = engine.events().add_listener::<ElementRebuiltEvent>({
-            let did_rebuilt = Rc::clone(&did_rebuilt);
+            let did_rebuild = Rc::clone(&did_rebuild);
 
             move |event| {
-                *did_rebuilt.borrow_mut() = Some(event.element_id);
+                *did_rebuild.borrow_mut() = Some(event.element_id);
             }
         });
 
         engine.update();
 
-        let root_id = engine.get_root();
+        let root_id = engine.root();
 
         assert_eq!(
-            *did_rebuilt.borrow(),
+            *did_rebuild.borrow(),
             Some(root_id),
             "should have emitted a rebuild event for the root"
         );
+
+        let render_object_id = engine
+            .elements()
+            .get(root_id)
+            .expect("no element found for the root widget")
+            .render_object_id()
+            .expect("no render object attached to the root element");
+
+        let root_render_object_id = engine
+            .render_objects()
+            .root()
+            .expect("no root render object");
+
+        assert_eq!(render_object_id, root_render_object_id);
+
+        engine
+            .render_object_tree
+            .get(render_object_id)
+            .expect("should have created a render object for the root element");
     }
 
     #[test]
@@ -699,7 +855,7 @@ mod tests {
 
         engine.update();
 
-        let root_id = engine.get_root();
+        let root_id = engine.root();
 
         let did_rebuild = Rc::new(RefCell::new(false));
 
@@ -724,22 +880,22 @@ mod tests {
 
     #[test]
     pub fn spawns_children() {
-        let widget = MockRenderWidget::default();
+        let root_widget = MockRenderWidget::new("RootWidget");
         {
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_get_children()
+                .expect_children()
                 .returning(|| vec![DummyWidget.into_widget(), DummyWidget.into_widget()]);
 
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_layout()
-                .returning(|_, _| Size::ZERO);
+                .expect_create_render_object()
+                .returning(|| DummyRenderObject.into());
         }
 
-        let mut engine = Engine::builder().with_root(widget).build();
+        let mut engine = Engine::builder().with_root(root_widget).build();
 
         let widgets_spawned = Rc::new(RefCell::new(FxHashSet::default()));
 
@@ -753,15 +909,21 @@ mod tests {
 
         engine.update();
 
-        let root_id = engine.get_root();
+        let root_id = engine.root();
 
         assert_eq!(
-            engine.get_tree().len(),
+            engine.elements().len(),
             3,
             "children should have been added"
         );
 
-        let children = engine.get_tree().get_children(root_id).unwrap();
+        assert_eq!(
+            engine.render_objects().len(),
+            3,
+            "child render objects should have been added"
+        );
+
+        let children = engine.elements().get_children(root_id).unwrap();
 
         assert_eq!(children.len(), 2, "root should have two children");
 
@@ -774,6 +936,9 @@ mod tests {
             widgets_spawned.borrow().contains(&children[1]),
             "should have emitted a spawn event for the second child"
         );
+
+        println!("{:?}", engine.element_tree);
+        println!("{:?}", engine.render_object_tree);
     }
 
     #[test]
@@ -788,38 +953,44 @@ mod tests {
             children
         }));
 
-        let widget = MockRenderWidget::default();
+        let root_widget = MockRenderWidget::new("RootWidget");
         {
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_get_children()
+                .expect_children()
                 .returning_st({
                     let children = Rc::clone(&children);
 
                     move || children.borrow().clone()
                 });
 
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_layout()
-                .returning(|_, _| Size::ZERO);
+                .expect_create_render_object()
+                .returning(|| DummyRenderObject.into());
         }
 
-        let mut engine = Engine::builder().with_root(widget).build();
+        let mut engine = Engine::builder().with_root(root_widget).build();
 
         engine.update();
 
         assert_eq!(
-            engine.get_tree().len(),
+            engine.elements().len(),
             1001,
             "children should have been added"
         );
 
+        assert_eq!(
+            engine.render_objects().len(),
+            1001,
+            "child render objects should have been added"
+        );
+
         children.borrow_mut().clear();
 
-        let root_id = engine.get_root();
+        let root_id = engine.root();
 
         let widgets_destroyed = Rc::new(RefCell::new(FxHashSet::default()));
 
@@ -836,7 +1007,7 @@ mod tests {
         engine.update();
 
         assert_eq!(
-            engine.get_tree().len(),
+            engine.elements().len(),
             1,
             "nested children should have been removed"
         );
@@ -846,36 +1017,42 @@ mod tests {
             1000,
             "should have emitted a destroyed event for all children"
         );
+
+        assert_eq!(
+            engine.render_object_tree.len(),
+            1,
+            "root root render object should remain"
+        );
     }
 
     #[test]
     pub fn rebuilds_children() {
         let child = Rc::new(RefCell::new(DummyWidget.into_widget()));
 
-        let widget = MockRenderWidget::default();
+        let root_widget = MockRenderWidget::new("RootWidget");
         {
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_get_children()
+                .expect_children()
                 .returning_st({
                     let child = Rc::clone(&child);
 
                     move || vec![child.borrow().clone()]
                 });
 
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_layout()
-                .returning(|_, _| Size::ZERO);
+                .expect_create_render_object()
+                .returning(|| DummyRenderObject.into());
         }
 
-        let mut engine = Engine::builder().with_root(widget).build();
+        let mut engine = Engine::builder().with_root(root_widget).build();
 
         engine.update();
 
-        let root_id = engine.get_root();
+        let root_id = engine.root();
 
         let widgets_rebuilt = Rc::new(RefCell::new(FxHashSet::default()));
 
@@ -907,50 +1084,81 @@ mod tests {
 
     #[test]
     pub fn reuses_unchanged_widgets() {
-        let widget = MockRenderWidget::default();
+        let root_widget = MockRenderWidget::new("RootWidget");
         {
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_get_children()
+                .expect_children()
                 .returning_st(|| vec![DummyWidget.into_widget()]);
 
-            widget
+            root_widget
                 .mock
                 .borrow_mut()
-                .expect_layout()
-                .returning(|_, _| Size::ZERO);
+                .expect_create_render_object()
+                .returning(|| DummyRenderObject.into());
         }
 
-        let mut engine = Engine::builder().with_root(widget).build();
+        let mut engine = Engine::builder().with_root(root_widget).build();
 
         engine.update();
 
-        let root_id = engine.get_root();
+        let root_id = engine.root();
         let element_id = engine
-            .get_tree()
+            .elements()
             .get_children(root_id)
             .cloned()
             .expect("no children");
 
-        engine.mark_dirty(engine.get_root());
+        engine.mark_dirty(engine.root());
 
         engine.update();
 
         assert_eq!(
             root_id,
-            engine.get_root(),
+            engine.root(),
             "root widget should have remained unchanged"
         );
 
         assert_eq!(
             element_id,
             engine
-                .get_tree()
+                .elements()
                 .get_children(root_id)
                 .cloned()
                 .expect("no children"),
             "root widget should not have regenerated its child"
+        );
+    }
+
+    #[derive(Debug)]
+    struct TestPlugin1;
+
+    impl Plugin for TestPlugin1 {}
+
+    #[derive(Debug)]
+    struct TestPlugin2;
+
+    impl Plugin for TestPlugin2 {}
+
+    #[test]
+    pub fn can_get_plugins() {
+        let mut engine = Engine::builder()
+            .add_plugin(TestPlugin1)
+            .add_plugin(TestPlugin2)
+            .with_root(DummyWidget)
+            .build();
+
+        engine.update();
+
+        assert!(
+            engine.plugins().get::<TestPlugin1>().is_some(),
+            "should have grabbed plugin 1"
+        );
+
+        assert!(
+            engine.plugins().get::<TestPlugin2>().is_some(),
+            "should have grabbed plugin 2"
         );
     }
 }

@@ -1,14 +1,17 @@
 use crate::{
-    element::{Element, ElementId},
+    element::{ContextElements, Element, ElementId},
     listenable::EventBus,
-    plugin::Plugins,
     util::tree::Tree,
 };
 
 pub struct PluginInitContext<'ctx> {
     pub bus: &'ctx EventBus,
 
-    pub plugins: &'ctx mut Plugins,
-
     pub element_tree: &'ctx Tree<ElementId, Element>,
+}
+
+impl ContextElements for PluginInitContext<'_> {
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.element_tree
+    }
 }

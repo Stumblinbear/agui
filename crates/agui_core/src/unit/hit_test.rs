@@ -2,24 +2,24 @@ use std::any::Any;
 
 use glam::{Mat4, Vec3};
 
-use crate::{element::ElementId, unit::Offset};
+use crate::{render::RenderObjectId, unit::Offset};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HitTest {
-    /// The hit test was absorbed by the element or at least one of its descendants.
+    /// The hit test was absorbed by the render object or at least one of its descendants.
     ///
-    /// This prevents elements below this one (i.e. its ancestors) from being hit.
+    /// This prevents render objects below this one (i.e. its ancestors) from being hit.
     Absorb,
 
-    /// The hit test was not absorbed by the element.
+    /// The hit test was not absorbed by the render object.
     ///
-    /// This allows elements below this one (i.e. its ancestors) to be hit.
+    /// This allows render objects below this one (i.e. its ancestors) to be hit.
     Pass,
 }
 
 #[derive(Debug)]
 pub struct HitTestEntry {
-    pub element_id: ElementId,
+    pub render_object_id: RenderObjectId,
     pub data: Option<Box<dyn Any>>,
     transform: Mat4,
 }
@@ -37,39 +37,37 @@ pub struct HitTestResult {
 }
 
 impl HitTestResult {
-    fn get_current_transform(&self) -> Mat4 {
+    fn current_transform(&self) -> Mat4 {
         self.transforms.last().copied().unwrap_or_default()
     }
 
     pub fn push_offset(&mut self, offset: Offset) {
         self.transforms.push(
-            self.get_current_transform()
-                * Mat4::from_translation(Vec3::new(offset.x, offset.y, 0.0)),
+            self.current_transform() * Mat4::from_translation(Vec3::new(offset.x, offset.y, 0.0)),
         );
     }
 
     pub fn push_transform(&mut self, transform: Mat4) {
-        self.transforms
-            .push(self.get_current_transform() * transform);
+        self.transforms.push(self.current_transform() * transform);
     }
 
     pub fn pop_transform(&mut self) {
         self.transforms.pop();
     }
 
-    pub fn add(&mut self, element_id: ElementId) {
+    pub fn add(&mut self, render_object_id: RenderObjectId) {
         self.path.push(HitTestEntry {
-            element_id,
+            render_object_id,
             data: None,
-            transform: self.get_current_transform(),
+            transform: self.current_transform(),
         });
     }
 
-    pub fn add_with_data(&mut self, element_id: ElementId, data: impl Any) {
+    pub fn add_with_data(&mut self, render_object_id: RenderObjectId, data: impl Any) {
         self.path.push(HitTestEntry {
-            element_id,
+            render_object_id,
             data: Some(Box::new(data)),
-            transform: self.get_current_transform(),
+            transform: self.current_transform(),
         });
     }
 }

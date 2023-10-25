@@ -5,7 +5,7 @@ use agui_core::{
     widget::{AnyWidget, IntoWidget, Widget},
 };
 
-use crate::{CurrentRenderView, RenderView, RenderViewId, RenderViewPlugin};
+use crate::{CurrentRenderView, RenderView, RenderViewId, RenderViewManager};
 
 pub struct RenderViewElement {
     widget: Rc<RenderView>,
@@ -31,11 +31,10 @@ impl ElementWidget for RenderViewElement {
         self.widget.widget_name()
     }
 
-    #[allow(unused_variables)]
-    fn mount(&mut self, mut ctx: ElementMountContext) {
-        if let Some(render_view_plugin) = ctx.plugins.get_mut::<RenderViewPlugin>() {
+    fn mount(&mut self, ctx: ElementMountContext) {
+        if let Some(render_view_manager) = RenderViewManager::of_mut(ctx.plugins) {
             self.child = CurrentRenderView {
-                id: render_view_plugin.create_render_view(*ctx.element_id),
+                id: render_view_manager.create_render_view(*ctx.element_id),
 
                 child: self.widget.child.clone(),
             }
@@ -55,7 +54,7 @@ impl ElementWidget for RenderViewElement {
 }
 
 impl ElementProxy for RenderViewElement {
-    fn get_child(&self) -> Widget {
+    fn child(&self) -> Widget {
         self.child.clone()
     }
 }

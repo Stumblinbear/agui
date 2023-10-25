@@ -1,9 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use agui_core::{
-    element::mock::{render::MockRenderWidget, DummyWidget},
+    element::mock::{render::MockRenderWidget, DummyRenderObject, DummyWidget},
     engine::Engine,
-    unit::Size,
     widget::IntoWidget,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -25,12 +24,12 @@ fn engine_ops(c: &mut Criterion) {
             || {
                 let children = Rc::new(RefCell::new(vec![DummyWidget.into_widget()]));
 
-                let root_widget = MockRenderWidget::default();
+                let root_widget = MockRenderWidget::new("RootWidget");
                 {
                     root_widget
                         .mock
                         .borrow_mut()
-                        .expect_get_children()
+                        .expect_children()
                         .returning_st({
                             let children = Rc::clone(&children);
 
@@ -40,8 +39,8 @@ fn engine_ops(c: &mut Criterion) {
                     root_widget
                         .mock
                         .borrow_mut()
-                        .expect_layout()
-                        .returning(|_, _| Size::ZERO);
+                        .expect_create_render_object()
+                        .returning(|| DummyRenderObject.into());
                 }
 
                 let mut engine = Engine::builder().with_root(root_widget).build();
@@ -50,7 +49,7 @@ fn engine_ops(c: &mut Criterion) {
 
                 children.borrow_mut().clear();
 
-                engine.mark_dirty(engine.get_root());
+                engine.mark_dirty(engine.root());
 
                 engine
             },
@@ -77,19 +76,19 @@ fn engine_ops(c: &mut Criterion) {
                     children
                 };
 
-                let root_widget = MockRenderWidget::default();
+                let root_widget = MockRenderWidget::new("RootWidget");
                 {
                     root_widget
                         .mock
                         .borrow_mut()
-                        .expect_get_children()
+                        .expect_children()
                         .returning_st(move || children.clone());
 
                     root_widget
                         .mock
                         .borrow_mut()
-                        .expect_layout()
-                        .returning(|_, _| Size::ZERO);
+                        .expect_create_render_object()
+                        .returning(|| DummyRenderObject.into());
                 }
 
                 Engine::builder().with_root(root_widget).build()
@@ -111,12 +110,12 @@ fn engine_ops(c: &mut Criterion) {
                     children
                 }));
 
-                let root_widget = MockRenderWidget::default();
+                let root_widget = MockRenderWidget::new("RootWidget");
                 {
                     root_widget
                         .mock
                         .borrow_mut()
-                        .expect_get_children()
+                        .expect_children()
                         .returning_st({
                             let children = Rc::clone(&children);
 
@@ -126,8 +125,8 @@ fn engine_ops(c: &mut Criterion) {
                     root_widget
                         .mock
                         .borrow_mut()
-                        .expect_layout()
-                        .returning(|_, _| Size::ZERO);
+                        .expect_create_render_object()
+                        .returning(|| DummyRenderObject.into());
                 }
 
                 let mut engine = Engine::builder().with_root(root_widget).build();
@@ -136,7 +135,7 @@ fn engine_ops(c: &mut Criterion) {
 
                 children.borrow_mut().clear();
 
-                engine.mark_dirty(engine.get_root());
+                engine.mark_dirty(engine.root());
 
                 engine
             },

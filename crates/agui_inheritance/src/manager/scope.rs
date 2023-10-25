@@ -59,14 +59,14 @@ impl InheritanceScope {
         InheritanceScope {
             type_id,
 
-            ancestor_scope_id: Some(ancestor_scope.get_element_id()),
+            ancestor_scope_id: Some(ancestor_scope.element_id()),
 
             element_id,
 
             child_scope_ids: Vec::default(),
 
             available_scopes: ancestor_scope
-                .get_available_scopes()
+                .available_scopes()
                 .update(type_id, element_id),
 
             dependents: TypeMap::default(),
@@ -75,7 +75,7 @@ impl InheritanceScope {
         }
     }
 
-    pub fn get_ancestor_scope(&self) -> Option<ElementId> {
+    pub fn ancestor_scope(&self) -> Option<ElementId> {
         self.ancestor_scope_id
     }
 
@@ -83,11 +83,11 @@ impl InheritanceScope {
         self.ancestor_scope_id = new_ancestor_scope_id;
     }
 
-    pub fn get_element_id(&self) -> ElementId {
+    pub fn element_id(&self) -> ElementId {
         self.element_id
     }
 
-    pub fn get_child_scopes(&self) -> &[ElementId] {
+    pub fn child_scopes(&self) -> &[ElementId] {
         &self.child_scope_ids
     }
 
@@ -100,7 +100,7 @@ impl InheritanceScope {
             .retain(|element_id| *element_id != child_scope_id);
     }
 
-    pub fn get_available_scopes(
+    pub fn available_scopes(
         &self,
     ) -> &im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>> {
         &self.available_scopes

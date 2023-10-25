@@ -1,13 +1,13 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+use parking_lot::Mutex;
 
 use crate::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementHitTestContext,
-        ElementIntrinsicSizeContext, ElementLayoutContext, ElementMountContext, ElementType,
-        ElementUnmountContext, ElementUpdate,
+        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementMountContext,
+        ElementType, ElementUnmountContext, ElementUpdate,
     },
-    render::canvas::Canvas,
-    unit::{Constraints, HitTest, IntrinsicDimension, Offset, Size},
+    render::{MockRenderObjectImpl, RenderObject},
     widget::{IntoWidget, Widget},
 };
 
@@ -23,24 +23,11 @@ pub trait RenderElement {
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
-    fn get_children(&self) -> Vec<Widget>;
+    fn children(&self) -> Vec<Widget>;
 
-    fn intrinsic_size<'ctx>(
-        &self,
-        ctx: ElementIntrinsicSizeContext<'ctx>,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32;
+    fn create_render_object(&self) -> RenderObject;
 
-    fn layout<'ctx>(&self, ctx: ElementLayoutContext<'ctx>, constraints: Constraints) -> Size;
-
-    fn hit_test<'ctx>(
-        &self,
-        ctx: &'ctx mut ElementHitTestContext<'ctx>,
-        position: Offset,
-    ) -> HitTest;
-
-    fn paint(&self, size: Size) -> Option<Canvas>;
+    fn update_render_object(&self, render_object: &mut RenderObject);
 }
 
 #[derive(Default)]
@@ -93,35 +80,45 @@ impl ElementWidget for MockElement {
 }
 
 impl ElementRender for MockElement {
-    fn get_children(&self) -> Vec<Widget> {
-        self.widget.mock.borrow().get_children()
+    fn children(&self) -> Vec<Widget> {
+        self.widget.mock.borrow().children()
     }
 
-    fn intrinsic_size(
-        &self,
-        ctx: ElementIntrinsicSizeContext,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32 {
+    fn create_render_object(&self) -> RenderObject {
+        self.widget.mock.borrow().create_render_object()
+    }
+
+    fn update_render_object(&self, render_object: &mut RenderObject) {
         self.widget
             .mock
             .borrow()
-            .intrinsic_size(ctx, dimension, cross_extent)
+            .update_render_object(render_object)
     }
+}
 
-    fn layout(&mut self, ctx: ElementLayoutContext, constraints: Constraints) -> Size {
-        self.widget.mock.borrow().layout(ctx, constraints)
+#[derive(Default)]
+pub struct MockRenderObject {
+    pub mock: Arc<Mutex<MockRenderObjectImpl>>,
+}
+
+impl MockRenderObject {
+    pub fn new(name: &'static str) -> Self {
+        let mut mock = MockRenderObjectImpl::default();
+
+        mock.expect_render_object_name().returning(move || name);
+
+        Self {
+            mock: Arc::new(Mutex::new(mock)),
+        }
     }
+}
 
-    fn hit_test<'ctx>(
-        &self,
-        ctx: &'ctx mut ElementHitTestContext<'ctx>,
-        position: Offset,
-    ) -> HitTest {
-        self.widget.mock.borrow().hit_test(ctx, position)
-    }
-
-    fn paint(&self, size: Size) -> Option<Canvas> {
-        self.widget.mock.borrow().paint(size)
+impl From<MockRenderObject> for RenderObject {
+    fn from(value: MockRenderObject) -> Self {
+        RenderObject::new(
+            Arc::into_inner(value.mock)
+                .expect("cannot convert mock to render object as a reference is still held")
+                .into_inner(),
+        )
     }
 }

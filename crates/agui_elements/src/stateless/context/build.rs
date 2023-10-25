@@ -2,7 +2,9 @@ use std::ops::{Deref, DerefMut};
 
 use agui_core::{
     callback::{Callback, CallbackId, CallbackQueue, ContextCallbackQueue, WidgetCallback},
-    element::{ContextElement, ContextMarkDirty, Element, ElementBuildContext, ElementId},
+    element::{
+        ContextElement, ContextElements, ContextMarkDirty, Element, ElementBuildContext, ElementId,
+    },
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -23,25 +25,27 @@ pub struct StatelessBuildContext<'ctx, W> {
     pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn StatelessCallbackFunc<W>>>,
 }
 
-impl<W> ContextElement for StatelessBuildContext<'_, W> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.get_elements()
+impl<W> ContextElements for StatelessBuildContext<'_, W> {
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.inner.elements()
     }
+}
 
-    fn get_element_id(&self) -> ElementId {
-        self.inner.get_element_id()
+impl<W> ContextElement for StatelessBuildContext<'_, W> {
+    fn element_id(&self) -> ElementId {
+        self.inner.element_id()
     }
 }
 
 impl<'ctx, W> ContextPlugins<'ctx> for StatelessBuildContext<'ctx, W> {
-    fn get_plugins(&self) -> &Plugins {
-        self.inner.get_plugins()
+    fn plugins(&self) -> &Plugins {
+        self.inner.plugins()
     }
 }
 
 impl<'ctx, W> ContextPluginsMut<'ctx> for StatelessBuildContext<'ctx, W> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins {
-        self.inner.get_plugins_mut()
+    fn plugins_mut(&mut self) -> &mut Plugins {
+        self.inner.plugins_mut()
     }
 }
 
@@ -52,8 +56,8 @@ impl<W> ContextMarkDirty for StatelessBuildContext<'_, W> {
 }
 
 impl<W> ContextCallbackQueue for StatelessBuildContext<'_, W> {
-    fn get_callback_queue(&self) -> &CallbackQueue {
-        self.inner.get_callback_queue()
+    fn callback_queue(&self) -> &CallbackQueue {
+        self.inner.callback_queue()
     }
 }
 
@@ -77,11 +81,10 @@ impl<W: 'static> StatelessBuildContext<'_, W> {
         A: AsAny,
         F: Fn(&mut StatelessCallbackContext, A) + 'static,
     {
-        let callback =
-            WidgetCallback::new::<F>(self.get_element_id(), self.get_callback_queue().clone());
+        let callback = WidgetCallback::new::<F>(self.element_id(), self.callback_queue().clone());
 
         self.callbacks
-            .insert(callback.get_id(), Box::new(StatelessCallbackFn::new(func)));
+            .insert(callback.id(), Box::new(StatelessCallbackFn::new(func)));
 
         Callback::Widget(callback)
     }

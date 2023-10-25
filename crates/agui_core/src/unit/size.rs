@@ -41,7 +41,7 @@ impl Size {
         self.width.is_finite() && self.height.is_finite()
     }
 
-    pub fn get_extent(&self, axis: Axis) -> f32 {
+    pub fn extent(&self, axis: Axis) -> f32 {
         match axis {
             Axis::Horizontal => self.width,
             Axis::Vertical => self.height,

@@ -12,7 +12,7 @@ pub struct EventChannel<Event: 'static> {
 }
 
 impl<Event> InheritedWidget for EventChannel<Event> {
-    fn get_child(&self) -> Widget {
+    fn child(&self) -> Widget {
         self.child.clone()
     }
 

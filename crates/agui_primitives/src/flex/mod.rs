@@ -39,7 +39,7 @@ pub struct Flex {
 }
 
 impl WidgetLayout for Flex {
-    fn get_children(&self) -> Vec<Widget> {
+    fn children(&self) -> Vec<Widget> {
         self.children
             .iter()
             .map(|data| data.child.clone())
@@ -270,13 +270,11 @@ impl WidgetLayout for Flex {
                     {
                         0.0
                     } else {
-                        cross_size - child_size.get_extent(cross_axis)
+                        cross_size - child_size.extent(cross_axis)
                     }
                 }
 
-                CrossAxisAlignment::Center => {
-                    (cross_size - child_size.get_extent(cross_axis)) / 2.0
-                }
+                CrossAxisAlignment::Center => (cross_size - child_size.extent(cross_axis)) / 2.0,
 
                 CrossAxisAlignment::Stretch => 0.0,
 
@@ -296,7 +294,7 @@ impl WidgetLayout for Flex {
             };
 
             if flip_main_axis {
-                child_main_position -= child_size.get_extent(self.direction);
+                child_main_position -= child_size.extent(self.direction);
             }
 
             match self.direction {
@@ -312,7 +310,7 @@ impl WidgetLayout for Flex {
             if flip_main_axis {
                 child_main_position -= between_space;
             } else {
-                child_main_position += child_size.get_extent(self.direction) + between_space;
+                child_main_position += child_size.extent(self.direction) + between_space;
             }
         }
 
@@ -327,8 +325,8 @@ impl Flex {
 
         let max_size = constraints.biggest();
 
-        let max_main_size = max_size.get_extent(main_axis);
-        let max_cross_size = max_size.get_extent(cross_axis);
+        let max_main_size = max_size.extent(main_axis);
+        let max_cross_size = max_size.extent(cross_axis);
 
         let can_flex = max_main_size < f32::INFINITY;
 
@@ -347,7 +345,7 @@ impl Flex {
 
             if flex > 0.0 {
                 total_flex += flex;
-                last_flexible_child = Some(child.get_element_id());
+                last_flexible_child = Some(child.element_id());
             } else {
                 let inner_constraints = if self.cross_axis_alignment == CrossAxisAlignment::Stretch
                 {
@@ -357,8 +355,8 @@ impl Flex {
                 };
 
                 let child_size = child.compute_layout(inner_constraints);
-                allocated_size += child_size.get_extent(main_axis);
-                cross_size = cross_size.max(child_size.get_extent(cross_axis));
+                allocated_size += child_size.extent(main_axis);
+                cross_size = cross_size.max(child_size.extent(cross_axis));
 
                 child_sizes[child.index()] = child_size;
             }
@@ -385,7 +383,7 @@ impl Flex {
 
                 if flex > 0.0 {
                     let max_child_extent = if can_flex {
-                        if Some(child.get_element_id()) == last_flexible_child {
+                        if Some(child.element_id()) == last_flexible_child {
                             free_space - allocated_flex_space
                         } else {
                             space_per_flex * flex
@@ -423,7 +421,7 @@ impl Flex {
                             .enforce(cross_constraints);
 
                     let child_size = child.compute_layout(inner_constraints);
-                    let child_main_size = child_size.get_extent(main_axis);
+                    let child_main_size = child_size.extent(main_axis);
 
                     debug_assert!(
                         child_main_size <= max_child_extent,
@@ -432,7 +430,7 @@ impl Flex {
 
                     allocated_size += child_main_size;
                     allocated_flex_space += max_child_extent;
-                    cross_size = cross_size.max(child_size.get_extent(cross_axis));
+                    cross_size = cross_size.max(child_size.extent(cross_axis));
 
                     child_sizes[child.index()] = child_size;
                 }

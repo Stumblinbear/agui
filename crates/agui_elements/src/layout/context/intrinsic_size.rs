@@ -1,26 +1,26 @@
 use std::ops::{Deref, DerefMut};
 
 use agui_core::{
-    element::{ContextElement, Element, ElementId, ElementIntrinsicSizeContext},
+    element::{ContextElement, Element, ElementId, RenderObjectIntrinsicSizeContext},
     util::tree::Tree,
 };
 
 pub struct IntrinsicSizeContext<'ctx> {
-    pub(crate) inner: ElementIntrinsicSizeContext<'ctx>,
+    pub(crate) inner: RenderObjectIntrinsicSizeContext<'ctx>,
 }
 
 impl ContextElement for IntrinsicSizeContext<'_> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.get_elements()
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.inner.elements()
     }
 
-    fn get_element_id(&self) -> ElementId {
-        self.inner.get_element_id()
+    fn element_id(&self) -> ElementId {
+        self.inner.element_id()
     }
 }
 
 impl<'ctx> Deref for IntrinsicSizeContext<'ctx> {
-    type Target = ElementIntrinsicSizeContext<'ctx>;
+    type Target = RenderObjectIntrinsicSizeContext<'ctx>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner

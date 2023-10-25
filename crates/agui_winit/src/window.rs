@@ -250,11 +250,9 @@ where
             return tracing::error!("windowing plugin not found");
         };
 
-        if let Err(err) = winit_plugin.create_window(
-            ctx.get_element_id(),
-            (ctx.widget.window)(),
-            on_window_created,
-        ) {
+        if let Err(err) =
+            winit_plugin.create_window(ctx.element_id(), (ctx.widget.window)(), on_window_created)
+        {
             tracing::error!("failed to create window: {:?}", err);
         }
     }
@@ -324,7 +322,7 @@ struct WinitWindowLayout {
 }
 
 impl WidgetLayout for WinitWindowLayout {
-    fn get_children(&self) -> Vec<Widget> {
+    fn children(&self) -> Vec<Widget> {
         vec![self.child.clone()]
     }
 

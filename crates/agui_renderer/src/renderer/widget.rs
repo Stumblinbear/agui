@@ -15,7 +15,7 @@ pub struct DefaultRenderer<T: 'static> {
 }
 
 impl<T> InheritedWidget for DefaultRenderer<T> {
-    fn get_child(&self) -> Widget {
+    fn child(&self) -> Widget {
         self.child.clone()
     }
 

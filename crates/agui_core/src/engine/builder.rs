@@ -4,6 +4,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
+    element::ElementId,
     listenable::EventBus,
     plugin::{Plugin, Plugins},
     util::tree::Tree,
@@ -12,25 +13,30 @@ use crate::{
 
 use super::{DirtyElements, Engine};
 
-pub struct EngineBuilder {
+pub struct EngineBuilder<P> {
     update_notifier_tx: Option<mpsc::Sender<()>>,
 
     root: Option<Widget>,
 
-    plugins: Vec<Box<dyn Plugin>>,
+    plugins: P,
 }
 
-impl EngineBuilder {
+impl EngineBuilder<()> {
     pub(super) fn new() -> Self {
         Self {
             update_notifier_tx: None,
 
             root: None,
 
-            plugins: Vec::default(),
+            plugins: (),
         }
     }
+}
 
+impl<P> EngineBuilder<P>
+where
+    P: Plugin,
+{
     pub fn with_notifier(mut self, update_notifier_tx: mpsc::Sender<()>) -> Self {
         self.update_notifier_tx = Some(update_notifier_tx);
         self
@@ -41,18 +47,27 @@ impl EngineBuilder {
         self
     }
 
-    pub fn add_plugin(mut self, plugin: impl Plugin + 'static) -> Self {
-        self.plugins.push(Box::new(plugin));
-        self
+    pub fn add_plugin<T>(self, plugin: T) -> EngineBuilder<(T, P)>
+    where
+        T: Plugin,
+    {
+        EngineBuilder {
+            update_notifier_tx: None,
+
+            root: None,
+
+            plugins: (plugin, self.plugins),
+        }
     }
 
     pub fn build(self) -> Engine {
         let mut engine = Engine {
-            bus: EventBus::default(),
-
             plugins: Plugins::new(self.plugins),
 
+            bus: EventBus::default(),
+
             element_tree: Tree::default(),
+            render_object_tree: Tree::default(),
 
             dirty: DirtyElements::new(),
             callback_queue: CallbackQueue::new(
@@ -60,8 +75,11 @@ impl EngineBuilder {
             ),
 
             rebuild_queue: VecDeque::default(),
-            retained_elements: FxHashSet::default(),
             removal_queue: FxHashSet::default(),
+
+            sync_render_object_children: FxHashSet::default(),
+            create_render_object: VecDeque::<ElementId>::default(),
+            update_render_object: FxHashSet::default(),
         };
 
         engine.init(self.root.expect("root is not set"));

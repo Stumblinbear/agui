@@ -34,7 +34,7 @@ where
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
-            .find(|element| element.get_widget().downcast::<W>().is_some())
+            .find(|element| element.widget().downcast::<W>().is_some())
     }
 
     #[inline]
@@ -57,31 +57,27 @@ mod tests {
     pub fn finds_widget_by_type() {
         let proxy_widget = MockProxyWidget::default();
         {
-            proxy_widget
-                .mock
-                .borrow_mut()
-                .expect_get_child()
-                .returning(|| {
-                    let build_widget = MockBuildWidget::default();
-                    {
-                        build_widget
-                            .mock
-                            .borrow_mut()
-                            .expect_build()
-                            .returning(|_| {
-                                let build_widget = MockBuildWidget::default();
-                                {
-                                    build_widget
-                                        .mock
-                                        .borrow_mut()
-                                        .expect_build()
-                                        .returning(|_| DummyWidget.into_widget());
-                                }
-                                build_widget.into_widget()
-                            });
-                    }
-                    build_widget.into_widget()
-                });
+            proxy_widget.mock.borrow_mut().expect_child().returning(|| {
+                let build_widget = MockBuildWidget::default();
+                {
+                    build_widget
+                        .mock
+                        .borrow_mut()
+                        .expect_build()
+                        .returning(|_| {
+                            let build_widget = MockBuildWidget::default();
+                            {
+                                build_widget
+                                    .mock
+                                    .borrow_mut()
+                                    .expect_build()
+                                    .returning(|_| DummyWidget.into_widget());
+                            }
+                            build_widget.into_widget()
+                        });
+                }
+                build_widget.into_widget()
+            });
         }
 
         let mut engine = Engine::builder().with_root(proxy_widget).build();

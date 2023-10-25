@@ -15,7 +15,7 @@ pub struct ColoredBox {
 }
 
 impl WidgetPaint for ColoredBox {
-    fn get_child(&self) -> Option<Widget> {
+    fn child(&self) -> Option<Widget> {
         self.child.clone()
     }
 

@@ -51,7 +51,7 @@ where
         }
     }
 
-    pub fn get_size(&self) -> Size {
+    pub fn size(&self) -> Size {
         self.canvas.size
     }
 

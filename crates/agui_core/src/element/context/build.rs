@@ -9,7 +9,7 @@ use crate::{
     util::tree::Tree,
 };
 
-use super::{ContextElement, ContextMarkDirty};
+use super::{ContextElement, ContextElements, ContextMarkDirty};
 
 pub struct ElementBuildContext<'ctx> {
     pub plugins: &'ctx mut Plugins,
@@ -22,23 +22,25 @@ pub struct ElementBuildContext<'ctx> {
 }
 
 impl<'ctx> ContextPlugins<'ctx> for ElementBuildContext<'ctx> {
-    fn get_plugins(&self) -> &Plugins {
+    fn plugins(&self) -> &Plugins {
         self.plugins
     }
 }
 
 impl<'ctx> ContextPluginsMut<'ctx> for ElementBuildContext<'ctx> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins {
+    fn plugins_mut(&mut self) -> &mut Plugins {
         self.plugins
     }
 }
 
-impl ContextElement for ElementBuildContext<'_> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
+impl ContextElements for ElementBuildContext<'_> {
+    fn elements(&self) -> &Tree<ElementId, Element> {
         self.element_tree
     }
+}
 
-    fn get_element_id(&self) -> ElementId {
+impl ContextElement for ElementBuildContext<'_> {
+    fn element_id(&self) -> ElementId {
         *self.element_id
     }
 }
@@ -50,7 +52,7 @@ impl ContextMarkDirty for ElementBuildContext<'_> {
 }
 
 impl ContextCallbackQueue for ElementBuildContext<'_> {
-    fn get_callback_queue(&self) -> &CallbackQueue {
+    fn callback_queue(&self) -> &CallbackQueue {
         self.callback_queue
     }
 }

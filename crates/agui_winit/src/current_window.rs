@@ -22,7 +22,7 @@ impl Deref for CurrentWindow {
 }
 
 impl InheritedWidget for CurrentWindow {
-    fn get_child(&self) -> Widget {
+    fn child(&self) -> Widget {
         self.child.clone()
     }
 

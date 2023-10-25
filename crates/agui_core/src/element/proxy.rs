@@ -3,7 +3,7 @@ use crate::widget::Widget;
 use super::widget::ElementWidget;
 
 pub trait ElementProxy: ElementWidget {
-    fn get_child(&self) -> Widget;
+    fn child(&self) -> Widget;
 }
 
 impl std::fmt::Debug for Box<dyn ElementProxy> {

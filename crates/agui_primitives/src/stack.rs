@@ -12,7 +12,7 @@ pub struct Stack {
 }
 
 impl WidgetLayout for Stack {
-    fn get_children(&self) -> Vec<Widget> {
+    fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.children.iter().cloned())
     }
 

@@ -20,7 +20,7 @@ impl InheritanceNode {
         }
     }
 
-    pub fn get_scope(&self) -> Option<ElementId> {
+    pub fn scope(&self) -> Option<ElementId> {
         self.scope_id
     }
 

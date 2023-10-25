@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    render::texture::TextureId,
-    unit::{Bounds, Rect, Shape, TextStyle},
-};
+use crate::unit::{Bounds, Rect, Shape, TextStyle, TextureId};
 
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]

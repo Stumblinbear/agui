@@ -1,5 +1,8 @@
 use agui_core::{
-    element::{ContextElement, ContextMarkDirty, Element, ElementCallbackContext, ElementId},
+    element::{
+        ContextElement, ContextElements, ContextMarkDirty, Element, ElementCallbackContext,
+        ElementId,
+    },
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -12,24 +15,26 @@ pub struct StatelessCallbackContext<'ctx> {
 }
 
 impl<'ctx> ContextPlugins<'ctx> for StatelessCallbackContext<'ctx> {
-    fn get_plugins(&self) -> &Plugins {
-        self.inner.get_plugins()
+    fn plugins(&self) -> &Plugins {
+        self.inner.plugins()
     }
 }
 
 impl<'ctx> ContextPluginsMut<'ctx> for StatelessCallbackContext<'ctx> {
-    fn get_plugins_mut(&mut self) -> &mut Plugins {
-        self.inner.get_plugins_mut()
+    fn plugins_mut(&mut self) -> &mut Plugins {
+        self.inner.plugins_mut()
+    }
+}
+
+impl ContextElements for StatelessCallbackContext<'_> {
+    fn elements(&self) -> &Tree<ElementId, Element> {
+        self.inner.elements()
     }
 }
 
 impl ContextElement for StatelessCallbackContext<'_> {
-    fn get_elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.get_elements()
-    }
-
-    fn get_element_id(&self) -> ElementId {
-        self.inner.get_element_id()
+    fn element_id(&self) -> ElementId {
+        self.inner.element_id()
     }
 }
 

@@ -40,7 +40,7 @@ impl Widget {
         (*self.widget).widget_name()
     }
 
-    pub fn get_key(&self) -> Option<Key> {
+    pub fn key(&self) -> Option<Key> {
         self.key
     }
 

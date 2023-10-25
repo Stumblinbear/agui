@@ -19,7 +19,7 @@ pub struct CallbackId {
 }
 
 impl CallbackId {
-    pub fn get_element_id(&self) -> ElementId {
+    pub fn element_id(&self) -> ElementId {
         self.element_id
     }
 }
@@ -112,7 +112,7 @@ where
         }
     }
 
-    pub fn get_id(&self) -> CallbackId {
+    pub fn id(&self) -> CallbackId {
         self.id
     }
 
@@ -235,9 +235,9 @@ mod tests {
         engine.update();
 
         WidgetCallback::new_unchecked(
-            engine.get_root(),
+            engine.root(),
             TypeId::of::<()>(),
-            engine.get_callback_queue().clone(),
+            engine.callback_queue().clone(),
         )
         .call(3);
     }
@@ -261,9 +261,9 @@ mod tests {
         engine.update();
 
         WidgetCallback::new_unchecked(
-            engine.get_root(),
+            engine.root(),
             TypeId::of::<()>(),
-            engine.get_callback_queue().clone(),
+            engine.callback_queue().clone(),
         )
         .call(7);
 

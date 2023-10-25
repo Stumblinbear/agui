@@ -20,7 +20,7 @@ pub trait ProxyElement {
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
-    fn get_child(&self) -> Widget;
+    fn child(&self) -> Widget;
 }
 
 #[derive(Default)]
@@ -73,7 +73,7 @@ impl ElementWidget for MockElement {
 }
 
 impl ElementProxy for MockElement {
-    fn get_child(&self) -> Widget {
-        self.widget.mock.borrow().get_child()
+    fn child(&self) -> Widget {
+        self.widget.mock.borrow().child()
     }
 }

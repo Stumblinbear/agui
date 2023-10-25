@@ -32,10 +32,35 @@ where
     K: slotmap::Key,
 {
     depth: usize,
-    pub value: Option<V>,
+    value: Option<V>,
 
-    pub parent: Option<K>,
-    pub children: Vec<K>,
+    parent: Option<K>,
+    children: Vec<K>,
+}
+
+impl<K, V> TreeNode<K, V>
+where
+    K: slotmap::Key,
+{
+    pub fn depth(&self) -> usize {
+        self.depth
+    }
+
+    pub fn value(&self) -> &V {
+        self.value.as_ref().expect("node is currently in use")
+    }
+
+    pub fn value_mut(&mut self) -> &mut V {
+        self.value.as_mut().expect("node is currently in use")
+    }
+
+    pub fn parent(&self) -> Option<K> {
+        self.parent
+    }
+
+    pub fn children(&self) -> &[K] {
+        &self.children
+    }
 }
 
 impl<K, V> TreeMap<K, V>
@@ -193,32 +218,33 @@ where
             .map(|node| node.value.replace(value));
     }
 
+    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
+        self.nodes.get(node_id)
+    }
+
+    pub fn get_node_mut(&mut self, node_id: K) -> Option<&mut TreeNode<K, V>> {
+        self.nodes.get_mut(node_id)
+    }
+
     pub fn get(&self, node_id: K) -> Option<&V> {
-        self.nodes
-            .get(node_id)
-            .map(|node| node.value.as_ref().expect("node is currently in use"))
+        self.get_node(node_id).map(|node| node.value())
     }
 
     pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.nodes
-            .get_mut(node_id)
-            .map(|node| node.value.as_mut().expect("node is currently in use"))
+        self.get_node_mut(node_id).map(|node| node.value_mut())
     }
 
-    pub fn get_parent(&self, node_id: K) -> Option<&K> {
-        self.nodes
-            .get(node_id)
-            .and_then(|node| node.parent.as_ref())
+    pub fn get_parent(&self, node_id: K) -> Option<K> {
+        self.get_node(node_id).and_then(|node| node.parent())
     }
 
-    pub fn get_child(&self, node_id: K, idx: usize) -> Option<&K> {
-        self.nodes
-            .get(node_id)
-            .and_then(|node| node.children.get(idx))
+    pub fn get_child(&self, node_id: K, idx: usize) -> Option<K> {
+        self.get_node(node_id)
+            .and_then(|node| node.children.get(idx).copied())
     }
 
     pub fn get_children(&self, node_id: K) -> Option<&Vec<K>> {
-        self.nodes.get(node_id).map(|node| &node.children)
+        self.get_node(node_id).map(|node| &node.children)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -308,7 +334,7 @@ where
 
     pub fn is_first_child(&self, node_id: K) -> bool {
         if let Some(parent_id) = self.get_parent(node_id) {
-            if let Some(parent) = self.nodes.get(*parent_id) {
+            if let Some(parent) = self.nodes.get(parent_id) {
                 return parent
                     .children
                     .first()
@@ -321,7 +347,7 @@ where
 
     pub fn is_last_child(&self, node_id: K) -> bool {
         if let Some(parent_id) = self.get_parent(node_id) {
-            if let Some(parent) = self.nodes.get(*parent_id) {
+            if let Some(parent) = self.nodes.get(parent_id) {
                 return parent
                     .children
                     .last()

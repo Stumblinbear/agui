@@ -42,7 +42,7 @@ mod tests {
     struct TestWidget {}
 
     impl WidgetLayout for TestWidget {
-        fn get_children(&self) -> Vec<Widget> {
+        fn children(&self) -> Vec<Widget> {
             vec![]
         }
 

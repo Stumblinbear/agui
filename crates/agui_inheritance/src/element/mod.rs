@@ -7,7 +7,7 @@ pub mod mock;
 pub use instance::*;
 
 pub trait InheritedWidget: AnyWidget {
-    fn get_child(&self) -> Widget;
+    fn child(&self) -> Widget;
 
     #[allow(unused_variables)]
     fn should_notify(&self, old_widget: &Self) -> bool;
@@ -37,7 +37,7 @@ mod tests {
     }
 
     impl InheritedWidget for TestInheritedWidget {
-        fn get_child(&self) -> Widget {
+        fn child(&self) -> Widget {
             self.child.clone()
         }
 
@@ -52,7 +52,7 @@ mod tests {
     }
 
     impl InheritedWidget for TestOtherInheritedWidget {
-        fn get_child(&self) -> Widget {
+        fn child(&self) -> Widget {
             self.child.clone()
         }
 
@@ -94,7 +94,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.mark_dirty(engine.get_root());
+        engine.mark_dirty(engine.root());
 
         engine.update();
 
@@ -143,7 +143,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.mark_dirty(engine.get_root());
+        engine.mark_dirty(engine.root());
 
         engine.update();
 
@@ -181,7 +181,7 @@ mod tests {
 
         *root_children.borrow_mut() = vec![depending_widget.clone()];
 
-        engine.mark_dirty(engine.get_root());
+        engine.mark_dirty(engine.root());
 
         engine.update();
 
@@ -197,15 +197,11 @@ mod tests {
 
         let widget = MockRenderWidget::new(name);
         {
-            widget
-                .mock
-                .borrow_mut()
-                .expect_get_children()
-                .returning_st({
-                    let children = children.clone();
+            widget.mock.borrow_mut().children().returning_st({
+                let children = children.clone();
 
-                    move || children.borrow().clone()
-                });
+                move || children.borrow().clone()
+            });
 
             widget
                 .mock
