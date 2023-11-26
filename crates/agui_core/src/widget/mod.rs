@@ -6,7 +6,7 @@ use std::{
 
 use rustc_hash::FxHashMap;
 
-use crate::{element::ElementType, unit::Key};
+use crate::{element::ElementType, unit::Key, util::ptr_eq::PtrEqual};
 
 mod traits;
 
@@ -62,11 +62,7 @@ impl PartialEq for Widget {
             return self.key == other.key;
         }
 
-        // war crimes
-        std::ptr::eq(
-            Rc::as_ptr(&self.widget) as *const _ as *const (),
-            Rc::as_ptr(&other.widget) as *const _ as *const (),
-        )
+        self.widget.is_exact_ptr(&other.widget)
     }
 }
 

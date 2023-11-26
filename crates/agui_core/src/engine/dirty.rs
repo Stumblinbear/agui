@@ -1,34 +1,37 @@
+use std::hash::Hash;
+
 use rustc_hash::FxHashSet;
 
-use crate::{element::ElementId, util::map::ElementSet};
-
-pub struct DirtyElements {
-    inner: ElementSet,
+pub struct Dirty<T> {
+    inner: FxHashSet<T>,
 }
 
-impl DirtyElements {
+impl<T> Dirty<T>
+where
+    T: PartialEq + Eq + Hash,
+{
     pub(super) fn new() -> Self {
         Self {
             inner: FxHashSet::default(),
         }
     }
 
-    /// Check if any elements have been marked as dirty.
+    /// Check if any any entries have been added.
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    /// Check if a given element has been marked as dirty.
-    pub fn is_dirty(&self, element_id: ElementId) -> bool {
-        self.inner.contains(&element_id)
+    /// Check if a given key exists in the list.
+    pub fn is_dirty(&self, key: &T) -> bool {
+        self.inner.contains(key)
     }
 
-    /// Mark an element as dirty, causing it to be rebuilt at the next opportunity.
-    pub fn insert(&mut self, element_id: ElementId) {
-        self.inner.insert(element_id);
+    /// Marks an entry as dirty, causing it to be processed at the next opportunity.
+    pub fn insert(&mut self, key: T) {
+        self.inner.insert(key);
     }
 
-    pub(super) fn drain(&mut self) -> impl Iterator<Item = ElementId> + '_ {
+    pub(super) fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
         self.inner.drain()
     }
 }

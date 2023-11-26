@@ -1,11 +1,13 @@
 use agui_core::{
+    element::{ContextDirtyRenderObject, RenderObjectBuildContext, RenderObjectUpdateContext},
+    render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     unit::{Constraints, EdgeInsets, IntrinsicDimension, Offset, Size},
     widget::Widget,
 };
-use agui_elements::layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout};
-use agui_macros::LayoutWidget;
+use agui_elements::render::RenderObjectWidget;
+use agui_macros::RenderObjectWidget;
 
-#[derive(LayoutWidget, Debug)]
+#[derive(RenderObjectWidget, Debug)]
 pub struct Padding {
     pub padding: EdgeInsets,
 
@@ -13,14 +15,47 @@ pub struct Padding {
     pub child: Option<Widget>,
 }
 
-impl WidgetLayout for Padding {
+impl RenderObjectWidget for Padding {
+    type RenderObject = RenderPadding;
+
     fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 
+    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+        RenderPadding {
+            padding: self.padding,
+        }
+    }
+
+    fn update_render_object(
+        &self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut Self::RenderObject,
+    ) {
+        render_object.update_padding(ctx, self.padding);
+    }
+}
+
+pub struct RenderPadding {
+    pub padding: EdgeInsets,
+}
+
+impl RenderPadding {
+    pub fn update_padding(&mut self, ctx: &mut RenderObjectUpdateContext, padding: EdgeInsets) {
+        if self.padding == padding {
+            return;
+        }
+
+        self.padding = padding;
+        ctx.mark_needs_layout();
+    }
+}
+
+impl RenderObjectImpl for RenderPadding {
     fn intrinsic_size(
         &self,
-        ctx: &mut IntrinsicSizeContext,
+        ctx: &mut RenderObjectIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -33,11 +68,11 @@ impl WidgetLayout for Padding {
                 .unwrap_or(0.0)
     }
 
-    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {
-            child.compute_layout(constraints.deflate(self.padding));
+            child.layout(constraints.deflate(self.padding));
             child.set_offset(Offset {
                 x: self.padding.left,
                 y: self.padding.top,

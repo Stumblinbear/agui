@@ -1,12 +1,16 @@
 use crate::{
-    element::{ContextElement, ContextElements, ContextMarkDirty, Element, ElementId},
-    engine::DirtyElements,
+    element::{ContextElement, ContextElements, Element, ElementId},
+    engine::Dirty,
+    render::RenderObjectId,
     util::tree::Tree,
 };
 
 pub struct PluginElementMountContext<'ctx> {
     pub element_tree: &'ctx Tree<ElementId, Element>,
-    pub dirty: &'ctx mut DirtyElements,
+
+    pub needs_build: &'ctx mut Dirty<ElementId>,
+    pub needs_layout: &'ctx mut Dirty<RenderObjectId>,
+    pub needs_paint: &'ctx mut Dirty<RenderObjectId>,
 
     pub parent_element_id: Option<&'ctx ElementId>,
     pub element_id: &'ctx ElementId,
@@ -22,12 +26,6 @@ impl ContextElements for PluginElementMountContext<'_> {
 impl ContextElement for PluginElementMountContext<'_> {
     fn element_id(&self) -> ElementId {
         *self.element_id
-    }
-}
-
-impl ContextMarkDirty for PluginElementMountContext<'_> {
-    fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
     }
 }
 

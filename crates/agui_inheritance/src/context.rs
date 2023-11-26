@@ -1,12 +1,10 @@
 use std::rc::Rc;
 
+use agui_core::element::ContextElements;
 use agui_core::plugin::context::ContextPlugins;
 use agui_core::{element::ContextElement, plugin::context::ContextPluginsMut, widget::AnyWidget};
 
-use crate::{
-    element::{InheritedElement, InheritedWidget},
-    plugin::InheritancePlugin,
-};
+use crate::{plugin::InheritancePlugin, InheritedElement, InheritedWidget};
 
 pub trait ContextInherited {
     fn find_inherited_widget<I>(&self) -> Option<Rc<I>>
@@ -22,7 +20,7 @@ pub trait ContextInheritedMut {
 
 impl<'ctx, C> ContextInherited for C
 where
-    C: ContextElement + ContextPlugins<'ctx>,
+    C: ContextElements + ContextElement + ContextPlugins<'ctx>,
 {
     fn find_inherited_widget<I>(&self) -> Option<Rc<I>>
     where
@@ -53,7 +51,7 @@ where
 
 impl<'ctx, C> ContextInheritedMut for C
 where
-    C: ContextElement + ContextPluginsMut<'ctx>,
+    C: ContextElements + ContextElement + ContextPluginsMut<'ctx>,
 {
     fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
     where

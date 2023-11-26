@@ -5,9 +5,9 @@ use agui_core::{
     engine::Engine,
     plugin::{
         context::{
-            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
-            PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
-            PluginInitContext,
+            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginCreateRenderObjectContext,
+            PluginElementBuildContext, PluginElementMountContext, PluginElementRemountContext,
+            PluginElementUnmountContext, PluginInitContext, UpdatePluginRenderObjectContext,
         },
         Plugin,
     },
@@ -33,7 +33,7 @@ fn plugin_ops(c: &mut Criterion) {
                     children
                 };
 
-                let root_widget = MockRenderWidget::new("RootWidget");
+                let root_widget = MockRenderWidget::default();
                 {
                     root_widget
                         .mock
@@ -45,7 +45,7 @@ fn plugin_ops(c: &mut Criterion) {
                         .mock
                         .borrow_mut()
                         .expect_create_render_object()
-                        .returning(|| DummyRenderObject.into());
+                        .returning(|_| DummyRenderObject.into());
                 }
 
                 Engine::builder()
@@ -75,7 +75,7 @@ fn plugin_ops(c: &mut Criterion) {
                     children
                 }));
 
-                let root_widget = MockRenderWidget::new("RootWidget");
+                let root_widget = MockRenderWidget::default();
                 {
                     root_widget
                         .mock
@@ -91,7 +91,7 @@ fn plugin_ops(c: &mut Criterion) {
                         .mock
                         .borrow_mut()
                         .expect_create_render_object()
-                        .returning(|| DummyRenderObject.into());
+                        .returning(|_| DummyRenderObject.into());
                 }
 
                 let mut engine = Engine::builder()
@@ -108,7 +108,7 @@ fn plugin_ops(c: &mut Criterion) {
 
                 children.borrow_mut().clear();
 
-                engine.mark_dirty(engine.root());
+                engine.mark_needs_build(engine.root());
 
                 engine
             },
@@ -129,10 +129,6 @@ impl Plugin for DummyPlugin {
         self.i += 1;
     }
 
-    fn on_before_update(&mut self, _: &mut PluginBeforeUpdateContext) {
-        self.i += 1;
-    }
-
     fn on_after_update(&mut self, _: &mut PluginAfterUpdateContext) {
         self.i += 1;
     }
@@ -150,6 +146,18 @@ impl Plugin for DummyPlugin {
     }
 
     fn on_element_build(&mut self, _: &mut PluginElementBuildContext) {
+        self.i += 1;
+    }
+
+    fn on_create_render_object(&mut self, _: &mut PluginCreateRenderObjectContext) {
+        self.i += 1;
+    }
+
+    fn on_update_render_object(&mut self, _: &mut UpdatePluginRenderObjectContext) {
+        self.i += 1;
+    }
+
+    fn on_before_update(&mut self, _: &mut PluginBeforeUpdateContext) {
         self.i += 1;
     }
 }

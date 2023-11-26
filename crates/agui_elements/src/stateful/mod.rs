@@ -1,9 +1,10 @@
-mod context;
-mod instance;
-
 use agui_core::widget::Widget;
+
+mod context;
+mod element;
+
 pub use context::*;
-pub use instance::*;
+pub use element::*;
 
 pub trait StatefulWidget: 'static {
     type State: WidgetState<Widget = Self>;

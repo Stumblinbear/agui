@@ -22,3 +22,6 @@ rustc-hash.workspace = true
 im-rc.workspace = true
 
 unicode-segmentation = "1.9"
+
+[dev-dependencies]
+agui_core = { workspace = true, features = ["mocks"] }

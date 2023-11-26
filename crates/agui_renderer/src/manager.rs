@@ -3,8 +3,9 @@ use rustc_hash::FxHashMap;
 use agui_core::{
     element::{Element, ElementId},
     plugin::context::{ContextPlugins, ContextPluginsMut},
-    util::{map::ElementMap, tree::Tree},
+    util::tree::Tree,
 };
+use slotmap::SlotMap;
 
 use crate::plugin::RenderViewPlugin;
 
@@ -12,11 +13,9 @@ use super::RenderViewId;
 
 #[derive(Default)]
 pub struct RenderViewManager {
-    last_render_view_id: usize,
+    map: FxHashMap<ElementId, RenderViewId>,
 
-    map: ElementMap<RenderViewId>,
-
-    render_views: FxHashMap<RenderViewId, ElementId>,
+    boundaries: SlotMap<RenderViewId, ElementId>,
 }
 
 impl RenderViewManager {
@@ -37,30 +36,30 @@ impl RenderViewManager {
     }
 
     pub fn get_boundary(&self, render_view_id: RenderViewId) -> Option<ElementId> {
-        self.render_views.get(&render_view_id).copied()
+        self.boundaries.get(render_view_id).copied()
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn create_render_view(&mut self, element_id: ElementId) -> RenderViewId {
-        self.last_render_view_id += 1;
-
-        let render_view_id = RenderViewId::new(self.last_render_view_id);
-
-        self.map.insert(element_id, render_view_id);
-        self.render_views.insert(render_view_id, element_id);
-
-        render_view_id
-    }
-
-    pub(crate) fn add(&mut self, parent_element_id: Option<ElementId>, element_id: ElementId) {
-        tracing::trace!(
-            element_id = &format!("{:?}", element_id),
-            "attaching render view"
-        );
-
         assert!(
             !self.map.contains_key(&element_id),
             "element already exists in the render view manager"
         );
+
+        let render_view_id = self.boundaries.insert(element_id);
+
+        self.map.insert(element_id, render_view_id);
+
+        render_view_id
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub(crate) fn add(&mut self, parent_element_id: Option<ElementId>, element_id: ElementId) {
+        if self.map.contains_key(&element_id) {
+            return;
+        }
+
+        tracing::trace!("attaching render view");
 
         let parent_render_view_id = parent_element_id
             .map(|parent_element_id| {
@@ -73,6 +72,7 @@ impl RenderViewManager {
         self.map.insert(element_id, parent_render_view_id);
     }
 
+    #[tracing::instrument(skip(self, element_tree))]
     pub(crate) fn update_render_view(
         &mut self,
         element_tree: &Tree<ElementId, Element>,
@@ -87,7 +87,7 @@ impl RenderViewManager {
 
         // If this element is the creator of a render view, then we don't need to do anything.
         if let Some(current_render_view_id) = current_render_view_id {
-            if self.render_views.get(&current_render_view_id) == Some(&element_id) {
+            if self.get_boundary(current_render_view_id) == Some(element_id) {
                 return;
             }
         }
@@ -108,11 +108,12 @@ impl RenderViewManager {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn remove(&mut self, element_id: ElementId) {
         if let Some(render_view_id) = self.map.remove(&element_id) {
             // If this element is the one that created the render view, remove it from the map.
-            if self.render_views.get(&render_view_id) == Some(&element_id) {
-                self.render_views.remove(&render_view_id);
+            if self.get_boundary(render_view_id) == Some(element_id) {
+                self.boundaries.remove(render_view_id);
             }
         }
     }

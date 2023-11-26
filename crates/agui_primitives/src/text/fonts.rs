@@ -1,10 +1,6 @@
 use std::hash::BuildHasherDefault;
 
-use agui_core::{
-    callback::Callback,
-    unit::Font,
-    widget::{IntoWidget, Widget},
-};
+use agui_core::{callback::Callback, unit::Font, widget::Widget};
 use agui_elements::stateful::{
     ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState,
 };
@@ -12,14 +8,11 @@ use agui_inheritance::InheritedWidget;
 use agui_macros::{InheritedWidget, StatefulWidget};
 use rustc_hash::FxHasher;
 
-use crate::sized_box::SizedBox;
-
 #[derive(StatefulWidget, Debug)]
 pub struct Fonts {
     fonts: im_rc::HashMap<String, Font, BuildHasherDefault<FxHasher>>,
 
-    #[prop(default, into)]
-    child: Option<Widget>,
+    child: Widget,
 }
 
 impl StatefulWidget for Fonts {
@@ -51,11 +44,7 @@ impl WidgetState for FontsState {
                 });
             }),
 
-            child: ctx
-                .widget
-                .child
-                .clone()
-                .unwrap_or_else(|| SizedBox::shrink().into_widget()),
+            child: ctx.widget.child.clone(),
         }
         .into()
     }
@@ -140,7 +129,7 @@ mod tests {
                 <Fonts> {
                     fonts: im_rc::HashMap::from_iter([(
                         String::from("test font family"),
-                        Font::by_id(0),
+                        Font::from_family("test font family"),
                     )]),
 
                     child: <TestWidget> {},

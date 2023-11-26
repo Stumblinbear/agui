@@ -4,10 +4,11 @@ use agui_core::{
     element::{Element, ElementId},
     engine::Engine,
     unit::{Offset, Size},
-    util::{map::ElementMap, tree::Tree},
+    util::tree::Tree,
 };
 use agui_renderer::{RenderViewId, RenderViewManager, ViewRenderer};
 use parking_lot::Mutex;
+use rustc_hash::FxHashMap;
 use vello::{
     block_on_wgpu,
     kurbo::{Affine, Vec2},
@@ -30,12 +31,12 @@ impl VelloViewRendererHandle {
         }
     }
 
-    pub(crate) fn redraw(&self, engine: &Engine, fonts: &mut VelloFonts) {
-        let render_view_manager =
-            RenderViewManager::of(engine).expect("render view manager not found");
-
-        let tree = engine.elements();
-
+    pub(crate) fn redraw(
+        &self,
+        render_view_manager: &RenderViewManager,
+        tree: &Tree<ElementId, Element>,
+        fonts: &mut VelloFonts,
+    ) {
         self.inner.lock().redraw(render_view_manager, tree, fonts);
     }
 }
@@ -61,7 +62,7 @@ pub struct VelloViewRenderer {
     pub renderer: vello::Renderer,
 
     pub scene: Scene,
-    pub widgets: ElementMap<RenderObject>,
+    pub widgets: FxHashMap<ElementId, RenderObject>,
 }
 
 impl VelloViewRenderer {

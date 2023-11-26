@@ -1,4 +1,5 @@
 use crate::{
+    element::{ContextRenderObject, ContextRenderObjects},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -6,8 +7,6 @@ use crate::{
     render::{RenderObject, RenderObjectId},
     util::tree::Tree,
 };
-
-use super::{ContextRenderObject, ContextRenderObjects};
 
 pub struct RenderObjectUnmountContext<'ctx> {
     pub plugins: &'ctx mut Plugins,

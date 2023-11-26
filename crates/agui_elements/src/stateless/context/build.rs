@@ -2,9 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use agui_core::{
     callback::{Callback, CallbackId, CallbackQueue, ContextCallbackQueue, WidgetCallback},
-    element::{
-        ContextElement, ContextElements, ContextMarkDirty, Element, ElementBuildContext, ElementId,
-    },
+    element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -19,63 +17,57 @@ use super::{
     StatelessCallbackContext,
 };
 
-pub struct StatelessBuildContext<'ctx, W> {
-    pub(crate) inner: ElementBuildContext<'ctx>,
+pub struct StatelessBuildContext<'ctx, 'element, W> {
+    pub(crate) inner: &'element mut ElementBuildContext<'ctx>,
 
-    pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn StatelessCallbackFunc<W>>>,
+    pub(crate) callbacks: &'element mut FxHashMap<CallbackId, Box<dyn StatelessCallbackFunc<W>>>,
 }
 
-impl<W> ContextElements for StatelessBuildContext<'_, W> {
+impl<W> ContextElements for StatelessBuildContext<'_, '_, W> {
     fn elements(&self) -> &Tree<ElementId, Element> {
         self.inner.elements()
     }
 }
 
-impl<W> ContextElement for StatelessBuildContext<'_, W> {
+impl<W> ContextElement for StatelessBuildContext<'_, '_, W> {
     fn element_id(&self) -> ElementId {
         self.inner.element_id()
     }
 }
 
-impl<'ctx, W> ContextPlugins<'ctx> for StatelessBuildContext<'ctx, W> {
+impl<'ctx, W> ContextPlugins<'ctx> for StatelessBuildContext<'ctx, '_, W> {
     fn plugins(&self) -> &Plugins {
         self.inner.plugins()
     }
 }
 
-impl<'ctx, W> ContextPluginsMut<'ctx> for StatelessBuildContext<'ctx, W> {
+impl<'ctx, W> ContextPluginsMut<'ctx> for StatelessBuildContext<'ctx, '_, W> {
     fn plugins_mut(&mut self) -> &mut Plugins {
         self.inner.plugins_mut()
     }
 }
 
-impl<W> ContextMarkDirty for StatelessBuildContext<'_, W> {
-    fn mark_dirty(&mut self, element_id: ElementId) {
-        self.inner.mark_dirty(element_id);
-    }
-}
-
-impl<W> ContextCallbackQueue for StatelessBuildContext<'_, W> {
+impl<W> ContextCallbackQueue for StatelessBuildContext<'_, '_, W> {
     fn callback_queue(&self) -> &CallbackQueue {
         self.inner.callback_queue()
     }
 }
 
-impl<'ctx, W> Deref for StatelessBuildContext<'ctx, W> {
+impl<'ctx, W> Deref for StatelessBuildContext<'ctx, '_, W> {
     type Target = ElementBuildContext<'ctx>;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        self.inner
     }
 }
 
-impl<'ctx, W> DerefMut for StatelessBuildContext<'ctx, W> {
+impl<'ctx, W> DerefMut for StatelessBuildContext<'ctx, '_, W> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        self.inner
     }
 }
 
-impl<W: 'static> StatelessBuildContext<'_, W> {
+impl<W: 'static> StatelessBuildContext<'_, '_, W> {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: AsAny,

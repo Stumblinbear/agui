@@ -1,10 +1,7 @@
 use std::rc::Rc;
 
 use agui_core::{
-    element::{
-        render::ElementRender, widget::ElementWidget, ElementUpdate,
-        RenderObjectIntrinsicSizeContext,
-    },
+    element::{render::ElementRender, widget::ElementWidget, ElementUpdate},
     render::canvas::{
         painter::{CanvasPainter, Head},
         Canvas,

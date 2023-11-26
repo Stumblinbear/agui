@@ -27,6 +27,7 @@ slotmap.workspace = true
 parking_lot.workspace = true
 im-rc.workspace = true
 bitflags.workspace = true
+url.workspace = true
 
 glam.workspace = true
 lyon.workspace = true

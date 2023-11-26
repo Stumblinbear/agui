@@ -11,7 +11,7 @@ use crate::{
     widget::{IntoWidget, Widget},
 };
 
-use super::{DirtyElements, Engine};
+use super::{Dirty, Engine};
 
 pub struct EngineBuilder<P> {
     update_notifier_tx: Option<mpsc::Sender<()>>,
@@ -69,10 +69,12 @@ where
             element_tree: Tree::default(),
             render_object_tree: Tree::default(),
 
-            dirty: DirtyElements::new(),
+            needs_build: Dirty::new(),
             callback_queue: CallbackQueue::new(
                 self.update_notifier_tx.unwrap_or_else(|| mpsc::channel().0),
             ),
+            needs_layout: Dirty::new(),
+            needs_paint: Dirty::new(),
 
             rebuild_queue: VecDeque::default(),
             removal_queue: FxHashSet::default(),

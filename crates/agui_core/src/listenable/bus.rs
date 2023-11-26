@@ -3,13 +3,13 @@ use std::{any::TypeId, cell::RefCell, rc::Rc};
 use crate::{
     listenable::{Event, EventEmitter, EventEmitterHandle},
     unit::AsAny,
-    util::map::TypeMap,
+    util::map::TypeIdMap,
 };
 
 #[derive(Default)]
 #[allow(clippy::type_complexity)]
 pub struct EventBus {
-    emitters: Rc<RefCell<TypeMap<Box<dyn EventBusEmitter>>>>,
+    emitters: Rc<RefCell<TypeIdMap<Box<dyn EventBusEmitter>>>>,
 }
 
 impl Clone for EventBus {

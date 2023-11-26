@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use agui_core::{
     callback::{Callback, CallbackId, CallbackQueue, ContextCallbackQueue, WidgetCallback},
-    element::{ContextElement, ContextMarkDirty, Element, ElementBuildContext, ElementId},
+    element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -19,31 +19,36 @@ use super::{
     StatefulCallbackContext,
 };
 
-pub struct StatefulBuildContext<'ctx, S>
+pub struct StatefulBuildContext<'ctx, 'element, S>
 where
     S: WidgetState + ?Sized,
 {
-    pub(crate) inner: ElementBuildContext<'ctx>,
+    pub(crate) inner: &'element mut ElementBuildContext<'ctx>,
 
-    pub(crate) callbacks: &'ctx mut FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<S>>>,
+    pub(crate) callbacks: &'element mut FxHashMap<CallbackId, Box<dyn StatefulCallbackFunc<S>>>,
 
-    pub widget: &'ctx S::Widget,
+    pub widget: &'element S::Widget,
 }
 
-impl<S> ContextElement for StatefulBuildContext<'_, S>
+impl<S> ContextElements for StatefulBuildContext<'_, '_, S>
 where
     S: WidgetState,
 {
     fn elements(&self) -> &Tree<ElementId, Element> {
         self.inner.elements()
     }
+}
 
+impl<S> ContextElement for StatefulBuildContext<'_, '_, S>
+where
+    S: WidgetState,
+{
     fn element_id(&self) -> ElementId {
         self.inner.element_id()
     }
 }
 
-impl<'ctx, S> ContextPlugins<'ctx> for StatefulBuildContext<'ctx, S>
+impl<'ctx, S> ContextPlugins<'ctx> for StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {
@@ -52,7 +57,7 @@ where
     }
 }
 
-impl<'ctx, S> ContextPluginsMut<'ctx> for StatefulBuildContext<'ctx, S>
+impl<'ctx, S> ContextPluginsMut<'ctx> for StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {
@@ -61,16 +66,7 @@ where
     }
 }
 
-impl<S> ContextMarkDirty for StatefulBuildContext<'_, S>
-where
-    S: WidgetState,
-{
-    fn mark_dirty(&mut self, element_id: ElementId) {
-        self.inner.mark_dirty(element_id)
-    }
-}
-
-impl<S> ContextCallbackQueue for StatefulBuildContext<'_, S>
+impl<S> ContextCallbackQueue for StatefulBuildContext<'_, '_, S>
 where
     S: WidgetState,
 {
@@ -79,27 +75,27 @@ where
     }
 }
 
-impl<'ctx, S: 'static> Deref for StatefulBuildContext<'ctx, S>
+impl<'ctx, S: 'static> Deref for StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {
     type Target = ElementBuildContext<'ctx>;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        self.inner
     }
 }
 
-impl<'ctx, S: 'static> DerefMut for StatefulBuildContext<'ctx, S>
+impl<'ctx, S: 'static> DerefMut for StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        self.inner
     }
 }
 
-impl<'ctx, S: 'static> StatefulBuildContext<'ctx, S>
+impl<'ctx, S: 'static> StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {

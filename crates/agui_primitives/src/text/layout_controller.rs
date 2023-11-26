@@ -1,33 +1,27 @@
-use std::{borrow::Cow, rc::Rc};
+use std::{borrow::Cow, sync::Arc};
 
 use agui_core::{
     unit::{Constraints, IntrinsicDimension, Size, TextStyle},
-    widget::{IntoWidget, Widget},
+    util::ptr_eq::PtrEqual,
+    widget::Widget,
 };
 use agui_inheritance::InheritedWidget;
 use agui_macros::InheritedWidget;
 
-use crate::sized_box::SizedBox;
-
 #[derive(InheritedWidget)]
 pub struct TextLayoutController {
-    pub delegate: Rc<dyn TextLayoutDelegate>,
+    pub delegate: Arc<dyn TextLayoutDelegate + Send + Sync + 'static>,
 
-    pub child: Option<Widget>,
+    pub child: Widget,
 }
 
 impl InheritedWidget for TextLayoutController {
     fn child(&self) -> Widget {
-        self.child
-            .clone()
-            .unwrap_or_else(|| SizedBox::shrink().into_widget())
+        self.child.clone()
     }
 
     fn should_notify(&self, old_widget: &Self) -> bool {
-        !std::ptr::eq(
-            Rc::as_ptr(&self.delegate) as *const _ as *const (),
-            Rc::as_ptr(&old_widget.delegate) as *const _ as *const (),
-        )
+        !self.delegate.is_exact_ptr(&old_widget.delegate)
     }
 }
 

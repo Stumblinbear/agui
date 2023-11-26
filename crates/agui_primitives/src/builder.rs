@@ -27,49 +27,20 @@ impl StatelessWidget for Builder {
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{
-        engine::Engine,
-        query::WidgetQueryExt,
-        unit::{Constraints, IntrinsicDimension, Size},
-        widget::Widget,
-    };
-    use agui_elements::layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout};
-    use agui_macros::LayoutWidget;
+    use agui_core::{element::mock::DummyWidget, engine::Engine, query::WidgetQueryExt};
 
     use crate::builder::Builder;
-
-    #[derive(LayoutWidget, Debug, Default, PartialEq)]
-    struct TestWidget {}
-
-    impl WidgetLayout for TestWidget {
-        fn children(&self) -> Vec<Widget> {
-            vec![]
-        }
-
-        fn intrinsic_size(
-            &self,
-            _: &mut IntrinsicSizeContext,
-            _: IntrinsicDimension,
-            _: f32,
-        ) -> f32 {
-            0.0
-        }
-
-        fn layout(&self, _: &mut LayoutContext, _: Constraints) -> Size {
-            Size::ZERO
-        }
-    }
 
     #[test]
     pub fn calls_func() {
         let mut engine = Engine::builder()
-            .with_root(Builder::new(|_| TestWidget::default().into()))
+            .with_root(Builder::new(|_| DummyWidget.into()))
             .build();
 
         engine.update();
 
         assert!(
-            engine.query().by_type::<TestWidget>().next().is_some(),
+            engine.query().by_type::<DummyWidget>().next().is_some(),
             "widget should have been created"
         );
     }

@@ -2,10 +2,7 @@ use std::{any::TypeId, hash::BuildHasherDefault};
 
 use agui_core::{
     element::ElementId,
-    util::{
-        hasher::TypeIdHasher,
-        map::{ElementSet, TypeMap},
-    },
+    util::{hasher::TypeIdHasher, map::TypeIdMap},
 };
 use rustc_hash::FxHashSet;
 
@@ -26,10 +23,10 @@ pub struct InheritanceScope {
     available_scopes: im_rc::HashMap<TypeId, ElementId, BuildHasherDefault<TypeIdHasher>>,
 
     // Keep track of all the elements in our scope that are listening for each type.
-    dependents: TypeMap<ElementSet>,
+    dependents: TypeIdMap<FxHashSet<ElementId>>,
 
     /// A set of all elements that are listening to this scope.
-    listeners: ElementSet,
+    listeners: FxHashSet<ElementId>,
 }
 
 impl InheritanceScope {
@@ -45,7 +42,7 @@ impl InheritanceScope {
 
             available_scopes: im_rc::HashMap::from(vec![(type_id, element_id)]),
 
-            dependents: TypeMap::default(),
+            dependents: TypeIdMap::default(),
 
             listeners: FxHashSet::default(),
         }
@@ -69,7 +66,7 @@ impl InheritanceScope {
                 .available_scopes()
                 .update(type_id, element_id),
 
-            dependents: TypeMap::default(),
+            dependents: TypeIdMap::default(),
 
             listeners: FxHashSet::default(),
         }

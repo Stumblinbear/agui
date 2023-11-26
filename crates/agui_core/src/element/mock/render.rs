@@ -4,8 +4,9 @@ use parking_lot::Mutex;
 
 use crate::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementMountContext,
-        ElementType, ElementUnmountContext, ElementUpdate,
+        render::ElementRender, widget::ElementWidget, ElementBuildContext, ElementBuilder,
+        ElementMountContext, ElementType, ElementUnmountContext, ElementUpdate,
+        RenderObjectBuildContext, RenderObjectUpdateContext,
     },
     render::{MockRenderObjectImpl, RenderObject},
     widget::{IntoWidget, Widget},
@@ -15,36 +16,28 @@ use crate::{
 #[mockall::automock]
 #[allow(clippy::needless_lifetimes)]
 pub trait RenderElement {
-    fn widget_name(&self) -> &'static str;
+    fn mount<'ctx>(&mut self, ctx: &mut ElementMountContext<'ctx>);
 
-    fn mount<'ctx>(&mut self, ctx: ElementMountContext<'ctx>);
-
-    fn unmount<'ctx>(&mut self, ctx: ElementUnmountContext<'ctx>);
+    fn unmount<'ctx>(&mut self, ctx: &mut ElementUnmountContext<'ctx>);
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
     fn children(&self) -> Vec<Widget>;
 
-    fn create_render_object(&self) -> RenderObject;
+    fn create_render_object<'ctx>(&mut self, ctx: &mut ElementBuildContext<'ctx>) -> RenderObject;
 
-    fn update_render_object(&self, render_object: &mut RenderObject);
+    fn is_valid_render_object(&self, render_object: &RenderObject) -> bool;
+
+    fn update_render_object<'ctx>(
+        &mut self,
+        ctx: &mut ElementBuildContext<'ctx>,
+        render_object: &mut RenderObject,
+    );
 }
 
 #[derive(Default)]
 pub struct MockRenderWidget {
     pub mock: Rc<RefCell<MockRenderElement>>,
-}
-
-impl MockRenderWidget {
-    pub fn new(name: &'static str) -> Self {
-        let mut mock = MockRenderElement::default();
-
-        mock.expect_widget_name().returning(move || name);
-
-        Self {
-            mock: Rc::new(RefCell::new(mock)),
-        }
-    }
 }
 
 impl IntoWidget for MockRenderWidget {
@@ -70,10 +63,6 @@ impl MockElement {
 }
 
 impl ElementWidget for MockElement {
-    fn widget_name(&self) -> &'static str {
-        self.widget.mock.borrow().widget_name()
-    }
-
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         self.widget.mock.borrow_mut().update(new_widget)
     }
@@ -84,33 +73,32 @@ impl ElementRender for MockElement {
         self.widget.mock.borrow().children()
     }
 
-    fn create_render_object(&self) -> RenderObject {
-        self.widget.mock.borrow().create_render_object()
+    fn create_render_object(&mut self, ctx: &mut RenderObjectBuildContext) -> RenderObject {
+        self.widget.mock.borrow_mut().create_render_object(ctx)
     }
 
-    fn update_render_object(&self, render_object: &mut RenderObject) {
+    fn is_valid_render_object(&self, render_object: &RenderObject) -> bool {
         self.widget
             .mock
             .borrow()
-            .update_render_object(render_object)
+            .is_valid_render_object(render_object)
+    }
+
+    fn update_render_object(
+        &mut self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut RenderObject,
+    ) {
+        self.widget
+            .mock
+            .borrow_mut()
+            .update_render_object(ctx, render_object)
     }
 }
 
 #[derive(Default)]
 pub struct MockRenderObject {
     pub mock: Arc<Mutex<MockRenderObjectImpl>>,
-}
-
-impl MockRenderObject {
-    pub fn new(name: &'static str) -> Self {
-        let mut mock = MockRenderObjectImpl::default();
-
-        mock.expect_render_object_name().returning(move || name);
-
-        Self {
-            mock: Arc::new(Mutex::new(mock)),
-        }
-    }
 }
 
 impl From<MockRenderObject> for RenderObject {

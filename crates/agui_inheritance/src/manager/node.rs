@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use agui_core::{element::ElementId, util::map::TypeSet};
+use agui_core::{element::ElementId, util::map::TypeIdSet};
 
 #[derive(PartialEq, Debug, Default)]
 pub struct InheritanceNode {
@@ -8,7 +8,7 @@ pub struct InheritanceNode {
     scope_id: Option<ElementId>,
 
     /// Tracks which types this node depends on.
-    dependencies: TypeSet,
+    dependencies: TypeIdSet,
 }
 
 impl InheritanceNode {
@@ -16,7 +16,7 @@ impl InheritanceNode {
         Self {
             scope_id,
 
-            dependencies: TypeSet::default(),
+            dependencies: TypeIdSet::default(),
         }
     }
 

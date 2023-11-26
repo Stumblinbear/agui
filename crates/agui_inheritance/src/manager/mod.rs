@@ -1,10 +1,11 @@
 use std::any::TypeId;
 
 use agui_core::{
-    element::{ContextElement, ContextMarkDirty, ElementId},
+    element::{ContextElements, ElementId},
     plugin::context::PluginElementRemountContext,
-    util::map::{ElementMap, TypeMap, TypeSet},
+    util::map::{TypeIdMap, TypeIdSet},
 };
+use rustc_hash::FxHashMap;
 
 use self::{node::InheritanceNode, scope::InheritanceScope};
 
@@ -13,7 +14,7 @@ mod scope;
 
 #[derive(Default)]
 pub struct InheritanceManager {
-    map: ElementMap<Inheritance>,
+    map: FxHashMap<ElementId, Inheritance>,
 }
 
 impl InheritanceManager {
@@ -233,7 +234,7 @@ impl InheritanceManager {
                 .keys()
                 .chain(new_available_scopes.keys())
                 .copied()
-                .collect::<TypeSet>()
+                .collect::<TypeIdSet>()
                 .into_iter()
                 .filter(|type_id| {
                     old_available_scopes.get(type_id) != new_available_scopes.get(type_id)
@@ -260,7 +261,7 @@ impl InheritanceManager {
                 // Mark every element that depends on this type dirty
                 scope
                     .get_dependents(&type_id)
-                    .for_each(|element_id| ctx.mark_dirty(element_id));
+                    .for_each(|element_id| ctx.needs_build.insert(element_id));
             }
 
             scope.child_scopes().to_vec()
@@ -282,7 +283,7 @@ impl InheritanceManager {
             .expect("failed to find the node while updating its inheritance scope")
             .iter_dependencies()
             .map(|type_id| (type_id, None))
-            .collect::<TypeMap<Option<ElementId>>>();
+            .collect::<TypeIdMap<Option<ElementId>>>();
 
         // Remove the tracked dependencies from the node's old scope
         if let Some(old_scope_id) = old_scope_id {
@@ -321,22 +322,25 @@ impl InheritanceManager {
                     .and_then(|available_scopes| available_scopes.get(&type_id).copied())
             {
                 // If the new dependency is different from the old one, mark the node as dirty
-                ctx.mark_dirty(element_id);
+                ctx.needs_build.insert(element_id);
 
                 break;
             }
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn create_scope(
         &mut self,
         type_id: TypeId,
         parent_element_id: Option<ElementId>,
         element_id: ElementId,
     ) {
-        tracing::trace!(
-            element_id = &format!("{:?}", element_id),
-            "creating new inheritance scope"
+        tracing::trace!("creating new inheritance scope");
+
+        assert!(
+            !self.map.contains_key(&element_id),
+            "element already exists in the inheritance manager"
         );
 
         let ancestor_scope_id = parent_element_id.and_then(|parent_element_id| {
@@ -362,20 +366,17 @@ impl InheritanceManager {
         self.map.insert(element_id, scope);
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn create_node(
         &mut self,
         parent_element_id: Option<ElementId>,
         element_id: ElementId,
     ) {
-        tracing::trace!(
-            element_id = &format!("{:?}", element_id),
-            "attaching inheritance node"
-        );
+        if self.map.contains_key(&element_id) {
+            return;
+        }
 
-        assert!(
-            !self.map.contains_key(&element_id),
-            "element already exists in the inheritance manager"
-        );
+        tracing::trace!("attaching inheritance node");
 
         let ancestor_scope_id = parent_element_id.and_then(|parent_element_id| {
             self.get(parent_element_id)
@@ -487,7 +488,7 @@ mod tests {
     use slotmap::KeyData;
 
     use super::InheritanceManager;
-    use crate::element::InheritedWidget;
+    use crate::InheritedWidget;
 
     fn new_element(idx: u64) -> ElementId {
         ElementId::from(KeyData::from_ffi(idx))

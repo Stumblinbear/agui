@@ -1,15 +1,20 @@
 use agui_core::{
-    unit::{Alignment, Constraints, IntrinsicDimension, Size},
+    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    unit::Alignment,
     widget::Widget,
 };
-use agui_elements::layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout};
-use agui_macros::LayoutWidget;
+use agui_elements::render::RenderObjectWidget;
+use agui_macros::RenderObjectWidget;
 
+mod aligned_box;
 mod center;
 
 pub use center::*;
 
-#[derive(LayoutWidget, Debug)]
+use self::aligned_box::RenderAlignedBox;
+
+#[derive(RenderObjectWidget, Debug)]
+#[props(default)]
 pub struct Align {
     pub alignment: Alignment,
 
@@ -20,56 +25,30 @@ pub struct Align {
     pub child: Option<Widget>,
 }
 
-impl WidgetLayout for Align {
+impl RenderObjectWidget for Align {
+    type RenderObject = RenderAlignedBox;
+
     fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 
-    fn intrinsic_size(
-        &self,
-        ctx: &mut IntrinsicSizeContext,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32 {
-        ctx.iter_children().next().map_or(0.0, |child| {
-            child.compute_intrinsic_size(dimension, cross_extent)
-        })
+    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+        RenderAlignedBox {
+            alignment: self.alignment,
+
+            width_factor: self.width_factor,
+            height_factor: self.height_factor,
+        }
     }
 
-    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
-        let shrink_wrap_width = self.width_factor.is_some() || !constraints.has_bounded_width();
-        let shrink_wrap_height = self.height_factor.is_some() || !constraints.has_bounded_height();
+    fn update_render_object(
+        &self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut Self::RenderObject,
+    ) {
+        render_object.update_alignment(ctx, self.alignment);
 
-        if let Some(mut child) = ctx.iter_children_mut().next() {
-            let child_size = child.compute_layout(constraints.loosen());
-
-            let size = constraints.constrain(Size {
-                width: shrink_wrap_width
-                    .then(|| child_size.width * self.width_factor.unwrap_or(1.0))
-                    .unwrap_or(f32::INFINITY),
-
-                height: shrink_wrap_height
-                    .then(|| child_size.height * self.height_factor.unwrap_or(1.0))
-                    .unwrap_or(f32::INFINITY),
-            });
-
-            child.set_offset(self.alignment.along_size(size - child_size));
-
-            size
-        } else {
-            constraints.constrain(Size {
-                width: if shrink_wrap_width {
-                    0.0
-                } else {
-                    f32::INFINITY
-                },
-
-                height: if shrink_wrap_height {
-                    0.0
-                } else {
-                    f32::INFINITY
-                },
-            })
-        }
+        render_object.update_width_factor(ctx, self.width_factor);
+        render_object.update_height_factor(ctx, self.height_factor);
     }
 }

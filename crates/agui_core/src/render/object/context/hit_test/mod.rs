@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
+    element::{ContextRenderObject, ContextRenderObjects},
     plugin::{context::ContextPlugins, Plugins},
     render::{RenderObject, RenderObjectId},
     unit::{HitTestResult, Size},
@@ -10,8 +11,6 @@ use crate::{
 mod iter;
 
 pub use iter::*;
-
-use super::{ContextRenderObject, ContextRenderObjects};
 
 pub struct RenderObjectHitTestContext<'ctx> {
     pub plugins: &'ctx Plugins,

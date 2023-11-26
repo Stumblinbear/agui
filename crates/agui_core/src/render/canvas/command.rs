@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::unit::{Bounds, Rect, Shape, TextStyle, TextureId};
+use crate::unit::{Bounds, Rect, Shape, TextStyle, Texture};
 
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
@@ -16,7 +16,7 @@ pub enum CanvasCommand {
         rect: Rect,
         shape: Shape,
 
-        texture_id: TextureId,
+        texture: Texture,
         tex_bounds: Bounds,
     },
 

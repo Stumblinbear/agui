@@ -153,13 +153,39 @@ impl ChildLayoutMut<'_> {
         )
     }
 
-    pub fn compute_layout(&mut self, constraints: impl Into<Constraints>) -> Size {
-        let constraints = constraints.into();
-
+    /// Computes the layout of the child render object without returning its size.
+    pub fn layout(&mut self, constraints: Constraints) -> Size {
         let render_object_id = self.render_object_id();
 
         self.render_object_tree
             .with(render_object_id, |render_object_tree, render_object| {
+                render_object.layout(
+                    RenderObjectContextMut {
+                        plugins: self.plugins,
+
+                        render_object_tree,
+
+                        render_object_id: &render_object_id,
+                    },
+                    constraints,
+                )
+            })
+            .expect("child render object missing during layout")
+    }
+
+    /// Computes the layout of the child render object and returns its resulting size.
+    ///
+    /// This binds the layout to the child element's layout, so that if the child's layout
+    /// changes, this element will be laid out as well. If you do not need the sizing
+    /// information of the child, use [layout()] instead.
+    #[must_use = "If the size information is not needed, call layout() instead."]
+    pub fn compute_layout(&mut self, constraints: Constraints) -> Size {
+        let render_object_id = self.render_object_id();
+
+        self.render_object_tree
+            .with(render_object_id, |render_object_tree, render_object| {
+                render_object.set_parent_uses_size(true);
+
                 render_object.layout(
                     RenderObjectContextMut {
                         plugins: self.plugins,

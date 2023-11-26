@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{element::ElementId, unit::AsAny};
+use crate::{element::ElementId, unit::AsAny, util::ptr_eq::PtrEqual};
 
 mod context;
 mod queue;
@@ -177,11 +177,7 @@ where
     A: AsAny,
 {
     fn eq(&self, other: &Self) -> bool {
-        // war crimes
-        std::ptr::eq(
-            Arc::as_ptr(&self.func) as *const _ as *const (),
-            Arc::as_ptr(&other.func) as *const _ as *const (),
-        )
+        self.func.is_exact_ptr(&other.func)
     }
 }
 

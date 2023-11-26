@@ -14,22 +14,20 @@ use agui_core::{
 #[mockall::automock]
 #[allow(clippy::needless_lifetimes)]
 pub trait InheritedElement {
-    fn widget_name(&self) -> &'static str;
+    #[allow(unused_variables)]
+    fn mount<'ctx>(&mut self, ctx: &mut ElementMountContext<'ctx>);
 
     #[allow(unused_variables)]
-    fn mount<'ctx>(&mut self, ctx: ElementMountContext<'ctx>);
-
-    #[allow(unused_variables)]
-    fn unmount<'ctx>(&mut self, ctx: ElementUnmountContext<'ctx>);
+    fn unmount<'ctx>(&mut self, ctx: &mut ElementUnmountContext<'ctx>);
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
-    fn build<'ctx>(&mut self, ctx: ElementBuildContext<'ctx>) -> Widget;
+    fn build<'ctx>(&mut self, ctx: &mut ElementBuildContext<'ctx>) -> Widget;
 
     #[allow(unused_variables)]
     fn call<'ctx>(
         &mut self,
-        ctx: ElementCallbackContext<'ctx>,
+        ctx: &mut ElementCallbackContext<'ctx>,
         callback_id: CallbackId,
         arg: Box<dyn Any>,
     ) -> bool;
@@ -71,23 +69,19 @@ impl MockElement {
 }
 
 impl ElementWidget for MockElement {
-    fn widget_name(&self) -> &'static str {
-        self.widget.mock.borrow().widget_name()
-    }
-
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         self.widget.mock.borrow_mut().update(new_widget)
     }
 }
 
 impl ElementBuild for MockElement {
-    fn build(&mut self, ctx: ElementBuildContext) -> Widget {
+    fn build(&mut self, ctx: &mut ElementBuildContext) -> Widget {
         self.widget.mock.borrow_mut().build(ctx)
     }
 
     fn call(
         &mut self,
-        ctx: ElementCallbackContext,
+        ctx: &mut ElementCallbackContext,
         callback_id: CallbackId,
         arg: Box<dyn Any>,
     ) -> bool {

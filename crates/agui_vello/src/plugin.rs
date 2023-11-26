@@ -3,7 +3,7 @@ use std::sync::{mpsc, Arc};
 
 use agui_core::plugin::context::{PluginAfterUpdateContext, PluginBeforeUpdateContext};
 use agui_core::{plugin::Plugin, unit::Font};
-use agui_renderer::RenderViewId;
+use agui_renderer::{RenderViewId, RenderViewManager};
 use parking_lot::Mutex;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use rustc_hash::FxHashMap;
@@ -80,6 +80,11 @@ impl Plugin for VelloPlugin {
     }
 
     fn on_after_update(&mut self, ctx: &mut PluginAfterUpdateContext) {
+        let render_view_manager =
+            RenderViewManager::of(ctx).expect("render view manager not found");
+
+        let tree = ctx.element_tree;
+
         for (render_view_id, renderer) in &self.views {
             renderer.redraw(ctx.element_tree);
         }

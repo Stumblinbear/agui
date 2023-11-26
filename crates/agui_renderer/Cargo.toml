@@ -13,6 +13,7 @@ readme = "README.md"
 
 [dependencies]
 agui_core.workspace = true
+agui_elements.workspace = true
 agui_macros.workspace = true
 
 agui_inheritance.workspace = true
@@ -20,3 +21,4 @@ agui_inheritance.workspace = true
 tracing.workspace = true
 
 rustc-hash.workspace = true
+slotmap.workspace = true

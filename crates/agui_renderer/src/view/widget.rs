@@ -2,29 +2,31 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{ElementBuilder, ElementType},
+    render::binding::RenderBinding,
     widget::{IntoWidget, Widget},
 };
 use agui_macros::WidgetProps;
 
-use super::element::RenderViewElement;
+use super::element::ViewElement;
 
 #[derive(WidgetProps)]
-pub struct RenderView {
-    #[props(into)]
+pub struct View {
+    pub binding: Rc<dyn RenderBinding>,
+
     pub child: Widget,
 }
 
-impl IntoWidget for RenderView {
+impl IntoWidget for View {
     fn into_widget(self) -> Widget {
         Widget::new(self)
     }
 }
 
-impl ElementBuilder for RenderView {
+impl ElementBuilder for View {
     fn create_element(self: Rc<Self>) -> ElementType
     where
         Self: Sized,
     {
-        ElementType::Proxy(Box::new(RenderViewElement::new(self)))
+        ElementType::Render(Box::new(ViewElement::new(self)))
     }
 }

@@ -1,12 +1,14 @@
 use agui_core::{
+    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
     unit::Alignment,
-    widget::{IntoWidget, Widget},
+    widget::Widget,
 };
-use agui_macros::WidgetProps;
+use agui_elements::render::RenderObjectWidget;
+use agui_macros::RenderObjectWidget;
 
-use crate::align::Align;
+use super::aligned_box::RenderAlignedBox;
 
-#[derive(Debug, WidgetProps)]
+#[derive(RenderObjectWidget, Debug)]
 #[props(default)]
 pub struct Center {
     pub width_factor: Option<f32>,
@@ -16,16 +18,30 @@ pub struct Center {
     pub child: Option<Widget>,
 }
 
-impl IntoWidget for Center {
-    fn into_widget(self) -> Widget {
-        Align {
+impl RenderObjectWidget for Center {
+    type RenderObject = RenderAlignedBox;
+
+    fn children(&self) -> Vec<Widget> {
+        Vec::from_iter(self.child.clone())
+    }
+
+    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+        RenderAlignedBox {
             alignment: Alignment::CENTER,
 
             width_factor: self.width_factor,
             height_factor: self.height_factor,
-
-            child: self.child.clone(),
         }
-        .into_widget()
+    }
+
+    fn update_render_object(
+        &self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut Self::RenderObject,
+    ) {
+        render_object.update_alignment(ctx, Alignment::CENTER);
+
+        render_object.update_width_factor(ctx, self.width_factor);
+        render_object.update_height_factor(ctx, self.height_factor);
     }
 }

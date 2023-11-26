@@ -129,10 +129,10 @@ impl CanvasObject {
                 CanvasCommand::Texture {
                     rect,
                     shape,
-                    texture_id,
+                    texture,
                     tex_bounds,
                 } => {
-                    tracing::info!("texture: {:?}", texture_id);
+                    tracing::info!("texture: {:?}", texture);
                 }
 
                 CanvasCommand::Text {

@@ -1,11 +1,5 @@
 use agui_core::widget::{AnyWidget, Widget};
 
-mod instance;
-#[cfg(any(test, feature = "mocks"))]
-pub mod mock;
-
-pub use instance::*;
-
 pub trait InheritedWidget: AnyWidget {
     fn child(&self) -> Widget;
 
@@ -18,9 +12,13 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use agui_core::{
-        element::mock::{build::MockBuildWidget, render::MockRenderWidget, DummyWidget},
+        element::{
+            mock::{
+                build::MockBuildWidget, render::MockRenderWidget, DummyRenderObject, DummyWidget,
+            },
+            ElementUpdate,
+        },
         engine::Engine,
-        unit::Size,
         widget::{IntoWidget, Widget},
     };
     use agui_macros::InheritedWidget;
@@ -65,9 +63,9 @@ mod tests {
 
     #[test]
     pub fn updates_scoped_children() {
-        let (root_widget, root_children) = create_widget("RootWidget");
+        let (root_widget, root_children) = create_widget();
 
-        let (depending_widget, inherited_data) = create_depending_widget("DependingWidget");
+        let (depending_widget, inherited_data) = create_depending_widget();
 
         let mut engine = Engine::builder()
             .add_plugin(InheritancePlugin::default())
@@ -94,7 +92,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.mark_dirty(engine.root());
+        engine.mark_needs_build(engine.root());
 
         engine.update();
 
@@ -107,9 +105,9 @@ mod tests {
 
     #[test]
     pub fn updates_nested_scope_children() {
-        let (root_widget, root_children) = create_widget("RootWidget");
+        let (root_widget, root_children) = create_widget();
 
-        let (depending_widget, inherited_data) = create_depending_widget("DependingWidget");
+        let (depending_widget, inherited_data) = create_depending_widget();
 
         let nested_scope = TestOtherInheritedWidget {
             child: depending_widget,
@@ -143,7 +141,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.mark_dirty(engine.root());
+        engine.mark_needs_build(engine.root());
 
         engine.update();
 
@@ -156,9 +154,9 @@ mod tests {
 
     #[test]
     pub fn child_updates_when_dependency_unavailable() {
-        let (root_widget, root_children) = create_widget("RootWidget");
+        let (root_widget, root_children) = create_widget();
 
-        let (depending_widget, inherited_data) = create_depending_widget("DependingWidget");
+        let (depending_widget, inherited_data) = create_depending_widget();
 
         let mut engine = Engine::builder()
             .add_plugin(InheritancePlugin::default())
@@ -181,7 +179,7 @@ mod tests {
 
         *root_children.borrow_mut() = vec![depending_widget.clone()];
 
-        engine.mark_dirty(engine.root());
+        engine.mark_needs_build(engine.root());
 
         engine.update();
 
@@ -192,32 +190,44 @@ mod tests {
         );
     }
 
-    fn create_widget(name: &'static str) -> (Widget, Rc<RefCell<Vec<Widget>>>) {
+    fn create_widget() -> (Widget, Rc<RefCell<Vec<Widget>>>) {
         let children = Rc::new(RefCell::new(Vec::new()));
 
-        let widget = MockRenderWidget::new(name);
+        let widget = MockRenderWidget::default();
         {
-            widget.mock.borrow_mut().children().returning_st({
+            let mut widget_mock = widget.mock.borrow_mut();
+
+            widget_mock.expect_children().returning_st({
                 let children = children.clone();
 
                 move || children.borrow().clone()
             });
 
-            widget
-                .mock
-                .borrow_mut()
-                .expect_layout()
-                .returning(|_, _| Size::ZERO);
+            widget_mock.expect_update().returning(|new_widget| {
+                if new_widget.downcast::<MockRenderWidget>().is_some() {
+                    ElementUpdate::RebuildNecessary
+                } else {
+                    ElementUpdate::Invalid
+                }
+            });
+
+            widget_mock
+                .expect_create_render_object()
+                .returning(|_| DummyRenderObject.into());
+
+            widget_mock
+                .expect_update_render_object()
+                .returning(|_, _| {});
         }
         let widget = widget.into_widget();
 
         (widget, children)
     }
 
-    fn create_depending_widget(name: &'static str) -> (Widget, Rc<RefCell<Option<usize>>>) {
+    fn create_depending_widget() -> (Widget, Rc<RefCell<Option<usize>>>) {
         let inherited_data = Rc::new(RefCell::new(None));
 
-        let depending_widget = MockBuildWidget::new(name);
+        let depending_widget = MockBuildWidget::default();
         {
             depending_widget
                 .mock
@@ -226,7 +236,7 @@ mod tests {
                 .returning_st({
                     let inherited_data = inherited_data.clone();
 
-                    move |mut ctx| {
+                    move |ctx| {
                         let widget = ctx.depend_on_inherited_widget::<TestInheritedWidget>();
 
                         *inherited_data.borrow_mut() = widget.map(|widget| widget.data);

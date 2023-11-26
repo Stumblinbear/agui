@@ -16,7 +16,9 @@ mod rect;
 mod shape;
 mod size;
 mod text_direction;
+mod text_style;
 mod texture;
+mod view_config;
 
 pub use alignment::*;
 pub use axis::*;
@@ -36,4 +38,6 @@ pub use rect::*;
 pub use shape::*;
 pub use size::*;
 pub use text_direction::*;
+pub use text_style::*;
 pub use texture::*;
+pub use view_config::*;

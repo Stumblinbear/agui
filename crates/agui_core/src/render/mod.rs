@@ -1,3 +1,4 @@
+pub mod binding;
 pub mod canvas;
 mod object;
 mod paint;

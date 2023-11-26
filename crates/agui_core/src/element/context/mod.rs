@@ -1,17 +1,22 @@
 use crate::{
     element::{Element, ElementId},
+    render::{RenderObject, RenderObjectId},
     util::tree::Tree,
 };
 
 mod build;
+mod build_render_object;
 mod callback;
 mod mount;
 mod unmount;
+mod update_render_object;
 
 pub use build::*;
+pub use build_render_object::*;
 pub use callback::*;
 pub use mount::*;
 pub use unmount::*;
+pub use update_render_object::*;
 
 pub trait ContextElements {
     fn elements(&self) -> &Tree<ElementId, Element>;
@@ -21,8 +26,22 @@ pub trait ContextElement {
     fn element_id(&self) -> ElementId;
 }
 
-pub trait ContextMarkDirty {
-    fn mark_dirty(&mut self, element_id: ElementId);
+pub trait ContextRenderObjects {
+    fn render_objects(&self) -> &Tree<RenderObjectId, RenderObject>;
+}
+
+pub trait ContextRenderObject {
+    fn render_object_id(&self) -> RenderObjectId;
+}
+
+pub trait ContextDirtyElement {
+    fn mark_needs_build(&mut self);
+}
+
+pub trait ContextDirtyRenderObject {
+    fn mark_needs_layout(&mut self);
+
+    fn mark_needs_paint(&mut self);
 }
 
 pub struct ElementContext<'ctx> {

@@ -1,17 +1,19 @@
 use std::{marker::PhantomData, ops::Deref, sync::Arc};
 
 use agui_core::{
-    element::ContextElement,
+    element::{ContextDirtyRenderObject, ContextElement},
     listenable::EventEmitterHandle,
+    render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     unit::{Constraints, IntrinsicDimension, Size},
+    util::ptr_eq::PtrEqual,
     widget::{IntoWidget, Widget},
 };
 use agui_elements::{
-    layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout},
+    render::{RenderObjectBuildContext, RenderObjectUpdateContext, RenderObjectWidget},
     stateful::{ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState},
 };
 use agui_inheritance::ContextInheritedMut;
-use agui_macros::{build, LayoutWidget, StatefulWidget, WidgetProps};
+use agui_macros::{build, RenderObjectWidget, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
 use agui_renderer::{CurrentRenderView, DefaultRenderer, RenderView, RenderViewId, Renderer};
 use winit::{
@@ -32,7 +34,6 @@ where
     #[prop(default)]
     pub renderer: Option<Arc<dyn Renderer<Target = winit::window::Window>>>,
 
-    #[prop(into)]
     pub child: Widget,
 }
 
@@ -84,6 +85,8 @@ where
 
             window: None,
             event_listener: None,
+
+            window_size: None,
         }
     }
 }
@@ -113,6 +116,8 @@ struct WinitWindowState<WindowFn> {
 
     window: Option<WinitWindowHandle>,
     event_listener: Option<EventEmitterHandle<WinitWindowEvent>>,
+
+    window_size: Option<Size>,
 }
 
 impl<WindowFn> WidgetState for WinitWindowState<WindowFn>
@@ -163,7 +168,7 @@ where
                     .depend_on_inherited_widget::<DefaultRenderer<winit::window::Window>>()
                     .map(|default_renderer| Arc::clone(&default_renderer.renderer));
 
-                if !self.is_renderer_eq(current_renderer, default_renderer.as_ref()) {
+                if !current_renderer.is_exact_ptr(&default_renderer) {
                     if let Some(default_renderer) = default_renderer {
                         self.renderer = Some(WindowRenderer::Default(default_renderer));
 
@@ -176,25 +181,13 @@ where
                 self.bind_renderer(ctx);
             }
 
-            let resize_notifier = ctx.callback(|_, _: ()| {});
-
-            let current_size = current_window.inner_size();
-
             build! {
                 <CurrentWindow> {
                     handle: current_window.clone(),
 
                     child: <WinitWindowLayout> {
-                        handle: current_window.clone(),
+                        size: self.window_size.expect("window_size must be set when current_window is set"),
                         child: ctx.widget.child.clone(),
-
-                        listener: current_window.events().add_listener(move |WinitWindowEvent(ref event)| {
-                            if let WindowEvent::Resized(size) = event {
-                                if current_size != *size {
-                                    resize_notifier.call(());
-                                }
-                            }
-                        }),
                     }
                 }
             }
@@ -224,8 +217,19 @@ where
             },
         );
 
+        let resize_event_cb = ctx.callback(|ctx, new_size: Size| {
+            if ctx.state.window_size == Some(new_size) {
+                return;
+            }
+
+            ctx.set_state(move |state| {
+                state.window_size.replace(new_size);
+            });
+        });
+
         let on_window_created = ctx.callback(move |ctx, window: WinitWindowHandle| {
             let mouse_input_event_cb = mouse_input_event_cb.clone();
+            let resize_event_cb = resize_event_cb.clone();
 
             ctx.set_state(|state| {
                 state.event_listener = Some(window.events().add_listener(
@@ -238,11 +242,19 @@ where
                         } = event
                         {
                             mouse_input_event_cb.call((*device_id, *state, *button));
+                        } else if let WindowEvent::Resized(size) = event {
+                            resize_event_cb.call(Size::new(size.width as f32, size.height as f32));
                         }
                     },
                 ));
 
+                let size = window.inner_size();
+
                 state.window.replace(window);
+
+                state
+                    .window_size
+                    .replace(Size::new(size.width as f32, size.height as f32));
             });
         });
 
@@ -254,22 +266,6 @@ where
             winit_plugin.create_window(ctx.element_id(), (ctx.widget.window)(), on_window_created)
         {
             tracing::error!("failed to create window: {:?}", err);
-        }
-    }
-
-    fn is_renderer_eq(
-        &self,
-        renderer: Option<&Arc<dyn Renderer<Target = winit::window::Window>>>,
-        other_renderer: Option<&Arc<dyn Renderer<Target = winit::window::Window>>>,
-    ) -> bool {
-        match (renderer, other_renderer) {
-            // war crimes
-            (Some(a), Some(b)) => std::ptr::eq(
-                Arc::as_ptr(a) as *const _ as *const (),
-                Arc::as_ptr(b) as *const _ as *const (),
-            ),
-            (None, None) => true,
-            _ => false,
         }
     }
 
@@ -313,22 +309,51 @@ where
     }
 }
 
-#[derive(LayoutWidget)]
+#[derive(RenderObjectWidget)]
 struct WinitWindowLayout {
-    handle: WinitWindowHandle,
-    child: Widget,
+    size: Size,
 
-    listener: EventEmitterHandle<WinitWindowEvent>,
+    child: Widget,
 }
 
-impl WidgetLayout for WinitWindowLayout {
+impl RenderObjectWidget for WinitWindowLayout {
+    type RenderObject = RenderWinitWindow;
+
     fn children(&self) -> Vec<Widget> {
         vec![self.child.clone()]
     }
 
+    fn create_render_object(&self, ctx: &mut RenderObjectBuildContext) -> Self::RenderObject {
+        RenderWinitWindow { size: self.size }
+    }
+
+    fn update_render_object(
+        &self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut Self::RenderObject,
+    ) {
+        render_object.update_size(ctx, self.size);
+    }
+}
+
+struct RenderWinitWindow {
+    size: Size,
+}
+impl RenderWinitWindow {
+    fn update_size(&mut self, ctx: &mut RenderObjectUpdateContext, size: Size) {
+        if self.size == size {
+            return;
+        }
+
+        self.size = size;
+        ctx.mark_needs_layout();
+    }
+}
+
+impl RenderObjectImpl for RenderWinitWindow {
     fn intrinsic_size(
         &self,
-        ctx: &mut IntrinsicSizeContext,
+        ctx: &mut RenderObjectIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -337,16 +362,13 @@ impl WidgetLayout for WinitWindowLayout {
         })
     }
 
-    fn layout(&self, ctx: &mut LayoutContext, _: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, _: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
-        let size = self.handle.inner_size();
-        let size = Size::new(size.width as f32, size.height as f32);
-
         while let Some(mut child) = children.next() {
-            child.compute_layout(Constraints::from(size));
+            child.layout(Constraints::from(self.size));
         }
 
-        size
+        self.size
     }
 }

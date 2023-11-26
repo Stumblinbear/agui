@@ -1,11 +1,13 @@
 use agui_core::{
+    element::{ContextDirtyRenderObject, RenderObjectBuildContext, RenderObjectUpdateContext},
+    render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     unit::{Axis, Constraints, IntrinsicDimension, Offset, Size},
     widget::Widget,
 };
-use agui_elements::layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout};
-use agui_macros::LayoutWidget;
+use agui_elements::render::RenderObjectWidget;
+use agui_macros::RenderObjectWidget;
 
-#[derive(LayoutWidget, Debug)]
+#[derive(RenderObjectWidget, Debug)]
 #[props(default)]
 pub struct SizedBox {
     pub width: Option<f32>,
@@ -78,14 +80,59 @@ impl SizedBox {
     }
 }
 
-impl WidgetLayout for SizedBox {
+impl RenderObjectWidget for SizedBox {
+    type RenderObject = RenderSizedBox;
+
     fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 
+    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+        RenderSizedBox {
+            width: self.width,
+            height: self.height,
+        }
+    }
+
+    fn update_render_object(
+        &self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut Self::RenderObject,
+    ) {
+        render_object.update_width(ctx, self.width);
+        render_object.update_height(ctx, self.height);
+    }
+}
+
+pub struct RenderSizedBox {
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+}
+
+impl RenderSizedBox {
+    pub fn update_width(&mut self, ctx: &mut RenderObjectUpdateContext, width: Option<f32>) {
+        if self.width == width {
+            return;
+        }
+
+        self.width = width;
+        ctx.mark_needs_layout();
+    }
+
+    pub fn update_height(&mut self, ctx: &mut RenderObjectUpdateContext, height: Option<f32>) {
+        if self.height == height {
+            return;
+        }
+
+        self.height = height;
+        ctx.mark_needs_layout();
+    }
+}
+
+impl RenderObjectImpl for RenderSizedBox {
     fn intrinsic_size(
         &self,
-        ctx: &mut IntrinsicSizeContext,
+        ctx: &mut RenderObjectIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
@@ -101,7 +148,7 @@ impl WidgetLayout for SizedBox {
         }
     }
 
-    fn layout(&self, ctx: &mut LayoutContext, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let size = constraints.constrain(Size {
             width: self.width.unwrap_or(f32::INFINITY),
             height: self.height.unwrap_or(f32::INFINITY),
@@ -110,7 +157,7 @@ impl WidgetLayout for SizedBox {
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {
-            child.compute_layout(size);
+            child.layout(Constraints::tight(size));
             child.set_offset(Offset::ZERO)
         }
 

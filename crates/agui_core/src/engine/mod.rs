@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callback::{CallbackInvoke, CallbackQueue},
@@ -13,15 +13,15 @@ use crate::{
     plugin::{
         context::{
             ContextPlugins, PluginAfterUpdateContext, PluginBeforeUpdateContext,
-            PluginElementBuildContext, PluginElementMountContext, PluginElementUnmountContext,
-            PluginInitContext,
+            PluginCreateRenderObjectContext, PluginElementBuildContext, PluginElementMountContext,
+            PluginElementUnmountContext, PluginInitContext, UpdatePluginRenderObjectContext,
         },
         Plugins,
     },
     query::WidgetQuery,
     render::{RenderObject, RenderObjectContextMut, RenderObjectId},
     unit::{Constraints, Key},
-    util::{map::ElementSet, tree::Tree},
+    util::tree::Tree,
     widget::Widget,
 };
 
@@ -31,7 +31,7 @@ pub mod builder;
 mod dirty;
 pub mod event;
 
-pub use dirty::DirtyElements;
+pub use dirty::Dirty;
 
 pub struct Engine {
     plugins: Plugins,
@@ -41,15 +41,17 @@ pub struct Engine {
     element_tree: Tree<ElementId, Element>,
     render_object_tree: Tree<RenderObjectId, RenderObject>,
 
-    dirty: DirtyElements,
+    needs_build: Dirty<ElementId>,
     callback_queue: CallbackQueue,
+    needs_layout: Dirty<RenderObjectId>,
+    needs_paint: Dirty<RenderObjectId>,
 
     rebuild_queue: VecDeque<ElementId>,
-    removal_queue: ElementSet,
+    removal_queue: FxHashSet<ElementId>,
 
-    sync_render_object_children: ElementSet,
+    sync_render_object_children: FxHashSet<ElementId>,
     create_render_object: VecDeque<ElementId>,
-    update_render_object: ElementSet,
+    update_render_object: FxHashSet<ElementId>,
 }
 
 impl ContextPlugins<'_> for Engine {
@@ -100,12 +102,14 @@ impl Engine {
     }
 
     pub fn has_changes(&self) -> bool {
-        !self.rebuild_queue.is_empty() || !self.dirty.is_empty() || !self.callback_queue.is_empty()
+        !self.rebuild_queue.is_empty()
+            || !self.needs_build.is_empty()
+            || !self.callback_queue.is_empty()
     }
 
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
-    pub fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
+    pub fn mark_needs_build(&mut self, element_id: ElementId) {
+        self.needs_build.insert(element_id);
     }
 
     /// Initializes plugins and sets the initial root widget, but does not build it or spawn
@@ -139,17 +143,15 @@ impl Engine {
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
-        'layout: loop {
-            'changes: loop {
+        while self.has_changes() {
+            // We want to resolve all changes before we do any layout to reduce the overall amount of
+            // work we have to do.
+            while self.has_changes() {
                 self.flush_rebuilds();
 
                 self.flush_dirty();
 
                 self.flush_callbacks();
-
-                if !self.has_changes() {
-                    break 'changes;
-                }
             }
 
             // We sync render after the rebuild loop to prevent unnecessary work keeping the render
@@ -160,14 +162,11 @@ impl Engine {
             self.flush_removals();
 
             self.flush_layout();
-
-            if !self.has_changes() {
-                break 'layout;
-            }
         }
 
         self.plugins.on_after_update(&mut PluginAfterUpdateContext {
             element_tree: &self.element_tree,
+            render_object_tree: &self.render_object_tree,
         });
     }
 
@@ -181,7 +180,7 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_dirty(&mut self) {
-        for element_id in self.dirty.drain() {
+        for element_id in self.needs_build.drain() {
             tracing::trace!(
                 ?element_id,
                 widget = self.element_tree.get(element_id).unwrap().widget_name(),
@@ -203,14 +202,17 @@ impl Engine {
         {
             let element_id = callback_id.element_id();
 
-            self.element_tree
+            let existed = self
+                .element_tree
                 .with(element_id, |element_tree, element| {
                     let changed = element.call(
-                        ElementCallbackContext {
+                        &mut ElementCallbackContext {
                             plugins: &mut self.plugins,
 
                             element_tree,
-                            dirty: &mut self.dirty,
+                            needs_build: &mut self.needs_build,
+                            needs_layout: &mut self.needs_layout,
+                            needs_paint: &mut self.needs_paint,
 
                             element_id: &element_id,
                         },
@@ -228,32 +230,66 @@ impl Engine {
                         self.rebuild_queue.push_back(element_id);
                     }
                 })
-                .expect("cannot call a callback on a widget that does not exist");
+                .is_some();
+
+            if !existed {
+                tracing::warn!(
+                    ?element_id,
+                    "callback invoked on a widget that does not exist"
+                );
+            }
         }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_layout(&mut self) {
-        let Some(root_id) = self.render_object_tree.root() else {
-            return;
-        };
+        let root_render_object_id = self
+            .render_object_tree
+            .root()
+            .expect("root render object missing during layout");
 
-        // TODO: Layout using a loop rather than deeply recursively
-        self.render_object_tree
-            .with(root_id, |render_object_tree, render_object| {
-                render_object.layout(
-                    RenderObjectContextMut {
-                        plugins: &mut self.plugins,
+        let mut relayout_queue = self
+            .needs_layout
+            .drain()
+            .filter(|render_object_id| self.render_object_tree.contains(*render_object_id))
+            .collect::<Vec<_>>();
 
-                        render_object_tree,
+        relayout_queue.sort_by_cached_key(|render_object_id| {
+            self.render_object_tree
+                .get_depth(*render_object_id)
+                .unwrap()
+        });
 
-                        render_object_id: &root_id,
-                    },
-                    // The root element is always unbounded
-                    Constraints::expand(),
+        for render_object_id in self.needs_layout.drain() {
+            let existed = self
+                .render_object_tree
+                .with(render_object_id, |render_object_tree, render_object| {
+                    if render_object_id == root_render_object_id {
+                        render_object.set_constraints(Constraints::expand());
+                    }
+
+                    render_object.layout(
+                        RenderObjectContextMut {
+                            plugins: &mut self.plugins,
+
+                            render_object_tree,
+
+                            render_object_id: &render_object_id,
+                        },
+                        render_object
+                            .constraints()
+                            .expect("constraints missing for render object during layout"),
+                    );
+                })
+                .is_some();
+
+            if !existed {
+                tracing::warn!(
+                    ?render_object_id,
+                    "layout called for a render object that doesn't exist"
                 );
-            })
-            .expect("cannot layout a widget that doesn't exist");
+            }
+        }
     }
 
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
@@ -265,25 +301,27 @@ impl Engine {
         let element_id = self.element_tree.add(parent_id, element);
 
         self.element_tree.with(element_id, |element_tree, element| {
+            element.mount(&mut ElementMountContext {
+                plugins: &mut self.plugins,
+
+                element_tree,
+
+                parent_element_id: parent_id.as_ref(),
+                element_id: &element_id,
+            });
+
             self.plugins
                 .on_element_mount(&mut PluginElementMountContext {
                     element_tree,
-                    dirty: &mut self.dirty,
+
+                    needs_build: &mut self.needs_build,
+                    needs_layout: &mut self.needs_layout,
+                    needs_paint: &mut self.needs_paint,
 
                     parent_element_id: parent_id.as_ref(),
                     element_id: &element_id,
                     element,
                 });
-
-            element.mount(ElementMountContext {
-                plugins: &mut self.plugins,
-
-                element_tree,
-                dirty: &mut self.dirty,
-
-                parent_element_id: parent_id.as_ref(),
-                element_id: &element_id,
-            });
         });
 
         self.create_render_object.push_back(element_id);
@@ -306,25 +344,33 @@ impl Engine {
             let new_widgets = self
                 .element_tree
                 .with(element_id, |element_tree, element| {
+                    let children = element.build(&mut ElementBuildContext {
+                        plugins: &mut self.plugins,
+
+                        element_tree,
+                        callback_queue: &self.callback_queue,
+
+                        needs_build: &mut self.needs_build,
+                        needs_layout: &mut self.needs_layout,
+                        needs_paint: &mut self.needs_paint,
+
+                        element_id: &element_id,
+                    });
+
                     self.plugins
                         .on_element_build(&mut PluginElementBuildContext {
                             element_tree,
-                            dirty: &mut self.dirty,
                             callback_queue: &self.callback_queue,
+
+                            needs_build: &mut self.needs_build,
+                            needs_layout: &mut self.needs_layout,
+                            needs_paint: &mut self.needs_paint,
 
                             element_id: &element_id,
                             element,
                         });
 
-                    element.build(ElementBuildContext {
-                        plugins: &mut self.plugins,
-
-                        element_tree,
-                        dirty: &mut self.dirty,
-                        callback_queue: &self.callback_queue,
-
-                        element_id: &element_id,
-                    })
+                    children
                 })
                 .expect("cannot build a widget that doesn't exist");
 
@@ -383,7 +429,11 @@ impl Engine {
                             );
 
                             self.rebuild_queue.push_back(old_child_id);
-                            self.update_render_object.insert(old_child_id);
+
+                            // If the child has a render object, we need to update it.
+                            if old_child.render_object_id().is_some() {
+                                self.update_render_object.insert(old_child_id);
+                            }
                         }
 
                         ElementUpdate::Invalid => break,
@@ -616,23 +666,25 @@ impl Engine {
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
+                    element.unmount(&mut ElementUnmountContext {
+                        plugins: &mut self.plugins,
+
+                        element_tree,
+
+                        element_id: &element_id,
+                    });
+
                     self.plugins
                         .on_element_unmount(&mut PluginElementUnmountContext {
                             element_tree,
-                            dirty: &mut self.dirty,
+
+                            needs_build: &mut self.needs_build,
+                            needs_layout: &mut self.needs_layout,
+                            needs_paint: &mut self.needs_paint,
 
                             element_id: &element_id,
                             element,
                         });
-
-                    element.unmount(ElementUnmountContext {
-                        plugins: &mut self.plugins,
-
-                        element_tree,
-                        dirty: &mut self.dirty,
-
-                        element_id: &element_id,
-                    });
                 })
                 .expect("cannot destroy an element that doesn't exist");
 
@@ -664,23 +716,50 @@ impl Engine {
                         .expect("parent element has no render object")
                 });
 
-        let element = self
-            .element_tree
-            .get_mut(element_id)
-            .expect("element missing while creating render objects");
+        self.element_tree
+            .with(element_id, |element_tree, element| {
+                if let Some(render_object_id) = element.render_object_id() {
+                    panic!(
+                        "element already has a render object: {:?}",
+                        render_object_id
+                    );
+                }
 
-        // If we've already created a render object for this element, skip it.
-        if let Some(render_object_id) = element.render_object_id() {
-            return Some(render_object_id);
-        }
+                let render_object_id = self.render_object_tree.add(
+                    parent_render_object_id,
+                    element.create_render_object(&mut ElementBuildContext {
+                        plugins: &mut self.plugins,
 
-        let render_object_id = self
-            .render_object_tree
-            .add(parent_render_object_id, element.create_render_object());
+                        element_tree,
+                        callback_queue: &self.callback_queue,
 
-        element.set_render_object_id(render_object_id);
+                        needs_build: &mut self.needs_build,
+                        needs_layout: &mut self.needs_layout,
+                        needs_paint: &mut self.needs_paint,
 
-        Some(render_object_id)
+                        element_id: &element_id,
+                    }),
+                );
+
+                element.set_render_object_id(render_object_id);
+
+                self.plugins
+                    .on_create_render_object(&mut PluginCreateRenderObjectContext {
+                        element_tree,
+                        callback_queue: &self.callback_queue,
+
+                        needs_build: &mut self.needs_build,
+                        needs_layout: &mut self.needs_layout,
+                        needs_paint: &mut self.needs_paint,
+
+                        element_id: &element_id,
+                        element,
+
+                        render_object_id: &render_object_id,
+                    });
+                Some(render_object_id)
+            })
+            .expect("element missing while creating render objects")
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -756,6 +835,9 @@ impl Engine {
 
         while let Some(element_id) = self.create_render_object.pop_front() {
             self.create_render_object(element_id);
+
+            // We just created it, so make sure we aren't about to update it.
+            self.update_render_object.remove(&element_id);
         }
 
         // Remove any render objects owned by elements that are being removed.
@@ -785,7 +867,39 @@ impl Engine {
                 .get_mut(render_object_id)
                 .expect("render object missing while updating");
 
-            element.update_render_object(render_object);
+            self.element_tree
+                .with(element_id, |element_tree, element| {
+                    element.update_render_object(
+                        &mut ElementBuildContext {
+                            plugins: &mut self.plugins,
+
+                            element_tree,
+                            callback_queue: &self.callback_queue,
+
+                            needs_build: &mut self.needs_build,
+                            needs_layout: &mut self.needs_layout,
+                            needs_paint: &mut self.needs_paint,
+
+                            element_id: &element_id,
+                        },
+                        render_object,
+                    );
+
+                    self.plugins
+                        .on_update_render_object(&mut UpdatePluginRenderObjectContext {
+                            element_tree,
+                            callback_queue: &self.callback_queue,
+
+                            needs_build: &mut self.needs_build,
+                            needs_layout: &mut self.needs_layout,
+                            needs_paint: &mut self.needs_paint,
+
+                            element_id: &element_id,
+
+                            render_object_id: &render_object_id,
+                        });
+                })
+                .expect("element missing while creating render objects");
         }
     }
 }
@@ -871,7 +985,7 @@ mod tests {
             }
         });
 
-        engine.mark_dirty(root_id);
+        engine.mark_needs_build(root_id);
 
         engine.update();
 
@@ -880,7 +994,7 @@ mod tests {
 
     #[test]
     pub fn spawns_children() {
-        let root_widget = MockRenderWidget::new("RootWidget");
+        let root_widget = MockRenderWidget::default();
         {
             root_widget
                 .mock
@@ -892,7 +1006,7 @@ mod tests {
                 .mock
                 .borrow_mut()
                 .expect_create_render_object()
-                .returning(|| DummyRenderObject.into());
+                .returning(|_| DummyRenderObject.into());
         }
 
         let mut engine = Engine::builder().with_root(root_widget).build();
@@ -953,7 +1067,7 @@ mod tests {
             children
         }));
 
-        let root_widget = MockRenderWidget::new("RootWidget");
+        let root_widget = MockRenderWidget::default();
         {
             root_widget
                 .mock
@@ -969,7 +1083,7 @@ mod tests {
                 .mock
                 .borrow_mut()
                 .expect_create_render_object()
-                .returning(|| DummyRenderObject.into());
+                .returning(|_| DummyRenderObject.into());
         }
 
         let mut engine = Engine::builder().with_root(root_widget).build();
@@ -1002,7 +1116,7 @@ mod tests {
             }
         });
 
-        engine.mark_dirty(root_id);
+        engine.mark_needs_build(root_id);
 
         engine.update();
 
@@ -1029,7 +1143,7 @@ mod tests {
     pub fn rebuilds_children() {
         let child = Rc::new(RefCell::new(DummyWidget.into_widget()));
 
-        let root_widget = MockRenderWidget::new("RootWidget");
+        let root_widget = MockRenderWidget::default();
         {
             root_widget
                 .mock
@@ -1045,7 +1159,7 @@ mod tests {
                 .mock
                 .borrow_mut()
                 .expect_create_render_object()
-                .returning(|| DummyRenderObject.into());
+                .returning(|_| DummyRenderObject.into());
         }
 
         let mut engine = Engine::builder().with_root(root_widget).build();
@@ -1064,7 +1178,7 @@ mod tests {
             }
         });
 
-        engine.mark_dirty(root_id);
+        engine.mark_needs_build(root_id);
 
         *child.borrow_mut() = DummyWidget.into_widget();
 
@@ -1084,7 +1198,7 @@ mod tests {
 
     #[test]
     pub fn reuses_unchanged_widgets() {
-        let root_widget = MockRenderWidget::new("RootWidget");
+        let root_widget = MockRenderWidget::default();
         {
             root_widget
                 .mock
@@ -1096,7 +1210,7 @@ mod tests {
                 .mock
                 .borrow_mut()
                 .expect_create_render_object()
-                .returning(|| DummyRenderObject.into());
+                .returning(|_| DummyRenderObject.into());
         }
 
         let mut engine = Engine::builder().with_root(root_widget).build();
@@ -1110,7 +1224,7 @@ mod tests {
             .cloned()
             .expect("no children");
 
-        engine.mark_dirty(engine.root());
+        engine.mark_needs_build(engine.root());
 
         engine.update();
 

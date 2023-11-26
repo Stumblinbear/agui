@@ -1,22 +1,26 @@
 use crate::{
     callback::{CallbackQueue, ContextCallbackQueue},
     element::{Element, ElementId},
-    engine::DirtyElements,
+    engine::Dirty,
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
+    render::RenderObjectId,
     util::tree::Tree,
 };
 
-use super::{ContextElement, ContextElements, ContextMarkDirty};
+use super::{ContextElement, ContextElements};
 
 pub struct ElementBuildContext<'ctx> {
     pub plugins: &'ctx mut Plugins,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
-    pub dirty: &'ctx mut DirtyElements,
     pub callback_queue: &'ctx CallbackQueue,
+
+    pub needs_build: &'ctx mut Dirty<ElementId>,
+    pub needs_layout: &'ctx mut Dirty<RenderObjectId>,
+    pub needs_paint: &'ctx mut Dirty<RenderObjectId>,
 
     pub element_id: &'ctx ElementId,
 }
@@ -42,12 +46,6 @@ impl ContextElements for ElementBuildContext<'_> {
 impl ContextElement for ElementBuildContext<'_> {
     fn element_id(&self) -> ElementId {
         *self.element_id
-    }
-}
-
-impl ContextMarkDirty for ElementBuildContext<'_> {
-    fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
     }
 }
 

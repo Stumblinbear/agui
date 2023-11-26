@@ -4,17 +4,15 @@ use proc_macro::TokenStream;
 
 mod builder;
 mod inherited_widget;
-mod layout_widget;
-mod paint_widget;
 mod props;
+mod render_object_widget;
 mod stateful_widget;
 mod stateless_widget;
 mod utils;
 
 use inherited_widget::impl_inherited_widget;
-use layout_widget::impl_layout_widget;
-use paint_widget::impl_paint_widget;
 use props::impl_widget_props;
+use render_object_widget::impl_render_object_widget;
 use stateful_widget::impl_stateful_widget;
 use stateless_widget::impl_stateless_widget;
 
@@ -33,14 +31,9 @@ pub fn stateful_widget(input: TokenStream) -> TokenStream {
     impl_stateful_widget(input.into()).into()
 }
 
-#[proc_macro_derive(LayoutWidget, attributes(props, prop))]
-pub fn layout_widget(input: TokenStream) -> TokenStream {
-    impl_layout_widget(input.into()).into()
-}
-
-#[proc_macro_derive(PaintWidget, attributes(props, prop))]
-pub fn paint_widget(input: TokenStream) -> TokenStream {
-    impl_paint_widget(input.into()).into()
+#[proc_macro_derive(RenderObjectWidget, attributes(props, prop))]
+pub fn render_object_widget(input: TokenStream) -> TokenStream {
+    impl_render_object_widget(input.into()).into()
 }
 
 #[proc_macro_derive(InheritedWidget, attributes(props, prop))]

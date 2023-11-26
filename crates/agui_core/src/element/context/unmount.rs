@@ -1,6 +1,5 @@
 use crate::{
-    element::{ContextElement, ContextMarkDirty, Element, ElementId},
-    engine::DirtyElements,
+    element::{ContextElement, Element, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -14,7 +13,6 @@ pub struct ElementUnmountContext<'ctx> {
     pub plugins: &'ctx mut Plugins,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
-    pub dirty: &'ctx mut DirtyElements,
 
     pub element_id: &'ctx ElementId,
 }
@@ -40,11 +38,5 @@ impl ContextElements for ElementUnmountContext<'_> {
 impl ContextElement for ElementUnmountContext<'_> {
     fn element_id(&self) -> ElementId {
         *self.element_id
-    }
-}
-
-impl ContextMarkDirty for ElementUnmountContext<'_> {
-    fn mark_dirty(&mut self, element_id: ElementId) {
-        self.dirty.insert(element_id);
     }
 }

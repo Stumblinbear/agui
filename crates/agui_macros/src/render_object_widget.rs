@@ -3,7 +3,7 @@ use syn::{parse2, parse_quote, ItemStruct};
 
 use crate::{props::impl_props_derive, utils::resolve_package_path};
 
-pub fn impl_layout_widget(input: TokenStream2) -> TokenStream2 {
+pub fn impl_render_object_widget(input: TokenStream2) -> TokenStream2 {
     let agui_core = resolve_package_path("agui_core");
     let agui_elements = resolve_package_path("agui_elements");
 
@@ -31,7 +31,7 @@ pub fn impl_layout_widget(input: TokenStream2) -> TokenStream2 {
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::Render(Box::new(#agui_elements::layout::LayoutElement::new(self)))
+                #agui_core::element::ElementType::Render(Box::new(#agui_elements::render::RenderObjectElement::new(self)))
             }
         }
     }

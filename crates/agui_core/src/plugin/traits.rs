@@ -1,9 +1,9 @@
 use std::any::TypeId;
 
 use super::context::{
-    PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
-    PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
-    PluginInitContext,
+    PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginCreateRenderObjectContext,
+    PluginElementBuildContext, PluginElementMountContext, PluginElementRemountContext,
+    PluginElementUnmountContext, PluginInitContext, UpdatePluginRenderObjectContext,
 };
 use crate::unit::AsAny;
 
@@ -11,9 +11,6 @@ macros::impl_trait! {
     pub trait Plugin: AsAny {
         /// Called when the engine is initialized.
         fn on_init(&mut self, ctx: &mut PluginInitContext);
-
-        /// Called before each engine update, before any changes have been processed.
-        fn on_before_update(&mut self, ctx: &mut PluginBeforeUpdateContext);
 
         /// Called after each engine update, after all changes have been processed and the tree
         /// has settled.
@@ -26,6 +23,13 @@ macros::impl_trait! {
         fn on_element_unmount(&mut self, ctx: &mut PluginElementUnmountContext);
 
         fn on_element_build(&mut self, ctx: &mut PluginElementBuildContext);
+
+        fn on_create_render_object(&mut self, ctx: &mut PluginCreateRenderObjectContext);
+
+        fn on_update_render_object(&mut self, ctx: &mut UpdatePluginRenderObjectContext);
+
+        /// Called before each engine update, before any changes have been processed.
+        fn on_before_update(&mut self, ctx: &mut PluginBeforeUpdateContext);
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::{
+    element::{ContextRenderObject, ContextRenderObjects},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -18,14 +19,6 @@ pub use intrinsic_size::*;
 pub use layout::*;
 pub use mount::*;
 pub use unmount::*;
-
-pub trait ContextRenderObjects {
-    fn render_objects(&self) -> &Tree<RenderObjectId, RenderObject>;
-}
-
-pub trait ContextRenderObject {
-    fn render_object_id(&self) -> RenderObjectId;
-}
 
 pub struct RenderObjectContext<'ctx> {
     pub plugins: &'ctx Plugins,

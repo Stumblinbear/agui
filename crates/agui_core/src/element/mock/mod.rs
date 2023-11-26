@@ -24,7 +24,7 @@ impl IntoWidget for DummyWidget {
 
 impl ElementBuilder for DummyWidget {
     fn create_element(self: Rc<Self>) -> ElementType {
-        let widget = MockRenderWidget::new("DummyWidget");
+        let widget = MockRenderWidget::default();
         {
             let mut widget_mock = widget.mock.borrow_mut();
 
@@ -40,9 +40,11 @@ impl ElementBuilder for DummyWidget {
 
             widget_mock
                 .expect_create_render_object()
-                .returning(|| DummyRenderObject.into());
+                .returning(|_| DummyRenderObject.into());
 
-            widget_mock.expect_update_render_object().returning(|_| {});
+            widget_mock
+                .expect_update_render_object()
+                .returning(|_, _| {});
         }
 
         Rc::new(widget).create_element()
@@ -58,10 +60,6 @@ impl From<DummyRenderObject> for RenderObject {
             let mut render_object_mock = render_object.mock.lock();
 
             render_object_mock
-                .expect_render_object_name()
-                .returning(|| "DummyRenderObject");
-
-            render_object_mock
                 .expect_intrinsic_size()
                 .returning(|_, _, _| 0.0);
 
@@ -73,7 +71,7 @@ impl From<DummyRenderObject> for RenderObject {
                 .expect_hit_test()
                 .returning(|_, _| HitTest::Pass);
 
-            render_object_mock.expect_paint().returning(|_| None);
+            render_object_mock.expect_paint().returning(|_| {});
         }
         render_object.into()
     }

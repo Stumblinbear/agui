@@ -40,6 +40,7 @@ slotmap = "1.0"
 parking_lot = "0.12"
 im-rc = "15.1"
 bitflags = "2.4"
+url = "2.4"
 
 mockall = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }

@@ -39,13 +39,11 @@ impl<I> ElementWidget for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    fn widget_name(&self) -> &'static str {
-        self.widget.widget_name()
-    }
-
-    fn mount(&mut self, ctx: ElementMountContext) {
+    fn mount(&mut self, ctx: &mut ElementMountContext) {
         if let Some(inheritance_plugin) = ctx.plugins.get_mut::<InheritancePlugin>() {
             inheritance_plugin.create_scope::<I>(ctx.parent_element_id.copied(), *ctx.element_id);
+        } else {
+            tracing::warn!("inheritance plugin not found in the context");
         }
     }
 
@@ -68,7 +66,7 @@ impl<I> ElementBuild for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    fn build(&mut self, ctx: ElementBuildContext) -> Widget {
+    fn build(&mut self, ctx: &mut ElementBuildContext) -> Widget {
         if self.needs_notify {
             self.needs_notify = false;
 
@@ -79,7 +77,7 @@ where
                     .iter_listeners(element_id)
                     .expect("failed to get the inherited element's scope during build")
                 {
-                    ctx.dirty.insert(element_id);
+                    ctx.needs_build.insert(element_id);
                 }
             }
         }
@@ -89,7 +87,7 @@ where
 
     fn call(
         &mut self,
-        _: ElementCallbackContext,
+        _: &mut ElementCallbackContext,
         _: CallbackId,
         _: Box<dyn std::any::Any>,
     ) -> bool {

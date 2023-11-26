@@ -40,10 +40,6 @@ impl<W> ElementWidget for StatelessElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
-    fn widget_name(&self) -> &'static str {
-        self.widget.widget_name()
-    }
-
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;
@@ -59,7 +55,7 @@ impl<W> ElementBuild for StatelessElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
-    fn build(&mut self, ctx: ElementBuildContext) -> Widget {
+    fn build(&mut self, ctx: &mut ElementBuildContext) -> Widget {
         self.callbacks.clear();
 
         let mut ctx = StatelessBuildContext {
@@ -73,7 +69,7 @@ where
 
     fn call(
         &mut self,
-        ctx: ElementCallbackContext,
+        ctx: &mut ElementCallbackContext,
         callback_id: CallbackId,
         arg: Box<dyn Any>,
     ) -> bool {

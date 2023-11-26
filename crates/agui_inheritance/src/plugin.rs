@@ -10,7 +10,7 @@ use agui_core::{
     },
 };
 
-use crate::{element::InheritedWidget, manager::InheritanceManager};
+use crate::{manager::InheritanceManager, InheritedWidget};
 
 #[derive(Default)]
 pub struct InheritancePlugin {

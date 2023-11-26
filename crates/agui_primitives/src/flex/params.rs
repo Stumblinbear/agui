@@ -1,4 +1,8 @@
+use agui_core::widget::Widget;
+
 use crate::text::TextBaseline;
+
+use super::Flexible;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum MainAxisSize {
@@ -63,4 +67,26 @@ pub enum FlexFit {
 
     /// The child can be at most as large as the available space (but is allowed to be smaller).
     Loose,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FlexChildParams {
+    pub flex: f32,
+    pub fit: FlexFit,
+}
+
+impl From<&Widget> for FlexChildParams {
+    fn from(widget: &Widget) -> Self {
+        if let Some(flexible) = widget.downcast::<Flexible>() {
+            Self {
+                flex: flexible.flex.unwrap_or(0.0),
+                fit: flexible.fit.unwrap_or_default(),
+            }
+        } else {
+            Self {
+                flex: 0.0,
+                fit: FlexFit::default(),
+            }
+        }
+    }
 }

@@ -1,4 +1,3 @@
-pub mod layout;
-pub mod paint;
+pub mod render;
 pub mod stateful;
 pub mod stateless;
