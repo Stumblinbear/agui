@@ -5,9 +5,9 @@ use agui_core::{
     engine::Engine,
     plugin::{
         context::{
-            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginCreateRenderObjectContext,
-            PluginElementBuildContext, PluginElementMountContext, PluginElementRemountContext,
-            PluginElementUnmountContext, PluginInitContext, UpdatePluginRenderObjectContext,
+            PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
+            PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
+            PluginInitContext,
         },
         Plugin,
     },
@@ -146,14 +146,6 @@ impl Plugin for DummyPlugin {
     }
 
     fn on_element_build(&mut self, _: &mut PluginElementBuildContext) {
-        self.i += 1;
-    }
-
-    fn on_create_render_object(&mut self, _: &mut PluginCreateRenderObjectContext) {
-        self.i += 1;
-    }
-
-    fn on_update_render_object(&mut self, _: &mut UpdatePluginRenderObjectContext) {
         self.i += 1;
     }
 

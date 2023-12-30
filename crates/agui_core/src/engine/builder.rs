@@ -14,6 +14,8 @@ use crate::{
 use super::{Dirty, Engine};
 
 pub struct EngineBuilder<P> {
+    update_notifier_tx: Option<mpsc::Sender<()>>,
+
     root: Option<Widget>,
 
     plugins: P,
@@ -22,6 +24,8 @@ pub struct EngineBuilder<P> {
 impl EngineBuilder<()> {
     pub(super) fn new() -> Self {
         Self {
+            update_notifier_tx: None,
+
             root: None,
 
             plugins: (),
@@ -33,6 +37,11 @@ impl<P> EngineBuilder<P>
 where
     P: Plugin,
 {
+    pub fn with_notifier(mut self, update_notifier_tx: mpsc::Sender<()>) -> Self {
+        self.update_notifier_tx = Some(update_notifier_tx);
+        self
+    }
+
     pub fn with_root(mut self, root: impl IntoWidget) -> Self {
         self.root = Some(root.into_widget());
         self
@@ -43,6 +52,8 @@ where
         T: Plugin,
     {
         EngineBuilder {
+            update_notifier_tx: None,
+
             root: None,
 
             plugins: (plugin, self.plugins),
@@ -50,20 +61,18 @@ where
     }
 
     pub fn build(self) -> Engine {
-        let (update_notifier_tx, update_notifier_rx) = mpsc::channel();
-
         let mut engine = Engine {
             plugins: Plugins::new(self.plugins),
 
             bus: EventBus::default(),
 
-            update_notifier_rx,
-
             element_tree: Tree::default(),
             render_object_tree: Tree::default(),
 
             needs_build: Dirty::new(),
-            callback_queue: CallbackQueue::new(update_notifier_tx),
+            callback_queue: CallbackQueue::new(
+                self.update_notifier_tx.unwrap_or_else(|| mpsc::channel().0),
+            ),
             needs_layout: Dirty::new(),
             needs_paint: Dirty::new(),
 

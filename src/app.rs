@@ -1,5 +1,3 @@
-use std::{sync::mpsc, time::Instant};
-
 use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
@@ -7,11 +5,6 @@ use agui_macros::build;
 // use agui_vello::VelloPlugin;
 // #[cfg(feature = "winit")]
 // use agui_winit::WinitPlugin;
-use winit::window::Window;
-use winit::{
-    event::Event as WinitEvent,
-    event_loop::{ControlFlow, EventLoopBuilder},
-};
 
 #[cfg(not(all(feature = "vello", feature = "winit")))]
 compile_error!("app feature requires both winit and vello to be enabled");
@@ -41,8 +34,6 @@ pub fn run_app(widget: impl IntoWidget) -> Result<(), Box<dyn std::error::Error>
 
     println!("elements: {:?}", engine.elements());
     println!("render_objects: {:?}", engine.render_objects());
-
-    engine.launch();
 
     Ok(())
 

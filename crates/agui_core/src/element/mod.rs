@@ -58,17 +58,6 @@ impl Element {
         }
     }
 
-    pub fn element_name(&self) -> &'static str {
-        match self.inner {
-            ElementType::Proxy(ref element) => (**element).short_type_name(),
-
-            ElementType::Widget(ref element) => (**element).short_type_name(),
-
-            ElementType::View(ref element) => (**element).short_type_name(),
-            ElementType::Render(ref element) => (**element).short_type_name(),
-        }
-    }
-
     pub fn widget_name(&self) -> &str {
         self.widget.widget_name()
     }

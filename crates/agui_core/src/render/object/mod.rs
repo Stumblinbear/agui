@@ -90,20 +90,8 @@ impl RenderObject {
         self.render_view_id
     }
 
-    pub(crate) fn attach(&mut self, render_view_id: ElementId) {
-        assert!(
-            self.render_view_id.is_none(),
-            "a render object may only be attached to one view at a time"
-        );
-
+    pub(crate) fn set_render_view_id(&mut self, render_view_id: ElementId) {
         self.render_view_id = Some(render_view_id);
-    }
-
-    pub(crate) fn detatch(&mut self, render_view_id: ElementId) {
-        assert!(
-            self.render_view_id.take() == Some(render_view_id),
-            "cannot detatch a render object from a view it is not attached to"
-        );
     }
 
     pub fn relayout_boundary_id(&self) -> Option<RenderObjectId> {
@@ -270,10 +258,21 @@ impl RenderObject {
 
 impl std::fmt::Debug for RenderObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct DebugRenderObject(&'static str);
+
+        impl std::fmt::Debug for DebugRenderObject {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(self.0).finish_non_exhaustive()
+            }
+        }
+
         f.debug_struct("RenderObject")
+            .field(
+                "render_object",
+                &DebugRenderObject((*self.render_object).short_type_name()),
+            )
             .field("size", &self.size)
             .field("offset", &self.offset)
-            .field("render_object", &self.render_object)
             .finish()
     }
 }
@@ -386,11 +385,4 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
 
     #[allow(unused_variables)]
     fn paint<'a>(&self, canvas: CanvasPainter<'a, Head<()>>) {}
-}
-
-impl std::fmt::Debug for Box<dyn RenderObjectImpl> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct((**self).short_type_name())
-            .finish_non_exhaustive()
-    }
 }

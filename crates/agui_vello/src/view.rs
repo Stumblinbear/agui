@@ -5,7 +5,7 @@ use agui_core::{
         view::ElementView, widget::ElementWidget, ElementBuilder, ElementType, ElementUpdate,
     },
     render::RenderObjectId,
-    widget::{AnyWidget, IntoWidget, Widget},
+    widget::{IntoWidget, Widget},
 };
 use agui_macros::WidgetProps;
 
@@ -76,11 +76,12 @@ impl ElementView for VelloViewElement {
         println!("VelloViewElement::on_detach {:?}", render_object_id);
     }
 
-    fn on_needs_visual_update(&mut self, render_object_id: RenderObjectId) {
-        println!(
-            "VelloViewElement::on_needs_visual_update {:?}",
-            render_object_id
-        );
+    fn on_layout(&mut self, render_object_id: RenderObjectId) {
+        println!("VelloViewElement::on_layout {:?}", render_object_id);
+    }
+
+    fn on_paint(&mut self, render_object_id: RenderObjectId) {
+        println!("VelloViewElement::on_paint {:?}", render_object_id);
     }
 
     fn on_needs_semantics_update(&mut self, render_object_id: RenderObjectId) {

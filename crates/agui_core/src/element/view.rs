@@ -16,8 +16,16 @@ pub trait ElementView: ElementWidget {
     /// Called when a render object is detached within this element's view.
     fn on_detach(&mut self, render_object_id: RenderObjectId);
 
-    /// Called when a render object within this element's view needs to be redrawn.
-    fn on_needs_visual_update(&mut self, render_object_id: RenderObjectId);
+    /// Called when the given render object within this element's view was laid out.
+    /// This does not necessarily mean that the render object, nor any of their children,
+    /// had their size or position changed.
+    ///
+    /// This is only called for render objects which are considered relayout boundaries.
+    fn on_layout(&mut self, render_object_id: RenderObjectId);
+
+    /// Called when the given render object within this element's view needs to be
+    /// painted.
+    fn on_paint(&mut self, render_object_id: RenderObjectId);
 
     /// Called when a render object within this element's view needs to update its
     /// semantics information.
@@ -26,7 +34,7 @@ pub trait ElementView: ElementWidget {
     /// Called up to once per frame to redraw the view.
     fn redraw(&mut self);
 
-    /// Called up to once per frame to render the view as it currently is.
+    /// Called to render the view as it currently is.
     ///
     /// This is not necessarily called every frame, nor is it guaranteed to be called
     /// after a call to [`redraw`](ElementView::redraw).
