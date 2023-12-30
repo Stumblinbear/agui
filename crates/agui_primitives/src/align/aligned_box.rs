@@ -49,7 +49,7 @@ impl RenderObjectImpl for RenderAlignedBox {
         })
     }
 
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let shrink_wrap_width = self.width_factor.is_some() || !constraints.has_bounded_width();
         let shrink_wrap_height = self.height_factor.is_some() || !constraints.has_bounded_height();
 

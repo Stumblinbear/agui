@@ -68,7 +68,7 @@ impl RenderObjectImpl for RenderPadding {
                 .unwrap_or(0.0)
     }
 
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {

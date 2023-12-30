@@ -1,10 +1,7 @@
-use std::{
-    marker::PhantomData,
-    sync::{mpsc, Arc},
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use agui_core::unit::Size;
-use agui_renderer::{RenderViewId, Renderer, ViewRenderer};
+use agui_renderer::{RenderManifold, RenderViewId, Renderer};
 use futures::executor::block_on;
 use parking_lot::Mutex;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -12,7 +9,6 @@ use rustc_hash::FxHashMap;
 use vello::{util::RenderContext, RendererOptions, Scene};
 
 use crate::{
-    event::VelloPluginEvent,
     fonts::VelloFonts,
     render::{VelloViewRenderer, VelloViewRendererHandle},
 };
@@ -21,8 +17,6 @@ pub struct VelloHandle<T> {
     pub(crate) phantom: PhantomData<T>,
 
     pub(crate) fonts: Arc<Mutex<VelloFonts>>,
-
-    pub(crate) events_tx: mpsc::Sender<VelloPluginEvent>,
 }
 
 impl<W> Renderer for VelloHandle<W>
@@ -36,7 +30,7 @@ where
         render_view_id: RenderViewId,
         target: &Self::Target,
         size: Size,
-    ) -> Result<Arc<dyn ViewRenderer>, Box<dyn std::error::Error>> {
+    ) -> Result<Arc<dyn RenderManifold>, Box<dyn std::error::Error>> {
         let mut render_context = RenderContext::new()?;
 
         let surface = block_on(render_context.create_surface(
@@ -67,13 +61,8 @@ where
             renderer,
 
             scene: Scene::new(),
-            widgets: FxHashMap::default(),
+            render_objects: FxHashMap::default(),
         }));
-
-        self.events_tx.send(VelloPluginEvent::ViewBind {
-            render_view_id,
-            renderer: Arc::clone(&view_renderer_handle),
-        })?;
 
         Ok(view_renderer_handle)
     }

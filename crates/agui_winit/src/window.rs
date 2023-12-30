@@ -9,13 +9,14 @@ use agui_core::{
     widget::{IntoWidget, Widget},
 };
 use agui_elements::{
-    render::{RenderObjectBuildContext, RenderObjectUpdateContext, RenderObjectWidget},
+    render::RenderObjectWidget,
     stateful::{ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState},
+    stateless::{StatelessBuildContext, StatelessWidget},
 };
 use agui_inheritance::ContextInheritedMut;
-use agui_macros::{build, RenderObjectWidget, StatefulWidget, WidgetProps};
+use agui_macros::{build, RenderObjectWidget, StatefulWidget, StatelessWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
-use agui_renderer::{CurrentRenderView, DefaultRenderer, RenderView, RenderViewId, Renderer};
+use agui_renderer::{CurrentRenderView, RenderViewId, Renderer, ViewBoundary};
 use winit::{
     event::{DeviceId, ElementState, MouseButton, WindowEvent},
     window::WindowBuilder,
@@ -31,8 +32,7 @@ where
 {
     pub window: WindowFn,
 
-    #[prop(default)]
-    pub renderer: Option<Arc<dyn Renderer<Target = winit::window::Window>>>,
+    pub renderer: Arc<dyn Renderer<Target = winit::window::Window>>,
 
     pub child: Widget,
 }
@@ -44,7 +44,9 @@ where
     fn into_widget(self) -> Widget {
         // Windows must be created within their own render view
         build! {
-            <RenderView> {
+            <ViewBoundary> {
+                binding: self.renderer,
+
                 child: <WinitWindow> {
                     window: self.window,
 
@@ -135,7 +137,7 @@ where
     }
 
     fn updated(&mut self, ctx: &mut StatefulBuildContext<Self>, old_widget: &Self::Widget) {
-        if !self.is_renderer_eq(ctx.widget.renderer.as_ref(), old_widget.renderer.as_ref()) {
+        if !ctx.widget.renderer.is_exact_ptr(&old_widget.renderer) {
             if let Some(renderer) = ctx.widget.renderer.as_ref() {
                 self.renderer = Some(WindowRenderer::Defined(Arc::clone(renderer)));
 
@@ -362,7 +364,7 @@ impl RenderObjectImpl for RenderWinitWindow {
         })
     }
 
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, _: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, _: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {

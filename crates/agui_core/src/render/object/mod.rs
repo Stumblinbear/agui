@@ -1,28 +1,33 @@
-use std::rc::Rc;
+use crate::{
+    element::ElementId,
+    unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
+};
 
-use crate::unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size};
-
-use super::{
-    binding::RenderBinding,
-    canvas::{
-        painter::{CanvasPainter, Head},
-        Canvas,
-    },
+use super::canvas::{
+    painter::{CanvasPainter, Head},
+    Canvas,
 };
 
 mod context;
 mod render_box;
+mod render_view;
 
 pub use context::*;
 pub use render_box::*;
+pub use render_view::*;
 
 slotmap::new_key_type! {
     pub struct RenderObjectId;
 }
 
 pub struct RenderObject {
-    /// The constraints imposed on this render object by its parent
-    constraints: Option<Constraints>,
+    render_object: Box<dyn RenderObjectImpl>,
+
+    render_view_id: Option<ElementId>,
+
+    /// Tracks which render object should be used when this render object needs
+    /// to have its layout updated.
+    relayout_boundary_id: Option<RenderObjectId>,
 
     /// The current size of the render object.
     size: Option<Size>,
@@ -35,18 +40,7 @@ pub struct RenderObject {
     /// children.
     parent_uses_size: bool,
 
-    /// Whether the constraints are the only input to the sizing algorithm (i.e.
-    /// given the same constraints, it will always return the same size regardless
-    /// of other parameters, including children).
-    ///
-    /// Returning `false` is always correct, but returning `true` can be more
-    /// efficient when computing the size of this render object because we don't
-    /// need to recompute the size if the constraints don't change.
-    sized_by_parent: bool,
-
     offset: Offset,
-
-    render_object: Box<dyn RenderObjectImpl>,
 }
 
 impl RenderObject {
@@ -55,42 +49,16 @@ impl RenderObject {
         R: RenderObjectImpl,
     {
         Self {
-            constraints: None,
+            render_object: Box::new(render_object),
+
             size: None,
             parent_uses_size: false,
-            sized_by_parent: render_object.is_sized_by_parent(),
+
+            relayout_boundary_id: None,
+            render_view_id: None,
+
             offset: Offset::ZERO,
-
-            render_object: Box::new(render_object),
         }
-    }
-
-    pub fn constraints(&self) -> Option<Constraints> {
-        self.constraints
-    }
-
-    pub(crate) fn set_constraints(&mut self, constraints: Constraints) {
-        self.constraints = Some(constraints);
-    }
-
-    pub fn size(&self) -> Option<Size> {
-        self.size
-    }
-
-    pub(crate) fn set_parent_uses_size(&mut self, parent_uses_size: bool) {
-        self.parent_uses_size = parent_uses_size;
-    }
-
-    pub fn is_relayout_boundary(&self) -> bool {
-        !self.parent_uses_size
-            || self.sized_by_parent
-            || self
-                .constraints
-                .map_or(false, |constraints| constraints.is_tight())
-    }
-
-    pub fn offset(&self) -> Offset {
-        self.offset
     }
 
     pub fn is<R>(&self) -> bool
@@ -116,6 +84,50 @@ impl RenderObject {
 
     pub fn render_object_name(&self) -> &str {
         (*self.render_object).short_type_name()
+    }
+
+    pub fn render_view_id(&self) -> Option<ElementId> {
+        self.render_view_id
+    }
+
+    pub(crate) fn attach(&mut self, render_view_id: ElementId) {
+        assert!(
+            self.render_view_id.is_none(),
+            "a render object may only be attached to one view at a time"
+        );
+
+        self.render_view_id = Some(render_view_id);
+    }
+
+    pub(crate) fn detatch(&mut self, render_view_id: ElementId) {
+        assert!(
+            self.render_view_id.take() == Some(render_view_id),
+            "cannot detatch a render object from a view it is not attached to"
+        );
+    }
+
+    pub fn relayout_boundary_id(&self) -> Option<RenderObjectId> {
+        self.relayout_boundary_id
+    }
+
+    pub(crate) fn set_relayout_boundary(&mut self, render_object_id: RenderObjectId) {
+        self.relayout_boundary_id = Some(render_object_id);
+    }
+
+    pub fn size(&self) -> Option<Size> {
+        self.size
+    }
+
+    pub fn does_parent_use_size(&self) -> bool {
+        self.parent_uses_size
+    }
+
+    pub(crate) fn set_parent_uses_size(&mut self, parent_uses_size: bool) {
+        self.parent_uses_size = parent_uses_size;
+    }
+
+    pub fn offset(&self) -> Offset {
+        self.offset
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx))]
@@ -146,14 +158,14 @@ impl RenderObject {
         )
     }
 
+    pub(crate) fn is_relayout_boundary(&self, constraints: Constraints) -> bool {
+        !self.does_parent_use_size()
+            || constraints.is_tight()
+            || self.render_object.is_sized_by_parent()
+    }
+
     #[tracing::instrument(level = "debug", skip(self, ctx))]
     pub fn layout(&mut self, ctx: RenderObjectContextMut, constraints: Constraints) -> Size {
-        self.constraints = Some(constraints);
-
-        // TODO: if `render_object.layout` calls `.layout()` on its children, we need to update this render
-        // object when the child indicates that its layout has changed. If they don't call it, we can skip
-        // layout on render objects that haven't changed.
-
         let children = ctx
             .render_object_tree
             .get_children(*ctx.render_object_id)
@@ -184,9 +196,13 @@ impl RenderObject {
                 .offset = offset;
         }
 
-        // The size of the render object may be larger than the constraints (currently, so we can determine intrinsic sizes),
-        // so we have to ensure it's constrained, here.
-        self.size = Some(constraints.constrain(size));
+        debug_assert_eq!(
+            size,
+            constraints.constrain(size),
+            "render object returned a size that is larger than the constraints"
+        );
+
+        self.size = Some(size);
 
         size
     }
@@ -232,16 +248,6 @@ impl RenderObject {
         hit
     }
 
-    #[tracing::instrument(level = "debug", skip(self, render_binding))]
-    pub fn attach(&mut self, render_binding: &Rc<dyn RenderBinding>) {
-        self.render_object.attach(render_binding);
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, render_binding))]
-    pub fn detatch(&mut self, render_binding: &Rc<dyn RenderBinding>) {
-        self.render_object.detatch(render_binding);
-    }
-
     #[tracing::instrument(level = "debug", skip(self))]
     pub fn paint(&self) -> Canvas {
         let size = self.size.expect("render object not laid out");
@@ -256,8 +262,7 @@ impl RenderObject {
             tail: None,
         };
 
-        self.render_object
-            .paint(CanvasPainter::<Head<()>>::begin(&mut canvas));
+        self.render_object.paint(CanvasPainter::begin(&mut canvas));
 
         canvas
     }
@@ -328,7 +333,7 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
     }
 
     fn layout<'ctx>(
-        &'ctx mut self,
+        &'ctx self,
         ctx: &mut RenderObjectLayoutContext<'ctx>,
         constraints: Constraints,
     ) -> Size {
@@ -378,28 +383,6 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
 
         HitTest::Pass
     }
-
-    /**
-     * Called when the render object is attached to a renderer. This is where
-     * the render object should create any resources it may need for painting.
-     *
-     * Note that it is possible for the render object to be attached to multiple
-     * renderers at the same time, so it should generally not assume that it is
-     * only attached to a single renderer even if this is often the case in
-     * practice.
-     */
-    #[allow(unused_variables)]
-    fn attach(&self, render_binding: &Rc<dyn RenderBinding>) {}
-
-    /**
-     * Called when the render object is detatched from a renderer. This case is
-     * generally pretty rare, but it can happen if the render object is moved
-     * from one renderer to another.
-     *
-     * This may not necessarily be called if the render object is dropped.
-     */
-    #[allow(unused_variables)]
-    fn detatch(&self, render_binding: &Rc<dyn RenderBinding>) {}
 
     #[allow(unused_variables)]
     fn paint<'a>(&self, canvas: CanvasPainter<'a, Head<()>>) {}

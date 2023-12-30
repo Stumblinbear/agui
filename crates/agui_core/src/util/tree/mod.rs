@@ -95,10 +95,10 @@ where
     where
         F: FnOnce(&mut Tree<K, V>, &mut V) -> R,
     {
-        if let Some(mut value) = self.take(node_id) {
+        if let Some(mut value) = self.map.take(node_id) {
             let ret = func(self, &mut value);
 
-            self.replace(node_id, value);
+            self.map.replace(node_id, value);
 
             Some(ret)
         } else {
@@ -107,7 +107,9 @@ where
     }
 
     pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> bool {
-        if self.root == Some(node_id) {
+        if new_parent_id.is_none() {
+            self.root = Some(node_id);
+        } else if self.root == Some(node_id) {
             self.root = None;
         }
 
@@ -124,15 +126,15 @@ where
 
     pub fn iter_up(&self) -> UpwardIterator<K, V> {
         UpwardIterator {
-            tree: self,
-            node_id: self.get_deepest_child(self.root),
+            tree: &self.map,
+            node_id: self.map.get_deepest_child(self.root),
             first: true,
         }
     }
 
     pub fn iter_children(&self, node_id: K) -> ChildIterator<K, V> {
         ChildIterator {
-            tree: self,
+            tree: &self.map,
             node_id,
             current_child_id: None,
             first: true,
@@ -169,7 +171,7 @@ where
         writeln!(f, "Tree")?;
 
         for node_id in self.iter_down() {
-            let depth = self.get_depth(node_id).unwrap();
+            let depth = self.map.get_depth(node_id).unwrap();
 
             f.write_str("  ")?;
 
@@ -201,7 +203,7 @@ where
         writeln!(f, "Tree")?;
 
         for node_id in self.iter_down() {
-            let depth = self.get_depth(node_id).unwrap();
+            let depth = self.map.get_depth(node_id).unwrap();
 
             f.write_str("  ")?;
 

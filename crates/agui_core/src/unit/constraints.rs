@@ -312,12 +312,12 @@ impl Constraints {
 
     /// Whether there is exactly one width value that satisfies the constraints.
     pub fn has_tight_width(&self) -> bool {
-        self.min_width == self.max_width
+        self.min_width == self.max_width && self.has_bounded_width()
     }
 
     /// Whether there is exactly one height value that satisfies the constraints
     pub fn has_tight_height(&self) -> bool {
-        self.min_height == self.max_height
+        self.min_height == self.max_height && self.has_bounded_height()
     }
 
     /// Whether there is exactly one extent on the given axis that satisfies the constraints.

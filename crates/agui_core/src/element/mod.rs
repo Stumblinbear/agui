@@ -2,7 +2,8 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
-    render::{RenderBox, RenderObject, RenderObjectId},
+    element::view::ElementView,
+    render::{RenderBox, RenderObject, RenderObjectId, RenderView},
     widget::Widget,
 };
 
@@ -18,6 +19,7 @@ pub mod mock;
 pub mod proxy;
 pub mod render;
 mod update;
+pub mod view;
 pub mod widget;
 
 pub use builder::*;
@@ -40,6 +42,8 @@ pub enum ElementType {
     Proxy(Box<dyn ElementProxy>),
 
     Widget(Box<dyn ElementBuild>),
+
+    View(Box<dyn ElementView>),
     Render(Box<dyn ElementRender>),
 }
 
@@ -59,6 +63,8 @@ impl Element {
             ElementType::Proxy(ref element) => (**element).short_type_name(),
 
             ElementType::Widget(ref element) => (**element).short_type_name(),
+
+            ElementType::View(ref element) => (**element).short_type_name(),
             ElementType::Render(ref element) => (**element).short_type_name(),
         }
     }
@@ -80,10 +86,12 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
-            ElementType::Proxy(ref widget) => (**widget).as_any().is::<E>(),
+            ElementType::Proxy(ref element) => (**element).as_any().is::<E>(),
 
-            ElementType::Widget(ref widget) => (**widget).as_any().is::<E>(),
-            ElementType::Render(ref widget) => (**widget).as_any().is::<E>(),
+            ElementType::Widget(ref element) => (**element).as_any().is::<E>(),
+
+            ElementType::View(ref element) => (**element).as_any().is::<E>(),
+            ElementType::Render(ref element) => (**element).as_any().is::<E>(),
         }
     }
 
@@ -92,10 +100,12 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
-            ElementType::Proxy(ref widget) => (**widget).as_any().downcast_ref::<E>(),
+            ElementType::Proxy(ref element) => (**element).as_any().downcast_ref::<E>(),
 
-            ElementType::Widget(ref widget) => (**widget).as_any().downcast_ref::<E>(),
-            ElementType::Render(ref widget) => (**widget).as_any().downcast_ref::<E>(),
+            ElementType::Widget(ref element) => (**element).as_any().downcast_ref::<E>(),
+
+            ElementType::View(ref element) => (**element).as_any().downcast_ref::<E>(),
+            ElementType::Render(ref element) => (**element).as_any().downcast_ref::<E>(),
         }
     }
 
@@ -104,40 +114,48 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
-            ElementType::Proxy(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
+            ElementType::Proxy(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
 
-            ElementType::Widget(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
-            ElementType::Render(ref mut widget) => (**widget).as_any_mut().downcast_mut::<E>(),
+            ElementType::Widget(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
+
+            ElementType::View(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
+            ElementType::Render(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
         }
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn mount(&mut self, ctx: &mut ElementMountContext) {
         match self.inner {
-            ElementType::Proxy(ref mut widget) => widget.mount(ctx),
+            ElementType::Proxy(ref mut element) => element.mount(ctx),
 
-            ElementType::Widget(ref mut widget) => widget.mount(ctx),
-            ElementType::Render(ref mut widget) => widget.mount(ctx),
+            ElementType::Widget(ref mut element) => element.mount(ctx),
+
+            ElementType::View(ref mut element) => element.mount(ctx),
+            ElementType::Render(ref mut element) => element.mount(ctx),
         }
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
         match self.inner {
-            ElementType::Proxy(ref mut widget) => widget.unmount(ctx),
+            ElementType::Proxy(ref mut element) => element.unmount(ctx),
 
-            ElementType::Widget(ref mut widget) => widget.unmount(ctx),
-            ElementType::Render(ref mut widget) => widget.unmount(ctx),
+            ElementType::Widget(ref mut element) => element.unmount(ctx),
+
+            ElementType::View(ref mut element) => element.unmount(ctx),
+            ElementType::Render(ref mut element) => element.unmount(ctx),
         }
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn build(&mut self, ctx: &mut ElementBuildContext) -> Vec<Widget> {
         match self.inner {
-            ElementType::Proxy(ref mut widget) => Vec::from([widget.child()]),
+            ElementType::Proxy(ref mut element) => Vec::from([element.child()]),
 
-            ElementType::Widget(ref mut widget) => Vec::from([widget.build(ctx)]),
-            ElementType::Render(ref mut widget) => widget.children(),
+            ElementType::Widget(ref mut element) => Vec::from([element.build(ctx)]),
+
+            ElementType::View(ref mut element) => Vec::from([element.child()]),
+            ElementType::Render(ref mut element) => element.children(),
         }
     }
 
@@ -148,10 +166,12 @@ impl Element {
         }
 
         let result = match self.inner {
-            ElementType::Proxy(ref mut widget) => widget.update(new_widget),
+            ElementType::Proxy(ref mut element) => element.update(new_widget),
 
-            ElementType::Widget(ref mut widget) => widget.update(new_widget),
-            ElementType::Render(ref mut widget) => widget.update(new_widget),
+            ElementType::Widget(ref mut element) => element.update(new_widget),
+
+            ElementType::View(ref mut element) => element.update(new_widget),
+            ElementType::Render(ref mut element) => element.update(new_widget),
         };
 
         match result {
@@ -173,13 +193,13 @@ impl Element {
         arg: Box<dyn Any>,
     ) -> bool {
         match self.inner {
-            ElementType::Proxy(_) | ElementType::Render(_) => {
+            ElementType::Proxy(_) | ElementType::View(_) | ElementType::Render(_) => {
                 tracing::warn!("attempted to call a callback on an unsupported element");
 
                 false
             }
 
-            ElementType::Widget(ref mut widget) => widget.call(ctx, callback_id, arg),
+            ElementType::Widget(ref mut element) => element.call(ctx, callback_id, arg),
         }
     }
 
@@ -194,8 +214,10 @@ impl Element {
                 RenderObject::new(RenderBox::default())
             }
 
-            ElementType::Render(ref mut widget) => {
-                widget.create_render_object(&mut RenderObjectBuildContext { inner: ctx })
+            ElementType::View(_) => RenderObject::new(RenderView::default()),
+
+            ElementType::Render(ref mut element) => {
+                element.create_render_object(&mut RenderObjectBuildContext { inner: ctx })
             }
         }
     }
@@ -203,34 +225,46 @@ impl Element {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub(crate) fn update_render_object(
         &mut self,
-        ctx: &mut ElementBuildContext,
+        ctx: &mut RenderObjectUpdateContext,
         render_object: &mut RenderObject,
     ) {
-        if let ElementType::Render(widget) = &mut self.inner {
-            widget.update_render_object(
-                &mut RenderObjectUpdateContext {
-                    inner: ctx,
-
-                    render_object_id: self
-                        .render_object_id
-                        .as_ref()
-                        .expect("called update_render_object on an element without one attached"),
-                },
-                render_object,
-            );
+        if let ElementType::Render(element) = &mut self.inner {
+            element.update_render_object(ctx, render_object);
         } else {
             tracing::trace!("skipping render object update for non-render element");
         }
     }
 }
 
+impl AsRef<ElementType> for Element {
+    fn as_ref(&self) -> &ElementType {
+        &self.inner
+    }
+}
+
+impl AsMut<ElementType> for Element {
+    fn as_mut(&mut self) -> &mut ElementType {
+        &mut self.inner
+    }
+}
+
 impl std::fmt::Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.inner {
-            ElementType::Proxy(ref widget) => widget.fmt(f),
+        struct DebugWidget(&'static str);
 
-            ElementType::Widget(ref widget) => widget.fmt(f),
-            ElementType::Render(ref widget) => widget.fmt(f),
+        impl std::fmt::Debug for DebugWidget {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(self.0).finish_non_exhaustive()
+            }
         }
+
+        f.debug_struct(match self.inner {
+            ElementType::Proxy(_) => "ProxyElement",
+            ElementType::Widget(_) => "WidgetElement",
+            ElementType::View(_) => "ViewElement",
+            ElementType::Render(_) => "RenderElement",
+        })
+        .field("widget", &DebugWidget(self.widget.widget_name()))
+        .finish()
     }
 }

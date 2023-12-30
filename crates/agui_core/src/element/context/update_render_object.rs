@@ -16,6 +16,8 @@ use super::{ContextElement, ContextElements, ContextRenderObject};
 pub struct RenderObjectUpdateContext<'ctx, 'element> {
     pub(crate) inner: &'element mut ElementBuildContext<'ctx>,
 
+    pub relayout_boundary_id: &'element Option<RenderObjectId>,
+
     pub render_object_id: &'element RenderObjectId,
 }
 
@@ -51,7 +53,9 @@ impl<'ctx> ContextPluginsMut<'ctx> for RenderObjectUpdateContext<'ctx, '_> {
 
 impl ContextDirtyRenderObject for RenderObjectUpdateContext<'_, '_> {
     fn mark_needs_layout(&mut self) {
-        self.inner.needs_layout.insert(*self.render_object_id)
+        self.inner
+            .needs_layout
+            .insert(self.relayout_boundary_id.unwrap_or(*self.render_object_id))
     }
 
     fn mark_needs_paint(&mut self) {

@@ -1,8 +1,7 @@
 use agui_core::{
-    element::ElementId,
     render::{
         canvas::{Canvas, CanvasCommand},
-        Paint,
+        Paint, RenderObjectId,
     },
     unit::{Offset, Rect},
 };
@@ -17,17 +16,17 @@ use vello::{
 use crate::fonts::VelloFonts;
 
 #[derive(Default)]
-pub struct RenderObject {
-    /// This is the layer that this render element belongs to
-    pub head_target: Option<ElementId>,
+pub struct VelloRenderObject {
+    /// This is the layer that this render object belongs to
+    pub head_target: Option<RenderObjectId>,
 
     pub offset: Offset,
 
-    pub canvas: CanvasObject,
+    pub canvas: VelloCanvasObject,
 }
 
 #[derive(Default)]
-pub struct CanvasObject {
+pub struct VelloCanvasObject {
     pub offset: Offset,
 
     pub fragment: SceneFragment,
@@ -39,7 +38,7 @@ pub struct CanvasObject {
     pub glyph_cache: FxHashMap<(GlyphId, usize), Option<SceneFragment>>,
 }
 
-impl CanvasObject {
+impl VelloCanvasObject {
     pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
@@ -75,7 +74,7 @@ impl CanvasObject {
             let mut layer = LayerObject {
                 rect: tail.offset & tail.canvas.size,
 
-                canvas: CanvasObject {
+                canvas: VelloCanvasObject {
                     offset: tail.offset,
 
                     fragment: SceneFragment::default(),
@@ -229,7 +228,7 @@ impl CanvasObject {
 pub struct LayerObject {
     pub rect: Rect,
 
-    pub canvas: CanvasObject,
+    pub canvas: VelloCanvasObject,
 }
 
 impl LayerObject {

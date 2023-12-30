@@ -53,7 +53,7 @@ impl RenderObjectImpl for RenderParagraph {
         0.0
     }
 
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         // let size = if let Some(delegate) = self.delegate.as_ref() {
         //     delegate.compute_layout(&self.style, Cow::clone(&self.text), constraints)
         // } else {

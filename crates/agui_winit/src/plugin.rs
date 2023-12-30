@@ -11,7 +11,7 @@ use agui_core::{
     plugin::Plugin,
     unit::{Offset, Size},
 };
-use agui_renderer::{RenderViewId, Renderer, ViewRenderer};
+use agui_renderer::{RenderViewId, Renderer};
 use rustc_hash::FxHashMap;
 use winit::{
     dpi::PhysicalPosition,
@@ -20,7 +20,7 @@ use winit::{
     window::{WindowBuilder, WindowId},
 };
 
-use crate::{WinitWindowEvent, WinitWindowHandle};
+use crate::{controller::WinitSendError, WinitWindowEvent, WinitWindowHandle};
 
 pub struct WinitPlugin {
     windows: FxHashMap<WindowId, WinitWindowHandle>,
@@ -51,29 +51,6 @@ impl WinitPlugin {
 impl Plugin for WinitPlugin {}
 
 impl WinitPlugin {
-    pub fn get_window(&self, window_id: WindowId) -> Option<&WinitWindowHandle> {
-        self.windows.get(&window_id)
-    }
-
-    pub(crate) fn create_window(
-        &self,
-        window_element_id: ElementId,
-        window: WindowBuilder,
-        callback: Callback<WinitWindowHandle>,
-    ) -> Result<(), WinitSendError> {
-        tracing::debug!("queueing window for creation at on {:?}", window_element_id);
-
-        self.action_queue_tx.send(WinitBindingAction::CreateWindow(
-            window_element_id,
-            Box::new(window),
-            callback,
-        ))?;
-
-        self.event_notifier_tx.send(())?;
-
-        Ok(())
-    }
-
     pub(crate) fn bind_renderer(
         &mut self,
         window_id: WindowId,
@@ -174,9 +151,9 @@ impl WinitPlugin {
 
                 WindowEvent::Resized(size) => {
                     if let Some(window) = self.windows.get(&window_id) {
-                        if let Some(view_renderer) = self.window_renderer.get_mut(&window_id) {
-                            view_renderer.resize(Size::new(size.width as f32, size.height as f32));
-                        }
+                        // if let Some(view_renderer) = self.window_renderer.get_mut(&window_id) {
+                        //     view_renderer.resize(Size::new(size.width as f32, size.height as f32));
+                        // }
 
                         window.request_redraw();
                     } else {
@@ -322,35 +299,5 @@ impl WinitPlugin {
                 window.events().emit(&WinitWindowEvent(event));
             }
         }
-    }
-}
-
-pub enum WinitBindingAction {
-    CreateWindow(ElementId, Box<WindowBuilder>, Callback<WinitWindowHandle>),
-    CloseWindow(WindowId),
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub struct WinitSendError {
-    __private: (),
-}
-
-impl fmt::Debug for WinitSendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("WinitSendError").finish()
-    }
-}
-
-impl fmt::Display for WinitSendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "sending on a closed channel".fmt(f)
-    }
-}
-
-impl Error for WinitSendError {}
-
-impl<T> From<mpsc::SendError<T>> for WinitSendError {
-    fn from(_: mpsc::SendError<T>) -> Self {
-        Self { __private: () }
     }
 }

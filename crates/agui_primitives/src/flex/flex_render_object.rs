@@ -221,7 +221,7 @@ impl RenderObjectImpl for RenderFlex {
         }
     }
 
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let ComputedSizes {
             mut main_size,
             mut cross_size,

@@ -6,7 +6,7 @@ use std::{
 use agui_core::listenable::EventEmitter;
 
 use crate::{
-    plugin::{WinitBindingAction, WinitSendError},
+    controller::{WinitBindingAction, WinitSendError},
     WinitWindowEvent,
 };
 

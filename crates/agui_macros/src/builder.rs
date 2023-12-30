@@ -3,7 +3,7 @@ use proc_macro2::{
     TokenTree,
 };
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{token::Paren, Token};
+use syn::{spanned::Spanned, token::Paren, Token};
 
 use crate::utils::resolve_package_path;
 
@@ -62,35 +62,106 @@ fn parse_const_widget(ident: Ident, tokens: &mut IntoIter, output: &mut TokenStr
     false
 }
 
-fn parse_widget(punct: Punct, tokens: &mut IntoIter, output: &mut TokenStream2) -> bool {
+fn parse_widget(initial_punct: Punct, tokens: &mut IntoIter, output: &mut TokenStream2) -> bool {
     // Check for `<$name> {`
-    if punct.as_char() == '<' {
-        match (tokens.next(), tokens.next(), tokens.next()) {
-            (
-                Some(TokenTree::Ident(ident)),
-                Some(TokenTree::Punct(punct1)),
-                Some(TokenTree::Group(group)),
-            ) if punct1.as_char() == '>' && group.delimiter() == Delimiter::Brace => {
-                parse_widget_init(ident, None, TokenStream2::default(), group.stream(), output);
+    if initial_punct.as_char() == '<' {
+        // Parse the widget name, which may have a path or not
+        let mut widget_path = TokenStream2::new();
+
+        let mut allow_ident = true;
+        let mut num_colons = 0;
+
+        loop {
+            match tokens.next() {
+                Some(TokenTree::Ident(ident)) if allow_ident => {
+                    widget_path.append(ident);
+
+                    allow_ident = false;
+                }
+
+                // Parse the :: between path segments
+                Some(TokenTree::Punct(punct)) if num_colons < 2 && punct.as_char() == ':' => {
+                    widget_path.append(punct);
+
+                    num_colons += 1;
+                    allow_ident = num_colons == 2;
+                }
+
+                // Parses any ::<..> as a group other than the outer tag
+                Some(TokenTree::Punct(punct)) if num_colons == 2 && punct.as_char() == '<' => {
+                    widget_path.append(punct);
+
+                    // Consume all tokens until we reach the matching >
+                    let mut depth = 0;
+
+                    loop {
+                        if let Some(token) = tokens.next() {
+                            match &token {
+                                TokenTree::Punct(punct) if punct.as_char() == '<' => {
+                                    depth += 1;
+                                }
+
+                                TokenTree::Punct(punct) if punct.as_char() == '>' && depth == 0 => {
+                                    break;
+                                }
+
+                                TokenTree::Punct(punct) if punct.as_char() == '>' => {
+                                    depth -= 1;
+                                }
+
+                                _ => {}
+                            }
+
+                            widget_path.append(token);
+                        } else {
+                            output.append(TokenTree::Punct(initial_punct));
+                            output.extend(widget_path);
+                            return false;
+                        }
+                    }
+                }
+
+                // Parses the final > of the widget tag
+                Some(TokenTree::Punct(punct)) if punct.as_char() == '>' => {
+                    break;
+                }
+
+                token => {
+                    // This wasn't a valid widget tag, so just output the tokens we've parsed so far
+                    output.append(TokenTree::Punct(initial_punct));
+                    output.extend(widget_path);
+                    output.extend(token);
+                    return false;
+                }
+            }
+        }
+
+        // Following a widget tag, we expect either a `{` or `::`
+        match tokens.next() {
+            Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Brace => {
+                parse_widget_init(
+                    widget_path,
+                    None,
+                    TokenStream2::default(),
+                    group.stream(),
+                    output,
+                );
 
                 return true;
             }
 
-            (
-                Some(TokenTree::Ident(ident)),
-                Some(TokenTree::Punct(punct1)),
-                Some(TokenTree::Punct(punct2)),
-            ) if punct1.as_char() == '>' && punct2.as_char() == ':' => {
+            Some(TokenTree::Punct(punct1)) if punct1.as_char() == ':' => {
                 match (tokens.next(), tokens.next(), tokens.next(), tokens.next()) {
                     // `<Widget>::new() { .. }`
+                    // TODO: support `<Widget>::new::<..>() { .. }`
                     (
-                        Some(TokenTree::Punct(punct3)),
+                        Some(TokenTree::Punct(punct2)),
                         Some(TokenTree::Ident(init_func)),
                         Some(TokenTree::Group(init_params)),
                         Some(TokenTree::Group(group)),
-                    ) if punct3.as_char() == ':' && group.delimiter() == Delimiter::Brace => {
+                    ) if punct2.as_char() == ':' && group.delimiter() == Delimiter::Brace => {
                         parse_widget_init(
-                            ident,
+                            widget_path,
                             Some(init_func),
                             init_params.stream(),
                             group.stream(),
@@ -102,13 +173,13 @@ fn parse_widget(punct: Punct, tokens: &mut IntoIter, output: &mut TokenStream2) 
 
                     // `<Widget>::new()`
                     (
-                        Some(TokenTree::Punct(punct3)),
+                        Some(TokenTree::Punct(punct2)),
                         Some(TokenTree::Ident(func_ident)),
                         Some(TokenTree::Group(func_params)),
                         trailing,
-                    ) if punct3.as_char() == ':' => {
+                    ) if punct2.as_char() == ':' => {
                         parse_widget_init(
-                            ident,
+                            widget_path,
                             Some(func_ident),
                             func_params.stream(),
                             TokenStream2::default(),
@@ -124,8 +195,8 @@ fn parse_widget(punct: Punct, tokens: &mut IntoIter, output: &mut TokenStream2) 
                     _ => {
                         output.extend(
                             syn::Error::new(
-                                punct2.span(),
-                                format!("expected `<{}>::func(..)`", ident),
+                                punct1.span(),
+                                format!("expected `<{}>::func(..)`", widget_path),
                             )
                             .to_compile_error(),
                         );
@@ -133,35 +204,33 @@ fn parse_widget(punct: Punct, tokens: &mut IntoIter, output: &mut TokenStream2) 
                 };
             }
 
-            (first, second, third) => {
-                output.append(TokenTree::Punct(punct));
-                output.extend(first);
-                output.extend(second);
-                output.extend(third);
+            token => {
+                output.extend(widget_path);
+                output.extend(token);
             }
         }
     } else {
-        output.append(TokenTree::Punct(punct));
+        output.append(TokenTree::Punct(initial_punct));
     }
 
     false
 }
 
 fn parse_widget_init(
-    widget_ident: Ident,
+    widget_path: TokenStream2,
     init_func: Option<Ident>,
     init_params: TokenStream2,
     content: TokenStream2,
     output: &mut TokenStream2,
 ) {
-    let span = Span::call_site().located_at(widget_ident.span());
+    let span = Span::call_site().located_at(widget_path.span());
 
     let mut builder = TokenStream2::new();
 
     let is_using_builder = init_func.is_none() || init_func.as_ref().unwrap() == "builder";
 
     {
-        builder.extend(widget_ident.to_token_stream());
+        builder.extend(widget_path);
         builder.extend(Token![::](span).to_token_stream());
         builder.extend(
             init_func

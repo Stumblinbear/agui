@@ -32,10 +32,3 @@ pub trait ElementRender: ElementWidget {
         render_object: &mut RenderObject,
     );
 }
-
-impl std::fmt::Debug for Box<dyn ElementRender> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct((**self).short_type_name())
-            .finish_non_exhaustive()
-    }
-}

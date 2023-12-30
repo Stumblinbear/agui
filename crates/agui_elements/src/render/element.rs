@@ -77,9 +77,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("RenderObjectElement");
-
         dbg.field("widget", &self.widget);
-
         dbg.finish()
     }
 }

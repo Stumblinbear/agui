@@ -148,7 +148,7 @@ impl RenderObjectImpl for RenderSizedBox {
         }
     }
 
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let size = constraints.constrain(Size {
             width: self.width.unwrap_or(f32::INFINITY),
             height: self.height.unwrap_or(f32::INFINITY),

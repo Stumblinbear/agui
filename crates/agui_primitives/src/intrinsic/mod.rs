@@ -1,15 +1,19 @@
 use agui_core::{
-    unit::{Axis, Constraints, IntrinsicDimension, Size},
+    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    unit::Axis,
     widget::Widget,
 };
-use agui_elements::layout::{IntrinsicSizeContext, LayoutContext, WidgetLayout};
-use agui_macros::LayoutWidget;
+use agui_elements::render::RenderObjectWidget;
+use agui_macros::RenderObjectWidget;
 
 mod intrinsic_height;
 mod intrinsic_width;
+mod render_intrinsic_dimension;
 
 pub use intrinsic_height::*;
 pub use intrinsic_width::*;
+
+use crate::intrinsic::render_intrinsic_dimension::RenderIntrinsicDimension;
 
 /// A widget that sizes its child to the child's maximum intrinsic size along the
 /// given axis.
@@ -17,7 +21,7 @@ pub use intrinsic_width::*;
 /// This is relatively expensive because it adds a speculative layout pass before
 /// the final layout phase. Avoid using it where possible. In the worst case, this
 /// can result in a layout that is O(N²) in the depth of the tree.
-#[derive(LayoutWidget, Debug)]
+#[derive(RenderObjectWidget, Debug)]
 pub struct IntrinsicAxis {
     pub axis: Axis,
 
@@ -25,46 +29,22 @@ pub struct IntrinsicAxis {
     pub child: Option<Widget>,
 }
 
-impl WidgetLayout for IntrinsicAxis {
+impl RenderObjectWidget for IntrinsicAxis {
+    type RenderObject = RenderIntrinsicDimension;
+
     fn children(&self) -> Vec<Widget> {
         Vec::from_iter(self.child.clone())
     }
 
-    fn intrinsic_size(
-        &self,
-        ctx: &mut IntrinsicSizeContext,
-        dimension: IntrinsicDimension,
-        cross_extent: f32,
-    ) -> f32 {
-        ctx.iter_children().next().map_or(0.0, |child| {
-            child.compute_intrinsic_size(dimension, cross_extent)
-        })
+    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+        RenderIntrinsicDimension { axis: self.axis }
     }
 
-    fn layout(&self, ctx: &mut LayoutContext, mut constraints: Constraints) -> Size {
-        if let Some(mut child) = ctx.iter_children_mut().next() {
-            if !constraints.has_tight_axis(self.axis) {
-                let extent = child.compute_intrinsic_size(
-                    IntrinsicDimension::max_axis(self.axis),
-                    constraints.max_axis(self.axis.flip()),
-                );
-
-                assert!(
-                    extent.is_finite(),
-                    "IntrinsicAxis must have a child that has a finite maximum intrinsic size along its {:?} axis.",
-                    self.axis
-                );
-
-                constraints = constraints.tighten_axis(self.axis, extent);
-            } else {
-                // Technically IntrinsicAxis isn't necessary if the child has a tight axis.
-                // Do we want to log anything here? It's not an error, but it could be good
-                // to know if this is happening.
-            }
-
-            child.compute_layout(constraints)
-        } else {
-            constraints.smallest()
-        }
+    fn update_render_object(
+        &self,
+        ctx: &mut RenderObjectUpdateContext,
+        render_object: &mut Self::RenderObject,
+    ) {
+        render_object.update_axis(ctx, self.axis);
     }
 }

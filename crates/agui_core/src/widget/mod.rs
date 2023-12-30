@@ -36,7 +36,7 @@ impl Widget {
         }
     }
 
-    pub fn widget_name(&self) -> &str {
+    pub fn widget_name(&self) -> &'static str {
         (*self.widget).widget_name()
     }
 

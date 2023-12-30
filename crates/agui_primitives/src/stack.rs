@@ -47,7 +47,7 @@ impl RenderObjectImpl for RenderStack {
     }
 
     // TODO: make this actually work properly
-    fn layout(&mut self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
+    fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
         let mut children = ctx.iter_children_mut();
 
         let mut size = constraints.biggest();

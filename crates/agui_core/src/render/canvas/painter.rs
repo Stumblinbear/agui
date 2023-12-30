@@ -30,7 +30,7 @@ impl<T> CanvasPainterState for Head<T> where T: CanvasPainterState {}
 impl<T> CanvasPainterState for Layer<T> where T: CanvasPainterState {}
 impl<T> CanvasPainterState for Tail<T> where T: CanvasPainterState {}
 
-pub struct CanvasPainter<'paint, State>
+pub struct CanvasPainter<'paint, State = Head<()>>
 where
     State: CanvasPainterState,
 {

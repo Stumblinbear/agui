@@ -2,11 +2,11 @@ use std::{sync::mpsc, time::Instant};
 
 use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_inheritance::InheritancePlugin;
-use agui_renderer::{DefaultRenderer, RenderViewPlugin};
-#[cfg(feature = "vello")]
-use agui_vello::VelloPlugin;
-#[cfg(feature = "winit")]
-use agui_winit::WinitPlugin;
+use agui_macros::build;
+// #[cfg(feature = "vello")]
+// use agui_vello::VelloPlugin;
+// #[cfg(feature = "winit")]
+// use agui_winit::WinitPlugin;
 use winit::window::Window;
 use winit::{
     event::Event as WinitEvent,
@@ -16,90 +16,100 @@ use winit::{
 #[cfg(not(all(feature = "vello", feature = "winit")))]
 compile_error!("app feature requires both winit and vello to be enabled");
 
-pub fn run_app(root: impl IntoWidget) -> Result<(), Box<dyn std::error::Error>> {
-    let (update_notifier_tx, update_notifier_rx) = mpsc::channel();
+pub fn run_app(widget: impl IntoWidget) -> Result<(), Box<dyn std::error::Error>> {
+    // let (update_notifier_tx, update_notifier_rx) = mpsc::channel();
 
-    let vello_plugin = VelloPlugin::new();
+    // let vello_plugin = VelloPlugin::new();
 
-    let renderer = vello_plugin.create_renderer::<winit::window::Window>()?;
+    // let renderer = vello_plugin.create_renderer::<winit::window::Window>()?;
 
     // renderer.get_fonts().lock().add_font(
     //     FontRef::new(include_bytes!("../examples/fonts/DejaVuSans.ttf"))
     //         .expect("failed to load font"),
     // );
 
-    let engine = Engine::builder()
-        .with_notifier(update_notifier_tx.clone())
-        .add_plugin(InheritancePlugin::default())
-        .add_plugin(RenderViewPlugin::default());
-
-    #[cfg(feature = "winit")]
-    let engine = { engine.add_plugin(WinitPlugin::new(update_notifier_tx.clone())) };
-
     #[cfg(feature = "vello")]
-    let engine = { engine.add_plugin(vello_plugin) };
+    let root = build!(<agui_vello::VelloView> { child: widget.into_widget() });
 
-    let test: DefaultRenderer<Window> = DefaultRenderer::builder()
-        .renderer(renderer)
-        .child(root.into_widget())
+    let mut engine = Engine::builder()
+        // .with_notifier(update_notifier_tx.clone())
+        .add_plugin(InheritancePlugin::default())
+        .with_root(root)
         .build();
 
-    let mut engine = engine.with_root(test).build();
+    engine.update();
 
-    let event_loop = EventLoopBuilder::<()>::with_user_event().build();
+    println!("elements: {:?}", engine.elements());
+    println!("render_objects: {:?}", engine.render_objects());
 
-    let event_loop_proxy = event_loop.create_proxy();
+    engine.launch();
 
-    // Wake up the event loop when the engine has changes to process
-    std::thread::spawn(move || {
-        let _ = event_loop_proxy.send_event(());
+    Ok(())
 
-        while update_notifier_rx.recv().is_ok() {
-            let _ = event_loop_proxy.send_event(());
-        }
-    });
+    // #[cfg(feature = "winit")]
+    // let engine = { engine.add_plugin(WinitPlugin::new(update_notifier_tx.clone())) };
 
-    event_loop.run(move |event, window_target, control_flow| {
-        *control_flow = ControlFlow::Wait;
+    // let test: DefaultRenderer<Window> = DefaultRenderer::builder()
+    //     .renderer(renderer)
+    //     .child(root.into_widget())
+    //     .build();
 
-        let mut requires_update = false;
+    // let mut engine = engine.with_root(test).build();
 
-        let winit_plugin = engine
-            .get_plugins_mut()
-            .get_mut::<WinitPlugin>()
-            .expect("no winit plugin");
+    // let event_loop = EventLoopBuilder::<()>::with_user_event().build();
 
-        winit_plugin.process_queue(window_target, control_flow);
+    // let event_loop_proxy = event_loop.create_proxy();
 
-        match event {
-            WinitEvent::WindowEvent { event, window_id } => {
-                winit_plugin.handle_event(window_target, window_id, event, control_flow);
-            }
+    // // Wake up the event loop when the engine has changes to process
+    // std::thread::spawn(move || {
+    //     let _ = event_loop_proxy.send_event(());
 
-            WinitEvent::RedrawRequested(window_id) => {
-                winit_plugin.render(window_id);
+    //     while update_notifier_rx.recv().is_ok() {
+    //         let _ = event_loop_proxy.send_event(());
+    //     }
+    // });
 
-                requires_update = true;
-            }
+    // event_loop.run(move |event, window_target, control_flow| {
+    //     *control_flow = ControlFlow::Wait;
 
-            WinitEvent::UserEvent(event) => {
-                requires_update = true;
-            }
+    //     let mut requires_update = false;
 
-            _ => (),
-        }
+    //     let winit_plugin = engine
+    //         .get_plugins_mut()
+    //         .get_mut::<WinitPlugin>()
+    //         .expect("no winit plugin");
 
-        if requires_update {
-            let now = Instant::now();
+    //     winit_plugin.process_queue(window_target, control_flow);
 
-            engine.update();
+    //     match event {
+    //         WinitEvent::WindowEvent { event, window_id } => {
+    //             winit_plugin.handle_event(window_target, window_id, event, control_flow);
+    //         }
 
-            tracing::info!("updated in: {:?}", Instant::now().duration_since(now));
+    //         WinitEvent::RedrawRequested(window_id) => {
+    //             winit_plugin.render(window_id);
 
-            // // TODO: limit redraws only to the windows that show visual changes
-            // windows.iter_mut().for_each(|(window_id, window)| {
-            //     window.request_redraw();
-            // });
-        }
-    });
+    //             requires_update = true;
+    //         }
+
+    //         WinitEvent::UserEvent(event) => {
+    //             requires_update = true;
+    //         }
+
+    //         _ => (),
+    //     }
+
+    //     if requires_update {
+    //         let now = Instant::now();
+
+    //         engine.update();
+
+    //         tracing::info!("updated in: {:?}", Instant::now().duration_since(now));
+
+    //         // // TODO: limit redraws only to the windows that show visual changes
+    //         // windows.iter_mut().for_each(|(window_id, window)| {
+    //         //     window.request_redraw();
+    //         // });
+    //     }
+    // });
 }

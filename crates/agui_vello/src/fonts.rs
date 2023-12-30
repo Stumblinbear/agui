@@ -44,17 +44,17 @@ impl VelloFonts {
             .new_provider(font, font_id, ppem, hint, variations)
     }
 
-    pub fn add_font(&mut self, font: FontRef<'static>) -> Font {
-        let font_id = Font::by_id(self.fonts.len());
+    // pub fn add_font(&mut self, font: FontRef<'static>) -> Font {
+    //     let font_id = Font::by_id(self.fonts.len());
 
-        self.fonts.insert(font_id, font);
+    //     self.fonts.insert(font_id, font);
 
-        if self.default_font.is_none() {
-            self.default_font = Some(font_id);
-        }
+    //     if self.default_font.is_none() {
+    //         self.default_font = Some(font_id);
+    //     }
 
-        font_id
-    }
+    //     font_id
+    // }
 
     pub fn get(&self, font: Font) -> Option<FontRef<'static>> {
         self.fonts.get(&font).cloned()

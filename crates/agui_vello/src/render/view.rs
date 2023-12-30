@@ -3,10 +3,11 @@ use std::{sync::Arc, time::Instant};
 use agui_core::{
     element::{Element, ElementId},
     engine::Engine,
+    render::{RenderObject, RenderObjectId},
     unit::{Offset, Size},
     util::tree::Tree,
 };
-use agui_renderer::{RenderViewId, RenderViewManager, ViewRenderer};
+use agui_renderer::{RenderManifold, RenderViewId, RenderViewManager};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use vello::{
@@ -18,7 +19,7 @@ use vello::{
 };
 
 use crate::fonts::VelloFonts;
-use crate::render::RenderObject;
+use crate::render::VelloRenderObject;
 
 pub struct VelloViewRendererHandle {
     inner: Mutex<VelloViewRenderer>,
@@ -41,9 +42,20 @@ impl VelloViewRendererHandle {
     }
 }
 
-impl ViewRenderer for VelloViewRendererHandle {
-    fn resize(&self, size: Size) {
-        self.inner.lock().resize(size);
+impl RenderManifold for VelloViewRendererHandle {
+    fn on_attach(
+        &self,
+        parent_render_object_id: Option<RenderObjectId>,
+        render_object_id: RenderObjectId,
+        render_object: &RenderObject,
+    ) {
+        self.inner
+            .lock()
+            .on_attach(parent_render_object_id, render_object_id, render_object);
+    }
+
+    fn on_detach(&self, render_object_id: RenderObjectId) {
+        self.inner.lock().on_detach(render_object_id);
     }
 
     fn render(&self) {
@@ -62,119 +74,43 @@ pub struct VelloViewRenderer {
     pub renderer: vello::Renderer,
 
     pub scene: Scene,
-    pub widgets: FxHashMap<ElementId, RenderObject>,
+    pub render_objects: FxHashMap<RenderObjectId, VelloRenderObject>,
 }
 
 impl VelloViewRenderer {
-    pub fn init(&mut self, engine: &Engine, fonts: &mut VelloFonts) {
-        let render_view_manager =
-            RenderViewManager::of(engine).expect("render view manager not found");
-
-        let boundary_element_id = render_view_manager
-            .get_boundary(self.render_view_id)
-            .expect("the required render view boundary does not exist");
-
-        let tree = engine.elements();
-
-        self.init_subtree(render_view_manager, tree, boundary_element_id);
-
-        self.redraw(render_view_manager, tree, fonts);
-    }
-
-    pub fn init_subtree(
+    fn on_attach(
         &mut self,
-        render_view_manager: &RenderViewManager,
-        tree: &Tree<ElementId, Element>,
-        boundary_element_id: ElementId,
+        parent_render_object_id: Option<RenderObjectId>,
+        render_object_id: RenderObjectId,
+        render_object: &RenderObject,
     ) {
-        for element_id in tree.iter_subtree(boundary_element_id, |element_id| {
-            render_view_manager.get_view(element_id) == Some(self.render_view_id)
-        }) {
-            self.create_element(render_view_manager, tree, element_id);
-        }
+        self.render_objects.insert(
+            render_object_id,
+            VelloRenderObject {
+                head_target: parent_render_object_id.and_then(|parent_render_object_id| {
+                    let Some(parent) = self.render_objects.get(&parent_render_object_id) else {
+                        panic!(
+                            "render object {:?} spawned to a non-existent parent {:?}",
+                            render_object_id, parent_render_object_id
+                        );
+                    };
+
+                    if parent.canvas.tail.is_some() {
+                        Some(parent_render_object_id)
+                    } else {
+                        parent.head_target
+                    }
+                }),
+
+                offset: Offset::ZERO,
+
+                ..VelloRenderObject::default()
+            },
+        );
     }
 
-    pub fn update_elements(&mut self, engine: &Engine, fonts: &mut VelloFonts) {
-        let now = Instant::now();
-
-        let tree = engine.elements();
-
-        let render_view_manager =
-            RenderViewManager::of(engine).expect("render view manager not found");
-
-        for event in events {
-            match event {
-                ElementEvent::Spawned {
-                    parent_id,
-                    element_id,
-                } => {
-                    self.create_element(render_view_manager, *element_id, *parent_id);
-                }
-
-                ElementEvent::Destroyed { element_id } => {
-                    self.widgets.remove(element_id);
-                }
-
-                ElementEvent::Reparent {
-                    parent_id,
-                    element_id,
-                } => {
-                    // We need to check if a subtree was moved outside or into this render view
-                    let was_in_render_view = self.widgets.contains_key(element_id);
-
-                    let is_in_render_view =
-                        render_view_manager.get_view(*element_id) == Some(self.render_view_id);
-
-                    if was_in_render_view && !is_in_render_view {
-                        // Remove the subtree from the render view
-                        for element_id in engine
-                            .elements()
-                            .iter_subtree(*element_id, |element_id| {
-                                self.widgets.contains_key(&element_id)
-                            })
-                            .collect::<Vec<_>>()
-                        {
-                            self.widgets.remove(&element_id);
-                        }
-                    } else if !was_in_render_view && is_in_render_view {
-                        let render_view_id = self.render_view_id;
-
-                        self.init_subtree(render_view_manager, tree, *element_id);
-                    }
-
-                    if is_in_render_view {
-                        let new_head_target = parent_id.and_then(|parent_id| {
-                            let parent = self
-                                .widgets
-                                .get(&parent_id)
-                                .expect("render element spawned to a non-existent parent");
-
-                            if parent.canvas.tail.is_some() {
-                                Some(parent_id)
-                            } else {
-                                parent.head_target
-                            }
-                        });
-
-                        let element = self
-                            .widgets
-                            .get_mut(element_id)
-                            .expect("reparented render element not found");
-
-                        element.head_target = new_head_target;
-                    }
-                }
-
-                _ => todo!(),
-            }
-        }
-
-        tracing::info!(
-            "updated render elements in: {:?}",
-            Instant::now().duration_since(now)
-        );
-
-        self.redraw(render_view_manager, tree, fonts);
+    fn on_detach(&mut self, render_object_id: RenderObjectId) {
+        self.render_objects.remove(&render_object_id);
     }
 
     pub fn redraw(
@@ -238,46 +174,7 @@ impl VelloViewRenderer {
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
-    fn create_element(
-        &mut self,
-        render_view_manager: &RenderViewManager,
-        tree: &Tree<ElementId, Element>,
-        element_id: ElementId,
-    ) {
-        let parent_id = tree.get_parent(element_id).copied();
-
-        self.widgets.insert(
-            element_id,
-            RenderObject {
-                head_target: parent_id.and_then(|parent_id| {
-                    let Some(parent) = self.widgets.get(&parent_id) else {
-                        // If the parent isn't tracked in the render view, but it's in the same context, then
-                        // the something went wrong. The parent should always exist before the child is spawned.
-                        if render_view_manager.get_view(parent_id)
-                            == Some(self.render_view_id)
-                        {
-                            panic!(
-                                "render element {:?} spawned to a non-existent parent {:?} in render view {:?}",
-                                element_id, parent_id, self.render_view_id
-                            );
-                        }
-
-                        return None;
-                    };
-
-                    if parent.canvas.tail.is_some() {
-                        Some(parent_id)
-                    } else {
-                        parent.head_target
-                    }
-                }),
-
-                offset: Offset::ZERO,
-
-                ..RenderObject::default()
-            },
-        );
-    }
+    fn create_element(&mut self, tree: &Tree<ElementId, Element>, element_id: ElementId) {}
 
     fn update_element(&mut self, engine: &Engine, fonts: &mut VelloFonts, element_id: ElementId) {
         let render_element = self

@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    mem,
     ops::{Index, IndexMut},
 };
 
@@ -71,12 +72,45 @@ where
         self.nodes.contains_key(node_id)
     }
 
-    pub fn get_depth(&self, node_id: K) -> Option<usize> {
-        self.nodes.get(node_id).map(|node| node.depth)
+    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
+        self.nodes.get(node_id)
     }
 
-    pub(super) fn clear(&mut self) {
-        self.nodes.clear();
+    pub fn get_node_mut(&mut self, node_id: K) -> Option<&mut TreeNode<K, V>> {
+        self.nodes.get_mut(node_id)
+    }
+
+    pub fn get(&self, node_id: K) -> Option<&V> {
+        self.get_node(node_id).map(|node| node.value())
+    }
+
+    pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
+        self.get_node_mut(node_id).map(|node| node.value_mut())
+    }
+
+    pub fn get_parent(&self, node_id: K) -> Option<K> {
+        self.get_node(node_id).and_then(|node| node.parent())
+    }
+
+    pub fn get_child(&self, node_id: K, idx: usize) -> Option<K> {
+        self.get_node(node_id)
+            .and_then(|node| node.children.get(idx).copied())
+    }
+
+    pub fn get_children(&self, node_id: K) -> Option<&Vec<K>> {
+        self.get_node(node_id).map(|node| &node.children)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn get_depth(&self, node_id: K) -> Option<usize> {
+        self.nodes.get(node_id).map(|node| node.depth)
     }
 
     pub(super) fn add(&mut self, parent_id: Option<K>, value: V) -> K {
@@ -111,6 +145,47 @@ where
         } else {
             None
         }
+    }
+
+    /// Retains only the children of the given node specified by the predicate.
+    pub fn retain_children<F>(&mut self, node_id: K, mut func: F)
+    where
+        F: FnMut(&K) -> bool,
+    {
+        let Some(node) = self.get_node_mut(node_id) else {
+            return;
+        };
+
+        let mut children = Vec::new();
+
+        // With many children, it's potentially very expensive to allocate a new
+        // array that would contian all of the children that need to be removed.
+        // Instead we create a new array, which will not allocate, and swap it
+        // with the node's current children. This lets us `retain` the children
+        // while also modifying the tree in-place.
+        mem::swap(&mut children, &mut node.children);
+
+        children.retain(|child_id| {
+            if !func(child_id) {
+                // We don't need to call `self.remove` here, because we've already
+                // removed the child from the parent's children list.
+                self.nodes.remove(*child_id);
+
+                false
+            } else {
+                true
+            }
+        });
+
+        let node = self
+            .get_node_mut(node_id)
+            .expect("node was removed while retaining children");
+
+        mem::swap(&mut children, &mut node.children);
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.nodes.clear();
     }
 
     /// Moves a node from one parent to another.
@@ -191,68 +266,16 @@ where
         }
     }
 
-    pub fn with<F, R>(&mut self, node_id: K, func: F) -> Option<R>
-    where
-        F: FnOnce(&mut TreeMap<K, V>, &mut V) -> R,
-    {
-        if let Some(mut value) = self.take(node_id) {
-            let ret = func(self, &mut value);
-
-            self.replace(node_id, value);
-
-            Some(ret)
-        } else {
-            None
-        }
-    }
-
-    pub fn take(&mut self, node_id: K) -> Option<V> {
+    pub(super) fn take(&mut self, node_id: K) -> Option<V> {
         self.nodes
             .get_mut(node_id)
             .map(|node| node.value.take().expect("node is currently in use"))
     }
 
-    pub fn replace(&mut self, node_id: K, value: V) {
+    pub(super) fn replace(&mut self, node_id: K, value: V) {
         self.nodes
             .get_mut(node_id)
             .map(|node| node.value.replace(value));
-    }
-
-    pub fn get_node(&self, node_id: K) -> Option<&TreeNode<K, V>> {
-        self.nodes.get(node_id)
-    }
-
-    pub fn get_node_mut(&mut self, node_id: K) -> Option<&mut TreeNode<K, V>> {
-        self.nodes.get_mut(node_id)
-    }
-
-    pub fn get(&self, node_id: K) -> Option<&V> {
-        self.get_node(node_id).map(|node| node.value())
-    }
-
-    pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.get_node_mut(node_id).map(|node| node.value_mut())
-    }
-
-    pub fn get_parent(&self, node_id: K) -> Option<K> {
-        self.get_node(node_id).and_then(|node| node.parent())
-    }
-
-    pub fn get_child(&self, node_id: K, idx: usize) -> Option<K> {
-        self.get_node(node_id)
-            .and_then(|node| node.children.get(idx).copied())
-    }
-
-    pub fn get_children(&self, node_id: K) -> Option<&Vec<K>> {
-        self.get_node(node_id).map(|node| &node.children)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.nodes.len()
     }
 
     pub fn iter(&self) -> Iter<K, TreeNode<K, V>> {
@@ -411,53 +434,53 @@ where
         None
     }
 
-    /// Returns any nodes that do not have any other node as a parent.
-    pub fn filter_topmost<I>(&self, nodes: I) -> Vec<K>
-    where
-        I: Iterator<Item = K>,
-    {
-        let mut topmost = Vec::new();
+    // /// Returns any nodes that do not have any other node as a parent.
+    // pub fn filter_topmost<I>(&self, nodes: I) -> Vec<K>
+    // where
+    //     I: Iterator<Item = K>,
+    // {
+    //     let mut topmost = Vec::new();
 
-        'main: for key in nodes {
-            let tree_node = match self.nodes.get(key) {
-                Some(widget) => widget,
-                None => continue,
-            };
+    //     'main: for key in nodes {
+    //         let tree_node = match self.nodes.get(key) {
+    //             Some(widget) => widget,
+    //             None => continue,
+    //         };
 
-            let node_depth = tree_node.depth;
+    //         let node_depth = tree_node.depth;
 
-            let mut i = 0;
+    //         let mut i = 0;
 
-            while i < topmost.len() {
-                let (dirty_id, dirty_depth) = topmost[i];
+    //         while i < topmost.len() {
+    //             let (dirty_id, dirty_depth) = topmost[i];
 
-                // If they're at the same depth, bail. No reason to check if they're children.
-                if node_depth != dirty_depth {
-                    if node_depth > dirty_depth {
-                        // If the node is a child of one of the `topmost` nodes, bail
-                        if self.has_child(dirty_id, key) {
-                            continue 'main;
-                        }
-                    } else {
-                        // If the node is a parent of a node already in the `topmost` vec, remove it
-                        if self.has_child(key, dirty_id) {
-                            topmost.remove(i);
-                            continue;
-                        }
-                    }
-                }
+    //             // If they're at the same depth, bail. No reason to check if they're children.
+    //             if node_depth != dirty_depth {
+    //                 if node_depth > dirty_depth {
+    //                     // If the node is a child of one of the `topmost` nodes, bail
+    //                     if self.has_child(dirty_id, key) {
+    //                         continue 'main;
+    //                     }
+    //                 } else {
+    //                     // If the node is a parent of a node already in the `topmost` vec, remove it
+    //                     if self.has_child(key, dirty_id) {
+    //                         topmost.remove(i);
+    //                         continue;
+    //                     }
+    //                 }
+    //             }
 
-                i += 1;
-            }
+    //             i += 1;
+    //         }
 
-            topmost.push((key, node_depth));
-        }
+    //         topmost.push((key, node_depth));
+    //     }
 
-        topmost
-            .into_iter()
-            .map(|(widget_id, _)| widget_id)
-            .collect::<Vec<_>>()
-    }
+    //     topmost
+    //         .into_iter()
+    //         .map(|(widget_id, _)| widget_id)
+    //         .collect::<Vec<_>>()
+    // }
 }
 
 impl<K, V> Index<K> for TreeMap<K, V>

@@ -33,10 +33,6 @@ impl<W> ElementWidget for LayoutElement<W>
 where
     W: AnyWidget + WidgetLayout,
 {
-    fn widget_name(&self) -> &'static str {
-        self.widget.widget_name()
-    }
-
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;

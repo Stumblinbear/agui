@@ -32,10 +32,6 @@ impl<W> ElementWidget for PaintElement<W>
 where
     W: WidgetPaint,
 {
-    fn widget_name(&self) -> &'static str {
-        self.widget.widget_name()
-    }
-
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;
@@ -77,8 +73,7 @@ where
             tail: None,
         };
 
-        self.widget
-            .paint(CanvasPainter::<Head<()>>::begin(&mut canvas));
+        self.widget.paint(CanvasPainter::begin(&mut canvas));
 
         if !canvas.head.is_empty() || !canvas.children.is_empty() || canvas.tail.is_some() {
             Some(canvas)

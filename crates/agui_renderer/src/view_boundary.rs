@@ -2,23 +2,46 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementMountContext, ElementUpdate,
-        RenderObjectBuildContext, RenderObjectUpdateContext,
+        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementMountContext,
+        ElementType, ElementUpdate, RenderObjectBuildContext, RenderObjectUpdateContext,
     },
-    render::{RenderObject, RenderObjectImpl},
+    render::{binding::ViewBinding, RenderObject, RenderObjectImpl},
     widget::{IntoWidget, Widget},
 };
+use agui_macros::WidgetProps;
 
-use crate::{CurrentRenderView, RenderViewId, RenderViewManager, View};
+use crate::{CurrentRenderView, RenderViewId, RenderViewManager};
 
-pub struct ViewElement {
-    widget: Rc<View>,
+#[derive(WidgetProps)]
+pub struct ViewBoundary {
+    pub binding: Rc<dyn ViewBinding>,
+
+    pub child: Widget,
+}
+
+impl IntoWidget for ViewBoundary {
+    fn into_widget(self) -> Widget {
+        Widget::new(self)
+    }
+}
+
+impl ElementBuilder for ViewBoundary {
+    fn create_element(self: Rc<Self>) -> ElementType
+    where
+        Self: Sized,
+    {
+        ElementType::Render(Box::new(ViewBoundaryElement::new(self)))
+    }
+}
+
+pub struct ViewBoundaryElement {
+    widget: Rc<ViewBoundary>,
 
     child: Widget,
 }
 
-impl ViewElement {
-    pub fn new(widget: Rc<View>) -> Self {
+impl ViewBoundaryElement {
+    pub fn new(widget: Rc<ViewBoundary>) -> Self {
         let child = CurrentRenderView {
             id: RenderViewId::default(),
 
@@ -30,7 +53,7 @@ impl ViewElement {
     }
 }
 
-impl ElementWidget for ViewElement {
+impl ElementWidget for ViewBoundaryElement {
     fn mount(&mut self, ctx: &mut ElementMountContext) {
         if let Some(render_view_manager) = RenderViewManager::of_mut(ctx.plugins) {
             self.child = CurrentRenderView {
@@ -43,7 +66,7 @@ impl ElementWidget for ViewElement {
     }
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
-        if let Some(new_widget) = new_widget.downcast::<View>() {
+        if let Some(new_widget) = new_widget.downcast::<ViewBoundary>() {
             self.widget = new_widget;
 
             ElementUpdate::RebuildNecessary
@@ -53,17 +76,17 @@ impl ElementWidget for ViewElement {
     }
 }
 
-impl ElementRender for ViewElement {
+impl ElementRender for ViewBoundaryElement {
     fn children(&self) -> Vec<Widget> {
         vec![self.child.clone()]
     }
 
     fn create_render_object(&mut self, ctx: &mut RenderObjectBuildContext) -> RenderObject {
-        RenderObject::new(RenderView)
+        RenderObject::new(RenderViewBoundary)
     }
 
     fn is_valid_render_object(&self, render_object: &RenderObject) -> bool {
-        render_object.is::<RenderView>()
+        render_object.is::<RenderViewBoundary>()
     }
 
     fn update_render_object(
@@ -74,17 +97,17 @@ impl ElementRender for ViewElement {
     }
 }
 
-impl std::fmt::Debug for ViewElement {
+impl std::fmt::Debug for ViewBoundaryElement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("ViewElement");
+        let mut dbg = f.debug_struct("ViewBoundaryElement");
 
         dbg.finish()
     }
 }
 
-struct RenderView;
+struct RenderViewBoundary;
 
-impl RenderObjectImpl for RenderView {
+impl RenderObjectImpl for RenderViewBoundary {
     fn is_sized_by_parent(&self) -> bool {
         true
     }
