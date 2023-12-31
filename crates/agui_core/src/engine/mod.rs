@@ -281,6 +281,10 @@ impl Engine {
                         "laying out render object"
                     );
 
+                    // TODO: we need a way to allow render objects to create new elements
+                    // during layout. This is important for performant responsivity, since
+                    // some elements may want to change which children they have based on
+                    // the parent element's size constraints.
                     render_object.layout(
                         RenderObjectContextMut {
                             plugins: &mut self.plugins,
