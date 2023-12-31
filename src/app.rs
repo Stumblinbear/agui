@@ -1,6 +1,7 @@
 use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
+use agui_vello::VelloViewBinding;
 // #[cfg(feature = "vello")]
 // use agui_vello::VelloPlugin;
 // #[cfg(feature = "winit")]
@@ -22,7 +23,11 @@ pub fn run_app(widget: impl IntoWidget) -> Result<(), Box<dyn std::error::Error>
     // );
 
     #[cfg(feature = "vello")]
-    let root = build!(<agui_vello::VelloView> { child: widget.into_widget() });
+    let root = build!(<agui_vello::VelloView> {
+        binding: || VelloViewBinding,
+
+        child: widget.into_widget()
+    });
 
     let mut engine = Engine::builder()
         // .with_notifier(update_notifier_tx.clone())

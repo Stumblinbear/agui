@@ -2,67 +2,97 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        view::ElementView, widget::ElementWidget, ElementBuilder, ElementType, ElementUpdate,
+        render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
+        ElementType, ElementUpdate, RenderObjectBuildContext, RenderObjectUpdateContext,
     },
-    render::RenderObjectId,
-    widget::{IntoWidget, Widget},
+    render::{RenderObject, RenderObjectId, RenderObjectImpl, ViewBinding},
+    widget::Widget,
 };
 use agui_macros::WidgetProps;
 
 #[derive(WidgetProps)]
-pub struct VelloView {
+pub struct VelloView<F>
+where
+    F: Fn() -> VelloViewBinding + 'static,
+{
+    pub binding: F,
+
     #[prop(into)]
     pub child: Widget,
 }
 
-impl IntoWidget for VelloView {
-    fn into_widget(self) -> Widget {
-        Widget::new(self)
-    }
-}
-
-impl ElementBuilder for VelloView {
+impl<F> ElementBuilder for VelloView<F>
+where
+    F: Fn() -> VelloViewBinding + 'static,
+{
     fn create_element(self: std::rc::Rc<Self>) -> ElementType
     where
         Self: Sized,
     {
-        ElementType::View(Box::new(VelloViewElement::new(self)))
+        ElementType::View(Box::new(VelloViewElement::new(
+            (self.binding)(),
+            self.child.clone(),
+        )))
     }
 }
 
 struct VelloViewElement {
-    widget: Rc<VelloView>,
+    binding: Rc<dyn ViewBinding>,
+
+    child: Widget,
 }
 
 impl VelloViewElement {
-    pub fn new(widget: Rc<VelloView>) -> Self {
-        Self { widget }
-    }
-}
+    pub fn new(binding: VelloViewBinding, child: Widget) -> Self {
+        Self {
+            binding: Rc::new(binding),
 
-impl ElementWidget for VelloViewElement {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
-        if let Some(new_widget) = new_widget.downcast::<VelloView>() {
-            if self.widget.child == new_widget.child {
-                return ElementUpdate::Noop;
-            }
-
-            self.widget = new_widget;
-
-            ElementUpdate::RebuildNecessary
-        } else {
-            ElementUpdate::Invalid
+            child,
         }
     }
 }
 
-impl ElementView for VelloViewElement {
-    fn child(&self) -> Widget {
-        self.widget.child.clone()
+impl ElementWidget for VelloViewElement {
+    fn update(&mut self, _: &Widget) -> ElementUpdate {
+        ElementUpdate::Invalid
+    }
+}
+
+impl ElementRender for VelloViewElement {
+    fn children(&self) -> Vec<Widget> {
+        vec![self.child.clone()]
     }
 
+    fn create_render_object(&mut self, _: &mut RenderObjectBuildContext) -> RenderObject {
+        RenderObject::new(RenderVelloView)
+    }
+
+    fn is_valid_render_object(&self, render_object: &RenderObject) -> bool {
+        render_object.is::<RenderVelloView>()
+    }
+
+    fn update_render_object(&mut self, _: &mut RenderObjectUpdateContext, _: &mut RenderObject) {}
+}
+
+impl ElementView for VelloViewElement {
+    fn binding(&self) -> &Rc<dyn ViewBinding> {
+        &self.binding
+    }
+}
+
+struct RenderVelloView;
+
+impl RenderObjectImpl for RenderVelloView {
+    fn is_sized_by_parent(&self) -> bool {
+        true
+    }
+}
+
+pub struct VelloViewBinding;
+
+impl ViewBinding for VelloViewBinding {
     fn on_attach(
-        &mut self,
+        &self,
         parent_render_object_id: Option<RenderObjectId>,
         render_object_id: RenderObjectId,
     ) {
@@ -72,36 +102,30 @@ impl ElementView for VelloViewElement {
         );
     }
 
-    fn on_detach(&mut self, render_object_id: RenderObjectId) {
+    fn on_detach(&self, render_object_id: RenderObjectId) {
         println!("VelloViewElement::on_detach {:?}", render_object_id);
     }
 
-    fn on_layout(&mut self, render_object_id: RenderObjectId) {
+    fn on_layout(&self, render_object_id: RenderObjectId) {
         println!("VelloViewElement::on_layout {:?}", render_object_id);
     }
 
-    fn on_paint(&mut self, render_object_id: RenderObjectId) {
-        println!("VelloViewElement::on_paint {:?}", render_object_id);
+    fn on_needs_paint(&self, render_object_id: RenderObjectId) {
+        println!("VelloViewElement::on_needs_paint {:?}", render_object_id);
     }
 
-    fn on_needs_semantics_update(&mut self, render_object_id: RenderObjectId) {
+    fn on_needs_semantics_update(&self, render_object_id: RenderObjectId) {
         println!(
             "VelloViewElement::on_needs_semantics_update {:?}",
             render_object_id
         );
     }
 
-    fn redraw(&mut self) {
-        println!("VelloViewElement::redraw");
+    fn on_redraw(&self) {
+        println!("VelloViewElement::on_redraw");
     }
 
-    fn render(&self) {
-        println!("VelloViewElement::render");
-    }
-}
-
-impl std::fmt::Debug for VelloViewElement {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VelloViewElement").finish()
+    fn on_needs_render(&self) {
+        println!("VelloViewElement::on_needs_render");
     }
 }

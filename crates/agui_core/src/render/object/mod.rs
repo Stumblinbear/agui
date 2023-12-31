@@ -1,5 +1,5 @@
 use crate::{
-    element::ElementId,
+    render::RenderView,
     unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
 };
 
@@ -10,11 +10,9 @@ use super::canvas::{
 
 mod context;
 mod render_box;
-mod render_view;
 
 pub use context::*;
 pub use render_box::*;
-pub use render_view::*;
 
 slotmap::new_key_type! {
     pub struct RenderObjectId;
@@ -23,7 +21,7 @@ slotmap::new_key_type! {
 pub struct RenderObject {
     render_object: Box<dyn RenderObjectImpl>,
 
-    render_view_id: Option<ElementId>,
+    render_view: Option<RenderView>,
 
     /// Tracks which render object should be used when this render object needs
     /// to have its layout updated.
@@ -51,12 +49,11 @@ impl RenderObject {
         Self {
             render_object: Box::new(render_object),
 
-            size: None,
-            parent_uses_size: false,
+            render_view: None,
 
             relayout_boundary_id: None,
-            render_view_id: None,
-
+            size: None,
+            parent_uses_size: false,
             offset: Offset::ZERO,
         }
     }
@@ -86,12 +83,12 @@ impl RenderObject {
         (*self.render_object).short_type_name()
     }
 
-    pub fn render_view_id(&self) -> Option<ElementId> {
-        self.render_view_id
+    pub(crate) fn render_view(&self) -> Option<&RenderView> {
+        self.render_view.as_ref()
     }
 
-    pub(crate) fn set_render_view_id(&mut self, render_view_id: ElementId) {
-        self.render_view_id = Some(render_view_id);
+    pub(crate) fn set_render_view(&mut self, render_view: RenderView) {
+        self.render_view = Some(render_view);
     }
 
     pub fn relayout_boundary_id(&self) -> Option<RenderObjectId> {

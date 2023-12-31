@@ -9,8 +9,6 @@ pub struct PluginElementMountContext<'ctx> {
     pub element_tree: &'ctx Tree<ElementId, Element>,
 
     pub needs_build: &'ctx mut Dirty<ElementId>,
-    pub needs_layout: &'ctx mut Dirty<RenderObjectId>,
-    pub needs_paint: &'ctx mut Dirty<RenderObjectId>,
 
     pub parent_element_id: Option<&'ctx ElementId>,
     pub element_id: &'ctx ElementId,

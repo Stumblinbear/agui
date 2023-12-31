@@ -10,8 +10,6 @@ pub struct PluginElementBuildContext<'ctx> {
     pub element_tree: &'ctx Tree<ElementId, Element>,
 
     pub needs_build: &'ctx mut Dirty<ElementId>,
-    pub needs_layout: &'ctx mut Dirty<RenderObjectId>,
-    pub needs_paint: &'ctx mut Dirty<RenderObjectId>,
 
     pub element_id: &'ctx ElementId,
     pub element: &'ctx Element,

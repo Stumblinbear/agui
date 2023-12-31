@@ -4,6 +4,8 @@ use quote::quote;
 use syn::{parse::Error, spanned::Spanned};
 use syn::{parse2, ItemStruct};
 
+use crate::utils::resolve_package_path;
+
 mod field_info;
 mod struct_info;
 mod util;
@@ -17,58 +19,46 @@ pub fn impl_widget_props(input: TokenStream2) -> TokenStream2 {
     impl_props_derive(&item).unwrap_or_else(|err| err.into_compile_error())
 }
 
-pub fn impl_props_derive(ast: &syn::ItemStruct) -> Result<TokenStream2, Error> {
-    let data = match &ast.fields {
-        syn::Fields::Named(fields) => {
-            let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
-            let builder_creation = struct_info.builder_creation_impl()?;
-            let fields = struct_info
-                .included_fields()
-                .map(|f| struct_info.field_impl(f))
-                .collect::<Result<TokenStream2, _>>()?;
-            let required_fields = struct_info
-                .included_fields()
-                .filter(|f| f.builder_attr.default.is_none())
-                .map(|f| struct_info.required_field_impl(f));
-            let build_method = struct_info.build_method_impl();
+pub fn impl_props_derive(item: &syn::ItemStruct) -> Result<TokenStream2, Error> {
+    let agui_core = resolve_package_path("agui_core");
 
-            quote! {
-                #builder_creation
-                #fields
-                #(#required_fields)*
-                #build_method
-            }
-        }
+    let ident = &item.ident;
+    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
+
+    let struct_info = match &item.fields {
+        syn::Fields::Named(fields) => struct_info::StructInfo::new(item, fields.named.iter())?,
+
+        syn::Fields::Unit => struct_info::StructInfo::new(item, &[])?,
 
         syn::Fields::Unnamed(_) => {
             return Err(Error::new(
-                ast.span(),
+                item.span(),
                 "TypedBuilder is not supported for tuple structs",
             ))
         }
-
-        syn::Fields::Unit => {
-            let fields = Vec::new();
-            let struct_info = struct_info::StructInfo::new(ast, fields.iter())?;
-            let builder_creation = struct_info.builder_creation_impl()?;
-            let fields = struct_info
-                .included_fields()
-                .map(|f| struct_info.field_impl(f))
-                .collect::<Result<TokenStream2, _>>()?;
-            let required_fields = struct_info
-                .included_fields()
-                .filter(|f| f.builder_attr.default.is_none())
-                .map(|f| struct_info.required_field_impl(f));
-            let build_method = struct_info.build_method_impl();
-
-            quote! {
-                #builder_creation
-                #fields
-                #(#required_fields)*
-                #build_method
-            }
-        }
     };
 
-    Ok(data)
+    let builder_creation = struct_info.builder_creation_impl()?;
+    let fields = struct_info
+        .included_fields()
+        .map(|f| struct_info.field_impl(f))
+        .collect::<Result<TokenStream2, _>>()?;
+    let required_fields = struct_info
+        .included_fields()
+        .filter(|f| f.builder_attr.default.is_none())
+        .map(|f| struct_info.required_field_impl(f));
+    let build_method = struct_info.build_method_impl();
+
+    Ok(quote! {
+        #builder_creation
+        #fields
+        #(#required_fields)*
+        #build_method
+
+        impl #impl_generics #agui_core::widget::IntoWidget for #ident #ty_generics #where_clause {
+            fn into_widget(self) -> #agui_core::widget::Widget {
+                #agui_core::widget::Widget::new(self)
+            }
+        }
+    })
 }

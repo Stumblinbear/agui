@@ -30,7 +30,7 @@ impl<'a> StructInfo<'a> {
 
     pub fn new(
         ast: &'a syn::ItemStruct,
-        fields: impl Iterator<Item = &'a syn::Field>,
+        fields: impl IntoIterator<Item = &'a syn::Field>,
     ) -> Result<StructInfo<'a>, Error> {
         let builder_attr = TypeBuilderAttr::new(&ast.attrs)?;
         let builder_name = strip_raw_ident_prefix(format!("{}Props", ast.ident));
@@ -40,6 +40,7 @@ impl<'a> StructInfo<'a> {
             name: &ast.ident,
             generics: &ast.generics,
             fields: fields
+                .into_iter()
                 .enumerate()
                 .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
                 .collect::<Result<_, _>>()?,

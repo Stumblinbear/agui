@@ -9,4 +9,4 @@
 // pub use renderer::VelloRenderer;
 mod view;
 
-pub use view::VelloView;
+pub use view::{VelloView, VelloViewBinding};

@@ -3,20 +3,17 @@ use std::any::Any;
 use crate::{
     callback::CallbackId,
     element::view::ElementView,
-    render::{RenderBox, RenderObject, RenderObjectId, RenderView},
+    render::{RenderBox, RenderObject, RenderObjectId},
     widget::Widget,
 };
 
-use self::{
-    build::ElementBuild, proxy::ElementProxy, render::ElementRender, widget::ElementWidget,
-};
+use self::{build::ElementBuild, render::ElementRender, widget::ElementWidget};
 
 pub mod build;
 mod builder;
 mod context;
 #[cfg(any(test, feature = "mocks"))]
 pub mod mock;
-pub mod proxy;
 pub mod render;
 mod update;
 pub mod view;
@@ -39,8 +36,6 @@ pub struct Element {
 }
 
 pub enum ElementType {
-    Proxy(Box<dyn ElementProxy>),
-
     Widget(Box<dyn ElementBuild>),
 
     View(Box<dyn ElementView>),
@@ -75,8 +70,6 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
-            ElementType::Proxy(ref element) => (**element).as_any().is::<E>(),
-
             ElementType::Widget(ref element) => (**element).as_any().is::<E>(),
 
             ElementType::View(ref element) => (**element).as_any().is::<E>(),
@@ -89,8 +82,6 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
-            ElementType::Proxy(ref element) => (**element).as_any().downcast_ref::<E>(),
-
             ElementType::Widget(ref element) => (**element).as_any().downcast_ref::<E>(),
 
             ElementType::View(ref element) => (**element).as_any().downcast_ref::<E>(),
@@ -103,8 +94,6 @@ impl Element {
         E: ElementWidget,
     {
         match self.inner {
-            ElementType::Proxy(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
-
             ElementType::Widget(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
 
             ElementType::View(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
@@ -115,8 +104,6 @@ impl Element {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn mount(&mut self, ctx: &mut ElementMountContext) {
         match self.inner {
-            ElementType::Proxy(ref mut element) => element.mount(ctx),
-
             ElementType::Widget(ref mut element) => element.mount(ctx),
 
             ElementType::View(ref mut element) => element.mount(ctx),
@@ -127,8 +114,6 @@ impl Element {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
         match self.inner {
-            ElementType::Proxy(ref mut element) => element.unmount(ctx),
-
             ElementType::Widget(ref mut element) => element.unmount(ctx),
 
             ElementType::View(ref mut element) => element.unmount(ctx),
@@ -139,11 +124,9 @@ impl Element {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn build(&mut self, ctx: &mut ElementBuildContext) -> Vec<Widget> {
         match self.inner {
-            ElementType::Proxy(ref mut element) => Vec::from([element.child()]),
-
             ElementType::Widget(ref mut element) => Vec::from([element.build(ctx)]),
 
-            ElementType::View(ref mut element) => Vec::from([element.child()]),
+            ElementType::View(ref mut element) => element.children(),
             ElementType::Render(ref mut element) => element.children(),
         }
     }
@@ -155,8 +138,6 @@ impl Element {
         }
 
         let result = match self.inner {
-            ElementType::Proxy(ref mut element) => element.update(new_widget),
-
             ElementType::Widget(ref mut element) => element.update(new_widget),
 
             ElementType::View(ref mut element) => element.update(new_widget),
@@ -182,7 +163,7 @@ impl Element {
         arg: Box<dyn Any>,
     ) -> bool {
         match self.inner {
-            ElementType::Proxy(_) | ElementType::View(_) | ElementType::Render(_) => {
+            ElementType::View(_) | ElementType::Render(_) => {
                 tracing::warn!("attempted to call a callback on an unsupported element");
 
                 false
@@ -199,11 +180,11 @@ impl Element {
     pub fn create_render_object(&mut self, ctx: &mut ElementBuildContext) -> RenderObject {
         match self.inner {
             // Use the default render object for proxies and widgets
-            ElementType::Proxy(_) | ElementType::Widget(_) => {
-                RenderObject::new(RenderBox::default())
-            }
+            ElementType::Widget(_) => RenderObject::new(RenderBox::default()),
 
-            ElementType::View(_) => RenderObject::new(RenderView::default()),
+            ElementType::View(ref mut element) => {
+                element.create_render_object(&mut RenderObjectBuildContext { inner: ctx })
+            }
 
             ElementType::Render(ref mut element) => {
                 element.create_render_object(&mut RenderObjectBuildContext { inner: ctx })
@@ -248,7 +229,6 @@ impl std::fmt::Debug for Element {
         }
 
         f.debug_struct(match self.inner {
-            ElementType::Proxy(_) => "ProxyElement",
             ElementType::Widget(_) => "WidgetElement",
             ElementType::View(_) => "ViewElement",
             ElementType::Render(_) => "RenderElement",

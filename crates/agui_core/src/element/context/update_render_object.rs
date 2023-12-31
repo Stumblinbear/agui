@@ -1,8 +1,5 @@
-use std::ops::{Deref, DerefMut};
-
 use crate::{
-    callback::{CallbackQueue, ContextCallbackQueue},
-    element::{ContextDirtyRenderObject, Element, ElementBuildContext, ElementId},
+    element::{ContextDirtyRenderObject, Element, ElementId},
     plugin::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
@@ -13,72 +10,55 @@ use crate::{
 
 use super::{ContextElement, ContextElements, ContextRenderObject};
 
-pub struct RenderObjectUpdateContext<'ctx, 'element> {
-    pub(crate) inner: &'element mut ElementBuildContext<'ctx>,
+pub struct RenderObjectUpdateContext<'ctx> {
+    pub plugins: &'ctx mut Plugins,
 
-    pub relayout_boundary_id: &'element Option<RenderObjectId>,
+    pub element_tree: &'ctx Tree<ElementId, Element>,
 
-    pub render_object_id: &'element RenderObjectId,
+    pub needs_layout: &'ctx mut bool,
+    pub needs_paint: &'ctx mut bool,
+
+    pub element_id: &'ctx ElementId,
+    pub relayout_boundary_id: &'ctx Option<RenderObjectId>,
+    pub render_object_id: &'ctx RenderObjectId,
 }
 
-impl ContextElements for RenderObjectUpdateContext<'_, '_> {
+impl<'ctx> ContextPlugins<'ctx> for RenderObjectUpdateContext<'ctx> {
+    fn plugins(&self) -> &Plugins {
+        self.plugins
+    }
+}
+
+impl<'ctx> ContextPluginsMut<'ctx> for RenderObjectUpdateContext<'ctx> {
+    fn plugins_mut(&mut self) -> &mut Plugins {
+        self.plugins
+    }
+}
+
+impl ContextElements for RenderObjectUpdateContext<'_> {
     fn elements(&self) -> &Tree<ElementId, Element> {
-        self.inner.elements()
+        self.element_tree
     }
 }
 
-impl ContextElement for RenderObjectUpdateContext<'_, '_> {
+impl ContextElement for RenderObjectUpdateContext<'_> {
     fn element_id(&self) -> ElementId {
-        self.inner.element_id()
+        *self.element_id
     }
 }
 
-impl ContextRenderObject for RenderObjectUpdateContext<'_, '_> {
+impl ContextRenderObject for RenderObjectUpdateContext<'_> {
     fn render_object_id(&self) -> RenderObjectId {
         *self.render_object_id
     }
 }
 
-impl<'ctx> ContextPlugins<'ctx> for RenderObjectUpdateContext<'ctx, '_> {
-    fn plugins(&self) -> &Plugins {
-        self.inner.plugins()
-    }
-}
-
-impl<'ctx> ContextPluginsMut<'ctx> for RenderObjectUpdateContext<'ctx, '_> {
-    fn plugins_mut(&mut self) -> &mut Plugins {
-        self.inner.plugins_mut()
-    }
-}
-
-impl ContextDirtyRenderObject for RenderObjectUpdateContext<'_, '_> {
+impl ContextDirtyRenderObject for RenderObjectUpdateContext<'_> {
     fn mark_needs_layout(&mut self) {
-        self.inner
-            .needs_layout
-            .insert(self.relayout_boundary_id.unwrap_or(*self.render_object_id))
+        *self.needs_layout = true;
     }
 
     fn mark_needs_paint(&mut self) {
-        self.inner.needs_paint.insert(*self.render_object_id)
-    }
-}
-
-impl ContextCallbackQueue for RenderObjectUpdateContext<'_, '_> {
-    fn callback_queue(&self) -> &CallbackQueue {
-        self.inner.callback_queue()
-    }
-}
-
-impl<'ctx> Deref for RenderObjectUpdateContext<'ctx, '_> {
-    type Target = ElementBuildContext<'ctx>;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner
-    }
-}
-
-impl<'ctx> DerefMut for RenderObjectUpdateContext<'ctx, '_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner
+        *self.needs_paint = true;
     }
 }

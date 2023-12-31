@@ -6,7 +6,6 @@ use crate::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
-    render::RenderObjectId,
     util::tree::Tree,
 };
 
@@ -19,8 +18,6 @@ pub struct ElementBuildContext<'ctx> {
     pub callback_queue: &'ctx CallbackQueue,
 
     pub needs_build: &'ctx mut Dirty<ElementId>,
-    pub needs_layout: &'ctx mut Dirty<RenderObjectId>,
-    pub needs_paint: &'ctx mut Dirty<RenderObjectId>,
 
     pub element_id: &'ctx ElementId,
 }

@@ -1,5 +1,5 @@
 use core::panic;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -20,7 +20,7 @@ use crate::{
         Plugins,
     },
     query::WidgetQuery,
-    render::{RenderObject, RenderObjectContextMut, RenderObjectId},
+    render::{RenderObject, RenderObjectContextMut, RenderObjectId, RenderView},
     unit::{Constraints, Key},
     util::tree::Tree,
     widget::Widget,
@@ -145,25 +145,23 @@ impl Engine {
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
         while self.has_changes() {
-            // We want to resolve all changes before we do any layout to reduce the overall amount of
-            // work we have to do.
-            while self.has_changes() {
-                self.flush_rebuilds();
+            self.flush_rebuilds();
 
-                self.flush_dirty();
+            self.flush_dirty();
 
-                self.flush_callbacks();
-            }
-
-            // We sync render after the rebuild loop to prevent unnecessary work keeping the render
-            // tree up-to-date. This is done before `flush_removals` so that we can steal any render
-            // objects that would otherwise be removed.
-            self.sync_render_objects();
-
-            self.flush_removals();
-
-            self.flush_layout();
+            self.flush_callbacks();
         }
+
+        // We sync render after the rebuild loop to prevent unnecessary work keeping the render
+        // tree up-to-date. This is done before `flush_removals` so that we can steal any render
+        // objects that would otherwise be removed.
+        self.sync_render_objects();
+
+        self.flush_removals();
+
+        // We want to resolve all changes before we do any layout to reduce the overall amount of
+        // work we have to do.
+        self.flush_layout();
 
         self.flush_views();
 
@@ -221,8 +219,6 @@ impl Engine {
 
                             element_tree,
                             needs_build: &mut self.needs_build,
-                            needs_layout: &mut self.needs_layout,
-                            needs_paint: &mut self.needs_paint,
 
                             element_id: &element_id,
                         },
@@ -296,15 +292,8 @@ impl Engine {
                         Constraints::default(),
                     );
 
-                    if let Some(render_view_id) = render_object.render_view_id() {
-                        if let ElementType::View(ref mut render_view) = self
-                            .element_tree
-                            .get_mut(render_view_id)
-                            .expect("render object is not a view")
-                            .as_mut()
-                        {
-                            render_view.on_layout(render_object_id);
-                        }
+                    if let Some(render_view) = render_object.render_view() {
+                        render_view.on_layout(render_object_id);
                     }
                 })
                 .is_some();
@@ -320,24 +309,16 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_views(&mut self) {
-        for (render_view_id, render_object_id) in
-            self.needs_paint.drain().filter_map(|render_object_id| {
-                Some((
-                    self.render_object_tree
-                        .get(render_object_id)?
-                        .render_view_id()?,
-                    render_object_id,
-                ))
-            })
-        {
-            if let ElementType::View(ref mut render_view) = self
-                .element_tree
-                .get_mut(render_view_id)
-                .expect("render object is not a view")
-                .as_mut()
-            {
-                render_view.on_paint(render_object_id);
-            }
+        for render_object_id in self.needs_paint.drain() {
+            let Some(render_view) = self
+                .render_object_tree
+                .get(render_object_id)
+                .and_then(|render_object| render_object.render_view())
+            else {
+                continue;
+            };
+
+            render_view.on_needs_paint(render_object_id);
         }
     }
 
@@ -364,8 +345,6 @@ impl Engine {
                     element_tree,
 
                     needs_build: &mut self.needs_build,
-                    needs_layout: &mut self.needs_layout,
-                    needs_paint: &mut self.needs_paint,
 
                     parent_element_id: parent_id.as_ref(),
                     element_id: &element_id,
@@ -408,8 +387,6 @@ impl Engine {
                         callback_queue: &self.callback_queue,
 
                         needs_build: &mut self.needs_build,
-                        needs_layout: &mut self.needs_layout,
-                        needs_paint: &mut self.needs_paint,
 
                         element_id: &element_id,
                     });
@@ -420,8 +397,6 @@ impl Engine {
                             callback_queue: &self.callback_queue,
 
                             needs_build: &mut self.needs_build,
-                            needs_layout: &mut self.needs_layout,
-                            needs_paint: &mut self.needs_paint,
 
                             element_id: &element_id,
                             element,
@@ -736,8 +711,6 @@ impl Engine {
                             element_tree,
 
                             needs_build: &mut self.needs_build,
-                            needs_layout: &mut self.needs_layout,
-                            needs_paint: &mut self.needs_paint,
 
                             element_id: &element_id,
                             element,
@@ -755,7 +728,7 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", skip(self))]
     fn create_render_object(&mut self, element_id: ElementId) -> RenderObjectId {
-        let (relayout_boundary_id, parent_render_object_id, parent_render_view_id) = self
+        let (relayout_boundary_id, parent_render_object_id, parent_render_view) = self
             .element_tree
             .get_parent(element_id)
             .map(|parent_element_id| {
@@ -764,17 +737,20 @@ impl Engine {
                     .get(parent_element_id)
                     .expect("parent element missing while creating render object");
 
-                if matches!(parent_element.as_ref(), ElementType::View(_)) {
-                    return (
-                        parent_element.render_object_id(),
-                        parent_element.render_object_id(),
-                        Some(parent_element_id),
-                    );
-                }
-
                 let parent_render_object_id = parent_element
                     .render_object_id()
                     .expect("parent element has no render object while creating render object");
+
+                if let ElementType::View(ref element) = parent_element.as_ref() {
+                    return (
+                        Some(parent_render_object_id),
+                        Some(parent_render_object_id),
+                        Some(RenderView::new(
+                            parent_render_object_id,
+                            Rc::clone(element.binding()),
+                        )),
+                    );
+                }
 
                 let parent_render_object = self
                     .render_object_tree
@@ -784,13 +760,12 @@ impl Engine {
                 (
                     parent_render_object.relayout_boundary_id(),
                     Some(parent_render_object_id),
-                    parent_render_object.render_view_id(),
+                    parent_render_object.render_view().cloned(),
                 )
             })
             .unwrap_or_default();
 
-        let render_object_id = self
-            .element_tree
+        self.element_tree
             .with(element_id, |element_tree, element| {
                 if let Some(render_object_id) = element.render_object_id() {
                     panic!(
@@ -799,66 +774,50 @@ impl Engine {
                     );
                 }
 
-                let mut render_object = element.create_render_object(&mut ElementBuildContext {
-                    plugins: &mut self.plugins,
+                self.render_object_tree
+                    .add_with_key(parent_render_object_id, |render_object_id| {
+                        let mut render_object =
+                            element.create_render_object(&mut ElementBuildContext {
+                                plugins: &mut self.plugins,
 
-                    element_tree,
-                    callback_queue: &self.callback_queue,
+                                element_tree,
+                                callback_queue: &self.callback_queue,
 
-                    needs_build: &mut self.needs_build,
-                    needs_layout: &mut self.needs_layout,
-                    needs_paint: &mut self.needs_paint,
+                                needs_build: &mut self.needs_build,
 
-                    element_id: &element_id,
-                });
+                                element_id: &element_id,
+                            });
 
-                if let Some(relayout_boundary_id) = relayout_boundary_id {
-                    render_object.set_relayout_boundary(relayout_boundary_id);
+                        element.set_render_object_id(render_object_id);
 
-                    self.needs_layout.insert(relayout_boundary_id);
-                }
+                        if let ElementType::View(element) = element.as_mut() {
+                            let view_binding = Rc::clone(element.binding());
 
-                if let ElementType::View(_) = element.as_mut() {
-                    // Attach the render object to its own view
-                    render_object.set_render_view_id(element_id);
-                } else if let Some(parent_render_view_id) = parent_render_view_id {
-                    render_object.set_render_view_id(parent_render_view_id);
-                }
+                            // Attach the render object as the root of its own view
+                            view_binding.on_attach(None, render_object_id);
 
-                let render_object_id = self
-                    .render_object_tree
-                    .add(parent_render_object_id, render_object);
+                            render_object
+                                .set_render_view(RenderView::new(render_object_id, view_binding));
+                        } else if let Some(parent_render_view) = parent_render_view {
+                            parent_render_view.on_attach(parent_render_object_id, render_object_id);
 
-                element.set_render_object_id(render_object_id);
+                            render_object.set_render_view(parent_render_view);
+                        }
 
-                if let ElementType::View(ref mut render_view) = element.as_mut() {
-                    // Attach the render object as the root of its own view
-                    render_view.on_attach(None, render_object_id);
+                        if render_object.render_view().is_some() {
+                            self.needs_paint.insert(render_object_id);
+                        }
 
-                    // View elements are always a relayout boundary
-                    self.needs_layout.insert(render_object_id);
-                }
+                        if let Some(relayout_boundary_id) = relayout_boundary_id {
+                            render_object.set_relayout_boundary(relayout_boundary_id);
 
-                render_object_id
+                            self.needs_layout.insert(relayout_boundary_id);
+                        }
+
+                        render_object
+                    })
             })
-            .expect("element missing while creating render objects");
-
-        if let Some(parent_render_view_id) = parent_render_view_id {
-            let ElementType::View(ref mut render_view) = self
-                .element_tree
-                .get_mut(parent_render_view_id)
-                .expect("render view missing while creating render objects")
-                .as_mut()
-            else {
-                panic!("cannot attach a render object to a non-view element");
-            };
-
-            render_view.on_attach(parent_render_object_id, render_object_id);
-        }
-
-        self.needs_paint.insert(render_object_id);
-
-        render_object_id
+            .expect("element missing while creating render objects")
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -889,33 +848,33 @@ impl Engine {
 
         // If the render object changed parents, we need to update both the old and
         // the new render views.
-        let old_render_view_id = current_parent_render_object_id
+        let old_render_view = current_parent_render_object_id
             .and_then(|parent_render_object_id| {
                 self.render_object_tree
                     .get(parent_render_object_id)
                     .map(|render_object| {
                         render_object
-                            .render_view_id()
+                            .render_view()
                             .expect("render object missing render view")
                     })
             })
-            .unwrap_or_default();
+            .cloned();
 
-        let new_render_view_id = new_parent_render_object_id
+        let new_render_view = new_parent_render_object_id
             .and_then(|parent_render_object_id| {
                 self.render_object_tree
                     .get(parent_render_object_id)
                     .map(|render_object| {
                         render_object
-                            .render_view_id()
+                            .render_view()
                             .expect("render object missing render view")
                     })
             })
-            .unwrap_or_default();
+            .cloned();
 
         // It's highly likely that it would have moved within the same render view, so we
         // check for that first.
-        if old_render_view_id == new_render_view_id {
+        if old_render_view == new_render_view {
             tracing::trace!(
                 render_object = ?self.render_object_tree.get(render_object_id).unwrap(),
                 "render object moved within the same render view"
@@ -924,44 +883,28 @@ impl Engine {
             return;
         }
 
-        let ElementType::View(ref mut old_render_view) = self
-            .element_tree
-            .get_mut(old_render_view_id)
-            .expect("old render view missing while moving render object")
-            .as_mut()
-        else {
-            panic!("the old render view is not a view");
-        };
+        if let Some(old_render_view) = old_render_view {
+            tracing::trace!(
+                render_object = ?self.render_object_tree.get(render_object_id).unwrap(),
+                "detatching render object from old render view"
+            );
 
-        tracing::trace!(
-            ?old_render_view_id,
-            render_object = ?self.render_object_tree.get(render_object_id).unwrap(),
-            "detatching render object from old render view"
-        );
-
-        old_render_view.on_detach(render_object_id);
-
-        let new_render_view_element = self
-            .element_tree
-            .get_mut(new_render_view_id)
-            .expect("new render view missing while moving render object");
-
-        // If it's being attached to the root render view, we want to clear the parent.
-        if new_parent_render_object_id == new_render_view_element.render_object_id() {
-            new_parent_render_object_id = None;
+            old_render_view.on_detach(render_object_id);
         }
 
-        let ElementType::View(ref mut new_render_view) = new_render_view_element.as_mut() else {
-            panic!("the new render view is not a view");
-        };
+        if let Some(new_render_view) = new_render_view {
+            // If it's being attached to the root render view, we want to clear the parent.
+            if new_parent_render_object_id == Some(new_render_view.root_id()) {
+                new_parent_render_object_id = None;
+            }
 
-        tracing::trace!(
-            ?new_render_view_id,
-            render_object = ?self.render_object_tree.get(render_object_id).unwrap(),
-            "attatching render object to new render view"
-        );
+            tracing::trace!(
+                render_object = ?self.render_object_tree.get(render_object_id).unwrap(),
+                "attatching render object to new render view"
+            );
 
-        new_render_view.on_attach(new_parent_render_object_id, render_object_id);
+            new_render_view.on_attach(new_parent_render_object_id, render_object_id);
+        }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -1067,26 +1010,37 @@ impl Engine {
 
             self.element_tree
                 .with(element_id, |element_tree, element| {
+                    let mut needs_layout = false;
+                    let mut needs_paint = false;
+
                     element.update_render_object(
                         &mut RenderObjectUpdateContext {
-                            inner: &mut ElementBuildContext {
-                                plugins: &mut self.plugins,
+                            plugins: &mut self.plugins,
 
-                                element_tree,
-                                callback_queue: &self.callback_queue,
+                            element_tree,
 
-                                needs_build: &mut self.needs_build,
-                                needs_layout: &mut self.needs_layout,
-                                needs_paint: &mut self.needs_paint,
+                            needs_layout: &mut needs_layout,
+                            needs_paint: &mut needs_paint,
 
-                                element_id: &element_id,
-                            },
+                            element_id: &element_id,
 
                             relayout_boundary_id: &render_object.relayout_boundary_id(),
                             render_object_id: &render_object_id,
                         },
                         render_object,
                     );
+
+                    if needs_layout {
+                        self.needs_layout.insert(
+                            render_object
+                                .relayout_boundary_id()
+                                .unwrap_or(render_object_id),
+                        )
+                    }
+
+                    if needs_paint {
+                        self.needs_paint.insert(render_object_id);
+                    }
                 })
                 .expect("element missing while creating render objects");
         }

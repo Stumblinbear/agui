@@ -1,9 +1,11 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::{
+    callback::CallbackId,
     element::{
-        proxy::ElementProxy, widget::ElementWidget, ElementBuilder, ElementMountContext,
-        ElementType, ElementUnmountContext, ElementUpdate,
+        build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementBuilder,
+        ElementCallbackContext, ElementMountContext, ElementType, ElementUnmountContext,
+        ElementUpdate,
     },
     widget::{IntoWidget, Widget},
 };
@@ -34,7 +36,7 @@ impl IntoWidget for MockProxyWidget {
 
 impl ElementBuilder for MockProxyWidget {
     fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::Proxy(Box::new(MockElement::new(self)))
+        ElementType::Widget(Box::new(MockElement::new(self)))
     }
 }
 
@@ -54,8 +56,12 @@ impl ElementWidget for MockElement {
     }
 }
 
-impl ElementProxy for MockElement {
-    fn child(&self) -> Widget {
+impl ElementBuild for MockElement {
+    fn build(&mut self, _: &mut ElementBuildContext) -> Widget {
         self.widget.mock.borrow().child()
+    }
+
+    fn call(&mut self, _: &mut ElementCallbackContext, _: CallbackId, _: Box<dyn Any>) -> bool {
+        false
     }
 }

@@ -30,7 +30,7 @@ pub trait RenderElement {
 
     fn update_render_object<'ctx>(
         &mut self,
-        ctx: &mut ElementBuildContext<'ctx>,
+        ctx: &mut RenderObjectUpdateContext<'ctx>,
         render_object: &mut RenderObject,
     );
 }

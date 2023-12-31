@@ -126,6 +126,22 @@ where
         node_id
     }
 
+    pub(super) fn add_with_key<F>(&mut self, parent_id: Option<K>, f: F) -> K
+    where
+        F: FnOnce(K) -> V,
+    {
+        let node_id = self.nodes.insert_with_key(|node_id| TreeNode {
+            depth: 0,
+            value: Some(f(node_id)),
+            parent: parent_id,
+            children: Vec::new(),
+        });
+
+        self.propagate_node(parent_id, node_id);
+
+        node_id
+    }
+
     pub(super) fn remove(&mut self, node_id: K) -> Option<V> {
         if let Some(mut node) = self.nodes.remove(node_id) {
             if let Some(parent_id) = node.parent {

@@ -74,6 +74,19 @@ where
         node_id
     }
 
+    pub fn add_with_key<F>(&mut self, parent_id: Option<K>, f: F) -> K
+    where
+        F: FnOnce(K) -> V,
+    {
+        let node_id = self.map.add_with_key(parent_id, f);
+
+        if parent_id.is_none() {
+            self.root = Some(node_id);
+        }
+
+        node_id
+    }
+
     pub fn remove(&mut self, node_id: K, cascade: bool) -> Option<V> {
         if self.root == Some(node_id) {
             self.root = None;
