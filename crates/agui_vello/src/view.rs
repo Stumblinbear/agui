@@ -120,12 +120,4 @@ impl ViewBinding for VelloViewBinding {
             render_object_id
         );
     }
-
-    fn on_redraw(&self) {
-        println!("VelloViewElement::on_redraw");
-    }
-
-    fn on_needs_render(&self) {
-        println!("VelloViewElement::on_needs_render");
-    }
 }

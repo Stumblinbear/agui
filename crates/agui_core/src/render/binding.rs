@@ -29,14 +29,14 @@ pub trait ViewBinding {
     /// information.
     fn on_needs_semantics_update(&self, render_object_id: RenderObjectId);
 
-    /// Called up to once per frame to redraw the view.
-    fn on_redraw(&self);
+    // /// Called up to once per frame to redraw the view.
+    // fn on_redraw(&self);
 
-    /// Called to render the view as it currently is.
-    ///
-    /// This is not necessarily called every frame, nor is it guaranteed to be called
-    /// after a call to [`redraw`](ElementView::redraw).
-    fn on_needs_render(&self);
+    // /// Called to render the view as it currently is.
+    // ///
+    // /// This is not necessarily called every frame, nor is it guaranteed to be called
+    // /// after a call to [`redraw`](ElementView::redraw).
+    // fn on_needs_render(&self);
 
     // fn load_font(&self, font_data: &[u8]) -> Result<Font, Box<dyn std::error::Error>>;
 
