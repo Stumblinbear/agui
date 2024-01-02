@@ -1,4 +1,4 @@
-use crate::render::RenderObjectImpl;
+use crate::render::object::RenderObjectImpl;
 
 #[derive(Default)]
 pub struct RenderBox {}

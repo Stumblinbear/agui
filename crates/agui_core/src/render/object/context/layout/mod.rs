@@ -1,6 +1,6 @@
 use crate::{
     element::{ContextRenderObject, ContextRenderObjects},
-    render::{RenderObject, RenderObjectId},
+    render::{object::RenderObject, RenderObjectId},
     util::tree::Tree,
 };
 

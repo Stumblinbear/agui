@@ -1,6 +1,6 @@
 use agui_core::{
     element::{RenderObjectCreateContext, RenderObjectUpdateContext},
-    render::RenderObjectImpl,
+    render::object::RenderObjectImpl,
     widget::{AnyWidget, Widget},
 };
 

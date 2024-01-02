@@ -1,7 +1,10 @@
 use glam::Mat4;
 
 use crate::{
-    render::{RenderObject, RenderObjectContext, RenderObjectId},
+    render::{
+        object::{RenderObject, RenderObjectContext},
+        RenderObjectId,
+    },
     unit::{HitTest, HitTestResult, Offset},
     util::tree::Tree,
 };

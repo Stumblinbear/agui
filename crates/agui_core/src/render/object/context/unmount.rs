@@ -4,7 +4,7 @@ use crate::{
         context::{ContextPlugins, ContextPluginsMut},
         Plugins,
     },
-    render::{RenderObject, RenderObjectId},
+    render::{object::RenderObject, RenderObjectId},
     util::tree::Tree,
 };
 

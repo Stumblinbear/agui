@@ -5,7 +5,11 @@ use agui_core::{
         render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
         ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
-    render::{RenderObject, RenderObjectId, RenderObjectImpl, ViewBinding},
+    render::{
+        binding::ViewBinding,
+        object::{RenderObject, RenderObjectImpl},
+        RenderObjectId,
+    },
     widget::Widget,
 };
 use agui_macros::WidgetProps;

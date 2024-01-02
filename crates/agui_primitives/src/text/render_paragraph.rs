@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use agui_core::{
     element::{ContextDirtyRenderObject, RenderObjectUpdateContext},
     render::{
-        CanvasPainter, Paint, RenderObjectImpl, RenderObjectIntrinsicSizeContext,
-        RenderObjectLayoutContext,
+        canvas::{paint::Paint, painter::CanvasPainter},
+        object::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     },
     unit::{Constraints, IntrinsicDimension, Size, TextStyle},
 };

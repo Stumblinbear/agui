@@ -1,6 +1,8 @@
 use agui_core::{
     element::{RenderObjectCreateContext, RenderObjectUpdateContext},
-    render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
+    render::object::{
+        RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext,
+    },
     unit::{Constraints, IntrinsicDimension, Size},
     widget::Widget,
 };

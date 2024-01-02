@@ -3,7 +3,10 @@ use std::any::Any;
 use crate::{
     callback::CallbackId,
     element::view::ElementView,
-    render::{RenderBox, RenderObject, RenderObjectId},
+    render::{
+        object::{RenderBox, RenderObject},
+        RenderObjectId,
+    },
     widget::Widget,
 };
 

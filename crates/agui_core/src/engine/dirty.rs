@@ -6,14 +6,20 @@ pub struct Dirty<T> {
     inner: FxHashSet<T>,
 }
 
+impl<T> Default for Dirty<T> {
+    fn default() -> Self {
+        Self {
+            inner: FxHashSet::default(),
+        }
+    }
+}
+
 impl<T> Dirty<T>
 where
     T: PartialEq + Eq + Hash,
 {
-    pub(super) fn new() -> Self {
-        Self {
-            inner: FxHashSet::default(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Check if any any entries have been added.

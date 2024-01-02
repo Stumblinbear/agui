@@ -1,10 +1,11 @@
-use super::Paint;
-use crate::unit::{Offset, Shape, Size};
+use crate::{
+    render::canvas::{command::CanvasCommand, paint::Paint},
+    unit::{Offset, Shape, Size},
+};
 
 pub mod command;
+pub mod paint;
 pub mod painter;
-
-pub use command::*;
 
 #[derive(Debug, PartialEq)]
 pub struct Canvas {

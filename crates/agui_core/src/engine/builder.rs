@@ -4,7 +4,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
-    element::ElementId,
+    engine::render::RenderManager,
     listenable::EventBus,
     plugin::{Plugin, Plugins},
     util::tree::Tree,
@@ -67,21 +67,15 @@ where
             bus: EventBus::default(),
 
             element_tree: Tree::default(),
-            render_object_tree: Tree::default(),
+            render_manager: RenderManager::default(),
 
             needs_build: Dirty::new(),
             callback_queue: CallbackQueue::new(
                 self.update_notifier_tx.unwrap_or_else(|| mpsc::channel().0),
             ),
-            needs_layout: Dirty::new(),
-            needs_paint: Dirty::new(),
 
             rebuild_queue: VecDeque::default(),
-            removal_queue: FxHashSet::default(),
-
-            sync_render_object_children: FxHashSet::default(),
-            create_render_object: VecDeque::<ElementId>::default(),
-            update_render_object: FxHashSet::default(),
+            forgotten_elements: FxHashSet::default(),
         };
 
         engine.init(self.root.expect("root is not set"));

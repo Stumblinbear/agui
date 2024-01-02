@@ -1,4 +1,4 @@
-use crate::{element::RenderObjectCreateContext, render::RenderObject, widget::Widget};
+use crate::{element::RenderObjectCreateContext, render::object::RenderObject, widget::Widget};
 
 use super::{widget::ElementWidget, RenderObjectUpdateContext};
 

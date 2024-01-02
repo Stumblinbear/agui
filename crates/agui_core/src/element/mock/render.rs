@@ -8,7 +8,7 @@ use crate::{
         ElementType, ElementUnmountContext, ElementUpdate, RenderObjectCreateContext,
         RenderObjectUpdateContext,
     },
-    render::{MockRenderObjectImpl, RenderObject},
+    render::object::{MockRenderObjectImpl, RenderObject},
     widget::{IntoWidget, Widget},
 };
 

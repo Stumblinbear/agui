@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     element::{ContextRenderObject, ContextRenderObjects},
-    render::{RenderObject, RenderObjectId},
+    render::{object::RenderObject, RenderObjectId},
     unit::{HitTestResult, Size},
     util::tree::Tree,
 };

@@ -3,10 +3,10 @@ use std::{borrow::Cow, marker::PhantomData};
 use lyon::path::Path;
 
 use crate::{
-    render::{
-        canvas::{command::CanvasCommand, Canvas, CanvasLayer, LayerStyle},
-        paint::Paint,
-        Brush,
+    render::canvas::{
+        command::CanvasCommand,
+        paint::{Brush, Paint},
+        Canvas, CanvasLayer, LayerStyle,
     },
     unit::{Rect, Shape, Size, TextStyle},
 };

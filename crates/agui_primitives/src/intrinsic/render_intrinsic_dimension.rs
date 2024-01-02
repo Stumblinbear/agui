@@ -1,6 +1,8 @@
 use agui_core::{
     element::{ContextDirtyRenderObject, RenderObjectUpdateContext},
-    render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
+    render::object::{
+        RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext,
+    },
     unit::{Axis, Constraints, IntrinsicDimension, Size},
 };
 

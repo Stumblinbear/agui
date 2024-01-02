@@ -1,6 +1,9 @@
 use agui_core::{
     element::{ContextDirtyRenderObject, RenderObjectCreateContext, RenderObjectUpdateContext},
-    render::{CanvasPainter, Paint, RenderObjectImpl},
+    render::{
+        canvas::{paint::Paint, painter::CanvasPainter},
+        object::RenderObjectImpl,
+    },
     unit::Color,
     widget::Widget,
 };

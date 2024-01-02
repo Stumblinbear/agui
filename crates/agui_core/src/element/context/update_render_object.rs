@@ -1,44 +1,17 @@
 use crate::{
-    element::{ContextDirtyRenderObject, Element, ElementId},
-    plugin::{
-        context::{ContextPlugins, ContextPluginsMut},
-        Plugins,
-    },
+    element::{ContextDirtyRenderObject, ElementId},
     render::RenderObjectId,
-    util::tree::Tree,
 };
 
-use super::{ContextElement, ContextElements, ContextRenderObject};
+use super::{ContextElement, ContextRenderObject};
 
 pub struct RenderObjectUpdateContext<'ctx> {
-    pub plugins: &'ctx mut Plugins,
-
-    pub element_tree: &'ctx Tree<ElementId, Element>,
-
     pub needs_layout: &'ctx mut bool,
     pub needs_paint: &'ctx mut bool,
 
     pub element_id: &'ctx ElementId,
     pub relayout_boundary_id: &'ctx Option<RenderObjectId>,
     pub render_object_id: &'ctx RenderObjectId,
-}
-
-impl<'ctx> ContextPlugins<'ctx> for RenderObjectUpdateContext<'ctx> {
-    fn plugins(&self) -> &Plugins {
-        self.plugins
-    }
-}
-
-impl<'ctx> ContextPluginsMut<'ctx> for RenderObjectUpdateContext<'ctx> {
-    fn plugins_mut(&mut self) -> &mut Plugins {
-        self.plugins
-    }
-}
-
-impl ContextElements for RenderObjectUpdateContext<'_> {
-    fn elements(&self) -> &Tree<ElementId, Element> {
-        self.element_tree
-    }
 }
 
 impl ContextElement for RenderObjectUpdateContext<'_> {

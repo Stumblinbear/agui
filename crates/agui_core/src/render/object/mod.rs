@@ -1,5 +1,5 @@
 use crate::{
-    render::RenderView,
+    render::{binding::RenderView, RenderObjectId},
     unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
 };
 
@@ -13,10 +13,6 @@ mod render_box;
 
 pub use context::*;
 pub use render_box::*;
-
-slotmap::new_key_type! {
-    pub struct RenderObjectId;
-}
 
 pub struct RenderObject {
     render_object: Box<dyn RenderObjectImpl>,

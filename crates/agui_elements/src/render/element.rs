@@ -4,7 +4,7 @@ use agui_core::{
     element::{
         render::ElementRender, widget::ElementWidget, ElementUpdate, RenderObjectUpdateContext,
     },
-    render::RenderObject,
+    render::object::RenderObject,
     widget::Widget,
 };
 

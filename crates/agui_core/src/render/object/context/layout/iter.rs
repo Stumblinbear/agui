@@ -2,7 +2,8 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     render::{
-        LayoutResult, RenderObject, RenderObjectContext, RenderObjectId, RenderObjectLayoutContext,
+        object::{LayoutResult, RenderObject, RenderObjectContext, RenderObjectLayoutContext},
+        RenderObjectId,
     },
     unit::{Constraints, IntrinsicDimension, Offset, Size},
     util::tree::Tree,
