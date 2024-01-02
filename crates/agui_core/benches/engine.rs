@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use agui_core::{
     element::mock::{render::MockRenderWidget, DummyRenderObject, DummyWidget},
     engine::Engine,
-    widget::IntoWidget,
+    widget::{IntoWidget, Widget},
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 
@@ -101,7 +101,7 @@ fn engine_ops(c: &mut Criterion) {
         b.iter_with_setup(
             || {
                 let children = Rc::new(RefCell::new({
-                    let mut children = Vec::new();
+                    let mut children: Vec<Widget> = Vec::new();
 
                     for _ in 0..1000 {
                         children.push(DummyWidget.into_widget());

@@ -48,11 +48,6 @@ path = "benches/engine.rs"
 harness = false
 
 [[bench]]
-name = "plugins"
-path = "benches/plugins.rs"
-harness = false
-
-[[bench]]
 name = "hashers"
 path = "benches/hashers.rs"
 harness = false
@@ -65,9 +60,4 @@ harness = false
 [[bench]]
 name = "tree"
 path = "benches/tree.rs"
-harness = false
-
-[[bench]]
-name = "events"
-path = "benches/events.rs"
 harness = false
