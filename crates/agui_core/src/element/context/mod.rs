@@ -5,16 +5,16 @@ use crate::{
 };
 
 mod build;
-mod build_render_object;
 mod callback;
+mod create_render_object;
 mod mount;
 mod redraw_view;
 mod unmount;
 mod update_render_object;
 
 pub use build::*;
-pub use build_render_object::*;
 pub use callback::*;
+pub use create_render_object::*;
 pub use mount::*;
 pub use redraw_view::*;
 pub use unmount::*;

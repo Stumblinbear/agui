@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     render::RenderObjectImpl,
     widget::{AnyWidget, Widget},
 };
@@ -13,7 +13,7 @@ pub trait RenderObjectWidget: AnyWidget {
 
     fn children(&self) -> Vec<Widget>;
 
-    fn create_render_object(&self, ctx: &mut RenderObjectBuildContext) -> Self::RenderObject;
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> Self::RenderObject;
 
     fn update_render_object(
         &self,

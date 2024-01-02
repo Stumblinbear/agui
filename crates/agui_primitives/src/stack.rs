@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     unit::{Constraints, IntrinsicDimension, Size},
     widget::Widget,
@@ -20,16 +20,11 @@ impl RenderObjectWidget for Stack {
         self.children.clone()
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderStack
     }
 
-    fn update_render_object(
-        &self,
-        ctx: &mut RenderObjectUpdateContext,
-        render_object: &mut Self::RenderObject,
-    ) {
-    }
+    fn update_render_object(&self, _: &mut RenderObjectUpdateContext, _: &mut Self::RenderObject) {}
 }
 
 #[derive(Debug)]

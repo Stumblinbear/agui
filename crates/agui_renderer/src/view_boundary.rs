@@ -3,7 +3,7 @@ use std::rc::Rc;
 use agui_core::{
     element::{
         render::ElementRender, widget::ElementWidget, ElementBuilder, ElementMountContext,
-        ElementType, ElementUpdate, RenderObjectBuildContext, RenderObjectUpdateContext,
+        ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{binding::ViewBinding, RenderObject, RenderObjectImpl},
     widget::{IntoWidget, Widget},
@@ -81,7 +81,7 @@ impl ElementRender for ViewBoundaryElement {
         vec![self.child.clone()]
     }
 
-    fn create_render_object(&mut self, ctx: &mut RenderObjectBuildContext) -> RenderObject {
+    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         RenderObject::new(RenderViewBoundary)
     }
 

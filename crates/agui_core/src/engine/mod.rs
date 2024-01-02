@@ -7,7 +7,8 @@ use crate::{
     callback::{CallbackInvoke, CallbackQueue},
     element::{
         Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
-        ElementType, ElementUnmountContext, ElementUpdate, RenderObjectUpdateContext,
+        ElementType, ElementUnmountContext, ElementUpdate, RenderObjectCreateContext,
+        RenderObjectUpdateContext,
     },
     engine::event::{ElementDestroyedEvent, ElementSpawnedEvent},
     listenable::EventBus,
@@ -160,7 +161,7 @@ impl Engine {
         self.flush_removals();
 
         // We want to resolve all changes before we do any layout to reduce the overall amount of
-        // work we have to do.
+        // // work we have to do.
         self.flush_layout();
 
         self.flush_views();
@@ -731,7 +732,7 @@ impl Engine {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    fn create_render_object(&mut self, element_id: ElementId) -> RenderObjectId {
+    fn create_render_object(&mut self, element_id: ElementId) {
         let (relayout_boundary_id, parent_render_object_id, parent_render_view) = self
             .element_tree
             .get_parent(element_id)
@@ -769,59 +770,54 @@ impl Engine {
             })
             .unwrap_or_default();
 
-        self.element_tree
-            .with(element_id, |element_tree, element| {
-                if let Some(render_object_id) = element.render_object_id() {
-                    panic!(
-                        "element already has a render object: {:?}",
-                        render_object_id
-                    );
+        let element = self
+            .element_tree
+            .get_mut(element_id)
+            .expect("element missing while creating render objects");
+
+        if let Some(render_object_id) = element.render_object_id() {
+            panic!(
+                "element already has a render object: {:?}",
+                render_object_id
+            );
+        }
+
+        self.render_object_tree
+            .add_with_key(parent_render_object_id, |render_object_id| {
+                let mut render_object =
+                    element.create_render_object(&mut RenderObjectCreateContext {
+                        plugins: &mut self.plugins,
+
+                        element_id: &element_id,
+                    });
+
+                element.set_render_object_id(render_object_id);
+
+                if let ElementType::View(element) = element.as_mut() {
+                    let view_binding = Rc::clone(element.binding());
+
+                    // Attach the render object as the root of its own view
+                    view_binding.on_attach(None, render_object_id);
+
+                    render_object.set_render_view(RenderView::new(render_object_id, view_binding));
+                } else if let Some(parent_render_view) = parent_render_view {
+                    parent_render_view.on_attach(parent_render_object_id, render_object_id);
+
+                    render_object.set_render_view(parent_render_view);
                 }
 
-                self.render_object_tree
-                    .add_with_key(parent_render_object_id, |render_object_id| {
-                        let mut render_object =
-                            element.create_render_object(&mut ElementBuildContext {
-                                plugins: &mut self.plugins,
+                if render_object.render_view().is_some() {
+                    self.needs_paint.insert(render_object_id);
+                }
 
-                                element_tree,
-                                callback_queue: &self.callback_queue,
+                if let Some(relayout_boundary_id) = relayout_boundary_id {
+                    render_object.set_relayout_boundary(relayout_boundary_id);
 
-                                needs_build: &mut self.needs_build,
+                    self.needs_layout.insert(relayout_boundary_id);
+                }
 
-                                element_id: &element_id,
-                            });
-
-                        element.set_render_object_id(render_object_id);
-
-                        if let ElementType::View(element) = element.as_mut() {
-                            let view_binding = Rc::clone(element.binding());
-
-                            // Attach the render object as the root of its own view
-                            view_binding.on_attach(None, render_object_id);
-
-                            render_object
-                                .set_render_view(RenderView::new(render_object_id, view_binding));
-                        } else if let Some(parent_render_view) = parent_render_view {
-                            parent_render_view.on_attach(parent_render_object_id, render_object_id);
-
-                            render_object.set_render_view(parent_render_view);
-                        }
-
-                        if render_object.render_view().is_some() {
-                            self.needs_paint.insert(render_object_id);
-                        }
-
-                        if let Some(relayout_boundary_id) = relayout_boundary_id {
-                            render_object.set_relayout_boundary(relayout_boundary_id);
-
-                            self.needs_layout.insert(relayout_boundary_id);
-                        }
-
-                        render_object
-                    })
-            })
-            .expect("element missing while creating render objects")
+                render_object
+            });
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -913,13 +909,22 @@ impl Engine {
 
     #[tracing::instrument(level = "trace", skip(self))]
     fn sync_render_objects(&mut self) {
-        let mut sync_render_object_queue = self
+        self.create_render_object
+            .retain(|element_id| !self.removal_queue.contains(element_id));
+
+        // No need to update render objects that are about to be created.
+        self.update_render_object
+            .retain(|element_id| !self.create_render_object.contains(element_id));
+
+        while let Some(element_id) = self.create_render_object.pop_front() {
+            self.create_render_object(element_id);
+        }
+
+        for element_id in self
             .sync_render_object_children
             .drain()
             .filter(|element_id| !self.removal_queue.contains(element_id))
-            .collect::<VecDeque<_>>();
-
-        while let Some(element_id) = sync_render_object_queue.pop_front() {
+        {
             // Elements that were removed should still be available in the tree, so this should
             // never fail.
             let element_node = self
@@ -939,18 +944,11 @@ impl Engine {
                         .element_tree
                         .get(child_id)
                         .expect("child element missing while syncing render object children")
-                        .render_object_id();
+                        .render_object_id()
+                        .expect("child element has no render object");
 
-                    let child_render_object_id =
-                        if let Some(child_render_object_id) = child_render_object_id {
-                            self.render_object_tree
-                                .reparent(Some(render_object_id), child_render_object_id);
-
-                            child_render_object_id
-                        } else {
-                            // If they don't already have a render object, create it.
-                            self.create_render_object(child_id)
-                        };
+                    self.render_object_tree
+                        .reparent(Some(render_object_id), child_render_object_id);
 
                     if first_child_render_object_id.is_none() {
                         first_child_render_object_id = Some(child_render_object_id);
@@ -972,17 +970,6 @@ impl Engine {
                         found_child
                     });
             }
-        }
-
-        self.create_render_object
-            .retain(|element_id| !self.removal_queue.contains(element_id));
-
-        // No need to update render objects that are about to be created.
-        self.update_render_object
-            .retain(|element_id| !self.create_render_object.contains(element_id));
-
-        while let Some(element_id) = self.create_render_object.pop_front() {
-            self.create_render_object(element_id);
         }
 
         // Remove any render objects owned by elements that are being removed.

@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     render::{
         RenderObjectHitTestContext, RenderObjectImpl, RenderObjectIntrinsicSizeContext,
         RenderObjectLayoutContext,
@@ -22,7 +22,7 @@ impl RenderObjectWidget for WinitWindowCollection {
         self.windows.clone()
     }
 
-    fn create_render_object(&self, ctx: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderWinitWindowCollection {}
     }
 

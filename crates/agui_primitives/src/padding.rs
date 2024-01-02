@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{ContextDirtyRenderObject, RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{ContextDirtyRenderObject, RenderObjectCreateContext, RenderObjectUpdateContext},
     render::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     unit::{Constraints, EdgeInsets, IntrinsicDimension, Offset, Size},
     widget::Widget,
@@ -22,7 +22,7 @@ impl RenderObjectWidget for Padding {
         Vec::from_iter(self.child.clone())
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderPadding {
             padding: self.padding,
         }

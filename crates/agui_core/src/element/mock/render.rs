@@ -4,9 +4,9 @@ use parking_lot::Mutex;
 
 use crate::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementBuildContext, ElementBuilder,
-        ElementMountContext, ElementType, ElementUnmountContext, ElementUpdate,
-        RenderObjectBuildContext, RenderObjectUpdateContext,
+        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementMountContext,
+        ElementType, ElementUnmountContext, ElementUpdate, RenderObjectCreateContext,
+        RenderObjectUpdateContext,
     },
     render::{MockRenderObjectImpl, RenderObject},
     widget::{IntoWidget, Widget},
@@ -24,7 +24,10 @@ pub trait RenderElement {
 
     fn children(&self) -> Vec<Widget>;
 
-    fn create_render_object<'ctx>(&mut self, ctx: &mut ElementBuildContext<'ctx>) -> RenderObject;
+    fn create_render_object<'ctx>(
+        &mut self,
+        ctx: &mut RenderObjectCreateContext<'ctx>,
+    ) -> RenderObject;
 
     fn is_valid_render_object(&self, render_object: &RenderObject) -> bool;
 
@@ -73,7 +76,7 @@ impl ElementRender for MockElement {
         self.widget.mock.borrow().children()
     }
 
-    fn create_render_object(&mut self, ctx: &mut RenderObjectBuildContext) -> RenderObject {
+    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         self.widget.mock.borrow_mut().create_render_object(ctx)
     }
 

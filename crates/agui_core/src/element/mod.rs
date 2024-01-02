@@ -177,18 +177,14 @@ impl Element {
         self.render_object_id = Some(id);
     }
 
-    pub fn create_render_object(&mut self, ctx: &mut ElementBuildContext) -> RenderObject {
+    pub fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         match self.inner {
             // Use the default render object for proxies and widgets
             ElementType::Widget(_) => RenderObject::new(RenderBox::default()),
 
-            ElementType::View(ref mut element) => {
-                element.create_render_object(&mut RenderObjectBuildContext { inner: ctx })
-            }
+            ElementType::View(ref mut element) => element.create_render_object(ctx),
 
-            ElementType::Render(ref mut element) => {
-                element.create_render_object(&mut RenderObjectBuildContext { inner: ctx })
-            }
+            ElementType::Render(ref mut element) => element.create_render_object(ctx),
         }
     }
 

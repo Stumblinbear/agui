@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     unit::{Axis, ClipBehavior, TextDirection},
     widget::Widget,
 };
@@ -34,7 +34,7 @@ impl RenderObjectWidget for Column {
         self.children.clone()
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderFlex {
             direction: Axis::Vertical,
 

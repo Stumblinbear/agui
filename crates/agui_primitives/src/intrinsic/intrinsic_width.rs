@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     unit::Axis,
     widget::Widget,
 };
@@ -22,7 +22,7 @@ impl RenderObjectWidget for IntrinsicWidth {
         Vec::from_iter(self.child.clone())
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderIntrinsicDimension {
             axis: Axis::Horizontal,
         }

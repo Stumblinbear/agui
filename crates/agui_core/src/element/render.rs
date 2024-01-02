@@ -1,6 +1,6 @@
-use crate::{render::RenderObject, widget::Widget};
+use crate::{element::RenderObjectCreateContext, render::RenderObject, widget::Widget};
 
-use super::{widget::ElementWidget, RenderObjectBuildContext, RenderObjectUpdateContext};
+use super::{widget::ElementWidget, RenderObjectUpdateContext};
 
 pub trait ElementRender: ElementWidget {
     fn children(&self) -> Vec<Widget>;
@@ -9,7 +9,7 @@ pub trait ElementRender: ElementWidget {
     ///
     /// This must always create a new render object, and should never contain any data derived
     /// from, or containing references to, any previously created render object.
-    fn create_render_object(&mut self, ctx: &mut RenderObjectBuildContext) -> RenderObject;
+    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject;
 
     /// Returns true if the given render object is valid for the current element and can be
     /// used as-is.

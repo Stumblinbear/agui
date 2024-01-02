@@ -8,7 +8,7 @@ use agui_core::{
     widget::Widget,
 };
 
-use super::{RenderObjectBuildContext, RenderObjectWidget};
+use super::{RenderObjectCreateContext, RenderObjectWidget};
 
 pub struct RenderObjectElement<W>
 where
@@ -49,7 +49,7 @@ where
         self.widget.children()
     }
 
-    fn create_render_object(&mut self, ctx: &mut RenderObjectBuildContext) -> RenderObject {
+    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         RenderObject::new(self.widget.create_render_object(ctx))
     }
 

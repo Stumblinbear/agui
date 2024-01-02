@@ -325,7 +325,7 @@ impl RenderObjectWidget for WinitWindowLayout {
         vec![self.child.clone()]
     }
 
-    fn create_render_object(&self, ctx: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderWinitWindow { size: self.size }
     }
 

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use agui_core::{
     element::{
         render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
-        ElementType, ElementUpdate, RenderObjectBuildContext, RenderObjectUpdateContext,
+        ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{RenderObject, RenderObjectId, RenderObjectImpl, ViewBinding},
     widget::Widget,
@@ -63,7 +63,7 @@ impl ElementRender for VelloViewElement {
         vec![self.child.clone()]
     }
 
-    fn create_render_object(&mut self, _: &mut RenderObjectBuildContext) -> RenderObject {
+    fn create_render_object(&mut self, _: &mut RenderObjectCreateContext) -> RenderObject {
         RenderObject::new(RenderVelloView)
     }
 

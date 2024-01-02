@@ -1,5 +1,5 @@
 use agui_core::{
-    element::{ContextDirtyRenderObject, RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{ContextDirtyRenderObject, RenderObjectCreateContext, RenderObjectUpdateContext},
     render::{CanvasPainter, Paint, RenderObjectImpl},
     unit::{Rect, Shape},
     widget::Widget,
@@ -26,7 +26,7 @@ impl RenderObjectWidget for Clip {
         Vec::from_iter(self.child.clone())
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderClip {
             rect: self.rect,
 

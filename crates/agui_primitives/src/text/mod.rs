@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use agui_core::{
-    element::{RenderObjectBuildContext, RenderObjectUpdateContext},
+    element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     unit::TextStyle,
     widget::Widget,
 };
@@ -40,7 +40,7 @@ impl RenderObjectWidget for Text {
         Vec::default()
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectBuildContext) -> Self::RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
         RenderParagraph {
             style: self.style.clone(),
 
