@@ -2,6 +2,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rustc_hash::FxHashMap;
+use slotmap::HopSlotMap;
+
+slotmap::new_key_type! {
+    pub struct TestId;
+}
 
 thread_local! {
     static THREAD_LOCAL: RefCell<FxHashMap<usize, usize>> = RefCell::default();
@@ -11,6 +16,23 @@ fn reference_patterns(c: &mut Criterion) {
     let mut group = c.benchmark_group("reference patterns");
 
     group.throughput(criterion::Throughput::Elements(1));
+
+    group.sample_size(1000).bench_function("slotmap", |b| {
+        b.iter_with_setup(
+            || {
+                let mut map = HopSlotMap::<TestId, i32>::default();
+
+                for i in 0..99 {
+                    map.insert(i);
+                }
+
+                let id = map.insert(101);
+
+                (map, id)
+            },
+            |(map, id)| *black_box(map.get(id).unwrap()),
+        )
+    });
 
     group.sample_size(1000).bench_function("map key", |b| {
         b.iter_with_setup(
@@ -37,7 +59,7 @@ fn reference_patterns(c: &mut Criterion) {
     THREAD_LOCAL.with(|value| value.borrow_mut().insert(0, 0));
 
     group.sample_size(1000).bench_function("thread local", |b| {
-        b.iter(|| THREAD_LOCAL.with(|value| black_box(*value.borrow().get(&black_box(0)).unwrap())))
+        b.iter(|| THREAD_LOCAL.with(|value| *black_box(value.borrow().get(&black_box(0)).unwrap())))
     });
 
     group.finish();
