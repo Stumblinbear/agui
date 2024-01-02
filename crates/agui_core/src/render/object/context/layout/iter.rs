@@ -1,14 +1,15 @@
+use rustc_hash::FxHashMap;
+
 use crate::{
-    plugin::Plugins,
-    render::{RenderObject, RenderObjectContext, RenderObjectContextMut, RenderObjectId},
+    render::{
+        LayoutResult, RenderObject, RenderObjectContext, RenderObjectId, RenderObjectLayoutContext,
+    },
     unit::{Constraints, IntrinsicDimension, Offset, Size},
     util::tree::Tree,
 };
 
 pub struct IterChildrenLayout<'ctx> {
     pub(crate) index: usize,
-
-    pub(crate) plugins: &'ctx Plugins,
 
     pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
@@ -26,8 +27,6 @@ impl<'ctx> Iterator for IterChildrenLayout<'ctx> {
         self.index += 1;
 
         Some(ChildLayout {
-            plugins: self.plugins,
-
             render_object_tree: self.render_object_tree,
 
             index: self.index - 1,
@@ -38,8 +37,6 @@ impl<'ctx> Iterator for IterChildrenLayout<'ctx> {
 }
 
 pub struct ChildLayout<'ctx> {
-    plugins: &'ctx Plugins,
-
     render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     index: usize,
@@ -66,8 +63,6 @@ impl ChildLayout<'_> {
 
         render_object.intrinsic_size(
             RenderObjectContext {
-                plugins: self.plugins,
-
                 render_object_tree: self.render_object_tree,
 
                 render_object_id: &render_object_id,
@@ -81,12 +76,11 @@ impl ChildLayout<'_> {
 pub struct IterChildrenLayoutMut<'ctx> {
     pub(crate) index: usize,
 
-    pub(crate) plugins: &'ctx mut Plugins,
-
-    pub(crate) render_object_tree: &'ctx mut Tree<RenderObjectId, RenderObject>,
+    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub(crate) children: &'ctx [RenderObjectId],
-    pub(crate) offsets: &'ctx mut [Offset],
+
+    pub(crate) results: &'ctx mut FxHashMap<RenderObjectId, LayoutResult>,
 }
 
 // TODO: refactor to LendingIterator when possible
@@ -100,27 +94,25 @@ impl IterChildrenLayoutMut<'_> {
         self.index += 1;
 
         Some(ChildLayoutMut {
-            plugins: self.plugins,
-
             render_object_tree: self.render_object_tree,
 
             index: self.index - 1,
 
             children: self.children,
-            offsets: self.offsets,
+
+            results: self.results,
         })
     }
 }
 
 pub struct ChildLayoutMut<'ctx> {
-    plugins: &'ctx mut Plugins,
-
-    render_object_tree: &'ctx mut Tree<RenderObjectId, RenderObject>,
+    render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     index: usize,
 
     children: &'ctx [RenderObjectId],
-    offsets: &'ctx mut [Offset],
+
+    results: &'ctx mut FxHashMap<RenderObjectId, LayoutResult>,
 }
 
 impl ChildLayoutMut<'_> {
@@ -142,8 +134,6 @@ impl ChildLayoutMut<'_> {
 
         render_object.intrinsic_size(
             RenderObjectContext {
-                plugins: self.plugins,
-
                 render_object_tree: self.render_object_tree,
 
                 render_object_id: &render_object_id,
@@ -157,20 +147,24 @@ impl ChildLayoutMut<'_> {
     pub fn layout(&mut self, constraints: Constraints) -> Size {
         let render_object_id = self.render_object_id();
 
-        self.render_object_tree
-            .with(render_object_id, |render_object_tree, render_object| {
-                render_object.layout(
-                    RenderObjectContextMut {
-                        plugins: self.plugins,
-
-                        render_object_tree,
-
-                        render_object_id: &render_object_id,
-                    },
-                    constraints,
-                )
-            })
+        let (render_object, children) = self
+            .render_object_tree
+            .get_node(render_object_id)
             .expect("child render object missing during layout")
+            .into();
+
+        render_object.layout(
+            &mut RenderObjectLayoutContext {
+                render_object_tree: self.render_object_tree,
+
+                render_object_id: &render_object_id,
+
+                children,
+
+                results: self.results,
+            },
+            constraints,
+        )
     }
 
     /// Computes the layout of the child render object and returns its resulting size.
@@ -180,27 +174,18 @@ impl ChildLayoutMut<'_> {
     /// information of the child, use [layout()] instead.
     #[must_use = "If the size information is not needed, call layout() instead."]
     pub fn compute_layout(&mut self, constraints: Constraints) -> Size {
-        let render_object_id = self.render_object_id();
+        self.results
+            .entry(self.children[self.index])
+            .or_default()
+            .parent_uses_size = true;
 
-        self.render_object_tree
-            .with(render_object_id, |render_object_tree, render_object| {
-                render_object.set_parent_uses_size(true);
-
-                render_object.layout(
-                    RenderObjectContextMut {
-                        plugins: self.plugins,
-
-                        render_object_tree,
-
-                        render_object_id: &render_object_id,
-                    },
-                    constraints,
-                )
-            })
-            .expect("child render object missing during layout")
+        self.layout(constraints)
     }
 
     pub fn set_offset(&mut self, offset: impl Into<Offset>) {
-        self.offsets[self.index] = offset.into();
+        self.results
+            .entry(self.children[self.index])
+            .or_default()
+            .offset = Some(offset.into());
     }
 }

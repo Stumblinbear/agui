@@ -1,30 +1,24 @@
 use crate::{
     element::{ContextRenderObject, ContextRenderObjects},
-    plugin::{context::ContextPlugins, Plugins},
     render::{RenderObject, RenderObjectId},
-    unit::Offset,
     util::tree::Tree,
 };
 
 mod iter;
+mod layout_result;
 
 pub use iter::*;
+pub use layout_result::*;
+use rustc_hash::FxHashMap;
 
 pub struct RenderObjectLayoutContext<'ctx> {
-    pub plugins: &'ctx mut Plugins,
-
-    pub(crate) render_object_tree: &'ctx mut Tree<RenderObjectId, RenderObject>,
+    pub render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub render_object_id: &'ctx RenderObjectId,
 
     pub children: &'ctx [RenderObjectId],
-    pub offsets: &'ctx mut [Offset],
-}
 
-impl<'ctx> ContextPlugins<'ctx> for RenderObjectLayoutContext<'ctx> {
-    fn plugins(&self) -> &Plugins {
-        self.plugins
-    }
+    pub(crate) results: &'ctx mut FxHashMap<RenderObjectId, LayoutResult>,
 }
 
 impl ContextRenderObjects for RenderObjectLayoutContext<'_> {
@@ -52,8 +46,6 @@ impl RenderObjectLayoutContext<'_> {
         IterChildrenLayout {
             index: 0,
 
-            plugins: self.plugins,
-
             render_object_tree: self.render_object_tree,
 
             children: self.children,
@@ -64,12 +56,11 @@ impl RenderObjectLayoutContext<'_> {
         IterChildrenLayoutMut {
             index: 0,
 
-            plugins: self.plugins,
-
             render_object_tree: self.render_object_tree,
 
             children: self.children,
-            offsets: self.offsets,
+
+            results: self.results,
         }
     }
 }

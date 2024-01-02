@@ -107,8 +107,16 @@ impl RenderObject {
         self.parent_uses_size
     }
 
-    pub(crate) fn set_parent_uses_size(&mut self, parent_uses_size: bool) {
-        self.parent_uses_size = parent_uses_size;
+    pub(crate) fn apply_layout(&mut self, result: LayoutResult) {
+        self.parent_uses_size = result.parent_uses_size;
+
+        self.size = Some(
+            result
+                .size
+                .expect("render object did not receive a size during layout"),
+        );
+
+        self.offset = result.offset.unwrap_or_default();
     }
 
     pub fn offset(&self) -> Offset {
@@ -130,8 +138,6 @@ impl RenderObject {
 
         self.render_object.intrinsic_size(
             &mut RenderObjectIntrinsicSizeContext {
-                plugins: ctx.plugins,
-
                 render_object_tree: ctx.render_object_tree,
 
                 render_object_id: ctx.render_object_id,
@@ -150,36 +156,12 @@ impl RenderObject {
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx))]
-    pub fn layout(&mut self, ctx: RenderObjectContextMut, constraints: Constraints) -> Size {
-        let children = ctx
-            .render_object_tree
-            .get_children(*ctx.render_object_id)
-            .cloned()
-            .unwrap_or_default();
-
-        let mut offsets = vec![Offset::ZERO; children.len()];
-
-        let size = self.render_object.layout(
-            &mut RenderObjectLayoutContext {
-                plugins: ctx.plugins,
-
-                render_object_tree: ctx.render_object_tree,
-
-                render_object_id: ctx.render_object_id,
-
-                children: &children,
-
-                offsets: &mut offsets,
-            },
-            constraints,
-        );
-
-        for (child_id, offset) in children.iter().zip(offsets) {
-            ctx.render_object_tree
-                .get_mut(*child_id)
-                .expect("child render object missing during layout")
-                .offset = offset;
-        }
+    pub fn layout<'ctx>(
+        &'ctx self,
+        ctx: &mut RenderObjectLayoutContext<'ctx>,
+        constraints: Constraints,
+    ) -> Size {
+        let size = self.render_object.layout(ctx, constraints);
 
         debug_assert_eq!(
             size,
@@ -187,7 +169,9 @@ impl RenderObject {
             "render object returned a size that is larger than the constraints"
         );
 
-        self.size = Some(size);
+        let entry = ctx.results.entry(*ctx.render_object_id).or_default();
+
+        entry.size = Some(size);
 
         size
     }
@@ -212,8 +196,6 @@ impl RenderObject {
 
         let hit = self.render_object.hit_test(
             &mut RenderObjectHitTestContext {
-                plugins: ctx.plugins,
-
                 render_object_tree: ctx.render_object_tree,
 
                 render_object_id: ctx.render_object_id,
@@ -314,8 +296,6 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
                 .expect("child element missing while computing intrinsic size")
                 .intrinsic_size(
                     RenderObjectContext {
-                        plugins: ctx.plugins,
-
                         render_object_tree: ctx.render_object_tree,
 
                         render_object_id: &child_id,
@@ -343,20 +323,24 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
             let child_id = *ctx.children.first().unwrap();
 
             // By default, we take the size of the child.
-            ctx.render_object_tree
-                .with(child_id, |render_object_tree, render_object| {
-                    render_object.layout(
-                        RenderObjectContextMut {
-                            plugins: ctx.plugins,
-
-                            render_object_tree,
-
-                            render_object_id: &child_id,
-                        },
-                        constraints,
-                    )
-                })
+            let (render_object, children) = ctx
+                .render_object_tree
+                .get_node(child_id)
                 .expect("child render object missing during layout")
+                .into();
+
+            render_object.layout(
+                &mut RenderObjectLayoutContext {
+                    render_object_tree: ctx.render_object_tree,
+
+                    render_object_id: &child_id,
+
+                    children,
+
+                    results: ctx.results,
+                },
+                constraints,
+            )
         } else {
             constraints.biggest()
         }

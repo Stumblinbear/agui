@@ -1,7 +1,6 @@
 use glam::Mat4;
 
 use crate::{
-    plugin::Plugins,
     render::{RenderObject, RenderObjectContext, RenderObjectId},
     unit::{HitTest, HitTestResult, Offset},
     util::tree::Tree,
@@ -10,8 +9,6 @@ use crate::{
 pub struct IterChildrenHitTest<'ctx> {
     pub(crate) front_index: usize,
     pub(crate) back_index: usize,
-
-    pub(crate) plugins: &'ctx Plugins,
 
     pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
@@ -31,8 +28,6 @@ impl IterChildrenHitTest<'_> {
         self.front_index += 1;
 
         Some(ChildHitTest {
-            plugins: self.plugins,
-
             render_object_tree: self.render_object_tree,
 
             result: self.result,
@@ -51,8 +46,6 @@ impl IterChildrenHitTest<'_> {
         self.back_index -= 1;
 
         Some(ChildHitTest {
-            plugins: self.plugins,
-
             render_object_tree: self.render_object_tree,
 
             index: self.back_index,
@@ -65,8 +58,6 @@ impl IterChildrenHitTest<'_> {
 }
 
 pub struct ChildHitTest<'ctx> {
-    plugins: &'ctx Plugins,
-
     render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     index: usize,
@@ -116,8 +107,6 @@ impl ChildHitTest<'_> {
 
         render_object.hit_test(
             RenderObjectContext {
-                plugins: self.plugins,
-
                 render_object_tree: self.render_object_tree,
 
                 render_object_id: &render_object_id,

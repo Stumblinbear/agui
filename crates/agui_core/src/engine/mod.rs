@@ -21,7 +21,7 @@ use crate::{
         Plugins,
     },
     query::WidgetQuery,
-    render::{RenderObject, RenderObjectContextMut, RenderObjectId, RenderView},
+    render::{RenderObject, RenderObjectId, RenderObjectLayoutContext, RenderView},
     unit::{Constraints, Key},
     util::tree::Tree,
     widget::Widget,
@@ -164,7 +164,7 @@ impl Engine {
         // // work we have to do.
         self.flush_layout();
 
-        self.flush_views();
+        self.flush_needs_paint();
 
         self.plugins.on_after_update(&mut PluginAfterUpdateContext {
             element_tree: &self.element_tree,
@@ -262,58 +262,71 @@ impl Engine {
                 .unwrap()
         });
 
+        let mut results = FxHashMap::default();
+
         while let Some(render_object_id) = relayout_queue.pop() {
-            let existed = self
-                .render_object_tree
-                .with(render_object_id, |render_object_tree, render_object| {
-                    if !render_object.is_relayout_boundary(Constraints::default()) {
-                        tracing::warn!(
-                            ?render_object_id,
-                            ?render_object,
-                            "layout called for a render object that is not a relayout boundary"
-                        );
-
-                        return;
-                    }
-
-                    tracing::trace!(
-                        ?render_object_id,
-                        ?render_object,
-                        "laying out render object"
-                    );
-
-                    // TODO: we need a way to allow render objects to create new elements
-                    // during layout. This is important for performant responsivity, since
-                    // some elements may want to change which children they have based on
-                    // the parent element's size constraints.
-                    render_object.layout(
-                        RenderObjectContextMut {
-                            plugins: &mut self.plugins,
-
-                            render_object_tree,
-
-                            render_object_id: &render_object_id,
-                        },
-                        Constraints::default(),
-                    );
-
-                    if let Some(render_view) = render_object.render_view() {
-                        render_view.on_layout(render_object_id);
-                    }
-                })
-                .is_some();
-
-            if !existed {
+            let Some(render_object_node) = self.render_object_tree.get_node(render_object_id)
+            else {
                 tracing::warn!(
                     ?render_object_id,
                     "layout called for a render object that doesn't exist"
                 );
+
+                continue;
+            };
+
+            let (render_object, children) = render_object_node.into();
+
+            if !render_object.is_relayout_boundary(Constraints::default()) {
+                tracing::warn!(
+                    ?render_object_id,
+                    ?render_object,
+                    "layout called for a render object that is not a relayout boundary"
+                );
+
+                return;
             }
+
+            tracing::trace!(
+                ?render_object_id,
+                ?render_object,
+                "laying out render object"
+            );
+
+            // TODO: we need a way to allow render objects to create new elements
+            // during layout. This is important for performant responsivity, since
+            // some elements may want to change which children they have based on
+            // the parent element's size constraints.
+            render_object.layout(
+                &mut RenderObjectLayoutContext {
+                    render_object_tree: &self.render_object_tree,
+
+                    render_object_id: &render_object_id,
+
+                    children,
+
+                    results: &mut results,
+                },
+                Constraints::default(),
+            );
+
+            if let Some(render_view) = render_object.render_view() {
+                render_view.on_layout(render_object_id);
+            }
+        }
+
+        for (child_id, result) in results {
+            tracing::trace!(?child_id, ?result, "applying layout result");
+
+            self.render_object_tree
+                .get_mut(child_id)
+                .expect("a non-existent render object was laid out")
+                .apply_layout(result);
         }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_views(&mut self) {
+    pub fn flush_needs_paint(&mut self) {
         for render_object_id in self.needs_paint.drain() {
             let Some(render_view) = self
                 .render_object_tree
@@ -793,6 +806,12 @@ impl Engine {
 
                 element.set_render_object_id(render_object_id);
 
+                if let Some(relayout_boundary_id) = relayout_boundary_id {
+                    render_object.set_relayout_boundary(relayout_boundary_id);
+
+                    self.needs_layout.insert(relayout_boundary_id);
+                }
+
                 if let ElementType::View(element) = element.as_mut() {
                     let view_binding = Rc::clone(element.binding());
 
@@ -808,12 +827,6 @@ impl Engine {
 
                 if render_object.render_view().is_some() {
                     self.needs_paint.insert(render_object_id);
-                }
-
-                if let Some(relayout_boundary_id) = relayout_boundary_id {
-                    render_object.set_relayout_boundary(relayout_boundary_id);
-
-                    self.needs_layout.insert(relayout_boundary_id);
                 }
 
                 render_object
@@ -927,15 +940,16 @@ impl Engine {
         {
             // Elements that were removed should still be available in the tree, so this should
             // never fail.
-            let element_node = self
+            let (element, children) = self
                 .element_tree
                 .get_node(element_id)
-                .expect("element missing while syncing render object children");
+                .expect("element missing while syncing render object children")
+                .into();
 
-            if let Some(render_object_id) = element_node.value().render_object_id() {
+            if let Some(render_object_id) = element.render_object_id() {
                 let mut first_child_render_object_id = None;
 
-                let children = element_node.children().to_vec();
+                let children = children.to_vec();
 
                 // Yank the render objects of the element's children from wheverever they are in
                 // the tree to the end of the list.
