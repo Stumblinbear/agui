@@ -12,14 +12,14 @@ fn engine_ops(c: &mut Criterion) {
 
     group.throughput(criterion::Throughput::Elements(1));
 
-    group.sample_size(500).bench_function("additions", |b| {
+    group.sample_size(10000).bench_function("additions", |b| {
         b.iter_with_setup(
             || Engine::builder().with_root(DummyWidget).build(),
             |mut engine| engine.update(),
         )
     });
 
-    group.sample_size(500).bench_function("removals", |b| {
+    group.sample_size(10000).bench_function("removals", |b| {
         b.iter_with_setup(
             || {
                 let children = Rc::new(RefCell::new(vec![DummyWidget.into_widget()]));
@@ -63,7 +63,7 @@ fn engine_ops(c: &mut Criterion) {
 
     group.throughput(criterion::Throughput::Elements(1000));
 
-    group.sample_size(500).bench_function("additions", |b| {
+    group.sample_size(1000).bench_function("additions", |b| {
         b.iter_with_setup(
             || {
                 let children = {
@@ -97,7 +97,7 @@ fn engine_ops(c: &mut Criterion) {
         )
     });
 
-    group.sample_size(500).bench_function("removals", |b| {
+    group.sample_size(1000).bench_function("removals", |b| {
         b.iter_with_setup(
             || {
                 let children = Rc::new(RefCell::new({

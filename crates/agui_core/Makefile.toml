@@ -3,4 +3,4 @@ CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 
 [tasks.bench]
 command = "cargo"
-args = ["bench", "--features", "mocks"]
+args = ["bench", "--features", "mocks", "--profile", "release"]

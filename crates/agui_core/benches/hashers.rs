@@ -18,7 +18,7 @@ fn hashers(c: &mut Criterion) {
 
     let element_id = ElementId::from(KeyData::from_ffi(0));
 
-    group.sample_size(500).bench_function("std", |b| {
+    group.sample_size(1000).bench_function("std", |b| {
         #[allow(clippy::disallowed_types)]
         b.iter_with_setup(
             std::collections::HashMap::<ElementId, ()>::default,
@@ -28,7 +28,7 @@ fn hashers(c: &mut Criterion) {
         )
     });
 
-    group.sample_size(500).bench_function("fx", |b| {
+    group.sample_size(1000).bench_function("fx", |b| {
         b.iter_with_setup(
             rustc_hash::FxHashMap::<ElementId, ()>::default,
             |mut map| {
@@ -37,7 +37,7 @@ fn hashers(c: &mut Criterion) {
         )
     });
 
-    group.sample_size(500).bench_function("fnv", |b| {
+    group.sample_size(1000).bench_function("fnv", |b| {
         b.iter_with_setup(fnv::FnvHashMap::<ElementId, ()>::default, |mut map| {
             map.insert(element_id, ());
         })
@@ -54,7 +54,7 @@ fn hashers(c: &mut Criterion) {
         type_id: TypeId::of::<Callback<()>>(),
     };
 
-    group.sample_size(500).bench_function("std", |b| {
+    group.sample_size(1000).bench_function("std", |b| {
         #[allow(clippy::disallowed_types)]
         b.iter_with_setup(
             std::collections::HashMap::<CallbackId, ()>::default,
@@ -64,7 +64,7 @@ fn hashers(c: &mut Criterion) {
         )
     });
 
-    group.sample_size(500).bench_function("fx", |b| {
+    group.sample_size(1000).bench_function("fx", |b| {
         b.iter_with_setup(
             rustc_hash::FxHashMap::<CallbackId, ()>::default,
             |mut map| {
@@ -73,7 +73,7 @@ fn hashers(c: &mut Criterion) {
         )
     });
 
-    group.sample_size(500).bench_function("fnv", |b| {
+    group.sample_size(1000).bench_function("fnv", |b| {
         b.iter_with_setup(fnv::FnvHashMap::<CallbackId, ()>::default, |mut map| {
             map.insert(callback_id, ());
         })

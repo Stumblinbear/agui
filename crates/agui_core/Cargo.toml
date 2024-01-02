@@ -53,8 +53,8 @@ path = "benches/hashers.rs"
 harness = false
 
 [[bench]]
-name = "rc_vs_thread_local"
-path = "benches/rc_vs_thread_local.rs"
+name = "reference_patterns"
+path = "benches/reference_patterns.rs"
 harness = false
 
 [[bench]]
