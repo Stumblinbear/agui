@@ -20,11 +20,10 @@ use crate::{
 pub(crate) struct RenderManager {
     tree: Tree<RenderObjectId, RenderObject>,
 
-    forgotten_elements: FxHashSet<ElementId>,
-
     create_render_object: VecDeque<ElementId>,
     update_render_object: FxHashSet<ElementId>,
     sync_render_object_children: FxHashSet<ElementId>,
+    forgotten_elements: FxHashSet<ElementId>,
 
     needs_layout: Dirty<RenderObjectId>,
     needs_paint: Dirty<RenderObjectId>,
@@ -55,6 +54,10 @@ impl RenderManager {
 
     pub fn on_children_changed(&mut self, element_id: ElementId) {
         self.sync_render_object_children.insert(element_id);
+    }
+
+    pub fn forget_element(&mut self, element_id: ElementId) {
+        self.forgotten_elements.insert(element_id);
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -149,10 +152,6 @@ impl RenderManager {
 
             render_view.on_needs_paint(render_object_id);
         }
-    }
-
-    pub fn forget_element(&mut self, element_id: ElementId) {
-        self.forgotten_elements.insert(element_id);
     }
 
     #[tracing::instrument(level = "trace", skip(self, element_tree))]
