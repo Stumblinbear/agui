@@ -11,7 +11,6 @@ use self::render::{MockRenderObject, MockRenderWidget};
 use super::{ElementBuilder, ElementType, ElementUpdate};
 
 pub mod build;
-pub mod proxy;
 pub mod render;
 
 pub struct DummyWidget;

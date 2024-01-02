@@ -3,9 +3,8 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     callback::CallbackId,
     element::{
-        build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementBuilder,
-        ElementCallbackContext, ElementMountContext, ElementType, ElementUnmountContext,
-        ElementUpdate,
+        widget::ElementWidget, ElementBuildContext, ElementBuilder, ElementCallbackContext,
+        ElementMountContext, ElementType, ElementUnmountContext, ElementUpdate,
     },
     widget::{IntoWidget, Widget},
 };
@@ -13,7 +12,7 @@ use crate::{
 #[allow(clippy::disallowed_types)]
 #[mockall::automock]
 #[allow(clippy::needless_lifetimes)]
-pub trait BuildElement {
+pub trait ElementBuild {
     #[allow(unused_variables)]
     fn mount<'ctx>(&mut self, ctx: &mut ElementMountContext<'ctx>);
 
@@ -35,7 +34,7 @@ pub trait BuildElement {
 
 #[derive(Default)]
 pub struct MockBuildWidget {
-    pub mock: Rc<RefCell<MockBuildElement>>,
+    pub mock: Rc<RefCell<MockElementBuild>>,
 }
 
 impl IntoWidget for MockBuildWidget {
@@ -66,7 +65,7 @@ impl ElementWidget for MockElement {
     }
 }
 
-impl ElementBuild for MockElement {
+impl crate::element::build::ElementBuild for MockElement {
     fn build(&mut self, ctx: &mut ElementBuildContext) -> Widget {
         self.widget.mock.borrow_mut().build(ctx)
     }

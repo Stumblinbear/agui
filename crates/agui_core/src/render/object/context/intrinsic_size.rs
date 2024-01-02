@@ -1,24 +1,15 @@
 use crate::{
     element::{ContextRenderObject, ContextRenderObjects},
-    plugin::{context::ContextPlugins, Plugins},
     render::{object::context::IterChildrenLayout, RenderObject, RenderObjectId},
     util::tree::Tree,
 };
 
 pub struct RenderObjectIntrinsicSizeContext<'ctx> {
-    pub plugins: &'ctx Plugins,
-
     pub render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub render_object_id: &'ctx RenderObjectId,
 
     pub children: &'ctx [RenderObjectId],
-}
-
-impl<'ctx> ContextPlugins<'ctx> for RenderObjectIntrinsicSizeContext<'ctx> {
-    fn plugins(&self) -> &Plugins {
-        self.plugins
-    }
 }
 
 impl ContextRenderObjects for RenderObjectIntrinsicSizeContext<'_> {
@@ -45,8 +36,6 @@ impl<'ctx> RenderObjectIntrinsicSizeContext<'ctx> {
     pub fn iter_children(&self) -> IterChildrenLayout {
         IterChildrenLayout {
             index: 0,
-
-            plugins: self.plugins,
 
             render_object_tree: self.render_object_tree,
 

@@ -47,7 +47,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        element::mock::{build::MockBuildWidget, proxy::MockProxyWidget, DummyWidget},
+        element::mock::{build::MockBuildWidget, render::MockRenderWidget, DummyWidget},
         engine::Engine,
         query::WidgetQueryExt,
         widget::IntoWidget,
@@ -55,29 +55,33 @@ mod tests {
 
     #[test]
     pub fn finds_widget_by_type() {
-        let proxy_widget = MockProxyWidget::default();
+        let proxy_widget = MockRenderWidget::default();
         {
-            proxy_widget.mock.borrow_mut().expect_child().returning(|| {
-                let build_widget = MockBuildWidget::default();
-                {
-                    build_widget
-                        .mock
-                        .borrow_mut()
-                        .expect_build()
-                        .returning(|_| {
-                            let build_widget = MockBuildWidget::default();
-                            {
-                                build_widget
-                                    .mock
-                                    .borrow_mut()
-                                    .expect_build()
-                                    .returning(|_| DummyWidget.into_widget());
-                            }
-                            build_widget.into_widget()
-                        });
-                }
-                build_widget.into_widget()
-            });
+            proxy_widget
+                .mock
+                .borrow_mut()
+                .expect_children()
+                .returning(|| {
+                    let build_widget = MockBuildWidget::default();
+                    {
+                        build_widget
+                            .mock
+                            .borrow_mut()
+                            .expect_build()
+                            .returning(|_| {
+                                let build_widget = MockBuildWidget::default();
+                                {
+                                    build_widget
+                                        .mock
+                                        .borrow_mut()
+                                        .expect_build()
+                                        .returning(|_| DummyWidget.into_widget());
+                                }
+                                build_widget.into_widget()
+                            });
+                    }
+                    vec![build_widget.into_widget()]
+                });
         }
 
         let mut engine = Engine::builder().with_root(proxy_widget).build();
@@ -85,9 +89,9 @@ mod tests {
         engine.update();
 
         assert_eq!(
-            engine.query().by_type::<MockProxyWidget>().count(),
+            engine.query().by_type::<MockRenderWidget>().count(),
             1,
-            "should have found 1 widget of type MockProxyWidget"
+            "should have found 1 widget of type MockRenderWidget"
         );
 
         assert_eq!(

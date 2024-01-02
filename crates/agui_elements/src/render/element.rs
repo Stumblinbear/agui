@@ -10,14 +10,14 @@ use agui_core::{
 
 use super::{RenderObjectCreateContext, RenderObjectWidget};
 
-pub struct RenderObjectElement<W>
+pub struct RenderObjectWidgetElement<W>
 where
     W: RenderObjectWidget,
 {
     widget: Rc<W>,
 }
 
-impl<W> RenderObjectElement<W>
+impl<W> RenderObjectWidgetElement<W>
 where
     W: RenderObjectWidget,
 {
@@ -26,7 +26,7 @@ where
     }
 }
 
-impl<W> ElementWidget for RenderObjectElement<W>
+impl<W> ElementWidget for RenderObjectWidgetElement<W>
 where
     W: RenderObjectWidget,
 {
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<W> ElementRender for RenderObjectElement<W>
+impl<W> ElementRender for RenderObjectWidgetElement<W>
 where
     W: RenderObjectWidget,
 {
@@ -71,12 +71,12 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for RenderObjectElement<W>
+impl<W> std::fmt::Debug for RenderObjectWidgetElement<W>
 where
     W: RenderObjectWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("RenderObjectElement");
+        let mut dbg = f.debug_struct("RenderObjectWidgetElement");
         dbg.field("widget", &self.widget);
         dbg.finish()
     }

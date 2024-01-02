@@ -2,7 +2,6 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     element::{ContextRenderObject, ContextRenderObjects},
-    plugin::{context::ContextPlugins, Plugins},
     render::{RenderObject, RenderObjectId},
     unit::{HitTestResult, Size},
     util::tree::Tree,
@@ -13,8 +12,6 @@ mod iter;
 pub use iter::*;
 
 pub struct RenderObjectHitTestContext<'ctx> {
-    pub plugins: &'ctx Plugins,
-
     pub render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub render_object_id: &'ctx RenderObjectId,
@@ -24,12 +21,6 @@ pub struct RenderObjectHitTestContext<'ctx> {
     pub children: &'ctx [RenderObjectId],
 
     pub(crate) result: &'ctx mut HitTestResult,
-}
-
-impl<'ctx> ContextPlugins<'ctx> for RenderObjectHitTestContext<'ctx> {
-    fn plugins(&self) -> &Plugins {
-        self.plugins
-    }
 }
 
 impl ContextRenderObjects for RenderObjectHitTestContext<'_> {
@@ -61,8 +52,6 @@ impl RenderObjectHitTestContext<'_> {
         IterChildrenHitTest {
             front_index: 0,
             back_index: self.children.len(),
-
-            plugins: self.plugins,
 
             render_object_tree: self.render_object_tree,
 

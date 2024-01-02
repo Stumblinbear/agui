@@ -225,9 +225,9 @@ impl std::fmt::Debug for Element {
         }
 
         f.debug_struct(match self.inner {
-            ElementType::Widget(_) => "WidgetElement",
-            ElementType::View(_) => "ViewElement",
-            ElementType::Render(_) => "RenderElement",
+            ElementType::Widget(_) => "Element::Widget",
+            ElementType::View(_) => "Element::View",
+            ElementType::Render(_) => "Element::Render",
         })
         .field("widget", &DebugWidget(self.widget.widget_name()))
         .finish()

@@ -15,7 +15,7 @@ use super::{
     WidgetState,
 };
 
-pub struct StatefulElement<W>
+pub struct StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -30,7 +30,7 @@ where
     initialized: bool,
 }
 
-impl<W> StatefulElement<W>
+impl<W> StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -51,7 +51,7 @@ where
     }
 }
 
-impl<W> ElementWidget for StatefulElement<W>
+impl<W> ElementWidget for StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -71,7 +71,7 @@ where
     }
 }
 
-impl<W> ElementBuild for StatefulElement<W>
+impl<W> ElementBuild for StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
@@ -136,13 +136,13 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for StatefulElement<W>
+impl<W> std::fmt::Debug for StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget + std::fmt::Debug,
     <W as StatefulWidget>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("StatefulElement");
+        let mut dbg = f.debug_struct("StatefulWidgetElement");
         dbg.field("widget", &self.widget);
         dbg.field("state", &self.state);
         dbg.finish()

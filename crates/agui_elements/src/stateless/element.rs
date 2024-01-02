@@ -14,7 +14,7 @@ use super::{
     func::StatelessCallbackFunc, StatelessBuildContext, StatelessCallbackContext, StatelessWidget,
 };
 
-pub struct StatelessElement<W>
+pub struct StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
@@ -23,7 +23,7 @@ where
     callbacks: FxHashMap<CallbackId, Box<dyn StatelessCallbackFunc<W>>>,
 }
 
-impl<W> StatelessElement<W>
+impl<W> StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
@@ -36,7 +36,7 @@ where
     }
 }
 
-impl<W> ElementWidget for StatelessElement<W>
+impl<W> ElementWidget for StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
@@ -51,7 +51,7 @@ where
     }
 }
 
-impl<W> ElementBuild for StatelessElement<W>
+impl<W> ElementBuild for StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
@@ -90,12 +90,12 @@ where
     }
 }
 
-impl<W> std::fmt::Debug for StatelessElement<W>
+impl<W> std::fmt::Debug for StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("StatelessElement");
+        let mut dbg = f.debug_struct("StatelessWidgetElement");
 
         dbg.field("widget", &self.widget);
 

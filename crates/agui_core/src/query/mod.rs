@@ -27,7 +27,7 @@ impl<'query> Iterator for WidgetQuery<'query> {
     type Item = &'query Element;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|(_, node)| node.value())
+        self.iter.next().map(|(_, node)| node.as_ref())
     }
 }
 

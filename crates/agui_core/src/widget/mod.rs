@@ -149,14 +149,14 @@ mod tests {
     use std::{ptr, rc::Rc};
 
     use crate::{
-        element::mock::proxy::MockProxyWidget,
+        element::mock::render::MockRenderWidget,
         widget::{IntoWidget, Widget},
     };
 
     #[test]
     fn strip_fat_ptr_equality() {
-        let widget1 = MockProxyWidget::default().into_widget();
-        let widget2 = MockProxyWidget::default().into_widget();
+        let widget1 = MockRenderWidget::default().into_widget();
+        let widget2 = MockRenderWidget::default().into_widget();
 
         // These equality checks are theoretically unstable
         #[allow(clippy::vtable_address_comparisons)]
@@ -216,7 +216,7 @@ mod tests {
         // will be equal.
         //
         // let test3 = IntoWidget::into_widget(
-        //     (|| MockProxyWidget::default().into_widget()) as fn() -> Widget,
+        //     (|| MockRenderWidget::default().into_widget()) as fn() -> Widget,
         // );
         //
         // assert_eq!(
@@ -226,6 +226,6 @@ mod tests {
     }
 
     fn widget_test() -> Widget {
-        MockProxyWidget::default().into_widget()
+        MockRenderWidget::default().into_widget()
     }
 }

@@ -25,7 +25,7 @@ pub fn impl_stateless_widget(input: TokenStream2) -> TokenStream2 {
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::Widget(Box::new(#agui_elements::stateless::StatelessElement::new(self)))
+                #agui_core::element::ElementType::Widget(Box::new(#agui_elements::stateless::StatelessWidgetElement::new(self)))
             }
         }
     }

@@ -64,6 +64,36 @@ where
     }
 }
 
+impl<K, V> AsRef<V> for TreeNode<K, V>
+where
+    K: slotmap::Key,
+{
+    fn as_ref(&self) -> &V {
+        self.value.as_ref().expect("node is currently in use")
+    }
+}
+
+impl<K, V> AsMut<V> for TreeNode<K, V>
+where
+    K: slotmap::Key,
+{
+    fn as_mut(&mut self) -> &mut V {
+        self.value.as_mut().expect("node is currently in use")
+    }
+}
+
+impl<'a, K, V> From<&'a TreeNode<K, V>> for (&'a V, &'a [K])
+where
+    K: slotmap::Key,
+{
+    fn from(val: &'a TreeNode<K, V>) -> Self {
+        (
+            val.value.as_ref().expect("node is currently in use"),
+            &val.children,
+        )
+    }
+}
+
 impl<K, V> TreeMap<K, V>
 where
     K: slotmap::Key,
