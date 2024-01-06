@@ -10,7 +10,6 @@ pub struct RenderObjectUpdateContext<'ctx> {
     pub needs_paint: &'ctx mut bool,
 
     pub element_id: &'ctx ElementId,
-    pub relayout_boundary_id: &'ctx Option<RenderObjectId>,
     pub render_object_id: &'ctx RenderObjectId,
 }
 

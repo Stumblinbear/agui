@@ -1,30 +1,36 @@
+use std::hash::BuildHasherDefault;
+
 use crate::{
-    element::{ContextRenderObject, ContextRenderObjects},
-    render::{object::RenderObject, RenderObjectId},
+    element::ContextRenderObject,
+    render::{
+        object::{layout_data::LayoutDataUpdate, RenderObject},
+        RenderObjectId,
+    },
     util::tree::Tree,
 };
 
 mod iter;
-mod layout_result;
 
 pub use iter::*;
-pub use layout_result::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHasher;
+use slotmap::SparseSecondaryMap;
 
 pub struct RenderObjectLayoutContext<'ctx> {
-    pub render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+
+    pub parent_uses_size: &'ctx bool,
+
+    pub relayout_boundary_id: &'ctx Option<RenderObjectId>,
 
     pub render_object_id: &'ctx RenderObjectId,
 
     pub children: &'ctx [RenderObjectId],
 
-    pub(crate) results: &'ctx mut FxHashMap<RenderObjectId, LayoutResult>,
-}
-
-impl ContextRenderObjects for RenderObjectLayoutContext<'_> {
-    fn render_objects(&self) -> &Tree<RenderObjectId, RenderObject> {
-        self.render_object_tree
-    }
+    pub(crate) layout_changed: &'ctx mut SparseSecondaryMap<
+        RenderObjectId,
+        LayoutDataUpdate,
+        BuildHasherDefault<FxHasher>,
+    >,
 }
 
 impl ContextRenderObject for RenderObjectLayoutContext<'_> {
@@ -56,11 +62,13 @@ impl RenderObjectLayoutContext<'_> {
         IterChildrenLayoutMut {
             index: 0,
 
+            relayout_boundary_id: self.relayout_boundary_id,
+
             render_object_tree: self.render_object_tree,
 
             children: self.children,
 
-            results: self.results,
+            layout_changed: self.layout_changed,
         }
     }
 }

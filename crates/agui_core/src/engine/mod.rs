@@ -34,7 +34,7 @@ use self::{builder::EngineBuilder, event::ElementRebuiltEvent};
 pub mod builder;
 mod dirty;
 pub mod event;
-mod render;
+pub mod render;
 
 pub use dirty::Dirty;
 

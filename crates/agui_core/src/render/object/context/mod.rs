@@ -1,5 +1,5 @@
 use crate::{
-    element::{ContextRenderObject, ContextRenderObjects},
+    element::ContextRenderObject,
     render::{object::RenderObject, RenderObjectId},
     util::tree::Tree,
 };
@@ -17,15 +17,9 @@ pub use mount::*;
 pub use unmount::*;
 
 pub struct RenderObjectContext<'ctx> {
-    pub render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub render_object_id: &'ctx RenderObjectId,
-}
-
-impl ContextRenderObjects for RenderObjectContext<'_> {
-    fn render_objects(&self) -> &Tree<RenderObjectId, RenderObject> {
-        self.render_object_tree
-    }
 }
 
 impl ContextRenderObject for RenderObjectContext<'_> {

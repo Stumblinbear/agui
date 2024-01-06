@@ -1,6 +1,6 @@
 use crate::{
     element::{Element, ElementId},
-    render::{object::RenderObject, RenderObjectId},
+    render::RenderObjectId,
     util::tree::Tree,
 };
 
@@ -24,10 +24,6 @@ pub trait ContextElements {
 
 pub trait ContextElement {
     fn element_id(&self) -> ElementId;
-}
-
-pub trait ContextRenderObjects {
-    fn render_objects(&self) -> &Tree<RenderObjectId, RenderObject>;
 }
 
 pub trait ContextRenderObject {

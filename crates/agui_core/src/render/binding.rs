@@ -1,6 +1,10 @@
 use std::{ops::Deref, rc::Rc};
 
-use crate::{render::RenderObjectId, util::ptr_eq::PtrEqual};
+use crate::{
+    render::{canvas::Canvas, RenderObjectId},
+    unit::{Offset, Size},
+    util::ptr_eq::PtrEqual,
+};
 
 pub trait ViewBinding {
     /// Called when a new render object is attached (or moved) within this element's
@@ -11,23 +15,20 @@ pub trait ViewBinding {
         render_object_id: RenderObjectId,
     );
 
-    /// Called when a render object is detached within this element's view.
+    /// Called when a render object is detached from this element's view.
     fn on_detach(&self, render_object_id: RenderObjectId);
 
-    /// Called when the given render object within this element's view was laid out.
-    /// This does not necessarily mean that the render object, nor any of their children,
-    /// had their size or position changed.
-    ///
-    /// This is only called for render objects which are considered relayout boundaries.
-    fn on_layout(&self, render_object_id: RenderObjectId);
+    fn on_size_changed(&self, render_object_id: RenderObjectId, size: Size);
 
-    /// Called when the given render object within this element's view needs to be
-    /// painted.
-    fn on_needs_paint(&self, render_object_id: RenderObjectId);
+    fn on_offset_changed(&self, render_object_id: RenderObjectId, offset: Offset);
 
-    /// Called when a render object within this element's view updates its semantics
-    /// information.
-    fn on_needs_semantics_update(&self, render_object_id: RenderObjectId);
+    /// Called when the given render object within this element's view has been painted
+    /// or repainted.
+    fn on_paint(&self, render_object_id: RenderObjectId, canvas: Canvas);
+
+    // /// Called when a render object within this element's view updates its semantics
+    // /// information.
+    // fn on_needs_semantics_update(&self, render_object_id: RenderObjectId);
 
     // /// Called up to once per frame to redraw the view.
     // fn on_redraw(&self);

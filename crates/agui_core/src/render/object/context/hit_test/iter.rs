@@ -79,14 +79,6 @@ impl ChildHitTest<'_> {
         self.children[self.index]
     }
 
-    pub fn render_object(&self) -> &RenderObject {
-        let render_object_id = self.render_object_id();
-
-        self.render_object_tree
-            .get(render_object_id)
-            .expect("child  render object missing during hit test")
-    }
-
     pub fn offset(&self) -> Offset {
         let render_object_id = self.render_object_id();
 

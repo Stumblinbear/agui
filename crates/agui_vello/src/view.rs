@@ -7,9 +7,11 @@ use agui_core::{
     },
     render::{
         binding::ViewBinding,
+        canvas::Canvas,
         object::{RenderObject, RenderObjectImpl},
         RenderObjectId,
     },
+    unit::{Offset, Size},
     widget::Widget,
 };
 use agui_macros::WidgetProps;
@@ -110,18 +112,24 @@ impl ViewBinding for VelloViewBinding {
         println!("VelloViewElement::on_detach {:?}", render_object_id);
     }
 
-    fn on_layout(&self, render_object_id: RenderObjectId) {
-        println!("VelloViewElement::on_layout {:?}", render_object_id);
-    }
-
-    fn on_needs_paint(&self, render_object_id: RenderObjectId) {
-        println!("VelloViewElement::on_needs_paint {:?}", render_object_id);
-    }
-
-    fn on_needs_semantics_update(&self, render_object_id: RenderObjectId) {
+    fn on_size_changed(&self, render_object_id: RenderObjectId, size: Size) {
         println!(
-            "VelloViewElement::on_needs_semantics_update {:?}",
-            render_object_id
+            "VelloViewElement::on_size_changed {:?} {:?}",
+            render_object_id, size
+        );
+    }
+
+    fn on_offset_changed(&self, render_object_id: RenderObjectId, offset: Offset) {
+        println!(
+            "VelloViewElement::on_offset_changed {:?} {:?}",
+            render_object_id, offset
+        );
+    }
+
+    fn on_paint(&self, render_object_id: RenderObjectId, canvas: Canvas) {
+        println!(
+            "VelloViewElement::on_paint {:?} {:?}",
+            render_object_id, canvas
         );
     }
 }

@@ -1,5 +1,9 @@
 use crate::{
-    render::{binding::RenderView, RenderObjectId},
+    render::{
+        binding::RenderView,
+        object::layout_data::{LayoutData, LayoutDataUpdate},
+        RenderObjectId,
+    },
     unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
 };
 
@@ -9,6 +13,7 @@ use super::canvas::{
 };
 
 mod context;
+pub mod layout_data;
 mod render_box;
 
 pub use context::*;
@@ -19,22 +24,7 @@ pub struct RenderObject {
 
     render_view: Option<RenderView>,
 
-    /// Tracks which render object should be used when this render object needs
-    /// to have its layout updated.
-    relayout_boundary_id: Option<RenderObjectId>,
-
-    /// The current size of the render object.
-    size: Option<Size>,
-
-    /// Whether the parent of this render object lays itself out based on the
-    /// resulting size of this render object. This results in the parent being
-    /// updated whenever this render object's layout is changed.
-    ///
-    /// This is `true` if the render object reads the sizing information of the
-    /// children.
-    parent_uses_size: bool,
-
-    offset: Offset,
+    layout_data: LayoutData,
 }
 
 impl RenderObject {
@@ -47,10 +37,7 @@ impl RenderObject {
 
             render_view: None,
 
-            relayout_boundary_id: None,
-            size: None,
-            parent_uses_size: false,
-            offset: Offset::ZERO,
+            layout_data: LayoutData::default(),
         }
     }
 
@@ -79,44 +66,38 @@ impl RenderObject {
         (*self.render_object).short_type_name()
     }
 
-    pub(crate) fn render_view(&self) -> Option<&RenderView> {
+    pub fn render_view(&self) -> Option<&RenderView> {
         self.render_view.as_ref()
     }
 
-    pub(crate) fn set_render_view(&mut self, render_view: RenderView) {
-        self.render_view = Some(render_view);
+    pub(crate) fn set_render_view(&mut self, render_view: Option<RenderView>) {
+        self.render_view = render_view;
     }
 
     pub fn relayout_boundary_id(&self) -> Option<RenderObjectId> {
-        self.relayout_boundary_id
+        self.layout_data.relayout_boundary_id
     }
 
-    pub(crate) fn set_relayout_boundary(&mut self, render_object_id: RenderObjectId) {
-        self.relayout_boundary_id = Some(render_object_id);
+    pub fn parent_uses_size(&self) -> bool {
+        self.layout_data.parent_uses_size
     }
 
-    pub fn size(&self) -> Option<Size> {
-        self.size
-    }
-
-    pub fn does_parent_use_size(&self) -> bool {
-        self.parent_uses_size
-    }
-
-    pub(crate) fn apply_layout(&mut self, result: LayoutResult) {
-        self.parent_uses_size = result.parent_uses_size;
-
-        self.size = Some(
-            result
-                .size
-                .expect("render object did not receive a size during layout"),
-        );
-
-        self.offset = result.offset.unwrap_or_default();
+    pub fn size(&self) -> Size {
+        self.layout_data.size
     }
 
     pub fn offset(&self) -> Offset {
-        self.offset
+        self.layout_data.offset
+    }
+
+    pub(crate) fn apply_layout_data(&mut self, layout_update: LayoutDataUpdate) {
+        layout_update.apply(&mut self.layout_data);
+    }
+
+    pub fn is_relayout_boundary(&self, constraints: Constraints) -> bool {
+        !self.layout_data.parent_uses_size
+            || constraints.is_tight()
+            || self.render_object.is_sized_by_parent()
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx))]
@@ -145,19 +126,39 @@ impl RenderObject {
         )
     }
 
-    pub(crate) fn is_relayout_boundary(&self, constraints: Constraints) -> bool {
-        !self.does_parent_use_size()
-            || constraints.is_tight()
-            || self.render_object.is_sized_by_parent()
-    }
-
     #[tracing::instrument(level = "debug", skip(self, ctx))]
     pub fn layout<'ctx>(
-        &'ctx self,
+        &self,
         ctx: &mut RenderObjectLayoutContext<'ctx>,
         constraints: Constraints,
     ) -> Size {
-        let size = self.render_object.layout(ctx, constraints);
+        let is_relayout_boundary = !ctx.parent_uses_size
+            || constraints.is_tight()
+            || self.render_object.is_sized_by_parent();
+
+        let relayout_boundary_id = if is_relayout_boundary {
+            Some(*ctx.render_object_id)
+        } else {
+            *ctx.relayout_boundary_id
+        };
+
+        let size = self.render_object.layout(
+            &mut RenderObjectLayoutContext {
+                render_object_tree: ctx.render_object_tree,
+
+                parent_uses_size: ctx.parent_uses_size,
+
+                // Make sure to propagate the relayout boundary if it is one.
+                relayout_boundary_id: &relayout_boundary_id,
+
+                render_object_id: ctx.render_object_id,
+
+                children: ctx.children,
+
+                layout_changed: ctx.layout_changed,
+            },
+            constraints,
+        );
 
         debug_assert_eq!(
             size,
@@ -165,9 +166,14 @@ impl RenderObject {
             "render object returned a size that is larger than the constraints"
         );
 
-        let entry = ctx.results.entry(*ctx.render_object_id).or_default();
-
-        entry.size = Some(size);
+        // Check if the size actually changed before we mark it as changed.
+        if self.size() != size {
+            ctx.layout_changed
+                .entry(*ctx.render_object_id)
+                .unwrap()
+                .or_default()
+                .size = Some(size);
+        }
 
         size
     }
@@ -179,11 +185,6 @@ impl RenderObject {
         result: &mut HitTestResult,
         position: Offset,
     ) -> HitTest {
-        let Some(size) = self.size else {
-            tracing::warn!("cannot hit test an element before layout");
-            return HitTest::Pass;
-        };
-
         let children = ctx
             .render_object_tree
             .get_children(*ctx.render_object_id)
@@ -195,7 +196,7 @@ impl RenderObject {
                 render_object_tree: ctx.render_object_tree,
 
                 render_object_id: ctx.render_object_id,
-                size: &size,
+                size: &self.size(),
 
                 children,
 
@@ -213,10 +214,8 @@ impl RenderObject {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub fn paint(&self) -> Canvas {
-        let size = self.size.expect("render object not laid out");
-
         let mut canvas = Canvas {
-            size,
+            size: self.size(),
 
             paints: Vec::default(),
 
@@ -246,8 +245,8 @@ impl std::fmt::Debug for RenderObject {
                 "render_object",
                 &DebugRenderObject((*self.render_object).short_type_name()),
             )
-            .field("size", &self.size)
-            .field("offset", &self.offset)
+            .field("offset", &self.offset())
+            .field("size", &self.size())
             .finish()
     }
 }
@@ -289,7 +288,7 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
             // By default, we take the intrinsic size of the child.
             ctx.render_object_tree
                 .get(child_id)
-                .expect("child element missing while computing intrinsic size")
+                .expect("child render object missing while computing intrinsic size")
                 .intrinsic_size(
                     RenderObjectContext {
                         render_object_tree: ctx.render_object_tree,
@@ -305,7 +304,7 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
     }
 
     fn layout<'ctx>(
-        &'ctx self,
+        &self,
         ctx: &mut RenderObjectLayoutContext<'ctx>,
         constraints: Constraints,
     ) -> Size {
@@ -316,27 +315,11 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
                 "render objects that do not defined a layout function cannot have more than a single child"
             );
 
-            let child_id = *ctx.children.first().unwrap();
-
-            // By default, we take the size of the child.
-            let (render_object, children) = ctx
-                .render_object_tree
-                .get_node(child_id)
-                .expect("child render object missing during layout")
-                .into();
-
-            render_object.layout(
-                &mut RenderObjectLayoutContext {
-                    render_object_tree: ctx.render_object_tree,
-
-                    render_object_id: &child_id,
-
-                    children,
-
-                    results: ctx.results,
-                },
-                constraints,
-            )
+            // By default, we pass the constraints to the child and take its size.
+            ctx.iter_children_mut()
+                .next()
+                .unwrap()
+                .compute_layout(constraints)
         } else {
             constraints.biggest()
         }
