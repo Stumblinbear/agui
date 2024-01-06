@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::mpsc};
+use std::collections::VecDeque;
 
 use rustc_hash::FxHashSet;
 
@@ -13,53 +13,76 @@ use crate::{
 
 use super::{Dirty, Engine};
 
-pub struct EngineBuilder<P> {
-    update_notifier_tx: Option<mpsc::Sender<()>>,
+pub struct EngineBuilder<P, N, const WITH_ROOT: bool = false> {
+    plugins: P,
+
+    notifier: N,
 
     root: Option<Widget>,
-
-    plugins: P,
 }
 
-impl EngineBuilder<()> {
+impl EngineBuilder<(), (), false> {
     pub(super) fn new() -> Self {
         Self {
-            update_notifier_tx: None,
+            plugins: (),
+
+            notifier: (),
 
             root: None,
-
-            plugins: (),
         }
     }
 }
 
-impl<P> EngineBuilder<P>
+impl<P, N, const WITH_ROOT: bool> EngineBuilder<P, N, WITH_ROOT>
 where
     P: Plugin,
 {
-    pub fn with_notifier(mut self, update_notifier_tx: mpsc::Sender<()>) -> Self {
-        self.update_notifier_tx = Some(update_notifier_tx);
-        self
-    }
-
-    pub fn with_root(mut self, root: impl IntoWidget) -> Self {
-        self.root = Some(root.into_widget());
-        self
-    }
-
-    pub fn add_plugin<T>(self, plugin: T) -> EngineBuilder<(T, P)>
+    pub fn add_plugin<T>(self, plugin: T) -> EngineBuilder<(T, P), N, WITH_ROOT>
     where
         T: Plugin,
     {
         EngineBuilder {
-            update_notifier_tx: None,
-
-            root: None,
-
             plugins: (plugin, self.plugins),
+
+            notifier: self.notifier,
+
+            root: self.root,
         }
     }
+}
 
+impl<P, const WITH_ROOT: bool> EngineBuilder<P, (), WITH_ROOT> {
+    pub fn with_notifier<N>(self, notifier: N) -> EngineBuilder<P, N, WITH_ROOT>
+    where
+        N: Fn() + 'static,
+    {
+        EngineBuilder {
+            plugins: self.plugins,
+
+            notifier,
+
+            root: self.root,
+        }
+    }
+}
+
+impl<P, N> EngineBuilder<P, N, false> {
+    pub fn with_root(self, root: impl IntoWidget) -> EngineBuilder<P, N, true> {
+        EngineBuilder {
+            plugins: self.plugins,
+
+            notifier: self.notifier,
+
+            root: Some(root.into_widget()),
+        }
+    }
+}
+
+impl<P, N> EngineBuilder<P, N, true>
+where
+    P: Plugin,
+    N: Fn() + 'static,
+{
     pub fn build(self) -> Engine {
         let mut engine = Engine {
             plugins: Plugins::new(self.plugins),
@@ -70,9 +93,35 @@ where
             render_manager: RenderManager::default(),
 
             needs_build: Dirty::new(),
-            callback_queue: CallbackQueue::new(
-                self.update_notifier_tx.unwrap_or_else(|| mpsc::channel().0),
-            ),
+            callback_queue: CallbackQueue::new(self.notifier),
+
+            rebuild_queue: VecDeque::default(),
+            forgotten_elements: FxHashSet::default(),
+        };
+
+        engine.init(self.root.expect("root is not set"));
+
+        engine
+    }
+}
+
+impl<P> EngineBuilder<P, (), true>
+where
+    P: Plugin,
+{
+    pub fn build(self) -> Engine {
+        fn noop() {}
+
+        let mut engine = Engine {
+            plugins: Plugins::new(self.plugins),
+
+            bus: EventBus::default(),
+
+            element_tree: Tree::default(),
+            render_manager: RenderManager::default(),
+
+            needs_build: Dirty::new(),
+            callback_queue: CallbackQueue::new(noop),
 
             rebuild_queue: VecDeque::default(),
             forgotten_elements: FxHashSet::default(),

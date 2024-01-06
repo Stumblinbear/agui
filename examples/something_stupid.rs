@@ -1,12 +1,14 @@
+use agui_winit::WinitWindow;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{app::run_app, prelude::*};
+use winit::window::WindowBuilder;
 
 fn main() {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
-        .add_directive(format!("agui={}", LevelFilter::INFO).parse().unwrap());
+        .add_directive(format!("agui={}", LevelFilter::DEBUG).parse().unwrap());
 
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
@@ -16,12 +18,18 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    run_app(build! {
-        <SizedBox>::axis(Axis::Horizontal, 100.0) {
-            child: <Text> {
-                style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                text: "Hello, world!".into(),
-            },
+    run_app(|| {
+        build! {
+            <WinitWindow> {
+                window: || WindowBuilder::new().with_title("Hello, world!"),
+
+                child: <SizedBox>::axis(Axis::Horizontal, 100.0) {
+                    child: <Text> {
+                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                        text: "Hello, world!".into(),
+                    },
+                }
+            }
         }
     })
     .expect("Failed to run app");

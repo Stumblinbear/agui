@@ -60,7 +60,7 @@ impl ContextPlugins<'_> for Engine {
 }
 
 impl Engine {
-    pub fn builder() -> EngineBuilder<()> {
+    pub fn builder() -> EngineBuilder<(), (), false> {
         EngineBuilder::new()
     }
 

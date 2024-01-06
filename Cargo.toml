@@ -61,7 +61,7 @@ primitives = ["agui_primitives"]
 widgets = ["primitives", "agui_widgets"]
 macros = ["agui_macros"]
 
-app = ["rustc-hash"]
+app = ["rustc-hash", "parking_lot"]
 winit = ["agui_renderer", "agui_winit", "dep:winit"]
 vello = ["agui_renderer", "agui_vello", "dep:vello"]
 
@@ -83,6 +83,7 @@ agui_vello = { workspace = true, optional = true }
 tracing.workspace = true
 
 rustc-hash = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
 
 winit = { workspace = true, optional = true }
 vello = { workspace = true, optional = true }
