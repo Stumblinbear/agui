@@ -18,9 +18,15 @@ mod render_box;
 
 pub use context::*;
 pub use render_box::*;
+use smallbox::{smallbox, SmallBox};
+
+/// The amount of space to allocate on the stack for a render object.
+/// This is used to avoid indirection for small objects, which is a
+/// very common case.
+type RenderObjectSpace = smallbox::space::S4;
 
 pub struct RenderObject {
-    render_object: Box<dyn RenderObjectImpl>,
+    render_object: SmallBox<dyn RenderObjectImpl, RenderObjectSpace>,
 
     render_view: Option<RenderView>,
 
@@ -33,7 +39,7 @@ impl RenderObject {
         R: RenderObjectImpl,
     {
         Self {
-            render_object: Box::new(render_object),
+            render_object: smallbox!(render_object),
 
             render_view: None,
 

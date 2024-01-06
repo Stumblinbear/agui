@@ -51,7 +51,7 @@ impl IntoWidget for MockRenderWidget {
 
 impl ElementBuilder for MockRenderWidget {
     fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::Render(Box::new(MockElement::new(self)))
+        ElementType::new_render(MockElement::new(self))
     }
 }
 

@@ -54,7 +54,7 @@ impl IntoWidget for MockInheritedWidget {
 
 impl ElementBuilder for MockInheritedWidget {
     fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::Widget(Box::new(MockElement::new(self)))
+        ElementType::new_widget(MockElement::new(self))
     }
 }
 

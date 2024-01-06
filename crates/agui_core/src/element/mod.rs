@@ -38,11 +38,70 @@ pub struct Element {
     render_object_id: Option<RenderObjectId>,
 }
 
-pub enum ElementType {
-    Widget(Box<dyn ElementBuild>),
+#[cfg(not(miri))]
+/// The amount of space to allocate on the stack for an element.
+/// This is used to avoid indirection for small elements, which
+/// is a very common case.
+type ElementSpace = smallbox::space::S8;
 
-    View(Box<dyn ElementView>),
-    Render(Box<dyn ElementRender>),
+#[cfg(not(miri))]
+type ElementBox<T> = smallbox::SmallBox<T, ElementSpace>;
+
+#[cfg(miri)]
+type ElementBox<T> = Box<T>;
+
+pub enum ElementType {
+    Widget(ElementBox<dyn ElementBuild>),
+
+    View(ElementBox<dyn ElementView>),
+    Render(ElementBox<dyn ElementRender>),
+}
+
+impl ElementType {
+    pub fn new_widget<E>(element: E) -> Self
+    where
+        E: ElementBuild,
+    {
+        #[cfg(not(miri))]
+        {
+            ElementType::Widget(smallbox::smallbox!(element))
+        }
+
+        #[cfg(miri)]
+        {
+            ElementType::Widget(Box::new(element))
+        }
+    }
+
+    pub fn new_view<E>(element: E) -> Self
+    where
+        E: ElementView,
+    {
+        #[cfg(not(miri))]
+        {
+            ElementType::View(smallbox::smallbox!(element))
+        }
+
+        #[cfg(miri)]
+        {
+            ElementType::View(Box::new(element))
+        }
+    }
+
+    pub fn new_render<E>(element: E) -> Self
+    where
+        E: ElementRender,
+    {
+        #[cfg(not(miri))]
+        {
+            ElementType::Render(smallbox::smallbox!(element))
+        }
+
+        #[cfg(miri)]
+        {
+            ElementType::Render(Box::new(element))
+        }
+    }
 }
 
 impl Element {

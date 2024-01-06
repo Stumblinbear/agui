@@ -35,10 +35,7 @@ where
     where
         Self: Sized,
     {
-        ElementType::View(Box::new(VelloViewElement::new(
-            (self.binding)(),
-            self.child.clone(),
-        )))
+        ElementType::new_view(VelloViewElement::new((self.binding)(), self.child.clone()))
     }
 }
 

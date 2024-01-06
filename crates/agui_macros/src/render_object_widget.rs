@@ -25,7 +25,7 @@ pub fn impl_render_object_widget(input: TokenStream2) -> TokenStream2 {
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::Render(Box::new(#agui_elements::render::RenderObjectWidgetElement::new(self)))
+                #agui_core::element::ElementType::new_render(#agui_elements::render::RenderObjectWidgetElement::new(self))
             }
         }
     }
