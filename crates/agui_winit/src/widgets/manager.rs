@@ -1,13 +1,15 @@
+use std::error::Error;
+
 use agui_core::{callback::Callback, widget::Widget};
 use agui_inheritance::InheritedWidget;
 use agui_macros::InheritedWidget;
-use winit::window::WindowBuilder;
+use winit::{event_loop::EventLoopProxy, window::WindowBuilder};
 
-use crate::{controller::WinitEventLoopClosed, WinitWindowController, WinitWindowHandle};
+use crate::{app::WinitBindingAction, WinitWindowHandle};
 
 #[derive(InheritedWidget)]
 pub struct WinitWindowManager {
-    pub controller: WinitWindowController,
+    event_loop: EventLoopProxy<WinitBindingAction>,
 
     pub child: Widget,
 }
@@ -28,6 +30,39 @@ impl WinitWindowManager {
         window_fn: impl FnOnce() -> WindowBuilder + Send + 'static,
         callback: Callback<WinitWindowHandle>,
     ) -> Result<(), WinitEventLoopClosed> {
-        self.controller.create_window(window_fn, callback)
+        tracing::debug!("queueing window for creation");
+
+        self.event_loop
+            .send_event(WinitBindingAction::CreateWindow(
+                Box::new(window_fn),
+                callback,
+            ))?;
+
+        Ok(())
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct WinitEventLoopClosed {
+    __private: (),
+}
+
+impl std::fmt::Debug for WinitEventLoopClosed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WinitEventLoopClosed").finish()
+    }
+}
+
+impl std::fmt::Display for WinitEventLoopClosed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        "sending on a closed channel".fmt(f)
+    }
+}
+
+impl Error for WinitEventLoopClosed {}
+
+impl<T> From<winit::event_loop::EventLoopClosed<T>> for WinitEventLoopClosed {
+    fn from(_: winit::event_loop::EventLoopClosed<T>) -> Self {
+        Self { __private: () }
     }
 }

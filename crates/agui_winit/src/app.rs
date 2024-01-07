@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use agui_core::callback::Callback;
-use parking_lot::{Condvar, Mutex};
 use rustc_hash::FxHashMap;
 use winit::{
     event::Event as WinitEvent,
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopWindowTarget},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{WindowBuilder, WindowId},
 };
 
@@ -65,14 +62,6 @@ impl WinitApp {
                                     .expect("failed to create window"),
                             ));
                         }
-
-                        WinitBindingAction::Sync(pair) => {
-                            let (mutex, cond) = &*pair;
-                            let mut guard = mutex.lock();
-                            let func = guard.take().unwrap();
-                            func(window_target);
-                            cond.notify_one();
-                        }
                     },
 
                     _ => (),
@@ -85,12 +74,5 @@ pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
         Callback<WinitWindowHandle>,
-    ),
-
-    Sync(
-        Arc<(
-            Mutex<Option<Box<dyn FnOnce(&EventLoopWindowTarget<WinitBindingAction>) + Send>>>,
-            Condvar,
-        )>,
     ),
 }

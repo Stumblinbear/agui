@@ -4,7 +4,7 @@ use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
 use agui_vello::VelloViewBinding;
-use agui_winit::{WinitApp, WinitWindowController, WinitWindowManager};
+use agui_winit::{WinitApp, WinitWindowManager};
 use parking_lot::{Condvar, Mutex};
 
 #[cfg(not(all(feature = "vello", feature = "winit")))]
@@ -22,12 +22,12 @@ where
 
     let winit_app = WinitApp::default();
 
-    let controller = WinitWindowController::new(winit_app.event_loop.create_proxy());
+    let event_loop = winit_app.event_loop.create_proxy();
 
     thread::spawn(move || {
         let root = build! {
             <WinitWindowManager> {
-                controller: controller,
+                event_loop: event_loop,
 
                 child: <agui_vello::VelloView> {
                     binding: || VelloViewBinding,

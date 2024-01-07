@@ -15,10 +15,7 @@ use agui_elements::{
 use agui_inheritance::ContextInherited;
 use agui_macros::{build, RenderObjectWidget, StatefulWidget};
 use agui_primitives::sized_box::SizedBox;
-use winit::{
-    event::{DeviceId, ElementState, MouseButton},
-    window::WindowBuilder,
-};
+use winit::window::WindowBuilder;
 
 use crate::CurrentWindow;
 use crate::{handle::WinitWindowHandle, WinitWindowManager};
