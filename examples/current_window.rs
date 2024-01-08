@@ -13,7 +13,11 @@ use winit::{dpi::PhysicalSize, window::WindowBuilder};
 fn main() {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
-        .add_directive(format!("agui={}", LevelFilter::INFO).parse().unwrap());
+        .add_directive(
+            format!("agui={}", LevelFilter::INFO)
+                .parse()
+                .expect("Failed to parse log level directive"),
+        );
 
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
