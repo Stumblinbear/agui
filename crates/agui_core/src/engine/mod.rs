@@ -16,9 +16,8 @@ use crate::{
     listenable::EventBus,
     plugin::{
         context::{
-            ContextPlugins, PluginAfterUpdateContext, PluginBeforeUpdateContext,
-            PluginElementBuildContext, PluginElementMountContext, PluginElementUnmountContext,
-            PluginInitContext,
+            ContextPlugins, PluginElementBuildContext, PluginElementMountContext,
+            PluginElementUnmountContext, PluginInitContext,
         },
         Plugins,
     },
@@ -132,12 +131,7 @@ impl Engine {
     /// Update the UI tree.
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn update(&mut self) {
-        tracing::debug!("updating widget tree");
-
-        self.plugins
-            .on_before_update(&mut PluginBeforeUpdateContext {
-                element_tree: &self.element_tree,
-            });
+        tracing::trace!("updating widget tree");
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
@@ -167,9 +161,7 @@ impl Engine {
 
         self.render_manager.flush_needs_paint();
 
-        self.plugins.on_after_update(&mut PluginAfterUpdateContext {
-            element_tree: &self.element_tree,
-        });
+        self.render_manager.flush_view_sync();
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -228,12 +220,15 @@ impl Engine {
                     );
 
                     if changed {
-                        tracing::debug!(
+                        tracing::trace!(
                             ?element_id,
                             widget = element.widget_name(),
                             "element updated, queueing for rebuild"
                         );
 
+                        // How often does the same widget get callbacks multiple times? Is it
+                        // worth checking if the last element is the same as the one we're about
+                        // to queue?
                         self.rebuild_queue.push_back(element_id);
                     }
                 })

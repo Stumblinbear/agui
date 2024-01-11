@@ -163,7 +163,7 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn mount(&mut self, ctx: &mut ElementMountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.mount(ctx),
@@ -173,7 +173,7 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.unmount(ctx),
@@ -183,7 +183,7 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn build(&mut self, ctx: &mut ElementBuildContext) -> Vec<Widget> {
         match self.inner {
             ElementType::Widget(ref mut element) => Vec::from([element.build(ctx)]),
@@ -193,7 +193,7 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, new_widget), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, new_widget), fields(widget_name = self.widget_name()))]
     pub fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if &self.widget == new_widget {
             return ElementUpdate::Noop;
@@ -217,7 +217,7 @@ impl Element {
         result
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub fn call(
         &mut self,
         ctx: &mut ElementCallbackContext,
@@ -250,7 +250,7 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
     pub(crate) fn update_render_object(
         &mut self,
         ctx: &mut RenderObjectUpdateContext,

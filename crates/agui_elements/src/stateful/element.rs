@@ -83,7 +83,7 @@ where
 
             callbacks: &mut self.build_callbacks,
 
-            widget: &self.widget,
+            widget: self.widget.as_ref(),
         };
 
         if !self.initialized || self.old_widget.is_some() {
@@ -117,6 +117,8 @@ where
         {
             let mut ctx = StatefulCallbackContext {
                 inner: ctx,
+
+                widget: self.widget.as_ref(),
 
                 state: &mut self.state,
                 is_changed: false,

@@ -26,6 +26,8 @@ pub trait ViewBinding {
     /// or repainted.
     fn on_paint(&self, render_object_id: RenderObjectId, canvas: Canvas);
 
+    fn on_sync(&self);
+
     // /// Called when a render object within this element's view updates its semantics
     // /// information.
     // fn on_needs_semantics_update(&self, render_object_id: RenderObjectId);

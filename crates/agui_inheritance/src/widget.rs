@@ -3,7 +3,6 @@ use agui_core::widget::{AnyWidget, Widget};
 pub trait InheritedWidget: AnyWidget {
     fn child(&self) -> Widget;
 
-    #[allow(unused_variables)]
     fn should_notify(&self, old_widget: &Self) -> bool;
 }
 

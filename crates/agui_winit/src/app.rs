@@ -1,4 +1,5 @@
 use agui_core::callback::Callback;
+use agui_renderer::RenderWindow;
 use rustc_hash::FxHashMap;
 use winit::{
     event::Event as WinitEvent,
@@ -6,12 +7,15 @@ use winit::{
     window::{WindowBuilder, WindowId},
 };
 
-use crate::WinitWindowHandle;
+use crate::{WinitWindowEvent, WinitWindowHandle};
+
+type BoxedRenderer = Box<dyn RenderWindow<Target = WinitWindowHandle>>;
 
 pub struct WinitApp {
     pub event_loop: EventLoop<WinitBindingAction>,
 
-    window_renderer: FxHashMap<WindowId, ()>,
+    window_events: FxHashMap<WindowId, async_channel::Sender<WinitWindowEvent>>,
+    window_renderer: FxHashMap<WindowId, BoxedRenderer>,
 }
 
 impl Default for WinitApp {
@@ -19,48 +23,70 @@ impl Default for WinitApp {
         Self {
             event_loop: EventLoopBuilder::<WinitBindingAction>::with_user_event().build(),
 
+            window_events: FxHashMap::default(),
             window_renderer: FxHashMap::default(),
         }
     }
 }
 
 impl WinitApp {
-    pub fn run(self) {
+    pub fn run(mut self) {
         self.event_loop
             .run(move |event, window_target, control_flow| {
                 *control_flow = ControlFlow::Wait;
 
-                // let winit_plugin = engine
-                //     .get_plugins_mut()
-                //     .get_mut::<WinitPlugin>()
-                //     .expect("no winit plugin");
-
-                // winit_plugin.process_queue(window_target, control_flow);
-
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
-                        // winit_plugin.handle_event(window_target, window_id, event, control_flow);
+                        if let Some(event) = event.to_static() {
+                            if let Some(events_tx) = self.window_events.get(&window_id) {
+                                if events_tx
+                                    .send_blocking(WinitWindowEvent::from(event))
+                                    .is_err()
+                                {
+                                    tracing::error!("window event channel is closed");
+                                }
+
+                                if events_tx.is_closed() {
+                                    tracing::debug!("closing window");
+
+                                    self.window_events.remove(&window_id);
+                                    self.window_renderer.remove(&window_id);
+                                }
+                            } else {
+                                tracing::warn!("no renderer for window {:?}", window_id);
+                            }
+                        }
                     }
 
                     WinitEvent::RedrawRequested(window_id) => {
-                        // winit_plugin.render(window_id);
-                        // // TODO: limit redraws only to the windows that show visual changes
-                        // windows.iter_mut().for_each(|(window_id, window)| {
-                        //     window.request_redraw();
-                        // });
+                        if let Some(renderer) = self.window_renderer.get(&window_id) {
+                            renderer.render();
+                        } else {
+                            tracing::warn!("no renderer for window {:?}", window_id);
+                        }
                     }
 
                     WinitEvent::UserEvent(action) => match action {
-                        WinitBindingAction::CreateWindow(builder_fn, callback) => {
+                        WinitBindingAction::CreateWindow(builder_fn, renderer_fn, callback) => {
                             let window_builder = (builder_fn)();
 
                             tracing::trace!("creating window: {:?}", window_builder);
 
-                            callback.call(WinitWindowHandle::new(
+                            let (events_tx, events_rx) = async_channel::unbounded();
+
+                            let window_handle = WinitWindowHandle::new(
                                 window_builder
                                     .build(window_target)
                                     .expect("failed to create window"),
-                            ));
+                                events_rx,
+                            );
+
+                            self.window_events.insert(window_handle.id(), events_tx);
+
+                            self.window_renderer
+                                .insert(window_handle.id(), (renderer_fn)(window_handle.clone()));
+
+                            callback.call(window_handle);
                         }
                     },
 
@@ -73,6 +99,7 @@ impl WinitApp {
 pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
+        Box<dyn FnOnce(WinitWindowHandle) -> BoxedRenderer + Send>,
         Callback<WinitWindowHandle>,
     ),
 }

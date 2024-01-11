@@ -25,5 +25,9 @@ tracing.workspace = true
 
 rustc-hash.workspace = true
 
-winit.workspace = true
+futures.workspace = true
+async-channel.workspace = true
+
 raw-window-handle.workspace = true
+
+winit.workspace = true

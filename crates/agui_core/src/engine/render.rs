@@ -2,7 +2,7 @@ use core::panic;
 use std::{collections::VecDeque, hash::BuildHasherDefault, rc::Rc};
 
 use rustc_hash::{FxHashSet, FxHasher};
-use slotmap::SparseSecondaryMap;
+use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
     element::{
@@ -30,8 +30,12 @@ pub struct RenderManager {
     needs_layout: Dirty<RenderObjectId>,
     needs_paint: Dirty<RenderObjectId>,
 
+    cached_constraints: SecondaryMap<RenderObjectId, Constraints>,
+
     layout_changed:
         SparseSecondaryMap<RenderObjectId, LayoutDataUpdate, BuildHasherDefault<FxHasher>>,
+
+    needs_sync: SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
 }
 
 impl RenderManager {
@@ -65,20 +69,28 @@ impl RenderManager {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_layout(&mut self) {
-        // let mut relayout_queue = self
-        //     .needs_layout
-        //     .drain()
-        //     .filter(|render_object_id| self.render_object_tree.contains(*render_object_id))
-        //     .collect::<Vec<_>>();
+        let mut relayout_queue = self
+            .needs_layout
+            .drain()
+            .filter(|render_object_id| self.tree.contains(*render_object_id))
+            .collect::<Vec<_>>();
 
-        // relayout_queue.sort_by_cached_key(|render_object_id| {
-        //     self.render_object_tree
-        //         .get_depth(*render_object_id)
-        //         .unwrap()
-        // });
+        relayout_queue
+            .sort_by_cached_key(|render_object_id| self.tree.get_depth(*render_object_id).unwrap());
 
-        for render_object_id in self.needs_layout.drain() {
+        for render_object_id in relayout_queue {
             tracing::trace!(?render_object_id, "laying out render object");
+
+            // It's likely that a nested render object will have already been processed by
+            // a previous iteration of the loop, so we can skip it here.
+            if self.layout_changed.contains_key(render_object_id) {
+                tracing::trace!(
+                    ?render_object_id,
+                    "render object has already been laid out, skipping"
+                );
+
+                continue;
+            }
 
             let Some(render_node) = self.tree.get_node(render_object_id) else {
                 tracing::warn!(
@@ -91,15 +103,13 @@ impl RenderManager {
 
             let (render_object, children) = render_node.into();
 
-            if !render_object.is_relayout_boundary(Constraints::default()) {
-                tracing::warn!(
-                    ?render_object_id,
-                    ?render_object,
-                    "layout queued for a render object that is not a relayout boundary"
-                );
+            let constraints = self
+                .tree
+                .get_parent(render_object_id)
+                .and_then(|parent_id| self.cached_constraints.get(parent_id).copied())
+                .unwrap_or_default();
 
-                return;
-            }
+            tracing::trace!(?render_object_id, ?constraints, "layout constraints");
 
             // TODO: we need a way to allow render objects to create new elements
             // during layout. This is important for performant responsivity, since
@@ -117,9 +127,11 @@ impl RenderManager {
 
                     children,
 
+                    constraints: &mut self.cached_constraints,
+
                     layout_changed: &mut self.layout_changed,
                 },
-                Constraints::default(),
+                constraints,
             );
         }
 
@@ -159,7 +171,21 @@ impl RenderManager {
 
             if let Some(render_view) = render_object.render_view() {
                 render_view.on_paint(render_object_id, render_object.paint());
+
+                self.needs_sync.insert(render_view.root_id(), ());
             }
+        }
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn flush_view_sync(&mut self) {
+        for render_object_id in self.needs_sync.drain().map(|(id, _)| id) {
+            self.tree
+                .get_mut(render_object_id)
+                .expect("render object missing while syncing")
+                .render_view()
+                .expect("render object has no view while syncing")
+                .on_sync()
         }
     }
 
@@ -241,6 +267,8 @@ impl RenderManager {
                 .and_then(|element| element.render_object_id())
             {
                 self.tree.remove(render_object_id, false);
+
+                self.cached_constraints.remove(render_object_id);
             }
         }
 
@@ -370,14 +398,14 @@ impl RenderManager {
                     render_object.set_render_view(Some(parent_render_view));
                 };
 
-                if let Some(relayout_boundary_id) = relayout_boundary_id {
-                    render_object.apply_layout_data(LayoutDataUpdate {
-                        relayout_boundary_id: Some(Some(relayout_boundary_id)),
-                        ..Default::default()
-                    });
+                let relayout_boundary_id = relayout_boundary_id.unwrap_or(render_object_id);
 
-                    self.needs_layout.insert(relayout_boundary_id);
-                }
+                render_object.apply_layout_data(LayoutDataUpdate {
+                    relayout_boundary_id: Some(Some(relayout_boundary_id)),
+                    ..Default::default()
+                });
+
+                self.needs_layout.insert(relayout_boundary_id);
 
                 self.needs_paint.insert(render_object_id);
 

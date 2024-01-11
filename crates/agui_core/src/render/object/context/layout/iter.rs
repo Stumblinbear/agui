@@ -1,7 +1,7 @@
 use std::hash::BuildHasherDefault;
 
 use rustc_hash::FxHasher;
-use slotmap::SparseSecondaryMap;
+use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
     render::{
@@ -89,6 +89,8 @@ pub struct IterChildrenLayoutMut<'ctx> {
 
     pub(crate) children: &'ctx [RenderObjectId],
 
+    pub(crate) constraints: &'ctx mut SecondaryMap<RenderObjectId, Constraints>,
+
     pub(crate) layout_changed: &'ctx mut SparseSecondaryMap<
         RenderObjectId,
         LayoutDataUpdate,
@@ -115,6 +117,8 @@ impl IterChildrenLayoutMut<'_> {
 
             children: self.children,
 
+            constraints: self.constraints,
+
             layout_changed: self.layout_changed,
         })
     }
@@ -128,6 +132,8 @@ pub struct ChildLayoutMut<'ctx> {
     index: usize,
 
     children: &'ctx [RenderObjectId],
+
+    constraints: &'ctx mut SecondaryMap<RenderObjectId, Constraints>,
 
     layout_changed: &'ctx mut SparseSecondaryMap<
         RenderObjectId,
@@ -199,6 +205,8 @@ impl ChildLayoutMut<'_> {
                 render_object_id: &render_object_id,
 
                 children,
+
+                constraints: self.constraints,
 
                 layout_changed: self.layout_changed,
             },

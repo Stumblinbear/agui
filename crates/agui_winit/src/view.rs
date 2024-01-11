@@ -129,4 +129,8 @@ impl ViewBinding for WinitViewBinding {
             render_object_id, canvas
         );
     }
+
+    fn on_sync(&self) {
+        todo!()
+    }
 }

@@ -1,7 +1,7 @@
 use agui_core::{
     render::{
-        canvas::{Canvas, CanvasCommand},
-        Paint, RenderObjectId,
+        canvas::{command::CanvasCommand, paint::Paint, Canvas},
+        RenderObjectId,
     },
     unit::{Offset, Rect},
 };
@@ -12,8 +12,6 @@ use vello::{
     peniko::{Color, Fill, Mix},
     SceneBuilder, SceneFragment,
 };
-
-use crate::fonts::VelloFonts;
 
 #[derive(Default)]
 pub struct VelloRenderObject {
@@ -39,7 +37,7 @@ pub struct VelloCanvasObject {
 }
 
 impl VelloCanvasObject {
-    pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
+    pub fn update(&mut self, canvas: Option<Canvas>) {
         let Some(canvas) = canvas else {
             self.fragment = SceneFragment::default();
             self.children.clear();
@@ -63,7 +61,7 @@ impl VelloCanvasObject {
         if canvas.head.is_empty() {
             self.fragment = SceneFragment::default();
         } else {
-            self.update_head(fonts, &canvas.head);
+            self.update_head(&canvas.head);
         }
 
         for child in canvas.children {
@@ -87,13 +85,13 @@ impl VelloCanvasObject {
                 },
             };
 
-            layer.update(fonts, Some(tail.canvas));
+            layer.update(Some(tail.canvas));
 
             self.tail = Some(Box::new(layer));
         }
     }
 
-    fn update_head(&mut self, fonts: &mut VelloFonts, commands: &[CanvasCommand]) {
+    fn update_head(&mut self, commands: &[CanvasCommand]) {
         let mut sb = SceneBuilder::for_fragment(&mut self.fragment);
 
         for command in commands {
@@ -141,56 +139,56 @@ impl VelloCanvasObject {
                     text,
                     ..
                 } => {
-                    let paint = &self.paints[*paint_idx];
+                    // let paint = &self.paints[*paint_idx];
 
-                    if let Some(font) = fonts.get_or_default(text_style.font) {
-                        let transform = Affine::translate((rect.left as f64, rect.top as f64));
+                    // if let Some(font) = fonts.get_or_default(text_style.font) {
+                    //     let transform = Affine::translate((rect.left as f64, rect.top as f64));
 
-                        let glyph_brush = &vello::peniko::Brush::Solid(Color::rgba(
-                            paint.color.red as f64,
-                            paint.color.green as f64,
-                            paint.color.blue as f64,
-                            paint.color.alpha as f64,
-                        ));
+                    //     let glyph_brush = &vello::peniko::Brush::Solid(Color::rgba(
+                    //         paint.color.red as f64,
+                    //         paint.color.green as f64,
+                    //         paint.color.blue as f64,
+                    //         paint.color.alpha as f64,
+                    //     ));
 
-                        let fello_size = vello::fello::Size::new(text_style.size);
-                        let charmap = font.charmap();
-                        let metrics = font.metrics(fello_size, Default::default());
-                        let line_height = metrics.ascent - metrics.descent + metrics.leading;
-                        let glyph_metrics = font.glyph_metrics(fello_size, Default::default());
-                        let mut pen_x = 0f64;
-                        let mut pen_y = 0f64;
-                        let vars: [(&str, f32); 0] = [];
-                        let mut provider =
-                            fonts.new_provider(&font, None, text_style.size, false, vars);
+                    //     let fello_size = vello::fello::Size::new(text_style.size);
+                    //     let charmap = font.charmap();
+                    //     let metrics = font.metrics(fello_size, Default::default());
+                    //     let line_height = metrics.ascent - metrics.descent + metrics.leading;
+                    //     let glyph_metrics = font.glyph_metrics(fello_size, Default::default());
+                    //     let mut pen_x = 0f64;
+                    //     let mut pen_y = 0f64;
+                    //     let vars: [(&str, f32); 0] = [];
+                    //     let mut provider =
+                    //         fonts.new_provider(&font, None, text_style.size, false, vars);
 
-                        for ch in text.chars() {
-                            if ch == '\n' {
-                                pen_y += line_height as f64;
-                                pen_x = 0.0;
-                                continue;
-                            }
+                    //     for ch in text.chars() {
+                    //         if ch == '\n' {
+                    //             pen_y += line_height as f64;
+                    //             pen_x = 0.0;
+                    //             continue;
+                    //         }
 
-                            let gid = charmap.map(ch).unwrap_or_default();
-                            let advance =
-                                glyph_metrics.advance_width(gid).unwrap_or_default() as f64;
+                    //         let gid = charmap.map(ch).unwrap_or_default();
+                    //         let advance =
+                    //             glyph_metrics.advance_width(gid).unwrap_or_default() as f64;
 
-                            // Getting the glyph from the provider is expensive
-                            if let Some(glyph) = self
-                                .glyph_cache
-                                .entry((gid, *paint_idx))
-                                .or_insert_with(|| provider.get(gid.to_u16(), Some(glyph_brush)))
-                            {
-                                let xform = transform
-                                    * Affine::translate((pen_x, pen_y + text_style.size as f64))
-                                    * Affine::scale_non_uniform(1.0, -1.0);
+                    //         // Getting the glyph from the provider is expensive
+                    //         if let Some(glyph) = self
+                    //             .glyph_cache
+                    //             .entry((gid, *paint_idx))
+                    //             .or_insert_with(|| provider.get(gid.to_u16(), Some(glyph_brush)))
+                    //         {
+                    //             let xform = transform
+                    //                 * Affine::translate((pen_x, pen_y + text_style.size as f64))
+                    //                 * Affine::scale_non_uniform(1.0, -1.0);
 
-                                sb.append(glyph, Some(xform));
-                            }
+                    //             sb.append(glyph, Some(xform));
+                    //         }
 
-                            pen_x += advance;
-                        }
-                    }
+                    //         pen_x += advance;
+                    //     }
+                    // }
                 }
 
                 cmd => {
@@ -232,8 +230,8 @@ pub struct LayerObject {
 }
 
 impl LayerObject {
-    pub fn update(&mut self, fonts: &mut VelloFonts, canvas: Option<Canvas>) {
-        self.canvas.update(fonts, canvas);
+    pub fn update(&mut self, canvas: Option<Canvas>) {
+        self.canvas.update(canvas);
     }
 
     pub fn begin(&self, transform: Affine, sb: &mut SceneBuilder) {

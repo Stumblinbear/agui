@@ -1,16 +1,5 @@
-// mod current_view;
-// mod manager;
-// mod manifold;
-// mod plugin;
-// mod renderer;
-// mod view_boundary;
+#[cfg(feature = "window")]
+mod window;
 
-// pub use current_view::*;
-// pub use manager::*;
-// pub use manifold::*;
-// pub use renderer::*;
-// pub use view_boundary::*;
-
-// slotmap::new_key_type! {
-//     pub struct RenderViewId;
-// }
+#[cfg(feature = "window")]
+pub use window::RenderWindow;

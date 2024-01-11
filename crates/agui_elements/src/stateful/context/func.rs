@@ -2,9 +2,14 @@ use std::{any::Any, marker::PhantomData};
 
 use agui_core::unit::AsAny;
 
+use crate::stateful::WidgetState;
+
 use super::StatefulCallbackContext;
 
-pub trait StatefulCallbackFunc<W> {
+pub trait StatefulCallbackFunc<W>
+where
+    W: WidgetState,
+{
     fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: Box<dyn Any>);
 }
 
@@ -34,6 +39,7 @@ where
 
 impl<W, A, F> StatefulCallbackFunc<W> for StatefulCallbackFn<W, A, F>
 where
+    W: WidgetState,
     A: AsAny,
     F: Fn(&mut StatefulCallbackContext<W>, A),
 {

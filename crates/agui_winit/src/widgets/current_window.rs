@@ -26,7 +26,6 @@ impl InheritedWidget for CurrentWindow {
         self.child.clone()
     }
 
-    #[allow(unused_variables)]
     fn should_notify(&self, old_widget: &Self) -> bool {
         self.handle.id() != old_widget.handle.id()
     }

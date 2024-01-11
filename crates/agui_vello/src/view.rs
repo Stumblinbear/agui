@@ -7,35 +7,31 @@ use agui_core::{
     },
     render::{
         binding::ViewBinding,
-        canvas::Canvas,
         object::{RenderObject, RenderObjectImpl},
-        RenderObjectId,
     },
-    unit::{Offset, Size},
     widget::Widget,
 };
 use agui_macros::WidgetProps;
 
+use crate::renderer::binding::VelloViewBinding;
+
 #[derive(WidgetProps)]
-pub struct VelloView<F>
-where
-    F: Fn() -> VelloViewBinding + 'static,
-{
-    pub binding: F,
+pub struct VelloView {
+    pub binding: VelloViewBinding,
 
     #[prop(into)]
     pub child: Widget,
 }
 
-impl<F> ElementBuilder for VelloView<F>
-where
-    F: Fn() -> VelloViewBinding + 'static,
-{
+impl ElementBuilder for VelloView {
     fn create_element(self: std::rc::Rc<Self>) -> ElementType
     where
         Self: Sized,
     {
-        ElementType::new_view(VelloViewElement::new((self.binding)(), self.child.clone()))
+        ElementType::new_view(VelloViewElement::new(
+            self.binding.clone(),
+            self.child.clone(),
+        ))
     }
 }
 
@@ -88,45 +84,5 @@ struct RenderVelloView;
 impl RenderObjectImpl for RenderVelloView {
     fn is_sized_by_parent(&self) -> bool {
         true
-    }
-}
-
-pub struct VelloViewBinding;
-
-impl ViewBinding for VelloViewBinding {
-    fn on_attach(
-        &self,
-        parent_render_object_id: Option<RenderObjectId>,
-        render_object_id: RenderObjectId,
-    ) {
-        println!(
-            "VelloViewElement::on_attach {:?} {:?}",
-            parent_render_object_id, render_object_id
-        );
-    }
-
-    fn on_detach(&self, render_object_id: RenderObjectId) {
-        println!("VelloViewElement::on_detach {:?}", render_object_id);
-    }
-
-    fn on_size_changed(&self, render_object_id: RenderObjectId, size: Size) {
-        println!(
-            "VelloViewElement::on_size_changed {:?} {:?}",
-            render_object_id, size
-        );
-    }
-
-    fn on_offset_changed(&self, render_object_id: RenderObjectId, offset: Offset) {
-        println!(
-            "VelloViewElement::on_offset_changed {:?} {:?}",
-            render_object_id, offset
-        );
-    }
-
-    fn on_paint(&self, render_object_id: RenderObjectId, canvas: Canvas) {
-        println!(
-            "VelloViewElement::on_paint {:?} {:?}",
-            render_object_id, canvas
-        );
     }
 }

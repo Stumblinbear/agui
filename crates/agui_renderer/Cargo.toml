@@ -11,6 +11,9 @@ categories = ["gui", "graphics", "rendering"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
+[features]
+window = ["raw-window-handle"]
+
 [dependencies]
 agui_core.workspace = true
 agui_elements.workspace = true
@@ -22,3 +25,5 @@ tracing.workspace = true
 
 rustc-hash.workspace = true
 slotmap.workspace = true
+
+raw-window-handle = { workspace = true, optional = true }

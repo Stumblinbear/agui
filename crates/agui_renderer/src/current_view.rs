@@ -27,7 +27,6 @@ impl InheritedWidget for CurrentRenderView {
         self.child.clone()
     }
 
-    #[allow(unused_variables)]
     fn should_notify(&self, old_widget: &Self) -> bool {
         self.id != old_widget.id
     }

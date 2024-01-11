@@ -1,11 +1,14 @@
 use std::ops::Deref;
 
-use agui_core::listenable::Event;
 use winit::event::WindowEvent;
 
 pub struct WinitWindowEvent(pub WindowEvent<'static>);
 
-impl Event for WinitWindowEvent {}
+impl AsRef<WindowEvent<'static>> for WinitWindowEvent {
+    fn as_ref(&self) -> &WindowEvent<'static> {
+        &self.0
+    }
+}
 
 impl Deref for WinitWindowEvent {
     type Target = WindowEvent<'static>;

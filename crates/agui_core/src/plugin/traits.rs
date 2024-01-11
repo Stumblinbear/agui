@@ -1,9 +1,8 @@
 use std::any::TypeId;
 
 use super::context::{
-    PluginAfterUpdateContext, PluginBeforeUpdateContext, PluginElementBuildContext,
-    PluginElementMountContext, PluginElementRemountContext, PluginElementUnmountContext,
-    PluginInitContext,
+    PluginElementBuildContext, PluginElementMountContext, PluginElementRemountContext,
+    PluginElementUnmountContext, PluginInitContext,
 };
 use crate::unit::AsAny;
 
@@ -12,10 +11,6 @@ macros::impl_trait! {
         /// Called when the engine is initialized.
         fn on_init(&mut self, ctx: &mut PluginInitContext);
 
-        /// Called after each engine update, after all changes have been processed and the tree
-        /// has settled.
-        fn on_after_update(&mut self, ctx: &mut PluginAfterUpdateContext);
-
         fn on_element_mount(&mut self, ctx: &mut PluginElementMountContext);
 
         fn on_element_remount(&mut self, ctx: &mut PluginElementRemountContext);
@@ -23,9 +18,6 @@ macros::impl_trait! {
         fn on_element_unmount(&mut self, ctx: &mut PluginElementUnmountContext);
 
         fn on_element_build(&mut self, ctx: &mut PluginElementBuildContext);
-
-        /// Called before each engine update, before any changes have been processed.
-        fn on_before_update(&mut self, ctx: &mut PluginBeforeUpdateContext);
     }
 }
 

@@ -84,10 +84,6 @@ impl RenderObject {
         self.layout_data.relayout_boundary_id
     }
 
-    pub fn parent_uses_size(&self) -> bool {
-        self.layout_data.parent_uses_size
-    }
-
     pub fn size(&self) -> Size {
         self.layout_data.size
     }
@@ -100,13 +96,7 @@ impl RenderObject {
         layout_update.apply(&mut self.layout_data);
     }
 
-    pub fn is_relayout_boundary(&self, constraints: Constraints) -> bool {
-        !self.layout_data.parent_uses_size
-            || constraints.is_tight()
-            || self.render_object.is_sized_by_parent()
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, ctx))]
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn intrinsic_size(
         &self,
         ctx: RenderObjectContext,
@@ -132,7 +122,7 @@ impl RenderObject {
         )
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx))]
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn layout<'ctx>(
         &self,
         ctx: &mut RenderObjectLayoutContext<'ctx>,
@@ -148,6 +138,30 @@ impl RenderObject {
             *ctx.relayout_boundary_id
         };
 
+        // If we are a relayout boundary, we check if the constraints are the same as the previous
+        // layout. If they are, we can reuse the size from the previous layout. However, even if the
+        // constraints are the same, we still need to call layout so that the children can update
+        // their target relayout boundary if it has changed.
+        if is_relayout_boundary && self.relayout_boundary_id() == relayout_boundary_id {
+            if let Some(old_constraints) = ctx.constraints.get(*ctx.render_object_id).copied() {
+                if constraints == old_constraints {
+                    // If the render object is sized by its parent and the constraints are the same,
+                    // we can reuse the size from the previous layout.
+                    if self.render_object.is_sized_by_parent() {
+                        tracing::trace!(
+                            render_object_id = ?ctx.render_object_id,
+                            size = ?self.size(),
+                            "reusing size from previous layout for render object"
+                        );
+
+                        return self.size();
+                    }
+                }
+            }
+        }
+
+        ctx.constraints.insert(*ctx.render_object_id, constraints);
+
         let size = self.render_object.layout(
             &mut RenderObjectLayoutContext {
                 render_object_tree: ctx.render_object_tree,
@@ -161,16 +175,18 @@ impl RenderObject {
 
                 children: ctx.children,
 
+                constraints: ctx.constraints,
+
                 layout_changed: ctx.layout_changed,
             },
             constraints,
         );
 
-        debug_assert_eq!(
-            size,
-            constraints.constrain(size),
-            "render object returned a size that is larger than the constraints"
-        );
+        if size > constraints.constrain(size) {
+            tracing::warn!(
+                "render object returned a size that is larger than the constraints: {constraints:?}",
+            );
+        }
 
         // Check if the size actually changed before we mark it as changed.
         if self.size() != size {
@@ -184,7 +200,7 @@ impl RenderObject {
         size
     }
 
-    #[tracing::instrument(level = "debug", skip(self, ctx))]
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn hit_test(
         &self,
         ctx: RenderObjectContext,
@@ -218,7 +234,7 @@ impl RenderObject {
         hit
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn paint(&self) -> Canvas {
         let mut canvas = Canvas {
             size: self.size(),

@@ -13,17 +13,14 @@ use crate::{
 #[mockall::automock]
 #[allow(clippy::needless_lifetimes)]
 pub trait ElementBuild {
-    #[allow(unused_variables)]
     fn mount<'ctx>(&mut self, ctx: &mut ElementMountContext<'ctx>);
 
-    #[allow(unused_variables)]
     fn unmount<'ctx>(&mut self, ctx: &mut ElementUnmountContext<'ctx>);
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
     fn build<'ctx>(&mut self, ctx: &mut ElementBuildContext<'ctx>) -> Widget;
 
-    #[allow(unused_variables)]
     fn call<'ctx>(
         &mut self,
         ctx: &mut ElementCallbackContext<'ctx>,

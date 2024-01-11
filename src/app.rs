@@ -3,7 +3,6 @@ use std::{sync::Arc, thread, time::Instant};
 use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
-use agui_vello::VelloViewBinding;
 use agui_winit::{WinitApp, WinitWindowManager};
 use parking_lot::{Condvar, Mutex};
 
@@ -29,11 +28,7 @@ where
             <WinitWindowManager> {
                 event_loop: event_loop,
 
-                child: <agui_vello::VelloView> {
-                    binding: || VelloViewBinding,
-
-                    child: (func)().into_widget(),
-                }
+                child: (func)().into_widget()
             }
         };
 

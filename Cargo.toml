@@ -43,14 +43,16 @@ bitflags = "2.4"
 url = "2.4"
 smallbox = "0.8"
 
+futures = "0.3"
+async-channel = "2.1"
+
 mockall = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 
-futures = "0.3"
-raw-window-handle = "0.5"
-
 glam = "0.24"
 lyon = "1.0"
+
+raw-window-handle = "0.5"
 
 winit = { version = "0.28" }
 vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "ee3a076b291d206c361431cc841407adf265c692" }
@@ -62,8 +64,9 @@ widgets = ["primitives", "agui_widgets"]
 macros = ["agui_macros"]
 
 app = ["rustc-hash", "parking_lot"]
-winit = ["agui_renderer", "agui_winit", "dep:winit"]
-vello = ["agui_renderer", "agui_vello", "dep:vello"]
+winit = ["agui_renderer/window", "agui_winit", "dep:winit"]
+vello = ["agui_renderer/window", "agui_vello", "dep:vello"]
+winit-vello = ["winit", "vello", "agui_vello/window"]
 
 mocks = ["agui_core/mocks", "agui_inheritance/mocks"]
 
@@ -89,7 +92,7 @@ winit = { workspace = true, optional = true }
 vello = { workspace = true, optional = true }
 
 [dev-dependencies]
-agui = { path = ".", features = ["app", "vello", "winit"] }
+agui = { path = ".", features = ["app", "winit-vello"] }
 
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

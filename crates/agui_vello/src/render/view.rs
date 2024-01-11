@@ -3,11 +3,10 @@ use std::{sync::Arc, time::Instant};
 use agui_core::{
     element::{Element, ElementId},
     engine::Engine,
-    render::{RenderObject, RenderObjectId},
+    render::{object::RenderObject, RenderObjectId},
     unit::{Offset, Size},
     util::tree::Tree,
 };
-use agui_renderer::{RenderManifold, RenderViewId, RenderViewManager};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use vello::{
@@ -18,57 +17,12 @@ use vello::{
     Scene, SceneBuilder,
 };
 
-use crate::fonts::VelloFonts;
-use crate::render::VelloRenderObject;
-
-pub struct VelloViewRendererHandle {
-    inner: Mutex<VelloViewRenderer>,
-}
-
-impl VelloViewRendererHandle {
-    pub(crate) fn new(renderer: VelloViewRenderer) -> Self {
-        Self {
-            inner: Mutex::new(renderer),
-        }
-    }
-
-    pub(crate) fn redraw(
-        &self,
-        render_view_manager: &RenderViewManager,
-        tree: &Tree<ElementId, Element>,
-        fonts: &mut VelloFonts,
-    ) {
-        self.inner.lock().redraw(render_view_manager, tree, fonts);
-    }
-}
-
-impl RenderManifold for VelloViewRendererHandle {
-    fn on_attach(
-        &self,
-        parent_render_object_id: Option<RenderObjectId>,
-        render_object_id: RenderObjectId,
-        render_object: &RenderObject,
-    ) {
-        self.inner
-            .lock()
-            .on_attach(parent_render_object_id, render_object_id, render_object);
-    }
-
-    fn on_detach(&self, render_object_id: RenderObjectId) {
-        self.inner.lock().on_detach(render_object_id);
-    }
-
-    fn render(&self) {
-        self.inner.lock().render();
-    }
-}
+use crate::render::{fonts::VelloFonts, VelloRenderObject};
 
 pub struct VelloViewRenderer {
     pub fonts: Arc<Mutex<VelloFonts>>,
 
     pub render_context: RenderContext,
-
-    pub render_view_id: RenderViewId,
 
     pub surface: RenderSurface,
     pub renderer: vello::Renderer,
