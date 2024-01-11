@@ -1,32 +1,31 @@
-use std::{ops::Deref, rc::Rc};
-
 use crate::{
     render::{canvas::Canvas, RenderObjectId},
     unit::{Offset, Size},
-    util::ptr_eq::PtrEqual,
 };
 
 pub trait ViewBinding {
     /// Called when a new render object is attached (or moved) within this element's
     /// view, returning a binding that the render object may use to interact with it.
     fn on_attach(
-        &self,
+        &mut self,
         parent_render_object_id: Option<RenderObjectId>,
         render_object_id: RenderObjectId,
     );
 
     /// Called when a render object is detached from this element's view.
-    fn on_detach(&self, render_object_id: RenderObjectId);
+    fn on_detach(&mut self, render_object_id: RenderObjectId);
 
-    fn on_size_changed(&self, render_object_id: RenderObjectId, size: Size);
+    fn on_size_changed(&mut self, render_object_id: RenderObjectId, size: Size);
 
-    fn on_offset_changed(&self, render_object_id: RenderObjectId, offset: Offset);
+    fn on_offset_changed(&mut self, render_object_id: RenderObjectId, offset: Offset);
 
     /// Called when the given render object within this element's view has been painted
     /// or repainted.
-    fn on_paint(&self, render_object_id: RenderObjectId, canvas: Canvas);
+    fn on_paint(&mut self, render_object_id: RenderObjectId, canvas: Canvas);
 
-    fn on_sync(&self);
+    /// Called when the tree has layout and paint have been complete for this update
+    /// cycle.
+    fn on_sync(&mut self);
 
     // /// Called when a render object within this element's view updates its semantics
     // /// information.
@@ -46,35 +45,7 @@ pub trait ViewBinding {
     // fn load_image(&self, image_data: &[u8]) -> Result<Texture, Box<dyn std::error::Error>>;
 }
 
-#[derive(Clone)]
-pub struct RenderView {
-    root_id: RenderObjectId,
-    view_binding: Rc<dyn ViewBinding>,
-}
-
-impl RenderView {
-    pub(crate) fn new(root_id: RenderObjectId, view_binding: Rc<dyn ViewBinding>) -> Self {
-        Self {
-            root_id,
-            view_binding,
-        }
-    }
-
-    pub fn root_id(&self) -> RenderObjectId {
-        self.root_id
-    }
-}
-
-impl PartialEq for RenderView {
-    fn eq(&self, other: &Self) -> bool {
-        self.root_id == other.root_id && self.view_binding.is_exact_ptr(&other.view_binding)
-    }
-}
-
-impl Deref for RenderView {
-    type Target = dyn ViewBinding;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.view_binding
-    }
+pub enum RenderView {
+    Owner(Box<dyn ViewBinding>),
+    Within(RenderObjectId),
 }

@@ -14,7 +14,7 @@ impl VelloViewBinding {
 
 impl ViewBinding for VelloViewBinding {
     fn on_attach(
-        &self,
+        &mut self,
         parent_render_object_id: Option<RenderObjectId>,
         render_object_id: RenderObjectId,
     ) {
@@ -25,11 +25,11 @@ impl ViewBinding for VelloViewBinding {
         );
     }
 
-    fn on_detach(&self, render_object_id: RenderObjectId) {
+    fn on_detach(&mut self, render_object_id: RenderObjectId) {
         tracing::debug!("VelloViewElement::on_detach {:?}", render_object_id);
     }
 
-    fn on_size_changed(&self, render_object_id: RenderObjectId, size: Size) {
+    fn on_size_changed(&mut self, render_object_id: RenderObjectId, size: Size) {
         tracing::debug!(
             "VelloViewElement::on_size_changed {:?} {:?}",
             render_object_id,
@@ -37,7 +37,7 @@ impl ViewBinding for VelloViewBinding {
         );
     }
 
-    fn on_offset_changed(&self, render_object_id: RenderObjectId, offset: Offset) {
+    fn on_offset_changed(&mut self, render_object_id: RenderObjectId, offset: Offset) {
         tracing::debug!(
             "VelloViewElement::on_offset_changed {:?} {:?}",
             render_object_id,
@@ -45,7 +45,7 @@ impl ViewBinding for VelloViewBinding {
         );
     }
 
-    fn on_paint(&self, render_object_id: RenderObjectId, canvas: Canvas) {
+    fn on_paint(&mut self, render_object_id: RenderObjectId, canvas: Canvas) {
         tracing::debug!(
             "VelloViewElement::on_paint {:?} {:?}",
             render_object_id,
@@ -53,7 +53,7 @@ impl ViewBinding for VelloViewBinding {
         );
     }
 
-    fn on_sync(&self) {
+    fn on_sync(&mut self) {
         tracing::debug!("VelloViewElement::on_sync");
     }
 }

@@ -76,9 +76,13 @@ where
 
     pub fn add_with_key<F>(&mut self, parent_id: Option<K>, f: F) -> K
     where
-        F: FnOnce(K) -> V,
+        F: FnOnce(&mut Tree<K, V>, K) -> V,
     {
-        let node_id = self.map.add_with_key(parent_id, f);
+        let node_id = self.map.add_placeholder(parent_id);
+
+        let value = f(self, node_id);
+
+        self.map.fill_placeholder(node_id, value);
 
         if parent_id.is_none() {
             self.root = Some(node_id);

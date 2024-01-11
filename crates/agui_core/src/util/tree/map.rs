@@ -156,13 +156,10 @@ where
         node_id
     }
 
-    pub(super) fn add_with_key<F>(&mut self, parent_id: Option<K>, f: F) -> K
-    where
-        F: FnOnce(K) -> V,
-    {
-        let node_id = self.nodes.insert_with_key(|node_id| TreeNode {
+    pub(super) fn add_placeholder(&mut self, parent_id: Option<K>) -> K {
+        let node_id = self.nodes.insert(TreeNode {
             depth: 0,
-            value: Some(f(node_id)),
+            value: None,
             parent: parent_id,
             children: Vec::new(),
         });
@@ -170,6 +167,14 @@ where
         self.propagate_node(parent_id, node_id);
 
         node_id
+    }
+
+    pub(super) fn fill_placeholder(&mut self, node_id: K, value: V) {
+        self.nodes
+            .get_mut(node_id)
+            .expect("node was removed from the tree before it was fully initialized")
+            .value
+            .replace(value);
     }
 
     pub(super) fn remove(&mut self, node_id: K) -> Option<V> {

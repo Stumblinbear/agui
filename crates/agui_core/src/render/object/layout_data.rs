@@ -24,7 +24,7 @@ pub(crate) struct LayoutDataUpdate {
 }
 
 impl LayoutDataUpdate {
-    pub fn apply(self, layout_data: &mut LayoutData) {
+    pub fn apply(&self, layout_data: &mut LayoutData) {
         if let Some(relayout_boundary_id) = self.relayout_boundary_id {
             layout_data.relayout_boundary_id = relayout_boundary_id;
         }

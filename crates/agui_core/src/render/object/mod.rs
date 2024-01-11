@@ -72,8 +72,12 @@ impl RenderObject {
         (*self.render_object).short_type_name()
     }
 
-    pub fn render_view(&self) -> Option<&RenderView> {
+    pub(crate) fn render_view(&self) -> Option<&RenderView> {
         self.render_view.as_ref()
+    }
+
+    pub(crate) fn render_view_mut(&mut self) -> Option<&mut RenderView> {
+        self.render_view.as_mut()
     }
 
     pub(crate) fn set_render_view(&mut self, render_view: Option<RenderView>) {
@@ -92,7 +96,7 @@ impl RenderObject {
         self.layout_data.offset
     }
 
-    pub(crate) fn apply_layout_data(&mut self, layout_update: LayoutDataUpdate) {
+    pub(crate) fn apply_layout_data(&mut self, layout_update: &LayoutDataUpdate) {
         layout_update.apply(&mut self.layout_data);
     }
 

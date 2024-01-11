@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use agui_core::{
     element::{
         render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
@@ -36,18 +34,14 @@ impl ElementBuilder for VelloView {
 }
 
 struct VelloViewElement {
-    binding: Rc<dyn ViewBinding>,
+    binding: VelloViewBinding,
 
     child: Widget,
 }
 
 impl VelloViewElement {
     pub fn new(binding: VelloViewBinding, child: Widget) -> Self {
-        Self {
-            binding: Rc::new(binding),
-
-            child,
-        }
+        Self { binding, child }
     }
 }
 
@@ -74,8 +68,8 @@ impl ElementRender for VelloViewElement {
 }
 
 impl ElementView for VelloViewElement {
-    fn binding(&self) -> &Rc<dyn ViewBinding> {
-        &self.binding
+    fn create_binding(&mut self) -> Box<dyn ViewBinding> {
+        Box::new(self.binding.clone())
     }
 }
 

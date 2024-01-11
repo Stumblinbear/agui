@@ -15,6 +15,22 @@ pub trait PtrEqual {
 macros::impl_ptr_equal_for!(Rc);
 macros::impl_ptr_equal_for!(Arc);
 
+impl<T: ?Sized> crate::util::ptr_eq::PtrEqual for Box<T> {
+    fn is_exact_ptr(&self, other: &Self) -> bool {
+        // You can't have a reference to an owned box to actually do a comparison
+        // of the same box.
+        false
+    }
+}
+
+impl<T: ?Sized> crate::util::ptr_eq::PtrEqual for &Box<T> {
+    fn is_exact_ptr(&self, other: &Self) -> bool {
+        std::ptr::eq(self.as_ref(), other.as_ref())
+    }
+}
+
+macros::impl_option_ptr_equal_for!(Box);
+
 mod macros {
     macro_rules! impl_ptr_equal_for {
         ($t:ident) => {
@@ -36,6 +52,12 @@ mod macros {
                 }
             }
 
+            macros::impl_option_ptr_equal_for!($t);
+        };
+    }
+
+    macro_rules! impl_option_ptr_equal_for {
+        ($t:ident) => {
             impl<T: ?Sized> PtrEqual for Option<$t<T>> {
                 fn is_exact_ptr(&self, other: &Self) -> bool {
                     match (self, other) {
@@ -78,5 +100,6 @@ mod macros {
         };
     }
 
+    pub(super) use impl_option_ptr_equal_for;
     pub(super) use impl_ptr_equal_for;
 }
