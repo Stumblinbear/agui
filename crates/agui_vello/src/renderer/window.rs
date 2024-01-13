@@ -88,6 +88,10 @@ impl VelloWindowRenderer<()> {
 }
 
 impl RenderWindow for VelloWindowRenderer<Attached> {
+    fn render_notifier(&self) -> async_channel::Receiver<()> {
+        self.view_handle.notifier()
+    }
+
     fn render(&mut self) {
         tracing::debug!("VelloWindowRenderer::render");
 

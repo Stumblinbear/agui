@@ -1,5 +1,9 @@
 use agui_core::callback::Callback;
 use agui_renderer::RenderWindow;
+use futures::{
+    executor::{LocalPool, LocalSpawner},
+    task::LocalSpawnExt,
+};
 use rustc_hash::FxHashMap;
 use winit::{
     event::Event as WinitEvent,
@@ -29,9 +33,12 @@ impl Default for WinitApp {
 
 impl WinitApp {
     pub fn run(mut self) {
+        let mut task_pool = LocalPool::new();
+
         self.event_loop
             .run(move |event, window_target, control_flow| {
-                *control_flow = ControlFlow::Wait;
+                // Refactor to use `::Wait``
+                *control_flow = ControlFlow::Poll;
 
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
@@ -78,15 +85,33 @@ impl WinitApp {
 
                             let (events_tx, events_rx) = async_channel::unbounded();
 
+                            let window = WinitWindowHandle::new(window, events_rx);
+
+                            task_pool
+                                .spawner()
+                                .spawn_local({
+                                    let window = window.clone();
+                                    let notifier = renderer.render_notifier();
+
+                                    async move {
+                                        while let Ok(()) = notifier.recv().await {
+                                            window.request_redraw();
+                                        }
+                                    }
+                                })
+                                .expect("failed to spawn render notifier task");
+
                             self.window_events.insert(window.id(), events_tx);
                             self.window_renderer.insert(window.id(), renderer);
 
-                            callback.call(WinitWindowHandle::new(window, events_rx));
+                            callback.call(window);
                         }
                     },
 
                     _ => (),
                 }
+
+                task_pool.run_until_stalled();
             });
     }
 }

@@ -24,6 +24,10 @@ pub struct VelloViewHandle {
 }
 
 impl VelloViewHandle {
+    pub fn notifier(&self) -> async_channel::Receiver<()> {
+        self.rx.clone()
+    }
+
     pub(crate) fn render<F>(&self, func: F)
     where
         F: FnOnce(&VelloScene),
