@@ -28,13 +28,13 @@ impl VelloViewHandle {
         self.rx.clone()
     }
 
-    pub(crate) fn render<F>(&self, func: F)
+    pub(crate) fn with_scene<F, Ret>(&self, func: F) -> Ret
     where
-        F: FnOnce(&VelloScene),
+        F: FnOnce(&VelloScene) -> Ret,
     {
         let scene = self.scene.read();
 
-        func(&scene);
+        func(&scene)
     }
 }
 

@@ -60,8 +60,13 @@ impl VelloWindowRenderer<()> {
     {
         let mut render_context = RenderContext::new()?;
 
-        let render_surface =
-            futures::executor::block_on(render_context.create_surface(window, 1_u32, 1_u32))?;
+        let size = self.view_handle.with_scene(|scene| scene.size);
+
+        let render_surface = futures::executor::block_on(render_context.create_surface(
+            window,
+            size.width as u32,
+            size.height as u32,
+        ))?;
 
         let device_handle = &render_context.devices[render_surface.dev_id];
 
@@ -103,7 +108,7 @@ impl RenderWindow for VelloWindowRenderer<Attached> {
         let height = render_surface.config.height;
         let device_handle = &render_context.devices[render_surface.dev_id];
 
-        self.view_handle.render(|scene| {
+        self.view_handle.with_scene(|scene| {
             if render_surface.config.width != scene.size.width as u32
                 || render_surface.config.height != scene.size.height as u32
             {

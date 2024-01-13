@@ -10,7 +10,7 @@ use vello::{
     SceneBuilder, SceneFragment,
 };
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct VelloRenderObject {
     // /// This is the layer that this render object belongs to
     // pub head_target: Option<RenderObjectId>,
@@ -34,19 +34,16 @@ pub struct VelloCanvasObject {
     pub glyph_cache: FxHashMap<(GlyphId, usize), Option<SceneFragment>>,
 }
 
+impl std::fmt::Debug for VelloCanvasObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VelloCanvasObject")
+            .field("offset", &self.offset)
+            .finish()
+    }
+}
+
 impl VelloCanvasObject {
     pub fn update(&mut self, canvas: Canvas) {
-        // let Some(canvas) = canvas else {
-        //     self.fragment = SceneFragment::default();
-        //     self.children.clear();
-        //     self.tail = None;
-
-        //     self.paints.clear();
-        //     self.glyph_cache.clear();
-
-        //     return;
-        // };
-
         // TODO: only invalidate paints that are different
         if self.paints.len() != canvas.paints.len() || self.paints != canvas.paints {
             self.paints = canvas.paints;
