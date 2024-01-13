@@ -175,7 +175,11 @@ impl RenderManager {
                     view.on_offset_changed(render_object_id, offset);
                 }
 
-                if layout_update.size.is_some() || layout_update.offset.is_some() {
+                if layout_update.size.is_some() {
+                    // TODO: how can we reduce repaints for render objects that don't
+                    // need to be repainted when their size changes?
+                    self.needs_paint.insert(render_object_id);
+                } else if layout_update.offset.is_some() {
                     self.needs_sync.insert(view_object_id, ());
                 }
             }

@@ -98,7 +98,7 @@ impl RenderWindow for VelloWindowRenderer<Attached> {
     }
 
     fn render(&mut self) {
-        tracing::debug!("VelloWindowRenderer::render");
+        tracing::trace!("VelloWindowRenderer::render");
 
         let render_context = &mut self.state.render_context;
         let render_surface = &mut self.state.render_surface;
