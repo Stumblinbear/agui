@@ -3,7 +3,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
     block_on_wgpu,
     util::{RenderContext, RenderSurface},
-    RendererOptions, Scene,
+    RendererOptions,
 };
 
 use crate::view::{VelloView, VelloViewHandle};
@@ -19,8 +19,6 @@ pub struct Attached {
 
     render_surface: RenderSurface,
     renderer: vello::Renderer,
-
-    scene: Scene,
 }
 
 impl sealed::VelloWindowRendererState for Attached {}
@@ -84,8 +82,6 @@ impl VelloWindowRenderer<()> {
 
                 render_surface,
                 renderer,
-
-                scene: Scene::new(),
             },
         })
     }
@@ -98,51 +94,62 @@ impl RenderWindow for VelloWindowRenderer<Attached> {
         let render_context = &mut self.state.render_context;
         let render_surface = &mut self.state.render_surface;
         let renderer = &mut self.state.renderer;
-        let scene = &mut self.state.scene;
 
         let width = render_surface.config.width;
         let height = render_surface.config.height;
         let device_handle = &render_context.devices[render_surface.dev_id];
 
-        let surface_texture = render_surface
-            .surface
-            .get_current_texture()
-            .expect("failed to get surface texture");
+        self.view_handle.render(|scene| {
+            if render_surface.config.width != scene.size.width as u32
+                || render_surface.config.height != scene.size.height as u32
+            {
+                render_context.resize_surface(
+                    render_surface,
+                    scene.size.width as u32,
+                    scene.size.height as u32,
+                );
+            }
 
-        let render_params = vello::RenderParams {
-            base_color: vello::peniko::Color::BLACK,
-            width,
-            height,
-        };
+            let surface_texture = render_surface
+                .surface
+                .get_current_texture()
+                .expect("failed to get surface texture");
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            block_on_wgpu(
-                &device_handle.device,
-                renderer.render_to_surface_async(
+            let render_params = vello::RenderParams {
+                base_color: vello::peniko::Color::BLACK,
+                width,
+                height,
+            };
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                block_on_wgpu(
+                    &device_handle.device,
+                    renderer.render_to_surface_async(
+                        &device_handle.device,
+                        &device_handle.queue,
+                        scene.as_ref(),
+                        &surface_texture,
+                        &render_params,
+                    ),
+                )
+                .expect("failed to render to surface");
+            }
+
+            // Note: in the wasm case, we're currently not running the robust
+            // pipeline, as it requires more async wiring for the readback.
+            #[cfg(target_arch = "wasm32")]
+            self.renderer
+                .render_to_surface(
                     &device_handle.device,
                     &device_handle.queue,
-                    scene,
+                    scene.as_ref(),
                     &surface_texture,
                     &render_params,
-                ),
-            )
-            .expect("failed to render to surface");
-        }
+                )
+                .expect("failed to render to surface");
 
-        // Note: in the wasm case, we're currently not running the robust
-        // pipeline, as it requires more async wiring for the readback.
-        #[cfg(target_arch = "wasm32")]
-        self.renderer
-            .render_to_surface(
-                &device_handle.device,
-                &device_handle.queue,
-                &scene,
-                &surface_texture,
-                &render_params,
-            )
-            .expect("failed to render to surface");
-
-        surface_texture.present();
+            surface_texture.present();
+        });
     }
 }

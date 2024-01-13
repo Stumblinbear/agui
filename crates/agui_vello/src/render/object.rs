@@ -1,6 +1,6 @@
 use agui_core::{
     render::canvas::{command::CanvasCommand, paint::Paint, Canvas},
-    unit::{Offset, Rect},
+    unit::{Offset, Rect, Size},
 };
 use rustc_hash::FxHashMap;
 use vello::{
@@ -14,6 +14,8 @@ use vello::{
 pub struct VelloRenderObject {
     // /// This is the layer that this render object belongs to
     // pub head_target: Option<RenderObjectId>,
+    pub size: Size,
+
     pub offset: Offset,
 
     pub canvas: VelloCanvasObject,

@@ -1,29 +1,42 @@
-use std::{hash::BuildHasherDefault, time::Instant};
+use std::time::Instant;
 
 use agui_core::{
     render::{canvas::Canvas, RenderObjectId},
     unit::{Offset, Size},
     util::tree::{storage::SparseSecondaryMapStorage, Tree},
 };
-use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-use slotmap::SparseSecondaryMap;
 use vello::{
     kurbo::{Affine, Vec2},
+    peniko::Fill,
     Scene, SceneBuilder,
 };
 
 use crate::render::VelloRenderObject;
 
-#[derive(Default)]
 pub(crate) struct VelloScene {
-    // root: Option<RenderObjectId>,
-    // relations: FxHashMap<RenderObjectId, FxHashSet<RenderObjectId>>,
     tree: Tree<RenderObjectId, VelloRenderObject, SparseSecondaryMapStorage>,
 
-    // objects: SparseSecondaryMap<RenderObjectId, VelloRenderObject, BuildHasherDefault<FxHasher>>,
-    scene: Scene,
-
     needs_redraw: bool,
+
+    pub size: Size,
+    scene: Scene,
+}
+
+impl Default for VelloScene {
+    fn default() -> Self {
+        let mut scene = Self {
+            tree: Tree::default(),
+
+            needs_redraw: true,
+
+            size: Size::new(32.0, 32.0),
+            scene: Scene::new(),
+        };
+
+        scene.redraw();
+
+        scene
+    }
 }
 
 impl VelloScene {
@@ -48,7 +61,18 @@ impl VelloScene {
         self.tree.remove(render_object_id);
     }
 
-    pub fn set_size(&mut self, render_object_id: RenderObjectId, size: Size) {}
+    pub fn set_size(&mut self, render_object_id: RenderObjectId, size: Size) {
+        self.tree
+            .get_mut(render_object_id)
+            .expect("received size for a non-existent object")
+            .size = size;
+
+        self.needs_redraw = true;
+
+        if self.tree.root() == Some(render_object_id) {
+            self.size = size;
+        }
+    }
 
     pub fn set_offset(&mut self, render_object_id: RenderObjectId, offset: Offset) {
         self.tree
@@ -82,6 +106,25 @@ impl VelloScene {
         let now = Instant::now();
 
         let mut builder = SceneBuilder::for_scene(&mut self.scene);
+
+        // Vello will crash if we try to draw an empty scene, so just add a transparent rectangle
+        if self.tree.is_empty() {
+            builder.fill(
+                Fill::NonZero,
+                Affine::translate((0.0_f64, 0.0_f64)),
+                vello::peniko::Color::TRANSPARENT,
+                None,
+                &[
+                    vello::kurbo::PathEl::LineTo((0.0, 0.0).into()),
+                    vello::kurbo::PathEl::LineTo((self.size.width as f64, 0.0).into()),
+                    vello::kurbo::PathEl::LineTo(
+                        (self.size.width as f64, self.size.height as f64).into(),
+                    ),
+                    vello::kurbo::PathEl::LineTo((0.0, self.size.height as f64).into()),
+                    vello::kurbo::PathEl::ClosePath,
+                ],
+            );
+        }
 
         let mut object_stack = Vec::<(usize, RenderObjectId, Affine)>::new();
 
@@ -125,5 +168,11 @@ impl VelloScene {
         }
 
         tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
+    }
+}
+
+impl AsRef<Scene> for VelloScene {
+    fn as_ref(&self) -> &Scene {
+        &self.scene
     }
 }

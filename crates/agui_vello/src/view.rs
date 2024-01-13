@@ -23,6 +23,17 @@ pub struct VelloViewHandle {
     scene: Arc<RwLock<VelloScene>>,
 }
 
+impl VelloViewHandle {
+    pub(crate) fn render<F>(&self, func: F)
+    where
+        F: FnOnce(&VelloScene),
+    {
+        let scene = self.scene.read();
+
+        func(&scene);
+    }
+}
+
 impl Default for VelloView {
     fn default() -> Self {
         let (tx, rx) = async_channel::unbounded();
