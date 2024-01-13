@@ -3,7 +3,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
     block_on_wgpu,
     util::{RenderContext, RenderSurface},
-    RendererOptions,
+    AaConfig, AaSupport, RendererOptions,
 };
 
 use crate::view::{VelloView, VelloViewHandle};
@@ -72,10 +72,10 @@ impl VelloWindowRenderer<()> {
 
         let renderer = vello::Renderer::new(
             &device_handle.device,
-            &RendererOptions {
+            RendererOptions {
                 surface_format: Some(render_surface.config.format),
-                timestamp_period: device_handle.queue.get_timestamp_period(),
                 use_cpu: false,
+                antialiasing_support: AaSupport::all(),
             },
         )?;
 
@@ -128,6 +128,7 @@ impl RenderWindow for VelloWindowRenderer<Attached> {
                 base_color: vello::peniko::Color::BLACK,
                 width,
                 height,
+                antialiasing_method: AaConfig::Area,
             };
 
             #[cfg(not(target_arch = "wasm32"))]

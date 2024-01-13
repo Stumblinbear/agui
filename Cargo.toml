@@ -55,7 +55,7 @@ lyon = "1.0"
 raw-window-handle = "0.5"
 
 winit = { version = "0.28" }
-vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "ee3a076b291d206c361431cc841407adf265c692" }
+vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "bd235d7977772440618eebb3d304bc85be143e65" }
 
 [features]
 default = ["primitives", "widgets", "macros"]
