@@ -1,20 +1,12 @@
-use std::hash::BuildHasherDefault;
-
-use agui_core::render::RenderObjectId;
 use agui_renderer::RenderWindow;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use rustc_hash::FxHasher;
-use slotmap::SparseSecondaryMap;
 use vello::{
     block_on_wgpu,
     util::{RenderContext, RenderSurface},
     RendererOptions, Scene,
 };
 
-use crate::{
-    render::VelloRenderObject,
-    view::{VelloView, VelloViewHandle},
-};
+use crate::view::{VelloView, VelloViewHandle};
 
 mod sealed {
     pub trait VelloWindowRendererState {}
@@ -29,8 +21,6 @@ pub struct Attached {
     renderer: vello::Renderer,
 
     scene: Scene,
-    render_objects:
-        SparseSecondaryMap<RenderObjectId, VelloRenderObject, BuildHasherDefault<FxHasher>>,
 }
 
 impl sealed::VelloWindowRendererState for Attached {}
@@ -96,7 +86,6 @@ impl VelloWindowRenderer<()> {
                 renderer,
 
                 scene: Scene::new(),
-                render_objects: SparseSecondaryMap::default(),
             },
         })
     }

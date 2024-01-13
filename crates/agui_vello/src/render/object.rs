@@ -1,13 +1,10 @@
 use agui_core::{
-    render::{
-        canvas::{command::CanvasCommand, paint::Paint, Canvas},
-        RenderObjectId,
-    },
+    render::canvas::{command::CanvasCommand, paint::Paint, Canvas},
     unit::{Offset, Rect},
 };
 use rustc_hash::FxHashMap;
 use vello::{
-    fello::{GlyphId, MetadataProvider},
+    fello::GlyphId,
     kurbo::{Affine, PathEl, Vec2},
     peniko::{Color, Fill, Mix},
     SceneBuilder, SceneFragment,
@@ -15,9 +12,8 @@ use vello::{
 
 #[derive(Default)]
 pub struct VelloRenderObject {
-    /// This is the layer that this render object belongs to
-    pub head_target: Option<RenderObjectId>,
-
+    // /// This is the layer that this render object belongs to
+    // pub head_target: Option<RenderObjectId>,
     pub offset: Offset,
 
     pub canvas: VelloCanvasObject,
@@ -37,17 +33,17 @@ pub struct VelloCanvasObject {
 }
 
 impl VelloCanvasObject {
-    pub fn update(&mut self, canvas: Option<Canvas>) {
-        let Some(canvas) = canvas else {
-            self.fragment = SceneFragment::default();
-            self.children.clear();
-            self.tail = None;
+    pub fn update(&mut self, canvas: Canvas) {
+        // let Some(canvas) = canvas else {
+        //     self.fragment = SceneFragment::default();
+        //     self.children.clear();
+        //     self.tail = None;
 
-            self.paints.clear();
-            self.glyph_cache.clear();
+        //     self.paints.clear();
+        //     self.glyph_cache.clear();
 
-            return;
-        };
+        //     return;
+        // };
 
         // TODO: only invalidate paints that are different
         if self.paints.len() != canvas.paints.len() || self.paints != canvas.paints {
@@ -85,9 +81,11 @@ impl VelloCanvasObject {
                 },
             };
 
-            layer.update(Some(tail.canvas));
+            layer.update(tail.canvas);
 
             self.tail = Some(Box::new(layer));
+        } else {
+            self.tail = None;
         }
     }
 
@@ -230,7 +228,7 @@ pub struct LayerObject {
 }
 
 impl LayerObject {
-    pub fn update(&mut self, canvas: Option<Canvas>) {
+    pub fn update(&mut self, canvas: Canvas) {
         self.canvas.update(canvas);
     }
 

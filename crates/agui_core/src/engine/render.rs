@@ -149,19 +149,19 @@ impl RenderManager {
 
             render_object.apply_layout_data(&layout_update);
 
-            if let Some(render_view) = render_object.render_view_mut() {
-                let (render_view_id, view) = match render_view {
+            if let Some(view_object) = render_object.render_view_mut() {
+                let (view_object_id, view) = match view_object {
                     RenderView::Owner(ref mut view) => (render_object_id, view),
-                    RenderView::Within(render_view_id) => {
-                        let render_view_id = *render_view_id;
+                    RenderView::Within(view_object_id) => {
+                        let view_object_id = *view_object_id;
 
-                        let render_view = self
+                        let view_object = self
                             .tree
-                            .get_mut(render_view_id)
+                            .get_mut(view_object_id)
                             .expect("render view missing while applying layout");
 
-                        match render_view.render_view_mut() {
-                            Some(RenderView::Owner(view) ) => (render_view_id, view),
+                        match view_object.render_view_mut() {
+                            Some(RenderView::Owner(view) ) => (view_object_id, view),
                             _ => panic!("render object supplied an incorrect render view while applying layout"),
                         }
                     }
@@ -176,7 +176,7 @@ impl RenderManager {
                 }
 
                 if layout_update.size.is_some() || layout_update.offset.is_some() {
-                    self.needs_sync.insert(render_view_id, ());
+                    self.needs_sync.insert(view_object_id, ());
                 }
             }
         }
@@ -196,20 +196,20 @@ impl RenderManager {
                 continue;
             };
 
-            let render_view = render_object.render_view_mut().unwrap();
+            let view_object = render_object.render_view_mut().unwrap();
 
-            let (render_view_id, view) = match render_view {
+            let (view_object_id, view) = match view_object {
                 RenderView::Owner(ref mut view) => (render_object_id, view),
-                RenderView::Within(render_view_id) => {
-                    let render_view_id = *render_view_id;
+                RenderView::Within(view_object_id) => {
+                    let view_object_id = *view_object_id;
 
-                    let render_view = self
+                    let view_object = self
                         .tree
-                        .get_mut(render_view_id)
+                        .get_mut(view_object_id)
                         .expect("render view missing while flushing paint");
 
-                    match render_view.render_view_mut() {
-                        Some(RenderView::Owner(view)) => (render_view_id, view),
+                    match view_object.render_view_mut() {
+                        Some(RenderView::Owner(view)) => (view_object_id, view),
                         _ => panic!(
                             "render object supplied an incorrect render view while flushing paint"
                         ),
@@ -219,7 +219,7 @@ impl RenderManager {
 
             view.on_paint(render_object_id, canvas);
 
-            self.needs_sync.insert(render_view_id, ());
+            self.needs_sync.insert(view_object_id, ());
         }
     }
 
@@ -238,18 +238,18 @@ impl RenderManager {
                 .get_mut(render_object_id)
                 .expect("render object missing while syncing");
 
-            if let Some(render_view) = render_object.render_view_mut() {
-                let view = match render_view {
+            if let Some(view_object) = render_object.render_view_mut() {
+                let view = match view_object {
                     RenderView::Owner(ref mut view) => view,
-                    RenderView::Within(render_view_id) => {
-                        let render_view_id = *render_view_id;
+                    RenderView::Within(view_object_id) => {
+                        let view_object_id = *view_object_id;
 
-                        let render_view = self
+                        let view_object = self
                             .tree
-                            .get_mut(render_view_id)
+                            .get_mut(view_object_id)
                             .expect("render view missing while syncing");
 
-                        match render_view.render_view_mut() {
+                        match view_object.render_view_mut() {
                             Some(RenderView::Owner(view)) => view,
                             _ => panic!(
                                 "render object supplied an incorrect render view while syncing"
@@ -340,7 +340,18 @@ impl RenderManager {
                 .get(element_id)
                 .and_then(|element| element.render_object_id())
             {
-                self.tree.remove(render_object_id, false);
+                if let Some(render_object) = self.tree.remove(render_object_id) {
+                    if let Some(RenderView::Within(view_object_id)) = render_object.render_view() {
+                        if let Some(view_object) = self.tree.get_mut(*view_object_id) {
+                            match view_object.render_view_mut() {
+                                Some(RenderView::Owner(view)) => view.on_detach(render_object_id),
+                                _ => panic!(
+                                    "render object supplied an incorrect render view while detatching"
+                                ),
+                            }
+                        }
+                    }
+                }
 
                 self.cached_constraints.remove(render_object_id);
             }
@@ -403,7 +414,7 @@ impl RenderManager {
         element_tree: &mut Tree<ElementId, Element>,
         element_id: ElementId,
     ) {
-        let (relayout_boundary_id, parent_render_object_id, parent_render_view) = element_tree
+        let (relayout_boundary_id, parent_render_object_id, parent_view_object) = element_tree
             .get_parent(element_id)
             .map(|parent_element_id| {
                 let parent_element = element_tree
@@ -432,7 +443,7 @@ impl RenderManager {
                     Some(parent_render_object_id),
                     match parent_render_object.render_view() {
                         Some(RenderView::Owner(_)) => Some(parent_render_object_id),
-                        Some(RenderView::Within(render_view_id)) => Some(*render_view_id),
+                        Some(RenderView::Within(view_object_id)) => Some(*view_object_id),
                         None => None,
                     },
                 )
@@ -473,9 +484,9 @@ impl RenderManager {
                     view.on_attach(None, render_object_id);
 
                     render_object.set_render_view(Some(RenderView::Owner(view)));
-                } else if let Some(parent_render_view) = parent_render_view {
+                } else if let Some(parent_view_object) = parent_view_object {
                     let view = match tree
-                        .get_mut(parent_render_view)
+                        .get_mut(parent_view_object)
                         .expect("parent render object missing while creating render objects")
                         .render_view_mut()
                         .expect("parent render object has no view while creating render objects")
@@ -488,7 +499,7 @@ impl RenderManager {
 
                     view.on_attach(parent_render_object_id, render_object_id);
 
-                    render_object.set_render_view(Some(RenderView::Within(parent_render_view)));
+                    render_object.set_render_view(Some(RenderView::Within(parent_view_object)));
                 };
 
                 self.needs_layout.insert(relayout_boundary_id);

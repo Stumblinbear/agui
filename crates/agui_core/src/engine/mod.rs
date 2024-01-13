@@ -633,7 +633,7 @@ impl Engine {
 
             self.bus.emit(&ElementDestroyedEvent { element_id });
 
-            let element = self.element_tree.remove(element_id, false).unwrap();
+            let element = self.element_tree.remove(element_id).unwrap();
 
             tracing::trace!(?element_id, widget = ?element.widget(), "destroyed widget");
         }
