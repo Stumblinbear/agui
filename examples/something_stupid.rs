@@ -35,7 +35,7 @@ fn main() {
             <WinitWindow> {
                 window: || WindowBuilder::new().with_title("Hello, world!"),
 
-                renderer: move |window_handle| window_renderer.attach(window_handle).expect("failed to create window renderer"),
+                renderer: move |window| window_renderer.attach(window).expect("failed to create window renderer"),
 
                 child: <VelloViewBinding> {
                     view: view,

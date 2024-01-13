@@ -3,8 +3,31 @@ use agui_core::{
     unit::{Offset, Size},
 };
 
-#[derive(Clone)]
-pub struct VelloView;
+pub struct VelloView {
+    tx: async_channel::Sender<ViewEvent>,
+    rx: async_channel::Receiver<ViewEvent>,
+}
+
+impl VelloView {
+    pub fn new() -> Self {
+        let (tx, rx) = async_channel::unbounded();
+
+        Self { tx, rx }
+    }
+
+    pub fn handle(&self) -> VelloViewHandle {
+        VelloViewHandle {
+            rx: self.rx.clone(),
+        }
+    }
+
+    pub(crate) fn clone(&self) -> VelloView {
+        VelloView {
+            tx: self.tx.clone(),
+            rx: self.rx.clone(),
+        }
+    }
+}
 
 impl View for VelloView {
     fn on_attach(
@@ -46,4 +69,37 @@ impl View for VelloView {
     fn on_sync(&mut self) {
         tracing::debug!("VelloView::on_sync");
     }
+}
+
+#[derive(Clone)]
+pub struct VelloViewHandle {
+    rx: async_channel::Receiver<ViewEvent>,
+}
+
+pub(crate) enum ViewEvent {
+    Attach {
+        parent_render_object_id: Option<RenderObjectId>,
+        render_object_id: RenderObjectId,
+    },
+
+    Detach {
+        render_object_id: RenderObjectId,
+    },
+
+    SizeChanged {
+        render_object_id: RenderObjectId,
+        size: Size,
+    },
+
+    OffsetChanged {
+        render_object_id: RenderObjectId,
+        offset: Offset,
+    },
+
+    Paint {
+        render_object_id: RenderObjectId,
+        canvas: Canvas,
+    },
+
+    Sync,
 }

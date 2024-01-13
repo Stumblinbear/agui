@@ -57,7 +57,7 @@ impl WinitApp {
                     }
 
                     WinitEvent::RedrawRequested(window_id) => {
-                        if let Some(renderer) = self.window_renderer.get(&window_id) {
+                        if let Some(renderer) = self.window_renderer.get_mut(&window_id) {
                             renderer.render();
                         } else {
                             tracing::warn!("no renderer for window {:?}", window_id);
@@ -70,21 +70,18 @@ impl WinitApp {
 
                             tracing::trace!("creating window: {:?}", window_builder);
 
+                            let window = window_builder
+                                .build(window_target)
+                                .expect("failed to create window");
+
+                            let renderer = (renderer_fn)(&window);
+
                             let (events_tx, events_rx) = async_channel::unbounded();
 
-                            let window_handle = WinitWindowHandle::new(
-                                window_builder
-                                    .build(window_target)
-                                    .expect("failed to create window"),
-                                events_rx,
-                            );
+                            self.window_events.insert(window.id(), events_tx);
+                            self.window_renderer.insert(window.id(), renderer);
 
-                            self.window_events.insert(window_handle.id(), events_tx);
-
-                            self.window_renderer
-                                .insert(window_handle.id(), (renderer_fn)(window_handle.clone()));
-
-                            callback.call(window_handle);
+                            callback.call(WinitWindowHandle::new(window, events_rx));
                         }
                     },
 
@@ -97,7 +94,7 @@ impl WinitApp {
 pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
-        Box<dyn FnOnce(WinitWindowHandle) -> Box<dyn RenderWindow> + Send>,
+        Box<dyn FnOnce(&winit::window::Window) -> Box<dyn RenderWindow> + Send>,
         Callback<WinitWindowHandle>,
     ),
 }

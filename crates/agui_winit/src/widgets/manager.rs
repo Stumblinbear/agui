@@ -29,7 +29,7 @@ impl WinitWindowManager {
     pub fn create_window<Renderer>(
         &self,
         window_fn: impl FnOnce() -> WindowBuilder + Send + 'static,
-        renderer_fn: impl FnOnce(WinitWindowHandle) -> Renderer + Send + 'static,
+        renderer_fn: impl FnOnce(&winit::window::Window) -> Renderer + Send + 'static,
         callback: Callback<WinitWindowHandle>,
     ) -> Result<(), WinitEventLoopClosed>
     where
@@ -40,7 +40,7 @@ impl WinitWindowManager {
         self.event_loop
             .send_event(WinitBindingAction::CreateWindow(
                 Box::new(window_fn),
-                Box::new(move |window_handle| Box::new((renderer_fn)(window_handle))),
+                Box::new(move |window| Box::new((renderer_fn)(window))),
                 callback,
             ))?;
 

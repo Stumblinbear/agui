@@ -1,3 +1,3 @@
 pub trait RenderWindow {
-    fn render(&self);
+    fn render(&mut self);
 }

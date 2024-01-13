@@ -26,8 +26,11 @@ agui_renderer.workspace = true
 tracing.workspace = true
 
 rustc-hash.workspace = true
+slotmap.workspace = true
 parking_lot.workspace = true
+
 futures.workspace = true
+async-channel.workspace = true
 
 raw-window-handle = { workspace = true, optional = true }
 

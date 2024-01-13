@@ -16,7 +16,7 @@ macros::impl_ptr_equal_for!(Rc);
 macros::impl_ptr_equal_for!(Arc);
 
 impl<T: ?Sized> crate::util::ptr_eq::PtrEqual for Box<T> {
-    fn is_exact_ptr(&self, other: &Self) -> bool {
+    fn is_exact_ptr(&self, _: &Self) -> bool {
         // You can't have a reference to an owned box to actually do a comparison
         // of the same box.
         false

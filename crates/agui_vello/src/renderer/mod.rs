@@ -12,6 +12,6 @@ impl VelloRenderer {
     }
 
     pub fn new_view(&self) -> VelloView {
-        VelloView
+        VelloView::new()
     }
 }
