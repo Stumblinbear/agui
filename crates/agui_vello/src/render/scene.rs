@@ -7,7 +7,6 @@ use agui_core::{
 };
 use vello::{
     kurbo::{Affine, Vec2},
-    peniko::Fill,
     Scene, SceneBuilder,
 };
 
@@ -106,25 +105,6 @@ impl VelloScene {
         let now = Instant::now();
 
         let mut builder = SceneBuilder::for_scene(&mut self.scene);
-
-        // Vello will crash if we try to draw an empty scene, so just add a transparent rectangle
-        if self.tree.is_empty() {
-            builder.fill(
-                Fill::NonZero,
-                Affine::translate((0.0_f64, 0.0_f64)),
-                vello::peniko::Color::TRANSPARENT,
-                None,
-                &[
-                    vello::kurbo::PathEl::LineTo((0.0, 0.0).into()),
-                    vello::kurbo::PathEl::LineTo((self.size.width as f64, 0.0).into()),
-                    vello::kurbo::PathEl::LineTo(
-                        (self.size.width as f64, self.size.height as f64).into(),
-                    ),
-                    vello::kurbo::PathEl::LineTo((0.0, self.size.height as f64).into()),
-                    vello::kurbo::PathEl::ClosePath,
-                ],
-            );
-        }
 
         let mut object_stack = Vec::<(usize, RenderObjectId, Affine)>::new();
 
