@@ -1,18 +1,18 @@
 use agui_core::{
-    render::{binding::ViewBinding, canvas::Canvas, RenderObjectId},
+    render::{canvas::Canvas, view::View, RenderObjectId},
     unit::{Offset, Size},
 };
 
 #[derive(Clone)]
-pub struct VelloViewBinding;
+pub struct VelloView;
 
-impl VelloViewBinding {
+impl VelloView {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl ViewBinding for VelloViewBinding {
+impl View for VelloView {
     fn on_attach(
         &mut self,
         parent_render_object_id: Option<RenderObjectId>,

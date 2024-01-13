@@ -1,6 +1,6 @@
 use agui_vello::{
     renderer::{window::VelloWindowRenderer, VelloRenderer},
-    view::VelloView,
+    view::VelloViewBinding,
 };
 use agui_winit::WinitWindow;
 use tracing::metadata::LevelFilter;
@@ -27,20 +27,20 @@ fn main() {
     run_app(move || {
         let vello_renderer = vello_renderer.clone();
 
-        let view_binding = vello_renderer.new_view_binding();
+        let view = vello_renderer.new_view();
 
         build! {
             <WinitWindow> {
                 window: || WindowBuilder::new().with_title("Hello, world!"),
 
                 renderer: {
-                    let view_binding = view_binding.clone();
+                    let view = view.clone();
 
-                    move |window_handle| VelloWindowRenderer::new(view_binding.clone(), window_handle).expect("failed to create window renderer")
+                    move |window_handle| VelloWindowRenderer::new(view.clone(), window_handle).expect("failed to create window renderer")
                 },
 
-                child: <VelloView> {
-                    binding: view_binding,
+                child: <VelloViewBinding> {
+                    view: view,
 
                     child: <SizedBox>::axis(Axis::Horizontal, 100.0) {
                         child: <Text> {

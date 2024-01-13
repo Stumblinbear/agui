@@ -4,44 +4,41 @@ use agui_core::{
         ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{
-        binding::ViewBinding,
         object::{RenderObject, RenderObjectImpl},
+        view::View,
     },
     widget::Widget,
 };
 use agui_macros::WidgetProps;
 
-use crate::renderer::binding::VelloViewBinding;
+use crate::renderer::binding::VelloView;
 
 #[derive(WidgetProps)]
-pub struct VelloView {
-    pub binding: VelloViewBinding,
+pub struct VelloViewBinding {
+    pub view: VelloView,
 
     #[prop(into)]
     pub child: Widget,
 }
 
-impl ElementBuilder for VelloView {
+impl ElementBuilder for VelloViewBinding {
     fn create_element(self: std::rc::Rc<Self>) -> ElementType
     where
         Self: Sized,
     {
-        ElementType::new_view(VelloViewElement::new(
-            self.binding.clone(),
-            self.child.clone(),
-        ))
+        ElementType::new_view(VelloViewElement::new(self.view.clone(), self.child.clone()))
     }
 }
 
 struct VelloViewElement {
-    binding: VelloViewBinding,
+    view: VelloView,
 
     child: Widget,
 }
 
 impl VelloViewElement {
-    pub fn new(binding: VelloViewBinding, child: Widget) -> Self {
-        Self { binding, child }
+    pub fn new(view: VelloView, child: Widget) -> Self {
+        Self { view, child }
     }
 }
 
@@ -68,8 +65,8 @@ impl ElementRender for VelloViewElement {
 }
 
 impl ElementView for VelloViewElement {
-    fn create_binding(&mut self) -> Box<dyn ViewBinding> {
-        Box::new(self.binding.clone())
+    fn create_view(&mut self) -> Box<dyn View> {
+        Box::new(self.view.clone())
     }
 }
 

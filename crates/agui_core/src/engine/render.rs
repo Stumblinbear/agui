@@ -10,8 +10,8 @@ use crate::{
     },
     engine::Dirty,
     render::{
-        binding::RenderView,
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
+        view::RenderView,
         RenderObjectId,
     },
     unit::Constraints,
@@ -150,8 +150,8 @@ impl RenderManager {
             render_object.apply_layout_data(&layout_update);
 
             if let Some(render_view) = render_object.render_view_mut() {
-                let (render_view_id, view_binding) = match render_view {
-                    RenderView::Owner(ref mut view_binding) => (render_object_id, view_binding),
+                let (render_view_id, view) = match render_view {
+                    RenderView::Owner(ref mut view) => (render_object_id, view),
                     RenderView::Within(render_view_id) => {
                         let render_view_id = *render_view_id;
 
@@ -161,18 +161,18 @@ impl RenderManager {
                             .expect("render view missing while applying layout");
 
                         match render_view.render_view_mut() {
-                            Some(RenderView::Owner(view_binding) ) => (render_view_id, view_binding),
+                            Some(RenderView::Owner(view) ) => (render_view_id, view),
                             _ => panic!("render object supplied an incorrect render view while applying layout"),
                         }
                     }
                 };
 
                 if let Some(size) = layout_update.size {
-                    view_binding.on_size_changed(render_object_id, size);
+                    view.on_size_changed(render_object_id, size);
                 }
 
                 if let Some(offset) = layout_update.offset {
-                    view_binding.on_offset_changed(render_object_id, offset);
+                    view.on_offset_changed(render_object_id, offset);
                 }
 
                 if layout_update.size.is_some() || layout_update.offset.is_some() {
@@ -198,8 +198,8 @@ impl RenderManager {
 
             let render_view = render_object.render_view_mut().unwrap();
 
-            let (render_view_id, view_binding) = match render_view {
-                RenderView::Owner(ref mut view_binding) => (render_object_id, view_binding),
+            let (render_view_id, view) = match render_view {
+                RenderView::Owner(ref mut view) => (render_object_id, view),
                 RenderView::Within(render_view_id) => {
                     let render_view_id = *render_view_id;
 
@@ -209,7 +209,7 @@ impl RenderManager {
                         .expect("render view missing while flushing paint");
 
                     match render_view.render_view_mut() {
-                        Some(RenderView::Owner(view_binding)) => (render_view_id, view_binding),
+                        Some(RenderView::Owner(view)) => (render_view_id, view),
                         _ => panic!(
                             "render object supplied an incorrect render view while flushing paint"
                         ),
@@ -217,7 +217,7 @@ impl RenderManager {
                 }
             };
 
-            view_binding.on_paint(render_object_id, canvas);
+            view.on_paint(render_object_id, canvas);
 
             self.needs_sync.insert(render_view_id, ());
         }
@@ -239,8 +239,8 @@ impl RenderManager {
                 .expect("render object missing while syncing");
 
             if let Some(render_view) = render_object.render_view_mut() {
-                let view_binding = match render_view {
-                    RenderView::Owner(ref mut view_binding) => view_binding,
+                let view = match render_view {
+                    RenderView::Owner(ref mut view) => view,
                     RenderView::Within(render_view_id) => {
                         let render_view_id = *render_view_id;
 
@@ -250,7 +250,7 @@ impl RenderManager {
                             .expect("render view missing while syncing");
 
                         match render_view.render_view_mut() {
-                            Some(RenderView::Owner(view_binding)) => view_binding,
+                            Some(RenderView::Owner(view)) => view,
                             _ => panic!(
                                 "render object supplied an incorrect render view while syncing"
                             ),
@@ -258,7 +258,7 @@ impl RenderManager {
                     }
                 };
 
-                view_binding.on_sync();
+                view.on_sync();
             }
         }
     }
@@ -467,26 +467,26 @@ impl RenderManager {
                 });
 
                 if let ElementType::View(element) = element.as_mut() {
-                    let mut view_binding = element.create_binding();
+                    let mut view = element.create_view();
 
                     // Attach the render object as the root of its own view
-                    view_binding.on_attach(None, render_object_id);
+                    view.on_attach(None, render_object_id);
 
-                    render_object.set_render_view(Some(RenderView::Owner(view_binding)));
+                    render_object.set_render_view(Some(RenderView::Owner(view)));
                 } else if let Some(parent_render_view) = parent_render_view {
-                    let view_binding = match tree
+                    let view = match tree
                         .get_mut(parent_render_view)
                         .expect("parent render object missing while creating render objects")
                         .render_view_mut()
                         .expect("parent render object has no view while creating render objects")
                     {
-                        RenderView::Owner(ref mut view_binding) => view_binding,
+                        RenderView::Owner(ref mut view) => view,
                         _ => panic!(
                             "parent render object is not a view owner while creating render objects"
                         ),
                     };
 
-                    view_binding.on_attach(parent_render_object_id, render_object_id);
+                    view.on_attach(parent_render_object_id, render_object_id);
 
                     render_object.set_render_view(Some(RenderView::Within(parent_render_view)));
                 };

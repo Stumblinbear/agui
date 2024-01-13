@@ -1,6 +1,6 @@
-use crate::{element::render::ElementRender, render::binding::ViewBinding};
+use crate::{element::render::ElementRender, render::view::View};
 
 pub trait ElementView: ElementRender {
-    /// Creates a binding for this element's view.
-    fn create_binding(&mut self) -> Box<dyn ViewBinding>;
+    /// Creates a the view for this subtree.
+    fn create_view(&mut self) -> Box<dyn View>;
 }

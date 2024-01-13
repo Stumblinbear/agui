@@ -24,6 +24,9 @@ impl RenderObjectWidget for WinitWindowLayout {
     }
 
     fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
+        // TODO: ideally we'd take in a window handle and listen for size changes instead of directing
+        // it through a statefulwidget, but we don't currently have a way to do callbacks in render
+        // objects. Maybe use async?
         RenderWinitWindowLayout { size: self.size }
     }
 

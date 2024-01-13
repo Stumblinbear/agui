@@ -2,10 +2,10 @@ use agui_renderer::RenderWindow;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{util::RenderContext, RendererOptions};
 
-use crate::renderer::binding::VelloViewBinding;
+use crate::renderer::binding::VelloView;
 
 pub struct VelloWindowRenderer<W> {
-    view_binding: VelloViewBinding,
+    view: VelloView,
 
     window: W,
 
@@ -17,10 +17,7 @@ impl<W> VelloWindowRenderer<W>
 where
     W: HasRawWindowHandle + HasRawDisplayHandle,
 {
-    pub fn new(
-        view_binding: VelloViewBinding,
-        window: W,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(view: VelloView, window: W) -> Result<Self, Box<dyn std::error::Error>> {
         let mut render_context = RenderContext::new()?;
 
         let surface =
@@ -52,7 +49,7 @@ where
         // }));
 
         Ok(Self {
-            view_binding,
+            view,
 
             window,
 

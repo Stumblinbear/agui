@@ -1,7 +1,7 @@
 use crate::{
     render::{
-        binding::RenderView,
         object::layout_data::{LayoutData, LayoutDataUpdate},
+        view::RenderView,
         RenderObjectId,
     },
     unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},

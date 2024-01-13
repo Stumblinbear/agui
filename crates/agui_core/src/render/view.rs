@@ -3,9 +3,9 @@ use crate::{
     unit::{Offset, Size},
 };
 
-pub trait ViewBinding {
+pub trait View {
     /// Called when a new render object is attached (or moved) within this element's
-    /// view, returning a binding that the render object may use to interact with it.
+    /// view.
     fn on_attach(
         &mut self,
         parent_render_object_id: Option<RenderObjectId>,
@@ -46,6 +46,6 @@ pub trait ViewBinding {
 }
 
 pub enum RenderView {
-    Owner(Box<dyn ViewBinding>),
+    Owner(Box<dyn View>),
     Within(RenderObjectId),
 }

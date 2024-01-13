@@ -1,4 +1,4 @@
-use crate::renderer::binding::VelloViewBinding;
+use crate::renderer::binding::VelloView;
 
 pub mod binding;
 
@@ -13,7 +13,7 @@ impl VelloRenderer {
         Self::default()
     }
 
-    pub fn new_view_binding(&self) -> VelloViewBinding {
-        VelloViewBinding
+    pub fn new_view(&self) -> VelloView {
+        VelloView
     }
 }
