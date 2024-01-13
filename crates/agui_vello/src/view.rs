@@ -1,79 +1,49 @@
 use agui_core::{
-    element::{
-        render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
-        ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
-    },
-    render::{
-        object::{RenderObject, RenderObjectImpl},
-        view::View,
-    },
-    widget::Widget,
+    render::{canvas::Canvas, view::View, RenderObjectId},
+    unit::{Offset, Size},
 };
-use agui_macros::WidgetProps;
 
-use crate::renderer::binding::VelloView;
+#[derive(Clone)]
+pub struct VelloView;
 
-#[derive(WidgetProps)]
-pub struct VelloViewBinding {
-    pub view: VelloView,
-
-    #[prop(into)]
-    pub child: Widget,
-}
-
-impl ElementBuilder for VelloViewBinding {
-    fn create_element(self: std::rc::Rc<Self>) -> ElementType
-    where
-        Self: Sized,
-    {
-        ElementType::new_view(VelloViewElement::new(self.view.clone(), self.child.clone()))
-    }
-}
-
-struct VelloViewElement {
-    view: VelloView,
-
-    child: Widget,
-}
-
-impl VelloViewElement {
-    pub fn new(view: VelloView, child: Widget) -> Self {
-        Self { view, child }
-    }
-}
-
-impl ElementWidget for VelloViewElement {
-    fn update(&mut self, _: &Widget) -> ElementUpdate {
-        ElementUpdate::Invalid
-    }
-}
-
-impl ElementRender for VelloViewElement {
-    fn children(&self) -> Vec<Widget> {
-        vec![self.child.clone()]
+impl View for VelloView {
+    fn on_attach(
+        &mut self,
+        parent_render_object_id: Option<RenderObjectId>,
+        render_object_id: RenderObjectId,
+    ) {
+        tracing::debug!(
+            "VelloView::on_attach {:?} {:?}",
+            parent_render_object_id,
+            render_object_id
+        );
     }
 
-    fn create_render_object(&mut self, _: &mut RenderObjectCreateContext) -> RenderObject {
-        RenderObject::new(RenderVelloView)
+    fn on_detach(&mut self, render_object_id: RenderObjectId) {
+        tracing::debug!("VelloView::on_detach {:?}", render_object_id);
     }
 
-    fn is_valid_render_object(&self, render_object: &RenderObject) -> bool {
-        render_object.is::<RenderVelloView>()
+    fn on_size_changed(&mut self, render_object_id: RenderObjectId, size: Size) {
+        tracing::debug!(
+            "VelloView::on_size_changed {:?} {:?}",
+            render_object_id,
+            size
+        );
     }
 
-    fn update_render_object(&mut self, _: &mut RenderObjectUpdateContext, _: &mut RenderObject) {}
-}
-
-impl ElementView for VelloViewElement {
-    fn create_view(&mut self) -> Box<dyn View> {
-        Box::new(self.view.clone())
+    fn on_offset_changed(&mut self, render_object_id: RenderObjectId, offset: Offset) {
+        tracing::debug!(
+            "VelloView::on_offset_changed {:?} {:?}",
+            render_object_id,
+            offset
+        );
     }
-}
 
-struct RenderVelloView;
+    fn on_paint(&mut self, render_object_id: RenderObjectId, canvas: Canvas) {
+        tracing::debug!("VelloView::on_paint {:?} {:?}", render_object_id, canvas);
+    }
 
-impl RenderObjectImpl for RenderVelloView {
-    fn is_sized_by_parent(&self) -> bool {
-        true
+    fn on_sync(&mut self) {
+        tracing::debug!("VelloView::on_sync");
     }
 }

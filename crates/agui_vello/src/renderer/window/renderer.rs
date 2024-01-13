@@ -2,22 +2,53 @@ use agui_renderer::RenderWindow;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{util::RenderContext, RendererOptions};
 
-use crate::renderer::binding::VelloView;
+use crate::view::VelloView;
 
-pub struct VelloWindowRenderer<W> {
-    view: VelloView,
+mod sealed {
+    pub trait VelloWindowRendererState {}
+}
 
+impl sealed::VelloWindowRendererState for () {}
+
+pub struct Attached<W> {
     window: W,
 
     render_context: RenderContext,
     renderer: vello::Renderer,
 }
 
-impl<W> VelloWindowRenderer<W>
-where
-    W: HasRawWindowHandle + HasRawDisplayHandle,
-{
-    pub fn new(view: VelloView, window: W) -> Result<Self, Box<dyn std::error::Error>> {
+pub struct VelloWindowRenderer<S> {
+    view: VelloView,
+
+    state: S,
+}
+
+impl Clone for VelloWindowRenderer<()> {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view.clone(),
+
+            state: (),
+        }
+    }
+}
+
+impl VelloWindowRenderer<()> {
+    pub fn new(view: &VelloView) -> Self {
+        Self {
+            view: view.clone(),
+
+            state: (),
+        }
+    }
+
+    pub fn attach<W>(
+        &self,
+        window: W,
+    ) -> Result<VelloWindowRenderer<Attached<W>>, Box<dyn std::error::Error>>
+    where
+        W: HasRawWindowHandle + HasRawDisplayHandle,
+    {
         let mut render_context = RenderContext::new()?;
 
         let surface =
@@ -34,37 +65,23 @@ where
             },
         )?;
 
-        // let view_renderer_handle = Arc::new(VelloViewRendererHandle::new(VelloViewRenderer {
-        //     fonts: Arc::clone(&self.fonts),
+        Ok(VelloWindowRenderer {
+            view: self.view.clone(),
 
-        //     render_context,
+            state: Attached {
+                window,
 
-        //     render_view_id,
-
-        //     surface,
-        //     renderer,
-
-        //     scene: Scene::new(),
-        //     render_objects: FxHashMap::default(),
-        // }));
-
-        Ok(Self {
-            view,
-
-            window,
-
-            render_context: RenderContext::new()?,
-            renderer,
+                render_context,
+                renderer,
+            },
         })
     }
 }
 
-impl<W> RenderWindow for VelloWindowRenderer<W>
+impl<W> RenderWindow for VelloWindowRenderer<Attached<W>>
 where
     W: HasRawWindowHandle + HasRawDisplayHandle,
 {
-    type Target = W;
-
     fn render(&self) {
         tracing::debug!("VelloWindowRenderer::render");
     }

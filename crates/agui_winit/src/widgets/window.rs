@@ -22,7 +22,7 @@ pub struct WinitWindow<WindowFn, RendererFn, Renderer>
 where
     WindowFn: Fn() -> WindowBuilder + Send + Sync + Clone + 'static,
     RendererFn: Fn(WinitWindowHandle) -> Renderer + Send + Sync + Clone + 'static,
-    Renderer: RenderWindow<Target = WinitWindowHandle> + 'static,
+    Renderer: RenderWindow + 'static,
 {
     pub window: WindowFn,
 
@@ -35,7 +35,7 @@ impl<WindowFn, RendererFn, Renderer> StatefulWidget for WinitWindow<WindowFn, Re
 where
     WindowFn: Fn() -> WindowBuilder + Send + Sync + Clone + 'static,
     RendererFn: Fn(WinitWindowHandle) -> Renderer + Send + Sync + Clone + 'static,
-    Renderer: RenderWindow<Target = WinitWindowHandle> + 'static,
+    Renderer: RenderWindow + 'static,
 {
     type State = WinitWindowState<WindowFn, RendererFn, Renderer>;
 
@@ -61,7 +61,7 @@ impl<WindowFn, RendererFn, Renderer> WidgetState
 where
     WindowFn: Fn() -> WindowBuilder + Send + Sync + Clone + 'static,
     RendererFn: Fn(WinitWindowHandle) -> Renderer + Send + Sync + Clone + 'static,
-    Renderer: RenderWindow<Target = WinitWindowHandle> + 'static,
+    Renderer: RenderWindow + 'static,
 {
     type Widget = WinitWindow<WindowFn, RendererFn, Renderer>;
 

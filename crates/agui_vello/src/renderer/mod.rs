@@ -1,6 +1,4 @@
-use crate::renderer::binding::VelloView;
-
-pub mod binding;
+use crate::view::VelloView;
 
 #[cfg(feature = "window")]
 pub mod window;

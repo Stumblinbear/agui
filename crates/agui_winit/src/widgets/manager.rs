@@ -33,7 +33,7 @@ impl WinitWindowManager {
         callback: Callback<WinitWindowHandle>,
     ) -> Result<(), WinitEventLoopClosed>
     where
-        Renderer: RenderWindow<Target = WinitWindowHandle> + 'static,
+        Renderer: RenderWindow + 'static,
     {
         tracing::debug!("queueing window for creation");
 

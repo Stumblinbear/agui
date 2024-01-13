@@ -9,13 +9,11 @@ use winit::{
 
 use crate::{WinitWindowEvent, WinitWindowHandle};
 
-type BoxedRenderer = Box<dyn RenderWindow<Target = WinitWindowHandle>>;
-
 pub struct WinitApp {
     pub event_loop: EventLoop<WinitBindingAction>,
 
     window_events: FxHashMap<WindowId, async_channel::Sender<WinitWindowEvent>>,
-    window_renderer: FxHashMap<WindowId, BoxedRenderer>,
+    window_renderer: FxHashMap<WindowId, Box<dyn RenderWindow>>,
 }
 
 impl Default for WinitApp {
@@ -99,7 +97,7 @@ impl WinitApp {
 pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
-        Box<dyn FnOnce(WinitWindowHandle) -> BoxedRenderer + Send>,
+        Box<dyn FnOnce(WinitWindowHandle) -> Box<dyn RenderWindow> + Send>,
         Callback<WinitWindowHandle>,
     ),
 }
