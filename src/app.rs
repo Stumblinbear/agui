@@ -1,9 +1,8 @@
-use std::{sync::Arc, thread, time::Instant};
+use std::{thread, time::Instant};
 
 use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_macros::build;
 use agui_winit::{WinitApp, WinitWindowManager};
-use parking_lot::{Condvar, Mutex};
 
 #[cfg(not(all(feature = "vello", feature = "winit")))]
 compile_error!("app feature requires both winit and vello to be enabled");
