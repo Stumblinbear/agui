@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use agui_core::{
     render::{canvas::Canvas, view::View, RenderObjectId},
@@ -142,6 +142,8 @@ impl View for VelloView {
 
         let mut scene = self.scene.write();
 
+        let now = Instant::now();
+
         for change in self.changes.drain(..) {
             match change {
                 Change::Attach {
@@ -167,6 +169,8 @@ impl View for VelloView {
                 } => scene.paint(render_object_id, canvas),
             }
         }
+
+        tracing::trace!(elapsed = ?now.elapsed(), "synced render tree changes");
 
         scene.redraw();
 

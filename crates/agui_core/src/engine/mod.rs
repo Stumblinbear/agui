@@ -53,7 +53,7 @@ impl Engine {
 
         self.widget_manager.update();
 
-        tracing::debug!(elapsed = ?now.elapsed(), "widget tree updated");
+        tracing::trace!(elapsed = ?now.elapsed(), "widget tree updated");
 
         let now = Instant::now();
 
@@ -80,7 +80,11 @@ impl Engine {
 
         tracing::trace!(elapsed = ?now.elapsed(), "render tree updated");
 
+        let now = Instant::now();
+
         self.render_manager.flush_view_sync();
+
+        tracing::trace!(elapsed = ?now.elapsed(), "synced views");
     }
 
     pub fn wait_for_update(&self) {
