@@ -7,6 +7,8 @@ use super::Widget;
 pub trait AnyWidget: ElementBuilder {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
 
+    fn widget_type_id(&self) -> std::any::TypeId;
+
     fn widget_name(&self) -> &'static str;
 }
 
@@ -16,6 +18,10 @@ where
 {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any> {
         self
+    }
+
+    fn widget_type_id(&self) -> std::any::TypeId {
+        std::any::TypeId::of::<T>()
     }
 
     fn widget_name(&self) -> &'static str {

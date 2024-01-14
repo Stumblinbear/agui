@@ -1,10 +1,10 @@
 use std::hash::BuildHasherDefault;
 
 use agui_core::{callback::Callback, unit::Font, widget::Widget};
-use agui_elements::stateful::{
-    ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState,
+use agui_elements::{
+    inherited::InheritedWidget,
+    stateful::{ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState},
 };
-use agui_inheritance::InheritedWidget;
 use agui_macros::{InheritedWidget, StatefulWidget};
 use rustc_hash::FxHasher;
 
@@ -85,9 +85,8 @@ impl AvailableFonts {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{engine::Engine, unit::Font, widget::Widget};
+    use agui_core::{engine::widgets::WidgetManager, unit::Font, widget::Widget};
     use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
-    use agui_inheritance::{ContextInheritedMut, InheritancePlugin};
     use agui_macros::{build, StatelessWidget};
 
     use crate::sized_box::SizedBox;
@@ -123,21 +122,18 @@ mod tests {
 
     #[test]
     fn can_retrieve_from_available_fonts() {
-        let mut engine = Engine::builder()
-            .add_plugin(InheritancePlugin::default())
-            .with_root(build! {
-                <Fonts> {
-                    fonts: im_rc::HashMap::from_iter([(
-                        String::from("test font family"),
-                        Font::from_family("test font family"),
-                    )]),
+        let mut manager = WidgetManager::with_root(build! {
+            <Fonts> {
+                fonts: im_rc::HashMap::from_iter([(
+                    String::from("test font family"),
+                    Font::from_family("test font family"),
+                )]),
 
-                    child: <TestWidget> {},
-                }
-            })
-            .build();
+                child: <TestWidget> {},
+            }
+        });
 
-        engine.update();
+        manager.update();
 
         TEST_HOOK.with(|result| {
             assert_ne!(

@@ -2,11 +2,8 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
-    element::view::ElementView,
-    render::{
-        object::{RenderBox, RenderObject},
-        RenderObjectId,
-    },
+    element::{inherited::ElementInherited, view::ElementView},
+    render::object::{RenderBox, RenderObject},
     widget::Widget,
 };
 
@@ -15,6 +12,7 @@ use self::{build::ElementBuild, render::ElementRender, widget::ElementWidget};
 pub mod build;
 mod builder;
 mod context;
+pub mod inherited;
 #[cfg(any(test, feature = "mocks"))]
 pub mod mock;
 pub mod render;
@@ -34,8 +32,6 @@ pub struct Element {
     inner: ElementType,
 
     widget: Widget,
-
-    render_object_id: Option<RenderObjectId>,
 }
 
 #[cfg(not(miri))]
@@ -52,6 +48,8 @@ type ElementBox<T> = Box<T>;
 
 pub enum ElementType {
     Widget(ElementBox<dyn ElementBuild>),
+
+    Inherited(ElementBox<dyn ElementInherited>),
 
     View(ElementBox<dyn ElementView>),
     Render(ElementBox<dyn ElementRender>),
@@ -70,6 +68,21 @@ impl ElementType {
         #[cfg(miri)]
         {
             ElementType::Widget(Box::new(element))
+        }
+    }
+
+    pub fn new_inherited<E>(element: E) -> Self
+    where
+        E: ElementInherited,
+    {
+        #[cfg(not(miri))]
+        {
+            ElementType::Inherited(smallbox::smallbox!(element))
+        }
+
+        #[cfg(miri)]
+        {
+            ElementType::Inherited(Box::new(element))
         }
     }
 
@@ -105,26 +118,16 @@ impl ElementType {
 }
 
 impl Element {
-    pub(crate) fn new(widget: Widget) -> Self {
+    pub fn new(widget: Widget) -> Self {
         Self {
             inner: Widget::create_element(&widget),
 
             widget,
-
-            render_object_id: None,
         }
-    }
-
-    pub fn widget_name(&self) -> &str {
-        self.widget.widget_name()
     }
 
     pub fn widget(&self) -> &Widget {
         &self.widget
-    }
-
-    pub fn render_object_id(&self) -> Option<RenderObjectId> {
-        self.render_object_id
     }
 
     pub fn is<E>(&self) -> bool
@@ -133,6 +136,8 @@ impl Element {
     {
         match self.inner {
             ElementType::Widget(ref element) => (**element).as_any().is::<E>(),
+
+            ElementType::Inherited(ref element) => (**element).as_any().is::<E>(),
 
             ElementType::View(ref element) => (**element).as_any().is::<E>(),
             ElementType::Render(ref element) => (**element).as_any().is::<E>(),
@@ -146,6 +151,8 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref element) => (**element).as_any().downcast_ref::<E>(),
 
+            ElementType::Inherited(ref element) => (**element).as_any().downcast_ref::<E>(),
+
             ElementType::View(ref element) => (**element).as_any().downcast_ref::<E>(),
             ElementType::Render(ref element) => (**element).as_any().downcast_ref::<E>(),
         }
@@ -158,42 +165,90 @@ impl Element {
         match self.inner {
             ElementType::Widget(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
 
+            ElementType::Inherited(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
+
             ElementType::View(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
             ElementType::Render(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
     pub fn mount(&mut self, ctx: &mut ElementMountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.mount(ctx),
 
+            ElementType::Inherited(ref mut element) => {
+                ctx.inheritance.create_scope(
+                    self.widget.widget_type_id(),
+                    *ctx.parent_element_id,
+                    *ctx.element_id,
+                );
+
+                element.mount(ctx);
+            }
+
             ElementType::View(ref mut element) => element.mount(ctx),
             ElementType::Render(ref mut element) => element.mount(ctx),
         }
+
+        // Is it beneficial to delay building up these until an element actually needs them?
+        ctx.inheritance
+            .create_node(*ctx.parent_element_id, *ctx.element_id);
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    // pub fn remount() {
+    //     let parent_scope_id = ctx.parent_element_id().and_then(|parent_element_id| {
+    //         self.manager
+    //             .get(parent_element_id)
+    //             .expect("failed to get scope from parent")
+    //             .scope()
+    //     });
+
+    //     let element_id = ctx.element_id();
+
+    //     self.manager
+    //         .update_inheritance_scope(ctx, element_id, parent_scope_id);
+    // }
+
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
     pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.unmount(ctx),
 
+            ElementType::Inherited(ref mut element) => element.unmount(ctx),
+
             ElementType::View(ref mut element) => element.unmount(ctx),
             ElementType::Render(ref mut element) => element.unmount(ctx),
         }
+
+        ctx.inheritance.remove(*ctx.element_id);
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
     pub fn build(&mut self, ctx: &mut ElementBuildContext) -> Vec<Widget> {
         match self.inner {
             ElementType::Widget(ref mut element) => Vec::from([element.build(ctx)]),
+
+            ElementType::Inherited(ref mut element) => {
+                if element.needs_notify() {
+                    for element_id in ctx
+                        .inheritance
+                        .iter_listeners(*ctx.element_id)
+                        .expect("failed to get the inherited element's scope during build")
+                    {
+                        ctx.needs_build.insert(element_id);
+                    }
+                }
+
+                Vec::from([element.child()])
+            }
 
             ElementType::View(ref mut element) => element.children(),
             ElementType::Render(ref mut element) => element.children(),
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, new_widget), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, new_widget), fields(widget_name = self.widget.widget_name()))]
     pub fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
         if &self.widget == new_widget {
             return ElementUpdate::Noop;
@@ -201,6 +256,8 @@ impl Element {
 
         let result = match self.inner {
             ElementType::Widget(ref mut element) => element.update(new_widget),
+
+            ElementType::Inherited(ref mut element) => element.update(new_widget),
 
             ElementType::View(ref mut element) => element.update(new_widget),
             ElementType::Render(ref mut element) => element.update(new_widget),
@@ -217,7 +274,7 @@ impl Element {
         result
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
     pub fn call(
         &mut self,
         ctx: &mut ElementCallbackContext,
@@ -225,7 +282,7 @@ impl Element {
         arg: Box<dyn Any>,
     ) -> bool {
         match self.inner {
-            ElementType::View(_) | ElementType::Render(_) => {
+            ElementType::Inherited(_) | ElementType::View(_) | ElementType::Render(_) => {
                 tracing::warn!("attempted to call a callback on an unsupported element");
 
                 false
@@ -235,28 +292,25 @@ impl Element {
         }
     }
 
-    pub(crate) fn set_render_object_id(&mut self, id: RenderObjectId) {
-        self.render_object_id = Some(id);
-    }
-
-    pub fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
+    pub fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         match self.inner {
-            // Use the default render object for proxies and widgets
-            ElementType::Widget(_) => RenderObject::new(RenderBox::default()),
+            // Use the default render object
+            ElementType::Widget(_) | ElementType::Inherited(_) => {
+                RenderObject::new(RenderBox::default())
+            }
 
-            ElementType::View(ref mut element) => element.create_render_object(ctx),
-
-            ElementType::Render(ref mut element) => element.create_render_object(ctx),
+            ElementType::View(ref element) => element.create_render_object(ctx),
+            ElementType::Render(ref element) => element.create_render_object(ctx),
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
     pub(crate) fn update_render_object(
-        &mut self,
+        &self,
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut RenderObject,
     ) {
-        if let ElementType::Render(element) = &mut self.inner {
+        if let ElementType::Render(element) = &self.inner {
             element.update_render_object(ctx, render_object);
         } else {
             tracing::trace!("skipping render object update for non-render element");
@@ -288,6 +342,7 @@ impl std::fmt::Debug for Element {
 
         f.debug_struct(match self.inner {
             ElementType::Widget(_) => "Element::Widget",
+            ElementType::Inherited(_) => "Element::Inherited",
             ElementType::View(_) => "Element::View",
             ElementType::Render(_) => "Element::Render",
         })

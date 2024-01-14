@@ -2,20 +2,20 @@ use std::{cell::RefCell, rc::Rc};
 
 use agui_core::{
     element::mock::{render::MockRenderWidget, DummyRenderObject, DummyWidget},
-    engine::Engine,
+    engine::widgets::WidgetManager,
     widget::{IntoWidget, Widget},
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 
-fn engine_ops(c: &mut Criterion) {
-    let mut group = c.benchmark_group("engine (single)");
+fn widget_manager_ops(c: &mut Criterion) {
+    let mut group = c.benchmark_group("widget manager (single)");
 
     group.throughput(criterion::Throughput::Elements(1));
 
     group.sample_size(10000).bench_function("additions", |b| {
         b.iter_with_setup(
-            || Engine::builder().with_root(DummyWidget).build(),
-            |mut engine| engine.update(),
+            || WidgetManager::with_root(DummyWidget.into_widget()),
+            |mut manager| manager.update(),
         )
     });
 
@@ -43,23 +43,23 @@ fn engine_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                let mut engine = Engine::builder().with_root(root_widget).build();
+                let mut manager = WidgetManager::with_root(root_widget.into_widget());
 
-                engine.update();
+                manager.update();
 
                 children.borrow_mut().clear();
 
-                engine.mark_needs_build(engine.root());
+                manager.mark_needs_build(manager.root());
 
-                engine
+                manager
             },
-            |mut engine| engine.update(),
+            |mut manager| manager.update(),
         )
     });
 
     group.finish();
 
-    let mut group = c.benchmark_group("engine (large)");
+    let mut group = c.benchmark_group("widget manager (large)");
 
     group.throughput(criterion::Throughput::Elements(1000));
 
@@ -91,9 +91,9 @@ fn engine_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                Engine::builder().with_root(root_widget).build()
+                WidgetManager::with_root(root_widget.into_widget())
             },
-            |mut engine| engine.update(),
+            |mut manager| manager.update(),
         )
     });
 
@@ -129,22 +129,22 @@ fn engine_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                let mut engine = Engine::builder().with_root(root_widget).build();
+                let mut manager = WidgetManager::with_root(root_widget.into_widget());
 
-                engine.update();
+                manager.update();
 
                 children.borrow_mut().clear();
 
-                engine.mark_needs_build(engine.root());
+                manager.mark_needs_build(manager.root());
 
-                engine
+                manager
             },
-            |mut engine| engine.update(),
+            |mut manager| manager.update(),
         )
     });
 
     group.finish();
 }
 
-criterion_group!(benches, engine_ops);
+criterion_group!(benches, widget_manager_ops);
 criterion_main!(benches);

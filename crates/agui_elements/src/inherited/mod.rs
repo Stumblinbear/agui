@@ -1,5 +1,9 @@
 use agui_core::widget::{AnyWidget, Widget};
 
+mod element;
+
+pub use element::*;
+
 pub trait InheritedWidget: AnyWidget {
     fn child(&self) -> Widget;
 
@@ -17,12 +21,10 @@ mod tests {
             },
             ElementUpdate,
         },
-        engine::Engine,
+        engine::widgets::WidgetManager,
         widget::{IntoWidget, Widget},
     };
     use agui_macros::InheritedWidget;
-
-    use crate::{context::ContextInheritedMut, InheritancePlugin};
 
     use super::InheritedWidget;
 
@@ -66,10 +68,7 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut engine = Engine::builder()
-            .add_plugin(InheritancePlugin::default())
-            .with_root(root_widget)
-            .build();
+        let mut manager = WidgetManager::with_root(root_widget.into_widget());
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -77,7 +76,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -91,9 +90,9 @@ mod tests {
         }
         .into_widget()];
 
-        engine.mark_needs_build(engine.root());
+        manager.mark_needs_build(manager.root());
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -115,10 +114,7 @@ mod tests {
 
         *root_children.borrow_mut() = vec![DummyWidget.into_widget()];
 
-        let mut engine = Engine::builder()
-            .add_plugin(InheritancePlugin::default())
-            .with_root(root_widget)
-            .build();
+        let mut manager = WidgetManager::with_root(root_widget.into_widget());
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -126,7 +122,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -140,9 +136,9 @@ mod tests {
         }
         .into_widget()];
 
-        engine.mark_needs_build(engine.root());
+        manager.mark_needs_build(manager.root());
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -157,10 +153,7 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut engine = Engine::builder()
-            .add_plugin(InheritancePlugin::default())
-            .with_root(root_widget)
-            .build();
+        let mut manager = WidgetManager::with_root(root_widget.into_widget());
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -168,7 +161,7 @@ mod tests {
         }
         .into_widget()];
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -178,9 +171,9 @@ mod tests {
 
         *root_children.borrow_mut() = vec![depending_widget.clone()];
 
-        engine.mark_needs_build(engine.root());
+        manager.mark_needs_build(manager.root());
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
             *inherited_data.borrow(),

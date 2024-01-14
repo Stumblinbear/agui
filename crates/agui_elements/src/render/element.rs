@@ -49,7 +49,7 @@ where
         self.widget.children()
     }
 
-    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         RenderObject::new(self.widget.create_render_object(ctx))
     }
 
@@ -58,7 +58,7 @@ where
     }
 
     fn update_render_object(
-        &mut self,
+        &self,
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut RenderObject,
     ) {

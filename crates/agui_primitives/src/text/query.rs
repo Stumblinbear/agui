@@ -60,32 +60,30 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::engine::Engine;
+    use agui_core::engine::widgets::WidgetManager;
     use agui_macros::build;
 
     use crate::{flex::Column, text::query::TextQueryExt, text::Text};
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut engine = Engine::builder()
-            .with_root(build! {
-                <Column> {
-                    children: [
-                        <Text> {
-                            text: "foo".into(),
-                        }.into(),
-                        <Text> {
-                            text: "bar".into(),
-                        }.into(),
-                    ],
-                }
-            })
-            .build();
+        let mut manager = WidgetManager::with_root(build! {
+            <Column> {
+                children: [
+                    <Text> {
+                        text: "foo".into(),
+                    }.into(),
+                    <Text> {
+                        text: "bar".into(),
+                    }.into(),
+                ],
+            }
+        });
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            engine
+            manager
                 .query()
                 .with_text("foo")
                 .next()
@@ -96,7 +94,7 @@ mod tests {
         );
 
         assert_eq!(
-            engine
+            manager
                 .query()
                 .with_text("bar")
                 .next()

@@ -3,10 +3,6 @@ use std::ops::{Deref, DerefMut};
 use agui_core::{
     callback::{Callback, CallbackId, CallbackQueue, ContextCallbackQueue, WidgetCallback},
     element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
-    plugin::{
-        context::{ContextPlugins, ContextPluginsMut},
-        Plugins,
-    },
     unit::AsAny,
     util::tree::Tree,
 };
@@ -45,24 +41,6 @@ where
 {
     fn element_id(&self) -> ElementId {
         self.inner.element_id()
-    }
-}
-
-impl<'ctx, S> ContextPlugins<'ctx> for StatefulBuildContext<'ctx, '_, S>
-where
-    S: WidgetState,
-{
-    fn plugins(&self) -> &Plugins {
-        self.inner.plugins()
-    }
-}
-
-impl<'ctx, S> ContextPluginsMut<'ctx> for StatefulBuildContext<'ctx, '_, S>
-where
-    S: WidgetState,
-{
-    fn plugins_mut(&mut self) -> &mut Plugins {
-        self.inner.plugins_mut()
     }
 }
 

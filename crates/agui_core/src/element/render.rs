@@ -9,7 +9,7 @@ pub trait ElementRender: ElementWidget {
     ///
     /// This must always create a new render object, and should never contain any data derived
     /// from, or containing references to, any previously created render object.
-    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject;
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> RenderObject;
 
     /// Returns true if the given render object is valid for the current element and can be
     /// used as-is.
@@ -27,7 +27,7 @@ pub trait ElementRender: ElementWidget {
     /// at any point and was instead created by another element at the same position in the
     /// tree, so all necessary parameters *must* be updated.
     fn update_render_object(
-        &mut self,
+        &self,
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut RenderObject,
     );

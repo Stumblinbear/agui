@@ -20,7 +20,6 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
 agui_elements = { path = "crates/agui_elements", version = "0.3" }
-agui_inheritance = { path = "crates/agui_inheritance", version = "0.3" }
 agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
 
 agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
@@ -68,14 +67,13 @@ winit = ["agui_renderer/window", "agui_winit", "dep:winit"]
 vello = ["agui_renderer/window", "agui_vello", "dep:vello"]
 winit-vello = ["winit", "vello", "agui_vello/window"]
 
-mocks = ["agui_core/mocks", "agui_inheritance/mocks"]
+mocks = ["agui_core/mocks"]
 
 [dependencies]
 agui_core.workspace = true
 agui_macros = { workspace = true, optional = true }
 
 agui_elements.workspace = true
-agui_inheritance.workspace = true
 agui_primitives = { workspace = true, optional = true }
 agui_widgets = { workspace = true, optional = true }
 

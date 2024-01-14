@@ -15,8 +15,6 @@ readme = "README.md"
 mocks = ["mockall"]
 
 [dependencies]
-cfg-if = "1.0"
-
 tracing.workspace = true
 
 thiserror.workspace = true
@@ -29,6 +27,8 @@ im-rc.workspace = true
 bitflags.workspace = true
 url.workspace = true
 smallbox.workspace = true
+
+async-channel.workspace = true
 
 glam.workspace = true
 lyon.workspace = true
@@ -44,8 +44,8 @@ criterion.workspace = true
 fnv = "1.0"
 
 [[bench]]
-name = "engine"
-path = "benches/engine.rs"
+name = "widget_manager"
+path = "benches/widget_manager.rs"
 harness = false
 
 [[bench]]

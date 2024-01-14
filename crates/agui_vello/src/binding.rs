@@ -53,7 +53,7 @@ impl ElementRender for VelloViewElement {
         vec![self.child.clone()]
     }
 
-    fn create_render_object(&mut self, _: &mut RenderObjectCreateContext) -> RenderObject {
+    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> RenderObject {
         RenderObject::new(RenderVelloView)
     }
 
@@ -61,11 +61,11 @@ impl ElementRender for VelloViewElement {
         render_object.is::<RenderVelloView>()
     }
 
-    fn update_render_object(&mut self, _: &mut RenderObjectUpdateContext, _: &mut RenderObject) {}
+    fn update_render_object(&self, _: &mut RenderObjectUpdateContext, _: &mut RenderObject) {}
 }
 
 impl ElementView for VelloViewElement {
-    fn create_view(&mut self) -> Box<dyn View> {
+    fn create_view(&self) -> Box<dyn View> {
         Box::new(self.view.clone())
     }
 }

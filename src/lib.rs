@@ -20,7 +20,6 @@ pub use agui_vello as vello;
 pub mod prelude {
     pub use agui_core::{callback::*, element, query::*, render::*, unit::*, widget::*};
     pub use agui_elements::{render::*, stateful::*, stateless::*};
-    pub use agui_inheritance::*;
     pub use agui_primitives::{
         align::{Align, Center},
         builder::Builder,

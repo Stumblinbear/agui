@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, pin::pin, thread};
+use std::{any::TypeId, marker::PhantomData, pin::pin, thread};
 
 use agui_core::{
     unit::Size,
@@ -7,7 +7,6 @@ use agui_core::{
 use agui_elements::stateful::{
     ContextWidgetStateMut, StatefulBuildContext, StatefulWidget, WidgetState,
 };
-use agui_inheritance::ContextInherited;
 use agui_macros::{build, StatefulWidget};
 use agui_primitives::sized_box::SizedBox;
 use agui_renderer::RenderWindow;
@@ -86,7 +85,10 @@ where
         });
 
         let Some(window_manager) = ctx.find_inherited_widget::<WinitWindowManager>() else {
-            return tracing::error!("windowing plugin not found");
+            return tracing::error!(
+                "WinitWindowManager was not found {:?}",
+                TypeId::of::<WinitWindowManager>()
+            );
         };
 
         let on_window_created = ctx.callback(move |ctx, window: WinitWindowHandle| {

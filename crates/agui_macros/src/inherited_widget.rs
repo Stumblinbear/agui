@@ -5,7 +5,7 @@ use crate::{props::impl_props_derive, utils::resolve_package_path};
 
 pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
     let agui_core = resolve_package_path("agui_core");
-    let agui_inheritance = resolve_package_path("agui_inheritance");
+    let agui_elements = resolve_package_path("agui_elements");
 
     let item: ItemStruct = match parse2(input) {
         Ok(item) => item,
@@ -25,7 +25,7 @@ pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::new_widget(#agui_inheritance::InheritedElement::new(self))
+                #agui_core::element::ElementType::new_inherited(#agui_elements::inherited::InheritedElement::new(self))
             }
         }
     }

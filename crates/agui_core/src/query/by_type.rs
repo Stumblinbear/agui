@@ -48,16 +48,16 @@ where
 mod tests {
     use crate::{
         element::mock::{build::MockBuildWidget, render::MockRenderWidget, DummyWidget},
-        engine::Engine,
+        engine::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::IntoWidget,
     };
 
     #[test]
     pub fn finds_widget_by_type() {
-        let proxy_widget = MockRenderWidget::default();
+        let root_widget = MockRenderWidget::default();
         {
-            proxy_widget
+            root_widget
                 .mock
                 .borrow_mut()
                 .expect_children()
@@ -84,24 +84,24 @@ mod tests {
                 });
         }
 
-        let mut engine = Engine::builder().with_root(proxy_widget).build();
+        let mut manager = WidgetManager::with_root(root_widget);
 
-        engine.update();
+        manager.update();
 
         assert_eq!(
-            engine.query().by_type::<MockRenderWidget>().count(),
+            manager.query().by_type::<MockRenderWidget>().count(),
             1,
             "should have found 1 widget of type MockRenderWidget"
         );
 
         assert_eq!(
-            engine.query().by_type::<MockBuildWidget>().count(),
+            manager.query().by_type::<MockBuildWidget>().count(),
             2,
             "should have found 2 widgets of type MockBuildWidget"
         );
 
         assert_eq!(
-            engine.query().by_type::<DummyWidget>().count(),
+            manager.query().by_type::<DummyWidget>().count(),
             1,
             "should have found 1 widget of type DummyWidget"
         );

@@ -5,7 +5,7 @@ use agui_core::{
     util::ptr_eq::PtrEqual,
     widget::Widget,
 };
-use agui_inheritance::InheritedWidget;
+use agui_elements::inherited::InheritedWidget;
 use agui_macros::InheritedWidget;
 
 #[derive(InheritedWidget)]

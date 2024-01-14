@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use agui_core::widget::Widget;
-use agui_inheritance::InheritedWidget;
+use agui_elements::inherited::InheritedWidget;
 use agui_macros::InheritedWidget;
 
 use crate::WinitWindowHandle;

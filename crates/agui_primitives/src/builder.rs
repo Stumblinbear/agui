@@ -27,20 +27,22 @@ impl StatelessWidget for Builder {
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{element::mock::DummyWidget, engine::Engine, query::WidgetQueryExt};
+    use agui_core::{
+        element::mock::DummyWidget, engine::widgets::WidgetManager, query::WidgetQueryExt,
+        widget::IntoWidget,
+    };
 
     use crate::builder::Builder;
 
     #[test]
     pub fn calls_func() {
-        let mut engine = Engine::builder()
-            .with_root(Builder::new(|_| DummyWidget.into()))
-            .build();
+        let mut manager =
+            WidgetManager::with_root(Builder::new(|_| DummyWidget.into()).into_widget());
 
-        engine.update();
+        manager.update();
 
         assert!(
-            engine.query().by_type::<DummyWidget>().next().is_some(),
+            manager.query().by_type::<DummyWidget>().next().is_some(),
             "widget should have been created"
         );
     }

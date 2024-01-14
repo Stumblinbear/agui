@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     cell::RefCell,
     hash::{Hash, Hasher},
     rc::Rc,
@@ -34,6 +35,10 @@ impl Widget {
             key,
             widget: Rc::new(widget),
         }
+    }
+
+    pub fn widget_type_id(&self) -> TypeId {
+        (*self.widget).widget_type_id()
     }
 
     pub fn widget_name(&self) -> &'static str {

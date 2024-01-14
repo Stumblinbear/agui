@@ -1,5 +1,3 @@
-use thiserror::Error;
-
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Color {
     pub red: f32,
@@ -175,7 +173,7 @@ impl From<Color> for String {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ColorParseError {
     #[error("string `{0}` is not a valid hex color")]
     InvalidHexCode(String),

@@ -208,7 +208,7 @@ mod tests {
     use crate::{
         callback::WidgetCallback,
         element::mock::{build::MockBuildWidget, DummyWidget},
-        engine::Engine,
+        engine::widgets::WidgetManager,
         widget::IntoWidget,
     };
 
@@ -226,14 +226,14 @@ mod tests {
             widget_mock.expect_call().never();
         }
 
-        let mut engine = Engine::builder().with_root(widget).build();
+        let mut manager = WidgetManager::builder().with_root(widget).build();
 
-        engine.update();
+        manager.update();
 
         WidgetCallback::new_unchecked(
-            engine.root(),
+            manager.root(),
             TypeId::of::<()>(),
-            engine.callback_queue().clone(),
+            manager.callback_queue().clone(),
         )
         .call(3);
     }
@@ -252,17 +252,17 @@ mod tests {
             widget_mock.expect_call().once().returning(|_, _, _| false);
         }
 
-        let mut engine = Engine::builder().with_root(widget).build();
+        let mut manager = WidgetManager::builder().with_root(widget).build();
 
-        engine.update();
+        manager.update();
 
         WidgetCallback::new_unchecked(
-            engine.root(),
+            manager.root(),
             TypeId::of::<()>(),
-            engine.callback_queue().clone(),
+            manager.callback_queue().clone(),
         )
         .call(7);
 
-        engine.update();
+        manager.update();
     }
 }

@@ -1,7 +1,6 @@
 use std::{sync::Arc, thread, time::Instant};
 
 use agui_core::{engine::Engine, widget::IntoWidget};
-use agui_inheritance::InheritancePlugin;
 use agui_macros::build;
 use agui_winit::{WinitApp, WinitWindowManager};
 use parking_lot::{Condvar, Mutex};
@@ -32,22 +31,7 @@ where
             }
         };
 
-        let notifier = Arc::new((Mutex::new(false), Condvar::new()));
-
-        let mut engine = Engine::builder()
-            .with_notifier({
-                let notifier = Arc::clone(&notifier);
-
-                move || {
-                    let (mutex, cond) = &*notifier;
-                    let mut guard = mutex.lock();
-                    *guard = true;
-                    cond.notify_one();
-                }
-            })
-            .add_plugin(InheritancePlugin::default())
-            .with_root(root)
-            .build();
+        let mut engine = Engine::with_root(root);
 
         // TODO: add a way to actually stop the engine
         loop {
@@ -57,12 +41,7 @@ where
 
             tracing::debug!(elapsed = ?start.elapsed(), "update complete");
 
-            let (mutex, cond) = &*notifier;
-            let mut guard = mutex.lock();
-            while !*guard {
-                cond.wait(&mut guard);
-            }
-            *guard = false;
+            engine.wait_for_update();
         }
     });
 

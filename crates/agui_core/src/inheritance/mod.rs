@@ -1,13 +1,15 @@
 use std::any::TypeId;
 
-use agui_core::{
-    element::{ContextElements, ElementId},
-    plugin::context::PluginElementRemountContext,
-    util::map::{TypeIdMap, TypeIdSet},
+use crate::{
+    element::{Element, ElementId},
+    engine::Dirty,
+    inheritance::{node::InheritanceNode, scope::InheritanceScope},
+    util::{
+        map::{TypeIdMap, TypeIdSet},
+        tree::Tree,
+    },
 };
 use rustc_hash::FxHashMap;
-
-use self::{node::InheritanceNode, scope::InheritanceScope};
 
 mod node;
 mod scope;
@@ -18,74 +20,7 @@ pub struct InheritanceManager {
 }
 
 impl InheritanceManager {
-    pub fn with<F, R>(&mut self, element_id: ElementId, func: F) -> Option<R>
-    where
-        F: FnOnce(&mut InheritanceManager, &mut Inheritance) -> R,
-    {
-        if let Some(mut value) = self.map.remove(&element_id) {
-            let ret = func(self, &mut value);
-
-            self.map.insert(element_id, value);
-
-            Some(ret)
-        } else {
-            None
-        }
-    }
-
-    pub fn get(&self, element_id: ElementId) -> Option<&Inheritance> {
-        self.map.get(&element_id)
-    }
-
-    pub fn get_mut(&mut self, element_id: ElementId) -> Option<&mut Inheritance> {
-        self.map.get_mut(&element_id)
-    }
-
-    pub fn get_as_scope(&self, element_id: ElementId) -> Option<&InheritanceScope> {
-        let inheritance = self.get(element_id)?;
-
-        if let Inheritance::Scope(scope) = inheritance {
-            Some(scope)
-        } else {
-            panic!("element is not an inheritance scope");
-        }
-    }
-
-    pub fn get_as_scope_mut(&mut self, element_id: ElementId) -> Option<&mut InheritanceScope> {
-        let inheritance = self.get_mut(element_id)?;
-
-        if let Inheritance::Scope(scope) = inheritance {
-            Some(scope)
-        } else {
-            panic!("element is not an inheritance scope");
-        }
-    }
-
-    pub fn get_as_node(&self, element_id: ElementId) -> Option<&InheritanceNode> {
-        let inheritance = self.get(element_id)?;
-
-        if let Inheritance::Node(node) = inheritance {
-            Some(node)
-        } else {
-            panic!("element is not an inheritance node");
-        }
-    }
-
-    pub fn get_as_node_mut(&mut self, element_id: ElementId) -> Option<&mut InheritanceNode> {
-        let inheritance = self.get_mut(element_id)?;
-
-        if let Inheritance::Node(node) = inheritance {
-            Some(node)
-        } else {
-            panic!("element is not an inheritance node");
-        }
-    }
-
-    pub fn find_inherited_element(
-        &self,
-        element_id: ElementId,
-        type_id: &TypeId,
-    ) -> Option<ElementId> {
+    pub fn find_type(&self, element_id: ElementId, type_id: &TypeId) -> Option<ElementId> {
         let scope_id = match self
             .get(element_id)
             .expect("cannot find an inherited element from one that doesn't exist")
@@ -103,11 +38,7 @@ impl InheritanceManager {
         })
     }
 
-    pub fn depend_on_inherited_element(
-        &mut self,
-        element_id: ElementId,
-        type_id: TypeId,
-    ) -> Option<ElementId> {
+    pub fn depend_on_type(&mut self, element_id: ElementId, type_id: TypeId) -> Option<ElementId> {
         let node = self
             .get_as_node_mut(element_id)
             .expect("failed to find the node while depending on an inherited element");
@@ -124,7 +55,7 @@ impl InheritanceManager {
             scope.add_dependent(type_id, element_id);
         }
 
-        if let Some(target_scope_id) = self.find_inherited_element(element_id, &type_id) {
+        if let Some(target_scope_id) = self.find_type(element_id, &type_id) {
             let target_scope = self.get_as_scope_mut(target_scope_id).expect(
                 "failed to find the target element while depending on an inherited element",
             );
@@ -138,9 +69,81 @@ impl InheritanceManager {
         }
     }
 
+    fn with<F, R>(&mut self, element_id: ElementId, func: F) -> Option<R>
+    where
+        F: FnOnce(&mut InheritanceManager, &mut Inheritance) -> R,
+    {
+        if let Some(mut value) = self.map.remove(&element_id) {
+            let ret = func(self, &mut value);
+
+            self.map.insert(element_id, value);
+
+            Some(ret)
+        } else {
+            None
+        }
+    }
+
+    fn get(&self, element_id: ElementId) -> Option<&Inheritance> {
+        self.map.get(&element_id)
+    }
+
+    fn get_mut(&mut self, element_id: ElementId) -> Option<&mut Inheritance> {
+        self.map.get_mut(&element_id)
+    }
+
+    fn get_as_scope(&self, element_id: ElementId) -> Option<&InheritanceScope> {
+        let inheritance = self.get(element_id)?;
+
+        if let Inheritance::Scope(scope) = inheritance {
+            Some(scope)
+        } else {
+            panic!("element is not an inheritance scope");
+        }
+    }
+
+    fn get_as_scope_mut(&mut self, element_id: ElementId) -> Option<&mut InheritanceScope> {
+        let inheritance = self.get_mut(element_id)?;
+
+        if let Inheritance::Scope(scope) = inheritance {
+            Some(scope)
+        } else {
+            panic!("element is not an inheritance scope");
+        }
+    }
+
+    fn get_as_node(&self, element_id: ElementId) -> Option<&InheritanceNode> {
+        let inheritance = self.get(element_id)?;
+
+        if let Inheritance::Node(node) = inheritance {
+            Some(node)
+        } else {
+            panic!("element is not an inheritance node");
+        }
+    }
+
+    fn get_as_node_mut(&mut self, element_id: ElementId) -> Option<&mut InheritanceNode> {
+        let inheritance = self.get_mut(element_id)?;
+
+        if let Inheritance::Node(node) = inheritance {
+            Some(node)
+        } else {
+            panic!("element is not an inheritance node");
+        }
+    }
+
+    pub(crate) fn iter_listeners(
+        &self,
+        element_id: ElementId,
+    ) -> Option<impl Iterator<Item = ElementId> + '_> {
+        self.get_as_scope(element_id)
+            .map(|scope| scope.iter_listeners())
+    }
+
     pub(crate) fn update_inheritance_scope(
         &mut self,
-        ctx: &mut PluginElementRemountContext,
+        tree: &Tree<ElementId, Element>,
+        needs_build: &mut Dirty<ElementId>,
         element_id: ElementId,
         new_scope_id: Option<ElementId>,
     ) {
@@ -153,11 +156,16 @@ impl InheritanceManager {
                 // since it may be that its available scopes have changed.
 
                 let child_scope_ids = self
-                    .update_ancestor_scope(ctx, element_id, scope.ancestor_scope(), new_scope_id)
+                    .update_ancestor_scope(
+                        needs_build,
+                        element_id,
+                        scope.ancestor_scope(),
+                        new_scope_id,
+                    )
                     .to_vec();
 
                 for child_scope_id in child_scope_ids {
-                    self.update_inheritance_scope(ctx, child_scope_id, new_scope_id);
+                    self.update_inheritance_scope(tree, needs_build, child_scope_id, new_scope_id);
                 }
             }
 
@@ -167,15 +175,15 @@ impl InheritanceManager {
                     return;
                 }
 
-                self.update_scope(ctx, element_id, node.scope(), new_scope_id);
+                self.update_scope(needs_build, element_id, node.scope(), new_scope_id);
 
-                for child_id in ctx
-                    .elements()
+                for child_id in tree
                     .get_children(element_id)
-                    .cloned()
-                    .unwrap_or_default()
+                    .expect("element missing from tree while updating its inheritance scope")
+                    .iter()
+                    .copied()
                 {
-                    self.update_inheritance_scope(ctx, child_id, new_scope_id);
+                    self.update_inheritance_scope(tree, needs_build, child_id, new_scope_id);
                 }
             }
         }
@@ -186,7 +194,7 @@ impl InheritanceManager {
     // must be updated.
     fn update_ancestor_scope(
         &mut self,
-        ctx: &mut PluginElementRemountContext,
+        needs_build: &mut Dirty<ElementId>,
         element_id: ElementId,
         old_ancestor_scope_id: Option<ElementId>,
         new_ancestor_scope_id: Option<ElementId>,
@@ -261,7 +269,7 @@ impl InheritanceManager {
                 // Mark every element that depends on this type dirty
                 scope
                     .get_dependents(&type_id)
-                    .for_each(|element_id| ctx.needs_build.insert(element_id));
+                    .for_each(|element_id| needs_build.insert(element_id));
             }
 
             scope.child_scopes().to_vec()
@@ -273,7 +281,7 @@ impl InheritanceManager {
     // marking it as dirty if necessary.
     fn update_scope(
         &mut self,
-        ctx: &mut PluginElementRemountContext,
+        needs_build: &mut Dirty<ElementId>,
         element_id: ElementId,
         old_scope_id: Option<ElementId>,
         new_scope_id: Option<ElementId>,
@@ -322,7 +330,7 @@ impl InheritanceManager {
                     .and_then(|available_scopes| available_scopes.get(&type_id).copied())
             {
                 // If the new dependency is different from the old one, mark the node as dirty
-                ctx.needs_build.insert(element_id);
+                needs_build.insert(element_id);
 
                 break;
             }
@@ -391,63 +399,65 @@ impl InheritanceManager {
     }
 
     pub(crate) fn remove(&mut self, element_id: ElementId) {
-        if let Some(inheritance) = self.map.remove(&element_id) {
-            tracing::trace!(
-                element_id = &format!("{:?}", element_id),
-                "removing inheritance entry"
-            );
+        let Some(inheritance) = self.map.remove(&element_id) else {
+            return;
+        };
 
-            match inheritance {
-                Inheritance::Scope(scope) => {
-                    // Remove this scope from its direct ancestor
-                    if let Some(ancestor_scope) = scope
-                        .ancestor_scope()
-                        .and_then(|ancestor_scope_id| self.get_as_scope_mut(ancestor_scope_id))
+        tracing::trace!(
+            element_id = &format!("{:?}", element_id),
+            "removing inheritance entry"
+        );
+
+        match inheritance {
+            Inheritance::Scope(scope) => {
+                // Remove this scope from its direct ancestor
+                if let Some(ancestor_scope) = scope
+                    .ancestor_scope()
+                    .and_then(|ancestor_scope_id| self.get_as_scope_mut(ancestor_scope_id))
+                {
+                    ancestor_scope.remove_child_scope(element_id);
+                }
+
+                // We shouldn't need to notify listeners of this scope, since they're either pending
+                // removal or they were reparented and their scope has already been updated
+
+                // However, we need to grab the dependents within our scope and remove them from
+                // the scopes they were listening to so we don't leave stale references to them in
+                // those scopes
+                for (type_id, dependents) in scope.iter_dependents() {
+                    if let Some(target_scope) = scope
+                        .available_scopes()
+                        .get(&type_id)
+                        .and_then(|target_scope_id| self.get_as_scope_mut(*target_scope_id))
                     {
-                        ancestor_scope.remove_child_scope(element_id);
-                    }
-
-                    // We shouldn't need to notify listeners of this scope, since they're either pending
-                    // removal or they were reparented and their scope has already been updated
-
-                    // However, we need to grab the dependents within our scope and remove them from
-                    // the scopes they were listening to so we don't leave stale references to them in
-                    // those scopes
-                    for (type_id, dependents) in scope.iter_dependents() {
-                        if let Some(target_scope) = scope
-                            .available_scopes()
-                            .get(&type_id)
-                            .and_then(|target_scope_id| self.get_as_scope_mut(*target_scope_id))
-                        {
-                            for node_id in dependents {
-                                target_scope.remove_listener(node_id);
-                            }
+                        for node_id in dependents {
+                            target_scope.remove_listener(node_id);
                         }
                     }
                 }
+            }
 
-                Inheritance::Node(node) => {
-                    if let Some(scope) = node
-                        .scope()
-                        // During removal, the node's scope may no longer exist. If it was removed, it has
-                        // already cleaned up our listeners.
-                        .and_then(|scope_id| self.get_as_scope_mut(scope_id))
-                    {
-                        let mut listening_to = Vec::new();
+            Inheritance::Node(node) => {
+                if let Some(scope) = node
+                    .scope()
+                    // During removal, the node's scope may no longer exist. If it was removed, it has
+                    // already cleaned up our listeners.
+                    .and_then(|scope_id| self.get_as_scope_mut(scope_id))
+                {
+                    let mut listening_to = Vec::new();
 
-                        for type_id in node.iter_dependencies() {
-                            listening_to.extend(scope.available_scopes().get(&type_id).copied());
+                    for type_id in node.iter_dependencies() {
+                        listening_to.extend(scope.available_scopes().get(&type_id).copied());
 
-                            // Remove the tracked dependencies from the node's scope
-                            scope.remove_dependent(&type_id, element_id);
-                        }
+                        // Remove the tracked dependencies from the node's scope
+                        scope.remove_dependent(&type_id, element_id);
+                    }
 
-                        // Loop the dependencies and remove this node from the scopes that it's listening to
-                        for dependency_id in listening_to {
-                            // During removals, the scope may not exist
-                            if let Some(scope) = self.get_as_scope_mut(dependency_id) {
-                                scope.remove_listener(element_id);
-                            }
+                    // Loop the dependencies and remove this node from the scopes that it's listening to
+                    for dependency_id in listening_to {
+                        // During removals, the scope may not exist
+                        if let Some(scope) = self.get_as_scope_mut(dependency_id) {
+                            scope.remove_listener(element_id);
                         }
                     }
                 }
@@ -457,7 +467,7 @@ impl InheritanceManager {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Inheritance {
+enum Inheritance {
     Scope(InheritanceScope),
     Node(InheritanceNode),
 }
@@ -483,46 +493,15 @@ impl Inheritance {
 mod tests {
     use std::any::TypeId;
 
-    use agui_core::{element::ElementId, widget::Widget};
-    use agui_macros::InheritedWidget;
+    use crate::{element::ElementId, inheritance::InheritanceManager};
     use slotmap::KeyData;
-
-    use super::InheritanceManager;
-    use crate::InheritedWidget;
 
     fn new_element(idx: u64) -> ElementId {
         ElementId::from(KeyData::from_ffi(idx))
     }
 
-    #[derive(InheritedWidget)]
-    struct TestWidget1 {
-        child: Widget,
-    }
-
-    impl InheritedWidget for TestWidget1 {
-        fn child(&self) -> Widget {
-            self.child.clone()
-        }
-
-        fn should_notify(&self, _: &Self) -> bool {
-            true
-        }
-    }
-
-    #[derive(InheritedWidget)]
-    struct TestWidget2 {
-        child: Widget,
-    }
-
-    impl InheritedWidget for TestWidget2 {
-        fn child(&self) -> Widget {
-            self.child.clone()
-        }
-
-        fn should_notify(&self, _: &Self) -> bool {
-            true
-        }
-    }
+    struct TestWidget1;
+    struct TestWidget2;
 
     #[test]
     fn scope_provides_itself() {
@@ -607,8 +586,7 @@ mod tests {
         inheritance_manager.create_node(Some(scope_id), element_id);
 
         assert_eq!(
-            inheritance_manager
-                .depend_on_inherited_element(element_id, TypeId::of::<TestWidget1>()),
+            inheritance_manager.depend_on_type(element_id, TypeId::of::<TestWidget1>()),
             Some(scope_id)
         );
 

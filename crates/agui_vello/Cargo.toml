@@ -18,7 +18,6 @@ window = ["dep:raw-window-handle", "agui_renderer/window"]
 agui_core.workspace = true
 agui_macros.workspace = true
 
-agui_inheritance.workspace = true
 agui_primitives.workspace = true
 
 agui_renderer.workspace = true

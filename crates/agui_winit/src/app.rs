@@ -1,9 +1,6 @@
 use agui_core::callback::Callback;
 use agui_renderer::RenderWindow;
-use futures::{
-    executor::{LocalPool, LocalSpawner},
-    task::LocalSpawnExt,
-};
+use futures::{executor::LocalPool, task::LocalSpawnExt};
 use rustc_hash::FxHashMap;
 use winit::{
     event::Event as WinitEvent,

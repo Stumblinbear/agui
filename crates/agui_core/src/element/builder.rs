@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::ElementType;
+use crate::element::ElementType;
 
 pub trait ElementBuilder: 'static {
     fn create_element(self: Rc<Self>) -> ElementType;

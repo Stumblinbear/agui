@@ -22,9 +22,10 @@ use crate::{
 pub struct RenderManager {
     tree: Tree<RenderObjectId, RenderObject>,
 
+    elements: SecondaryMap<ElementId, RenderObjectId>,
+
     create_render_object: VecDeque<ElementId>,
     update_render_object: FxHashSet<ElementId>,
-    sync_render_object_children: FxHashSet<ElementId>,
     forgotten_elements: FxHashSet<ElementId>,
 
     needs_layout: Dirty<RenderObjectId>,
@@ -57,10 +58,6 @@ impl RenderManager {
 
     pub fn on_needs_update(&mut self, element_id: ElementId) {
         self.update_render_object.insert(element_id);
-    }
-
-    pub fn on_children_changed(&mut self, element_id: ElementId) {
-        self.sync_render_object_children.insert(element_id);
     }
 
     pub fn forget_element(&mut self, element_id: ElementId) {
@@ -101,8 +98,6 @@ impl RenderManager {
                 continue;
             };
 
-            let (render_object, children) = render_node.into();
-
             let constraints = self
                 .tree
                 .get_parent(render_object_id)
@@ -115,7 +110,7 @@ impl RenderManager {
             // during layout. This is important for performant responsivity, since
             // some elements may want to change which children they have based on
             // the parent element's size constraints.
-            render_object.layout(
+            render_node.value().layout(
                 &mut RenderObjectLayoutContext {
                     render_object_tree: &self.tree,
 
@@ -125,7 +120,7 @@ impl RenderManager {
 
                     render_object_id: &render_object_id,
 
-                    children,
+                    children: render_node.children(),
 
                     constraints: &mut self.cached_constraints,
 
@@ -268,7 +263,7 @@ impl RenderManager {
     }
 
     #[tracing::instrument(level = "trace", skip(self, element_tree))]
-    pub fn sync_render_objects(&mut self, element_tree: &mut Tree<ElementId, Element>) {
+    pub fn sync_render_objects(&mut self, element_tree: &Tree<ElementId, Element>) {
         // No need to update render objects that are about to be created.
         if self.update_render_object.len() <= self.create_render_object.len() {
             self.update_render_object
@@ -289,30 +284,61 @@ impl RenderManager {
         }
 
         for element_id in self
-            .sync_render_object_children
+            .update_render_object
             .drain()
             .filter(|element_id| !self.forgotten_elements.contains(element_id))
         {
-            // Elements that were removed should still be available in the tree, so this should
-            // never fail.
-            let (element, children) = element_tree
+            let element_node = element_tree
                 .get_node(element_id)
-                .expect("element missing while syncing render object children")
-                .into();
+                .expect("element missing while yodatubg render objects");
 
-            if let Some(render_object_id) = element.render_object_id() {
+            let render_object_id = self
+                .elements
+                .get(element_id)
+                .copied()
+                .expect("element has no render object to update");
+
+            let render_object = self
+                .tree
+                .get_mut(render_object_id)
+                .expect("render object missing while updating");
+
+            let mut needs_layout = false;
+            let mut needs_paint = false;
+
+            element_node.as_ref().update_render_object(
+                &mut RenderObjectUpdateContext {
+                    needs_layout: &mut needs_layout,
+                    needs_paint: &mut needs_paint,
+
+                    element_id: &element_id,
+
+                    render_object_id: &render_object_id,
+                },
+                render_object,
+            );
+
+            if needs_layout {
+                self.needs_layout.insert(
+                    render_object
+                        .relayout_boundary_id()
+                        .unwrap_or(render_object_id),
+                )
+            }
+
+            if needs_paint {
+                self.needs_paint.insert(render_object_id);
+            }
+
+            if let Some(render_object_id) = self.elements.get(element_id).copied() {
                 let mut first_child_render_object_id = None;
 
-                let children = children.to_vec();
-
-                // Yank the render objects of the element's children from wheverever they are in
-                // the tree to the end of the list.
-                for child_id in children {
-                    let child_render_object_id = element_tree
-                        .get(child_id)
-                        .expect("child element missing while syncing render object children")
-                        .render_object_id()
-                        .expect("child element has no render object");
+                // Reorder the element children's render objects to match the element's children.
+                for child_element_id in element_node.children().iter().copied() {
+                    let child_render_object_id =
+                        self.elements.get(child_element_id).copied().expect(
+                            "child element has no render object while syncing render object",
+                        );
 
                     self.tree
                         .reparent(Some(render_object_id), child_render_object_id);
@@ -339,11 +365,8 @@ impl RenderManager {
         }
 
         // Remove any render objects owned by elements that are being removed.
-        for element_id in self.forgotten_elements.iter().copied() {
-            if let Some(render_object_id) = element_tree
-                .get(element_id)
-                .and_then(|element| element.render_object_id())
-            {
+        for element_id in self.forgotten_elements.drain() {
+            if let Some(render_object_id) = self.elements.remove(element_id) {
                 if let Some(render_object) = self.tree.remove(render_object_id) {
                     if let Some(RenderView::Within(view_object_id)) = render_object.render_view() {
                         if let Some(view_object) = self.tree.get_mut(*view_object_id) {
@@ -360,62 +383,12 @@ impl RenderManager {
                 self.cached_constraints.remove(render_object_id);
             }
         }
-
-        for element_id in self
-            .update_render_object
-            .drain()
-            .filter(|element_id| !self.forgotten_elements.contains(element_id))
-        {
-            let element = element_tree
-                .get(element_id)
-                .expect("element missing while updating render objects");
-
-            let render_object_id = element
-                .render_object_id()
-                .expect("element has no render object to update");
-
-            let render_object = self
-                .tree
-                .get_mut(render_object_id)
-                .expect("render object missing while updating");
-
-            let element = element_tree
-                .get_mut(element_id)
-                .expect("element missing while creating render objects");
-
-            let mut needs_layout = false;
-            let mut needs_paint = false;
-
-            element.update_render_object(
-                &mut RenderObjectUpdateContext {
-                    needs_layout: &mut needs_layout,
-                    needs_paint: &mut needs_paint,
-
-                    element_id: &element_id,
-
-                    render_object_id: &render_object_id,
-                },
-                render_object,
-            );
-
-            if needs_layout {
-                self.needs_layout.insert(
-                    render_object
-                        .relayout_boundary_id()
-                        .unwrap_or(render_object_id),
-                )
-            }
-
-            if needs_paint {
-                self.needs_paint.insert(render_object_id);
-            }
-        }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn create_render_object(
         &mut self,
-        element_tree: &mut Tree<ElementId, Element>,
+        element_tree: &Tree<ElementId, Element>,
         element_id: ElementId,
     ) {
         let (relayout_boundary_id, parent_render_object_id, parent_view_object) = element_tree
@@ -425,9 +398,12 @@ impl RenderManager {
                     .get(parent_element_id)
                     .expect("parent element missing while creating render object");
 
-                let parent_render_object_id = parent_element
-                    .render_object_id()
-                    .expect("parent element has no render object while creating render object");
+                let Some(parent_render_object_id) = self
+                .elements
+                .get(parent_element_id)
+                .copied() else {
+                    panic!("parent element {:?} has no render object while creating render object {:?}", parent_element_id, element_id);
+                };
 
                 if let ElementType::View(_) = parent_element.as_ref() {
                     return (
@@ -454,20 +430,20 @@ impl RenderManager {
             })
             .unwrap_or_default();
 
-        let element = element_tree
-            .get_mut(element_id)
-            .expect("element missing while creating render objects");
-
-        if let Some(render_object_id) = element.render_object_id() {
+        if let Some(render_object_id) = self.elements.get(element_id) {
             panic!(
                 "element already has a render object: {:?}",
                 render_object_id
             );
         }
 
+        let element = element_tree
+            .get(element_id)
+            .expect("element missing while creating render objects");
+
         self.tree
             .add_with_key(parent_render_object_id, |tree, render_object_id| {
-                element.set_render_object_id(render_object_id);
+                self.elements.insert(element_id, render_object_id);
 
                 let mut render_object =
                     element.create_render_object(&mut RenderObjectCreateContext {
@@ -481,7 +457,7 @@ impl RenderManager {
                     ..Default::default()
                 });
 
-                if let ElementType::View(element) = element.as_mut() {
+                if let ElementType::View(element) = element.as_ref() {
                     let mut view = element.create_view();
 
                     // Attach the render object as the root of its own view

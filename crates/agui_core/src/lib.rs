@@ -10,8 +10,7 @@
 pub mod callback;
 pub mod element;
 pub mod engine;
-pub mod listenable;
-pub mod plugin;
+pub mod inheritance;
 pub mod query;
 pub mod render;
 pub mod unit;

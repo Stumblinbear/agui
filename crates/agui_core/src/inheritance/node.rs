@@ -1,6 +1,6 @@
 use std::any::TypeId;
 
-use agui_core::{element::ElementId, util::map::TypeIdSet};
+use crate::{element::ElementId, util::map::TypeIdSet};
 
 #[derive(PartialEq, Debug, Default)]
 pub struct InheritanceNode {

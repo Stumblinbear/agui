@@ -188,13 +188,12 @@ impl ChildLayoutMut<'_> {
     fn do_layout(&mut self, constraints: Constraints, parent_uses_size: bool) -> Size {
         let render_object_id = self.render_object_id();
 
-        let (render_object, children) = self
+        let render_node = self
             .render_object_tree
             .get_node(render_object_id)
-            .expect("child render object missing during layout")
-            .into();
+            .expect("child render object missing during layout");
 
-        render_object.layout(
+        render_node.value().layout(
             &mut RenderObjectLayoutContext {
                 render_object_tree: self.render_object_tree,
 
@@ -204,7 +203,7 @@ impl ChildLayoutMut<'_> {
 
                 render_object_id: &render_object_id,
 
-                children,
+                children: render_node.children(),
 
                 constraints: self.constraints,
 

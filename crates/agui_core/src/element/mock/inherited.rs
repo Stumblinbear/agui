@@ -1,11 +1,9 @@
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use agui_core::{
-    callback::CallbackId,
+use crate::{
     element::{
-        build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementBuilder,
-        ElementCallbackContext, ElementMountContext, ElementType, ElementUnmountContext,
-        ElementUpdate,
+        inherited::ElementInherited, widget::ElementWidget, ElementBuilder, ElementMountContext,
+        ElementType, ElementUnmountContext, ElementUpdate,
     },
     widget::{IntoWidget, Widget},
 };
@@ -20,14 +18,9 @@ pub trait InheritedElement {
 
     fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
 
-    fn build<'ctx>(&mut self, ctx: &mut ElementBuildContext<'ctx>) -> Widget;
+    fn child(&self) -> Widget;
 
-    fn call<'ctx>(
-        &mut self,
-        ctx: &mut ElementCallbackContext<'ctx>,
-        callback_id: CallbackId,
-        arg: Box<dyn Any>,
-    ) -> bool;
+    fn needs_notify(&mut self) -> bool;
 }
 
 #[derive(Default)]
@@ -51,7 +44,7 @@ impl IntoWidget for MockInheritedWidget {
 
 impl ElementBuilder for MockInheritedWidget {
     fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::new_widget(MockElement::new(self))
+        ElementType::new_inherited(MockElement::new(self))
     }
 }
 
@@ -71,17 +64,12 @@ impl ElementWidget for MockElement {
     }
 }
 
-impl ElementBuild for MockElement {
-    fn build(&mut self, ctx: &mut ElementBuildContext) -> Widget {
-        self.widget.mock.borrow_mut().build(ctx)
+impl ElementInherited for MockElement {
+    fn child(&self) -> Widget {
+        self.widget.mock.borrow().child()
     }
 
-    fn call(
-        &mut self,
-        ctx: &mut ElementCallbackContext,
-        callback_id: CallbackId,
-        arg: Box<dyn Any>,
-    ) -> bool {
-        self.widget.mock.borrow_mut().call(ctx, callback_id, arg)
+    fn needs_notify(&mut self) -> bool {
+        self.widget.mock.borrow_mut().needs_notify()
     }
 }

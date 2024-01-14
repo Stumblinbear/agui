@@ -1,6 +1,6 @@
 use std::{any::TypeId, hash::BuildHasherDefault};
 
-use agui_core::{
+use crate::{
     element::ElementId,
     util::{hasher::TypeIdHasher, map::TypeIdMap},
 };

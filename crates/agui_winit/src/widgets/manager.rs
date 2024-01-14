@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use agui_core::{callback::Callback, widget::Widget};
-use agui_inheritance::InheritedWidget;
+use agui_elements::inherited::InheritedWidget;
 use agui_macros::InheritedWidget;
 use agui_renderer::RenderWindow;
 use winit::{event_loop::EventLoopProxy, window::WindowBuilder};

@@ -76,7 +76,7 @@ impl ElementRender for MockElement {
         self.widget.mock.borrow().children()
     }
 
-    fn create_render_object(&mut self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         self.widget.mock.borrow_mut().create_render_object(ctx)
     }
 
@@ -88,7 +88,7 @@ impl ElementRender for MockElement {
     }
 
     fn update_render_object(
-        &mut self,
+        &self,
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut RenderObject,
     ) {

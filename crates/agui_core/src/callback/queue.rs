@@ -1,9 +1,8 @@
 use std::{any::Any, sync::Arc};
 
 use parking_lot::Mutex;
-use smallbox::{smallbox, SmallBox};
 
-use crate::unit::AsAny;
+use crate::{engine::update_notifier::UpdateNotifier, unit::AsAny};
 
 use super::CallbackId;
 
@@ -12,18 +11,14 @@ pub struct CallbackQueue(Arc<InnerCallbackQueue>);
 
 struct InnerCallbackQueue {
     queue: Mutex<Vec<CallbackInvoke>>,
-    notifier: SmallBox<dyn Fn(), smallbox::space::S2>,
+    notifier: UpdateNotifier,
 }
 
 impl CallbackQueue {
-    #[allow(clippy::arc_with_non_send_sync)]
-    pub(crate) fn new<F>(notifier: F) -> Self
-    where
-        F: Fn() + 'static,
-    {
+    pub(crate) fn new(notifier: UpdateNotifier) -> Self {
         Self(Arc::new(InnerCallbackQueue {
             queue: Mutex::default(),
-            notifier: smallbox!(notifier),
+            notifier,
         }))
     }
 
@@ -44,7 +39,7 @@ impl CallbackQueue {
             .lock()
             .push(CallbackInvoke { callback_id, arg });
 
-        (self.0.notifier)();
+        self.0.notifier.notify();
     }
 
     /// # Panics
@@ -70,7 +65,7 @@ impl CallbackQueue {
                     }),
             );
 
-        (self.0.notifier)();
+        self.0.notifier.notify();
     }
 }
 
