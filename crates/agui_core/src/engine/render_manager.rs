@@ -225,13 +225,6 @@ impl RenderManager {
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_view_sync(&mut self) {
         for render_object_id in self.needs_sync.drain().map(|(id, _)| id) {
-            // self.tree
-            //     .get_mut(render_object_id)
-            //     .expect("render object missing while syncing")
-            //     .render_view()
-            //     .expect("render object has no view while syncing")
-            //     .on_sync()
-
             let render_object = self
                 .tree
                 .get_mut(render_object_id)

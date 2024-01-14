@@ -34,7 +34,7 @@ pub enum Callback<A> {
 
 impl<A> Callback<A>
 where
-    A: AsAny,
+    A: AsAny + Send,
 {
     pub fn call(&self, arg: A) {
         match self {
@@ -48,7 +48,7 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub fn call_unchecked(&self, arg: Box<dyn Any>) {
+    pub fn call_unchecked(&self, arg: Box<dyn Any + Send>) {
         match self {
             Self::None => {}
             Self::Widget(cb) => cb.call_unchecked(arg),
@@ -89,7 +89,7 @@ pub struct WidgetCallback<A> {
 
 impl<A> WidgetCallback<A>
 where
-    A: AsAny,
+    A: AsAny + Send,
 {
     pub fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
         Self::new_unchecked(element_id, TypeId::of::<F>(), callback_queue)
@@ -124,7 +124,7 @@ where
     ///
     /// You must ensure the callback is expecting the type of the `args` passed in. If the type
     /// is different, it will panic.
-    pub fn call_unchecked(&self, arg: Box<dyn Any>) {
+    pub fn call_unchecked(&self, arg: Box<dyn Any + Send>) {
         self.callback_queue.call_unchecked(self.id, arg);
     }
 }

@@ -33,7 +33,7 @@ impl CallbackQueue {
     /// # Panics
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
-    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any>) {
+    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any + Send>) {
         self.0
             .queue
             .lock()
@@ -50,7 +50,7 @@ impl CallbackQueue {
         callback_ids: impl IntoIterator<Item = &'a CallbackId>,
         arg: A,
     ) where
-        A: AsAny + Clone,
+        A: AsAny + Send + Clone,
     {
         self.0
             .queue
@@ -71,5 +71,5 @@ impl CallbackQueue {
 
 pub(crate) struct CallbackInvoke {
     pub callback_id: CallbackId,
-    pub arg: Box<dyn Any>,
+    pub arg: Box<dyn Any + Send>,
 }

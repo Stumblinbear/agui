@@ -54,7 +54,7 @@ impl<'ctx, W> DerefMut for StatelessBuildContext<'ctx, '_, W> {
 impl<W: 'static> StatelessBuildContext<'_, '_, W> {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
-        A: AsAny,
+        A: AsAny + Send,
         F: Fn(&mut StatelessCallbackContext, A) + 'static,
     {
         let callback = WidgetCallback::new::<F>(self.element_id(), self.callback_queue().clone());
