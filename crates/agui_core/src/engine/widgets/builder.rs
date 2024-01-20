@@ -1,12 +1,13 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::mpsc};
 
 use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
     engine::{
+        bindings::{ElementBinding, SchedulerBinding},
         update_notifier::UpdateNotifier,
-        widgets::{WidgetManager, WidgetManagerHooks},
+        widgets::WidgetManager,
         Dirty,
     },
     inheritance::InheritanceManager,
@@ -14,53 +15,81 @@ use crate::{
     widget::{IntoWidget, Widget},
 };
 
-pub struct WidgetManagerBuilder<H, const HAS_ROOT: bool> {
-    hooks: H,
+pub struct WidgetManagerBuilder<EB, SB, const HAS_ROOT: bool> {
+    element_binding: EB,
+    scheduler: SB,
+
     root: Option<Widget>,
 }
 
-impl Default for WidgetManagerBuilder<(), false> {
+impl Default for WidgetManagerBuilder<(), (), false> {
     fn default() -> Self {
         Self {
-            hooks: (),
+            element_binding: (),
+            scheduler: (),
+
             root: None,
         }
     }
 }
 
-impl<const HAS_ROOT: bool> WidgetManagerBuilder<(), HAS_ROOT> {
-    pub fn with_hooks<H>(self, hooks: H) -> WidgetManagerBuilder<H, HAS_ROOT>
+impl<SB, const HAS_ROOT: bool> WidgetManagerBuilder<(), SB, HAS_ROOT> {
+    pub fn with_element_binding<EB>(
+        self,
+        element_binding: EB,
+    ) -> WidgetManagerBuilder<EB, SB, HAS_ROOT>
     where
-        H: WidgetManagerHooks,
+        EB: ElementBinding,
     {
         WidgetManagerBuilder {
-            hooks,
+            element_binding,
+            scheduler: self.scheduler,
+
             root: self.root,
         }
     }
 }
 
-impl<H> WidgetManagerBuilder<H, false> {
-    pub fn with_root<W>(self, root: W) -> WidgetManagerBuilder<H, true>
+impl<EB, const HAS_ROOT: bool> WidgetManagerBuilder<EB, (), HAS_ROOT> {
+    pub fn with_scheduler<SB>(self, scheduler: SB) -> WidgetManagerBuilder<EB, SB, HAS_ROOT>
+    where
+        SB: SchedulerBinding,
+    {
+        WidgetManagerBuilder {
+            element_binding: self.element_binding,
+            scheduler,
+
+            root: self.root,
+        }
+    }
+}
+
+impl<EB, SB> WidgetManagerBuilder<EB, SB, false> {
+    pub fn with_root<W>(self, root: W) -> WidgetManagerBuilder<EB, SB, true>
     where
         W: IntoWidget,
     {
         WidgetManagerBuilder {
-            hooks: self.hooks,
+            element_binding: self.element_binding,
+            scheduler: self.scheduler,
+
             root: Some(root.into_widget()),
         }
     }
 }
 
-impl<H> WidgetManagerBuilder<H, true>
+impl<EB, SB> WidgetManagerBuilder<EB, SB, true>
 where
-    H: WidgetManagerHooks,
+    EB: ElementBinding,
+    SB: SchedulerBinding,
 {
-    pub fn build(self) -> WidgetManager<H> {
+    pub fn build(self) -> WidgetManager<EB, SB> {
+        let (callback_tx, callback_rx) = mpsc::channel();
         let notifier = UpdateNotifier::new();
 
         let mut manager = WidgetManager {
-            hooks: self.hooks,
+            element_binding: self.element_binding,
+            scheduler: self.scheduler,
 
             notifier: notifier.clone(),
 
@@ -69,7 +98,9 @@ where
             inheritance: InheritanceManager::default(),
 
             needs_build: Dirty::new(),
-            callback_queue: CallbackQueue::new(notifier.clone()),
+
+            callback_rx,
+            callback_queue: CallbackQueue::new(callback_tx, notifier.clone()),
 
             rebuild_queue: VecDeque::default(),
             forgotten_elements: FxHashSet::default(),

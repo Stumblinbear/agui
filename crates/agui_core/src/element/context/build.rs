@@ -1,9 +1,11 @@
-use std::{any::TypeId, rc::Rc};
+use std::{any::TypeId, future::Future, rc::Rc};
+
+use futures::{future::RemoteHandle, task::SpawnError};
 
 use crate::{
-    callback::{CallbackQueue, ContextCallbackQueue},
+    callback::CallbackQueue,
     element::{Element, ElementId, ElementType},
-    engine::Dirty,
+    engine::{bindings::SchedulerBinding, Dirty},
     inheritance::InheritanceManager,
     util::tree::Tree,
     widget::AnyWidget,
@@ -12,6 +14,8 @@ use crate::{
 use super::{ContextElement, ContextElements};
 
 pub struct ElementBuildContext<'ctx> {
+    pub(crate) scheduler: &'ctx mut dyn SchedulerBinding,
+
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub inheritance: &'ctx mut InheritanceManager,
     pub callback_queue: &'ctx CallbackQueue,
@@ -33,13 +37,23 @@ impl ContextElement for ElementBuildContext<'_> {
     }
 }
 
-impl ContextCallbackQueue for ElementBuildContext<'_> {
-    fn callback_queue(&self) -> &CallbackQueue {
-        self.callback_queue
-    }
-}
-
 impl ElementBuildContext<'_> {
+    pub fn spawn_local<Fut>(&mut self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
+    where
+        Fut: Future<Output = ()> + 'static,
+    {
+        self.scheduler
+            .spawn_local_task(*self.element_id, Box::pin(future))
+    }
+
+    pub fn spawn_shared<Fut>(&mut self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
+    where
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        self.scheduler
+            .spawn_shared_task(*self.element_id, Box::pin(future))
+    }
+
     pub fn find_inherited_widget<I>(&self) -> Option<Rc<I>>
     where
         I: AnyWidget,

@@ -57,21 +57,3 @@ impl ContextElement for ElementContext<'_> {
         *self.element_id
     }
 }
-
-pub struct ElementContextMut<'ctx> {
-    pub(crate) element_tree: &'ctx mut Tree<ElementId, Element>,
-
-    pub element_id: &'ctx ElementId,
-}
-
-impl ContextElements for ElementContextMut<'_> {
-    fn elements(&self) -> &Tree<ElementId, Element> {
-        self.element_tree
-    }
-}
-
-impl ContextElement for ElementContextMut<'_> {
-    fn element_id(&self) -> ElementId {
-        *self.element_id
-    }
-}

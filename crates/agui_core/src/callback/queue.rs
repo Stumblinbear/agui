@@ -1,75 +1,65 @@
-use std::{any::Any, sync::Arc};
+use std::{any::Any, ops::Deref, rc::Rc, sync::mpsc};
 
-use parking_lot::Mutex;
-
-use crate::{engine::update_notifier::UpdateNotifier, unit::AsAny};
+use crate::engine::update_notifier::UpdateNotifier;
 
 use super::CallbackId;
 
 #[derive(Clone)]
-pub struct CallbackQueue(Arc<InnerCallbackQueue>);
+pub struct CallbackQueue(Rc<LocalCallbackQueue>);
 
-struct InnerCallbackQueue {
-    queue: Mutex<Vec<CallbackInvoke>>,
+impl CallbackQueue {
+    pub(crate) fn new(tx: mpsc::Sender<InvokeCallback>, notifier: UpdateNotifier) -> Self {
+        Self(Rc::new(LocalCallbackQueue { tx, notifier }))
+    }
+}
+
+pub struct LocalCallbackQueue {
+    tx: mpsc::Sender<InvokeCallback>,
     notifier: UpdateNotifier,
 }
 
-impl CallbackQueue {
-    pub(crate) fn new(notifier: UpdateNotifier) -> Self {
-        Self(Arc::new(InnerCallbackQueue {
-            queue: Mutex::default(),
-            notifier,
-        }))
+impl LocalCallbackQueue {
+    /// # Panics
+    ///
+    /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
+    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any>) {
+        self.tx.send(InvokeCallback { callback_id, arg }).ok();
+        self.notifier.notify();
     }
 
-    pub(crate) fn take(&mut self) -> Vec<CallbackInvoke> {
-        self.0.queue.lock().drain(..).collect()
+    pub fn shared(&self) -> SharedCallbackQueue {
+        SharedCallbackQueue {
+            tx: self.tx.clone(),
+            notifier: self.notifier.clone(),
+        }
     }
+}
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.queue.lock().is_empty()
+impl Deref for CallbackQueue {
+    type Target = Rc<LocalCallbackQueue>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
+}
 
+#[derive(Clone)]
+pub struct SharedCallbackQueue {
+    tx: mpsc::Sender<InvokeCallback>,
+    notifier: UpdateNotifier,
+}
+
+impl SharedCallbackQueue {
     /// # Panics
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
     pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any + Send>) {
-        self.0
-            .queue
-            .lock()
-            .push(CallbackInvoke { callback_id, arg });
-
-        self.0.notifier.notify();
-    }
-
-    /// # Panics
-    ///
-    /// This function must be called with the expected `arg` for all of the `callback_ids`, or it will panic.
-    pub fn call_many_unchecked<'a, A>(
-        &self,
-        callback_ids: impl IntoIterator<Item = &'a CallbackId>,
-        arg: A,
-    ) where
-        A: AsAny + Send + Clone,
-    {
-        self.0
-            .queue
-            .lock()
-            .extend(
-                callback_ids
-                    .into_iter()
-                    .copied()
-                    .map(|callback_id| CallbackInvoke {
-                        callback_id,
-                        arg: Box::new(arg.clone()),
-                    }),
-            );
-
-        self.0.notifier.notify();
+        self.tx.send(InvokeCallback { callback_id, arg }).ok();
+        self.notifier.notify();
     }
 }
 
-pub(crate) struct CallbackInvoke {
+pub(crate) struct InvokeCallback {
     pub callback_id: CallbackId,
-    pub arg: Box<dyn Any + Send>,
+    pub arg: Box<dyn Any>,
 }

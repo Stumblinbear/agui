@@ -144,6 +144,8 @@ impl RenderManager {
 
             render_object.apply_layout_data(&layout_update);
 
+            let does_paint = render_object.does_paint();
+
             if let Some(view_object) = render_object.render_view_mut() {
                 let (view_object_id, view) = match view_object {
                     RenderView::Owner(ref mut view) => (render_object_id, view),
@@ -170,7 +172,7 @@ impl RenderManager {
                     view.on_offset_changed(render_object_id, offset);
                 }
 
-                if layout_update.size.is_some() {
+                if layout_update.size.is_some() && does_paint {
                     // TODO: how can we reduce repaints for render objects that don't
                     // need to be repainted when their size changes?
                     self.needs_paint.insert(render_object_id);
@@ -182,7 +184,7 @@ impl RenderManager {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_needs_paint(&mut self) {
+    pub fn flush_paint(&mut self) {
         for render_object_id in self.needs_paint.drain() {
             let render_object = self
                 .tree
@@ -223,7 +225,7 @@ impl RenderManager {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_view_sync(&mut self) {
+    pub fn sync_views(&mut self) {
         for render_object_id in self.needs_sync.drain().map(|(id, _)| id) {
             let render_object = self
                 .tree
@@ -378,7 +380,7 @@ impl RenderManager {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self, element_tree))]
     pub fn create_render_object(
         &mut self,
         element_tree: &Tree<ElementId, Element>,
@@ -477,7 +479,9 @@ impl RenderManager {
 
                 self.needs_layout.insert(relayout_boundary_id);
 
-                self.needs_paint.insert(render_object_id);
+                if render_object.does_paint() {
+                    self.needs_paint.insert(render_object_id);
+                }
 
                 render_object
             });

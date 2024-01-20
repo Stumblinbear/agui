@@ -67,6 +67,10 @@ impl RenderObjectImpl for RenderParagraph {
         constraints.smallest()
     }
 
+    fn does_paint(&self) -> bool {
+        true
+    }
+
     fn paint(&self, mut canvas: CanvasPainter) {
         let brush = canvas.add_paint(Paint {
             color: self.style.color,

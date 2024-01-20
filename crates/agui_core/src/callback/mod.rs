@@ -6,10 +6,8 @@ use std::{
 
 use crate::{element::ElementId, unit::AsAny, util::ptr_eq::PtrEqual};
 
-mod context;
 mod queue;
 
-pub use context::*;
 pub use queue::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -34,7 +32,7 @@ pub enum Callback<A> {
 
 impl<A> Callback<A>
 where
-    A: AsAny + Send,
+    A: AsAny,
 {
     pub fn call(&self, arg: A) {
         match self {
@@ -89,7 +87,7 @@ pub struct WidgetCallback<A> {
 
 impl<A> WidgetCallback<A>
 where
-    A: AsAny + Send,
+    A: AsAny,
 {
     pub fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
         Self::new_unchecked(element_id, TypeId::of::<F>(), callback_queue)

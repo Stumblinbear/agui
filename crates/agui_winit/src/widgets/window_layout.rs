@@ -35,6 +35,12 @@ impl RenderObjectWidget for WinitWindowLayout {
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut Self::RenderObject,
     ) {
+        tracing::info!(
+            "update_render_object {:?} {:?}",
+            ctx.render_object_id,
+            self.size
+        );
+
         render_object.update_size(ctx, self.size);
     }
 }
@@ -55,10 +61,6 @@ impl RenderWinitWindowLayout {
 }
 
 impl RenderObjectImpl for RenderWinitWindowLayout {
-    fn is_sized_by_parent(&self) -> bool {
-        true
-    }
-
     fn intrinsic_size(
         &self,
         ctx: &mut RenderObjectIntrinsicSizeContext,

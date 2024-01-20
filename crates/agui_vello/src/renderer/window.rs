@@ -104,8 +104,6 @@ impl RenderWindow for VelloWindowRenderer<Attached> {
         let render_surface = &mut self.state.render_surface;
         let renderer = &mut self.state.renderer;
 
-        let width = render_surface.config.width;
-        let height = render_surface.config.height;
         let device_handle = &render_context.devices[render_surface.dev_id];
 
         self.view_handle.with_scene(|scene| {
@@ -126,8 +124,8 @@ impl RenderWindow for VelloWindowRenderer<Attached> {
 
             let render_params = vello::RenderParams {
                 base_color: vello::peniko::Color::BLACK,
-                width,
-                height,
+                width: scene.size.width as u32,
+                height: scene.size.height as u32,
                 antialiasing_method: AaConfig::Area,
             };
 

@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use agui_core::{
-    callback::{Callback, CallbackId, CallbackQueue, ContextCallbackQueue, WidgetCallback},
+    callback::{Callback, CallbackId, WidgetCallback},
     element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
     unit::AsAny,
     util::tree::Tree,
@@ -31,12 +31,6 @@ impl<W> ContextElement for StatelessBuildContext<'_, '_, W> {
     }
 }
 
-impl<W> ContextCallbackQueue for StatelessBuildContext<'_, '_, W> {
-    fn callback_queue(&self) -> &CallbackQueue {
-        self.inner.callback_queue()
-    }
-}
-
 impl<'ctx, W> Deref for StatelessBuildContext<'ctx, '_, W> {
     type Target = ElementBuildContext<'ctx>;
 
@@ -54,10 +48,10 @@ impl<'ctx, W> DerefMut for StatelessBuildContext<'ctx, '_, W> {
 impl<W: 'static> StatelessBuildContext<'_, '_, W> {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
-        A: AsAny + Send,
+        A: AsAny,
         F: Fn(&mut StatelessCallbackContext, A) + 'static,
     {
-        let callback = WidgetCallback::new::<F>(self.element_id(), self.callback_queue().clone());
+        let callback = WidgetCallback::new::<F>(*self.element_id, self.callback_queue.clone());
 
         self.callbacks
             .insert(callback.id(), Box::new(StatelessCallbackFn::new(func)));

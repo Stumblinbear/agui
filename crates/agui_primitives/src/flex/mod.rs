@@ -55,8 +55,7 @@ impl RenderObjectWidget for Flex {
 
             text_direction: self.text_direction,
 
-            clip_behavior: self.clip_behavior,
-
+            // clip_behavior: self.clip_behavior,
             children_params: self.children.iter().map(FlexChildParams::from).collect(),
         }
     }
@@ -75,6 +74,6 @@ impl RenderObjectWidget for Flex {
 
         render_object.update_text_direction(ctx, self.text_direction);
 
-        render_object.update_clip_behavior(ctx, self.clip_behavior);
+        // render_object.update_clip_behavior(ctx, self.clip_behavior);
     }
 }

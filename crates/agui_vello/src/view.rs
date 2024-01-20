@@ -1,9 +1,10 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use agui_core::{
     render::{canvas::Canvas, view::View, RenderObjectId},
     unit::{Offset, Size},
 };
+use async_channel::TrySendError;
 use parking_lot::RwLock;
 
 use crate::render::VelloScene;
@@ -40,7 +41,7 @@ impl VelloViewHandle {
 
 impl Default for VelloView {
     fn default() -> Self {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(1);
 
         Self {
             tx,
@@ -140,9 +141,9 @@ impl View for VelloView {
     fn on_sync(&mut self) {
         tracing::trace!("VelloView::on_sync");
 
+        // TODO: if this is locked, we should somehow check if another frame is ready and
+        // skip this one
         let mut scene = self.scene.write();
-
-        let now = Instant::now();
 
         for change in self.changes.drain(..) {
             match change {
@@ -170,11 +171,11 @@ impl View for VelloView {
             }
         }
 
-        tracing::trace!(elapsed = ?now.elapsed(), "synced render tree changes");
-
         scene.redraw();
 
-        self.tx.try_send(()).ok();
+        if let Err(TrySendError::Full(_)) = self.tx.try_send(()) {
+            tracing::warn!("sync occurred before the previous frame was rendered (frame skipped)");
+        }
     }
 }
 

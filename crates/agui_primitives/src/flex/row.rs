@@ -1,6 +1,6 @@
 use agui_core::{
     element::{RenderObjectCreateContext, RenderObjectUpdateContext},
-    unit::{Axis, ClipBehavior, TextDirection},
+    unit::{Axis, TextDirection},
     widget::Widget,
 };
 use agui_elements::render::RenderObjectWidget;
@@ -21,8 +21,7 @@ pub struct Row {
 
     pub text_direction: Option<TextDirection>,
 
-    pub clip_behavior: ClipBehavior,
-
+    // pub clip_behavior: ClipBehavior,
     pub children: Vec<Widget>,
 }
 
@@ -44,8 +43,7 @@ impl RenderObjectWidget for Row {
 
             text_direction: self.text_direction,
 
-            clip_behavior: self.clip_behavior,
-
+            // clip_behavior: self.clip_behavior,
             children_params: self.children.iter().map(FlexChildParams::from).collect(),
         }
     }
@@ -64,7 +62,7 @@ impl RenderObjectWidget for Row {
 
         render_object.update_text_direction(ctx, self.text_direction);
 
-        render_object.update_clip_behavior(ctx, self.clip_behavior);
+        // render_object.update_clip_behavior(ctx, self.clip_behavior);
 
         render_object.update_children_params(
             ctx,

@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use agui_core::{
     render::{canvas::Canvas, RenderObjectId},
     unit::{Offset, Size},
@@ -102,8 +100,6 @@ impl VelloScene {
 
         self.needs_redraw = false;
 
-        let now = Instant::now();
-
         let mut builder = SceneBuilder::for_scene(&mut self.scene);
 
         let mut object_stack = Vec::<(usize, RenderObjectId, Affine)>::new();
@@ -146,8 +142,6 @@ impl VelloScene {
 
             object.canvas.end(transform, &mut builder);
         }
-
-        tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 }
 

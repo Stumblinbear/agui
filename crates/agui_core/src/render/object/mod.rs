@@ -4,7 +4,7 @@ use crate::{
         view::RenderView,
         RenderObjectId,
     },
-    unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Size},
+    unit::{AsAny, Constraints, HitTest, HitTestResult, IntrinsicDimension, Offset, Rect, Size},
 };
 
 use super::canvas::{
@@ -84,15 +84,15 @@ impl RenderObject {
         self.render_view = render_view;
     }
 
-    pub fn relayout_boundary_id(&self) -> Option<RenderObjectId> {
+    pub const fn relayout_boundary_id(&self) -> Option<RenderObjectId> {
         self.layout_data.relayout_boundary_id
     }
 
-    pub fn size(&self) -> Size {
+    pub const fn size(&self) -> Size {
         self.layout_data.size
     }
 
-    pub fn offset(&self) -> Offset {
+    pub const fn offset(&self) -> Offset {
         self.layout_data.offset
     }
 
@@ -238,6 +238,14 @@ impl RenderObject {
         hit
     }
 
+    pub fn does_paint(&self) -> bool {
+        self.render_object.does_paint()
+    }
+
+    pub fn paint_bounds(&self) -> Rect {
+        self.render_object.paint_bounds(self.size())
+    }
+
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn paint(&self) -> Canvas {
         let mut canvas = Canvas {
@@ -367,6 +375,31 @@ pub trait RenderObjectImpl: AsAny + Send + Sync {
         }
 
         HitTest::Pass
+    }
+
+    /// Whether this render object is capable of painting.
+    ///
+    /// Returning `false` causes this render object to be skipped during painting,
+    /// which can be useful for render objects that only exist to provide layout
+    /// information.
+    ///
+    /// This should always return the same value for the lifetime of a given render
+    /// object.
+    fn does_paint(&self) -> bool {
+        false
+    }
+
+    /// Returns the area covered by the paint of this box.
+    ///
+    /// This method calculates the total area affected by the paint of this box, which
+    /// may differ from its size. The given size refers to the space allocated for the
+    /// box during layout, but the paint area can extend beyond this, such as in cases
+    /// where the box casts a shadow.
+    ///
+    /// The paint bounds provided by this method are relative to the box's local
+    /// coordinate system.
+    fn paint_bounds(&self, size: Size) -> Rect {
+        Offset::ZERO & size
     }
 
     #[allow(unused_variables)]

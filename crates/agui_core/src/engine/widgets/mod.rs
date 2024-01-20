@@ -1,14 +1,18 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::mpsc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    callback::{CallbackInvoke, CallbackQueue},
+    callback::{CallbackQueue, InvokeCallback},
     element::{
         Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
         ElementUnmountContext, ElementUpdate,
     },
-    engine::{update_notifier::UpdateNotifier, Dirty},
+    engine::{
+        bindings::{ElementBinding, SchedulerBinding},
+        update_notifier::UpdateNotifier,
+        Dirty,
+    },
     inheritance::InheritanceManager,
     query::WidgetQuery,
     unit::Key,
@@ -20,21 +24,9 @@ mod builder;
 
 pub use builder::*;
 
-#[allow(unused_variables)]
-pub trait WidgetManagerHooks {
-    fn on_element_spawned(&mut self, parent_id: Option<ElementId>, id: ElementId) {}
-
-    fn on_element_build(&mut self, id: ElementId) {}
-
-    fn on_element_needs_rebuild(&mut self, id: ElementId) {}
-
-    fn on_element_destroyed(&mut self, id: ElementId) {}
-}
-
-impl WidgetManagerHooks for () {}
-
-pub struct WidgetManager<H = ()> {
-    hooks: H,
+pub struct WidgetManager<EB = (), SB = ()> {
+    element_binding: EB,
+    scheduler: SB,
 
     notifier: UpdateNotifier,
 
@@ -43,14 +35,16 @@ pub struct WidgetManager<H = ()> {
     inheritance: InheritanceManager,
 
     needs_build: Dirty<ElementId>,
+
+    callback_rx: mpsc::Receiver<InvokeCallback>,
     callback_queue: CallbackQueue,
 
     rebuild_queue: VecDeque<ElementId>,
     forgotten_elements: FxHashSet<ElementId>,
 }
 
-impl WidgetManager<()> {
-    pub fn builder() -> WidgetManagerBuilder<(), false> {
+impl WidgetManager<(), ()> {
+    pub fn builder() -> WidgetManagerBuilder<(), (), false> {
         WidgetManagerBuilder::default()
     }
 
@@ -59,7 +53,7 @@ impl WidgetManager<()> {
     }
 }
 
-impl<H> WidgetManager<H> {
+impl<EB, SB> WidgetManager<EB, SB> {
     /// Get the element tree.
     pub fn tree(&self) -> &Tree<ElementId, Element> {
         &self.tree
@@ -87,25 +81,20 @@ impl<H> WidgetManager<H> {
         &self.callback_queue
     }
 
-    pub fn has_changes(&self) -> bool {
-        !self.rebuild_queue.is_empty()
-            || !self.needs_build.is_empty()
-            || !self.callback_queue.is_empty()
-    }
-
     /// Mark a widget as dirty, causing it to be rebuilt on the next update.
     pub fn mark_needs_build(&mut self, element_id: ElementId) {
         self.needs_build.insert(element_id);
     }
 
-    pub fn wait_for_update(&self) {
-        self.notifier.wait();
+    pub async fn wait_for_update(&self) {
+        self.notifier.wait().await;
     }
 }
 
-impl<H> WidgetManager<H>
+impl<EB, SB> WidgetManager<EB, SB>
 where
-    H: WidgetManagerHooks,
+    EB: ElementBinding,
+    SB: SchedulerBinding,
 {
     /// Update the UI tree.
     #[tracing::instrument(level = "trace", skip(self))]
@@ -114,27 +103,43 @@ where
 
         // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
         // cause an infinite loop, so be careful.
-        while self.has_changes() {
-            self.flush_rebuilds();
+        loop {
+            let mut did_change = false;
 
-            self.flush_dirty();
+            did_change |= self.flush_rebuilds();
 
-            self.flush_callbacks();
+            did_change |= self.flush_dirty();
+
+            did_change |= self.flush_callbacks();
+
+            if !did_change {
+                break;
+            }
         }
 
         self.flush_removals();
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_rebuilds(&mut self) {
+    pub fn flush_rebuilds(&mut self) -> bool {
+        if self.rebuild_queue.is_empty() {
+            return false;
+        }
+
         // Apply any queued modifications
         while let Some(element_id) = self.rebuild_queue.pop_front() {
             self.process_rebuild(element_id);
         }
+
+        true
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_dirty(&mut self) {
+    pub fn flush_dirty(&mut self) -> bool {
+        if self.needs_build.is_empty() {
+            return false;
+        }
+
         for element_id in self.needs_build.drain() {
             tracing::trace!(
                 ?element_id,
@@ -144,17 +149,21 @@ where
 
             self.rebuild_queue.push_back(element_id);
         }
+
+        true
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_callbacks(&mut self) {
-        let callback_invokes = self.callback_queue.take();
+    pub fn flush_callbacks(&mut self) -> bool {
+        let mut had_callbacks = false;
 
-        for CallbackInvoke {
+        while let Ok(InvokeCallback {
             callback_id,
             arg: callback_arg,
-        } in callback_invokes
+        }) = self.callback_rx.try_recv()
         {
+            had_callbacks = true;
+
             let element_id = callback_id.element_id();
 
             tracing::trace!(
@@ -169,6 +178,8 @@ where
                 .with(element_id, |tree, element| {
                     let changed = element.call(
                         &mut ElementCallbackContext {
+                            scheduler: &mut self.scheduler,
+
                             element_tree: tree,
                             needs_build: &mut self.needs_build,
 
@@ -200,6 +211,8 @@ where
                 );
             }
         }
+
+        had_callbacks
     }
 
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
@@ -220,7 +233,8 @@ where
             });
         });
 
-        self.hooks.on_element_spawned(parent_id, element_id);
+        self.element_binding
+            .on_element_spawned(parent_id, element_id);
 
         element_id
     }
@@ -236,6 +250,8 @@ where
                 .tree
                 .with(element_id, |tree, element| {
                     element.build(&mut ElementBuildContext {
+                        scheduler: &mut self.scheduler,
+
                         element_tree: tree,
                         inheritance: &mut self.inheritance,
 
@@ -248,7 +264,7 @@ where
                 })
                 .expect("cannot build a widget that doesn't exist");
 
-            self.hooks.on_element_build(element_id);
+            self.element_binding.on_element_build(element_id);
 
             if new_widgets.is_empty() {
                 continue;
@@ -302,7 +318,7 @@ where
                                 "element was retained but must be rebuilt"
                             );
 
-                            self.hooks.on_element_needs_rebuild(old_child_id);
+                            self.element_binding.on_element_needs_rebuild(old_child_id);
 
                             self.rebuild_queue.push_back(old_child_id);
                         }
@@ -353,7 +369,7 @@ where
                                 "element was retained but must be rebuilt"
                             );
 
-                            self.hooks.on_element_needs_rebuild(old_child_id);
+                            self.element_binding.on_element_needs_rebuild(old_child_id);
 
                             self.rebuild_queue.push_back(old_child_id);
                         }
@@ -423,7 +439,7 @@ where
                                         "keyed element was retained but must be rebuilt"
                                     );
 
-                                    self.hooks.on_element_needs_rebuild(old_child_id);
+                                    self.element_binding.on_element_needs_rebuild(old_child_id);
 
                                     self.rebuild_queue.push_back(old_child_id);
                                 }
@@ -530,7 +546,7 @@ where
                 })
                 .expect("cannot destroy an element that doesn't exist");
 
-            self.hooks.on_element_destroyed(element_id);
+            self.element_binding.on_element_destroyed(element_id);
 
             let element = self.tree.remove(element_id).unwrap();
 
@@ -550,18 +566,18 @@ mod tests {
             mock::{render::MockRenderWidget, DummyRenderObject, DummyWidget},
             ElementId,
         },
-        engine::widgets::{WidgetManager, WidgetManagerHooks},
+        engine::{bindings::ElementBinding, widgets::WidgetManager},
         widget::IntoWidget,
     };
 
     #[derive(Default, Clone)]
-    struct TestHook {
+    struct TestElementBinding {
         spawned: Rc<RefCell<FxHashSet<ElementId>>>,
         rebuilds: Rc<RefCell<Vec<ElementId>>>,
         destroyed: Rc<RefCell<FxHashSet<ElementId>>>,
     }
 
-    impl TestHook {
+    impl TestElementBinding {
         fn clear(&self) {
             self.spawned.borrow_mut().clear();
             self.rebuilds.borrow_mut().clear();
@@ -569,7 +585,7 @@ mod tests {
         }
     }
 
-    impl WidgetManagerHooks for TestHook {
+    impl ElementBinding for TestElementBinding {
         fn on_element_spawned(&mut self, _: Option<ElementId>, id: ElementId) {
             self.spawned.borrow_mut().insert(id);
         }
@@ -585,11 +601,11 @@ mod tests {
 
     #[test]
     pub fn adding_a_root_widget() {
-        let hook = TestHook::default();
+        let hook = TestElementBinding::default();
 
         let mut manager = WidgetManager::builder()
             .with_root(DummyWidget)
-            .with_hooks(hook.clone())
+            .with_element_binding(hook.clone())
             .build();
 
         manager.update();
@@ -621,11 +637,11 @@ mod tests {
 
     #[test]
     pub fn rebuilding_widgets() {
-        let hook = TestHook::default();
+        let hook = TestElementBinding::default();
 
         let mut manager = WidgetManager::builder()
             .with_root(DummyWidget)
-            .with_hooks(hook.clone())
+            .with_element_binding(hook.clone())
             .build();
 
         manager.update();
@@ -659,11 +675,11 @@ mod tests {
                 .returning(|_| DummyRenderObject.into());
         }
 
-        let hook = TestHook::default();
+        let hook = TestElementBinding::default();
 
         let mut manager = WidgetManager::builder()
             .with_root(root_widget)
-            .with_hooks(hook.clone())
+            .with_element_binding(hook.clone())
             .build();
 
         manager.update();
@@ -724,11 +740,11 @@ mod tests {
                 .returning(|_| DummyRenderObject.into());
         }
 
-        let hook = TestHook::default();
+        let hook = TestElementBinding::default();
 
         let mut manager = WidgetManager::builder()
             .with_root(root_widget)
-            .with_hooks(hook.clone())
+            .with_element_binding(hook.clone())
             .build();
 
         manager.update();
@@ -795,11 +811,11 @@ mod tests {
                 .returning(|_| DummyRenderObject.into());
         }
 
-        let hook = TestHook::default();
+        let hook = TestElementBinding::default();
 
         let mut manager = WidgetManager::builder()
             .with_root(root_widget)
-            .with_hooks(hook.clone())
+            .with_element_binding(hook.clone())
             .build();
 
         manager.update();

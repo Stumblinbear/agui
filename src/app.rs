@@ -30,18 +30,8 @@ where
             }
         };
 
-        let mut engine = Engine::with_root(root);
-
         // TODO: add a way to actually stop the engine
-        loop {
-            let start = Instant::now();
-
-            engine.update();
-
-            tracing::debug!(elapsed = ?start.elapsed(), "update complete");
-
-            engine.wait_for_update();
-        }
+        Engine::with_root(root).run();
     });
 
     winit_app.run();

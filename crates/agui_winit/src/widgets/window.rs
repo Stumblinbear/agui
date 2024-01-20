@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData, pin::pin, thread};
+use std::{any::TypeId, marker::PhantomData, pin::pin};
 
 use agui_core::{
     unit::Size,
@@ -10,7 +10,7 @@ use agui_elements::stateful::{
 use agui_macros::{build, StatefulWidget};
 use agui_primitives::sized_box::SizedBox;
 use agui_renderer::RenderWindow;
-use futures::prelude::stream::StreamExt;
+use futures::{future::RemoteHandle, prelude::stream::StreamExt};
 use winit::{event::WindowEvent, window::WindowBuilder};
 
 use crate::{handle::WinitWindowHandle, WinitWindowManager};
@@ -43,6 +43,8 @@ where
             phantom: PhantomData,
 
             window: None,
+            resize_event_task: None,
+
             window_size: Size::ZERO,
         }
     }
@@ -52,6 +54,8 @@ pub struct WinitWindowState<WindowFn, RendererFn, Renderer> {
     phantom: PhantomData<(WindowFn, RendererFn, Renderer)>,
 
     window: Option<WinitWindowHandle>,
+    resize_event_task: Option<RemoteHandle<()>>,
+
     window_size: Size,
 }
 
@@ -95,23 +99,25 @@ where
             // let mouse_input_event_cb = mouse_input_event_cb.clone();
             // let resize_event_cb = resize_event_cb.clone();
 
-            thread::spawn({
-                let window = window.clone();
-                let resize_event_cb = resize_event_cb.clone();
+            ctx.state.resize_event_task = ctx
+                .spawn_local({
+                    let window = window.clone();
+                    let resize_event_cb = resize_event_cb.clone();
 
-                || {
-                    futures::executor::block_on(async move {
+                    async move {
                         let mut events = pin!(window.events());
 
                         while let Some(event) = events.next().await {
                             if let WindowEvent::Resized(size) = event.as_ref() {
+                                tracing::info!("Window resized {:?}", size);
+
                                 resize_event_cb
                                     .call(Size::new(size.width as f32, size.height as f32));
                             }
                         }
-                    });
-                }
-            });
+                    }
+                })
+                .ok();
 
             ctx.set_state(|state| {
                 state.window.replace(window);

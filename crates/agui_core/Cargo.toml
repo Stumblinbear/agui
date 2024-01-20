@@ -28,6 +28,7 @@ bitflags.workspace = true
 url.workspace = true
 smallbox.workspace = true
 
+futures.workspace = true
 async-channel.workspace = true
 
 glam.workspace = true

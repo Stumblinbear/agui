@@ -1,9 +1,10 @@
 use agui_core::{
     element::{ContextDirtyRenderObject, RenderObjectUpdateContext},
-    render::object::{
-        RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext,
+    render::{
+        canvas::{paint::Paint, painter::CanvasPainter},
+        object::{RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
     },
-    unit::{Axis, ClipBehavior, Constraints, IntrinsicDimension, Offset, Size, TextDirection},
+    unit::{Axis, Constraints, IntrinsicDimension, Offset, Shape, Size, TextDirection},
 };
 
 use crate::flex::FlexFit;
@@ -24,8 +25,7 @@ pub struct RenderFlex {
 
     pub text_direction: Option<TextDirection>,
 
-    pub clip_behavior: ClipBehavior,
-
+    // pub clip_behavior: ClipBehavior,
     pub children_params: Vec<FlexChildParams>,
 }
 
@@ -104,18 +104,18 @@ impl RenderFlex {
         ctx.mark_needs_layout();
     }
 
-    pub fn update_clip_behavior(
-        &mut self,
-        ctx: &mut RenderObjectUpdateContext,
-        clip_behavior: ClipBehavior,
-    ) {
-        if self.clip_behavior == clip_behavior {
-            return;
-        }
+    // pub fn update_clip_behavior(
+    //     &mut self,
+    //     ctx: &mut RenderObjectUpdateContext,
+    //     clip_behavior: ClipBehavior,
+    // ) {
+    //     if self.clip_behavior == clip_behavior {
+    //         return;
+    //     }
 
-        self.clip_behavior = clip_behavior;
-        ctx.mark_needs_paint();
-    }
+    //     self.clip_behavior = clip_behavior;
+    //     ctx.mark_needs_paint();
+    // }
 
     pub fn update_children_params(
         &mut self,
@@ -401,6 +401,21 @@ impl RenderObjectImpl for RenderFlex {
         }
 
         size
+    }
+
+    fn does_paint(&self) -> bool {
+        true
+    }
+
+    fn paint(&self, mut canvas: CanvasPainter) {
+        // TODO: only clip when overflow occurs, and mark the overflowed area
+
+        let brush = canvas.add_paint(Paint {
+            anti_alias: false,
+            ..Paint::default()
+        });
+
+        canvas.start_layer(&brush, Shape::Rect);
     }
 }
 
