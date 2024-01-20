@@ -346,9 +346,6 @@ where
                     }
                 };
 
-                // let mouse_input_event_cb = mouse_input_event_cb.clone();
-                // let resize_event_cb = resize_event_cb.clone();
-
                 ctx.state.resize_event_task = ctx
                     .spawn_local({
                         let window = window.clone();
@@ -359,8 +356,6 @@ where
 
                             while let Some(event) = events.next().await {
                                 if let WindowEvent::Resized(size) = event.as_ref() {
-                                    tracing::info!("Window resized {:?}", size);
-
                                     resize_event_cb
                                         .call(Size::new(size.width as f32, size.height as f32));
                                 }
