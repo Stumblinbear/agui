@@ -1,10 +1,11 @@
-use std::{cell::RefCell, future::Future, rc::Rc};
+use std::{cell::RefCell, error::Error, future::Future, rc::Rc};
 
 use agui_core::callback::Callback;
-use agui_renderer::RenderWindow;
+use agui_renderer::Renderer;
 use futures::{executor::LocalPool, task::LocalSpawnExt};
 use rustc_hash::FxHashMap;
 use winit::{
+    error::OsError,
     event::Event as WinitEvent,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{WindowBuilder, WindowId},
@@ -12,16 +13,28 @@ use winit::{
 
 use crate::{WinitWindowEvent, WinitWindowHandle};
 
-type CreateWinitWindowFn = dyn FnOnce(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
+type CreateWinitWindowFn = dyn FnOnce(
+        &winit::window::Window,
+    )
+        -> Box<dyn Future<Output = Result<Box<dyn Renderer>, Box<dyn Error + Send + Sync>>> + '_>
     + Send;
 
-type WindowRendererSlot = Rc<RefCell<Option<Box<dyn RenderWindow>>>>;
+type WindowRendererSlot = Rc<RefCell<Option<Box<dyn Renderer>>>>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum WinitCreateWindowError {
+    #[error("failed to create the window: {0}")]
+    Os(#[from] OsError),
+
+    #[error("failed to create the renderer: {0}")]
+    Renderer(Box<dyn Error + Send>),
+}
 
 pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
         Box<CreateWinitWindowFn>,
-        Callback<WinitWindowHandle>,
+        Callback<Result<WinitWindowHandle, WinitCreateWindowError>>,
     ),
 }
 
@@ -94,10 +107,11 @@ impl WinitApp {
 
                             tracing::trace!("creating window: {:?}", window_builder);
 
-                            let window = window_builder
-                                .with_visible(false)
-                                .build(window_target)
-                                .expect("failed to create window");
+                            let window =
+                                match window_builder.with_visible(false).build(window_target) {
+                                    Ok(window) => window,
+                                    Err(err) => return callback.call(Err(err.into())),
+                                };
 
                             let (events_tx, events_rx) = async_channel::unbounded();
 
@@ -110,8 +124,6 @@ impl WinitApp {
 
                             let window = WinitWindowHandle::new(window, events_rx);
 
-                            callback.call(window.clone());
-
                             #[allow(clippy::await_holding_refcell_ref)]
                             task_pool
                                 .spawner()
@@ -120,13 +132,21 @@ impl WinitApp {
 
                                     let renderer_fut = Box::into_pin((renderer_fn)(&window));
 
-                                    let renderer = renderer_fut.await;
+                                    let renderer = match renderer_fut.await {
+                                        Ok(renderer) => renderer,
+                                        Err(err) => {
+                                            return callback
+                                                .call(Err(WinitCreateWindowError::Renderer(err)));
+                                        }
+                                    };
 
                                     let notifier = renderer.render_notifier();
 
                                     window_renderer.replace(renderer);
 
                                     drop(window_renderer);
+
+                                    callback.call(Ok(window.clone()));
 
                                     while let Ok(()) = notifier.recv().await {
                                         window.request_redraw();

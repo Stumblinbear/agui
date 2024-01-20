@@ -24,6 +24,8 @@ agui_renderer.workspace = true
 
 tracing.workspace = true
 
+thiserror.workspace = true
+
 rustc-hash.workspace = true
 slotmap.workspace = true
 parking_lot.workspace = true

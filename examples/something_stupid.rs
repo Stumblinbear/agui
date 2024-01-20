@@ -28,21 +28,13 @@ fn main() {
 
         let view = vello_renderer.new_view();
 
-        let window_renderer = VelloWindowRenderer::new(&view);
-
         build! {
             <WinitWindow> {
                 attributes: WinitWindowAttributes::builder()
                     .title("Hello, world!")
                     .build(),
 
-                renderer:  move |window| {
-                    let window_renderer = window_renderer.clone();
-
-                    Box::new(async move {
-                        Box::new(window_renderer.attach(window).await.expect("failed to create window renderer")) as _
-                    })
-                },
+                renderer:  VelloWindowRenderer::new(&view),
 
                 child: <VelloViewBinding> {
                     view: view,

@@ -1,6 +1,6 @@
-use std::time::Instant;
+use std::{error::Error, time::Instant};
 
-use agui_renderer::RenderWindow;
+use agui_renderer::{BindRenderer, Renderer};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
     block_on_wgpu,
@@ -16,14 +16,14 @@ mod sealed {
 
 impl sealed::VelloWindowRendererState for () {}
 
-pub struct Attached {
+pub struct Bound {
     render_context: RenderContext,
 
     render_surface: RenderSurface,
     renderer: vello::Renderer,
 }
 
-impl sealed::VelloWindowRendererState for Attached {}
+impl sealed::VelloWindowRendererState for Bound {}
 
 pub struct VelloWindowRenderer<S>
 where
@@ -52,24 +52,24 @@ impl VelloWindowRenderer<()> {
             state: (),
         }
     }
+}
 
-    #[tracing::instrument(skip(self, window))]
-    pub async fn attach<W>(
-        &self,
-        window: W,
-    ) -> Result<VelloWindowRenderer<Attached>, Box<dyn std::error::Error>>
-    where
-        W: HasRawWindowHandle + HasRawDisplayHandle,
-    {
-        let mut render_context = RenderContext::new()?;
+impl<T> BindRenderer<T> for VelloWindowRenderer<()>
+where
+    T: HasRawWindowHandle + HasRawDisplayHandle,
+{
+    async fn bind(self, target: &T) -> Result<Box<dyn Renderer>, Box<dyn Error + Send + Sync>> {
+        let mut render_context =
+            RenderContext::new().map_err(|err| VelloBindError::Context(format!("{:?}", err)))?;
 
         let size = self.view_handle.with_scene(|scene| scene.size);
 
         let now = Instant::now();
 
         let render_surface = render_context
-            .create_surface(&window, size.width as u32, size.height as u32)
-            .await?;
+            .create_surface(target, size.width as u32, size.height as u32)
+            .await
+            .map_err(|err| VelloBindError::Surface(format!("{:?}", err)))?;
 
         tracing::trace!("created render surface in {:?}", now.elapsed());
 
@@ -82,22 +82,35 @@ impl VelloWindowRenderer<()> {
                 use_cpu: false,
                 antialiasing_support: AaSupport::all(),
             },
-        )?;
+        )
+        .map_err(|err| VelloBindError::Renderer(format!("{:?}", err)))?;
 
-        Ok(VelloWindowRenderer {
+        Ok(Box::new(VelloWindowRenderer {
             view_handle: self.view_handle.clone(),
 
-            state: Attached {
+            state: Bound {
                 render_context,
 
                 render_surface,
                 renderer,
             },
-        })
+        }))
     }
 }
 
-impl RenderWindow for VelloWindowRenderer<Attached> {
+#[derive(Debug, thiserror::Error)]
+pub enum VelloBindError {
+    #[error("failed to create the render context")]
+    Context(String),
+
+    #[error("failed to create surface")]
+    Surface(String),
+
+    #[error("failed to create the renderer")]
+    Renderer(String),
+}
+
+impl Renderer for VelloWindowRenderer<Bound> {
     fn render_notifier(&self) -> async_channel::Receiver<()> {
         self.view_handle.notifier()
     }

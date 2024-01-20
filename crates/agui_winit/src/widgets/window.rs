@@ -9,42 +9,34 @@ use agui_elements::stateful::{
 };
 use agui_macros::{build, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
-use agui_renderer::RenderWindow;
-use futures::{future::RemoteHandle, prelude::stream::StreamExt, Future};
+use agui_renderer::BindRenderer;
+use futures::{future::RemoteHandle, prelude::stream::StreamExt};
 use winit::{
     event::WindowEvent,
     window::{Fullscreen, Theme, WindowBuilder, WindowButtons, WindowLevel},
 };
 
-use crate::{handle::WinitWindowHandle, WinitWindowManager};
+use crate::{app::WinitCreateWindowError, handle::WinitWindowHandle, WinitWindowManager};
 use crate::{widgets::window_layout::WinitWindowLayout, CurrentWindow};
 
 #[derive(StatefulWidget)]
-pub struct WinitWindow<RendererFn>
+pub struct WinitWindow<Renderer>
 where
-    RendererFn: Fn(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
+    Renderer: BindRenderer<winit::window::Window> + Send + Sync + Clone + 'static,
 {
     #[prop(into)]
     pub attributes: Rc<WinitWindowAttributes>,
 
-    pub renderer: RendererFn,
+    pub renderer: Renderer,
 
     pub child: Widget,
 }
 
-impl<RendererFn> StatefulWidget for WinitWindow<RendererFn>
+impl<Renderer> StatefulWidget for WinitWindow<Renderer>
 where
-    RendererFn: Fn(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
+    Renderer: BindRenderer<winit::window::Window> + Send + Sync + Clone + 'static,
 {
-    type State = WinitWindowState<RendererFn>;
+    type State = WinitWindowState<Renderer>;
 
     fn create_state(&self) -> Self::State {
         WinitWindowState {
@@ -297,8 +289,8 @@ impl From<WinitWindowAttributes> for WindowBuilder {
     }
 }
 
-pub struct WinitWindowState<RendererFn> {
-    phantom: PhantomData<RendererFn>,
+pub struct WinitWindowState<Renderer> {
+    phantom: PhantomData<Renderer>,
 
     attributes: Rc<WinitWindowAttributes>,
 
@@ -310,15 +302,11 @@ pub struct WinitWindowState<RendererFn> {
     window_size: Size,
 }
 
-impl<RendererFn> WidgetState for WinitWindowState<RendererFn>
+impl<Renderer> WidgetState for WinitWindowState<Renderer>
 where
-    RendererFn: Fn(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
+    Renderer: BindRenderer<winit::window::Window> + Send + Sync + Clone + 'static,
 {
-    type Widget = WinitWindow<RendererFn>;
+    type Widget = WinitWindow<Renderer>;
 
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         // let mouse_input_event_cb = ctx.callback(
@@ -347,56 +335,67 @@ where
             );
         };
 
-        let on_window_created = ctx.callback(move |ctx, window: WinitWindowHandle| {
-            // let mouse_input_event_cb = mouse_input_event_cb.clone();
-            // let resize_event_cb = resize_event_cb.clone();
+        let on_window_created = ctx.callback(
+            move |ctx, result: Result<WinitWindowHandle, WinitCreateWindowError>| {
+                let window = match result {
+                    Ok(window) => window,
+                    Err(err) => {
+                        tracing::error!("failed to create window: {:?}", err);
 
-            ctx.state.resize_event_task = ctx
-                .spawn_local({
-                    let window = window.clone();
-                    let resize_event_cb = resize_event_cb.clone();
+                        return;
+                    }
+                };
 
-                    async move {
-                        let mut events = pin!(window.events());
+                // let mouse_input_event_cb = mouse_input_event_cb.clone();
+                // let resize_event_cb = resize_event_cb.clone();
 
-                        while let Some(event) = events.next().await {
-                            if let WindowEvent::Resized(size) = event.as_ref() {
-                                tracing::info!("Window resized {:?}", size);
+                ctx.state.resize_event_task = ctx
+                    .spawn_local({
+                        let window = window.clone();
+                        let resize_event_cb = resize_event_cb.clone();
 
-                                resize_event_cb
-                                    .call(Size::new(size.width as f32, size.height as f32));
+                        async move {
+                            let mut events = pin!(window.events());
+
+                            while let Some(event) = events.next().await {
+                                if let WindowEvent::Resized(size) = event.as_ref() {
+                                    tracing::info!("Window resized {:?}", size);
+
+                                    resize_event_cb
+                                        .call(Size::new(size.width as f32, size.height as f32));
+                                }
                             }
                         }
-                    }
-                })
-                .ok();
+                    })
+                    .ok();
 
-            ctx.set_state(|state| {
-                state.window.replace(window);
+                ctx.set_state(|state| {
+                    state.window.replace(window);
 
-                // state.event_listener = Some(window.events().add_listener(
-                //     move |WinitWindowEvent(ref event)| {
-                //         if let WindowEvent::MouseInput {
-                //             device_id,
-                //             state,
-                //             button,
-                //             ..
-                //         } = event
-                //         {
-                //             mouse_input_event_cb.call((*device_id, *state, *button));
-                //         } else if let WindowEvent::Resized(size) = event {
-                //             resize_event_cb.call(Size::new(size.width as f32, size.height as f32));
-                //         }
-                //     },
-                // ));
+                    // state.event_listener = Some(window.events().add_listener(
+                    //     move |WinitWindowEvent(ref event)| {
+                    //         if let WindowEvent::MouseInput {
+                    //             device_id,
+                    //             state,
+                    //             button,
+                    //             ..
+                    //         } = event
+                    //         {
+                    //             mouse_input_event_cb.call((*device_id, *state, *button));
+                    //         } else if let WindowEvent::Resized(size) = event {
+                    //             resize_event_cb.call(Size::new(size.width as f32, size.height as f32));
+                    //         }
+                    //     },
+                    // ));
 
-                // let size = window.inner_size();
+                    // let size = window.inner_size();
 
-                // state
-                //     .window_size
-                //     .replace(Size::new(size.width as f32, size.height as f32));
-            });
-        });
+                    // state
+                    //     .window_size
+                    //     .replace(Size::new(size.width as f32, size.height as f32));
+                });
+            },
+        );
 
         let attributes = self.attributes.as_ref().clone();
 

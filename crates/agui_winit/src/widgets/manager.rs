@@ -1,12 +1,15 @@
-use std::{error::Error, future::Future};
+use std::error::Error;
 
 use agui_core::{callback::Callback, widget::Widget};
 use agui_elements::inherited::InheritedWidget;
 use agui_macros::InheritedWidget;
-use agui_renderer::RenderWindow;
+use agui_renderer::BindRenderer;
 use winit::{event_loop::EventLoopProxy, window::WindowBuilder};
 
-use crate::{app::WinitBindingAction, WinitWindowHandle};
+use crate::{
+    app::{WinitBindingAction, WinitCreateWindowError},
+    WinitWindowHandle,
+};
 
 #[derive(InheritedWidget)]
 pub struct WinitWindowManager {
@@ -26,23 +29,18 @@ impl InheritedWidget for WinitWindowManager {
 }
 
 impl WinitWindowManager {
-    pub fn create_window<RendererFn>(
+    pub fn create_window(
         &self,
         window_fn: impl FnOnce() -> WindowBuilder + Send + 'static,
-        renderer_fn: RendererFn,
-        callback: Callback<WinitWindowHandle>,
-    ) -> Result<(), WinitEventLoopClosed>
-    where
-        RendererFn: FnOnce(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
-            + Send
-            + 'static,
-    {
+        renderer: impl BindRenderer<winit::window::Window> + Send + 'static,
+        callback: Callback<Result<WinitWindowHandle, WinitCreateWindowError>>,
+    ) -> Result<(), WinitEventLoopClosed> {
         tracing::debug!("queueing window for creation");
 
         self.event_loop
             .send_event(WinitBindingAction::CreateWindow(
                 Box::new(window_fn),
-                Box::new(renderer_fn),
+                Box::new(move |window| Box::new(renderer.bind(window))),
                 callback,
             ))?;
 

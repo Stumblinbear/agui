@@ -22,6 +22,8 @@ agui_renderer.workspace = true
 
 tracing.workspace = true
 
+thiserror.workspace = true
+
 rustc-hash.workspace = true
 
 futures.workspace = true
