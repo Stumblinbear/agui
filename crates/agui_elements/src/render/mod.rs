@@ -1,14 +1,14 @@
 use agui_core::{
     element::{RenderObjectCreateContext, RenderObjectUpdateContext},
     render::object::RenderObjectImpl,
-    widget::{AnyWidget, Widget},
+    widget::Widget,
 };
 
 mod element;
 
 pub use element::*;
 
-pub trait RenderObjectWidget: AnyWidget {
+pub trait RenderObjectWidget: Sized {
     type RenderObject: RenderObjectImpl;
 
     fn children(&self) -> Vec<Widget>;

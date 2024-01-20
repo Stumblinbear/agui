@@ -1,27 +1,21 @@
 use std::{any::Any, rc::Rc};
 
-use crate::element::ElementBuilder;
+use crate::{element::ElementBuilder, unit::AsAny};
 
 use super::Widget;
 
-pub trait AnyWidget: ElementBuilder {
+pub trait AnyWidget: ElementBuilder + AsAny {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
-
-    fn widget_type_id(&self) -> std::any::TypeId;
 
     fn widget_name(&self) -> &'static str;
 }
 
 impl<T> AnyWidget for T
 where
-    T: ElementBuilder,
+    T: ElementBuilder + 'static,
 {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any> {
         self
-    }
-
-    fn widget_type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<T>()
     }
 
     fn widget_name(&self) -> &'static str {
@@ -43,7 +37,7 @@ pub trait IntoWidget {
 
 impl<W> From<W> for Widget
 where
-    W: IntoWidget + ElementBuilder,
+    W: IntoWidget + ElementBuilder + 'static,
 {
     fn from(widget: W) -> Self {
         Widget::new(widget)

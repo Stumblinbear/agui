@@ -5,22 +5,16 @@ use agui_core::{
         render::ElementRender, widget::ElementWidget, ElementComparison, RenderObjectUpdateContext,
     },
     render::object::RenderObject,
-    widget::Widget,
+    widget::{AnyWidget, Widget},
 };
 
 use super::{RenderObjectCreateContext, RenderObjectWidget};
 
-pub struct RenderObjectWidgetElement<W>
-where
-    W: RenderObjectWidget,
-{
+pub struct RenderObjectWidgetElement<W> {
     widget: Rc<W>,
 }
 
-impl<W> RenderObjectWidgetElement<W>
-where
-    W: RenderObjectWidget,
-{
+impl<W> RenderObjectWidgetElement<W> {
     pub fn new(widget: Rc<W>) -> Self {
         Self { widget }
     }
@@ -28,7 +22,7 @@ where
 
 impl<W> ElementWidget for RenderObjectWidgetElement<W>
 where
-    W: RenderObjectWidget,
+    W: AnyWidget + RenderObjectWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         if let Some(new_widget) = new_widget.downcast::<W>() {
@@ -43,7 +37,7 @@ where
 
 impl<W> ElementRender for RenderObjectWidgetElement<W>
 where
-    W: RenderObjectWidget,
+    W: AnyWidget + RenderObjectWidget,
 {
     fn children(&self) -> Vec<Widget> {
         self.widget.children()

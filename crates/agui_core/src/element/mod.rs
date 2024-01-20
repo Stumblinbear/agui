@@ -179,7 +179,7 @@ impl Element {
 
             ElementType::Inherited(ref mut element) => {
                 ctx.inheritance.create_scope(
-                    self.widget.widget_type_id(),
+                    element.inherited_type_id(),
                     *ctx.parent_element_id,
                     *ctx.element_id,
                 );

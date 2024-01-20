@@ -14,19 +14,13 @@ use super::{
     func::StatelessCallbackFunc, StatelessBuildContext, StatelessCallbackContext, StatelessWidget,
 };
 
-pub struct StatelessWidgetElement<W>
-where
-    W: AnyWidget + StatelessWidget,
-{
+pub struct StatelessWidgetElement<W> {
     widget: Rc<W>,
 
     callbacks: FxHashMap<CallbackId, Box<dyn StatelessCallbackFunc<W>>>,
 }
 
-impl<W> StatelessWidgetElement<W>
-where
-    W: AnyWidget + StatelessWidget,
-{
+impl<W> StatelessWidgetElement<W> {
     pub fn new(widget: Rc<W>) -> Self {
         Self {
             widget,
@@ -92,7 +86,7 @@ where
 
 impl<W> std::fmt::Debug for StatelessWidgetElement<W>
 where
-    W: AnyWidget + StatelessWidget + std::fmt::Debug,
+    W: StatelessWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("StatelessWidgetElement");

@@ -17,7 +17,7 @@ use super::{
 
 pub struct StatefulWidgetElement<W>
 where
-    W: AnyWidget + StatefulWidget,
+    W: StatefulWidget,
 {
     widget: Rc<W>,
     old_widget: Option<Rc<W>>,
@@ -32,7 +32,7 @@ where
 
 impl<W> StatefulWidgetElement<W>
 where
-    W: AnyWidget + StatefulWidget,
+    W: StatefulWidget,
 {
     pub fn new(widget: Rc<W>) -> Self {
         let state = widget.create_state();
@@ -140,7 +140,7 @@ where
 
 impl<W> std::fmt::Debug for StatefulWidgetElement<W>
 where
-    W: AnyWidget + StatefulWidget + std::fmt::Debug,
+    W: StatefulWidget + std::fmt::Debug,
     <W as StatefulWidget>::State: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

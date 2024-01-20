@@ -44,7 +44,7 @@ where
     }
 }
 
-impl<'ctx, S: 'static> Deref for StatefulBuildContext<'ctx, '_, S>
+impl<'ctx, S> Deref for StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<'ctx, S: 'static> DerefMut for StatefulBuildContext<'ctx, '_, S>
+impl<'ctx, S> DerefMut for StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState,
 {
@@ -64,9 +64,9 @@ where
     }
 }
 
-impl<'ctx, S: 'static> StatefulBuildContext<'ctx, '_, S>
+impl<'ctx, S> StatefulBuildContext<'ctx, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + 'static,
 {
     pub fn widget(&self) -> &S::Widget {
         self.widget

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{any::TypeId, cell::RefCell, rc::Rc};
 
 use crate::{
     element::{
@@ -65,6 +65,10 @@ impl ElementWidget for MockElement {
 }
 
 impl ElementInherited for MockElement {
+    fn inherited_type_id(&self) -> TypeId {
+        TypeId::of::<MockInheritedWidget>()
+    }
+
     fn child(&self) -> Widget {
         self.widget.mock.borrow().child()
     }

@@ -6,13 +6,13 @@ mod element;
 pub use context::*;
 pub use element::*;
 
-pub trait StatefulWidget: 'static {
+pub trait StatefulWidget: Sized {
     type State: WidgetState<Widget = Self>;
 
     fn create_state(&self) -> Self::State;
 }
 
-pub trait WidgetState: 'static {
+pub trait WidgetState {
     type Widget;
 
     /// Called when the widget is first added to the tree.

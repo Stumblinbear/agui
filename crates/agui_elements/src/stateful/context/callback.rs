@@ -64,9 +64,9 @@ where
     }
 }
 
-impl<'ctx, S: 'static> Deref for StatefulCallbackContext<'ctx, '_, S>
+impl<'ctx, S> Deref for StatefulCallbackContext<'ctx, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     type Target = ElementCallbackContext<'ctx>;
 
@@ -75,9 +75,9 @@ where
     }
 }
 
-impl<'ctx, S: 'static> DerefMut for StatefulCallbackContext<'ctx, '_, S>
+impl<'ctx, S> DerefMut for StatefulCallbackContext<'ctx, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner

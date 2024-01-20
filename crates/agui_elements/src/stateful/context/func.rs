@@ -6,27 +6,22 @@ use crate::stateful::WidgetState;
 
 use super::StatefulCallbackContext;
 
-pub trait StatefulCallbackFunc<W>
+pub trait StatefulCallbackFunc<S>
 where
-    W: WidgetState,
+    S: WidgetState,
 {
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, args: Box<dyn Any>);
+    fn call(&self, ctx: &mut StatefulCallbackContext<S>, args: Box<dyn Any>);
 }
 
-pub struct StatefulCallbackFn<W, A, F>
-where
-    A: 'static,
-    F: Fn(&mut StatefulCallbackContext<W>, A),
-{
-    phantom: PhantomData<(W, A, F)>,
+pub struct StatefulCallbackFn<S, A, F> {
+    phantom: PhantomData<(S, A, F)>,
 
     func: F,
 }
 
-impl<W, A, F> StatefulCallbackFn<W, A, F>
+impl<S, A, F> StatefulCallbackFn<S, A, F>
 where
-    A: 'static,
-    F: Fn(&mut StatefulCallbackContext<W>, A),
+    F: Fn(&mut StatefulCallbackContext<S>, A),
 {
     pub fn new(func: F) -> Self {
         Self {
@@ -37,13 +32,13 @@ where
     }
 }
 
-impl<W, A, F> StatefulCallbackFunc<W> for StatefulCallbackFn<W, A, F>
+impl<S, A, F> StatefulCallbackFunc<S> for StatefulCallbackFn<S, A, F>
 where
-    W: WidgetState,
+    S: WidgetState,
     A: AsAny,
-    F: Fn(&mut StatefulCallbackContext<W>, A),
+    F: Fn(&mut StatefulCallbackContext<S>, A),
 {
-    fn call(&self, ctx: &mut StatefulCallbackContext<W>, arg: Box<dyn Any>) {
+    fn call(&self, ctx: &mut StatefulCallbackContext<S>, arg: Box<dyn Any>) {
         let arg = arg
             .downcast::<A>()
             .expect("failed to downcast callback argument");

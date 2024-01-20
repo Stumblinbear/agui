@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{any::TypeId, rc::Rc};
 
 use agui_core::{
     element::{inherited::ElementInherited, widget::ElementWidget, ElementComparison},
@@ -7,10 +7,7 @@ use agui_core::{
 
 use crate::inherited::InheritedWidget;
 
-pub struct InheritedElement<I>
-where
-    I: AnyWidget + InheritedWidget,
-{
+pub struct InheritedElement<I> {
     pub(crate) widget: Rc<I>,
 
     needs_notify: bool,
@@ -18,7 +15,7 @@ where
 
 impl<I> InheritedElement<I>
 where
-    I: AnyWidget + InheritedWidget,
+    I: InheritedWidget,
 {
     pub fn new(widget: Rc<I>) -> Self {
         Self {
@@ -52,6 +49,10 @@ impl<I> ElementInherited for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
+    fn inherited_type_id(&self) -> TypeId {
+        TypeId::of::<I>()
+    }
+
     fn child(&self) -> Widget {
         self.widget.child()
     }
@@ -69,7 +70,7 @@ where
 
 impl<I> std::fmt::Debug for InheritedElement<I>
 where
-    I: AnyWidget + InheritedWidget + std::fmt::Debug,
+    I: InheritedWidget + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("InheritedElement");

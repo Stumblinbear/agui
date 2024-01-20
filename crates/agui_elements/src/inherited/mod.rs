@@ -1,10 +1,10 @@
-use agui_core::widget::{AnyWidget, Widget};
+use agui_core::widget::Widget;
 
 mod element;
 
 pub use element::*;
 
-pub trait InheritedWidget: AnyWidget {
+pub trait InheritedWidget: Sized {
     fn child(&self) -> Widget;
 
     fn should_notify(&self, old_widget: &Self) -> bool;

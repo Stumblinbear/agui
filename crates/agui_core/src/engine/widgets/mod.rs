@@ -217,7 +217,7 @@ where
 
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
     fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
-        let element = Element::new(widget.clone());
+        let element = Element::new(widget);
 
         tracing::trace!(widget = element.widget().widget_name(), "spawning widget");
 

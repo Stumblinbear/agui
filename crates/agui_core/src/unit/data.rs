@@ -38,13 +38,3 @@ where
             .unwrap_or(type_name)
     }
 }
-
-impl dyn AsAny {
-    pub fn downcast_ref<T: AsAny>(&self) -> Option<&T> {
-        AsAny::as_any(self).downcast_ref()
-    }
-
-    pub fn downcast_mut<T: AsAny>(&mut self) -> Option<&mut T> {
-        AsAny::as_any_mut(self).downcast_mut()
-    }
-}
