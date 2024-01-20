@@ -5,8 +5,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     callback::{CallbackQueue, InvokeCallback},
     element::{
-        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
-        ElementUnmountContext, ElementUpdate,
+        Element, ElementBuildContext, ElementCallbackContext, ElementComparison, ElementId,
+        ElementMountContext, ElementUnmountContext,
     },
     engine::{
         bindings::{ElementBinding, SchedulerBinding},
@@ -297,7 +297,7 @@ where
                         .expect("child element does not exist in the tree");
 
                     match old_child.update(new_widget) {
-                        ElementUpdate::Noop => {
+                        ElementComparison::Identical => {
                             tracing::trace!(
                                 parent_id = ?element_id,
                                 element_id = ?old_child_id,
@@ -308,7 +308,7 @@ where
                             );
                         }
 
-                        ElementUpdate::RebuildNecessary => {
+                        ElementComparison::Changed => {
                             tracing::trace!(
                                 parent_id = ?element_id,
                                 element_id = ?old_child_id,
@@ -323,7 +323,7 @@ where
                             self.rebuild_queue.push_back(old_child_id);
                         }
 
-                        ElementUpdate::Invalid => break,
+                        ElementComparison::Invalid => break,
                     }
 
                     new_children[new_children_top as usize] = Some(old_child_id);
@@ -349,7 +349,7 @@ where
                         .expect("child element does not exist in the tree");
 
                     match old_child.update(new_widget) {
-                        ElementUpdate::Noop => {
+                        ElementComparison::Identical => {
                             tracing::trace!(
                                 parent_id = ?element_id,
                                 element_id = ?old_child_id,
@@ -360,7 +360,7 @@ where
                             );
                         }
 
-                        ElementUpdate::RebuildNecessary => {
+                        ElementComparison::Changed => {
                             tracing::trace!(
                                 parent_id = ?element_id,
                                 element_id = ?old_child_id,
@@ -374,7 +374,7 @@ where
                             self.rebuild_queue.push_back(old_child_id);
                         }
 
-                        ElementUpdate::Invalid => break,
+                        ElementComparison::Invalid => break,
                     }
                 } else {
                     break;
@@ -418,7 +418,7 @@ where
                                 .expect("child element does not exist in the tree");
 
                             match old_child.update(new_widget) {
-                                ElementUpdate::Noop => {
+                                ElementComparison::Identical => {
                                     tracing::trace!(
                                         parent_id = ?element_id,
                                         element_id = ?old_child_id,
@@ -429,7 +429,7 @@ where
                                     );
                                 }
 
-                                ElementUpdate::RebuildNecessary => {
+                                ElementComparison::Changed => {
                                     tracing::trace!(
                                         parent_id = ?element_id,
                                         element_id = ?old_child_id,
@@ -444,7 +444,7 @@ where
                                     self.rebuild_queue.push_back(old_child_id);
                                 }
 
-                                ElementUpdate::Invalid => break,
+                                ElementComparison::Invalid => break,
                             }
 
                             // Remove it from the list so that we don't try to use it again.

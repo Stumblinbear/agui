@@ -2,8 +2,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     element::{
-        inherited::ElementInherited, widget::ElementWidget, ElementBuilder, ElementMountContext,
-        ElementType, ElementUnmountContext, ElementUpdate,
+        inherited::ElementInherited, widget::ElementWidget, ElementBuilder, ElementComparison,
+        ElementMountContext, ElementType, ElementUnmountContext,
     },
     widget::{IntoWidget, Widget},
 };
@@ -16,7 +16,7 @@ pub trait InheritedElement {
 
     fn unmount<'ctx>(&mut self, ctx: &mut ElementUnmountContext<'ctx>);
 
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison;
 
     fn child(&self) -> Widget;
 
@@ -59,7 +59,7 @@ impl MockElement {
 }
 
 impl ElementWidget for MockElement {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         self.widget.mock.borrow_mut().update(new_widget)
     }
 }

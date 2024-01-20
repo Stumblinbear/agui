@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementUpdate, RenderObjectUpdateContext,
+        render::ElementRender, widget::ElementWidget, ElementComparison, RenderObjectUpdateContext,
     },
     render::object::RenderObject,
     widget::Widget,
@@ -30,13 +30,13 @@ impl<W> ElementWidget for RenderObjectWidgetElement<W>
 where
     W: RenderObjectWidget,
 {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;
 
-            ElementUpdate::RebuildNecessary
+            ElementComparison::Changed
         } else {
-            ElementUpdate::Invalid
+            ElementComparison::Invalid
         }
     }
 }

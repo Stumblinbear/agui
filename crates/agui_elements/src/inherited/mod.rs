@@ -19,7 +19,7 @@ mod tests {
             mock::{
                 build::MockBuildWidget, render::MockRenderWidget, DummyRenderObject, DummyWidget,
             },
-            ElementUpdate,
+            ElementComparison,
         },
         engine::widgets::WidgetManager,
         widget::{IntoWidget, Widget},
@@ -197,9 +197,9 @@ mod tests {
 
             widget_mock.expect_update().returning(|new_widget| {
                 if new_widget.downcast::<MockRenderWidget>().is_some() {
-                    ElementUpdate::RebuildNecessary
+                    ElementComparison::Changed
                 } else {
-                    ElementUpdate::Invalid
+                    ElementComparison::Invalid
                 }
             });
 

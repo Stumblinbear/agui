@@ -4,7 +4,7 @@ use crate::{
     callback::CallbackId,
     element::{
         widget::ElementWidget, ElementBuildContext, ElementBuilder, ElementCallbackContext,
-        ElementMountContext, ElementType, ElementUnmountContext, ElementUpdate,
+        ElementComparison, ElementMountContext, ElementType, ElementUnmountContext,
     },
     widget::{IntoWidget, Widget},
 };
@@ -17,7 +17,7 @@ pub trait ElementBuild {
 
     fn unmount<'ctx>(&mut self, ctx: &mut ElementUnmountContext<'ctx>);
 
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison;
 
     fn build<'ctx>(&mut self, ctx: &mut ElementBuildContext<'ctx>) -> Widget;
 
@@ -57,7 +57,7 @@ impl MockElement {
 }
 
 impl ElementWidget for MockElement {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         self.widget.mock.borrow_mut().update(new_widget)
     }
 }

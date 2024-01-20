@@ -4,7 +4,7 @@ use agui_core::{
     callback::CallbackId,
     element::{
         build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementCallbackContext,
-        ElementUpdate,
+        ElementComparison,
     },
     widget::{AnyWidget, Widget},
 };
@@ -40,13 +40,13 @@ impl<W> ElementWidget for StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;
 
-            ElementUpdate::RebuildNecessary
+            ElementComparison::Changed
         } else {
-            ElementUpdate::Invalid
+            ElementComparison::Invalid
         }
     }
 }

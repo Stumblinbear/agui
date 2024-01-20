@@ -1,7 +1,7 @@
 use agui_core::{
     element::{
         render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
-        ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
+        ElementComparison, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{
         object::{RenderObject, RenderObjectImpl},
@@ -43,8 +43,8 @@ impl VelloViewElement {
 }
 
 impl ElementWidget for VelloViewElement {
-    fn update(&mut self, _: &Widget) -> ElementUpdate {
-        ElementUpdate::Invalid
+    fn update(&mut self, _: &Widget) -> ElementComparison {
+        ElementComparison::Invalid
     }
 }
 

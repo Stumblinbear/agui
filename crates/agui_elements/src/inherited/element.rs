@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use agui_core::{
-    element::{inherited::ElementInherited, widget::ElementWidget, ElementUpdate},
+    element::{inherited::ElementInherited, widget::ElementWidget, ElementComparison},
     widget::{AnyWidget, Widget},
 };
 
@@ -33,7 +33,7 @@ impl<I> ElementWidget for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         if let Some(new_widget) = new_widget.downcast::<I>() {
             self.needs_notify |= new_widget.should_notify(self.widget.as_ref());
 
@@ -41,9 +41,9 @@ where
 
             // Since (for example) the child of the inherited widget may have changed, we need to
             // rebuild the widget even if we don't need to notify listeners.
-            ElementUpdate::RebuildNecessary
+            ElementComparison::Changed
         } else {
-            ElementUpdate::Invalid
+            ElementComparison::Invalid
         }
     }
 }

@@ -11,18 +11,18 @@ use self::{build::ElementBuild, render::ElementRender, widget::ElementWidget};
 
 pub mod build;
 mod builder;
+mod comparison;
 mod context;
 pub mod inherited;
 #[cfg(any(test, feature = "mocks"))]
 pub mod mock;
 pub mod render;
-mod update;
 pub mod view;
 pub mod widget;
 
 pub use builder::*;
+pub use comparison::*;
 pub use context::*;
-pub use update::*;
 
 slotmap::new_key_type! {
     pub struct ElementId;
@@ -249,9 +249,9 @@ impl Element {
     }
 
     #[tracing::instrument(level = "trace", skip(self, new_widget), fields(widget_name = self.widget.widget_name()))]
-    pub fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    pub fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         if &self.widget == new_widget {
-            return ElementUpdate::Noop;
+            return ElementComparison::Identical;
         }
 
         let result = match self.inner {
@@ -264,11 +264,11 @@ impl Element {
         };
 
         match result {
-            ElementUpdate::Noop | ElementUpdate::RebuildNecessary => {
+            ElementComparison::Identical | ElementComparison::Changed => {
                 self.widget = new_widget.clone();
             }
 
-            ElementUpdate::Invalid => {}
+            ElementComparison::Invalid => {}
         }
 
         result

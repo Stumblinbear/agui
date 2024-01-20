@@ -4,7 +4,7 @@ use agui_core::{
     callback::CallbackId,
     element::{
         build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementCallbackContext,
-        ElementUpdate,
+        ElementComparison,
     },
     widget::{AnyWidget, Widget},
 };
@@ -55,7 +55,7 @@ impl<W> ElementWidget for StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         if let Some(new_widget) = new_widget.downcast::<W>() {
             if !Rc::ptr_eq(&self.widget, &new_widget) {
                 self.old_widget = Some(new_widget.clone());
@@ -64,9 +64,9 @@ where
             self.widget = new_widget;
 
             // Stateful widgets always need to be rebuilt because they likely reference widget data
-            ElementUpdate::RebuildNecessary
+            ElementComparison::Changed
         } else {
-            ElementUpdate::Invalid
+            ElementComparison::Invalid
         }
     }
 }

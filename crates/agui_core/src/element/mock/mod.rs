@@ -8,7 +8,7 @@ use crate::{
 
 use self::render::{MockRenderObject, MockRenderWidget};
 
-use super::{ElementBuilder, ElementType, ElementUpdate};
+use super::{ElementBuilder, ElementComparison, ElementType};
 
 pub mod build;
 pub mod inherited;
@@ -32,9 +32,9 @@ impl ElementBuilder for DummyWidget {
 
             widget_mock.expect_update().returning(|new_widget| {
                 if new_widget.downcast::<DummyWidget>().is_some() {
-                    ElementUpdate::RebuildNecessary
+                    ElementComparison::Changed
                 } else {
-                    ElementUpdate::Invalid
+                    ElementComparison::Invalid
                 }
             });
 

@@ -4,8 +4,8 @@ use parking_lot::Mutex;
 
 use crate::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementMountContext,
-        ElementType, ElementUnmountContext, ElementUpdate, RenderObjectCreateContext,
+        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementComparison,
+        ElementMountContext, ElementType, ElementUnmountContext, RenderObjectCreateContext,
         RenderObjectUpdateContext,
     },
     render::object::{MockRenderObjectImpl, RenderObject},
@@ -20,7 +20,7 @@ pub trait RenderElement {
 
     fn unmount<'ctx>(&mut self, ctx: &mut ElementUnmountContext<'ctx>);
 
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate;
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison;
 
     fn children(&self) -> Vec<Widget>;
 
@@ -66,7 +66,7 @@ impl MockElement {
 }
 
 impl ElementWidget for MockElement {
-    fn update(&mut self, new_widget: &Widget) -> ElementUpdate {
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         self.widget.mock.borrow_mut().update(new_widget)
     }
 }
