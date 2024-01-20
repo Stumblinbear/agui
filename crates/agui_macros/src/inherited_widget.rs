@@ -20,6 +20,13 @@ pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
     parse_quote! {
         #props_impl
 
+        impl #impl_generics #agui_core::widget::IntoWidget for #ident #ty_generics #where_clause {
+            fn into_widget(self) -> #agui_core::widget::Widget {
+                #agui_core::widget::Widget::new(self)
+            }
+        }
+
+        #[automatically_derived]
         impl #impl_generics #agui_core::element::ElementBuilder for #ident #ty_generics #where_clause {
             fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where

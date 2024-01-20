@@ -1,4 +1,7 @@
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 

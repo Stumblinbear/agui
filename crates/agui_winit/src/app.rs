@@ -94,11 +94,6 @@ impl WinitApp {
 
                             tracing::trace!("creating window: {:?}", window_builder);
 
-                            // We don't control how long the renderer will take to set up, so we want to
-                            // hide the window until it's ready to render regardless of the user's
-                            // preference.
-                            let wants_is_visible = window_builder.window_attributes().visible;
-
                             let window = window_builder
                                 .with_visible(false)
                                 .build(window_target)
@@ -132,11 +127,6 @@ impl WinitApp {
                                     window_renderer.replace(renderer);
 
                                     drop(window_renderer);
-
-                                    // The renderer is ready, so we can restore the visibility user's preference.
-                                    if wants_is_visible {
-                                        window.set_visible(true);
-                                    }
 
                                     while let Ok(()) = notifier.recv().await {
                                         window.request_redraw();

@@ -4,8 +4,6 @@ use quote::quote;
 use syn::{parse::Error, spanned::Spanned};
 use syn::{parse2, ItemStruct};
 
-use crate::utils::resolve_package_path;
-
 mod field_info;
 mod struct_info;
 mod util;
@@ -20,11 +18,6 @@ pub fn impl_widget_props(input: TokenStream2) -> TokenStream2 {
 }
 
 pub fn impl_props_derive(item: &syn::ItemStruct) -> Result<TokenStream2, Error> {
-    let agui_core = resolve_package_path("agui_core");
-
-    let ident = &item.ident;
-    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
-
     let struct_info = match &item.fields {
         syn::Fields::Named(fields) => struct_info::StructInfo::new(item, fields.named.iter())?,
 
@@ -54,11 +47,5 @@ pub fn impl_props_derive(item: &syn::ItemStruct) -> Result<TokenStream2, Error> 
         #fields
         #(#required_fields)*
         #build_method
-
-        impl #impl_generics #agui_core::widget::IntoWidget for #ident #ty_generics #where_clause {
-            fn into_widget(self) -> #agui_core::widget::Widget {
-                #agui_core::widget::Widget::new(self)
-            }
-        }
     })
 }

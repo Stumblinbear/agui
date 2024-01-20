@@ -7,7 +7,7 @@ use agui_core::{
         object::{RenderObject, RenderObjectImpl},
         view::View,
     },
-    widget::Widget,
+    widget::{IntoWidget, Widget},
 };
 use agui_macros::WidgetProps;
 
@@ -19,6 +19,12 @@ pub struct VelloViewBinding {
 
     #[prop(into)]
     pub child: Widget,
+}
+
+impl IntoWidget for VelloViewBinding {
+    fn into_widget(self) -> Widget {
+        Widget::new(self)
+    }
 }
 
 impl ElementBuilder for VelloViewBinding {

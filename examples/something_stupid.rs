@@ -2,12 +2,11 @@ use agui_vello::{
     binding::VelloViewBinding,
     renderer::{window::VelloWindowRenderer, VelloRenderer},
 };
-use agui_winit::WinitWindow;
+use agui_winit::{WinitWindow, WinitWindowAttributes};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{app::run_app, prelude::*};
-use winit::window::WindowBuilder;
 
 fn main() {
     let filter = EnvFilter::from_default_env()
@@ -33,7 +32,9 @@ fn main() {
 
         build! {
             <WinitWindow> {
-                window: || WindowBuilder::new().with_title("Hello, world!"),
+                attributes: WinitWindowAttributes::builder()
+                    .title("Hello, world!")
+                    .build(),
 
                 renderer:  move |window| {
                     let window_renderer = window_renderer.clone();

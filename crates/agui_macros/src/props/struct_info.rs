@@ -97,8 +97,9 @@ impl<'a> StructInfo<'a> {
         }
 
         Ok(quote! {
+            #[automatically_derived]
+            #[allow(dead_code, clippy::type_complexity)]
             impl #impl_generics #name #ty_generics #where_clause {
-                #[allow(dead_code, clippy::default_trait_access)]
                 #vis fn builder() -> #builder_name #generics_with_empty {
                     #builder_name {
                         fields: #empties_tuple,
@@ -109,12 +110,14 @@ impl<'a> StructInfo<'a> {
 
             #[must_use]
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, non_snake_case)]
+            #[allow(dead_code, clippy::type_complexity)]
             #vis struct #builder_name #b_generics {
                 fields: #all_fields_param,
                 phantom: ::core::marker::PhantomData<(#( #phantom_generics ),*)>,
             }
 
+            #[automatically_derived]
+            #[allow(clippy::type_complexity)]
             impl #b_generics_impl Clone for #builder_name #b_generics_ty #b_generics_where {
                 #[allow(clippy::default_trait_access)]
                 fn clone(&self) -> Self {
@@ -249,7 +252,8 @@ impl<'a> StructInfo<'a> {
         Ok(quote_spanned! {
             self.builder_name.span() =>
 
-            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
+            #[automatically_derived]
+            #[allow(dead_code, clippy::type_complexity)]
             impl #b_impl_generics #name #b_ty_generics #b_where_clause {
                 #deprecated
                 #doc
@@ -260,7 +264,8 @@ impl<'a> StructInfo<'a> {
                 }
             }
 
-            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
+            #[automatically_derived]
+            #[allow(dead_code, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                 #deprecated
                 #doc
@@ -275,10 +280,12 @@ impl<'a> StructInfo<'a> {
             }
 
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, non_snake_case)]
+            #[allow(dead_code, non_camel_case_types)]
             pub enum #repeated_fields_error_type_name {}
+
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
+            #[automatically_derived]
+            #[allow(dead_code, clippy::type_complexity)]
             impl #impl_generics #builder_name < #( #target_generics ),* > #where_clause {
                 #[deprecated(
                     note = #repeated_fields_error_message
@@ -381,10 +388,12 @@ impl<'a> StructInfo<'a> {
             builder_name.span() =>
 
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, non_snake_case)]
+            #[allow(dead_code, non_camel_case_types)]
             pub enum #early_build_error_type_name {}
+
             #[doc(hidden)]
-            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic, clippy::type_complexity)]
+            #[automatically_derived]
+            #[allow(dead_code, non_camel_case_types)]
             impl #impl_generics #builder_name < #( #builder_generics ),* > #where_clause {
 
                 #vis fn build(self, _: #early_build_error_type_name) -> #agui_core::widget::Widget {
@@ -478,14 +487,14 @@ impl<'a> StructInfo<'a> {
         quote_spanned! {
             self.builder_name.span() =>
 
-            #[allow(dead_code, non_camel_case_types, missing_docs, clippy::type_complexity)]
+            #[automatically_derived]
+            #[allow(non_camel_case_types)]
+            #[allow(dead_code, clippy::all)]
             impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                #[allow(clippy::let_unit_value, clippy::default_trait_access)]
                 #vis fn build(self) -> #name #ty_generics {
                     let ( #(#descructuring,)* ) = self.fields;
                     #( #assignments )*
 
-                    #[allow(deprecated)]
                     #name {
                         #( #field_names ),*
                     }
