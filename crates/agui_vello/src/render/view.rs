@@ -125,7 +125,7 @@ impl VelloViewRenderer {
             element.canvas.end(transform, &mut builder);
         }
 
-        tracing::info!("redrew in: {:?}", Instant::now().duration_since(now));
+        tracing::debug!("redrew in: {:?}", Instant::now().duration_since(now));
     }
 
     fn create_element(&mut self, tree: &Tree<ElementId, Element>, element_id: ElementId) {}
