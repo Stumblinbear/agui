@@ -1,4 +1,4 @@
-use std::{thread, time::Instant};
+use std::thread;
 
 use agui_core::{engine::Engine, widget::IntoWidget};
 use agui_macros::build;
