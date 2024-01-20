@@ -22,7 +22,7 @@ impl CallbackId {
     }
 }
 
-pub enum Callback<A> {
+pub enum Callback<A: ?Sized> {
     Widget(WidgetCallback<A>),
     Func(FuncCallback<A>),
 }
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<A: 'static> PartialEq for Callback<A> {
+impl<A: ?Sized> PartialEq for Callback<A> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Widget(a), Self::Widget(b)) => a == b,
@@ -78,7 +78,7 @@ impl<A: 'static> std::fmt::Debug for Callback<A> {
     }
 }
 
-pub struct WidgetCallback<A> {
+pub struct WidgetCallback<A: ?Sized> {
     phantom: PhantomData<A>,
 
     id: CallbackId,
@@ -128,16 +128,16 @@ where
     }
 }
 
-unsafe impl<A> Send for WidgetCallback<A> {}
-unsafe impl<A> Sync for WidgetCallback<A> {}
+unsafe impl<A: ?Sized> Send for WidgetCallback<A> {}
+unsafe impl<A: ?Sized> Sync for WidgetCallback<A> {}
 
-impl<A> PartialEq for WidgetCallback<A> {
+impl<A: ?Sized> PartialEq for WidgetCallback<A> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<A> Clone for WidgetCallback<A> {
+impl<A: ?Sized> Clone for WidgetCallback<A> {
     fn clone(&self) -> Self {
         Self {
             phantom: PhantomData,
@@ -149,7 +149,7 @@ impl<A> Clone for WidgetCallback<A> {
     }
 }
 
-impl<A> std::fmt::Debug for WidgetCallback<A> {
+impl<A: ?Sized> std::fmt::Debug for WidgetCallback<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WidgetCallback")
             .field("id", &self.id)
@@ -157,7 +157,7 @@ impl<A> std::fmt::Debug for WidgetCallback<A> {
     }
 }
 
-pub struct FuncCallback<A> {
+pub struct FuncCallback<A: ?Sized> {
     func: Arc<dyn Fn(A) + Send + Sync>,
 }
 
@@ -182,16 +182,13 @@ where
     }
 }
 
-impl<A> PartialEq for FuncCallback<A>
-where
-    A: AsAny,
-{
+impl<A: ?Sized> PartialEq for FuncCallback<A> {
     fn eq(&self, other: &Self) -> bool {
         self.func.is_exact_ptr(&other.func)
     }
 }
 
-impl<A> Clone for FuncCallback<A> {
+impl<A: ?Sized> Clone for FuncCallback<A> {
     fn clone(&self) -> Self {
         Self {
             func: Arc::clone(&self.func),
