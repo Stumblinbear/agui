@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, future::Future};
 
 use agui_core::{callback::Callback, widget::Widget};
 use agui_elements::inherited::InheritedWidget;
@@ -26,21 +26,23 @@ impl InheritedWidget for WinitWindowManager {
 }
 
 impl WinitWindowManager {
-    pub fn create_window<Renderer>(
+    pub fn create_window<RendererFn>(
         &self,
         window_fn: impl FnOnce() -> WindowBuilder + Send + 'static,
-        renderer_fn: impl FnOnce(&winit::window::Window) -> Renderer + Send + 'static,
+        renderer_fn: RendererFn,
         callback: Callback<WinitWindowHandle>,
     ) -> Result<(), WinitEventLoopClosed>
     where
-        Renderer: RenderWindow + 'static,
+        RendererFn: FnOnce(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
+            + Send
+            + 'static,
     {
         tracing::debug!("queueing window for creation");
 
         self.event_loop
             .send_event(WinitBindingAction::CreateWindow(
                 Box::new(window_fn),
-                Box::new(move |window| Box::new((renderer_fn)(window))),
+                Box::new(renderer_fn),
                 callback,
             ))?;
 

@@ -1,3 +1,5 @@
+use std::{cell::RefCell, future::Future, rc::Rc};
+
 use agui_core::callback::Callback;
 use agui_renderer::RenderWindow;
 use futures::{executor::LocalPool, task::LocalSpawnExt};
@@ -10,11 +12,24 @@ use winit::{
 
 use crate::{WinitWindowEvent, WinitWindowHandle};
 
+type CreateWinitWindowFn = dyn FnOnce(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
+    + Send;
+
+type WindowRendererSlot = Rc<RefCell<Option<Box<dyn RenderWindow>>>>;
+
+pub enum WinitBindingAction {
+    CreateWindow(
+        Box<dyn FnOnce() -> WindowBuilder + Send>,
+        Box<CreateWinitWindowFn>,
+        Callback<WinitWindowHandle>,
+    ),
+}
+
 pub struct WinitApp {
     pub event_loop: EventLoop<WinitBindingAction>,
 
     window_events: FxHashMap<WindowId, async_channel::Sender<WinitWindowEvent>>,
-    window_renderer: FxHashMap<WindowId, Box<dyn RenderWindow>>,
+    window_renderer: FxHashMap<WindowId, WindowRendererSlot>,
 }
 
 impl Default for WinitApp {
@@ -34,9 +49,6 @@ impl WinitApp {
 
         self.event_loop
             .run(move |event, window_target, control_flow| {
-                // Refactor to use `::Wait``
-                *control_flow = ControlFlow::Poll;
-
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
                         if let Some(event) = event.to_static() {
@@ -62,7 +74,15 @@ impl WinitApp {
 
                     WinitEvent::RedrawRequested(window_id) => {
                         if let Some(renderer) = self.window_renderer.get_mut(&window_id) {
-                            renderer.render();
+                            if let Ok(mut renderer) = renderer.try_borrow_mut() {
+                                if let Some(renderer) = renderer.as_mut() {
+                                    renderer.render();
+                                } else {
+                                    tracing::error!("window renderer was not created");
+                                }
+                            } else {
+                                tracing::warn!("renderer for window is not yet ready");
+                            }
                         } else {
                             tracing::warn!("no renderer for window {:?}", window_id);
                         }
@@ -84,51 +104,56 @@ impl WinitApp {
                                 .build(window_target)
                                 .expect("failed to create window");
 
-                            let renderer = (renderer_fn)(&window);
-
                             let (events_tx, events_rx) = async_channel::unbounded();
+
+                            self.window_events.insert(window.id(), events_tx);
+
+                            let window_renderer = Rc::new(RefCell::new(None));
+
+                            self.window_renderer
+                                .insert(window.id(), Rc::clone(&window_renderer));
 
                             let window = WinitWindowHandle::new(window, events_rx);
 
+                            callback.call(window.clone());
+
+                            #[allow(clippy::await_holding_refcell_ref)]
                             task_pool
                                 .spawner()
-                                .spawn_local({
-                                    let window = window.clone();
+                                .spawn_local(async move {
+                                    let mut window_renderer = window_renderer.borrow_mut();
+
+                                    let renderer_fut = Box::into_pin((renderer_fn)(&window));
+
+                                    let renderer = renderer_fut.await;
+
                                     let notifier = renderer.render_notifier();
 
-                                    async move {
-                                        while let Ok(()) = notifier.recv().await {
-                                            window.request_redraw();
-                                        }
+                                    window_renderer.replace(renderer);
+
+                                    drop(window_renderer);
+
+                                    // The renderer is ready, so we can restore the visibility user's preference.
+                                    if wants_is_visible {
+                                        window.set_visible(true);
+                                    }
+
+                                    while let Ok(()) = notifier.recv().await {
+                                        window.request_redraw();
                                     }
                                 })
                                 .expect("failed to spawn render notifier task");
-
-                            self.window_events.insert(window.id(), events_tx);
-                            self.window_renderer.insert(window.id(), renderer);
-
-                            // The renderer is ready, so we can restore the visibility user's preference.
-                            if wants_is_visible {
-                                window.set_visible(true);
-                            }
-
-                            callback.call(window);
                         }
                     },
 
                     _ => (),
                 }
 
-                task_pool.run_until_stalled();
+                if task_pool.try_run_one() {
+                    *control_flow = ControlFlow::Poll;
+                } else {
+                    *control_flow = ControlFlow::Wait;
+                }
             });
     }
-}
-
-pub enum WinitBindingAction {
-    CreateWindow(
-        Box<dyn FnOnce() -> WindowBuilder + Send>,
-        #[allow(clippy::type_complexity)]
-        Box<dyn FnOnce(&winit::window::Window) -> Box<dyn RenderWindow> + Send>,
-        Callback<WinitWindowHandle>,
-    ),
 }

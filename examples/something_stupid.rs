@@ -35,7 +35,13 @@ fn main() {
             <WinitWindow> {
                 window: || WindowBuilder::new().with_title("Hello, world!"),
 
-                renderer: move |window| window_renderer.attach(window).expect("failed to create window renderer"),
+                renderer:  move |window| {
+                    let window_renderer = window_renderer.clone();
+
+                    Box::new(async move {
+                        Box::new(window_renderer.attach(window).await.expect("failed to create window renderer")) as _
+                    })
+                },
 
                 child: <VelloViewBinding> {
                     view: view,

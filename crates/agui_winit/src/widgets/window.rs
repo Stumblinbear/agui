@@ -10,18 +10,21 @@ use agui_elements::stateful::{
 use agui_macros::{build, StatefulWidget};
 use agui_primitives::sized_box::SizedBox;
 use agui_renderer::RenderWindow;
-use futures::{future::RemoteHandle, prelude::stream::StreamExt};
+use futures::{future::RemoteHandle, prelude::stream::StreamExt, Future};
 use winit::{event::WindowEvent, window::WindowBuilder};
 
 use crate::{handle::WinitWindowHandle, WinitWindowManager};
 use crate::{widgets::window_layout::WinitWindowLayout, CurrentWindow};
 
 #[derive(StatefulWidget)]
-pub struct WinitWindow<WindowFn, RendererFn, Renderer>
+pub struct WinitWindow<WindowFn, RendererFn>
 where
     WindowFn: Fn() -> WindowBuilder + Send + Sync + Clone + 'static,
-    RendererFn: Fn(&winit::window::Window) -> Renderer + Send + Sync + Clone + 'static,
-    Renderer: RenderWindow + 'static,
+    RendererFn: Fn(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
 {
     pub window: WindowFn,
 
@@ -30,13 +33,16 @@ where
     pub child: Widget,
 }
 
-impl<WindowFn, RendererFn, Renderer> StatefulWidget for WinitWindow<WindowFn, RendererFn, Renderer>
+impl<WindowFn, RendererFn> StatefulWidget for WinitWindow<WindowFn, RendererFn>
 where
     WindowFn: Fn() -> WindowBuilder + Send + Sync + Clone + 'static,
-    RendererFn: Fn(&winit::window::Window) -> Renderer + Send + Sync + Clone + 'static,
-    Renderer: RenderWindow + 'static,
+    RendererFn: Fn(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
 {
-    type State = WinitWindowState<WindowFn, RendererFn, Renderer>;
+    type State = WinitWindowState<WindowFn, RendererFn>;
 
     fn create_state(&self) -> Self::State {
         WinitWindowState {
@@ -50,8 +56,8 @@ where
     }
 }
 
-pub struct WinitWindowState<WindowFn, RendererFn, Renderer> {
-    phantom: PhantomData<(WindowFn, RendererFn, Renderer)>,
+pub struct WinitWindowState<WindowFn, RendererFn> {
+    phantom: PhantomData<(WindowFn, RendererFn)>,
 
     window: Option<WinitWindowHandle>,
     resize_event_task: Option<RemoteHandle<()>>,
@@ -59,14 +65,16 @@ pub struct WinitWindowState<WindowFn, RendererFn, Renderer> {
     window_size: Size,
 }
 
-impl<WindowFn, RendererFn, Renderer> WidgetState
-    for WinitWindowState<WindowFn, RendererFn, Renderer>
+impl<WindowFn, RendererFn> WidgetState for WinitWindowState<WindowFn, RendererFn>
 where
     WindowFn: Fn() -> WindowBuilder + Send + Sync + Clone + 'static,
-    RendererFn: Fn(&winit::window::Window) -> Renderer + Send + Sync + Clone + 'static,
-    Renderer: RenderWindow + 'static,
+    RendererFn: Fn(&winit::window::Window) -> Box<dyn Future<Output = Box<dyn RenderWindow>> + '_>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
 {
-    type Widget = WinitWindow<WindowFn, RendererFn, Renderer>;
+    type Widget = WinitWindow<WindowFn, RendererFn>;
 
     fn init_state(&mut self, ctx: &mut StatefulBuildContext<Self>) {
         // let mouse_input_event_cb = ctx.callback(

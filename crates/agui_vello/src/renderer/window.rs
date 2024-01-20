@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use agui_renderer::RenderWindow;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
@@ -51,9 +53,10 @@ impl VelloWindowRenderer<()> {
         }
     }
 
-    pub fn attach<W>(
+    #[tracing::instrument(skip(self, window))]
+    pub async fn attach<W>(
         &self,
-        window: &W,
+        window: W,
     ) -> Result<VelloWindowRenderer<Attached>, Box<dyn std::error::Error>>
     where
         W: HasRawWindowHandle + HasRawDisplayHandle,
@@ -62,11 +65,13 @@ impl VelloWindowRenderer<()> {
 
         let size = self.view_handle.with_scene(|scene| scene.size);
 
-        let render_surface = futures::executor::block_on(render_context.create_surface(
-            window,
-            size.width as u32,
-            size.height as u32,
-        ))?;
+        let now = Instant::now();
+
+        let render_surface = render_context
+            .create_surface(&window, size.width as u32, size.height as u32)
+            .await?;
+
+        tracing::trace!("created render surface in {:?}", now.elapsed());
 
         let device_handle = &render_context.devices[render_surface.dev_id];
 
