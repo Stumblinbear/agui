@@ -23,8 +23,6 @@ pub trait WidgetState {
     #[allow(unused_variables)]
     fn updated(&mut self, ctx: &mut StatefulBuildContext<Self>, old_widget: &Self::Widget) {}
 
-    /// Called whenever this widget is rebuilt.
-    ///
-    /// This method may be called when any parent is rebuilt or when its internal state changes.
+    /// Called whenever this widget is rebuilt or when its state changes.
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget;
 }
