@@ -28,7 +28,7 @@ where
 
 impl<S> ContextElements for StatefulBuildContext<'_, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     fn elements(&self) -> &Tree<ElementId, Element> {
         self.inner.elements()
@@ -37,7 +37,7 @@ where
 
 impl<S> ContextElement for StatefulBuildContext<'_, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     fn element_id(&self) -> ElementId {
         self.inner.element_id()
@@ -46,7 +46,7 @@ where
 
 impl<'ctx, S> Deref for StatefulBuildContext<'ctx, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     type Target = ElementBuildContext<'ctx>;
 
@@ -57,7 +57,7 @@ where
 
 impl<'ctx, S> DerefMut for StatefulBuildContext<'ctx, '_, S>
 where
-    S: WidgetState,
+    S: WidgetState + ?Sized,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner
@@ -68,10 +68,6 @@ impl<'ctx, S> StatefulBuildContext<'ctx, '_, S>
 where
     S: WidgetState + 'static,
 {
-    pub fn widget(&self) -> &S::Widget {
-        self.widget
-    }
-
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
         A: AsAny,

@@ -6,7 +6,7 @@ mod element;
 pub use context::*;
 pub use element::*;
 
-pub trait StatefulWidget: Sized {
+pub trait StatefulWidget {
     type State: WidgetState<Widget = Self>;
 
     fn create_state(&self) -> Self::State;
