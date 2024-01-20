@@ -22,10 +22,7 @@ impl CallbackId {
     }
 }
 
-#[derive(Default, Clone)]
 pub enum Callback<A> {
-    #[default]
-    None,
     Widget(WidgetCallback<A>),
     Func(FuncCallback<A>),
 }
@@ -36,7 +33,6 @@ where
 {
     pub fn call(&self, arg: A) {
         match self {
-            Self::None => {}
             Self::Widget(cb) => cb.call(arg),
             Self::Func(cb) => cb.call(arg),
         }
@@ -48,7 +44,6 @@ where
     /// is different, it will panic.
     pub fn call_unchecked(&self, arg: Box<dyn Any + Send>) {
         match self {
-            Self::None => {}
             Self::Widget(cb) => cb.call_unchecked(arg),
             Self::Func(cb) => cb.call_unchecked(arg),
         }
@@ -58,7 +53,6 @@ where
 impl<A: 'static> PartialEq for Callback<A> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::None, Self::None) => true,
             (Self::Widget(a), Self::Widget(b)) => a == b,
             (Self::Func(a), Self::Func(b)) => a == b,
             _ => false,
@@ -66,17 +60,24 @@ impl<A: 'static> PartialEq for Callback<A> {
     }
 }
 
+impl<A> Clone for Callback<A> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Widget(cb) => Self::Widget(cb.clone()),
+            Self::Func(cb) => Self::Func(cb.clone()),
+        }
+    }
+}
+
 impl<A: 'static> std::fmt::Debug for Callback<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Callback::None => f.debug_tuple("None").finish(),
             Callback::Widget(cb) => f.debug_tuple("Widget").field(cb).finish(),
             Callback::Func(cb) => f.debug_tuple("Func").field(cb).finish(),
         }
     }
 }
 
-#[derive(Clone)]
 pub struct WidgetCallback<A> {
     phantom: PhantomData<A>,
 
@@ -136,6 +137,18 @@ impl<A> PartialEq for WidgetCallback<A> {
     }
 }
 
+impl<A> Clone for WidgetCallback<A> {
+    fn clone(&self) -> Self {
+        Self {
+            phantom: PhantomData,
+
+            id: self.id,
+
+            callback_queue: self.callback_queue.clone(),
+        }
+    }
+}
+
 impl<A> std::fmt::Debug for WidgetCallback<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WidgetCallback")
@@ -144,7 +157,6 @@ impl<A> std::fmt::Debug for WidgetCallback<A> {
     }
 }
 
-#[derive(Clone)]
 pub struct FuncCallback<A> {
     func: Arc<dyn Fn(A) + Send + Sync>,
 }
@@ -154,7 +166,7 @@ where
     A: AsAny,
 {
     pub fn call(&self, arg: A) {
-        (self.func)(arg);
+        (self.func)(arg)
     }
 
     /// # Panics
@@ -176,6 +188,14 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         self.func.is_exact_ptr(&other.func)
+    }
+}
+
+impl<A> Clone for FuncCallback<A> {
+    fn clone(&self) -> Self {
+        Self {
+            func: Arc::clone(&self.func),
+        }
     }
 }
 
