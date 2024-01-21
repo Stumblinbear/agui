@@ -46,6 +46,6 @@ pub trait View {
 }
 
 pub enum RenderView {
-    Owner(Box<dyn View>),
+    Owner(Box<dyn View + Send>),
     Within(RenderObjectId),
 }

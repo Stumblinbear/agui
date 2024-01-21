@@ -61,7 +61,6 @@ impl RenderObjectImpl for RenderPadding {
         dimension: IntrinsicDimension,
         cross_extent: f32,
     ) -> f32 {
-        // TODO: should padding even be included in the intrinsic size?
         self.padding.axis(dimension.axis())
             + ctx
                 .iter_children()

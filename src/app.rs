@@ -1,6 +1,9 @@
 use std::thread;
 
-use agui_core::{engine::Engine, widget::IntoWidget};
+use agui_core::{
+    executor::{self, EngineExecutor},
+    widget::IntoWidget,
+};
 use agui_macros::build;
 use agui_winit::{WinitApp, WinitWindowManager};
 
@@ -31,7 +34,7 @@ where
         };
 
         // TODO: add a way to actually stop the engine
-        Engine::with_root(root).run();
+        executor::ThreadedEngineExecutor::with_root(root).run();
     });
 
     winit_app.run();

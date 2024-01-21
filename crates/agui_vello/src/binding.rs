@@ -85,7 +85,7 @@ impl ElementRender for VelloViewElement {
 }
 
 impl ElementView for VelloViewElement {
-    fn create_view(&self) -> Box<dyn View> {
+    fn create_view(&self) -> Box<dyn View + Send> {
         Box::new(self.view.clone())
     }
 }

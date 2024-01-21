@@ -1,4 +1,3 @@
-// TODO: ElementComparison
 #[derive(Debug, PartialEq, Eq)]
 pub enum ElementComparison {
     /// The widgets were of the same type and instance.
