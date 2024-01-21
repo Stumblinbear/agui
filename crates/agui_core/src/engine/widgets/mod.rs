@@ -216,7 +216,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
-    fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: &Widget) -> ElementId {
+    fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
         let element = widget.create_element();
 
         tracing::trace!(widget = element.name(), "spawning element");
@@ -273,13 +273,25 @@ where
             let old_children = self
                 .tree
                 .get_children(element_id)
-                .expect("newly created element does not exist in the tree")
-                .clone();
+                .expect("newly created element does not exist in the tree");
+
+            // If we had no children before, we can just spawn all of the new widgets.
+            if old_children.is_empty() {
+                for new_widget in new_widgets {
+                    let new_child_id = self.process_spawn(Some(element_id), new_widget);
+
+                    build_queue.push_back(new_child_id);
+                }
+
+                continue;
+            }
+
+            let old_children = old_children.clone();
 
             let mut new_children_top = 0;
             let mut old_children_top = 0;
-            let mut new_children_bottom = new_widgets.len() as i32 - 1;
-            let mut old_children_bottom = old_children.len() as i32 - 1;
+            let mut new_children_bottom = new_widgets.len() - 1;
+            let mut old_children_bottom = old_children.len() - 1;
 
             let mut new_children = vec![None; new_widgets.len()];
 
@@ -287,8 +299,8 @@ where
             while (old_children_top <= old_children_bottom)
                 && (new_children_top <= new_children_bottom)
             {
-                let old_child_id = old_children.get(old_children_top as usize).copied();
-                let new_widget = new_widgets.get(new_children_top as usize);
+                let old_child_id = old_children.get(old_children_top).copied();
+                let new_widget = new_widgets.get(new_children_top);
 
                 if let Some((old_child_id, new_widget)) = old_child_id.zip(new_widget) {
                     let old_child = self
@@ -326,7 +338,7 @@ where
                         ElementComparison::Invalid => break,
                     }
 
-                    new_children[new_children_top as usize] = Some(old_child_id);
+                    new_children[new_children_top] = Some(old_child_id);
                 } else {
                     break;
                 }
@@ -339,8 +351,8 @@ where
             while (old_children_top <= old_children_bottom)
                 && (new_children_top <= new_children_bottom)
             {
-                let old_child_id = old_children.get(old_children_bottom as usize).copied();
-                let new_widget = new_widgets.get(new_children_bottom as usize);
+                let old_child_id = old_children.get(old_children_bottom).copied();
+                let new_widget = new_widgets.get(new_children_bottom);
 
                 if let Some((old_child_id, new_widget)) = old_child_id.zip(new_widget) {
                     let old_child = self
@@ -389,7 +401,7 @@ where
             let mut old_keyed_children = FxHashMap::<Key, ElementId>::default();
 
             while old_children_top <= old_children_bottom {
-                if let Some(old_child_id) = old_children.get(old_children_top as usize) {
+                if let Some(old_child_id) = old_children.get(old_children_top) {
                     let old_child = self
                         .tree
                         .get(*old_child_id)
@@ -405,9 +417,15 @@ where
                 old_children_top += 1;
             }
 
+            let new_widgets_len = new_widgets.len();
+            let mut new_widgets = new_widgets.into_iter().skip(new_children_top);
+
             // Update the middle of the list.
             while new_children_top <= new_children_bottom {
-                let new_widget = &new_widgets[new_children_top as usize];
+                let new_widget = match new_widgets.next() {
+                    Some(new_widget) => new_widget,
+                    None => unreachable!("new widgets should never run out"),
+                };
 
                 if have_old_children {
                     if let Some(key) = new_widget.key() {
@@ -417,7 +435,7 @@ where
                                 .get_mut(old_child_id)
                                 .expect("child element does not exist in the tree");
 
-                            match old_child.update(new_widget) {
+                            match old_child.update(&new_widget) {
                                 ElementComparison::Identical => {
                                     tracing::trace!(
                                         parent_id = ?element_id,
@@ -450,7 +468,7 @@ where
                             // Remove it from the list so that we don't try to use it again.
                             old_keyed_children.remove(&key);
 
-                            new_children[new_children_top as usize] = Some(old_child_id);
+                            new_children[new_children_top] = Some(old_child_id);
                             new_children_top += 1;
 
                             continue;
@@ -460,7 +478,7 @@ where
 
                 let new_child_id = self.process_spawn(Some(element_id), new_widget);
 
-                new_children[new_children_top as usize] = Some(new_child_id);
+                new_children[new_children_top] = Some(new_child_id);
                 new_children_top += 1;
 
                 build_queue.push_back(new_child_id);
@@ -469,20 +487,16 @@ where
             // We've scanned the whole list.
             assert!(old_children_top == old_children_bottom + 1);
             assert!(new_children_top == new_children_bottom + 1);
-            assert!(
-                new_widgets.len() as i32 - new_children_top
-                    == old_children.len() as i32 - old_children_top
-            );
+            assert!(new_widgets_len - new_children_top == old_children.len() - old_children_top);
 
-            new_children_bottom = new_widgets.len() as i32 - 1;
-            old_children_bottom = old_children.len() as i32 - 1;
+            new_children_bottom = new_widgets_len - 1;
+            old_children_bottom = old_children.len() - 1;
 
             // Update the bottom of the list.
             while (old_children_top <= old_children_bottom)
                 && (new_children_top <= new_children_bottom)
             {
-                new_children[new_children_top as usize] =
-                    Some(old_children[old_children_top as usize]);
+                new_children[new_children_top] = Some(old_children[old_children_top]);
                 new_children_top += 1;
                 old_children_top += 1;
             }

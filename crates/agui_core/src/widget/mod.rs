@@ -51,8 +51,8 @@ impl Widget {
         Rc::clone(&self.widget).as_any().downcast::<W>().ok()
     }
 
-    pub(crate) fn create_element(&self) -> Element {
-        Rc::clone(&self.widget).create_element(self.key)
+    pub(crate) fn create_element(self) -> Element {
+        self.widget.create_element(self.key)
     }
 }
 

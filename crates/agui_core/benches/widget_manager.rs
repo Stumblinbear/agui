@@ -19,6 +19,21 @@ fn widget_manager_ops(c: &mut Criterion) {
         )
     });
 
+    group.sample_size(10000).bench_function("rebuilds", |b| {
+        b.iter_with_setup(
+            || {
+                let mut manager = WidgetManager::with_root(DummyWidget.into_widget());
+
+                manager.update();
+
+                manager.mark_needs_build(manager.root());
+
+                manager
+            },
+            |mut manager| manager.update(),
+        )
+    });
+
     group.sample_size(10000).bench_function("removals", |b| {
         b.iter_with_setup(
             || {
@@ -92,6 +107,46 @@ fn widget_manager_ops(c: &mut Criterion) {
                 }
 
                 WidgetManager::with_root(root_widget.into_widget())
+            },
+            |mut manager| manager.update(),
+        )
+    });
+
+    group.sample_size(1000).bench_function("rebuilds", |b| {
+        b.iter_with_setup(
+            || {
+                let children = {
+                    let mut children = Vec::new();
+
+                    for _ in 0..1000 {
+                        children.push(DummyWidget.into_widget());
+                    }
+
+                    children
+                };
+
+                let root_widget = MockRenderWidget::default();
+                {
+                    root_widget
+                        .mock
+                        .borrow_mut()
+                        .expect_children()
+                        .returning_st(move || children.clone());
+
+                    root_widget
+                        .mock
+                        .borrow_mut()
+                        .expect_create_render_object()
+                        .returning(|_| DummyRenderObject.into());
+                }
+
+                let mut manager = WidgetManager::with_root(root_widget.into_widget());
+
+                manager.update();
+
+                manager.mark_needs_build(manager.root());
+
+                manager
             },
             |mut manager| manager.update(),
         )
