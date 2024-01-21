@@ -1,13 +1,18 @@
 use std::{any::Any, rc::Rc};
 
-use crate::{element::ElementBuilder, unit::AsAny};
+use crate::{
+    element::{Element, ElementBuilder},
+    unit::{AsAny, Key},
+};
 
 use super::Widget;
 
-pub trait AnyWidget: ElementBuilder + AsAny {
+pub trait AnyWidget: AsAny {
     fn as_any(self: Rc<Self>) -> Rc<dyn Any>;
 
     fn widget_name(&self) -> &'static str;
+
+    fn create_element(self: Rc<Self>, key: Option<Key>) -> Element;
 }
 
 impl<T> AnyWidget for T
@@ -28,6 +33,14 @@ where
             .split("::")
             .last()
             .unwrap_or(type_name)
+    }
+
+    fn create_element(self: Rc<Self>, key: Option<Key>) -> Element {
+        Element::new(
+            self.widget_name(),
+            key,
+            ElementBuilder::create_element(self),
+        )
     }
 }
 

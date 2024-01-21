@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use crate::{
+    element::{
+        mock::render::{MockRenderObject, MockRenderWidget},
+        ElementBuilder, ElementComparison, ElementType,
+    },
     render::object::RenderObject,
     unit::HitTest,
     widget::{IntoWidget, Widget},
 };
-
-use self::render::{MockRenderObject, MockRenderWidget};
-
-use super::{ElementBuilder, ElementComparison, ElementType};
 
 pub mod build;
 pub mod inherited;
@@ -23,6 +23,8 @@ impl IntoWidget for DummyWidget {
 }
 
 impl ElementBuilder for DummyWidget {
+    type Element = <MockRenderWidget as ElementBuilder>::Element;
+
     fn create_element(self: Rc<Self>) -> ElementType {
         let widget = MockRenderWidget::default();
         {

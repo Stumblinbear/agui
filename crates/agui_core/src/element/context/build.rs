@@ -1,10 +1,10 @@
-use std::{any::TypeId, future::Future, rc::Rc};
+use std::{any::TypeId, future::Future};
 
 use futures::{future::RemoteHandle, task::SpawnError};
 
 use crate::{
     callback::CallbackQueue,
-    element::{Element, ElementId, ElementType},
+    element::{inherited::ElementInherited, Element, ElementBuilder, ElementId, ElementType},
     engine::{bindings::SchedulerBinding, Dirty},
     inheritance::InheritanceManager,
     util::tree::Tree,
@@ -54,55 +54,65 @@ impl ElementBuildContext<'_> {
             .spawn_shared_task(*self.element_id, Box::pin(future))
     }
 
-    pub fn find_inherited_widget<I>(&self) -> Option<Rc<I>>
+    pub fn find_inherited_widget<I>(
+        &self,
+    ) -> Option<&<<I as ElementBuilder>::Element as ElementInherited>::Data>
     where
-        I: AnyWidget,
+        I: AnyWidget + ElementBuilder,
+        <I as ElementBuilder>::Element: ElementInherited,
     {
-        if let Some(element_id) = self
-            .inheritance
-            .find_type(*self.element_id, &TypeId::of::<I>())
-        {
+        if let Some(element_id) = self.inheritance.find_type(
+            *self.element_id,
+            &TypeId::of::<<<I as ElementBuilder>::Element as ElementInherited>::Data>(),
+        ) {
             let inherited_element = self
                 .elements()
                 .get(element_id)
-                .expect("found an inherited widget but it does not exist exist in the tree");
+                .expect("found an inherited element but it does not exist exist in the tree");
 
-            if !matches!(inherited_element.as_ref(), ElementType::Inherited(_)) {
-                panic!("widget did not create an inherited element");
-            }
+            debug_assert!(
+                matches!(inherited_element.as_ref(), ElementType::Inherited(_)),
+                "widget did not create an inherited element"
+            );
 
-            let Some(widget) = inherited_element.widget().downcast::<I>() else {
-                panic!("inherited widget downcast failed");
+            let Some(element) = inherited_element.downcast::<<I as ElementBuilder>::Element>()
+            else {
+                panic!("inherited element downcast failed");
             };
 
-            Some(widget)
+            Some(element.inherited_data())
         } else {
             None
         }
     }
 
-    pub fn depend_on_inherited_widget<I>(&mut self) -> Option<Rc<I>>
+    pub fn depend_on_inherited_widget<I>(
+        &mut self,
+    ) -> Option<&<<I as ElementBuilder>::Element as ElementInherited>::Data>
     where
-        I: AnyWidget,
+        I: AnyWidget + ElementBuilder,
+        <I as ElementBuilder>::Element: ElementInherited,
     {
-        if let Some(element_id) = self
-            .inheritance
-            .depend_on_type(*self.element_id, TypeId::of::<I>())
-        {
+        if let Some(element_id) = self.inheritance.depend_on_type(
+            *self.element_id,
+            TypeId::of::<<<I as ElementBuilder>::Element as ElementInherited>::Data>(),
+        ) {
             let inherited_element = self
                 .elements()
                 .get(element_id)
-                .expect("found an inherited widget but it does not exist exist in the tree");
+                .expect("found an inherited element but it does not exist exist in the tree");
 
-            if !matches!(inherited_element.as_ref(), ElementType::Inherited(_)) {
-                panic!("widget did not create an inherited element");
-            }
+            debug_assert!(
+                matches!(inherited_element.as_ref(), ElementType::Inherited(_)),
+                "widget did not create an inherited element"
+            );
 
-            let Some(widget) = inherited_element.widget().downcast::<I>() else {
-                panic!("inherited widget downcast failed");
+            let Some(element) = inherited_element.downcast::<<I as ElementBuilder>::Element>()
+            else {
+                panic!("inherited element downcast failed");
             };
 
-            Some(widget)
+            Some(element.inherited_data())
         } else {
             None
         }

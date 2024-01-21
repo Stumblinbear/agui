@@ -21,13 +21,8 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find(|element| {
-            element
-                .widget()
-                .key()
-                .filter(|key| key == &self.key)
-                .is_some()
-        })
+        self.iter
+            .find(|element| element.key().filter(|key| key == &self.key).is_some())
     }
 
     #[inline]

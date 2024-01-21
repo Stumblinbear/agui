@@ -28,6 +28,8 @@ pub fn impl_stateless_widget(input: TokenStream2) -> TokenStream2 {
 
         #[automatically_derived]
         impl #impl_generics #agui_core::element::ElementBuilder for #ident #ty_generics #where_clause {
+            type Element = #agui_elements::stateless::StatelessWidgetElement<Self>;
+
             fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
             where
                 Self: Sized

@@ -42,7 +42,7 @@ mod tests {
         manager.update();
 
         assert!(
-            manager.query().by_type::<DummyWidget>().next().is_some(),
+            manager.query().by_widget::<DummyWidget>().next().is_some(),
             "widget should have been created"
         );
     }

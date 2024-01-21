@@ -4,16 +4,18 @@ use crate::{
     callback::CallbackId,
     element::{inherited::ElementInherited, view::ElementView},
     render::object::{RenderBox, RenderObject},
+    unit::Key,
     widget::Widget,
 };
 
-use self::{build::ElementBuild, render::ElementRender, widget::ElementWidget};
+use self::{build::ElementBuild, lifecycle::ElementLifecycle, render::ElementRender};
 
 pub mod build;
 mod builder;
 mod comparison;
 mod context;
 pub mod inherited;
+pub mod lifecycle;
 #[cfg(any(test, feature = "mocks"))]
 pub mod mock;
 pub mod render;
@@ -29,9 +31,13 @@ slotmap::new_key_type! {
 }
 
 pub struct Element {
+    meta: Box<ElementMetadata>,
     inner: ElementType,
+}
 
-    widget: Widget,
+struct ElementMetadata {
+    name: &'static str,
+    key: Option<Key>,
 }
 
 #[cfg(not(miri))]
@@ -118,21 +124,16 @@ impl ElementType {
 }
 
 impl Element {
-    pub fn new(widget: Widget) -> Self {
+    pub fn new(name: &'static str, key: Option<Key>, element: ElementType) -> Self {
         Self {
-            inner: Widget::create_element(&widget),
-
-            widget,
+            meta: Box::new(ElementMetadata { name, key }),
+            inner: element,
         }
-    }
-
-    pub fn widget(&self) -> &Widget {
-        &self.widget
     }
 
     pub fn is<E>(&self) -> bool
     where
-        E: ElementWidget,
+        E: ElementLifecycle,
     {
         match self.inner {
             ElementType::Widget(ref element) => (**element).as_any().is::<E>(),
@@ -146,7 +147,7 @@ impl Element {
 
     pub fn downcast<E>(&self) -> Option<&E>
     where
-        E: ElementWidget,
+        E: ElementLifecycle,
     {
         match self.inner {
             ElementType::Widget(ref element) => (**element).as_any().downcast_ref::<E>(),
@@ -160,7 +161,7 @@ impl Element {
 
     pub fn downcast_mut<E>(&mut self) -> Option<&mut E>
     where
-        E: ElementWidget,
+        E: ElementLifecycle,
     {
         match self.inner {
             ElementType::Widget(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
@@ -172,7 +173,15 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
+    pub fn name(&self) -> &'static str {
+        self.meta.name
+    }
+
+    pub fn key(&self) -> Option<Key> {
+        self.meta.key
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.meta.name))]
     pub fn mount(&mut self, ctx: &mut ElementMountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.mount(ctx),
@@ -210,7 +219,7 @@ impl Element {
     //         .update_inheritance_scope(ctx, element_id, parent_scope_id);
     // }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.meta.name))]
     pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.unmount(ctx),
@@ -224,7 +233,7 @@ impl Element {
         ctx.inheritance.remove(*ctx.element_id);
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.meta.name))]
     pub fn build(&mut self, ctx: &mut ElementBuildContext) -> Vec<Widget> {
         match self.inner {
             ElementType::Widget(ref mut element) => Vec::from([element.build(ctx)]),
@@ -248,33 +257,19 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, new_widget), fields(widget_name = self.widget.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, new_widget), fields(widget_name = self.meta.name))]
     pub fn update(&mut self, new_widget: &Widget) -> ElementComparison {
-        if &self.widget == new_widget {
-            return ElementComparison::Identical;
-        }
-
-        let result = match self.inner {
+        match self.inner {
             ElementType::Widget(ref mut element) => element.update(new_widget),
 
             ElementType::Inherited(ref mut element) => element.update(new_widget),
 
             ElementType::View(ref mut element) => element.update(new_widget),
             ElementType::Render(ref mut element) => element.update(new_widget),
-        };
-
-        match result {
-            ElementComparison::Identical | ElementComparison::Changed => {
-                self.widget = new_widget.clone();
-            }
-
-            ElementComparison::Invalid => {}
         }
-
-        result
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.meta.name))]
     pub fn call(
         &mut self,
         ctx: &mut ElementCallbackContext,
@@ -304,7 +299,7 @@ impl Element {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.widget.widget_name()))]
+    #[tracing::instrument(level = "trace", skip(self, ctx), fields(widget_name = self.meta.name))]
     pub(crate) fn update_render_object(
         &self,
         ctx: &mut RenderObjectUpdateContext,
@@ -346,7 +341,8 @@ impl std::fmt::Debug for Element {
             ElementType::View(_) => "Element::View",
             ElementType::Render(_) => "Element::Render",
         })
-        .field("widget", &DebugWidget(self.widget.widget_name()))
+        .field("key", &self.meta.key)
+        .field("widget", &DebugWidget(self.meta.name))
         .finish()
     }
 }

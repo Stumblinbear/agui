@@ -1,40 +1,35 @@
 use std::marker::PhantomData;
 
-use crate::{element::Element, widget::AnyWidget};
+use crate::element::{lifecycle::ElementLifecycle, Element};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
-pub struct QueryByType<I, W>
-where
-    W: AnyWidget,
-{
+pub struct QueryByElement<I, E> {
+    phantom: PhantomData<E>,
+
     pub(crate) iter: I,
-    phantom: PhantomData<W>,
 }
 
-impl<I, W> QueryByType<I, W>
-where
-    W: AnyWidget,
-{
+impl<I, E> QueryByElement<I, E> {
     pub(super) fn new(iter: I) -> Self {
         Self {
-            iter,
             phantom: PhantomData,
+
+            iter,
         }
     }
 }
 
-impl<'query, I, W> Iterator for QueryByType<I, W>
+impl<'query, I, E> Iterator for QueryByElement<I, E>
 where
-    W: AnyWidget + 'query,
+    E: ElementLifecycle + 'query,
     I: Iterator<Item = &'query Element>,
 {
     type Item = &'query Element;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .find(|element| element.widget().downcast::<W>().is_some())
+        self.iter.find(|element| element.downcast::<E>().is_some())
     }
 
     #[inline]
@@ -47,7 +42,11 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        element::mock::{build::MockBuildWidget, render::MockRenderWidget, DummyWidget},
+        element::mock::{
+            build::{MockBuildWidget, MockedElementBuild},
+            render::{MockRenderWidget, MockedElementRender},
+            DummyWidget,
+        },
         engine::widgets::WidgetManager,
         query::WidgetQueryExt,
         widget::IntoWidget,
@@ -89,21 +88,21 @@ mod tests {
         manager.update();
 
         assert_eq!(
-            manager.query().by_type::<MockRenderWidget>().count(),
+            manager.query().by_element::<MockedElementRender>().count(),
             1,
-            "should have found 1 widget of type MockRenderWidget"
+            "should have found 1 element of type MockedElementRender"
         );
 
         assert_eq!(
-            manager.query().by_type::<MockBuildWidget>().count(),
+            manager.query().by_element::<MockedElementBuild>().count(),
             2,
-            "should have found 2 widgets of type MockBuildWidget"
+            "should have found 2 elements of type MockedElementBuild"
         );
 
         assert_eq!(
-            manager.query().by_type::<DummyWidget>().count(),
+            manager.query().by_element::<MockedElementRender>().count(),
             1,
-            "should have found 1 widget of type DummyWidget"
+            "should have found 1 element of type MockedElementRender"
         );
     }
 }

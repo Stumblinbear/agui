@@ -59,20 +59,20 @@ impl<EB, SB> WidgetManager<EB, SB> {
         &self.tree
     }
 
-    /// Get the root widget.
+    /// Get the root element.
     pub fn root(&self) -> ElementId {
         self.tree.root().expect("root is not set")
     }
 
-    /// Check if a widget exists in the tree.
+    /// Check if an element exists in the tree.
     pub fn contains(&self, element_id: ElementId) -> bool {
         self.tree.contains(element_id)
     }
 
-    /// Query widgets from the tree.
+    /// Query elements from the tree.
     ///
-    /// This essentially iterates the widget tree's element Vec, and as such does not guarantee
-    /// the order in which widgets will be returned.
+    /// This essentially iterates the element tree's element Vec, and as such does not guarantee
+    /// the order in which elements will be returned.
     pub fn query(&self) -> WidgetQuery {
         WidgetQuery::new(&self.tree)
     }
@@ -81,7 +81,7 @@ impl<EB, SB> WidgetManager<EB, SB> {
         &self.callback_queue
     }
 
-    /// Mark a widget as dirty, causing it to be rebuilt on the next update.
+    /// Mark an element as dirty, causing it to be rebuilt on the next update.
     pub fn mark_needs_build(&mut self, element_id: ElementId) {
         self.needs_build.insert(element_id);
     }
@@ -99,9 +99,9 @@ where
     /// Update the UI tree.
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn update(&mut self) {
-        tracing::trace!("updating widget tree");
+        tracing::trace!("updating element tree");
 
-        // Update everything until all widgets fall into a stable state. Incorrectly set up widgets may
+        // Update everything until all elements fall into a stable state. Incorrectly set up elements may
         // cause an infinite loop, so be careful.
         loop {
             let mut did_change = false;
@@ -143,8 +143,8 @@ where
         for element_id in self.needs_build.drain() {
             tracing::trace!(
                 ?element_id,
-                widget = self.tree.get(element_id).unwrap().widget().widget_name(),
-                "queueing widget for rebuild"
+                widget = self.tree.get(element_id).unwrap().name(),
+                "queueing element for rebuild"
             );
 
             self.rebuild_queue.push_back(element_id);
@@ -169,7 +169,7 @@ where
             tracing::trace!(
                 ?callback_id,
                 ?element_id,
-                widget = self.tree.get(element_id).unwrap().widget().widget_name(),
+                widget = self.tree.get(element_id).unwrap().name(),
                 "executing callback"
             );
 
@@ -192,11 +192,11 @@ where
                     if changed {
                         tracing::trace!(
                             ?element_id,
-                            widget = element.widget().widget_name(),
+                            widget = element.name(),
                             "element updated, queueing for rebuild"
                         );
 
-                        // How often does the same widget get callbacks multiple times? Is it
+                        // How often does the same element get callbacks multiple times? Is it
                         // worth checking if the last element is the same as the one we're about
                         // to queue?
                         self.rebuild_queue.push_back(element_id);
@@ -207,7 +207,7 @@ where
             if !existed {
                 tracing::warn!(
                     ?element_id,
-                    "callback invoked on a widget that does not exist"
+                    "callback invoked on an element that does not exist"
                 );
             }
         }
@@ -216,10 +216,10 @@ where
     }
 
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
-    fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
-        let element = Element::new(widget);
+    fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: &Widget) -> ElementId {
+        let element = widget.create_element();
 
-        tracing::trace!(widget = element.widget().widget_name(), "spawning widget");
+        tracing::trace!(widget = element.name(), "spawning element");
 
         let element_id = self.tree.add(parent_id, element);
 
@@ -395,7 +395,7 @@ where
                         .get(*old_child_id)
                         .expect("child element does not exist in the tree");
 
-                    if let Some(key) = old_child.widget().key() {
+                    if let Some(key) = old_child.key() {
                         old_keyed_children.insert(key, *old_child_id);
                     } else {
                         // unmount / deactivate the child
@@ -458,7 +458,7 @@ where
                     }
                 }
 
-                let new_child_id = self.process_spawn(Some(element_id), new_widget.clone());
+                let new_child_id = self.process_spawn(Some(element_id), new_widget);
 
                 new_children[new_children_top as usize] = Some(new_child_id);
                 new_children_top += 1;
@@ -550,7 +550,7 @@ where
 
             let element = self.tree.remove(element_id).unwrap();
 
-            tracing::trace!(?element_id, widget = ?element.widget(), "destroyed widget");
+            tracing::trace!(?element_id, widget = ?element.name(), "destroyed element");
         }
     }
 }

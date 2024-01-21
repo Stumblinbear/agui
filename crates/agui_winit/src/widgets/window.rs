@@ -328,13 +328,6 @@ where
             });
         });
 
-        let Some(window_manager) = ctx.find_inherited_widget::<WinitWindowManager>() else {
-            return tracing::error!(
-                "WinitWindowManager was not found {:?}",
-                TypeId::of::<WinitWindowManager>()
-            );
-        };
-
         let on_window_created = ctx.callback(
             move |ctx, result: Result<WinitWindowHandle, WinitCreateWindowError>| {
                 let window = match result {
@@ -391,6 +384,13 @@ where
                 });
             },
         );
+
+        let Some(window_manager) = ctx.find_inherited_widget::<WinitWindowManager>() else {
+            return tracing::error!(
+                "WinitWindowManager was not found {:?}",
+                TypeId::of::<WinitWindowManager>()
+            );
+        };
 
         let attributes = self.attributes.as_ref().clone();
 

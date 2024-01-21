@@ -4,9 +4,9 @@ use parking_lot::Mutex;
 
 use crate::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementBuilder, ElementComparison,
-        ElementMountContext, ElementType, ElementUnmountContext, RenderObjectCreateContext,
-        RenderObjectUpdateContext,
+        lifecycle::ElementLifecycle, render::ElementRender, widget::ElementWidget, ElementBuilder,
+        ElementComparison, ElementMountContext, ElementType, ElementUnmountContext,
+        RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::object::{MockRenderObjectImpl, RenderObject},
     widget::{IntoWidget, Widget},
@@ -50,28 +50,38 @@ impl IntoWidget for MockRenderWidget {
 }
 
 impl ElementBuilder for MockRenderWidget {
+    type Element = MockedElementRender;
+
     fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::new_render(MockElement::new(self))
+        ElementType::new_render(MockedElementRender::new(self))
     }
 }
 
-struct MockElement {
+pub struct MockedElementRender {
     widget: Rc<MockRenderWidget>,
 }
 
-impl MockElement {
+impl MockedElementRender {
     pub fn new(widget: Rc<MockRenderWidget>) -> Self {
         Self { widget }
     }
 }
 
-impl ElementWidget for MockElement {
+impl ElementLifecycle for MockedElementRender {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         self.widget.mock.borrow_mut().update(new_widget)
     }
 }
 
-impl ElementRender for MockElement {
+impl ElementWidget for MockedElementRender {
+    type Widget = MockRenderWidget;
+
+    fn widget(&self) -> &Rc<Self::Widget> {
+        &self.widget
+    }
+}
+
+impl ElementRender for MockedElementRender {
     fn children(&self) -> Vec<Widget> {
         self.widget.mock.borrow().children()
     }

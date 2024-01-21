@@ -1,17 +1,19 @@
 use slotmap::hop::Iter;
 
 use crate::{
-    element::{Element, ElementId},
+    element::{lifecycle::ElementLifecycle, Element, ElementId},
     unit::Key,
     util::tree::{Tree, TreeNode},
     widget::AnyWidget,
 };
 
+pub mod by_element;
 pub mod by_key;
-pub mod by_type;
+pub mod by_widget;
 
+use self::by_element::QueryByElement;
 use self::by_key::QueryByKey;
-use self::by_type::QueryByType;
+use self::by_widget::QueryByWidget;
 
 pub struct WidgetQuery<'query> {
     pub iter: Iter<'query, ElementId, TreeNode<ElementId, Element>>,
@@ -36,10 +38,15 @@ pub trait WidgetQueryExt<'query> {
     where
         Self: Sized;
 
-    fn by_type<W>(self) -> QueryByType<Self, W>
+    fn by_widget<W>(self) -> QueryByWidget<Self, W>
     where
         Self: Sized,
         W: AnyWidget;
+
+    fn by_element<E>(self) -> QueryByElement<Self, E>
+    where
+        Self: Sized,
+        E: ElementLifecycle;
 }
 
 impl<'query, I> WidgetQueryExt<'query> for I
@@ -50,10 +57,17 @@ where
         QueryByKey::new(self, key)
     }
 
-    fn by_type<W>(self) -> QueryByType<Self, W>
+    fn by_widget<W>(self) -> QueryByWidget<Self, W>
     where
         W: AnyWidget,
     {
-        QueryByType::<Self, W>::new(self)
+        QueryByWidget::<Self, W>::new(self)
+    }
+
+    fn by_element<E>(self) -> QueryByElement<Self, E>
+    where
+        E: ElementLifecycle,
+    {
+        QueryByElement::<Self, E>::new(self)
     }
 }

@@ -3,9 +3,10 @@ use std::{any::Any, rc::Rc};
 use agui_core::{
     callback::CallbackId,
     element::{
-        build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementCallbackContext,
-        ElementComparison,
+        build::ElementBuild, lifecycle::ElementLifecycle, widget::ElementWidget,
+        ElementBuildContext, ElementCallbackContext, ElementComparison,
     },
+    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 use rustc_hash::FxHashMap;
@@ -30,11 +31,15 @@ impl<W> StatelessWidgetElement<W> {
     }
 }
 
-impl<W> ElementWidget for StatelessWidgetElement<W>
+impl<W> ElementLifecycle for StatelessWidgetElement<W>
 where
     W: AnyWidget + StatelessWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
+        if new_widget.is_exact_ptr(&self.widget) {
+            return ElementComparison::Identical;
+        }
+
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;
 
@@ -42,6 +47,17 @@ where
         } else {
             ElementComparison::Invalid
         }
+    }
+}
+
+impl<W> ElementWidget for StatelessWidgetElement<W>
+where
+    W: AnyWidget + StatelessWidget,
+{
+    type Widget = W;
+
+    fn widget(&self) -> &Rc<Self::Widget> {
+        &self.widget
     }
 }
 

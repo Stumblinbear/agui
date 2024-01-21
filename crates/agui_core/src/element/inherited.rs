@@ -1,12 +1,20 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 
 use crate::widget::Widget;
 
-use super::widget::ElementWidget;
+use super::lifecycle::ElementLifecycle;
 
-pub trait ElementInherited: ElementWidget {
-    /// This must return the type id of the widget that this element is for.
+pub trait ElementInherited: ElementLifecycle {
+    type Data: Any + ?Sized
+    where
+        Self: Sized;
+
+    /// Returns the [`TypeId`] of the data provided by this element.
     fn inherited_type_id(&self) -> TypeId;
+
+    fn inherited_data(&self) -> &Self::Data
+    where
+        Self: Sized;
 
     fn child(&self) -> Widget;
 

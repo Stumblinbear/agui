@@ -1,7 +1,11 @@
 use std::{any::TypeId, rc::Rc};
 
 use agui_core::{
-    element::{inherited::ElementInherited, widget::ElementWidget, ElementComparison},
+    element::{
+        inherited::ElementInherited, lifecycle::ElementLifecycle, widget::ElementWidget,
+        ElementComparison,
+    },
+    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 
@@ -26,11 +30,15 @@ where
     }
 }
 
-impl<I> ElementWidget for InheritedElement<I>
+impl<I> ElementLifecycle for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
+        if new_widget.is_exact_ptr(&self.widget) {
+            return ElementComparison::Identical;
+        }
+
         if let Some(new_widget) = new_widget.downcast::<I>() {
             self.needs_notify |= new_widget.should_notify(self.widget.as_ref());
 
@@ -45,12 +53,32 @@ where
     }
 }
 
+impl<I> ElementWidget for InheritedElement<I>
+where
+    I: AnyWidget + InheritedWidget,
+{
+    type Widget = I;
+
+    fn widget(&self) -> &Rc<Self::Widget> {
+        &self.widget
+    }
+}
+
 impl<I> ElementInherited for InheritedElement<I>
 where
     I: AnyWidget + InheritedWidget,
 {
+    type Data = I;
+
     fn inherited_type_id(&self) -> TypeId {
         TypeId::of::<I>()
+    }
+
+    fn inherited_data(&self) -> &Self::Data
+    where
+        Self: Sized,
+    {
+        self.widget.as_ref()
     }
 
     fn child(&self) -> Widget {

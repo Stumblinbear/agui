@@ -3,9 +3,10 @@ use std::{any::Any, rc::Rc};
 use agui_core::{
     callback::CallbackId,
     element::{
-        build::ElementBuild, widget::ElementWidget, ElementBuildContext, ElementCallbackContext,
-        ElementComparison,
+        build::ElementBuild, lifecycle::ElementLifecycle, widget::ElementWidget,
+        ElementBuildContext, ElementCallbackContext, ElementComparison,
     },
+    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 use rustc_hash::FxHashMap;
@@ -51,11 +52,15 @@ where
     }
 }
 
-impl<W> ElementWidget for StatefulWidgetElement<W>
+impl<W> ElementLifecycle for StatefulWidgetElement<W>
 where
     W: AnyWidget + StatefulWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
+        if new_widget.is_exact_ptr(&self.widget) {
+            return ElementComparison::Identical;
+        }
+
         if let Some(new_widget) = new_widget.downcast::<W>() {
             if !Rc::ptr_eq(&self.widget, &new_widget) {
                 self.old_widget = Some(new_widget.clone());
@@ -68,6 +73,17 @@ where
         } else {
             ElementComparison::Invalid
         }
+    }
+}
+
+impl<W> ElementWidget for StatefulWidgetElement<W>
+where
+    W: AnyWidget + StatefulWidget,
+{
+    type Widget = W;
+
+    fn widget(&self) -> &Rc<Self::Widget> {
+        &self.widget
     }
 }
 

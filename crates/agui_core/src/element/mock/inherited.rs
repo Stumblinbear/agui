@@ -2,8 +2,8 @@ use std::{any::TypeId, cell::RefCell, rc::Rc};
 
 use crate::{
     element::{
-        inherited::ElementInherited, widget::ElementWidget, ElementBuilder, ElementComparison,
-        ElementMountContext, ElementType, ElementUnmountContext,
+        inherited::ElementInherited, lifecycle::ElementLifecycle, widget::ElementWidget,
+        ElementBuilder, ElementComparison, ElementMountContext, ElementType, ElementUnmountContext,
     },
     widget::{IntoWidget, Widget},
 };
@@ -43,30 +43,46 @@ impl IntoWidget for MockInheritedWidget {
 }
 
 impl ElementBuilder for MockInheritedWidget {
+    type Element = MockedElementInherited;
+
     fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::new_inherited(MockElement::new(self))
+        ElementType::new_inherited(MockedElementInherited::new(self))
     }
 }
 
-struct MockElement {
+pub struct MockedElementInherited {
     widget: Rc<MockInheritedWidget>,
 }
 
-impl MockElement {
+impl MockedElementInherited {
     pub fn new(widget: Rc<MockInheritedWidget>) -> Self {
         Self { widget }
     }
 }
 
-impl ElementWidget for MockElement {
+impl ElementLifecycle for MockedElementInherited {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         self.widget.mock.borrow_mut().update(new_widget)
     }
 }
 
-impl ElementInherited for MockElement {
+impl ElementWidget for MockedElementInherited {
+    type Widget = MockInheritedWidget;
+
+    fn widget(&self) -> &Rc<Self::Widget> {
+        &self.widget
+    }
+}
+
+impl ElementInherited for MockedElementInherited {
+    type Data = Rc<MockInheritedWidget>;
+
     fn inherited_type_id(&self) -> TypeId {
-        TypeId::of::<MockInheritedWidget>()
+        TypeId::of::<Self::Data>()
+    }
+
+    fn inherited_data(&self) -> &Self::Data {
+        &self.widget
     }
 
     fn child(&self) -> Widget {

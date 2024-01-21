@@ -6,7 +6,7 @@ use std::{
 
 use rustc_hash::FxHashMap;
 
-use crate::{element::ElementType, unit::Key, util::ptr_eq::PtrEqual};
+use crate::{element::Element, unit::Key, util::ptr_eq::PtrEqual};
 
 mod traits;
 
@@ -51,8 +51,8 @@ impl Widget {
         Rc::clone(&self.widget).as_any().downcast::<W>().ok()
     }
 
-    pub(crate) fn create_element(&self) -> ElementType {
-        Rc::clone(&self.widget).create_element()
+    pub(crate) fn create_element(&self) -> Element {
+        Rc::clone(&self.widget).create_element(self.key)
     }
 }
 
@@ -63,6 +63,36 @@ impl PartialEq for Widget {
         }
 
         self.widget.is_exact_ptr(&other.widget)
+    }
+}
+
+impl PtrEqual for Widget {
+    fn is_exact_ptr(&self, other_widget: &Widget) -> bool {
+        self.widget.is_exact_ptr(&other_widget.widget)
+    }
+}
+
+impl<T> PartialEq<Rc<T>> for Widget
+where
+    T: AnyWidget,
+{
+    fn eq(&self, other: &Rc<T>) -> bool {
+        std::ptr::eq(
+            Rc::as_ptr(&self.widget) as *const _ as *const (),
+            Rc::as_ptr(other) as *const _ as *const (),
+        )
+    }
+}
+
+impl<T> PtrEqual<Rc<T>> for Widget
+where
+    T: AnyWidget,
+{
+    fn is_exact_ptr(&self, other_widget: &Rc<T>) -> bool {
+        std::ptr::eq(
+            Rc::as_ptr(&self.widget) as *const _ as *const (),
+            Rc::as_ptr(other_widget) as *const _ as *const (),
+        )
     }
 }
 
@@ -150,6 +180,7 @@ mod tests {
 
     use crate::{
         element::mock::render::MockRenderWidget,
+        util::ptr_eq::PtrEqual,
         widget::{IntoWidget, Widget},
     };
 
@@ -198,6 +229,19 @@ mod tests {
         assert_eq!(
             widget1, widget1,
             "widget1 should should always be equal to itself"
+        );
+    }
+
+    #[test]
+    fn exact_ptr_widget_and_rc() {
+        let widget = MockRenderWidget::default().into_widget();
+        let widget_rc = widget
+            .downcast::<MockRenderWidget>()
+            .expect("widget should be MockRenderWidget");
+
+        assert!(
+            widget.is_exact_ptr(&widget_rc),
+            "widget should be equal to widget_rc"
         );
     }
 

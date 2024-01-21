@@ -2,9 +2,11 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        render::ElementRender, widget::ElementWidget, ElementComparison, RenderObjectUpdateContext,
+        lifecycle::ElementLifecycle, render::ElementRender, widget::ElementWidget,
+        ElementComparison, RenderObjectUpdateContext,
     },
     render::object::RenderObject,
+    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 
@@ -20,11 +22,15 @@ impl<W> RenderObjectWidgetElement<W> {
     }
 }
 
-impl<W> ElementWidget for RenderObjectWidgetElement<W>
+impl<W> ElementLifecycle for RenderObjectWidgetElement<W>
 where
     W: AnyWidget + RenderObjectWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
+        if new_widget.is_exact_ptr(&self.widget) {
+            return ElementComparison::Identical;
+        }
+
         if let Some(new_widget) = new_widget.downcast::<W>() {
             self.widget = new_widget;
 
@@ -32,6 +38,17 @@ where
         } else {
             ElementComparison::Invalid
         }
+    }
+}
+
+impl<W> ElementWidget for RenderObjectWidgetElement<W>
+where
+    W: AnyWidget + RenderObjectWidget,
+{
+    type Widget = W;
+
+    fn widget(&self) -> &Rc<Self::Widget> {
+        &self.widget
     }
 }
 

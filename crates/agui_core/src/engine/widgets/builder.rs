@@ -106,7 +106,7 @@ where
             forgotten_elements: FxHashSet::default(),
         };
 
-        let root_id = manager.process_spawn(None, self.root.unwrap());
+        let root_id = manager.process_spawn(None, &self.root.unwrap());
 
         manager.rebuild_queue.push_back(root_id);
 

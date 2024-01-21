@@ -1,14 +1,13 @@
-use crate::{unit::AsAny, widget::Widget};
+use std::rc::Rc;
 
-use super::{ElementComparison, ElementMountContext, ElementUnmountContext};
+use crate::{element::lifecycle::ElementLifecycle, widget::AnyWidget};
 
-pub trait ElementWidget: AsAny {
-    #[allow(unused_variables)]
-    fn mount(&mut self, ctx: &mut ElementMountContext) {}
+pub trait ElementWidget: ElementLifecycle {
+    type Widget: AnyWidget
+    where
+        Self: Sized;
 
-    #[allow(unused_variables)]
-    fn unmount(&mut self, ctx: &mut ElementUnmountContext) {}
-
-    /// Returns true if the widget is of the same type as the other widget.
-    fn update(&mut self, new_widget: &Widget) -> ElementComparison;
+    fn widget(&self) -> &Rc<Self::Widget>
+    where
+        Self: Sized;
 }

@@ -2,9 +2,9 @@ use std::any::Any;
 
 use crate::{callback::CallbackId, widget::Widget};
 
-use super::{widget::ElementWidget, ElementBuildContext, ElementCallbackContext};
+use super::{lifecycle::ElementLifecycle, ElementBuildContext, ElementCallbackContext};
 
-pub trait ElementBuild: ElementWidget {
+pub trait ElementBuild: ElementLifecycle {
     fn build(&mut self, ctx: &mut ElementBuildContext) -> Widget;
 
     fn call(

@@ -1,6 +1,6 @@
 use agui_core::{
     element::{
-        render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
+        lifecycle::ElementLifecycle, render::ElementRender, view::ElementView, ElementBuilder,
         ElementComparison, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{
@@ -28,6 +28,8 @@ impl IntoWidget for VelloViewBinding {
 }
 
 impl ElementBuilder for VelloViewBinding {
+    type Element = VelloViewElement;
+
     fn create_element(self: std::rc::Rc<Self>) -> ElementType
     where
         Self: Sized,
@@ -36,7 +38,7 @@ impl ElementBuilder for VelloViewBinding {
     }
 }
 
-struct VelloViewElement {
+pub struct VelloViewElement {
     view: VelloView,
 
     child: Widget,
@@ -48,7 +50,7 @@ impl VelloViewElement {
     }
 }
 
-impl ElementWidget for VelloViewElement {
+impl ElementLifecycle for VelloViewElement {
     fn update(&mut self, _: &Widget) -> ElementComparison {
         ElementComparison::Invalid
     }

@@ -8,8 +8,8 @@ use std::{rc::Rc, sync::Arc};
 /// parameter is a trait object. This is because the trait object
 /// is a fat pointer, and the pointer comparison is done on the
 /// vtable pointer, which is not stable.
-pub trait PtrEqual {
-    fn is_exact_ptr(&self, other: &Self) -> bool;
+pub trait PtrEqual<Rhs: ?Sized = Self> {
+    fn is_exact_ptr(&self, other: &Rhs) -> bool;
 }
 
 macros::impl_ptr_equal_for!(Rc);

@@ -1,8 +1,8 @@
 use crate::{element::RenderObjectCreateContext, render::object::RenderObject, widget::Widget};
 
-use super::{widget::ElementWidget, RenderObjectUpdateContext};
+use super::{lifecycle::ElementLifecycle, RenderObjectUpdateContext};
 
-pub trait ElementRender: ElementWidget {
+pub trait ElementRender: ElementLifecycle {
     fn children(&self) -> Vec<Widget>;
 
     /// Creates a new render object for the current element.

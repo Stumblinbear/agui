@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::element::Element;
+use agui_core::element::{widget::ElementWidget, Element, ElementBuilder};
 
 use crate::text::Text;
 
@@ -45,9 +45,10 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.find_map(|element| {
             element
-                .widget()
-                .downcast::<Text>()
-                .filter(|text| text.text == self.text)
+                .downcast::<<Text as ElementBuilder>::Element>()
+                .map(|element| element.widget())
+                .filter(|widget| widget.text == self.text)
+                .map(Rc::clone)
         })
     }
 
