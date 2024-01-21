@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agui_core::{
     render::{canvas::Canvas, view::View, RenderObjectId},
     unit::{Offset, Size},
+    util::ptr_eq::PtrEqual,
 };
 use async_channel::TrySendError;
 use parking_lot::RwLock;
@@ -57,6 +58,10 @@ impl Default for VelloView {
 impl VelloView {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn is_same_view(&self, other: &Self) -> bool {
+        self.scene.is_exact_ptr(&other.scene)
     }
 
     pub fn handle(&self) -> VelloViewHandle {

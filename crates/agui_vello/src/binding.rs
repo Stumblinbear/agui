@@ -51,8 +51,20 @@ impl VelloViewElement {
 }
 
 impl ElementLifecycle for VelloViewElement {
-    fn update(&mut self, _: &Widget) -> ElementComparison {
-        ElementComparison::Invalid
+    fn update(&mut self, new_widget: &Widget) -> ElementComparison {
+        if let Some(vello_binding) = new_widget.downcast::<VelloViewBinding>() {
+            if vello_binding.view.is_same_view(&self.view) {
+                if vello_binding.child == self.child {
+                    ElementComparison::Identical
+                } else {
+                    ElementComparison::Changed
+                }
+            } else {
+                ElementComparison::Invalid
+            }
+        } else {
+            ElementComparison::Invalid
+        }
     }
 }
 
