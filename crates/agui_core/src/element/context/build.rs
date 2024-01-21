@@ -5,7 +5,7 @@ use futures::{future::RemoteHandle, task::SpawnError};
 use crate::{
     callback::CallbackQueue,
     element::{inherited::ElementInherited, Element, ElementBuilder, ElementId, ElementType},
-    engine::{bindings::SchedulerBinding, Dirty},
+    engine::{bindings::LocalSchedulerBinding, Dirty},
     inheritance::InheritanceManager,
     util::tree::Tree,
     widget::AnyWidget,
@@ -14,7 +14,7 @@ use crate::{
 use super::{ContextElement, ContextElements};
 
 pub struct ElementBuildContext<'ctx> {
-    pub(crate) scheduler: &'ctx mut dyn SchedulerBinding,
+    pub(crate) scheduler: &'ctx mut dyn LocalSchedulerBinding,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub inheritance: &'ctx mut InheritanceManager,
@@ -38,20 +38,12 @@ impl ContextElement for ElementBuildContext<'_> {
 }
 
 impl ElementBuildContext<'_> {
-    pub fn spawn_local<Fut>(&mut self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
+    pub fn spawn_task<Fut>(&self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
     where
         Fut: Future<Output = ()> + 'static,
     {
         self.scheduler
-            .spawn_local_task(*self.element_id, Box::pin(future))
-    }
-
-    pub fn spawn_shared<Fut>(&mut self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
-    where
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        self.scheduler
-            .spawn_shared_task(*self.element_id, Box::pin(future))
+            .spawn_task(*self.element_id, Box::pin(future))
     }
 
     pub fn find_inherited_widget<I>(

@@ -8,14 +8,14 @@ use std::{
 use futures::{
     executor::{LocalPool, LocalSpawner},
     future::{FusedFuture, RemoteHandle},
-    task::{LocalSpawnExt, SpawnError, SpawnExt},
+    task::{LocalSpawnExt, SpawnError},
     FutureExt,
 };
 
 use crate::{
     element::ElementId,
     engine::{
-        bindings::{ElementBinding, SchedulerBinding},
+        bindings::{ElementBinding, LocalSchedulerBinding, SharedSchedulerBinding},
         rendering::RenderManager,
         widgets::WidgetManager,
     },
@@ -24,8 +24,9 @@ use crate::{
 };
 
 pub struct LocalEngineExecutor {
-    widget_manager: WidgetManager<LocalEngineElementBinding, LocalEngineSchedulerBinding>,
-    render_manager: RenderManager,
+    widget_manager: WidgetManager<EngineElementBinding, EngineSchedulerBinding>,
+
+    render_manager: RenderManager<EngineSchedulerBinding>,
 
     spawned_rx: mpsc::Receiver<ElementId>,
     rebuilt_rx: mpsc::Receiver<ElementId>,
@@ -45,16 +46,21 @@ impl LocalEngineExecutor {
         Self {
             widget_manager: WidgetManager::builder()
                 .with_root(root)
-                .with_element_binding(LocalEngineElementBinding {
+                .with_element_binding(EngineElementBinding {
                     spawned_tx,
                     rebuilt_tx,
                     forget_tx,
                 })
-                .with_scheduler(LocalEngineSchedulerBinding {
+                .with_scheduler(EngineSchedulerBinding {
                     spawner: pool.spawner(),
                 })
                 .build(),
-            render_manager: RenderManager::default(),
+
+            render_manager: RenderManager::builder()
+                .with_scheduler(EngineSchedulerBinding {
+                    spawner: pool.spawner(),
+                })
+                .build(),
 
             spawned_rx,
             rebuilt_rx,
@@ -153,13 +159,13 @@ impl EngineExecutor for LocalEngineExecutor {
     }
 }
 
-struct LocalEngineElementBinding {
+struct EngineElementBinding {
     spawned_tx: mpsc::Sender<ElementId>,
     rebuilt_tx: mpsc::Sender<ElementId>,
     forget_tx: mpsc::Sender<ElementId>,
 }
 
-impl ElementBinding for LocalEngineElementBinding {
+impl ElementBinding for EngineElementBinding {
     fn on_element_spawned(&mut self, _: Option<ElementId>, id: ElementId) {
         self.spawned_tx.send(id).ok();
     }
@@ -173,13 +179,13 @@ impl ElementBinding for LocalEngineElementBinding {
     }
 }
 
-struct LocalEngineSchedulerBinding {
+struct EngineSchedulerBinding {
     spawner: LocalSpawner,
 }
 
-impl SchedulerBinding for LocalEngineSchedulerBinding {
-    fn spawn_local_task(
-        &mut self,
+impl LocalSchedulerBinding for EngineSchedulerBinding {
+    fn spawn_task(
+        &self,
         id: ElementId,
         future: Pin<Box<dyn Future<Output = ()> + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError> {
@@ -187,15 +193,17 @@ impl SchedulerBinding for LocalEngineSchedulerBinding {
 
         self.spawner.spawn_local_with_handle(future)
     }
+}
 
-    fn spawn_shared_task(
-        &mut self,
+impl SharedSchedulerBinding for EngineSchedulerBinding {
+    fn spawn_task(
+        &self,
         id: ElementId,
         future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError> {
         tracing::trace!("spawning shared task for {:?}", id);
 
-        self.spawner.spawn_with_handle(future)
+        self.spawner.spawn_local_with_handle(future)
     }
 }
 

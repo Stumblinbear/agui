@@ -5,7 +5,7 @@ use rustc_hash::FxHashSet;
 use crate::{
     callback::CallbackQueue,
     engine::{
-        bindings::{ElementBinding, SchedulerBinding},
+        bindings::{ElementBinding, LocalSchedulerBinding},
         update_notifier::UpdateNotifier,
         widgets::WidgetManager,
         Dirty,
@@ -53,7 +53,7 @@ impl<SB, const HAS_ROOT: bool> WidgetManagerBuilder<(), SB, HAS_ROOT> {
 impl<EB, const HAS_ROOT: bool> WidgetManagerBuilder<EB, (), HAS_ROOT> {
     pub fn with_scheduler<SB>(self, scheduler: SB) -> WidgetManagerBuilder<EB, SB, HAS_ROOT>
     where
-        SB: SchedulerBinding,
+        SB: LocalSchedulerBinding,
     {
         WidgetManagerBuilder {
             element_binding: self.element_binding,
@@ -81,7 +81,7 @@ impl<EB, SB> WidgetManagerBuilder<EB, SB, false> {
 impl<EB, SB> WidgetManagerBuilder<EB, SB, true>
 where
     EB: ElementBinding,
-    SB: SchedulerBinding,
+    SB: LocalSchedulerBinding,
 {
     pub fn build(self) -> WidgetManager<EB, SB> {
         let (callback_tx, callback_rx) = mpsc::channel();

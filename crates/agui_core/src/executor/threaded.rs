@@ -8,15 +8,18 @@ use std::{
 use futures::{
     executor::{LocalPool, LocalSpawner},
     future::RemoteHandle,
-    prelude::future::{FusedFuture, FutureExt},
-    task::{LocalSpawnExt, SpawnError, SpawnExt},
+    prelude::{
+        future::{FusedFuture, FutureExt},
+        stream::StreamExt,
+    },
+    task::{LocalSpawnExt, SpawnError},
 };
 use parking_lot::Mutex;
 
 use crate::{
     element::ElementId,
     engine::{
-        bindings::{ElementBinding, SchedulerBinding},
+        bindings::{ElementBinding, LocalSchedulerBinding, SharedSchedulerBinding},
         rendering::RenderManager,
         update_notifier::UpdateNotifier,
         widgets::WidgetManager,
@@ -26,11 +29,11 @@ use crate::{
 };
 
 pub struct ThreadedEngineExecutor {
-    widget_manager: WidgetManager<EngineElementBinding, EngineSchedulerBinding>,
+    widget_manager: WidgetManager<ThreadedEngineElementBinding, LocalEngineSchedulerBinding>,
 
     sync_notifier: UpdateNotifier,
 
-    render_manager: Arc<Mutex<RenderManager>>,
+    render_manager: Arc<Mutex<RenderManager<SharedEngineSchedulerBinding>>>,
 
     spawned_rx: mpsc::Receiver<ElementId>,
     rebuilt_rx: mpsc::Receiver<ElementId>,
@@ -43,39 +46,64 @@ impl ThreadedEngineExecutor {
     pub fn with_root(root: Widget) -> Self {
         let sync_notifier = UpdateNotifier::new();
 
-        let render_manager = Arc::new(Mutex::new(RenderManager::default()));
-
-        let (spawned_tx, spawned_rx) = mpsc::channel();
-        let (rebuilt_tx, rebuilt_rx) = mpsc::channel();
-        let (forget_tx, forget_rx) = mpsc::channel();
+        let (tx, rx) = mpsc::sync_channel(1);
 
         std::thread::spawn({
             let sync_notifier = sync_notifier.clone();
-            let render_manager = Arc::clone(&render_manager);
 
             move || {
-                ThreadedEngineRendering {
-                    sync_notifier,
+                let (task_tx, mut task_rx) = futures::channel::mpsc::unbounded();
 
+                let render_manager = Arc::new(Mutex::new(
+                    RenderManager::builder()
+                        .with_scheduler(SharedEngineSchedulerBinding { task_tx })
+                        .build(),
+                ));
+
+                tx.send(Arc::clone(&render_manager)).ok();
+
+                let pool = LocalPool::default();
+
+                let spawner = pool.spawner();
+
+                pool.spawner()
+                    .spawn_local(async move {
+                        while let Some(task) = task_rx.next().await {
+                            if let Ok(handle) = spawner.spawn_local_with_handle(task.task) {
+                                task.reply_tx.send(handle).ok();
+                            }
+                        }
+                    })
+                    .ok();
+
+                ThreadedEngineRendering {
                     render_manager,
 
-                    pool: LocalPool::default(),
+                    sync_notifier,
+
+                    pool,
                 }
                 .run();
             }
         });
+
+        let render_manager = rx.recv().expect("failed to receive render manager");
+
+        let (spawned_tx, spawned_rx) = mpsc::channel();
+        let (rebuilt_tx, rebuilt_rx) = mpsc::channel();
+        let (forget_tx, forget_rx) = mpsc::channel();
 
         let pool = LocalPool::default();
 
         Self {
             widget_manager: WidgetManager::builder()
                 .with_root(root)
-                .with_element_binding(EngineElementBinding {
+                .with_element_binding(ThreadedEngineElementBinding {
                     spawned_tx,
                     rebuilt_tx,
                     forget_tx,
                 })
-                .with_scheduler(EngineSchedulerBinding {
+                .with_scheduler(LocalEngineSchedulerBinding {
                     spawner: pool.spawner(),
                 })
                 .build(),
@@ -176,7 +204,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
 }
 
 struct ThreadedEngineRendering {
-    render_manager: Arc<Mutex<RenderManager>>,
+    render_manager: Arc<Mutex<RenderManager<SharedEngineSchedulerBinding>>>,
 
     sync_notifier: UpdateNotifier,
 
@@ -228,13 +256,13 @@ impl ThreadedEngineRendering {
     }
 }
 
-struct EngineElementBinding {
+struct ThreadedEngineElementBinding {
     spawned_tx: mpsc::Sender<ElementId>,
     rebuilt_tx: mpsc::Sender<ElementId>,
     forget_tx: mpsc::Sender<ElementId>,
 }
 
-impl ElementBinding for EngineElementBinding {
+impl ElementBinding for ThreadedEngineElementBinding {
     fn on_element_spawned(&mut self, _: Option<ElementId>, id: ElementId) {
         self.spawned_tx.send(id).ok();
     }
@@ -248,13 +276,13 @@ impl ElementBinding for EngineElementBinding {
     }
 }
 
-struct EngineSchedulerBinding {
+struct LocalEngineSchedulerBinding {
     spawner: LocalSpawner,
 }
 
-impl SchedulerBinding for EngineSchedulerBinding {
-    fn spawn_local_task(
-        &mut self,
+impl LocalSchedulerBinding for LocalEngineSchedulerBinding {
+    fn spawn_task(
+        &self,
         id: ElementId,
         future: Pin<Box<dyn Future<Output = ()> + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError> {
@@ -262,16 +290,36 @@ impl SchedulerBinding for EngineSchedulerBinding {
 
         self.spawner.spawn_local_with_handle(future)
     }
+}
 
-    fn spawn_shared_task(
-        &mut self,
+struct SharedEngineSchedulerBinding {
+    task_tx: futures::channel::mpsc::UnboundedSender<SpawnTask>,
+}
+
+impl SharedSchedulerBinding for SharedEngineSchedulerBinding {
+    fn spawn_task(
+        &self,
         id: ElementId,
         future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError> {
         tracing::trace!("spawning shared task for {:?}", id);
 
-        self.spawner.spawn_with_handle(future)
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+
+        self.task_tx
+            .unbounded_send(SpawnTask {
+                task: future,
+                reply_tx,
+            })
+            .map_err(|_| SpawnError::shutdown())?;
+
+        reply_rx.recv().map_err(|_| SpawnError::shutdown())
     }
+}
+
+struct SpawnTask {
+    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    reply_tx: mpsc::SyncSender<RemoteHandle<()>>,
 }
 
 #[derive(Debug)]

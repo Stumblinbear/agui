@@ -28,7 +28,7 @@ bitflags.workspace = true
 url.workspace = true
 smallbox.workspace = true
 
-futures.workspace = true
+futures = { workspace = true, features = ["thread-pool"] }
 async-channel.workspace = true
 
 glam.workspace = true

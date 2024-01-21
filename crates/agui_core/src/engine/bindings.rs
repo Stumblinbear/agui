@@ -18,31 +18,36 @@ pub trait ElementBinding {
 impl ElementBinding for () {}
 
 #[allow(unused_variables)]
-pub trait SchedulerBinding {
-    fn spawn_local_task(
-        &mut self,
+pub trait LocalSchedulerBinding {
+    fn spawn_task(
+        &self,
         id: ElementId,
         future: Pin<Box<dyn Future<Output = ()> + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError>;
-
-    fn spawn_shared_task(
-        &mut self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError>;
 }
 
-impl SchedulerBinding for () {
-    fn spawn_local_task(
-        &mut self,
+impl LocalSchedulerBinding for () {
+    fn spawn_task(
+        &self,
         _: ElementId,
         _: Pin<Box<dyn Future<Output = ()> + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError> {
         Err(SpawnError::shutdown())
     }
+}
 
-    fn spawn_shared_task(
-        &mut self,
+#[allow(unused_variables)]
+pub trait SharedSchedulerBinding {
+    fn spawn_task(
+        &self,
+        id: ElementId,
+        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    ) -> Result<RemoteHandle<()>, SpawnError>;
+}
+
+impl SharedSchedulerBinding for () {
+    fn spawn_task(
+        &self,
         _: ElementId,
         _: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
     ) -> Result<RemoteHandle<()>, SpawnError> {

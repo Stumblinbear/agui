@@ -9,7 +9,7 @@ use crate::{
         ElementMountContext, ElementUnmountContext,
     },
     engine::{
-        bindings::{ElementBinding, SchedulerBinding},
+        bindings::{ElementBinding, LocalSchedulerBinding},
         update_notifier::UpdateNotifier,
         Dirty,
     },
@@ -94,7 +94,7 @@ impl<EB, SB> WidgetManager<EB, SB> {
 impl<EB, SB> WidgetManager<EB, SB>
 where
     EB: ElementBinding,
-    SB: SchedulerBinding,
+    SB: LocalSchedulerBinding,
 {
     /// Update the UI tree.
     #[tracing::instrument(level = "trace", skip(self))]

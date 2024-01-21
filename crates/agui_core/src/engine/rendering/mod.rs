@@ -8,7 +8,7 @@ use crate::{
     element::{
         Element, ElementId, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
-    engine::Dirty,
+    engine::{bindings::SharedSchedulerBinding, Dirty},
     render::{
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
         view::RenderView,
@@ -18,8 +18,13 @@ use crate::{
     util::tree::Tree,
 };
 
-#[derive(Default)]
-pub struct RenderManager {
+mod builder;
+
+pub use builder::*;
+
+pub struct RenderManager<SB = ()> {
+    scheduler: SB,
+
     tree: Tree<RenderObjectId, RenderObject>,
 
     elements: SecondaryMap<ElementId, RenderObjectId>,
@@ -39,7 +44,16 @@ pub struct RenderManager {
     needs_sync: SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
 }
 
-impl RenderManager {
+impl RenderManager<()> {
+    pub fn builder() -> RenderManagerBuilder<()> {
+        RenderManagerBuilder::default()
+    }
+}
+
+impl<SB> RenderManager<SB>
+where
+    SB: SharedSchedulerBinding,
+{
     pub fn tree(&self) -> &Tree<RenderObjectId, RenderObject> {
         &self.tree
     }
@@ -303,6 +317,8 @@ impl RenderManager {
 
             element_node.as_ref().update_render_object(
                 &mut RenderObjectUpdateContext {
+                    scheduler: &mut self.scheduler,
+
                     needs_layout: &mut needs_layout,
                     needs_paint: &mut needs_paint,
 
@@ -442,6 +458,8 @@ impl RenderManager {
 
                 let mut render_object =
                     element.create_render_object(&mut RenderObjectCreateContext {
+                        scheduler: &mut self.scheduler,
+
                         element_id: &element_id,
                     });
 

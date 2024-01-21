@@ -340,7 +340,7 @@ where
                 };
 
                 ctx.state.resize_event_task = ctx
-                    .spawn_local({
+                    .spawn_task({
                         let window = window.clone();
                         let resize_event_cb = resize_event_cb.clone();
 
