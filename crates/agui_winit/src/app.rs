@@ -1,4 +1,4 @@
-use std::{cell::RefCell, error::Error, future::Future, rc::Rc};
+use std::{error::Error, future::Future};
 
 use agui_core::callback::Callback;
 use agui_renderer::{FrameNotifier, Renderer};
@@ -19,8 +19,6 @@ type CreateWinitWindowFn = dyn FnOnce(
         -> Box<dyn Future<Output = Result<Box<dyn Renderer>, Box<dyn Error + Send + Sync>>> + '_>
     + Send;
 
-type WindowRendererSlot = Rc<RefCell<Option<Box<dyn Renderer>>>>;
-
 #[derive(Debug, thiserror::Error)]
 pub enum WinitCreateWindowError {
     #[error("failed to create the window: {0}")]
@@ -36,13 +34,15 @@ pub enum WinitBindingAction {
         Box<CreateWinitWindowFn>,
         Callback<Result<WinitWindowHandle, WinitCreateWindowError>>,
     ),
+
+    Render(WindowId),
 }
 
 pub struct WinitApp {
     pub event_loop: EventLoop<WinitBindingAction>,
 
     window_events: FxHashMap<WindowId, async_channel::Sender<WinitWindowEvent>>,
-    window_renderer: FxHashMap<WindowId, WindowRendererSlot>,
+    window_renderer: FxHashMap<WindowId, Box<dyn Renderer>>,
 }
 
 impl Default for WinitApp {
@@ -58,9 +58,11 @@ impl Default for WinitApp {
 
 impl WinitApp {
     pub fn run(mut self) {
+        let event_loop_proxy = self.event_loop.create_proxy();
+
         self.event_loop
             .run(move |event, window_target, control_flow| {
-                *control_flow = ControlFlow::Poll;
+                *control_flow = ControlFlow::Wait;
 
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
@@ -85,74 +87,60 @@ impl WinitApp {
                         }
                     }
 
-                    WinitEvent::RedrawRequested(window_id) => {
+                    WinitEvent::RedrawRequested(window_id)
+                    | WinitEvent::UserEvent(WinitBindingAction::Render(window_id)) => {
                         if let Some(renderer) = self.window_renderer.get_mut(&window_id) {
-                            if let Ok(mut renderer) = renderer.try_borrow_mut() {
-                                if let Some(renderer) = renderer.as_mut() {
-                                    renderer.render();
-                                } else {
-                                    tracing::error!("window renderer was not created");
-                                }
-                            } else {
-                                tracing::warn!("renderer for window is not yet ready");
-                            }
+                            renderer.render();
                         } else {
                             tracing::warn!("no renderer for window {:?}", window_id);
                         }
                     }
 
-                    WinitEvent::UserEvent(action) => match action {
-                        WinitBindingAction::CreateWindow(builder_fn, renderer_fn, callback) => {
-                            let window_builder = (builder_fn)();
+                    WinitEvent::UserEvent(WinitBindingAction::CreateWindow(
+                        builder_fn,
+                        renderer_fn,
+                        callback,
+                    )) => {
+                        let window_builder = (builder_fn)();
 
-                            tracing::trace!("creating window: {:?}", window_builder);
+                        tracing::trace!("creating window: {:?}", window_builder);
 
-                            let window =
-                                match window_builder.with_visible(false).build(window_target) {
-                                    Ok(window) => window,
-                                    Err(err) => return callback.call(Err(err.into())),
-                                };
+                        let window = match window_builder.with_visible(false).build(window_target) {
+                            Ok(window) => window,
+                            Err(err) => return callback.call(Err(err.into())),
+                        };
 
-                            let (events_tx, events_rx) = async_channel::unbounded();
+                        let (events_tx, events_rx) = async_channel::unbounded();
 
-                            self.window_events.insert(window.id(), events_tx);
+                        self.window_events.insert(window.id(), events_tx);
 
-                            let window_renderer = Rc::new(RefCell::new(None));
+                        let window = WinitWindowHandle::new(window, events_rx);
 
-                            self.window_renderer
-                                .insert(window.id(), Rc::clone(&window_renderer));
+                        let renderer_fut = Box::into_pin((renderer_fn)(
+                            &window,
+                            FrameNotifier::new({
+                                let event_loop_proxy = event_loop_proxy.clone();
+                                let window_id = window.id();
 
-                            let window = WinitWindowHandle::new(window, events_rx);
-
-                            let mut window_renderer = window_renderer.borrow_mut();
-
-                            let renderer_fut = Box::into_pin((renderer_fn)(
-                                &window,
-                                FrameNotifier::new({
-                                    let window = window.clone();
-
-                                    move || {
-                                        window.request_redraw();
-                                    }
-                                }),
-                            ));
-
-                            // TODO: figure out how to make this actually async
-                            let renderer = match futures::executor::block_on(renderer_fut) {
-                                Ok(renderer) => renderer,
-                                Err(err) => {
-                                    return callback
-                                        .call(Err(WinitCreateWindowError::Renderer(err)));
+                                move || {
+                                    let _ = event_loop_proxy
+                                        .send_event(WinitBindingAction::Render(window_id));
                                 }
-                            };
+                            }),
+                        ));
 
-                            window_renderer.replace(renderer);
+                        // TODO: figure out how to make this actually async
+                        let renderer = match futures::executor::block_on(renderer_fut) {
+                            Ok(renderer) => renderer,
+                            Err(err) => {
+                                return callback.call(Err(WinitCreateWindowError::Renderer(err)));
+                            }
+                        };
 
-                            drop(window_renderer);
+                        self.window_renderer.insert(window.id(), renderer);
 
-                            callback.call(Ok(window));
-                        }
-                    },
+                        callback.call(Ok(window));
+                    }
 
                     _ => (),
                 }
