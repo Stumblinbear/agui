@@ -1,17 +1,21 @@
+use std::sync::Arc;
+
 use agui_core::{
     element::{ContextDirtyRenderObject, RenderObjectCreateContext, RenderObjectUpdateContext},
     render::object::{
         RenderObjectImpl, RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext,
     },
+    task::{context::ContextSpawnRenderingTask, TaskHandle},
     unit::{Constraints, IntrinsicDimension, Size},
     widget::Widget,
 };
 use agui_elements::render::RenderObjectWidget;
 use agui_macros::RenderObjectWidget;
+use parking_lot::Mutex;
 
 #[derive(RenderObjectWidget)]
 pub struct WinitWindowLayout {
-    size: Size,
+    size_rx: async_channel::Receiver<Size>,
 
     child: Widget,
 }
@@ -23,11 +27,8 @@ impl RenderObjectWidget for WinitWindowLayout {
         vec![self.child.clone()]
     }
 
-    fn create_render_object(&self, _: &mut RenderObjectCreateContext) -> Self::RenderObject {
-        // TODO: ideally we'd take in a window handle and listen for size changes instead of directing
-        // it through a statefulwidget, but we don't currently have a way to do callbacks in render
-        // objects. Maybe use async?
-        RenderWinitWindowLayout { size: self.size }
+    fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> Self::RenderObject {
+        RenderWinitWindowLayout::new(ctx, self.size_rx.clone())
     }
 
     fn update_render_object(
@@ -35,22 +36,49 @@ impl RenderObjectWidget for WinitWindowLayout {
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut Self::RenderObject,
     ) {
-        render_object.update_size(ctx, self.size);
+        render_object.update_size_rx(ctx, self.size_rx.clone());
     }
 }
 
 pub struct RenderWinitWindowLayout {
-    size: Size,
+    size: Arc<Mutex<Size>>,
+
+    size_task: Option<TaskHandle<()>>,
 }
 
 impl RenderWinitWindowLayout {
-    fn update_size(&mut self, ctx: &mut RenderObjectUpdateContext, size: Size) {
-        if self.size == size {
-            return;
-        }
+    fn new(ctx: &mut RenderObjectCreateContext, size_rx: async_channel::Receiver<Size>) -> Self {
+        let mut ro = Self {
+            size: Arc::new(Mutex::new(Size::default())),
 
-        self.size = size;
-        ctx.mark_needs_layout();
+            size_task: None,
+        };
+
+        ro.update_size_rx(ctx, size_rx);
+
+        ro
+    }
+
+    fn update_size_rx<C>(&mut self, ctx: &mut C, size_rx: async_channel::Receiver<Size>)
+    where
+        C: ContextSpawnRenderingTask,
+    {
+        let size = Arc::clone(&self.size);
+
+        self.size_task = ctx
+            .spawn_task(move |mut ctx| async move {
+                while let Ok(new_size) = size_rx.recv().await {
+                    let mut size = size.lock();
+
+                    if *size == new_size {
+                        continue;
+                    }
+
+                    *size = new_size;
+                    ctx.mark_needs_layout();
+                }
+            })
+            .ok();
     }
 }
 
@@ -67,12 +95,14 @@ impl RenderObjectImpl for RenderWinitWindowLayout {
     }
 
     fn layout(&self, ctx: &mut RenderObjectLayoutContext, _: Constraints) -> Size {
+        let size = *self.size.lock();
+
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {
-            child.layout(Constraints::from(self.size));
+            child.layout(Constraints::from(size));
         }
 
-        self.size
+        size
     }
 }

@@ -1,12 +1,14 @@
 use std::{any::TypeId, future::Future};
 
-use futures::{future::RemoteHandle, task::SpawnError};
-
 use crate::{
     callback::CallbackQueue,
-    element::{inherited::ElementInherited, Element, ElementBuilder, ElementId, ElementType},
-    engine::{bindings::LocalSchedulerBinding, Dirty},
+    element::{
+        inherited::ElementInherited, Element, ElementBuilder, ElementId, ElementTaskContext,
+        ElementType,
+    },
+    engine::{bindings::ElementSchedulerBinding, Dirty},
     inheritance::InheritanceManager,
+    task::{context::ContextSpawnElementTask, error::TaskError, TaskHandle},
     util::tree::Tree,
     widget::AnyWidget,
 };
@@ -14,13 +16,13 @@ use crate::{
 use super::{ContextElement, ContextElements};
 
 pub struct ElementBuildContext<'ctx> {
-    pub(crate) scheduler: &'ctx mut dyn LocalSchedulerBinding,
+    pub(crate) scheduler: &'ctx mut dyn ElementSchedulerBinding,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub inheritance: &'ctx mut InheritanceManager,
     pub callback_queue: &'ctx CallbackQueue,
 
-    pub needs_build: &'ctx mut Dirty<ElementId>,
+    pub(crate) needs_build: &'ctx mut Dirty<ElementId>,
 
     pub element_id: &'ctx ElementId,
 }
@@ -37,15 +39,25 @@ impl ContextElement for ElementBuildContext<'_> {
     }
 }
 
-impl ElementBuildContext<'_> {
-    pub fn spawn_task<Fut>(&self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
+impl ContextSpawnElementTask for ElementBuildContext<'_> {
+    fn spawn_task<Fut>(
+        &self,
+        func: impl FnOnce(ElementTaskContext) -> Fut + 'static,
+    ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + 'static,
     {
-        self.scheduler
-            .spawn_task(*self.element_id, Box::pin(future))
+        self.scheduler.spawn_task(
+            *self.element_id,
+            Box::pin(func(ElementTaskContext {
+                element_id: *self.element_id,
+                needs_build: self.needs_build.clone(),
+            })),
+        )
     }
+}
 
+impl ElementBuildContext<'_> {
     pub fn find_inherited_widget<I>(
         &self,
     ) -> Option<&<<I as ElementBuilder>::Element as ElementInherited>::Data>

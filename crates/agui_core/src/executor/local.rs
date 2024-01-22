@@ -1,32 +1,37 @@
 use std::{
-    future::Future,
-    pin::Pin,
     sync::mpsc,
     time::{Duration, Instant},
 };
 
 use futures::{
     executor::{LocalPool, LocalSpawner},
-    future::{FusedFuture, RemoteHandle},
-    task::{LocalSpawnExt, SpawnError},
-    FutureExt,
+    future::FusedFuture,
+    prelude::future::FutureExt,
+    task::LocalSpawnExt,
 };
 
 use crate::{
     element::ElementId,
     engine::{
-        bindings::{ElementBinding, LocalSchedulerBinding, SharedSchedulerBinding},
+        bindings::{
+            ElementBinding, ElementSchedulerBinding, ElementTask, RenderingSchedulerBinding,
+            RenderingTask,
+        },
         rendering::RenderManager,
+        update_notifier::{UpdateNotifier, UpdateReceiver},
         widgets::WidgetManager,
     },
     executor::EngineExecutor,
+    task::{error::TaskError, TaskHandle},
     widget::Widget,
 };
 
 pub struct LocalEngineExecutor {
     widget_manager: WidgetManager<EngineElementBinding, EngineSchedulerBinding>,
+    update_rx: UpdateReceiver,
 
     render_manager: RenderManager<EngineSchedulerBinding>,
+    render_rx: UpdateReceiver,
 
     spawned_rx: mpsc::Receiver<ElementId>,
     rebuilt_rx: mpsc::Receiver<ElementId>,
@@ -37,6 +42,9 @@ pub struct LocalEngineExecutor {
 
 impl LocalEngineExecutor {
     pub fn with_root(root: Widget) -> Self {
+        let (update_tx, update_rx) = UpdateNotifier::new();
+        let (render_tx, render_rx) = UpdateNotifier::new();
+
         let (spawned_tx, spawned_rx) = mpsc::channel();
         let (rebuilt_tx, rebuilt_rx) = mpsc::channel();
         let (forget_tx, forget_rx) = mpsc::channel();
@@ -54,13 +62,17 @@ impl LocalEngineExecutor {
                 .with_scheduler(EngineSchedulerBinding {
                     spawner: pool.spawner(),
                 })
+                .with_notifier(update_tx)
                 .build(),
+            update_rx,
 
             render_manager: RenderManager::builder()
                 .with_scheduler(EngineSchedulerBinding {
                     spawner: pool.spawner(),
                 })
+                .with_notifier(render_tx)
                 .build(),
+            render_rx,
 
             spawned_rx,
             rebuilt_rx,
@@ -130,9 +142,11 @@ impl EngineExecutor for LocalEngineExecutor {
             'update_tree: loop {
                 self.update();
 
-                let wait = self.widget_manager.wait_for_update().fuse();
+                let update_future = self.update_rx.wait().fuse();
+                let render_future = self.render_rx.wait().fuse();
 
-                futures::pin_mut!(wait);
+                futures::pin_mut!(update_future);
+                futures::pin_mut!(render_future);
 
                 // Run futures until no more progress can be made and no more tree updates are
                 // pending.
@@ -141,7 +155,7 @@ impl EngineExecutor for LocalEngineExecutor {
                         return;
                     }
 
-                    if wait.is_terminated() {
+                    if update_future.is_terminated() || render_future.is_terminated() {
                         continue 'update_tree;
                     }
                 }
@@ -154,7 +168,23 @@ impl EngineExecutor for LocalEngineExecutor {
         loop {
             self.update();
 
-            self.pool.run_until(self.widget_manager.wait_for_update());
+            let update_future = self.update_rx.wait().fuse();
+            let render_future = self.render_rx.wait().fuse();
+
+            futures::pin_mut!(update_future);
+            futures::pin_mut!(render_future);
+
+            self.pool.run_until(async {
+                futures::select! {
+                    _ = update_future => {
+                        tracing::trace!("update triggered by update notifier");
+                    }
+
+                    _ = render_future => {
+                        tracing::trace!("update triggered by render notifier");
+                    }
+                }
+            });
         }
     }
 }
@@ -183,27 +213,25 @@ struct EngineSchedulerBinding {
     spawner: LocalSpawner,
 }
 
-impl LocalSchedulerBinding for EngineSchedulerBinding {
-    fn spawn_task(
-        &self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError> {
+impl ElementSchedulerBinding for EngineSchedulerBinding {
+    fn spawn_task(&self, id: ElementId, task: ElementTask) -> Result<TaskHandle<()>, TaskError> {
         tracing::trace!("spawning local task for {:?}", id);
 
-        self.spawner.spawn_local_with_handle(future)
+        match self.spawner.spawn_local_with_handle(task) {
+            Ok(handle) => Ok(TaskHandle::from(handle)),
+            Err(_) => Err(TaskError::Shutdown),
+        }
     }
 }
 
-impl SharedSchedulerBinding for EngineSchedulerBinding {
-    fn spawn_task(
-        &self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError> {
+impl RenderingSchedulerBinding for EngineSchedulerBinding {
+    fn spawn_task(&self, id: ElementId, task: RenderingTask) -> Result<TaskHandle<()>, TaskError> {
         tracing::trace!("spawning shared task for {:?}", id);
 
-        self.spawner.spawn_local_with_handle(future)
+        match self.spawner.spawn_local_with_handle(task) {
+            Ok(handle) => Ok(TaskHandle::from(handle)),
+            Err(_) => Err(TaskError::Shutdown),
+        }
     }
 }
 

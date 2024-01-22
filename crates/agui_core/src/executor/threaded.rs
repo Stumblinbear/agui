@@ -1,39 +1,38 @@
 use std::{
-    future::Future,
-    pin::Pin,
     sync::{mpsc, Arc},
     time::{Duration, Instant},
 };
 
 use futures::{
     executor::{LocalPool, LocalSpawner},
-    future::RemoteHandle,
-    prelude::{
-        future::{FusedFuture, FutureExt},
-        stream::StreamExt,
-    },
-    task::{LocalSpawnExt, SpawnError},
+    future::{FusedFuture, RemoteHandle},
+    prelude::{future::FutureExt, stream::StreamExt},
+    task::LocalSpawnExt,
 };
 use parking_lot::Mutex;
 
 use crate::{
     element::ElementId,
     engine::{
-        bindings::{ElementBinding, LocalSchedulerBinding, SharedSchedulerBinding},
+        bindings::{
+            ElementBinding, ElementSchedulerBinding, ElementTask, RenderingSchedulerBinding,
+            RenderingTask,
+        },
         rendering::RenderManager,
-        update_notifier::UpdateNotifier,
+        update_notifier::{UpdateNotifier, UpdateReceiver},
         widgets::WidgetManager,
     },
     executor::EngineExecutor,
+    task::{error::TaskError, TaskHandle},
     widget::Widget,
 };
 
 pub struct ThreadedEngineExecutor {
     widget_manager: WidgetManager<ThreadedEngineElementBinding, LocalEngineSchedulerBinding>,
-
-    sync_notifier: UpdateNotifier,
+    update_rx: UpdateReceiver,
 
     render_manager: Arc<Mutex<RenderManager<SharedEngineSchedulerBinding>>>,
+    sync_tx: UpdateNotifier,
 
     spawned_rx: mpsc::Receiver<ElementId>,
     rebuilt_rx: mpsc::Receiver<ElementId>,
@@ -44,42 +43,42 @@ pub struct ThreadedEngineExecutor {
 
 impl ThreadedEngineExecutor {
     pub fn with_root(root: Widget) -> Self {
-        let sync_notifier = UpdateNotifier::new();
+        let (sync_tx, sync_rx) = UpdateNotifier::new();
 
         let (tx, rx) = mpsc::sync_channel(1);
 
         std::thread::spawn({
-            let sync_notifier = sync_notifier.clone();
-
             move || {
                 let (task_tx, mut task_rx) = futures::channel::mpsc::unbounded();
+
+                let (render_tx, render_rx) = UpdateNotifier::new();
 
                 let render_manager = Arc::new(Mutex::new(
                     RenderManager::builder()
                         .with_scheduler(SharedEngineSchedulerBinding { task_tx })
+                        .with_notifier(render_tx)
                         .build(),
                 ));
 
-                tx.send(Arc::clone(&render_manager)).ok();
+                let _ = tx.send(Arc::clone(&render_manager));
 
                 let pool = LocalPool::default();
 
                 let spawner = pool.spawner();
 
-                pool.spawner()
-                    .spawn_local(async move {
-                        while let Some(task) = task_rx.next().await {
-                            if let Ok(handle) = spawner.spawn_local_with_handle(task.task) {
-                                task.reply_tx.send(handle).ok();
-                            }
+                let _ = pool.spawner().spawn_local(async move {
+                    while let Some(task) = task_rx.next().await {
+                        if let Ok(handle) = spawner.spawn_local_with_handle(task.task) {
+                            let _ = task.reply_tx.send(handle);
                         }
-                    })
-                    .ok();
+                    }
+                });
 
                 ThreadedEngineRendering {
                     render_manager,
 
-                    sync_notifier,
+                    sync_rx,
+                    render_rx,
 
                     pool,
                 }
@@ -88,6 +87,8 @@ impl ThreadedEngineExecutor {
         });
 
         let render_manager = rx.recv().expect("failed to receive render manager");
+
+        let (update_tx, update_rx) = UpdateNotifier::new();
 
         let (spawned_tx, spawned_rx) = mpsc::channel();
         let (rebuilt_tx, rebuilt_rx) = mpsc::channel();
@@ -106,11 +107,12 @@ impl ThreadedEngineExecutor {
                 .with_scheduler(LocalEngineSchedulerBinding {
                     spawner: pool.spawner(),
                 })
+                .with_notifier(update_tx)
                 .build(),
-
-            sync_notifier,
+            update_rx,
 
             render_manager,
+            sync_tx,
 
             spawned_rx,
             rebuilt_rx,
@@ -124,11 +126,11 @@ impl ThreadedEngineExecutor {
 impl EngineExecutor for ThreadedEngineExecutor {
     #[tracing::instrument(level = "debug", skip(self))]
     fn update(&mut self) {
-        tracing::debug!("update started");
+        tracing::debug!("widget update started");
 
         let start = Instant::now();
 
-        self.widget_manager.update();
+        let num_cycles = self.widget_manager.update();
 
         let update_widget_tree_end = Instant::now();
 
@@ -154,7 +156,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
 
         drop(render_manager);
 
-        self.sync_notifier.notify();
+        self.sync_tx.notify();
 
         let timings = WidgetUpdateTimings {
             duration: start.elapsed(),
@@ -165,7 +167,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
             sync_render_tree: sync_render_tree_end - lock_renderer_end,
         };
 
-        tracing::debug!(?timings, "update complete");
+        tracing::debug!(?timings, did_change = num_cycles > 0, "update complete");
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -174,9 +176,12 @@ impl EngineExecutor for ThreadedEngineExecutor {
             'update_tree: loop {
                 self.update();
 
-                let wait = self.widget_manager.wait_for_update().fuse();
+                // TODO: This should wait for the render manager to be stalled as well to match the
+                // behavior of the single threaded executor.
 
-                futures::pin_mut!(wait);
+                let widget_future = self.update_rx.wait().fuse();
+
+                futures::pin_mut!(widget_future);
 
                 // Run futures until no more progress can be made and no more tree updates are
                 // pending.
@@ -185,7 +190,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
                         return;
                     }
 
-                    if wait.is_terminated() {
+                    if widget_future.is_terminated() {
                         continue 'update_tree;
                     }
                 }
@@ -198,7 +203,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
         loop {
             self.update();
 
-            self.pool.run_until(self.widget_manager.wait_for_update());
+            self.pool.run_until(self.update_rx.wait());
         }
     }
 }
@@ -206,7 +211,8 @@ impl EngineExecutor for ThreadedEngineExecutor {
 struct ThreadedEngineRendering {
     render_manager: Arc<Mutex<RenderManager<SharedEngineSchedulerBinding>>>,
 
-    sync_notifier: UpdateNotifier,
+    sync_rx: UpdateReceiver,
+    render_rx: UpdateReceiver,
 
     pool: LocalPool,
 }
@@ -220,17 +226,19 @@ impl ThreadedEngineRendering {
 
         let mut render_manager = self.render_manager.lock();
 
+        let mut did_change = false;
+
         let lock_renderer_end = Instant::now();
 
-        render_manager.flush_layout();
+        did_change |= render_manager.flush_layout();
 
         let layout_end = Instant::now();
 
-        render_manager.flush_paint();
+        did_change |= render_manager.flush_paint();
 
         let paint_end = Instant::now();
 
-        render_manager.sync_views();
+        did_change |= render_manager.sync_views();
 
         let sync_views_end = Instant::now();
 
@@ -243,7 +251,7 @@ impl ThreadedEngineRendering {
             sync_views: sync_views_end - paint_end,
         };
 
-        tracing::debug!(?timings, "renderer update complete");
+        tracing::debug!(?timings, ?did_change, "renderer update complete");
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -251,7 +259,23 @@ impl ThreadedEngineRendering {
         loop {
             self.update();
 
-            self.pool.run_until(self.sync_notifier.wait());
+            let sync_future = self.sync_rx.wait().fuse();
+            let render_future = self.render_rx.wait().fuse();
+
+            futures::pin_mut!(sync_future);
+            futures::pin_mut!(render_future);
+
+            self.pool.run_until(async {
+                futures::select! {
+                    _ = sync_future => {
+                        tracing::trace!("rendering triggered by sync notifier");
+                    }
+
+                    _ = render_future => {
+                        tracing::trace!("rendering triggered by render notifier");
+                    }
+                }
+            });
         }
     }
 }
@@ -280,15 +304,14 @@ struct LocalEngineSchedulerBinding {
     spawner: LocalSpawner,
 }
 
-impl LocalSchedulerBinding for LocalEngineSchedulerBinding {
-    fn spawn_task(
-        &self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError> {
+impl ElementSchedulerBinding for LocalEngineSchedulerBinding {
+    fn spawn_task(&self, id: ElementId, task: ElementTask) -> Result<TaskHandle<()>, TaskError> {
         tracing::trace!("spawning local task for {:?}", id);
 
-        self.spawner.spawn_local_with_handle(future)
+        match self.spawner.spawn_local_with_handle(task) {
+            Ok(handle) => Ok(TaskHandle::from(handle)),
+            Err(_) => Err(TaskError::Shutdown),
+        }
     }
 }
 
@@ -296,29 +319,25 @@ struct SharedEngineSchedulerBinding {
     task_tx: futures::channel::mpsc::UnboundedSender<SpawnTask>,
 }
 
-impl SharedSchedulerBinding for SharedEngineSchedulerBinding {
-    fn spawn_task(
-        &self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError> {
+impl RenderingSchedulerBinding for SharedEngineSchedulerBinding {
+    fn spawn_task(&self, id: ElementId, task: RenderingTask) -> Result<TaskHandle<()>, TaskError> {
         tracing::trace!("spawning shared task for {:?}", id);
 
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
 
         self.task_tx
-            .unbounded_send(SpawnTask {
-                task: future,
-                reply_tx,
-            })
-            .map_err(|_| SpawnError::shutdown())?;
+            .unbounded_send(SpawnTask { task, reply_tx })
+            .map_err(|_| TaskError::Shutdown)?;
 
-        reply_rx.recv().map_err(|_| SpawnError::shutdown())
+        match reply_rx.recv() {
+            Ok(handle) => Ok(TaskHandle::from(handle)),
+            Err(_) => Err(TaskError::Shutdown),
+        }
     }
 }
 
 struct SpawnTask {
-    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    task: RenderingTask,
     reply_tx: mpsc::SyncSender<RemoteHandle<()>>,
 }
 

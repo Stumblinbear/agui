@@ -8,7 +8,7 @@ use crate::{
     element::{
         Element, ElementId, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
-    engine::{bindings::SharedSchedulerBinding, Dirty},
+    engine::{bindings::RenderingSchedulerBinding, Dirty},
     render::{
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
         view::RenderView,
@@ -50,10 +50,7 @@ impl RenderManager<()> {
     }
 }
 
-impl<SB> RenderManager<SB>
-where
-    SB: SharedSchedulerBinding,
-{
+impl<SB> RenderManager<SB> {
     pub fn tree(&self) -> &Tree<RenderObjectId, RenderObject> {
         &self.tree
     }
@@ -79,12 +76,25 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_layout(&mut self) {
-        let mut relayout_queue = self
-            .needs_layout
-            .drain()
-            .filter(|render_object_id| self.tree.contains(*render_object_id))
-            .collect::<Vec<_>>();
+    pub fn flush_layout(&mut self) -> bool {
+        let mut relayout_boundary_queue =
+            FxHashSet::with_capacity_and_hasher(8, BuildHasherDefault::<FxHasher>::default());
+
+        self.needs_layout.process(|render_object_id| {
+            if let Some(render_object) = self.tree.get(render_object_id) {
+                relayout_boundary_queue.insert(
+                    render_object
+                        .relayout_boundary_id()
+                        .unwrap_or(render_object_id),
+                );
+            }
+        });
+
+        if relayout_boundary_queue.is_empty() {
+            return false;
+        }
+
+        let mut relayout_queue = Vec::from_iter(relayout_boundary_queue);
 
         relayout_queue
             .sort_by_cached_key(|render_object_id| self.tree.get_depth(*render_object_id).unwrap());
@@ -195,11 +205,13 @@ where
                 }
             }
         }
+
+        true
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_paint(&mut self) {
-        for render_object_id in self.needs_paint.drain() {
+    pub fn flush_paint(&mut self) -> bool {
+        self.needs_paint.process(|render_object_id| {
             let render_object = self
                 .tree
                 .get_mut(render_object_id)
@@ -208,7 +220,7 @@ where
             let canvas = if render_object.render_view().is_some() {
                 render_object.paint()
             } else {
-                continue;
+                return;
             };
 
             let view_object = render_object.render_view_mut().unwrap();
@@ -235,11 +247,15 @@ where
             view.on_paint(render_object_id, canvas);
 
             self.needs_sync.insert(view_object_id, ());
-        }
+        })
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn sync_views(&mut self) {
+    pub fn sync_views(&mut self) -> bool {
+        if self.needs_sync.is_empty() {
+            return false;
+        }
+
         for render_object_id in self.needs_sync.drain().map(|(id, _)| id) {
             let render_object = self
                 .tree
@@ -269,8 +285,15 @@ where
                 view.on_sync();
             }
         }
-    }
 
+        true
+    }
+}
+
+impl<SB> RenderManager<SB>
+where
+    SB: RenderingSchedulerBinding,
+{
     #[tracing::instrument(level = "trace", skip(self, element_tree))]
     pub fn sync_render_objects(&mut self, element_tree: &Tree<ElementId, Element>) {
         // No need to update render objects that are about to be created.
@@ -312,15 +335,12 @@ where
                 .get_mut(render_object_id)
                 .expect("render object missing while updating");
 
-            let mut needs_layout = false;
-            let mut needs_paint = false;
-
             element_node.as_ref().update_render_object(
                 &mut RenderObjectUpdateContext {
                     scheduler: &mut self.scheduler,
 
-                    needs_layout: &mut needs_layout,
-                    needs_paint: &mut needs_paint,
+                    needs_layout: &mut self.needs_layout,
+                    needs_paint: &mut self.needs_paint,
 
                     element_id: &element_id,
 
@@ -328,18 +348,6 @@ where
                 },
                 render_object,
             );
-
-            if needs_layout {
-                self.needs_layout.insert(
-                    render_object
-                        .relayout_boundary_id()
-                        .unwrap_or(render_object_id),
-                )
-            }
-
-            if needs_paint {
-                self.needs_paint.insert(render_object_id);
-            }
 
             if let Some(render_object_id) = self.elements.get(element_id).copied() {
                 let mut first_child_render_object_id = None;
@@ -460,7 +468,11 @@ where
                     element.create_render_object(&mut RenderObjectCreateContext {
                         scheduler: &mut self.scheduler,
 
+                        needs_layout: &mut self.needs_layout,
+                        needs_paint: &mut self.needs_paint,
+
                         element_id: &element_id,
+                        render_object_id: &render_object_id,
                     });
 
                 let relayout_boundary_id = relayout_boundary_id.unwrap_or(render_object_id);

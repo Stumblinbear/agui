@@ -1,15 +1,16 @@
-use futures::{future::Future, future::RemoteHandle, task::SpawnError};
+use futures::future::Future;
 
 use crate::{
-    element::{ContextDirtyElement, ContextElement, Element, ElementId},
-    engine::{bindings::LocalSchedulerBinding, Dirty},
+    element::{ContextDirtyElement, ContextElement, Element, ElementId, ElementTaskContext},
+    engine::{bindings::ElementSchedulerBinding, Dirty},
+    task::{context::ContextSpawnElementTask, error::TaskError, TaskHandle},
     util::tree::Tree,
 };
 
 use super::ContextElements;
 
 pub struct ElementCallbackContext<'ctx> {
-    pub(crate) scheduler: &'ctx mut dyn LocalSchedulerBinding,
+    pub(crate) scheduler: &'ctx mut dyn ElementSchedulerBinding,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub needs_build: &'ctx mut Dirty<ElementId>,
@@ -35,12 +36,20 @@ impl ContextDirtyElement for ElementCallbackContext<'_> {
     }
 }
 
-impl ElementCallbackContext<'_> {
-    pub fn spawn_task<Fut>(&self, future: Fut) -> Result<RemoteHandle<()>, SpawnError>
+impl ContextSpawnElementTask for ElementCallbackContext<'_> {
+    fn spawn_task<Fut>(
+        &self,
+        func: impl FnOnce(ElementTaskContext) -> Fut + 'static,
+    ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + 'static,
     {
-        self.scheduler
-            .spawn_task(*self.element_id, Box::pin(future))
+        self.scheduler.spawn_task(
+            *self.element_id,
+            Box::pin(func(ElementTaskContext {
+                element_id: *self.element_id,
+                needs_build: self.needs_build.clone(),
+            })),
+        )
     }
 }

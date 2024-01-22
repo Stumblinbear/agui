@@ -1,6 +1,7 @@
 use std::{any::TypeId, borrow::Cow, marker::PhantomData, pin::pin, rc::Rc};
 
 use agui_core::{
+    task::{context::ContextSpawnElementTask, TaskHandle},
     unit::{Offset, Size},
     widget::{IntoWidget, Widget},
 };
@@ -10,7 +11,7 @@ use agui_elements::stateful::{
 use agui_macros::{build, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
 use agui_renderer::BindRenderer;
-use futures::{future::RemoteHandle, prelude::stream::StreamExt};
+use futures::prelude::stream::StreamExt;
 use winit::{
     event::WindowEvent,
     window::{Fullscreen, Theme, WindowBuilder, WindowButtons, WindowLevel},
@@ -39,6 +40,8 @@ where
     type State = WinitWindowState<Renderer>;
 
     fn create_state(&self) -> Self::State {
+        let (window_size_tx, window_size_rx) = async_channel::unbounded();
+
         WinitWindowState {
             phantom: PhantomData,
 
@@ -49,7 +52,8 @@ where
 
             did_set_initial_visibility: false,
 
-            window_size: Size::ZERO,
+            window_size_tx,
+            window_size_rx,
         }
     }
 }
@@ -295,11 +299,12 @@ pub struct WinitWindowState<Renderer> {
     attributes: Rc<WinitWindowAttributes>,
 
     window: Option<WinitWindowHandle>,
-    resize_event_task: Option<RemoteHandle<()>>,
+    resize_event_task: Option<TaskHandle<()>>,
 
     did_set_initial_visibility: bool,
 
-    window_size: Size,
+    window_size_tx: async_channel::Sender<Size>,
+    window_size_rx: async_channel::Receiver<Size>,
 }
 
 impl<Renderer> WidgetState for WinitWindowState<Renderer>
@@ -318,16 +323,6 @@ where
         //     },
         // );
 
-        let resize_event_cb = ctx.callback(|ctx, new_window_size: Size| {
-            if ctx.state.window_size == new_window_size {
-                return;
-            }
-
-            ctx.set_state(move |state| {
-                state.window_size = new_window_size;
-            });
-        });
-
         let on_window_created = ctx.callback(
             move |ctx, result: Result<WinitWindowHandle, WinitCreateWindowError>| {
                 let window = match result {
@@ -339,23 +334,28 @@ where
                     }
                 };
 
-                ctx.state.resize_event_task = ctx
-                    .spawn_task({
-                        let window = window.clone();
-                        let resize_event_cb = resize_event_cb.clone();
+                ctx.state.resize_event_task = match ctx.spawn_task({
+                    let window = window.clone();
+                    let window_size_tx = ctx.state.window_size_tx.clone();
 
-                        async move {
-                            let mut events = pin!(window.events());
+                    move |_| async move {
+                        let mut events = pin!(window.events());
 
-                            while let Some(event) = events.next().await {
-                                if let WindowEvent::Resized(size) = event.as_ref() {
-                                    resize_event_cb
-                                        .call(Size::new(size.width as f32, size.height as f32));
-                                }
+                        while let Some(event) = events.next().await {
+                            if let WindowEvent::Resized(size) = event.as_ref() {
+                                window_size_tx
+                                    .try_send(Size::new(size.width as f32, size.height as f32))
+                                    .ok();
                             }
                         }
-                    })
-                    .ok();
+                    }
+                }) {
+                    Ok(task) => Some(task),
+                    Err(err) => {
+                        tracing::warn!("failed to spawn resize event task: {:?}", err);
+                        None
+                    }
+                };
 
                 ctx.set_state(|state| {
                     state.window.replace(window);
@@ -425,7 +425,7 @@ where
 
             build! {
                 <WinitWindowLayout> {
-                    size: self.window_size,
+                    size_rx: self.window_size_rx.clone(),
 
                     child: <CurrentWindow> {
                         handle: window.clone(),

@@ -1,34 +1,37 @@
 use std::sync::Arc;
 
-use futures::{channel::mpsc, lock::Mutex, StreamExt};
+use futures::{channel::mpsc, StreamExt};
+use parking_lot::Mutex;
 
 #[derive(Clone)]
 pub struct UpdateNotifier {
-    notifier: Arc<Notifier>,
-}
-
-struct Notifier {
-    sender: mpsc::Sender<()>,
-    receiver: Mutex<mpsc::Receiver<()>>,
+    // TODO: figure out a better method of notifying
+    sender: Arc<Mutex<mpsc::Sender<()>>>,
 }
 
 impl UpdateNotifier {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> (Self, UpdateReceiver) {
         let (sender, receiver) = mpsc::channel(1);
 
-        Self {
-            notifier: Arc::new(Notifier {
-                sender,
-                receiver: Mutex::new(receiver),
-            }),
-        }
+        (
+            Self {
+                sender: Arc::new(Mutex::new(sender)),
+            },
+            UpdateReceiver { receiver },
+        )
     }
 
     pub fn notify(&self) {
-        let _ = self.notifier.sender.clone().try_send(());
+        let _ = self.sender.lock().try_send(());
     }
+}
 
-    pub async fn wait(&self) {
-        self.notifier.receiver.lock().await.next().await;
+pub struct UpdateReceiver {
+    receiver: mpsc::Receiver<()>,
+}
+
+impl UpdateReceiver {
+    pub async fn wait(&mut self) {
+        self.receiver.next().await;
     }
 }

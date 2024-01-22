@@ -14,6 +14,7 @@ pub mod executor;
 pub mod inheritance;
 pub mod query;
 pub mod render;
+pub mod task;
 pub mod unit;
 pub mod util;
 pub mod widget;

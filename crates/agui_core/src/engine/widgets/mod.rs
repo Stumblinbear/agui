@@ -9,8 +9,7 @@ use crate::{
         ElementMountContext, ElementUnmountContext,
     },
     engine::{
-        bindings::{ElementBinding, LocalSchedulerBinding},
-        update_notifier::UpdateNotifier,
+        bindings::{ElementBinding, ElementSchedulerBinding},
         Dirty,
     },
     inheritance::InheritanceManager,
@@ -27,8 +26,6 @@ pub use builder::*;
 pub struct WidgetManager<EB = (), SB = ()> {
     element_binding: EB,
     scheduler: SB,
-
-    notifier: UpdateNotifier,
 
     tree: Tree<ElementId, Element>,
 
@@ -85,21 +82,19 @@ impl<EB, SB> WidgetManager<EB, SB> {
     pub fn mark_needs_build(&mut self, element_id: ElementId) {
         self.needs_build.insert(element_id);
     }
-
-    pub async fn wait_for_update(&self) {
-        self.notifier.wait().await;
-    }
 }
 
 impl<EB, SB> WidgetManager<EB, SB>
 where
     EB: ElementBinding,
-    SB: LocalSchedulerBinding,
+    SB: ElementSchedulerBinding,
 {
     /// Update the UI tree.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> usize {
         tracing::trace!("updating element tree");
+
+        let mut num_cycles = 0;
 
         // Update everything until all elements fall into a stable state. Incorrectly set up elements may
         // cause an infinite loop, so be careful.
@@ -115,9 +110,13 @@ where
             if !did_change {
                 break;
             }
+
+            num_cycles += 1;
         }
 
         self.flush_removals();
+
+        num_cycles
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -136,11 +135,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_dirty(&mut self) -> bool {
-        if self.needs_build.is_empty() {
-            return false;
-        }
-
-        for element_id in self.needs_build.drain() {
+        self.needs_build.process(|element_id| {
             tracing::trace!(
                 ?element_id,
                 widget = self.tree.get(element_id).unwrap().name(),
@@ -148,9 +143,7 @@ where
             );
 
             self.rebuild_queue.push_back(element_id);
-        }
-
-        true
+        })
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

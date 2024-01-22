@@ -43,6 +43,7 @@ mockall.workspace = true
 criterion.workspace = true
 
 fnv = "1.0"
+concurrent-queue = "2.4"
 
 [[bench]]
 name = "widget_manager"
@@ -57,6 +58,11 @@ harness = false
 [[bench]]
 name = "reference_patterns"
 path = "benches/reference_patterns.rs"
+harness = false
+
+[[bench]]
+name = "dirty_queue"
+path = "benches/dirty_queue.rs"
 harness = false
 
 [[bench]]

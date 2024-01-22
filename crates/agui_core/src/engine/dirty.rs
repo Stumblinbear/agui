@@ -1,22 +1,27 @@
-use std::hash::BuildHasherDefault;
+use std::{hash::BuildHasherDefault, sync::Arc};
 
+use parking_lot::Mutex;
 use rustc_hash::FxHasher;
 use slotmap::SparseSecondaryMap;
+
+use crate::engine::update_notifier::UpdateNotifier;
 
 pub struct Dirty<T>
 where
     T: slotmap::Key,
 {
-    inner: SparseSecondaryMap<T, (), BuildHasherDefault<FxHasher>>,
+    inner: Arc<Mutex<SparseSecondaryMap<T, (), BuildHasherDefault<FxHasher>>>>,
+    notifier: UpdateNotifier,
 }
 
-impl<T> Default for Dirty<T>
+impl<T> Clone for Dirty<T>
 where
     T: slotmap::Key,
 {
-    fn default() -> Self {
+    fn clone(&self) -> Self {
         Self {
-            inner: SparseSecondaryMap::default(),
+            inner: Arc::clone(&self.inner),
+            notifier: self.notifier.clone(),
         }
     }
 }
@@ -25,26 +30,41 @@ impl<T> Dirty<T>
 where
     T: slotmap::Key,
 {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Check if any any entries have been added.
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    /// Check if a given key exists in the list.
-    pub fn is_dirty(&self, key: T) -> bool {
-        self.inner.contains_key(key)
+    pub(crate) fn new(notifier: UpdateNotifier) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(SparseSecondaryMap::default())),
+            notifier,
+        }
     }
 
     /// Marks an entry as dirty, causing it to be processed at the next opportunity.
-    pub fn insert(&mut self, key: T) {
-        self.inner.insert(key, ());
+    pub fn insert(&self, key: T) {
+        self.inner.lock().insert(key, ());
     }
 
-    pub(super) fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
-        self.inner.drain().map(|(key, _)| key)
+    /// Notify the executor that there are dirty entries. This should only be called
+    /// when we're not already in the middle of an update.
+    pub fn notify(&self) {
+        self.notifier.notify();
+    }
+
+    /// Drains the dirty entries, processing them with the given function.
+    ///
+    /// Returns `true` if the queue was not empty.
+    pub(super) fn process<F>(&mut self, mut func: F) -> bool
+    where
+        F: FnMut(T),
+    {
+        let mut inner = self.inner.lock();
+
+        if inner.is_empty() {
+            false
+        } else {
+            for (key, _) in inner.drain() {
+                func(key);
+            }
+
+            true
+        }
     }
 }

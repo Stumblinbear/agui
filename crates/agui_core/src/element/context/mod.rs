@@ -8,6 +8,8 @@ mod build;
 mod callback;
 mod create_render_object;
 mod mount;
+mod render_object_task;
+mod task;
 mod unmount;
 mod update_render_object;
 
@@ -15,6 +17,8 @@ pub use build::*;
 pub use callback::*;
 pub use create_render_object::*;
 pub use mount::*;
+pub use render_object_task::*;
+pub use task::*;
 pub use unmount::*;
 pub use update_render_object::*;
 

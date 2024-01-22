@@ -1,8 +1,9 @@
-use std::{future::Future, pin::Pin};
+use futures::{future::BoxFuture, prelude::future::LocalBoxFuture};
 
-use futures::{future::RemoteHandle, task::SpawnError};
-
-use crate::element::ElementId;
+use crate::{
+    element::ElementId,
+    task::{error::TaskError, TaskHandle},
+};
 
 #[allow(unused_variables)]
 pub trait ElementBinding {
@@ -17,40 +18,28 @@ pub trait ElementBinding {
 
 impl ElementBinding for () {}
 
+pub type ElementTask = LocalBoxFuture<'static, ()>;
+
+pub type RenderingTask = BoxFuture<'static, ()>;
+
 #[allow(unused_variables)]
-pub trait LocalSchedulerBinding {
-    fn spawn_task(
-        &self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError>;
+pub trait ElementSchedulerBinding {
+    fn spawn_task(&self, id: ElementId, task: ElementTask) -> Result<TaskHandle<()>, TaskError>;
 }
 
-impl LocalSchedulerBinding for () {
-    fn spawn_task(
-        &self,
-        _: ElementId,
-        _: Pin<Box<dyn Future<Output = ()> + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError> {
-        Err(SpawnError::shutdown())
+impl ElementSchedulerBinding for () {
+    fn spawn_task(&self, _: ElementId, _: ElementTask) -> Result<TaskHandle<()>, TaskError> {
+        Err(TaskError::no_scheduler())
     }
 }
 
 #[allow(unused_variables)]
-pub trait SharedSchedulerBinding {
-    fn spawn_task(
-        &self,
-        id: ElementId,
-        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError>;
+pub trait RenderingSchedulerBinding {
+    fn spawn_task(&self, id: ElementId, task: RenderingTask) -> Result<TaskHandle<()>, TaskError>;
 }
 
-impl SharedSchedulerBinding for () {
-    fn spawn_task(
-        &self,
-        _: ElementId,
-        _: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    ) -> Result<RemoteHandle<()>, SpawnError> {
-        Err(SpawnError::shutdown())
+impl RenderingSchedulerBinding for () {
+    fn spawn_task(&self, _: ElementId, _: RenderingTask) -> Result<TaskHandle<()>, TaskError> {
+        Err(TaskError::no_scheduler())
     }
 }
