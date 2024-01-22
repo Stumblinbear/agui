@@ -5,53 +5,30 @@ use agui_core::{
     unit::{Offset, Size},
     util::ptr_eq::PtrEqual,
 };
-use async_channel::TrySendError;
-use parking_lot::RwLock;
+use agui_renderer::FrameNotifier;
+use parking_lot::{Mutex, RwLock};
 
 use crate::render::VelloScene;
 
+#[derive(Default)]
 pub struct VelloView {
-    tx: async_channel::Sender<()>,
-    rx: async_channel::Receiver<()>,
-
     scene: Arc<RwLock<VelloScene>>,
 
     changes: Vec<Change>,
+
+    frame_notifier: Arc<Mutex<Option<FrameNotifier>>>,
 }
 
 #[derive(Clone)]
 pub struct VelloViewHandle {
-    rx: async_channel::Receiver<()>,
     scene: Arc<RwLock<VelloScene>>,
+
+    frame_notifier: Arc<Mutex<Option<FrameNotifier>>>,
 }
 
 impl VelloViewHandle {
-    pub fn notifier(&self) -> async_channel::Receiver<()> {
-        self.rx.clone()
-    }
-
-    pub(crate) fn with_scene<F, Ret>(&self, func: F) -> Ret
-    where
-        F: FnOnce(&VelloScene) -> Ret,
-    {
-        let scene = self.scene.read();
-
-        func(&scene)
-    }
-}
-
-impl Default for VelloView {
-    fn default() -> Self {
-        let (tx, rx) = async_channel::bounded(1);
-
-        Self {
-            tx,
-            rx,
-
-            scene: Arc::default(),
-
-            changes: Vec::new(),
-        }
+    pub(crate) fn set_frame_notifier(&self, frame_notifier: FrameNotifier) {
+        self.frame_notifier.lock().replace(frame_notifier);
     }
 }
 
@@ -64,23 +41,33 @@ impl VelloView {
         self.scene.is_exact_ptr(&other.scene)
     }
 
-    pub fn handle(&self) -> VelloViewHandle {
+    pub(crate) fn handle(&self) -> VelloViewHandle {
         VelloViewHandle {
-            rx: self.rx.clone(),
-
             scene: Arc::clone(&self.scene),
+
+            frame_notifier: Arc::clone(&self.frame_notifier),
         }
     }
 
     pub(crate) fn clone(&self) -> VelloView {
         VelloView {
-            tx: self.tx.clone(),
-            rx: self.rx.clone(),
-
             scene: Arc::clone(&self.scene),
 
             changes: Vec::new(),
+
+            frame_notifier: Arc::clone(&self.frame_notifier),
         }
+    }
+}
+
+impl VelloViewHandle {
+    pub(crate) fn with_scene<F, Ret>(&self, func: F) -> Ret
+    where
+        F: FnOnce(&VelloScene) -> Ret,
+    {
+        let scene = self.scene.read();
+
+        func(&scene)
     }
 }
 
@@ -178,8 +165,12 @@ impl View for VelloView {
 
         scene.redraw();
 
-        if let Err(TrySendError::Full(_)) = self.tx.try_send(()) {
-            tracing::warn!("sync occurred before the previous frame was rendered (frame skipped)");
+        let frame_notifier = self.frame_notifier.lock();
+
+        if let Some(frame_notifier) = frame_notifier.as_ref() {
+            frame_notifier.notify();
+        } else {
+            tracing::warn!("a frame was rendered, but no frame notifier was set");
         }
     }
 }

@@ -26,7 +26,7 @@ fn main() {
     run_app(move || {
         let vello_renderer = vello_renderer.clone();
 
-        let view = vello_renderer.new_view();
+        let (view, view_handle) = vello_renderer.new_view();
 
         build! {
             <WinitWindow> {
@@ -34,7 +34,7 @@ fn main() {
                     .title("Hello, world!")
                     .build(),
 
-                renderer:  VelloWindowRenderer::new(&view),
+                renderer: VelloWindowRenderer::new(view_handle),
 
                 child: <VelloViewBinding> {
                     view: view,

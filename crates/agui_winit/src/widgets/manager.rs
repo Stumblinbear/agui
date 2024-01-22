@@ -40,7 +40,9 @@ impl WinitWindowManager {
         self.event_loop
             .send_event(WinitBindingAction::CreateWindow(
                 Box::new(window_fn),
-                Box::new(move |window| Box::new(renderer.bind(window))),
+                Box::new(move |window, frame_notifier| {
+                    Box::new(renderer.bind(window, frame_notifier))
+                }),
                 callback,
             ))?;
 

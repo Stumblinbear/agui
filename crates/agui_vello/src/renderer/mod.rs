@@ -1,4 +1,4 @@
-use crate::view::VelloView;
+use crate::view::{VelloView, VelloViewHandle};
 
 #[cfg(feature = "window")]
 pub mod window;
@@ -11,7 +11,10 @@ impl VelloRenderer {
         Self::default()
     }
 
-    pub fn new_view(&self) -> VelloView {
-        VelloView::new()
+    pub fn new_view(&self) -> (VelloView, VelloViewHandle) {
+        let view = VelloView::new();
+        let handle = view.handle();
+
+        (view, handle)
     }
 }

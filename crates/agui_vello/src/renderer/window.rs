@@ -1,6 +1,6 @@
 use std::{error::Error, time::Instant};
 
-use agui_renderer::{BindRenderer, Renderer};
+use agui_renderer::{BindRenderer, FrameNotifier, Renderer};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
     block_on_wgpu,
@@ -8,7 +8,7 @@ use vello::{
     AaConfig, AaSupport, RendererOptions,
 };
 
-use crate::view::{VelloView, VelloViewHandle};
+use crate::view::VelloViewHandle;
 
 mod sealed {
     pub trait VelloWindowRendererState {}
@@ -25,6 +25,7 @@ pub struct Bound {
 
 impl sealed::VelloWindowRendererState for Bound {}
 
+#[derive(Clone)]
 pub struct VelloWindowRenderer<S>
 where
     S: sealed::VelloWindowRendererState,
@@ -34,20 +35,10 @@ where
     state: S,
 }
 
-impl Clone for VelloWindowRenderer<()> {
-    fn clone(&self) -> Self {
-        Self {
-            view_handle: self.view_handle.clone(),
-
-            state: (),
-        }
-    }
-}
-
 impl VelloWindowRenderer<()> {
-    pub fn new(view: &VelloView) -> Self {
+    pub fn new(view_handle: VelloViewHandle) -> Self {
         Self {
-            view_handle: view.handle(),
+            view_handle,
 
             state: (),
         }
@@ -58,7 +49,11 @@ impl<T> BindRenderer<T> for VelloWindowRenderer<()>
 where
     T: HasRawWindowHandle + HasRawDisplayHandle,
 {
-    async fn bind(self, target: &T) -> Result<Box<dyn Renderer>, Box<dyn Error + Send + Sync>> {
+    async fn bind(
+        self,
+        target: &T,
+        frame_notifier: FrameNotifier,
+    ) -> Result<Box<dyn Renderer>, Box<dyn Error + Send + Sync>> {
         let mut render_context =
             RenderContext::new().map_err(|err| VelloBindError::Context(format!("{:?}", err)))?;
 
@@ -85,8 +80,10 @@ where
         )
         .map_err(|err| VelloBindError::Renderer(format!("{:?}", err)))?;
 
+        self.view_handle.set_frame_notifier(frame_notifier);
+
         Ok(Box::new(VelloWindowRenderer {
-            view_handle: self.view_handle.clone(),
+            view_handle: self.view_handle,
 
             state: Bound {
                 render_context,
@@ -111,10 +108,6 @@ pub enum VelloBindError {
 }
 
 impl Renderer for VelloWindowRenderer<Bound> {
-    fn render_notifier(&self) -> async_channel::Receiver<()> {
-        self.view_handle.notifier()
-    }
-
     fn render(&mut self) {
         tracing::trace!("VelloWindowRenderer::render");
 

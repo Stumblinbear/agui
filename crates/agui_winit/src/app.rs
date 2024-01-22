@@ -1,8 +1,7 @@
 use std::{cell::RefCell, error::Error, future::Future, rc::Rc};
 
 use agui_core::callback::Callback;
-use agui_renderer::Renderer;
-use futures::{executor::LocalPool, task::LocalSpawnExt};
+use agui_renderer::{FrameNotifier, Renderer};
 use rustc_hash::FxHashMap;
 use winit::{
     error::OsError,
@@ -15,6 +14,7 @@ use crate::{WinitWindowEvent, WinitWindowHandle};
 
 type CreateWinitWindowFn = dyn FnOnce(
         &winit::window::Window,
+        FrameNotifier,
     )
         -> Box<dyn Future<Output = Result<Box<dyn Renderer>, Box<dyn Error + Send + Sync>>> + '_>
     + Send;
@@ -58,10 +58,10 @@ impl Default for WinitApp {
 
 impl WinitApp {
     pub fn run(mut self) {
-        let mut task_pool = LocalPool::new();
-
         self.event_loop
             .run(move |event, window_target, control_flow| {
+                *control_flow = ControlFlow::Poll;
+
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
                         if let Some(event) = event.to_static() {
@@ -124,45 +124,37 @@ impl WinitApp {
 
                             let window = WinitWindowHandle::new(window, events_rx);
 
-                            #[allow(clippy::await_holding_refcell_ref)]
-                            task_pool
-                                .spawner()
-                                .spawn_local(async move {
-                                    let mut window_renderer = window_renderer.borrow_mut();
+                            let mut window_renderer = window_renderer.borrow_mut();
 
-                                    let renderer_fut = Box::into_pin((renderer_fn)(&window));
+                            let renderer_fut = Box::into_pin((renderer_fn)(
+                                &window,
+                                FrameNotifier::new({
+                                    let window = window.clone();
 
-                                    let renderer = match renderer_fut.await {
-                                        Ok(renderer) => renderer,
-                                        Err(err) => {
-                                            return callback
-                                                .call(Err(WinitCreateWindowError::Renderer(err)));
-                                        }
-                                    };
-
-                                    let notifier = renderer.render_notifier();
-
-                                    window_renderer.replace(renderer);
-
-                                    drop(window_renderer);
-
-                                    callback.call(Ok(window.clone()));
-
-                                    while let Ok(()) = notifier.recv().await {
+                                    move || {
                                         window.request_redraw();
                                     }
-                                })
-                                .expect("failed to spawn render notifier task");
+                                }),
+                            ));
+
+                            // TODO: figure out how to make this actually async
+                            let renderer = match futures::executor::block_on(renderer_fut) {
+                                Ok(renderer) => renderer,
+                                Err(err) => {
+                                    return callback
+                                        .call(Err(WinitCreateWindowError::Renderer(err)));
+                                }
+                            };
+
+                            window_renderer.replace(renderer);
+
+                            drop(window_renderer);
+
+                            callback.call(Ok(window));
                         }
                     },
 
                     _ => (),
-                }
-
-                if task_pool.try_run_one() {
-                    *control_flow = ControlFlow::Poll;
-                } else {
-                    *control_flow = ControlFlow::Wait;
                 }
             });
     }

@@ -25,6 +25,7 @@ tracing.workspace = true
 thiserror.workspace = true
 
 rustc-hash.workspace = true
+parking_lot.workspace = true
 
 futures.workspace = true
 async-channel.workspace = true
