@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use agui_core::{
     render::{canvas::Canvas, view::View, RenderObjectId},
@@ -133,9 +136,13 @@ impl View for VelloView {
     fn on_sync(&mut self) {
         tracing::trace!("VelloView::on_sync");
 
+        let start = Instant::now();
+
         // TODO: if this is locked, we should somehow check if another frame is ready and
         // skip this one
         let mut scene = self.scene.write();
+
+        let lock_scene_end = Instant::now();
 
         for change in self.changes.drain(..) {
             match change {
@@ -163,7 +170,11 @@ impl View for VelloView {
             }
         }
 
+        let apply_changes_end = Instant::now();
+
         scene.redraw();
+
+        let redraw_end = Instant::now();
 
         let frame_notifier = self.frame_notifier.lock();
 
@@ -172,6 +183,19 @@ impl View for VelloView {
         } else {
             tracing::warn!("a frame was rendered, but no frame notifier was set");
         }
+
+        let frame_notify_end = Instant::now();
+
+        let timings = SyncTimings {
+            duration: start.elapsed(),
+
+            lock_scene: lock_scene_end - start,
+            apply_changes: apply_changes_end - lock_scene_end,
+            redraw: redraw_end - apply_changes_end,
+            frame_notify: frame_notify_end - redraw_end,
+        };
+
+        tracing::debug!(?timings, "sync complete");
     }
 }
 
@@ -199,4 +223,15 @@ enum Change {
         render_object_id: RenderObjectId,
         canvas: Canvas,
     },
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct SyncTimings {
+    duration: Duration,
+
+    lock_scene: Duration,
+    apply_changes: Duration,
+    redraw: Duration,
+    frame_notify: Duration,
 }
