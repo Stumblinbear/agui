@@ -126,7 +126,7 @@ impl ThreadedEngineExecutor {
 impl EngineExecutor for ThreadedEngineExecutor {
     #[tracing::instrument(level = "debug", skip(self))]
     fn update(&mut self) {
-        tracing::debug!("widget update started");
+        tracing::trace!("widget update started");
 
         let start = Instant::now();
 
@@ -220,7 +220,7 @@ struct ThreadedEngineRendering {
 impl ThreadedEngineRendering {
     #[tracing::instrument(level = "debug", skip(self))]
     pub fn update(&mut self) {
-        tracing::debug!("renderer update started");
+        tracing::trace!("renderer update started");
 
         let start = Instant::now();
 

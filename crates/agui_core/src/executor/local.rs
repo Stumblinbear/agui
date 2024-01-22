@@ -86,7 +86,7 @@ impl LocalEngineExecutor {
 impl EngineExecutor for LocalEngineExecutor {
     #[tracing::instrument(level = "debug", skip(self))]
     fn update(&mut self) {
-        tracing::debug!("update started");
+        tracing::trace!("update started");
 
         let start = Instant::now();
 
