@@ -1,7 +1,10 @@
 use std::future::Future;
 
 use crate::{
-    element::{ContextElement, ContextRenderObject, ElementId, RenderObjectTaskContext},
+    element::{
+        ContextDirtyRenderObject, ContextElement, ContextRenderObject, ElementId,
+        RenderObjectTaskContext,
+    },
     engine::{bindings::RenderingSchedulerBinding, Dirty},
     render::RenderObjectId,
     task::{context::ContextSpawnRenderingTask, error::TaskError, TaskHandle},
@@ -26,6 +29,16 @@ impl ContextElement for RenderObjectCreateContext<'_> {
 impl ContextRenderObject for RenderObjectCreateContext<'_> {
     fn render_object_id(&self) -> RenderObjectId {
         *self.render_object_id
+    }
+}
+
+impl ContextDirtyRenderObject for RenderObjectCreateContext<'_> {
+    fn mark_needs_layout(&mut self) {
+        self.needs_layout.insert(*self.render_object_id);
+    }
+
+    fn mark_needs_paint(&mut self) {
+        self.needs_paint.insert(*self.render_object_id);
     }
 }
 

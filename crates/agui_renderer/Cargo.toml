@@ -24,6 +24,4 @@ tracing.workspace = true
 rustc-hash.workspace = true
 slotmap.workspace = true
 
-async-channel.workspace = true
-
 raw-window-handle = { workspace = true, optional = true }

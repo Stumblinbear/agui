@@ -1,8 +1,6 @@
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::{ops::Deref, sync::Arc};
 
+use agui_sync::broadcast;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::WinitWindowEvent;
@@ -11,23 +9,23 @@ use crate::WinitWindowEvent;
 pub struct WinitWindowHandle {
     inner: Arc<winit::window::Window>,
 
-    events: async_channel::Receiver<WinitWindowEvent>,
+    events_tx: broadcast::UnboundedSender<WinitWindowEvent>,
 }
 
 impl WinitWindowHandle {
     pub(crate) fn new(
         handle: winit::window::Window,
-        events: async_channel::Receiver<WinitWindowEvent>,
+        events_tx: broadcast::UnboundedSender<WinitWindowEvent>,
     ) -> Self {
         Self {
             inner: Arc::new(handle),
 
-            events,
+            events_tx,
         }
     }
 
-    pub fn events(&self) -> async_channel::Receiver<WinitWindowEvent> {
-        self.events.clone()
+    pub async fn subscribe(&self) -> broadcast::UnboundedReceiver<WinitWindowEvent> {
+        self.events_tx.subscribe().await
     }
 }
 

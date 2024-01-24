@@ -2,6 +2,7 @@ use std::ops::Deref;
 
 use winit::event::WindowEvent;
 
+#[derive(Clone, Debug)]
 pub struct WinitWindowEvent(pub WindowEvent<'static>);
 
 impl AsRef<WindowEvent<'static>> for WinitWindowEvent {

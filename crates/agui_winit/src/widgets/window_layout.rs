@@ -11,11 +11,12 @@ use agui_core::{
 };
 use agui_elements::render::RenderObjectWidget;
 use agui_macros::RenderObjectWidget;
+use agui_sync::watch;
 use parking_lot::Mutex;
 
 #[derive(RenderObjectWidget)]
 pub struct WinitWindowLayout {
-    size_rx: async_channel::Receiver<Size>,
+    size_rx: Option<watch::Receiver<Size>>,
 
     child: Widget,
 }
@@ -47,7 +48,7 @@ pub struct RenderWinitWindowLayout {
 }
 
 impl RenderWinitWindowLayout {
-    fn new(ctx: &mut RenderObjectCreateContext, size_rx: async_channel::Receiver<Size>) -> Self {
+    fn new(ctx: &mut RenderObjectCreateContext, size_rx: Option<watch::Receiver<Size>>) -> Self {
         let mut ro = Self {
             size: Arc::new(Mutex::new(Size::default())),
 
@@ -59,14 +60,25 @@ impl RenderWinitWindowLayout {
         ro
     }
 
-    fn update_size_rx<C>(&mut self, ctx: &mut C, size_rx: async_channel::Receiver<Size>)
+    fn update_size_rx<C>(&mut self, ctx: &mut C, size_rx: Option<watch::Receiver<Size>>)
     where
-        C: ContextSpawnRenderingTask,
+        C: ContextDirtyRenderObject + ContextSpawnRenderingTask,
     {
-        let size = Arc::clone(&self.size);
+        if let Some(size_rx) = &size_rx {
+            let mut size = self.size.lock();
 
-        self.size_task = ctx
-            .spawn_task(move |mut ctx| async move {
+            let new_size = *size_rx.borrow();
+
+            if *size != new_size {
+                *size = new_size;
+                ctx.mark_needs_layout();
+            }
+        }
+
+        self.size_task = size_rx.and_then(|mut size_rx| {
+            let size = Arc::clone(&self.size);
+
+            ctx.spawn_task(move |mut ctx| async move {
                 while let Ok(new_size) = size_rx.recv().await {
                     let mut size = size.lock();
 
@@ -78,7 +90,8 @@ impl RenderWinitWindowLayout {
                     ctx.mark_needs_layout();
                 }
             })
-            .ok();
+            .ok()
+        });
     }
 }
 

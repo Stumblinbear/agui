@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, marker::PhantomData, pin::pin, rc::Rc};
+use std::{any::TypeId, borrow::Cow, marker::PhantomData, rc::Rc};
 
 use agui_core::{
     task::{context::ContextSpawnElementTask, TaskHandle},
@@ -11,7 +11,7 @@ use agui_elements::stateful::{
 use agui_macros::{build, StatefulWidget, WidgetProps};
 use agui_primitives::sized_box::SizedBox;
 use agui_renderer::BindRenderer;
-use futures::prelude::stream::StreamExt;
+use agui_sync::watch;
 use winit::{
     event::WindowEvent,
     window::{Fullscreen, Theme, WindowBuilder, WindowButtons, WindowLevel},
@@ -40,20 +40,18 @@ where
     type State = WinitWindowState<Renderer>;
 
     fn create_state(&self) -> Self::State {
-        let (window_size_tx, window_size_rx) = async_channel::unbounded();
-
         WinitWindowState {
             phantom: PhantomData,
 
             attributes: self.attributes.clone(),
 
             window: None,
+            close_event_task: None,
             resize_event_task: None,
 
             did_set_initial_visibility: false,
 
-            window_size_tx,
-            window_size_rx,
+            window_size_rx: None,
         }
     }
 }
@@ -299,12 +297,12 @@ pub struct WinitWindowState<Renderer> {
     attributes: Rc<WinitWindowAttributes>,
 
     window: Option<WinitWindowHandle>,
+    close_event_task: Option<TaskHandle<()>>,
     resize_event_task: Option<TaskHandle<()>>,
 
     did_set_initial_visibility: bool,
 
-    window_size_tx: async_channel::Sender<Size>,
-    window_size_rx: async_channel::Receiver<Size>,
+    window_size_rx: Option<watch::Receiver<Size>>,
 }
 
 impl<Renderer> WidgetState for WinitWindowState<Renderer>
@@ -323,6 +321,14 @@ where
         //     },
         // );
 
+        let on_window_closed = ctx.callback(|ctx, _: ()| {
+            ctx.set_state(|state| {
+                state.window.take();
+                state.close_event_task.take();
+                state.resize_event_task.take();
+            })
+        });
+
         let on_window_created = ctx.callback(
             move |ctx, result: Result<WinitWindowHandle, WinitCreateWindowError>| {
                 let window = match result {
@@ -334,17 +340,39 @@ where
                     }
                 };
 
-                ctx.state.resize_event_task = match ctx.spawn_task({
+                let (window_size_tx, window_size_rx) = watch::channel(Size::ZERO);
+
+                ctx.state.close_event_task = match ctx.spawn_task({
                     let window = window.clone();
-                    let window_size_tx = ctx.state.window_size_tx.clone();
+                    let on_window_closed = on_window_closed.clone();
 
                     move |_| async move {
-                        let mut events = pin!(window.events());
+                        let window_events = window.subscribe().await;
 
-                        while let Some(event) = events.next().await {
+                        while let Ok(event) = window_events.recv().await {
+                            if let WindowEvent::CloseRequested = event.as_ref() {
+                                on_window_closed.call(());
+                            }
+                        }
+                    }
+                }) {
+                    Ok(task) => Some(task),
+                    Err(err) => {
+                        tracing::warn!("failed to close event task: {:?}", err);
+                        None
+                    }
+                };
+
+                ctx.state.resize_event_task = match ctx.spawn_task({
+                    let window = window.clone();
+
+                    move |_| async move {
+                        let window_events = window.subscribe().await;
+
+                        while let Ok(event) = window_events.recv().await {
                             if let WindowEvent::Resized(size) = event.as_ref() {
                                 window_size_tx
-                                    .try_send(Size::new(size.width as f32, size.height as f32))
+                                    .send(Size::new(size.width as f32, size.height as f32))
                                     .ok();
                             }
                         }
@@ -359,6 +387,8 @@ where
 
                 ctx.set_state(|state| {
                     state.window.replace(window);
+
+                    state.window_size_rx = Some(window_size_rx);
 
                     // state.event_listener = Some(window.events().add_listener(
                     //     move |WinitWindowEvent(ref event)| {

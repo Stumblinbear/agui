@@ -2,6 +2,7 @@ use std::{error::Error, future::Future};
 
 use agui_core::callback::Callback;
 use agui_renderer::{FrameNotifier, Renderer};
+use agui_sync::broadcast;
 use rustc_hash::FxHashMap;
 use winit::{
     error::OsError,
@@ -41,7 +42,7 @@ pub enum WinitBindingAction {
 pub struct WinitApp {
     pub event_loop: EventLoop<WinitBindingAction>,
 
-    window_events: FxHashMap<WindowId, async_channel::Sender<WinitWindowEvent>>,
+    window_events: FxHashMap<WindowId, broadcast::UnboundedSender<WinitWindowEvent>>,
     window_renderer: FxHashMap<WindowId, Box<dyn Renderer>>,
 }
 
@@ -67,22 +68,32 @@ impl WinitApp {
                 match event {
                     WinitEvent::WindowEvent { event, window_id } => {
                         if let Some(event) = event.to_static() {
-                            if let Some(events_tx) = self.window_events.get(&window_id) {
-                                if events_tx
-                                    .send_blocking(WinitWindowEvent::from(event))
-                                    .is_err()
-                                {
-                                    tracing::error!("window event channel is closed");
-                                }
+                            let is_destroyed =
+                                matches!(event, winit::event::WindowEvent::Destroyed);
 
-                                if events_tx.is_closed() {
-                                    tracing::debug!("closing window");
-
-                                    self.window_events.remove(&window_id);
-                                    self.window_renderer.remove(&window_id);
+                            if let Some(events_tx) = self.window_events.get_mut(&window_id) {
+                                if let Err(err) = futures::executor::block_on(
+                                    events_tx.send(WinitWindowEvent::from(event)),
+                                ) {
+                                    tracing::error!("failed to broadcast winit event: {}", err);
                                 }
                             } else {
-                                tracing::warn!("no renderer for window {:?}", window_id);
+                                tracing::warn!(?window_id, "no renderer for window");
+                            }
+
+                            if is_destroyed {
+                                tracing::debug!(?window_id, "window was destroyed");
+
+                                self.window_renderer.remove(&window_id);
+
+                                if let Some(events_tx) = self.window_events.remove(&window_id) {
+                                    if !events_tx.close() {
+                                        tracing::error!(
+                                            ?window_id,
+                                            "window event channel was already closed"
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -110,11 +121,11 @@ impl WinitApp {
                             Err(err) => return callback.call(Err(err.into())),
                         };
 
-                        let (events_tx, events_rx) = async_channel::unbounded();
+                        let (events_tx, _) = broadcast::unbounded();
 
-                        self.window_events.insert(window.id(), events_tx);
+                        self.window_events.insert(window.id(), events_tx.clone());
 
-                        let window = WinitWindowHandle::new(window, events_rx);
+                        let window = WinitWindowHandle::new(window, events_tx.clone());
 
                         let renderer_fut = Box::into_pin((renderer_fn)(
                             &window,

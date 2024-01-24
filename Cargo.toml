@@ -16,6 +16,8 @@ readme = "README.md"
 members = ["crates/*"]
 
 [workspace.dependencies]
+agui_sync = { path = "crates/agui_sync", version = "0.3" }
+
 agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
@@ -43,6 +45,10 @@ url = "2.4"
 smallbox = "0.8"
 
 futures = "0.3"
+event-listener = "4.0"
+async_cell = "0.2.2"
+async-watch = "0.3"
+async-lock = "3.3"
 async-channel = "2.1"
 
 mockall = "0.11"

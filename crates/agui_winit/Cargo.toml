@@ -12,6 +12,8 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
+agui_sync.workspace = true
+
 agui_core.workspace = true
 agui_macros.workspace = true
 
@@ -28,7 +30,6 @@ rustc-hash.workspace = true
 parking_lot.workspace = true
 
 futures.workspace = true
-async-channel.workspace = true
 
 raw-window-handle.workspace = true
 

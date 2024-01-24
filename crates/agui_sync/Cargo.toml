@@ -1,0 +1,31 @@
+[package]
+name = "agui_sync"
+version = "0.3.0"
+edition = "2021"
+resolver = "2"
+description = "Provides async primitives for agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui"]
+categories = ["gui"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+thiserror.workspace = true
+
+futures.workspace = true
+async-lock.workspace = true
+async-channel.workspace = true
+async-watch.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+async_cell.workspace = true
+async-watch.workspace = true
+
+[[bench]]
+name = "hashers"
+path = "benches/hashers.rs"
+harness = false
