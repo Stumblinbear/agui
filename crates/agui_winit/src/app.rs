@@ -1,6 +1,5 @@
 use std::{error::Error, future::Future};
 
-use agui_core::callback::Callback;
 use agui_renderer::{FrameNotifier, Renderer};
 use agui_sync::broadcast;
 use rustc_hash::FxHashMap;
@@ -8,10 +7,11 @@ use winit::{
     error::OsError,
     event::Event as WinitEvent,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
+    platform::run_return::EventLoopExtRunReturn,
     window::{WindowBuilder, WindowId},
 };
 
-use crate::{WinitWindowEvent, WinitWindowHandle};
+use crate::{controller::WinitController, WinitWindowEvent, WinitWindowHandle};
 
 type CreateWinitWindowFn = dyn FnOnce(
         &winit::window::Window,
@@ -33,14 +33,16 @@ pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
         Box<CreateWinitWindowFn>,
-        Callback<Result<WinitWindowHandle, WinitCreateWindowError>>,
+        Box<dyn FnOnce(Result<WinitWindowHandle, WinitCreateWindowError>) + Send>,
     ),
 
     Render(WindowId),
+
+    Shutdown,
 }
 
 pub struct WinitApp {
-    pub event_loop: EventLoop<WinitBindingAction>,
+    event_loop: EventLoop<WinitBindingAction>,
 
     window_events: FxHashMap<WindowId, broadcast::UnboundedSender<WinitWindowEvent>>,
     window_renderer: FxHashMap<WindowId, Box<dyn Renderer>>,
@@ -58,11 +60,17 @@ impl Default for WinitApp {
 }
 
 impl WinitApp {
+    pub fn create_controller(&self) -> WinitController {
+        WinitController::new(self.event_loop.create_proxy())
+    }
+
     pub fn run(mut self) {
         let event_loop_proxy = self.event_loop.create_proxy();
 
+        let mut shutting_down = false;
+
         self.event_loop
-            .run(move |event, window_target, control_flow| {
+            .run_return(move |event, window_target, control_flow| {
                 *control_flow = ControlFlow::Wait;
 
                 match event {
@@ -72,13 +80,15 @@ impl WinitApp {
                                 matches!(event, winit::event::WindowEvent::Destroyed);
 
                             if let Some(events_tx) = self.window_events.get_mut(&window_id) {
-                                if let Err(err) = futures::executor::block_on(
-                                    events_tx.send(WinitWindowEvent::from(event)),
-                                ) {
+                                if let Err(err @ broadcast::SendError::Closed(_)) =
+                                    futures::executor::block_on(
+                                        events_tx.send(WinitWindowEvent::from(event)),
+                                    )
+                                {
                                     tracing::error!("failed to broadcast winit event: {}", err);
                                 }
-                            } else {
-                                tracing::warn!(?window_id, "no renderer for window");
+                            } else if !shutting_down {
+                                tracing::warn!(?window_id, "no event channel for window");
                             }
 
                             if is_destroyed {
@@ -93,6 +103,10 @@ impl WinitApp {
                                             "window event channel was already closed"
                                         )
                                     }
+                                }
+
+                                if shutting_down && self.window_renderer.is_empty() {
+                                    *control_flow = ControlFlow::Exit;
                                 }
                             }
                         }
@@ -118,7 +132,7 @@ impl WinitApp {
 
                         let window = match window_builder.with_visible(false).build(window_target) {
                             Ok(window) => window,
-                            Err(err) => return callback.call(Err(err.into())),
+                            Err(err) => return callback(Err(err.into())),
                         };
 
                         let (events_tx, _) = broadcast::unbounded();
@@ -144,16 +158,48 @@ impl WinitApp {
                         let renderer = match futures::executor::block_on(renderer_fut) {
                             Ok(renderer) => renderer,
                             Err(err) => {
-                                return callback.call(Err(WinitCreateWindowError::Renderer(err)));
+                                return callback(Err(WinitCreateWindowError::Renderer(err)));
                             }
                         };
 
                         self.window_renderer.insert(window.id(), renderer);
 
-                        callback.call(Ok(window));
+                        callback(Ok(window));
                     }
 
-                    _ => (),
+                    WinitEvent::UserEvent(WinitBindingAction::Shutdown) => {
+                        if self.window_renderer.is_empty() {
+                            *control_flow = ControlFlow::Exit;
+                        } else {
+                            for (_, mut events_tx) in self.window_events.drain() {
+                                futures::executor::block_on(events_tx.send(
+                                    WinitWindowEvent::from(
+                                        winit::event::WindowEvent::CloseRequested,
+                                    ),
+                                ))
+                                .ok();
+
+                                events_tx.close();
+                            }
+
+                            shutting_down = true;
+
+                            *control_flow = ControlFlow::Poll;
+                        }
+                    }
+
+                    WinitEvent::NewEvents(_) => {}
+                    WinitEvent::DeviceEvent {
+                        device_id: _,
+                        event: _,
+                    } => {}
+                    WinitEvent::Suspended => {}
+                    WinitEvent::Resumed => {}
+                    WinitEvent::MainEventsCleared => {}
+
+                    WinitEvent::RedrawEventsCleared => {}
+
+                    WinitEvent::LoopDestroyed => {}
                 }
             });
     }

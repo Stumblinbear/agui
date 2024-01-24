@@ -1,10 +1,9 @@
 use std::thread;
 
-use agui_core::{
-    executor::{self, EngineExecutor},
-    widget::IntoWidget,
-};
+use agui_core::widget::IntoWidget;
+use agui_executor::EngineExecutor;
 use agui_macros::build;
+use agui_sync::notify;
 use agui_winit::{WinitApp, WinitWindowManager};
 
 #[cfg(not(all(feature = "vello", feature = "winit")))]
@@ -22,22 +21,28 @@ where
 
     let winit_app = WinitApp::default();
 
-    let event_loop = winit_app.event_loop.create_proxy();
+    let controller = winit_app.create_controller();
 
-    thread::spawn(move || {
+    let shutdown_tx = notify::Flag::new();
+    let mut shutdown_rx = shutdown_tx.subscribe();
+
+    let handle = thread::spawn(move || {
         let root = build! {
             <WinitWindowManager> {
-                event_loop: event_loop,
+                controller: controller,
 
                 child: (func)().into_widget()
             }
         };
 
-        // TODO: add a way to actually stop the engine
-        executor::ThreadedEngineExecutor::with_root(root).run();
+        agui_executor::ThreadedEngineExecutor::with_root(root).run_until(shutdown_rx.wait());
     });
 
     winit_app.run();
+
+    shutdown_tx.notify();
+
+    handle.join().expect("app thread panicked");
 
     Ok(())
 }

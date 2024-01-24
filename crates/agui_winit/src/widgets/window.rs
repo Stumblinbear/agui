@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, marker::PhantomData, rc::Rc};
+use std::{any::TypeId, borrow::Cow, marker::PhantomData};
 
 use agui_core::{
     task::{context::ContextSpawnElementTask, TaskHandle},
@@ -17,16 +17,20 @@ use winit::{
     window::{Fullscreen, Theme, WindowBuilder, WindowButtons, WindowLevel},
 };
 
-use crate::{app::WinitCreateWindowError, handle::WinitWindowHandle, WinitWindowManager};
-use crate::{widgets::window_layout::WinitWindowLayout, CurrentWindow};
+use crate::{
+    app::WinitCreateWindowError, handle::WinitWindowHandle,
+    widgets::window_layout::WinitWindowLayout, CurrentWindow, WinitWindowManager,
+};
 
 #[derive(StatefulWidget)]
 pub struct WinitWindow<Renderer>
 where
     Renderer: BindRenderer<winit::window::Window> + Send + Sync + Clone + 'static,
 {
-    #[prop(into)]
-    pub attributes: Rc<WinitWindowAttributes>,
+    pub attributes: WinitWindowAttributes,
+
+    #[prop(default = true)]
+    pub exit_on_close: bool,
 
     pub renderer: Renderer,
 
@@ -42,8 +46,6 @@ where
     fn create_state(&self) -> Self::State {
         WinitWindowState {
             phantom: PhantomData,
-
-            attributes: self.attributes.clone(),
 
             window: None,
             close_event_task: None,
@@ -294,8 +296,6 @@ impl From<WinitWindowAttributes> for WindowBuilder {
 pub struct WinitWindowState<Renderer> {
     phantom: PhantomData<Renderer>,
 
-    attributes: Rc<WinitWindowAttributes>,
-
     window: Option<WinitWindowHandle>,
     close_event_task: Option<TaskHandle<()>>,
     resize_event_task: Option<TaskHandle<()>>,
@@ -322,11 +322,21 @@ where
         // );
 
         let on_window_closed = ctx.callback(|ctx, _: ()| {
+            if ctx.widget.exit_on_close {
+                if let Err(err) = ctx
+                    .find_inherited_widget::<WinitWindowManager>()
+                    .expect("WinitWindowManager was not found")
+                    .shutdown()
+                {
+                    tracing::error!("failed to shut down winit on window close: {:?}", err);
+                }
+            }
+
             ctx.set_state(|state| {
                 state.window.take();
                 state.close_event_task.take();
                 state.resize_event_task.take();
-            })
+            });
         });
 
         let on_window_created = ctx.callback(
@@ -422,7 +432,7 @@ where
             );
         };
 
-        let attributes = self.attributes.as_ref().clone();
+        let attributes = ctx.widget.attributes.clone();
 
         if let Err(err) = window_manager.create_window(
             move || WindowBuilder::from(attributes),
@@ -433,14 +443,14 @@ where
         }
     }
 
-    fn updated(&mut self, _: &mut StatefulBuildContext<Self>, old_widget: &Self::Widget) {
+    fn updated(&mut self, ctx: &mut StatefulBuildContext<Self>, old_widget: &Self::Widget) {
         // TODO: if the attributes have changed between widget build and window creation,
         // we need to make sure to apply the attributes to the window.
-        if self.attributes != old_widget.attributes {
+        if ctx.widget.attributes != old_widget.attributes {
             if let Some(window) = &mut self.window {
                 tracing::debug!("Updating window attributes");
 
-                self.attributes.apply(&self.attributes, window);
+                ctx.widget.attributes.apply(&old_widget.attributes, window);
             }
         }
     }
@@ -450,7 +460,7 @@ where
             if !self.did_set_initial_visibility {
                 self.did_set_initial_visibility = true;
 
-                window.set_visible(self.attributes.visible.unwrap_or(true));
+                window.set_visible(ctx.widget.attributes.visible.unwrap_or(true));
             }
 
             build! {

@@ -1,4 +1,5 @@
 mod app;
+pub mod controller;
 mod event;
 mod handle;
 mod widgets;
