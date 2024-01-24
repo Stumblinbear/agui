@@ -24,8 +24,6 @@ fn main() {
     let vello_renderer = VelloRenderer::default();
 
     run_app(move || {
-        let vello_renderer = vello_renderer.clone();
-
         let (view, view_handle) = vello_renderer.new_view();
 
         build! {
