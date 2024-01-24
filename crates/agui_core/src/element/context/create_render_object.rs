@@ -5,7 +5,7 @@ use crate::{
         ContextDirtyRenderObject, ContextElement, ContextRenderObject, ElementId,
         RenderObjectTaskContext,
     },
-    engine::{bindings::RenderingSchedulerBinding, Dirty},
+    engine::{rendering::bindings::RenderingSchedulerBinding, Dirty},
     render::RenderObjectId,
     task::{context::ContextSpawnRenderingTask, error::TaskError, TaskHandle},
 };
@@ -51,7 +51,7 @@ impl ContextSpawnRenderingTask for RenderObjectCreateContext<'_> {
         Fut: Future<Output = ()> + Send + 'static,
     {
         self.scheduler.spawn_task(
-            *self.element_id,
+            *self.render_object_id,
             Box::pin(func(RenderObjectTaskContext {
                 element_id: *self.element_id,
                 render_object_id: *self.render_object_id,

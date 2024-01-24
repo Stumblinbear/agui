@@ -6,7 +6,7 @@ use crate::{
         inherited::ElementInherited, Element, ElementBuilder, ElementId, ElementTaskContext,
         ElementType,
     },
-    engine::{bindings::ElementSchedulerBinding, Dirty},
+    engine::{widgets::bindings::ElementSchedulerBinding, Dirty},
     inheritance::InheritanceManager,
     task::{context::ContextSpawnElementTask, error::TaskError, TaskHandle},
     util::tree::Tree,

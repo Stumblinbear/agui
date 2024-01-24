@@ -1,4 +1,4 @@
-use futures::{future::BoxFuture, prelude::future::LocalBoxFuture};
+use std::{future::Future, pin::Pin};
 
 use crate::{
     element::ElementId,
@@ -18,9 +18,7 @@ pub trait ElementBinding {
 
 impl ElementBinding for () {}
 
-pub type ElementTask = LocalBoxFuture<'static, ()>;
-
-pub type RenderingTask = BoxFuture<'static, ()>;
+pub type ElementTask = Pin<Box<dyn Future<Output = ()>>>;
 
 #[allow(unused_variables)]
 pub trait ElementSchedulerBinding {
@@ -29,17 +27,6 @@ pub trait ElementSchedulerBinding {
 
 impl ElementSchedulerBinding for () {
     fn spawn_task(&self, _: ElementId, _: ElementTask) -> Result<TaskHandle<()>, TaskError> {
-        Err(TaskError::no_scheduler())
-    }
-}
-
-#[allow(unused_variables)]
-pub trait RenderingSchedulerBinding {
-    fn spawn_task(&self, id: ElementId, task: RenderingTask) -> Result<TaskHandle<()>, TaskError>;
-}
-
-impl RenderingSchedulerBinding for () {
-    fn spawn_task(&self, _: ElementId, _: RenderingTask) -> Result<TaskHandle<()>, TaskError> {
         Err(TaskError::no_scheduler())
     }
 }

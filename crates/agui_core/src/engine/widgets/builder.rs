@@ -1,12 +1,12 @@
 use std::{collections::VecDeque, sync::mpsc};
 
+use agui_sync::notify;
 use rustc_hash::FxHashSet;
 
 use crate::{
     callback::CallbackQueue,
     engine::{
-        bindings::{ElementBinding, ElementSchedulerBinding},
-        update_notifier::UpdateNotifier,
+        widgets::bindings::{ElementBinding, ElementSchedulerBinding},
         widgets::WidgetManager,
         Dirty,
     },
@@ -19,7 +19,7 @@ pub struct WidgetManagerBuilder<EB, SB, const HAS_ROOT: bool> {
     element_binding: EB,
     scheduler: SB,
 
-    notifier: Option<UpdateNotifier>,
+    notifier: Option<notify::Flag>,
 
     root: Option<Widget>,
 }
@@ -73,15 +73,12 @@ impl<EB, const HAS_ROOT: bool> WidgetManagerBuilder<EB, (), HAS_ROOT> {
 }
 
 impl<EB, SB, const HAS_ROOT: bool> WidgetManagerBuilder<EB, SB, HAS_ROOT> {
-    pub fn with_notifier(
-        self,
-        update_notifier: UpdateNotifier,
-    ) -> WidgetManagerBuilder<EB, SB, HAS_ROOT> {
+    pub fn with_notifier(self, notifier: notify::Flag) -> WidgetManagerBuilder<EB, SB, HAS_ROOT> {
         WidgetManagerBuilder {
             element_binding: self.element_binding,
             scheduler: self.scheduler,
 
-            notifier: Some(update_notifier),
+            notifier: Some(notifier),
 
             root: self.root,
         }
@@ -110,7 +107,7 @@ where
     SB: ElementSchedulerBinding,
 {
     pub fn build(self) -> WidgetManager<EB, SB> {
-        let notifier = self.notifier.unwrap_or_else(|| UpdateNotifier::new().0);
+        let notifier = self.notifier.unwrap_or_default();
 
         let (callback_tx, callback_rx) = mpsc::channel();
 

@@ -1,21 +1,21 @@
 use std::{any::Any, ops::Deref, rc::Rc, sync::mpsc};
 
-use crate::engine::update_notifier::UpdateNotifier;
+use agui_sync::notify;
 
-use super::CallbackId;
+use crate::callback::CallbackId;
 
 #[derive(Clone)]
 pub struct CallbackQueue(Rc<LocalCallbackQueue>);
 
 impl CallbackQueue {
-    pub(crate) fn new(tx: mpsc::Sender<InvokeCallback>, notifier: UpdateNotifier) -> Self {
+    pub(crate) fn new(tx: mpsc::Sender<InvokeCallback>, notifier: notify::Flag) -> Self {
         Self(Rc::new(LocalCallbackQueue { tx, notifier }))
     }
 }
 
 pub struct LocalCallbackQueue {
     tx: mpsc::Sender<InvokeCallback>,
-    notifier: UpdateNotifier,
+    notifier: notify::Flag,
 }
 
 impl LocalCallbackQueue {
@@ -23,7 +23,7 @@ impl LocalCallbackQueue {
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
     pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any>) {
-        self.tx.send(InvokeCallback { callback_id, arg }).ok();
+        let _ = self.tx.send(InvokeCallback { callback_id, arg });
         self.notifier.notify();
     }
 
@@ -46,20 +46,43 @@ impl Deref for CallbackQueue {
 #[derive(Clone)]
 pub struct SharedCallbackQueue {
     tx: mpsc::Sender<InvokeCallback>,
-    notifier: UpdateNotifier,
+    notifier: notify::Flag,
 }
 
 impl SharedCallbackQueue {
     /// # Panics
     ///
     /// This function must be called with the expected `arg` for the `callback_id`, or it will panic.
-    pub fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any + Send>) {
-        self.tx.send(InvokeCallback { callback_id, arg }).ok();
+    pub fn call_unchecked(
+        &self,
+        callback_id: CallbackId,
+        arg: Box<dyn Any + Send>,
+    ) -> Result<(), CallError> {
+        if let Err(err) = self.tx.send(InvokeCallback { callback_id, arg }) {
+            return Err(CallError(err.0.arg));
+        }
+
         self.notifier.notify();
+
+        Ok(())
     }
 }
 
 pub(crate) struct InvokeCallback {
     pub callback_id: CallbackId,
     pub arg: Box<dyn Any>,
+}
+
+pub struct CallError(pub Box<dyn Any>);
+
+impl std::fmt::Debug for CallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CallError").field(&"...").finish()
+    }
+}
+
+impl std::fmt::Display for CallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("callback channel was closed")
+    }
 }

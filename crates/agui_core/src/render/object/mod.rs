@@ -286,7 +286,6 @@ impl std::fmt::Debug for RenderObject {
 }
 
 #[cfg_attr(any(test, feature = "mocks"), mockall::automock)]
-#[allow(clippy::disallowed_types)]
 #[allow(clippy::needless_lifetimes)]
 pub trait RenderObjectImpl: AsAny + Send {
     /// Whether the constraints are the only input to the sizing algorithm (i.e.

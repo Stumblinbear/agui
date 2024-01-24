@@ -8,7 +8,7 @@ use crate::{
     element::{
         Element, ElementId, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
-    engine::{bindings::RenderingSchedulerBinding, Dirty},
+    engine::{rendering::bindings::RenderingSchedulerBinding, Dirty},
     render::{
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
         view::RenderView,
@@ -18,6 +18,7 @@ use crate::{
     util::tree::Tree,
 };
 
+pub mod bindings;
 mod builder;
 
 pub use builder::*;

@@ -1,20 +1,18 @@
 use std::collections::VecDeque;
 
+use agui_sync::notify;
 use rustc_hash::FxHashSet;
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
-    engine::{
-        bindings::RenderingSchedulerBinding, rendering::RenderManager,
-        update_notifier::UpdateNotifier, Dirty,
-    },
+    engine::{rendering::bindings::RenderingSchedulerBinding, rendering::RenderManager, Dirty},
     util::tree::Tree,
 };
 
 pub struct RenderManagerBuilder<SB> {
     scheduler: SB,
 
-    notifier: Option<UpdateNotifier>,
+    notifier: Option<notify::Flag>,
 }
 
 impl Default for RenderManagerBuilder<()> {
@@ -41,7 +39,7 @@ impl RenderManagerBuilder<()> {
 }
 
 impl<SB> RenderManagerBuilder<SB> {
-    pub fn with_notifier(self, notifier: UpdateNotifier) -> RenderManagerBuilder<SB> {
+    pub fn with_notifier(self, notifier: notify::Flag) -> RenderManagerBuilder<SB> {
         RenderManagerBuilder {
             scheduler: self.scheduler,
 
@@ -55,7 +53,7 @@ where
     SB: RenderingSchedulerBinding,
 {
     pub fn build(self) -> RenderManager<SB> {
-        let notifier = self.notifier.unwrap_or_else(|| UpdateNotifier::new().0);
+        let notifier = self.notifier.unwrap_or_default();
 
         RenderManager {
             scheduler: self.scheduler,

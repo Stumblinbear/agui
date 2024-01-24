@@ -9,7 +9,7 @@ use crate::{
         ElementMountContext, ElementUnmountContext,
     },
     engine::{
-        bindings::{ElementBinding, ElementSchedulerBinding},
+        widgets::bindings::{ElementBinding, ElementSchedulerBinding},
         Dirty,
     },
     inheritance::InheritanceManager,
@@ -19,6 +19,7 @@ use crate::{
     widget::{IntoWidget, Widget},
 };
 
+pub mod bindings;
 mod builder;
 
 pub use builder::*;
@@ -174,6 +175,7 @@ where
                             scheduler: &mut self.scheduler,
 
                             element_tree: tree,
+                            inheritance: &self.inheritance,
                             needs_build: &mut self.needs_build,
 
                             element_id: &element_id,
@@ -573,7 +575,7 @@ mod tests {
             mock::{render::MockRenderWidget, DummyRenderObject, DummyWidget},
             ElementId,
         },
-        engine::{bindings::ElementBinding, widgets::WidgetManager},
+        engine::{widgets::bindings::ElementBinding, widgets::WidgetManager},
         widget::IntoWidget,
     };
 

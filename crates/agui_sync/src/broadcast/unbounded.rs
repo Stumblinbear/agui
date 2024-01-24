@@ -67,7 +67,7 @@ impl<T: 'static + Clone + Send + Sync> UnboundedSender<T> {
             return Err(SendError::NoReceivers(message));
         }
 
-        let results = futures::future::join_all(
+        let results = futures_util::future::join_all(
             channels
                 .iter_mut()
                 .map(|channel| channel.send(message.clone())),
@@ -99,7 +99,7 @@ impl<T: 'static + Clone + Send + Sync> UnboundedSender<T> {
         let was_closed = self.closed.swap(true, Ordering::SeqCst);
 
         if !was_closed {
-            for channel in futures::executor::block_on(self.channels.write()).drain(..) {
+            for channel in futures_lite::future::block_on(self.channels.write()).drain(..) {
                 channel.close();
             }
         }

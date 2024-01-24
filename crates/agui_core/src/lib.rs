@@ -10,7 +10,6 @@
 pub mod callback;
 pub mod element;
 pub mod engine;
-pub mod executor;
 pub mod inheritance;
 pub mod query;
 pub mod render;

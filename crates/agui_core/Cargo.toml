@@ -12,9 +12,11 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [features]
-mocks = ["mockall"]
+mocks = ["dep:mockall", "dep:parking_lot"]
 
 [dependencies]
+agui_sync.workspace = true
+
 tracing.workspace = true
 
 thiserror.workspace = true
@@ -22,13 +24,16 @@ thiserror.workspace = true
 rand.workspace = true
 rustc-hash.workspace = true
 slotmap.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 im-rc.workspace = true
 bitflags.workspace = true
 url.workspace = true
 smallbox.workspace = true
 
-futures = { workspace = true, features = ["thread-pool"] }
+futures-util = { workspace = true, default-features = false, features = [
+    "std",
+    "channel",
+] }
 
 glam.workspace = true
 lyon.workspace = true
@@ -37,6 +42,8 @@ mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 agui_macros.workspace = true
+
+parking_lot.workspace = true
 
 mockall.workspace = true
 criterion.workspace = true

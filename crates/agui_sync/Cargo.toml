@@ -3,7 +3,7 @@ name = "agui_sync"
 version = "0.3.0"
 edition = "2021"
 resolver = "2"
-description = "Provides async primitives for agui"
+description = "Provides async primitives and channels for agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
@@ -14,7 +14,11 @@ readme = "README.md"
 [dependencies]
 thiserror.workspace = true
 
-futures.workspace = true
+futures-lite.workspace = true
+futures-util = { workspace = true, default-features = false, features = [
+    "alloc",
+] }
+event-listener.workspace = true
 async-lock.workspace = true
 async-channel.workspace = true
 async-watch.workspace = true

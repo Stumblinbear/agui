@@ -1,0 +1,24 @@
+[package]
+name = "agui_executor"
+version = "0.3.0"
+edition = "2021"
+resolver = "2"
+description = "Provides the executors agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui"]
+categories = ["gui"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+agui_sync.workspace = true
+
+agui_core.workspace = true
+
+tracing.workspace = true
+
+parking_lot.workspace = true
+
+futures = { workspace = true, features = ["thread-pool"] }
+futures-executor.workspace = true

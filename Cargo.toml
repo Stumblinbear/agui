@@ -17,8 +17,8 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 agui_sync = { path = "crates/agui_sync", version = "0.3" }
-
 agui_core = { path = "crates/agui_core", version = "0.3" }
+agui_executor = { path = "crates/agui_executor", version = "0.3" }
 agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
 agui_elements = { path = "crates/agui_elements", version = "0.3" }
@@ -45,6 +45,9 @@ url = "2.4"
 smallbox = "0.8"
 
 futures = "0.3"
+futures-util = "0.3"
+futures-lite = "2.2"
+futures-executor = "0.3"
 event-listener = "4.0"
 async_cell = "0.2.2"
 async-watch = "0.3"
@@ -76,7 +79,9 @@ winit-vello = ["winit", "vello", "agui_vello/window"]
 mocks = ["agui_core/mocks"]
 
 [dependencies]
+agui_sync.workspace = true
 agui_core.workspace = true
+agui_executor.workspace = true
 agui_macros = { workspace = true, optional = true }
 
 agui_elements.workspace = true

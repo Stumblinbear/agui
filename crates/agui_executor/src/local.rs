@@ -1,8 +1,10 @@
 use std::{
+    future::Future,
     sync::mpsc,
     time::{Duration, Instant},
 };
 
+use agui_sync::notify;
 use futures::{
     executor::{LocalPool, LocalSpawner},
     future::FusedFuture,
@@ -10,28 +12,29 @@ use futures::{
     task::LocalSpawnExt,
 };
 
-use crate::{
+use agui_core::{
     element::ElementId,
     engine::{
-        bindings::{
-            ElementBinding, ElementSchedulerBinding, ElementTask, RenderingSchedulerBinding,
-            RenderingTask,
+        rendering::{
+            bindings::{RenderingSchedulerBinding, RenderingTask},
+            RenderManager,
         },
-        rendering::RenderManager,
-        update_notifier::{UpdateNotifier, UpdateReceiver},
+        widgets::bindings::{ElementBinding, ElementSchedulerBinding, ElementTask},
         widgets::WidgetManager,
     },
-    executor::EngineExecutor,
+    render::RenderObjectId,
     task::{error::TaskError, TaskHandle},
     widget::Widget,
 };
 
+use crate::EngineExecutor;
+
 pub struct LocalEngineExecutor {
     widget_manager: WidgetManager<EngineElementBinding, EngineSchedulerBinding>,
-    update_rx: UpdateReceiver,
+    update_rx: notify::Subscriber,
 
     render_manager: RenderManager<EngineSchedulerBinding>,
-    render_rx: UpdateReceiver,
+    render_rx: notify::Subscriber,
 
     spawned_rx: mpsc::Receiver<ElementId>,
     rebuilt_rx: mpsc::Receiver<ElementId>,
@@ -42,8 +45,11 @@ pub struct LocalEngineExecutor {
 
 impl LocalEngineExecutor {
     pub fn with_root(root: Widget) -> Self {
-        let (update_tx, update_rx) = UpdateNotifier::new();
-        let (render_tx, render_rx) = UpdateNotifier::new();
+        let update_tx = notify::Flag::new();
+        let update_rx = update_tx.subscribe();
+
+        let render_tx = notify::Flag::new();
+        let render_rx = render_tx.subscribe();
 
         let (spawned_tx, spawned_rx) = mpsc::channel();
         let (rebuilt_tx, rebuilt_rx) = mpsc::channel();
@@ -136,35 +142,39 @@ impl EngineExecutor for LocalEngineExecutor {
         tracing::debug!(?timings, "update complete");
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip_all)]
     fn run_until_stalled(&mut self) {
-        futures::executor::block_on(async {
-            'update_tree: loop {
-                self.update();
+        'update_tree: loop {
+            self.update();
 
-                let update_future = self.update_rx.wait().fuse();
-                let render_future = self.render_rx.wait().fuse();
+            let update_future = self.update_rx.wait().fuse();
+            let render_future = self.render_rx.wait().fuse();
 
-                futures::pin_mut!(update_future);
-                futures::pin_mut!(render_future);
+            futures::pin_mut!(update_future);
+            futures::pin_mut!(render_future);
 
-                // Run futures until no more progress can be made and no more tree updates are
-                // pending.
-                loop {
-                    if !self.pool.try_run_one() {
-                        return;
-                    }
+            // Run futures until no more progress can be made and no more tree updates are
+            // pending.
+            loop {
+                if !self.pool.try_run_one() {
+                    return;
+                }
 
-                    if update_future.is_terminated() || render_future.is_terminated() {
-                        continue 'update_tree;
-                    }
+                if update_future.is_terminated() || render_future.is_terminated() {
+                    continue 'update_tree;
                 }
             }
-        })
+        }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn run(mut self) {
+    fn run_until<Fut, Out>(mut self, fut: Fut) -> Out
+    where
+        Fut: Future<Output = Out>,
+    {
+        let fut = fut.fuse();
+
+        futures::pin_mut!(fut);
+
         loop {
             self.update();
 
@@ -174,18 +184,33 @@ impl EngineExecutor for LocalEngineExecutor {
             futures::pin_mut!(update_future);
             futures::pin_mut!(render_future);
 
-            self.pool.run_until(async {
+            let output = self.pool.run_until(async {
                 futures::select! {
                     _ = update_future => {
                         tracing::trace!("update triggered by update notifier");
+                        None
                     }
 
                     _ = render_future => {
                         tracing::trace!("update triggered by render notifier");
+                        None
+                    }
+
+                    output = fut => {
+                        Some(output)
                     }
                 }
             });
+
+            if let Some(output) = output {
+                return output;
+            }
         }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn run(self) {
+        self.run_until(std::future::pending::<()>())
     }
 }
 
@@ -225,7 +250,11 @@ impl ElementSchedulerBinding for EngineSchedulerBinding {
 }
 
 impl RenderingSchedulerBinding for EngineSchedulerBinding {
-    fn spawn_task(&self, id: ElementId, task: RenderingTask) -> Result<TaskHandle<()>, TaskError> {
+    fn spawn_task(
+        &self,
+        id: RenderObjectId,
+        task: RenderingTask,
+    ) -> Result<TaskHandle<()>, TaskError> {
         tracing::trace!("spawning shared task for {:?}", id);
 
         match self.spawner.spawn_local_with_handle(task) {

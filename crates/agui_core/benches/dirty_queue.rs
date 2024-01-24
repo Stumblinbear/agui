@@ -6,7 +6,6 @@ use std::{
 use agui_core::element::ElementId;
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
-use parking_lot::Mutex;
 use rustc_hash::FxHasher;
 use slotmap::KeyData;
 
@@ -122,31 +121,66 @@ fn dirty_queue(c: &mut Criterion) {
             )
         });
 
-    group.sample_size(SAMPLE_SIZE).bench_function("mutex", |b| {
-        let elements = elements.clone();
+    group
+        .sample_size(SAMPLE_SIZE)
+        .bench_function("mutex (std)", |b| {
+            let elements = elements.clone();
 
-        do_bench(
-            b,
-            elements,
-            || {
-                Arc::new(Mutex::new(slotmap::SparseSecondaryMap::<
-                    ElementId,
-                    (),
-                    BuildHasherDefault<FxHasher>,
-                >::default()))
-            },
-            move |queue, elements| {
-                for element_id in elements.iter() {
-                    queue.lock().insert(*element_id, ());
-                }
-            },
-            move |queue, elements| {
-                for element_id in queue.lock().drain().map(|(element_id, _)| element_id) {
-                    assert!(elements.contains(&element_id));
-                }
-            },
-        )
-    });
+            do_bench(
+                b,
+                elements,
+                || {
+                    Arc::new(std::sync::Mutex::new(slotmap::SparseSecondaryMap::<
+                        ElementId,
+                        (),
+                        BuildHasherDefault<FxHasher>,
+                    >::default()))
+                },
+                move |queue, elements| {
+                    for element_id in elements.iter() {
+                        queue.lock().unwrap().insert(*element_id, ());
+                    }
+                },
+                move |queue, elements| {
+                    for element_id in queue
+                        .lock()
+                        .expect("queue poisoned")
+                        .drain()
+                        .map(|(element_id, _)| element_id)
+                    {
+                        assert!(elements.contains(&element_id));
+                    }
+                },
+            )
+        });
+
+    group
+        .sample_size(SAMPLE_SIZE)
+        .bench_function("mutex (parking_lot)", |b| {
+            let elements = elements.clone();
+
+            do_bench(
+                b,
+                elements,
+                || {
+                    Arc::new(parking_lot::Mutex::new(slotmap::SparseSecondaryMap::<
+                        ElementId,
+                        (),
+                        BuildHasherDefault<FxHasher>,
+                    >::default()))
+                },
+                move |queue, elements| {
+                    for element_id in elements.iter() {
+                        queue.lock().insert(*element_id, ());
+                    }
+                },
+                move |queue, elements| {
+                    for element_id in queue.lock().drain().map(|(element_id, _)| element_id) {
+                        assert!(elements.contains(&element_id));
+                    }
+                },
+            )
+        });
 
     group.finish();
 }

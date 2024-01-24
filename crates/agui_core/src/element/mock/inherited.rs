@@ -8,7 +8,6 @@ use crate::{
     widget::{IntoWidget, Widget},
 };
 
-#[allow(clippy::disallowed_types)]
 #[mockall::automock]
 #[allow(clippy::needless_lifetimes)]
 pub trait InheritedElement {

@@ -1,4 +1,4 @@
-use futures::Future;
+use std::future::Future;
 
 use crate::{
     element::{ElementTaskContext, RenderObjectTaskContext},
