@@ -95,20 +95,19 @@ where
     pub fn update(&mut self) -> usize {
         tracing::trace!("updating element tree");
 
+        // Callbacks should only be resolved once per update so that we don't end up in an
+        // infinite loop.
+        self.flush_callbacks();
+
         let mut num_cycles = 0;
 
-        // Update everything until all elements fall into a stable state. Incorrectly set up elements may
-        // cause an infinite loop, so be careful.
+        // Rebuild the tree in a loop until it's fully settled. This is necessary as some
+        // widgets being build may cause other widgets to be marked as dirty, which would
+        // otherwise be missed in a single pass.
         loop {
-            let mut did_change = false;
+            self.flush_rebuilds();
 
-            did_change |= self.flush_rebuilds();
-
-            did_change |= self.flush_dirty();
-
-            did_change |= self.flush_callbacks();
-
-            if !did_change {
+            if !self.flush_dirty() {
                 break;
             }
 
@@ -121,17 +120,10 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_rebuilds(&mut self) -> bool {
-        if self.rebuild_queue.is_empty() {
-            return false;
-        }
-
-        // Apply any queued modifications
+    pub fn flush_rebuilds(&mut self) {
         while let Some(element_id) = self.rebuild_queue.pop_front() {
             self.process_rebuild(element_id);
         }
-
-        true
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -148,16 +140,12 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_callbacks(&mut self) -> bool {
-        let mut had_callbacks = false;
-
+    pub fn flush_callbacks(&mut self) {
         while let Ok(InvokeCallback {
             callback_id,
             arg: callback_arg,
         }) = self.callback_rx.try_recv()
         {
-            had_callbacks = true;
-
             let element_id = callback_id.element_id();
 
             tracing::trace!(
@@ -206,8 +194,6 @@ where
                 );
             }
         }
-
-        had_callbacks
     }
 
     #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
