@@ -17,6 +17,8 @@ impl ContextElement for ElementTaskContext {
 
 impl ContextDirtyElement for ElementTaskContext {
     fn mark_needs_build(&mut self) {
+        tracing::trace!(element_id = ?self.element_id, "element needs build");
+
         self.needs_build.insert(self.element_id);
         self.needs_build.notify();
     }

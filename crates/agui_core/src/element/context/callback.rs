@@ -38,6 +38,8 @@ impl ContextElement for ElementCallbackContext<'_> {
 
 impl ContextDirtyElement for ElementCallbackContext<'_> {
     fn mark_needs_build(&mut self) {
+        tracing::trace!(element_id = ?self.element_id, "element needs build");
+
         self.needs_build.insert(*self.element_id);
     }
 }

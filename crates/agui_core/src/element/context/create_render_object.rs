@@ -34,10 +34,14 @@ impl ContextRenderObject for RenderObjectCreateContext<'_> {
 
 impl ContextDirtyRenderObject for RenderObjectCreateContext<'_> {
     fn mark_needs_layout(&mut self) {
+        tracing::trace!(render_object_id = ?self.render_object_id, "render object needs layout");
+
         self.needs_layout.insert(*self.render_object_id);
     }
 
     fn mark_needs_paint(&mut self) {
+        tracing::trace!(render_object_id = ?self.render_object_id, "render object needs paint");
+
         self.needs_paint.insert(*self.render_object_id);
     }
 }
