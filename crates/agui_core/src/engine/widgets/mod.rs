@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, sync::mpsc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use tracing::field;
 
 use crate::{
     callback::{CallbackQueue, InvokeCallback},
@@ -81,6 +82,8 @@ impl<EB, SB> WidgetManager<EB, SB> {
 
     /// Mark an element as dirty, causing it to be rebuilt on the next update.
     pub fn mark_needs_build(&mut self, element_id: ElementId) {
+        tracing::trace!(?element_id, "element needs build");
+
         self.needs_build.insert(element_id);
     }
 }
@@ -91,56 +94,41 @@ where
     SB: ElementSchedulerBinding,
 {
     /// Update the UI tree.
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self), fields(iteration = field::Empty))]
     pub fn update(&mut self) -> usize {
-        tracing::trace!("updating element tree");
+        let span = tracing::Span::current();
 
-        // Callbacks should only be resolved once per update so that we don't end up in an
-        // infinite loop.
-        self.flush_callbacks();
-
-        let mut num_cycles = 0;
+        let mut num_iteration = 0;
 
         // Rebuild the tree in a loop until it's fully settled. This is necessary as some
         // widgets being build may cause other widgets to be marked as dirty, which would
         // otherwise be missed in a single pass.
-        loop {
-            self.flush_rebuilds();
+        while !self.rebuild_queue.is_empty() || self.flush_needs_build() {
+            num_iteration += 1;
 
-            if !self.flush_dirty() {
-                break;
+            if tracing::span_enabled!(tracing::Level::TRACE) {
+                span.record("iteration", num_iteration);
             }
 
-            num_cycles += 1;
+            self.flush_rebuilds();
         }
 
         self.flush_removals();
 
-        num_cycles
+        num_iteration
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_rebuilds(&mut self) {
-        while let Some(element_id) = self.rebuild_queue.pop_front() {
-            self.process_rebuild(element_id);
-        }
-    }
-
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_dirty(&mut self) -> bool {
-        self.needs_build.process(|element_id| {
-            tracing::trace!(
-                ?element_id,
-                widget = self.tree.get(element_id).unwrap().name(),
-                "queueing element for rebuild"
-            );
-
-            self.rebuild_queue.push_back(element_id);
-        })
-    }
-
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(
+        level = "trace",
+        skip(self),
+        fields(
+            callback_id = field::Empty,
+            element_id = field::Empty,
+        )
+    )]
     pub fn flush_callbacks(&mut self) {
+        let span = tracing::Span::current();
+
         while let Ok(InvokeCallback {
             callback_id,
             arg: callback_arg,
@@ -148,16 +136,16 @@ where
         {
             let element_id = callback_id.element_id();
 
-            tracing::trace!(
-                ?callback_id,
-                ?element_id,
-                widget = self.tree.get(element_id).unwrap().name(),
-                "executing callback"
-            );
+            if tracing::span_enabled!(tracing::Level::TRACE) {
+                span.record("callback_id", format!("{:?}", callback_id));
+                span.record("element_id", format!("{:?}", element_id));
+            }
 
             let existed = self
                 .tree
                 .with(element_id, |tree, element| {
+                    tracing::trace!("executing callback");
+
                     let changed = element.call(
                         &mut ElementCallbackContext {
                             scheduler: &mut self.scheduler,
@@ -173,11 +161,7 @@ where
                     );
 
                     if changed {
-                        tracing::trace!(
-                            ?element_id,
-                            widget = element.name(),
-                            "element updated, queueing for rebuild"
-                        );
+                        tracing::trace!("element updated, queueing for rebuild");
 
                         // How often does the same element get callbacks multiple times? Is it
                         // worth checking if the last element is the same as the one we're about
@@ -188,21 +172,46 @@ where
                 .is_some();
 
             if !existed {
-                tracing::warn!(
-                    ?element_id,
-                    "callback invoked on an element that does not exist"
-                );
+                tracing::warn!("callback invoked on an element that does not exist");
             }
         }
     }
 
-    #[tracing::instrument(level = "trace", name = "spawn", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn flush_needs_build(&mut self) -> bool {
+        self.needs_build.process(|element_id| {
+            if let Some(element) = self.tree.get(element_id) {
+                tracing::trace!(?element_id, ?element, "queueing element for rebuild");
+
+                self.rebuild_queue.push_back(element_id);
+            } else {
+                tracing::warn!("queued an element for rebuild, but it does not exist in the tree");
+            }
+        })
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn flush_rebuilds(&mut self) {
+        while let Some(element_id) = self.rebuild_queue.pop_front() {
+            self.process_rebuild(element_id);
+        }
+    }
+
+    #[tracing::instrument(level = "trace", name = "spawn", skip(self),fields(element_id = field::Empty))]
     fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
+        tracing::trace!("creating element");
+
         let element = widget.create_element();
 
-        tracing::trace!(widget = element.name(), "spawning element");
-
         let element_id = self.tree.add(parent_id, element);
+
+        let span = tracing::Span::current();
+
+        if tracing::span_enabled!(tracing::Level::TRACE) {
+            span.record("element_id", format!("{:?}", element_id));
+        }
+
+        tracing::trace!("mounting element");
 
         self.tree.with(element_id, |tree, element| {
             element.mount(&mut ElementMountContext {
@@ -220,13 +229,19 @@ where
         element_id
     }
 
-    #[tracing::instrument(level = "trace", name = "build", skip(self, element_id))]
+    #[tracing::instrument(level = "trace", name = "build", skip(self))]
     fn process_build(&mut self, element_id: ElementId) {
+        let span = tracing::Span::current();
+
         let mut build_queue = VecDeque::new();
 
         build_queue.push_back(element_id);
 
         while let Some(element_id) = build_queue.pop_front() {
+            if tracing::span_enabled!(tracing::Level::TRACE) {
+                span.record("element_id", format!("{:?}", element_id));
+            }
+
             let new_widgets = self
                 .tree
                 .with(element_id, |tree, element| {
@@ -258,6 +273,8 @@ where
 
             // If we had no children before, we can just spawn all of the new widgets.
             if old_children.is_empty() {
+                tracing::trace!("element had no children, spawning all new widgets");
+
                 for new_widget in new_widgets {
                     let new_child_id = self.process_spawn(Some(element_id), new_widget);
 
@@ -266,6 +283,15 @@ where
 
                 continue;
             }
+
+            let span = tracing::trace_span!(
+                "children",
+                parent_id = ?element_id,
+                child_id = field::Empty,
+                old_widget = field::Empty,
+                new_widget = field::Empty,
+            );
+            let _enter = span.enter();
 
             let old_children = old_children.clone();
 
@@ -283,6 +309,11 @@ where
                 let old_child_id = old_children.get(old_children_top).copied();
                 let new_widget = new_widgets.get(new_children_top);
 
+                if tracing::span_enabled!(tracing::Level::TRACE) {
+                    span.record("child_id", format!("{:?}", old_child_id));
+                    span.record("new_widget", format!("{:?}", new_widget));
+                }
+
                 if let Some((old_child_id, new_widget)) = old_child_id.zip(new_widget) {
                     let old_child = self
                         .tree
@@ -292,9 +323,6 @@ where
                     match old_child.update(new_widget) {
                         ElementComparison::Identical => {
                             tracing::trace!(
-                                parent_id = ?element_id,
-                                element_id = ?old_child_id,
-                                widget = ?new_widget,
                                 old_position = old_children_top,
                                 new_position = new_children_top,
                                 "element was retained"
@@ -303,9 +331,6 @@ where
 
                         ElementComparison::Changed => {
                             tracing::trace!(
-                                parent_id = ?element_id,
-                                element_id = ?old_child_id,
-                                widget = ?new_widget,
                                 old_position = old_children_top,
                                 new_position = new_children_top,
                                 "element was retained but must be rebuilt"
@@ -335,6 +360,11 @@ where
                 let old_child_id = old_children.get(old_children_bottom).copied();
                 let new_widget = new_widgets.get(new_children_bottom);
 
+                if tracing::span_enabled!(tracing::Level::TRACE) {
+                    span.record("child_id", format!("{:?}", old_child_id));
+                    span.record("new_widget", format!("{:?}", new_widget));
+                }
+
                 if let Some((old_child_id, new_widget)) = old_child_id.zip(new_widget) {
                     let old_child = self
                         .tree
@@ -344,9 +374,6 @@ where
                     match old_child.update(new_widget) {
                         ElementComparison::Identical => {
                             tracing::trace!(
-                                parent_id = ?element_id,
-                                element_id = ?old_child_id,
-                                widget = ?new_widget,
                                 old_position = old_children_bottom,
                                 new_position = new_children_bottom,
                                 "element was retained"
@@ -355,9 +382,6 @@ where
 
                         ElementComparison::Changed => {
                             tracing::trace!(
-                                parent_id = ?element_id,
-                                element_id = ?old_child_id,
-                                widget = ?new_widget,
                                 position = new_children_top,
                                 "element was retained but must be rebuilt"
                             );
@@ -416,12 +440,15 @@ where
                                 .get_mut(old_child_id)
                                 .expect("child element does not exist in the tree");
 
+                            if tracing::span_enabled!(tracing::Level::TRACE) {
+                                span.record("child_id", format!("{:?}", old_child_id));
+                                span.record("old_widget", format!("{:?}", old_child));
+                                span.record("new_widget", format!("{:?}", new_widget));
+                            }
+
                             match old_child.update(&new_widget) {
                                 ElementComparison::Identical => {
                                     tracing::trace!(
-                                        parent_id = ?element_id,
-                                        element_id = ?old_child_id,
-                                        widget = ?new_widget,
                                         key = ?key,
                                         new_position = new_children_top,
                                         "keyed element was retained"
@@ -430,9 +457,6 @@ where
 
                                 ElementComparison::Changed => {
                                     tracing::trace!(
-                                        parent_id = ?element_id,
-                                        element_id = ?old_child_id,
-                                        widget = ?new_widget,
                                         key = ?key,
                                         new_position = new_children_top,
                                         "keyed element was retained but must be rebuilt"
@@ -463,6 +487,12 @@ where
                 new_children_top += 1;
 
                 build_queue.push_back(new_child_id);
+            }
+
+            if tracing::span_enabled!(tracing::Level::TRACE) {
+                span.record("child_id", field::Empty);
+                span.record("old_widget", field::Empty);
+                span.record("new_widget", field::Empty);
             }
 
             // We've scanned the whole list.
@@ -518,11 +548,24 @@ where
         self.process_build(element_id);
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(
+        level = "trace",
+        name = "remove",
+        skip(self),
+        fields(
+            element_id = field::Empty,
+        )
+    )]
     fn flush_removals(&mut self) {
+        let span = tracing::Span::current();
+
         let mut destroy_queue = self.forgotten_elements.drain().collect::<VecDeque<_>>();
 
         while let Some(element_id) = destroy_queue.pop_front() {
+            if tracing::span_enabled!(tracing::Level::TRACE) {
+                span.record("element_id", format!("{:?}", element_id));
+            }
+
             // Queue the element's children for removal
             if let Some(children) = self.tree.get_children(element_id) {
                 for child_id in children {
@@ -530,22 +573,20 @@ where
                 }
             }
 
-            self.tree
-                .with(element_id, |tree, element| {
-                    element.unmount(&mut ElementUnmountContext {
-                        element_tree: tree,
-                        inheritance: &mut self.inheritance,
+            if let Some(mut element) = self.tree.remove(element_id) {
+                element.unmount(&mut ElementUnmountContext {
+                    element_tree: &mut self.tree,
+                    inheritance: &mut self.inheritance,
 
-                        element_id: &element_id,
-                    });
-                })
-                .expect("cannot destroy an element that doesn't exist");
+                    element_id: &element_id,
+                });
 
-            self.element_binding.on_element_destroyed(element_id);
+                self.element_binding.on_element_destroyed(element_id);
 
-            let element = self.tree.remove(element_id).unwrap();
-
-            tracing::trace!(?element_id, widget = ?element.name(), "destroyed element");
+                tracing::trace!("destroyed element");
+            } else {
+                tracing::warn!("attempted to remove an element that does not exist in the tree");
+            }
         }
     }
 }

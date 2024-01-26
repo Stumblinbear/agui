@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
-use event_listener::Event;
+use event_listener::{Event, EventListener};
 
 #[derive(Clone)]
 pub struct Flag {
@@ -36,7 +36,7 @@ pub struct Subscriber {
 }
 
 impl Subscriber {
-    pub async fn wait(&mut self) {
-        self.event.listen().await
+    pub fn wait(&mut self) -> Pin<Box<EventListener>> {
+        self.event.listen()
     }
 }

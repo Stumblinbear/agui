@@ -136,7 +136,9 @@ impl EngineExecutor for ThreadedEngineExecutor {
 
         let start = Instant::now();
 
-        let num_cycles = self.widget_manager.update();
+        self.widget_manager.flush_callbacks();
+
+        let num_iterations = self.widget_manager.update();
 
         let update_widget_tree_end = Instant::now();
 
@@ -173,7 +175,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
             sync_render_tree: sync_render_tree_end - lock_renderer_end,
         };
 
-        tracing::debug!(?timings, did_change = num_cycles > 0, "update complete");
+        tracing::debug!(?timings, num_iterations = num_iterations, "update complete");
     }
 
     #[tracing::instrument(level = "trace", skip_all)]

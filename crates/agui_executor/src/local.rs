@@ -96,6 +96,8 @@ impl EngineExecutor for LocalEngineExecutor {
 
         let start = Instant::now();
 
+        self.widget_manager.flush_callbacks();
+
         self.widget_manager.update();
 
         let update_widget_tree_end = Instant::now();
