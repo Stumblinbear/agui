@@ -11,6 +11,9 @@ categories = ["gui"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
+[features]
+multi-threaded = ["dep:parking_lot"]
+
 [dependencies]
 agui_sync.workspace = true
 
@@ -18,7 +21,7 @@ agui_core.workspace = true
 
 tracing.workspace = true
 
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 
 futures = { workspace = true, features = ["thread-pool"] }
 futures-executor.workspace = true

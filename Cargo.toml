@@ -72,6 +72,8 @@ widgets = ["primitives", "agui_widgets"]
 macros = ["agui_macros"]
 
 app = ["rustc-hash", "parking_lot"]
+multi-threaded = ["agui_executor/multi-threaded"]
+
 winit = ["agui_renderer/window", "agui_winit", "dep:winit"]
 vello = ["agui_renderer/window", "agui_vello", "dep:vello"]
 winit-vello = ["winit", "vello", "agui_vello/window"]
@@ -101,7 +103,7 @@ winit = { workspace = true, optional = true }
 vello = { workspace = true, optional = true }
 
 [dev-dependencies]
-agui = { path = ".", features = ["app", "winit-vello"] }
+agui = { path = "." }
 
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

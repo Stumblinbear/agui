@@ -1,8 +1,10 @@
 mod local;
+#[cfg(feature = "multi-threaded")]
 mod threaded;
 
 use futures::prelude::Future;
 pub use local::LocalEngineExecutor;
+#[cfg(feature = "multi-threaded")]
 pub use threaded::ThreadedEngineExecutor;
 
 pub trait EngineExecutor {

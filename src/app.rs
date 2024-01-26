@@ -35,6 +35,9 @@ where
             }
         };
 
+        #[cfg(not(feature = "multi-threaded"))]
+        agui_executor::LocalEngineExecutor::with_root(root).run_until(shutdown_rx.wait());
+        #[cfg(feature = "multi-threaded")]
         agui_executor::ThreadedEngineExecutor::with_root(root).run_until(shutdown_rx.wait());
     });
 
