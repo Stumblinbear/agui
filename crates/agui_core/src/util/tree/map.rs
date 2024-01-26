@@ -407,31 +407,31 @@ where
     //     false
     // }
 
-    // pub fn is_first_child(&self, node_id: K) -> bool {
-    //     if let Some(parent_id) = self.get_parent(node_id) {
-    //         if let Some(parent) = self.nodes.get(parent_id) {
-    //             return parent
-    //                 .children
-    //                 .first()
-    //                 .map_or(true, |child_id| *child_id == node_id);
-    //         }
-    //     }
+    pub fn is_first_child(&self, node_id: K) -> bool {
+        if let Some(parent_id) = self.get_parent(node_id) {
+            if let Some(parent) = self.nodes.get(parent_id) {
+                return parent
+                    .children
+                    .first()
+                    .map_or(true, |child_id| *child_id == node_id);
+            }
+        }
 
-    //     true
-    // }
+        true
+    }
 
-    // pub fn is_last_child(&self, node_id: K) -> bool {
-    //     if let Some(parent_id) = self.get_parent(node_id) {
-    //         if let Some(parent) = self.nodes.get(parent_id) {
-    //             return parent
-    //                 .children
-    //                 .last()
-    //                 .map_or(true, |child_id| *child_id == node_id);
-    //         }
-    //     }
+    pub fn is_last_child(&self, node_id: K) -> bool {
+        if let Some(parent_id) = self.get_parent(node_id) {
+            if let Some(parent) = self.nodes.get(parent_id) {
+                return parent
+                    .children
+                    .last()
+                    .map_or(true, |child_id| *child_id == node_id);
+            }
+        }
 
-    //     true
-    // }
+        true
+    }
 }
 
 impl<K, V, Storage> Tree<K, V, Storage>
@@ -673,623 +673,548 @@ where
 //     }
 // }
 
-// #[cfg(test)]
-// mod tests {
-//     use slotmap::HopSlotMap;
-
-//     use crate::{element::ElementId, util::tree::TreeNode};
-
-//     use super::Tree;
-
-//     #[test]
-//     fn hierarchy() {
-//         let mut tree: Tree<HopSlotMap<ElementId, TreeNode<ElementId, usize>>> =
-//             Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         let child_1_1_1 = tree.add(Some(child_1_1), 3);
-//         let child_1_2 = tree.add(Some(child_1), 4);
-//         let child_1_3 = tree.add(Some(child_1), 5);
-
-//         let child_2 = tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         let child_3_1 = tree.add(Some(child_3), 8);
-
-//         assert!(
-//             tree.is_first_child(child_1),
-//             "child_1 is the first child of the parent"
-//         );
-//         assert!(
-//             !tree.is_last_child(child_1),
-//             "child_1 is not the last child of the parent"
-//         );
-
-//         assert!(
-//             tree.is_first_child(child_1_1),
-//             "child_1_1 is the first child of the parent"
-//         );
-//         assert!(
-//             !tree.is_last_child(child_1_1),
-//             "child_1_1 is not the last child of the parent"
-//         );
-
-//         assert!(
-//             tree.is_first_child(child_1_1_1),
-//             "child_1_1_1 is the first child of the parent"
-//         );
-//         assert!(
-//             tree.is_last_child(child_1_1_1),
-//             "child_1_1_1 is the last child of the parent"
-//         );
-
-//         assert!(
-//             !tree.is_first_child(child_1_2),
-//             "child_1_2 is not the first child of the parent"
-//         );
-//         assert!(
-//             !tree.is_last_child(child_1_2),
-//             "child_1_2 is not the last child of the parent"
-//         );
-
-//         assert!(
-//             !tree.is_first_child(child_1_3),
-//             "child_1_3 is not the first child of the parent"
-//         );
-//         assert!(
-//             tree.is_last_child(child_1_3),
-//             "child_1_3 is the last child of the parent"
-//         );
-
-//         assert!(
-//             !tree.is_first_child(child_2),
-//             "child_2 is not the first child of the parent"
-//         );
-//         assert!(
-//             !tree.is_last_child(child_2),
-//             "child_2 is not the last child of the parent"
-//         );
-
-//         assert!(
-//             !tree.is_first_child(child_3),
-//             "child_3 is not the first child of the parent"
-//         );
-//         assert!(
-//             tree.is_last_child(child_3),
-//             "child_3 is the last child of the parent"
-//         );
-
-//         assert!(
-//             tree.is_first_child(child_3_1),
-//             "child_3_1 is the first child of the parent"
-//         );
-//         assert!(
-//             tree.is_last_child(child_3_1),
-//             "child_3_1 is the last child of the parent"
-//         );
-//     }
-
-//     #[test]
-//     fn downward_iter() {
-//         let mut tree: Tree<HopSlotMap<ElementId, TreeNode<ElementId, usize>>> =
-//             Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         let child_1_1_1 = tree.add(Some(child_1_1), 3);
-//         let child_1_2 = tree.add(Some(child_1), 4);
-//         let child_1_3 = tree.add(Some(child_1), 5);
-
-//         let child_2 = tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         let child_3_1 = tree.add(Some(child_3), 8);
-
-//         let mut iter = tree.iter_down_from(root_id);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(root_id),
-//             "downward iterator's first element must be the root node"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1),
-//             "downward iterator should have returned child_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1),
-//             "downward iterator should have returned child_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1_1),
-//             "downward iterator should have returned child_1_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_2),
-//             "downward iterator should have returned child_1_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_3),
-//             "downward iterator should have returned child_1_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_2),
-//             "downward iterator should have returned child_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3),
-//             "downward iterator should have returned child_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3_1),
-//             "downward iterator should have returned child_3_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "downward iterator should have returned None"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "downward iterator should have returned None"
-//         );
-
-//         let mut iter = tree.iter_down_from(child_2);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_2),
-//             "downward iterator should have returned child_2"
-//         );
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3),
-//             "downward iterator should have returned child_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3_1),
-//             "downward iterator should have returned child_3_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "downward iterator should have returned None"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "downward iterator should have returned None"
-//         );
-
-//         let mut iter = tree.iter_down_from(child_3);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3),
-//             "downward iterator should have returned child_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3_1),
-//             "downward iterator should have returned child_3_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "downward iterator should have returned None"
-//         );
-//     }
-
-//     #[test]
-//     fn upward_iter() {
-//         let mut tree: Tree<HopSlotMap<ElementId, TreeNode<ElementId, usize>>> =
-//             Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         let child_1_1_1 = tree.add(Some(child_1_1), 3);
-//         let child_1_2 = tree.add(Some(child_1), 4);
-//         let child_1_3 = tree.add(Some(child_1), 5);
-
-//         let child_2 = tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         let child_3_1 = tree.add(Some(child_3), 8);
-
-//         let mut iter = tree.iter_up_from(child_3_1);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3_1),
-//             "upward iterator should have returned child_3_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3),
-//             "upward iterator should have returned child_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_2),
-//             "upward iterator should have returned child_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_3),
-//             "upward iterator should have returned child_1_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_2),
-//             "upward iterator should have returned child_1_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1_1),
-//             "upward iterator should have returned child_1_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1),
-//             "upward iterator should have returned child_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1),
-//             "upward iterator should have returned child_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(root_id),
-//             "upward iterator should have returned the root node"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "upward iterator should have returned None"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "upward iterator should have returned None"
-//         );
-
-//         let mut iter = tree.iter_up_from(child_1_2);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_2),
-//             "upward iterator should have returned child_1_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1_1),
-//             "upward iterator should have returned child_1_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1),
-//             "upward iterator should have returned child_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1),
-//             "upward iterator should have returned child_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(root_id),
-//             "upward iterator should have returned the root node"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "upward iterator should have returned None"
-//         );
-//     }
-
-//     #[test]
-//     fn subtree_iter() {
-//         let mut tree: Tree<HopSlotMap<ElementId, TreeNode<ElementId, usize>>> =
-//             Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         let child_1_1_1 = tree.add(Some(child_1_1), 3);
-//         let child_1_2 = tree.add(Some(child_1), 4);
-//         let child_1_3 = tree.add(Some(child_1), 5);
-
-//         let child_2 = tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         let child_3_1 = tree.add(Some(child_3), 8);
-
-//         let mut iter = tree.iter_subtree(child_1, |_| true);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1),
-//             "subtree iterator's first element must be child_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1),
-//             "subtree iterator should have returned child_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_1_1),
-//             "subtree iterator should have returned child_1_1_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_2),
-//             "subtree iterator should have returned child_1_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1_3),
-//             "subtree iterator should have returned child_1_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "subtree iterator should have returned None"
-//         );
-
-//         let mut iter = tree.iter_subtree(child_2, |_| true);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_2),
-//             "subtree iterator should have returned child_2"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "subtree iterator should have returned None"
-//         );
-
-//         let mut iter = tree.iter_subtree(child_3, |_| true);
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3),
-//             "subtree iterator should have returned child_3"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3_1),
-//             "subtree iterator should have returned child_3_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             None,
-//             "subtree iterator should have returned None"
-//         );
-//     }
-
-//     #[test]
-//     fn depth_propagation() {
-//         let mut tree: Tree<HopSlotMap<ElementId, TreeNode<ElementId, usize>>> =
-//             Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         let child_1_1_1 = tree.add(Some(child_1_1), 3);
-//         let child_1_2 = tree.add(Some(child_1), 4);
-//         let child_1_3 = tree.add(Some(child_1), 5);
-
-//         let child_2 = tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         let child_3_1 = tree.add(Some(child_3), 8);
-
-//         assert_eq!(
-//             tree.get_depth(root_id),
-//             Some(0),
-//             "root node should have depth 0"
-//         );
-
-//         assert_eq!(
-//             tree.get_depth(child_1),
-//             Some(1),
-//             "child_1 should have depth 1"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_1),
-//             Some(2),
-//             "child_1_1 should have depth 2"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_1_1),
-//             Some(3),
-//             "child_1_1_1 should have depth 3"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_2),
-//             Some(2),
-//             "child_1_2 should have depth 2"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_3),
-//             Some(2),
-//             "child_1_3 should have depth 2"
-//         );
-
-//         assert_eq!(
-//             tree.get_depth(child_2),
-//             Some(1),
-//             "child_2 should have depth 1"
-//         );
-
-//         assert_eq!(
-//             tree.get_depth(child_3),
-//             Some(1),
-//             "child_3 should have depth 1"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_3_1),
-//             Some(2),
-//             "child_3_1 should have depth 2"
-//         );
-
-//         tree.reparent(Some(root_id), child_1_1);
-
-//         assert_eq!(
-//             tree.get_depth(root_id),
-//             Some(0),
-//             "root node should have depth 0"
-//         );
-
-//         assert_eq!(
-//             tree.get_depth(child_1),
-//             Some(1),
-//             "child_1 should have depth 1"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_1),
-//             Some(1),
-//             "child_1_1 should have depth 1"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_1_1),
-//             Some(2),
-//             "child_1_1_1 should have depth 2"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_2),
-//             Some(2),
-//             "child_1_2 should have depth 1"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_1_3),
-//             Some(2),
-//             "child_1_3 should have depth 2"
-//         );
-
-//         assert_eq!(
-//             tree.get_depth(child_2),
-//             Some(1),
-//             "child_2 should have depth 1"
-//         );
-
-//         assert_eq!(
-//             tree.get_depth(child_3),
-//             Some(1),
-//             "child_3 should have depth 1"
-//         );
-//         assert_eq!(
-//             tree.get_depth(child_3_1),
-//             Some(2),
-//             "child_3_1 should have depth 2"
-//         );
-//     }
-// }
-
-// #[cfg(test)]
-// mod tests {
-//     use crate::element::ElementId;
-
-//     use super::Tree;
-
-//     #[test]
-//     fn is_first_last_child() {
-//         let mut tree: Tree<ElementId, usize> = Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         assert!(
-//             tree.map.is_first_child(root_id),
-//             "root should return true for first child checks"
-//         );
-//         assert!(
-//             tree.map.is_last_child(root_id),
-//             "root should return true for last child checks"
-//         );
-//     }
-
-//     #[test]
-//     fn downward_iter() {
-//         let mut tree: Tree<ElementId, usize> = Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         tree.add(Some(child_1_1), 3);
-//         tree.add(Some(child_1), 4);
-//         tree.add(Some(child_1), 5);
-
-//         tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         tree.add(Some(child_3), 8);
-
-//         let mut iter = tree.iter_down();
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(root_id),
-//             "downward iterator's first element must be the root node"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_1),
-//             "downward iterator should have returned child_1"
-//         );
-//     }
-
-//     #[test]
-//     fn upward_iter() {
-//         let mut tree: Tree<ElementId, usize> = Tree::default();
-
-//         let root_id = tree.add(None, 0);
-
-//         let child_1 = tree.add(Some(root_id), 1);
-//         let child_1_1 = tree.add(Some(child_1), 2);
-//         tree.add(Some(child_1_1), 3);
-//         tree.add(Some(child_1), 4);
-//         tree.add(Some(child_1), 5);
-
-//         tree.add(Some(root_id), 6);
-
-//         let child_3 = tree.add(Some(root_id), 7);
-//         let child_3_1 = tree.add(Some(child_3), 8);
-
-//         let mut iter = tree.iter_up();
-
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3_1),
-//             "upward iterator should have returned child_3_1"
-//         );
-//         assert_eq!(
-//             iter.next(),
-//             Some(child_3),
-//             "upward iterator should have returned child_3"
-//         );
-//     }
-// }
+#[cfg(test)]
+mod tests {
+
+    use crate::element::ElementId;
+
+    use super::Tree;
+
+    #[test]
+    fn is_first_last_child() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        assert!(
+            tree.is_first_child(root_id),
+            "root should return true for first child checks"
+        );
+        assert!(
+            tree.is_last_child(root_id),
+            "root should return true for last child checks"
+        );
+    }
+
+    #[test]
+    fn hierarchy() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        assert!(
+            tree.is_first_child(child_1),
+            "child_1 is the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_1),
+            "child_1 is not the last child of the parent"
+        );
+
+        assert!(
+            tree.is_first_child(child_1_1),
+            "child_1_1 is the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_1_1),
+            "child_1_1 is not the last child of the parent"
+        );
+
+        assert!(
+            tree.is_first_child(child_1_1_1),
+            "child_1_1_1 is the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_1_1_1),
+            "child_1_1_1 is the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_1_2),
+            "child_1_2 is not the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_1_2),
+            "child_1_2 is not the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_1_3),
+            "child_1_3 is not the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_1_3),
+            "child_1_3 is the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_2),
+            "child_2 is not the first child of the parent"
+        );
+        assert!(
+            !tree.is_last_child(child_2),
+            "child_2 is not the last child of the parent"
+        );
+
+        assert!(
+            !tree.is_first_child(child_3),
+            "child_3 is not the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_3),
+            "child_3 is the last child of the parent"
+        );
+
+        assert!(
+            tree.is_first_child(child_3_1),
+            "child_3_1 is the first child of the parent"
+        );
+        assert!(
+            tree.is_last_child(child_3_1),
+            "child_3_1 is the last child of the parent"
+        );
+    }
+
+    #[test]
+    fn downward_iter() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        let mut iter = tree.iter_down_from(root_id);
+
+        assert_eq!(
+            iter.next(),
+            Some(root_id),
+            "downward iterator's first element must be the root node"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1),
+            "downward iterator should have returned child_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1),
+            "downward iterator should have returned child_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "downward iterator should have returned child_1_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_2),
+            "downward iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_3),
+            "downward iterator should have returned child_1_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_2),
+            "downward iterator should have returned child_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "downward iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "downward iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_down_from(child_2);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_2),
+            "downward iterator should have returned child_2"
+        );
+
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "downward iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "downward iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_down_from(child_3);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "downward iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "downward iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "downward iterator should have returned None"
+        );
+    }
+
+    #[test]
+    fn upward_iter() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        let mut iter = tree.iter_up_from(child_3_1);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "upward iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "upward iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_2),
+            "upward iterator should have returned child_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_3),
+            "upward iterator should have returned child_1_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_2),
+            "upward iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "upward iterator should have returned child_1_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1),
+            "upward iterator should have returned child_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1),
+            "upward iterator should have returned child_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(root_id),
+            "upward iterator should have returned the root node"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "upward iterator should have returned None"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "upward iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_up_from(child_1_2);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_1_2),
+            "upward iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "upward iterator should have returned child_1_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1),
+            "upward iterator should have returned child_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1),
+            "upward iterator should have returned child_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(root_id),
+            "upward iterator should have returned the root node"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "upward iterator should have returned None"
+        );
+    }
+
+    #[test]
+    fn subtree_iter() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        let mut iter = tree.iter_subtree(child_1, |_| true);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_1),
+            "subtree iterator's first element must be child_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1),
+            "subtree iterator should have returned child_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_1_1),
+            "subtree iterator should have returned child_1_1_1"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_2),
+            "subtree iterator should have returned child_1_2"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_1_3),
+            "subtree iterator should have returned child_1_3"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "subtree iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_subtree(child_2, |_| true);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_2),
+            "subtree iterator should have returned child_2"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "subtree iterator should have returned None"
+        );
+
+        let mut iter = tree.iter_subtree(child_3, |_| true);
+
+        assert_eq!(
+            iter.next(),
+            Some(child_3),
+            "subtree iterator should have returned child_3"
+        );
+        assert_eq!(
+            iter.next(),
+            Some(child_3_1),
+            "subtree iterator should have returned child_3_1"
+        );
+        assert_eq!(
+            iter.next(),
+            None,
+            "subtree iterator should have returned None"
+        );
+    }
+
+    #[test]
+    fn depth_propagation() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+        let child_1_2 = tree.add(Some(child_1), 4);
+        let child_1_3 = tree.add(Some(child_1), 5);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        let child_3 = tree.add(Some(root_id), 7);
+        let child_3_1 = tree.add(Some(child_3), 8);
+
+        assert_eq!(
+            tree.get_depth(root_id),
+            Some(0),
+            "root node should have depth 0"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_1),
+            Some(1),
+            "child_1 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1),
+            Some(2),
+            "child_1_1 should have depth 2"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1_1),
+            Some(3),
+            "child_1_1_1 should have depth 3"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_2),
+            Some(2),
+            "child_1_2 should have depth 2"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_3),
+            Some(2),
+            "child_1_3 should have depth 2"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_2),
+            Some(1),
+            "child_2 should have depth 1"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_3),
+            Some(1),
+            "child_3 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_3_1),
+            Some(2),
+            "child_3_1 should have depth 2"
+        );
+
+        tree.reparent(Some(root_id), child_1_1);
+
+        assert_eq!(
+            tree.get_depth(root_id),
+            Some(0),
+            "root node should have depth 0"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_1),
+            Some(1),
+            "child_1 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1),
+            Some(1),
+            "child_1_1 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_1_1),
+            Some(2),
+            "child_1_1_1 should have depth 2"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_2),
+            Some(2),
+            "child_1_2 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_1_3),
+            Some(2),
+            "child_1_3 should have depth 2"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_2),
+            Some(1),
+            "child_2 should have depth 1"
+        );
+
+        assert_eq!(
+            tree.get_depth(child_3),
+            Some(1),
+            "child_3 should have depth 1"
+        );
+        assert_eq!(
+            tree.get_depth(child_3_1),
+            Some(2),
+            "child_3_1 should have depth 2"
+        );
+    }
+}
