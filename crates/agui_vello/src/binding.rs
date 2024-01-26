@@ -1,7 +1,7 @@
 use agui_core::{
     element::{
-        lifecycle::ElementLifecycle, render::ElementRender, view::ElementView, ElementBuilder,
-        ElementComparison, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
+        lifecycle::ElementLifecycle, render::ElementRender, view::ElementView, Element,
+        ElementBuilder, ElementComparison, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{
         object::{RenderObject, RenderObjectImpl},
@@ -30,11 +30,11 @@ impl IntoWidget for VelloViewBinding {
 impl ElementBuilder for VelloViewBinding {
     type Element = VelloViewElement;
 
-    fn create_element(self: std::rc::Rc<Self>) -> ElementType
+    fn create_element(self: std::rc::Rc<Self>) -> Element
     where
         Self: Sized,
     {
-        ElementType::new_view(VelloViewElement::new(self.view.clone(), self.child.clone()))
+        Element::new_view(VelloViewElement::new(self.view.clone(), self.child.clone()))
     }
 }
 

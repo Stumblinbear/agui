@@ -2,7 +2,7 @@ use std::{any::Any, rc::Rc};
 
 use crate::{
     element::{Element, ElementBuilder},
-    unit::{AsAny, Key},
+    unit::AsAny,
 };
 
 use super::Widget;
@@ -12,7 +12,7 @@ pub trait AnyWidget: AsAny {
 
     fn widget_name(&self) -> &'static str;
 
-    fn create_element(self: Rc<Self>, key: Option<Key>) -> Element;
+    fn create_element(self: Rc<Self>) -> Element;
 }
 
 impl<T> AnyWidget for T
@@ -35,12 +35,8 @@ where
             .unwrap_or(type_name)
     }
 
-    fn create_element(self: Rc<Self>, key: Option<Key>) -> Element {
-        Element::new(
-            self.widget_name(),
-            key,
-            ElementBuilder::create_element(self),
-        )
+    fn create_element(self: Rc<Self>) -> Element {
+        ElementBuilder::create_element(self)
     }
 }
 

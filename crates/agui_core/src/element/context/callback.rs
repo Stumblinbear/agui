@@ -3,7 +3,7 @@ use std::{any::TypeId, future::Future};
 use crate::{
     element::{
         inherited::ElementInherited, ContextDirtyElement, ContextElement, Element, ElementBuilder,
-        ElementId, ElementTaskContext, ElementType,
+        ElementId, ElementTaskContext,
     },
     engine::{widgets::bindings::ElementSchedulerBinding, Dirty},
     inheritance::InheritanceManager,
@@ -80,7 +80,7 @@ impl ElementCallbackContext<'_> {
                 .expect("found an inherited element but it does not exist exist in the tree");
 
             debug_assert!(
-                matches!(inherited_element.as_ref(), ElementType::Inherited(_)),
+                matches!(inherited_element, Element::Inherited(_)),
                 "widget did not create an inherited element"
             );
 

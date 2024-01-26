@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use agui_core::{
     element::{
-        render::ElementRender, view::ElementView, widget::ElementWidget, ElementBuilder,
-        ElementType, ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
+        render::ElementRender, view::ElementView, widget::ElementWidget, Element, ElementBuilder,
+        ElementUpdate, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::{
         binding::ViewBinding,
@@ -31,11 +31,11 @@ impl<F> ElementBuilder for WinitView<F>
 where
     F: Fn() -> WinitViewBinding + 'static,
 {
-    fn create_element(self: std::rc::Rc<Self>) -> ElementType
+    fn create_element(self: std::rc::Rc<Self>) -> Element
     where
         Self: Sized,
     {
-        ElementType::new_view(WinitViewElement::new((self.binding)(), self.child.clone()))
+        Element::new_view(WinitViewElement::new((self.binding)(), self.child.clone()))
     }
 }
 

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     element::{
         mock::render::{MockRenderObject, MockRenderWidget},
-        ElementBuilder, ElementComparison, ElementType,
+        Element, ElementBuilder, ElementComparison,
     },
     render::object::RenderObject,
     unit::HitTest,
@@ -25,7 +25,7 @@ impl IntoWidget for DummyWidget {
 impl ElementBuilder for DummyWidget {
     type Element = <MockRenderWidget as ElementBuilder>::Element;
 
-    fn create_element(self: Rc<Self>) -> ElementType {
+    fn create_element(self: Rc<Self>) -> Element {
         let widget = MockRenderWidget::default();
         {
             let mut widget_mock = widget.mock.borrow_mut();

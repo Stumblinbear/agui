@@ -4,8 +4,8 @@ use parking_lot::Mutex;
 
 use crate::{
     element::{
-        lifecycle::ElementLifecycle, render::ElementRender, widget::ElementWidget, ElementBuilder,
-        ElementComparison, ElementMountContext, ElementType, ElementUnmountContext,
+        lifecycle::ElementLifecycle, render::ElementRender, widget::ElementWidget, Element,
+        ElementBuilder, ElementComparison, ElementMountContext, ElementUnmountContext,
         RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::object::{MockRenderObjectImpl, RenderObject},
@@ -37,7 +37,7 @@ pub trait RenderElement {
     );
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MockRenderWidget {
     pub mock: Rc<RefCell<MockRenderElement>>,
 }
@@ -51,8 +51,8 @@ impl IntoWidget for MockRenderWidget {
 impl ElementBuilder for MockRenderWidget {
     type Element = MockedElementRender;
 
-    fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::new_render(MockedElementRender::new(self))
+    fn create_element(self: Rc<Self>) -> Element {
+        Element::new_render(MockedElementRender::new(self))
     }
 }
 

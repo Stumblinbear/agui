@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    element::{Element, ElementBuilder},
+    element::{Element, ElementBuilder, ElementId},
     widget::AnyWidget,
 };
 
@@ -24,13 +24,13 @@ impl<I, W> QueryByWidget<I, W> {
 impl<'query, I, W> Iterator for QueryByWidget<I, W>
 where
     W: AnyWidget + ElementBuilder + 'query,
-    I: Iterator<Item = &'query Element>,
+    I: Iterator<Item = (ElementId, &'query Element)>,
 {
-    type Item = &'query Element;
+    type Item = (ElementId, &'query Element);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find(|element| {
+        self.iter.find(|(_, element)| {
             element
                 .downcast::<<W as ElementBuilder>::Element>()
                 .is_some()

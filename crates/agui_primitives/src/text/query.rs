@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::element::{widget::ElementWidget, Element, ElementBuilder};
+use agui_core::element::{widget::ElementWidget, Element, ElementBuilder, ElementId};
 
 use crate::text::Text;
 
@@ -12,7 +12,7 @@ pub trait TextQueryExt<'query> {
 
 impl<'query, I> TextQueryExt<'query> for I
 where
-    I: Iterator<Item = &'query Element>,
+    I: Iterator<Item = (ElementId, &'query Element)>,
 {
     fn with_text(self, text: &str) -> QueryWithText<Self>
     where
@@ -37,13 +37,13 @@ impl<'t, I> QueryWithText<'t, I> {
 
 impl<'query, 't, I> Iterator for QueryWithText<'t, I>
 where
-    I: Iterator<Item = &'query Element>,
+    I: Iterator<Item = (ElementId, &'query Element)>,
 {
     type Item = Rc<Text>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find_map(|element| {
+        self.iter.find_map(|(_, element)| {
             element
                 .downcast::<<Text as ElementBuilder>::Element>()
                 .map(|element| element.widget())

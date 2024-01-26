@@ -2,8 +2,8 @@ use std::{any::TypeId, cell::RefCell, rc::Rc};
 
 use crate::{
     element::{
-        inherited::ElementInherited, lifecycle::ElementLifecycle, widget::ElementWidget,
-        ElementBuilder, ElementComparison, ElementMountContext, ElementType, ElementUnmountContext,
+        inherited::ElementInherited, lifecycle::ElementLifecycle, widget::ElementWidget, Element,
+        ElementBuilder, ElementComparison, ElementMountContext, ElementUnmountContext,
     },
     widget::{IntoWidget, Widget},
 };
@@ -22,7 +22,7 @@ pub trait InheritedElement {
     fn needs_notify(&mut self) -> bool;
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MockInheritedWidget {
     pub mock: Rc<RefCell<MockInheritedElement>>,
 }
@@ -44,8 +44,8 @@ impl IntoWidget for MockInheritedWidget {
 impl ElementBuilder for MockInheritedWidget {
     type Element = MockedElementInherited;
 
-    fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::new_inherited(MockedElementInherited::new(self))
+    fn create_element(self: Rc<Self>) -> Element {
+        Element::new_inherited(MockedElementInherited::new(self))
     }
 }
 

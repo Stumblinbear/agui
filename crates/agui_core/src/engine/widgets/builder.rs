@@ -7,7 +7,7 @@ use crate::{
     callback::CallbackQueue,
     engine::{
         widgets::bindings::{ElementBinding, ElementSchedulerBinding},
-        widgets::WidgetManager,
+        widgets::{key_storage::WidgetKeyStorage, WidgetManager},
         Dirty,
     },
     inheritance::InheritanceManager,
@@ -116,6 +116,7 @@ where
             scheduler: self.scheduler,
 
             tree: Tree::default(),
+            key_storage: WidgetKeyStorage::default(),
 
             inheritance: InheritanceManager::default(),
 

@@ -30,11 +30,11 @@ pub fn impl_stateful_widget(input: TokenStream2) -> TokenStream2 {
         impl #impl_generics #agui_core::element::ElementBuilder for #ident #ty_generics #where_clause {
             type Element = #agui_elements::stateful::StatefulWidgetElement<Self>;
 
-            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
+            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::Element
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::new_widget(#agui_elements::stateful::StatefulWidgetElement::new(self))
+                #agui_core::element::Element::new_widget(#agui_elements::stateful::StatefulWidgetElement::new(self))
             }
         }
     }

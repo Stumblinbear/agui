@@ -23,15 +23,18 @@ impl Widget {
     where
         W: AnyWidget,
     {
-        Self::new_with_key(None, widget)
+        Self {
+            key: None,
+            widget: Rc::new(widget),
+        }
     }
 
-    pub fn new_with_key<W>(key: Option<Key>, widget: W) -> Self
+    pub fn new_with_key<W>(key: Key, widget: W) -> Self
     where
         W: AnyWidget,
     {
         Self {
-            key,
+            key: Some(key),
             widget: Rc::new(widget),
         }
     }
@@ -52,7 +55,7 @@ impl Widget {
     }
 
     pub(crate) fn create_element(self) -> Element {
-        self.widget.create_element(self.key)
+        self.widget.create_element()
     }
 }
 

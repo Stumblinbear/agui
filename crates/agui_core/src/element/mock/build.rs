@@ -3,8 +3,8 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     callback::CallbackId,
     element::{
-        lifecycle::ElementLifecycle, widget::ElementWidget, ElementBuildContext, ElementBuilder,
-        ElementCallbackContext, ElementComparison, ElementMountContext, ElementType,
+        lifecycle::ElementLifecycle, widget::ElementWidget, Element, ElementBuildContext,
+        ElementBuilder, ElementCallbackContext, ElementComparison, ElementMountContext,
         ElementUnmountContext,
     },
     widget::{IntoWidget, Widget},
@@ -29,7 +29,7 @@ pub trait ElementBuild {
     ) -> bool;
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MockBuildWidget {
     pub mock: Rc<RefCell<MockElementBuild>>,
 }
@@ -43,8 +43,8 @@ impl IntoWidget for MockBuildWidget {
 impl ElementBuilder for MockBuildWidget {
     type Element = MockedElementBuild;
 
-    fn create_element(self: Rc<Self>) -> ElementType {
-        ElementType::new_widget(MockedElementBuild::new(self))
+    fn create_element(self: Rc<Self>) -> Element {
+        Element::new_widget(MockedElementBuild::new(self))
     }
 }
 

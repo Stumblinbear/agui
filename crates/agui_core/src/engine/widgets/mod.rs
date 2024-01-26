@@ -10,7 +10,10 @@ use crate::{
         ElementMountContext, ElementUnmountContext,
     },
     engine::{
-        widgets::bindings::{ElementBinding, ElementSchedulerBinding},
+        widgets::{
+            bindings::{ElementBinding, ElementSchedulerBinding},
+            key_storage::WidgetKeyStorage,
+        },
         Dirty,
     },
     inheritance::InheritanceManager,
@@ -22,6 +25,7 @@ use crate::{
 
 pub mod bindings;
 mod builder;
+pub mod key_storage;
 
 pub use builder::*;
 
@@ -30,6 +34,7 @@ pub struct WidgetManager<EB = (), SB = ()> {
     scheduler: SB,
 
     tree: Tree<ElementId, Element>,
+    key_storage: WidgetKeyStorage,
 
     inheritance: InheritanceManager,
 
@@ -73,7 +78,7 @@ impl<EB, SB> WidgetManager<EB, SB> {
     /// This essentially iterates the element tree's element Vec, and as such does not guarantee
     /// the order in which elements will be returned.
     pub fn query(&self) -> WidgetQuery {
-        WidgetQuery::new(&self.tree)
+        WidgetQuery::new(&self.tree, &self.key_storage)
     }
 
     pub fn callback_queue(&self) -> &CallbackQueue {
@@ -199,9 +204,15 @@ where
     fn process_spawn(&mut self, parent_id: Option<ElementId>, widget: Widget) -> ElementId {
         tracing::trace!("creating element");
 
+        let key = widget.key();
+
         let element = widget.create_element();
 
         let element_id = self.tree.add(parent_id, element);
+
+        if let Some(key) = key {
+            self.key_storage.insert(element_id, key);
+        }
 
         let span = tracing::Span::current();
 
@@ -405,12 +416,7 @@ where
 
             while old_children_top <= old_children_bottom {
                 if let Some(old_child_id) = old_children.get(old_children_top) {
-                    let old_child = self
-                        .tree
-                        .get(*old_child_id)
-                        .expect("child element does not exist in the tree");
-
-                    if let Some(key) = old_child.key() {
+                    if let Some(key) = self.key_storage.get_key(*old_child_id) {
                         old_keyed_children.insert(key, *old_child_id);
                     } else {
                         // unmount / deactivate the child
@@ -578,6 +584,8 @@ where
 
                     element_id: &element_id,
                 });
+
+                self.key_storage.remove(element_id);
 
                 self.element_binding.on_element_destroyed(element_id);
 

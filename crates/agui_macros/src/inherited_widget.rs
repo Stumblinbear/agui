@@ -30,11 +30,11 @@ pub fn impl_inherited_widget(input: TokenStream2) -> TokenStream2 {
         impl #impl_generics #agui_core::element::ElementBuilder for #ident #ty_generics #where_clause {
             type Element = #agui_elements::inherited::InheritedElement<Self>;
 
-            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::ElementType
+            fn create_element(self: std::rc::Rc<Self>) -> #agui_core::element::Element
             where
                 Self: Sized
             {
-                #agui_core::element::ElementType::new_inherited(#agui_elements::inherited::InheritedElement::new(self))
+                #agui_core::element::Element::new_inherited(#agui_elements::inherited::InheritedElement::new(self))
             }
         }
     }

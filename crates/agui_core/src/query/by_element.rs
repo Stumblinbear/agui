@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::element::{lifecycle::ElementLifecycle, Element};
+use crate::element::{lifecycle::ElementLifecycle, Element, ElementId};
 
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
@@ -23,13 +23,14 @@ impl<I, E> QueryByElement<I, E> {
 impl<'query, I, E> Iterator for QueryByElement<I, E>
 where
     E: ElementLifecycle + 'query,
-    I: Iterator<Item = &'query Element>,
+    I: Iterator<Item = (ElementId, &'query Element)>,
 {
-    type Item = &'query Element;
+    type Item = (ElementId, &'query Element);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find(|element| element.downcast::<E>().is_some())
+        self.iter
+            .find(|(_, element)| element.downcast::<E>().is_some())
     }
 
     #[inline]

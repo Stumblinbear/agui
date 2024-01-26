@@ -5,9 +5,7 @@ use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
-    element::{
-        Element, ElementId, ElementType, RenderObjectCreateContext, RenderObjectUpdateContext,
-    },
+    element::{Element, ElementId, RenderObjectCreateContext, RenderObjectUpdateContext},
     engine::{rendering::bindings::RenderingSchedulerBinding, Dirty},
     render::{
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
@@ -435,7 +433,7 @@ where
                     panic!("parent element {:?} has no render object while creating render object {:?}", parent_element_id, element_id);
                 };
 
-                if let ElementType::View(_) = parent_element.as_ref() {
+                if let Element::View(_) = &parent_element {
                     return (
                         Some(parent_render_object_id),
                         Some(parent_render_object_id),
@@ -493,7 +491,7 @@ where
                     ..Default::default()
                 });
 
-                if let ElementType::View(element) = element.as_ref() {
+                if let Element::View(element) = &element {
                     let mut view = element.create_view();
 
                     // Attach the render object as the root of its own view
