@@ -88,17 +88,16 @@ impl LocalEngineExecutor {
         }
     }
 }
-
-impl EngineExecutor for LocalEngineExecutor {
+impl LocalEngineExecutor {
     #[tracing::instrument(level = "debug", skip(self))]
-    fn update(&mut self) {
-        tracing::trace!("update started");
+    fn update_widgets(&mut self) {
+        tracing::trace!("widget update started");
 
         let start = Instant::now();
 
         self.widget_manager.flush_callbacks();
 
-        self.widget_manager.update();
+        let num_iterations = self.widget_manager.update();
 
         let update_widget_tree_end = Instant::now();
 
@@ -114,10 +113,32 @@ impl EngineExecutor for LocalEngineExecutor {
             self.render_manager.on_needs_update(element_id)
         }
 
-        self.render_manager
-            .sync_render_objects(self.widget_manager.tree());
+        if self.render_manager.does_need_sync() {
+            self.render_manager
+                .sync_render_objects(self.widget_manager.tree());
+        }
 
-        let update_render_tree_end = Instant::now();
+        let sync_render_tree_end = Instant::now();
+
+        let timings = WidgetUpdateTimings {
+            duration: start.elapsed(),
+
+            update_widget_tree: update_widget_tree_end - start,
+            sync_render_tree: sync_render_tree_end - update_widget_tree_end,
+        };
+
+        tracing::debug!(
+            ?timings,
+            num_iterations = num_iterations,
+            "widget update complete"
+        );
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn update_renderer(&mut self) {
+        tracing::trace!("renderer update started");
+
+        let start = Instant::now();
 
         self.render_manager.flush_layout();
 
@@ -131,17 +152,26 @@ impl EngineExecutor for LocalEngineExecutor {
 
         let sync_views_end = Instant::now();
 
-        let timings = UpdateTimings {
+        let timings = RendererUpdateTimings {
             duration: start.elapsed(),
 
-            update_widget_tree: update_widget_tree_end - start,
-            update_render_tree: update_render_tree_end - update_widget_tree_end,
-            layout: layout_end - update_render_tree_end,
+            layout: layout_end - start,
             paint: paint_end - layout_end,
             sync_views: sync_views_end - paint_end,
         };
 
-        tracing::debug!(?timings, "update complete");
+        tracing::debug!(?timings, "renderer update complete");
+    }
+}
+
+impl EngineExecutor for LocalEngineExecutor {
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn update(&mut self) {
+        self.update_widgets();
+
+        if self.render_manager.does_need_update() {
+            self.update_renderer();
+        }
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -149,9 +179,6 @@ impl EngineExecutor for LocalEngineExecutor {
         'update_tree: loop {
             let update_future = self.update_rx.wait().fuse();
             let render_future = self.render_rx.wait().fuse();
-
-            futures::pin_mut!(update_future);
-            futures::pin_mut!(render_future);
 
             self.update();
 
@@ -177,19 +204,16 @@ impl EngineExecutor for LocalEngineExecutor {
 
         futures::pin_mut!(fut);
 
+        let mut update_future = self.update_rx.wait().fuse();
+        let mut render_future = self.update_rx.wait().fuse();
+
+        self.update();
+
         loop {
-            let update_future = self.update_rx.wait().fuse();
-            let render_future = self.render_rx.wait().fuse();
-
-            futures::pin_mut!(update_future);
-            futures::pin_mut!(render_future);
-
-            self.update();
-
             let output = self.pool.run_until(async {
                 futures::select! {
                     _ = update_future => {
-                        tracing::trace!("update triggered by update notifier");
+                        tracing::trace!("update triggered by widget notifier");
                         None
                     }
 
@@ -207,6 +231,17 @@ impl EngineExecutor for LocalEngineExecutor {
             if let Some(output) = output {
                 return output;
             }
+
+            if update_future.is_terminated() {
+                self.update_widgets();
+            }
+
+            if render_future.is_terminated() || self.render_manager.does_need_update() {
+                self.update_renderer();
+            }
+
+            update_future = self.update_rx.wait().fuse();
+            render_future = self.render_rx.wait().fuse();
         }
     }
 
@@ -268,11 +303,18 @@ impl RenderingSchedulerBinding for EngineSchedulerBinding {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct UpdateTimings {
+struct WidgetUpdateTimings {
     duration: Duration,
 
     update_widget_tree: Duration,
-    update_render_tree: Duration,
+    sync_render_tree: Duration,
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct RendererUpdateTimings {
+    duration: Duration,
+
     layout: Duration,
     paint: Duration,
     sync_views: Duration,

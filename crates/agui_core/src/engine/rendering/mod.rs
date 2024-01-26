@@ -76,6 +76,16 @@ impl<SB> RenderManager<SB> {
         self.forgotten_elements.insert(element_id);
     }
 
+    pub fn does_need_sync(&self) -> bool {
+        !self.create_render_object.is_empty()
+            || !self.update_render_object.is_empty()
+            || !self.forgotten_elements.is_empty()
+    }
+
+    pub fn does_need_update(&self) -> bool {
+        !self.needs_layout.is_empty() || !self.needs_paint.is_empty() || !self.needs_sync.is_empty()
+    }
+
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn flush_layout(&mut self) -> bool {
         let mut relayout_boundary_queue =
