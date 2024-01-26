@@ -122,8 +122,7 @@ where
         level = "trace",
         skip(self),
         fields(
-            callback_id = field::Empty,
-            element_id = field::Empty,
+            callback_id = field::Empty
         )
     )]
     pub fn flush_callbacks(&mut self) {
@@ -134,12 +133,11 @@ where
             arg: callback_arg,
         }) = self.callback_rx.try_recv()
         {
-            let element_id = callback_id.element_id();
-
             if tracing::span_enabled!(tracing::Level::TRACE) {
                 span.record("callback_id", format!("{:?}", callback_id));
-                span.record("element_id", format!("{:?}", element_id));
             }
+
+            let element_id = callback_id.element_id();
 
             let existed = self
                 .tree
