@@ -4,6 +4,7 @@ pub mod clip;
 pub mod colored_box;
 pub mod flex;
 pub mod intrinsic;
+pub mod layout_builder;
 pub mod padding;
 pub mod sized_box;
 pub mod stack;

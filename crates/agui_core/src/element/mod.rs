@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::{
     callback::CallbackId,
-    element::{inherited::ElementInherited, view::ElementView},
+    element::{deferred::ElementDeferred, inherited::ElementInherited, view::ElementView},
     render::object::{RenderBox, RenderObject},
     unit::Key,
     widget::Widget,
@@ -14,6 +14,7 @@ pub mod build;
 mod builder;
 mod comparison;
 mod context;
+pub mod deferred;
 pub mod inherited;
 pub mod lifecycle;
 #[cfg(any(test, feature = "mocks"))]
@@ -54,11 +55,12 @@ type ElementBox<T> = Box<T>;
 
 pub enum ElementType {
     Widget(ElementBox<dyn ElementBuild>),
-
     Inherited(ElementBox<dyn ElementInherited>),
 
     View(ElementBox<dyn ElementView>),
     Render(ElementBox<dyn ElementRender>),
+
+    Deferred(ElementBox<dyn ElementDeferred>),
 }
 
 impl ElementType {
@@ -121,6 +123,21 @@ impl ElementType {
             ElementType::Render(Box::new(element))
         }
     }
+
+    pub fn new_deferred<E>(element: E) -> Self
+    where
+        E: ElementDeferred,
+    {
+        #[cfg(not(miri))]
+        {
+            ElementType::Deferred(smallbox::smallbox!(element))
+        }
+
+        #[cfg(miri)]
+        {
+            ElementType::Deferred(Box::new(element))
+        }
+    }
 }
 
 impl Element {
@@ -137,11 +154,12 @@ impl Element {
     {
         match self.inner {
             ElementType::Widget(ref element) => (**element).as_any().is::<E>(),
-
             ElementType::Inherited(ref element) => (**element).as_any().is::<E>(),
 
             ElementType::View(ref element) => (**element).as_any().is::<E>(),
             ElementType::Render(ref element) => (**element).as_any().is::<E>(),
+
+            ElementType::Deferred(ref element) => (**element).as_any().is::<E>(),
         }
     }
 
@@ -151,11 +169,12 @@ impl Element {
     {
         match self.inner {
             ElementType::Widget(ref element) => (**element).as_any().downcast_ref::<E>(),
-
             ElementType::Inherited(ref element) => (**element).as_any().downcast_ref::<E>(),
 
             ElementType::View(ref element) => (**element).as_any().downcast_ref::<E>(),
             ElementType::Render(ref element) => (**element).as_any().downcast_ref::<E>(),
+
+            ElementType::Deferred(ref element) => (**element).as_any().downcast_ref::<E>(),
         }
     }
 
@@ -165,11 +184,12 @@ impl Element {
     {
         match self.inner {
             ElementType::Widget(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
-
             ElementType::Inherited(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
 
             ElementType::View(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
             ElementType::Render(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
+
+            ElementType::Deferred(ref mut element) => (**element).as_any_mut().downcast_mut::<E>(),
         }
     }
 
@@ -185,7 +205,6 @@ impl Element {
     pub fn mount(&mut self, ctx: &mut ElementMountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.mount(ctx),
-
             ElementType::Inherited(ref mut element) => {
                 ctx.inheritance.create_scope(
                     element.inherited_type_id(),
@@ -198,6 +217,8 @@ impl Element {
 
             ElementType::View(ref mut element) => element.mount(ctx),
             ElementType::Render(ref mut element) => element.mount(ctx),
+
+            ElementType::Deferred(ref mut element) => element.mount(ctx),
         }
 
         // Is it beneficial to delay building up these until an element actually needs them?
@@ -223,11 +244,12 @@ impl Element {
     pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
         match self.inner {
             ElementType::Widget(ref mut element) => element.unmount(ctx),
-
             ElementType::Inherited(ref mut element) => element.unmount(ctx),
 
             ElementType::View(ref mut element) => element.unmount(ctx),
             ElementType::Render(ref mut element) => element.unmount(ctx),
+
+            ElementType::Deferred(ref mut element) => element.unmount(ctx),
         }
 
         ctx.inheritance.remove(*ctx.element_id);
@@ -237,7 +259,6 @@ impl Element {
     pub fn build(&mut self, ctx: &mut ElementBuildContext) -> Vec<Widget> {
         match self.inner {
             ElementType::Widget(ref mut element) => Vec::from([element.build(ctx)]),
-
             ElementType::Inherited(ref mut element) => {
                 if element.needs_notify() {
                     for element_id in ctx
@@ -254,6 +275,8 @@ impl Element {
 
             ElementType::View(ref mut element) => element.children(),
             ElementType::Render(ref mut element) => element.children(),
+
+            ElementType::Deferred(_) => Vec::new(),
         }
     }
 
@@ -261,11 +284,12 @@ impl Element {
     pub fn update(&mut self, new_widget: &Widget) -> ElementComparison {
         match self.inner {
             ElementType::Widget(ref mut element) => element.update(new_widget),
-
             ElementType::Inherited(ref mut element) => element.update(new_widget),
 
             ElementType::View(ref mut element) => element.update(new_widget),
             ElementType::Render(ref mut element) => element.update(new_widget),
+
+            ElementType::Deferred(ref mut element) => element.update(new_widget),
         }
     }
 
@@ -277,7 +301,10 @@ impl Element {
         arg: Box<dyn Any>,
     ) -> bool {
         match self.inner {
-            ElementType::Inherited(_) | ElementType::View(_) | ElementType::Render(_) => {
+            ElementType::Inherited(_)
+            | ElementType::View(_)
+            | ElementType::Render(_)
+            | ElementType::Deferred(_) => {
                 tracing::warn!("attempted to call a callback on an unsupported element");
 
                 false
@@ -290,7 +317,7 @@ impl Element {
     pub fn create_render_object(&self, ctx: &mut RenderObjectCreateContext) -> RenderObject {
         match self.inner {
             // Use the default render object
-            ElementType::Widget(_) | ElementType::Inherited(_) => {
+            ElementType::Widget(_) | ElementType::Inherited(_) | ElementType::Deferred(_) => {
                 RenderObject::new(RenderBox::default())
             }
 
@@ -338,8 +365,11 @@ impl std::fmt::Debug for Element {
         f.debug_struct(match self.inner {
             ElementType::Widget(_) => "Element::Widget",
             ElementType::Inherited(_) => "Element::Inherited",
+
             ElementType::View(_) => "Element::View",
             ElementType::Render(_) => "Element::Render",
+
+            ElementType::Deferred(_) => "Element::Deferred",
         })
         .field("key", &self.meta.key)
         .field("widget", &DebugWidget(self.meta.name))
