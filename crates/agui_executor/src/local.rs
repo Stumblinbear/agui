@@ -147,13 +147,13 @@ impl EngineExecutor for LocalEngineExecutor {
     #[tracing::instrument(level = "trace", skip_all)]
     fn run_until_stalled(&mut self) {
         'update_tree: loop {
-            self.update();
-
             let update_future = self.update_rx.wait().fuse();
             let render_future = self.render_rx.wait().fuse();
 
             futures::pin_mut!(update_future);
             futures::pin_mut!(render_future);
+
+            self.update();
 
             // Run futures until no more progress can be made and no more tree updates are
             // pending.
@@ -178,13 +178,13 @@ impl EngineExecutor for LocalEngineExecutor {
         futures::pin_mut!(fut);
 
         loop {
-            self.update();
-
             let update_future = self.update_rx.wait().fuse();
             let render_future = self.render_rx.wait().fuse();
 
             futures::pin_mut!(update_future);
             futures::pin_mut!(render_future);
+
+            self.update();
 
             let output = self.pool.run_until(async {
                 futures::select! {

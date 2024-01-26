@@ -182,14 +182,14 @@ impl EngineExecutor for ThreadedEngineExecutor {
     fn run_until_stalled(&mut self) {
         futures::executor::block_on(async {
             'update_tree: loop {
+                let update_future = self.update_rx.wait().fuse();
+
+                futures::pin_mut!(update_future);
+
                 self.update();
 
                 // TODO: This should wait for the render manager to be stalled as well to match the
                 // behavior of the single threaded executor.
-
-                let widget_future = self.update_rx.wait().fuse();
-
-                futures::pin_mut!(widget_future);
 
                 // Run futures until no more progress can be made and no more tree updates are
                 // pending.
@@ -198,7 +198,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
                         return;
                     }
 
-                    if widget_future.is_terminated() {
+                    if update_future.is_terminated() {
                         continue 'update_tree;
                     }
                 }
@@ -215,11 +215,15 @@ impl EngineExecutor for ThreadedEngineExecutor {
         futures::pin_mut!(fut);
 
         loop {
+            let update_future = self.update_rx.wait().fuse();
+
+            futures::pin_mut!(update_future);
+
             self.update();
 
             let output = self.pool.run_until(async {
                 futures::select! {
-                    _ = self.update_rx.wait().fuse() => {
+                    _ = update_future => {
                         tracing::trace!("update triggered by widget notifier");
                         None
                     }
