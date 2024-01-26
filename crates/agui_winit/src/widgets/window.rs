@@ -350,7 +350,12 @@ where
                     }
                 };
 
-                let (window_size_tx, window_size_rx) = watch::channel(Size::ZERO);
+                tracing::debug!("window created: {:?}", window.id());
+
+                let (window_size_tx, window_size_rx) = watch::channel({
+                    let size = window.inner_size();
+                    Size::new(size.width as f32, size.height as f32)
+                });
 
                 ctx.state.close_event_task = match ctx.spawn_task({
                     let window = window.clone();
