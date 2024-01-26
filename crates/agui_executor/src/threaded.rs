@@ -158,13 +158,15 @@ impl EngineExecutor for ThreadedEngineExecutor {
             render_manager.on_needs_update(element_id)
         }
 
-        render_manager.sync_render_objects(self.widget_manager.tree());
+        if render_manager.does_need_sync() {
+            render_manager.sync_render_objects(self.widget_manager.tree());
+
+            self.sync_tx.notify();
+        }
 
         let sync_render_tree_end = Instant::now();
 
         drop(render_manager);
-
-        self.sync_tx.notify();
 
         let timings = WidgetUpdateTimings {
             duration: start.elapsed(),
@@ -175,7 +177,11 @@ impl EngineExecutor for ThreadedEngineExecutor {
             sync_render_tree: sync_render_tree_end - lock_renderer_end,
         };
 
-        tracing::debug!(?timings, num_iterations = num_iterations, "update complete");
+        tracing::debug!(
+            ?timings,
+            num_iterations = num_iterations,
+            "widget update complete"
+        );
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -183,8 +189,6 @@ impl EngineExecutor for ThreadedEngineExecutor {
         futures::executor::block_on(async {
             'update_tree: loop {
                 let update_future = self.update_rx.wait().fuse();
-
-                futures::pin_mut!(update_future);
 
                 self.update();
 
@@ -215,9 +219,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
         futures::pin_mut!(fut);
 
         loop {
-            let update_future = self.update_rx.wait().fuse();
-
-            futures::pin_mut!(update_future);
+            let mut update_future = self.update_rx.wait().fuse();
 
             self.update();
 
@@ -280,7 +282,7 @@ impl ThreadedEngineRendering {
 
         let sync_views_end = Instant::now();
 
-        let timings = RenderUpdateTimings {
+        let timings = RendererUpdateTimings {
             duration: start.elapsed(),
 
             lock_renderer: lock_renderer_end - start,
@@ -295,13 +297,10 @@ impl ThreadedEngineRendering {
     #[tracing::instrument(level = "debug", skip(self))]
     pub fn run(mut self) {
         loop {
+            let mut sync_future = self.sync_rx.wait().fuse();
+            let mut render_future = self.render_rx.wait().fuse();
+
             self.update();
-
-            let sync_future = self.sync_rx.wait().fuse();
-            let render_future = self.render_rx.wait().fuse();
-
-            futures::pin_mut!(sync_future);
-            futures::pin_mut!(render_future);
 
             self.pool.run_until(async {
                 futures::select! {
@@ -396,7 +395,7 @@ struct WidgetUpdateTimings {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct RenderUpdateTimings {
+struct RendererUpdateTimings {
     duration: Duration,
 
     lock_renderer: Duration,
