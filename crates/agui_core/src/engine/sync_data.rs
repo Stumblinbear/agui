@@ -1,4 +1,4 @@
-use std::{hash::BuildHasherDefault, sync::Arc};
+use std::hash::BuildHasherDefault;
 
 use rustc_hash::FxHasher;
 use slotmap::SparseSecondaryMap;
@@ -11,9 +11,9 @@ use crate::{
 pub struct SyncTreeData<'sync> {
     pub(crate) element_tree: &'sync Tree<ElementId, Element>,
 
-    pub(crate) deferred_resolvers: &'sync SparseSecondaryMap<
+    pub(crate) deferred_resolvers: &'sync mut SparseSecondaryMap<
         ElementId,
-        Arc<dyn DeferredResolver>,
+        Box<dyn DeferredResolver>,
         BuildHasherDefault<FxHasher>,
     >,
 }

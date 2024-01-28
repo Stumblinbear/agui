@@ -1,4 +1,4 @@
-use std::{any::Any, sync::Arc};
+use std::any::Any;
 
 use crate::{
     element::{
@@ -11,7 +11,7 @@ use crate::{
 
 pub trait ErasedElementDeferred: ElementLifecycle {
     #[allow(private_interfaces)]
-    fn create_resolver(&self) -> Arc<dyn DeferredResolver>;
+    fn create_resolver(&self) -> Box<dyn DeferredResolver>;
 
     #[allow(private_interfaces)]
     fn build(&self, resolver: &dyn DeferredResolver) -> Widget;
@@ -22,8 +22,8 @@ where
     T: ElementDeferred,
 {
     #[allow(private_interfaces)]
-    fn create_resolver(&self) -> Arc<dyn DeferredResolver> {
-        Arc::new(ErasedDeferredResolver {
+    fn create_resolver(&self) -> Box<dyn DeferredResolver> {
+        Box::new(ErasedDeferredResolver {
             resolver: self.create_resolver(),
 
             current_param: None,
