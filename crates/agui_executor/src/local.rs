@@ -115,7 +115,7 @@ impl LocalEngineExecutor {
 
         if self.render_manager.does_need_sync() {
             self.render_manager
-                .sync_render_objects(self.widget_manager.tree());
+                .sync_render_objects(self.widget_manager.sync_data());
         }
 
         let sync_render_tree_end = Instant::now();

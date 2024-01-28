@@ -9,6 +9,5 @@ pub trait ElementLifecycle: AsAny {
     #[allow(unused_variables)]
     fn unmount(&mut self, ctx: &mut ElementUnmountContext) {}
 
-    /// Returns true if the widget is of the same type as the other widget.
     fn update(&mut self, new_widget: &Widget) -> ElementComparison;
 }

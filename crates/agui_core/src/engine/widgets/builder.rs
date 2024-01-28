@@ -2,6 +2,7 @@ use std::{collections::VecDeque, sync::mpsc};
 
 use agui_sync::notify;
 use rustc_hash::FxHashSet;
+use slotmap::SparseSecondaryMap;
 
 use crate::{
     callback::CallbackQueue,
@@ -116,9 +117,11 @@ where
             scheduler: self.scheduler,
 
             tree: Tree::default(),
-            key_storage: WidgetKeyStorage::default(),
+            deferred_resolvers: SparseSecondaryMap::default(),
 
             inheritance: InheritanceManager::default(),
+
+            key_storage: WidgetKeyStorage::default(),
 
             needs_build: Dirty::new(notifier.clone()),
 

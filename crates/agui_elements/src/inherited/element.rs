@@ -1,4 +1,4 @@
-use std::{any::TypeId, rc::Rc};
+use std::rc::Rc;
 
 use agui_core::{
     element::{
@@ -69,10 +69,6 @@ where
     I: AnyWidget + InheritedWidget,
 {
     type Data = I;
-
-    fn inherited_type_id(&self) -> TypeId {
-        TypeId::of::<I>()
-    }
 
     fn inherited_data(&self) -> &Self::Data
     where

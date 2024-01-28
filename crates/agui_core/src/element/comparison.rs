@@ -1,6 +1,6 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum ElementComparison {
-    /// The widgets were of the same type and instance.
+    /// The widgets were of the same type and the element can be reused.
     Identical,
 
     /// The widgets was changed and the element must be rebuilt to reflect the changes.

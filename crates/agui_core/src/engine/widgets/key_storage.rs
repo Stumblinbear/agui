@@ -34,10 +34,8 @@ impl WidgetKeyStorage {
     }
 
     pub(super) fn remove(&mut self, element_id: ElementId) {
-        if let Some(key) = self.element_keys.remove(element_id) {
-            if let Key::Global(key_data) = key {
-                self.from_global_keys.remove(&key_data);
-            }
+        if let Some(Key::Global(key_data)) = self.element_keys.remove(element_id) {
+            self.from_global_keys.remove(&key_data);
         }
     }
 }

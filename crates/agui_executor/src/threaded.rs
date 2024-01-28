@@ -159,7 +159,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
         }
 
         if render_manager.does_need_sync() {
-            render_manager.sync_render_objects(self.widget_manager.tree());
+            render_manager.sync_render_objects(self.widget_manager.sync_data());
 
             self.sync_tx.notify();
         }

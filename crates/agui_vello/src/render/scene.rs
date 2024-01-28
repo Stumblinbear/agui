@@ -26,7 +26,7 @@ impl Default for VelloScene {
 
             needs_redraw: true,
 
-            size: Size::new(32.0, 32.0),
+            size: Size::new(1.0, 1.0),
             scene: Scene::new(),
         };
 

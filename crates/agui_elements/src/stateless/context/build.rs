@@ -1,9 +1,11 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    any::Any,
+    ops::{Deref, DerefMut},
+};
 
 use agui_core::{
     callback::{Callback, CallbackId, WidgetCallback},
     element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
-    unit::AsAny,
     util::tree::Tree,
 };
 use rustc_hash::FxHashMap;
@@ -45,10 +47,13 @@ impl<'ctx, W> DerefMut for StatelessBuildContext<'ctx, '_, W> {
     }
 }
 
-impl<W: 'static> StatelessBuildContext<'_, '_, W> {
+impl<W> StatelessBuildContext<'_, '_, W>
+where
+    W: Any,
+{
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
-        A: AsAny,
+        A: Any,
         F: Fn(&mut StatelessCallbackContext, A) + 'static,
     {
         let callback = WidgetCallback::new::<F>(*self.element_id, self.callback_queue.clone());

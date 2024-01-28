@@ -62,11 +62,9 @@ where
         }
 
         if let Some(new_widget) = new_widget.downcast::<W>() {
-            if !Rc::ptr_eq(&self.widget, &new_widget) {
-                self.old_widget = Some(new_widget.clone());
-            }
-
-            self.widget = new_widget;
+            let mut swap_widget = new_widget;
+            std::mem::swap(&mut self.widget, &mut swap_widget);
+            self.old_widget = Some(swap_widget);
 
             // Stateful widgets always need to be rebuilt because they likely reference widget data
             ElementComparison::Changed

@@ -62,6 +62,8 @@ where
 
             elements: SecondaryMap::default(),
 
+            deferred_resolvers: SparseSecondaryMap::default(),
+
             create_render_object: VecDeque::default(),
             update_render_object: FxHashSet::default(),
             forgotten_elements: FxHashSet::default(),

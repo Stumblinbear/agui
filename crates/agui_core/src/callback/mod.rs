@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{element::ElementId, unit::AsAny, util::ptr_eq::PtrEqual};
+use crate::{element::ElementId, util::ptr_eq::PtrEqual};
 
 mod queue;
 
@@ -29,7 +29,7 @@ pub enum Callback<A: ?Sized> {
 
 impl<A> Callback<A>
 where
-    A: AsAny,
+    A: Any,
 {
     pub fn call(&self, arg: A) {
         match self {
@@ -69,7 +69,10 @@ impl<A> Clone for Callback<A> {
     }
 }
 
-impl<A: 'static> std::fmt::Debug for Callback<A> {
+impl<A> std::fmt::Debug for Callback<A>
+where
+    A: Any,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Callback::Widget(cb) => f.debug_tuple("Widget").field(cb).finish(),
@@ -88,9 +91,12 @@ pub struct WidgetCallback<A: ?Sized> {
 
 impl<A> WidgetCallback<A>
 where
-    A: AsAny,
+    A: Any,
 {
-    pub fn new<F: 'static>(element_id: ElementId, callback_queue: CallbackQueue) -> Self {
+    pub fn new<F>(element_id: ElementId, callback_queue: CallbackQueue) -> Self
+    where
+        F: Any,
+    {
         Self::new_unchecked(element_id, TypeId::of::<F>(), callback_queue)
     }
 
@@ -163,7 +169,7 @@ pub struct FuncCallback<A: ?Sized> {
 
 impl<A> FuncCallback<A>
 where
-    A: AsAny,
+    A: Any,
 {
     pub fn call(&self, arg: A) {
         (self.func)(arg)
@@ -196,7 +202,10 @@ impl<A: ?Sized> Clone for FuncCallback<A> {
     }
 }
 
-impl<A: 'static> std::fmt::Debug for FuncCallback<A> {
+impl<A> std::fmt::Debug for FuncCallback<A>
+where
+    A: Any,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FuncCallback")
             .field("func", &TypeId::of::<A>())
@@ -206,7 +215,7 @@ impl<A: 'static> std::fmt::Debug for FuncCallback<A> {
 
 impl<A, F> From<F> for Callback<A>
 where
-    A: AsAny,
+    A: Any,
     F: Fn(A) + Send + Sync + 'static,
 {
     fn from(value: F) -> Self {

@@ -1,7 +1,5 @@
 use std::{any::Any, marker::PhantomData};
 
-use agui_core::unit::AsAny;
-
 use crate::stateful::WidgetState;
 
 use super::StatefulCallbackContext;
@@ -35,7 +33,7 @@ where
 impl<S, A, F> StatefulCallbackFunc<S> for StatefulCallbackFn<S, A, F>
 where
     S: WidgetState,
-    A: AsAny,
+    A: Any,
     F: Fn(&mut StatefulCallbackContext<S>, A),
 {
     fn call(&self, ctx: &mut StatefulCallbackContext<S>, arg: Box<dyn Any>) {

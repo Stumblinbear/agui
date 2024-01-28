@@ -1,7 +1,5 @@
 use std::{any::Any, marker::PhantomData};
 
-use agui_core::unit::AsAny;
-
 use super::StatelessCallbackContext;
 
 pub trait StatelessCallbackFunc<W> {
@@ -10,7 +8,7 @@ pub trait StatelessCallbackFunc<W> {
 
 pub struct StatelessCallbackFn<W, A, F>
 where
-    A: 'static,
+    A: Any,
     F: Fn(&mut StatelessCallbackContext, A),
 {
     phantom: PhantomData<(W, A, F)>,
@@ -20,7 +18,7 @@ where
 
 impl<W, A, F> StatelessCallbackFn<W, A, F>
 where
-    A: 'static,
+    A: Any,
     F: Fn(&mut StatelessCallbackContext, A),
 {
     pub fn new(func: F) -> Self {
@@ -34,7 +32,7 @@ where
 
 impl<W, A, F> StatelessCallbackFunc<W> for StatelessCallbackFn<W, A, F>
 where
-    A: AsAny,
+    A: Any,
     F: Fn(&mut StatelessCallbackContext, A),
 {
     fn call(&self, ctx: &mut StatelessCallbackContext, arg: Box<dyn Any>) {

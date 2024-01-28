@@ -1,9 +1,11 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    any::Any,
+    ops::{Deref, DerefMut},
+};
 
 use agui_core::{
     callback::{Callback, CallbackId, WidgetCallback},
     element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
-    unit::AsAny,
     util::tree::Tree,
 };
 use rustc_hash::FxHashMap;
@@ -70,7 +72,7 @@ where
 {
     pub fn callback<A, F>(&mut self, func: F) -> Callback<A>
     where
-        A: AsAny,
+        A: Any,
         F: Fn(&mut StatefulCallbackContext<S>, A) + 'static,
     {
         let callback = WidgetCallback::new::<F>(*self.element_id, self.callback_queue.clone());

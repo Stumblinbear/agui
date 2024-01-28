@@ -1,15 +1,21 @@
-use std::{collections::VecDeque, sync::mpsc};
+use std::{
+    collections::VecDeque,
+    hash::BuildHasherDefault,
+    sync::{mpsc, Arc},
+};
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+use slotmap::SparseSecondaryMap;
 use tracing::field;
 
 use crate::{
     callback::{CallbackQueue, InvokeCallback},
     element::{
-        Element, ElementBuildContext, ElementCallbackContext, ElementComparison, ElementId,
-        ElementMountContext, ElementUnmountContext,
+        deferred::resolver::DeferredResolver, Element, ElementBuildContext, ElementCallbackContext,
+        ElementComparison, ElementId, ElementMountContext, ElementUnmountContext,
     },
     engine::{
+        sync_data::SyncTreeData,
         widgets::{
             bindings::{ElementBinding, ElementSchedulerBinding},
             key_storage::WidgetKeyStorage,
@@ -34,9 +40,12 @@ pub struct WidgetManager<EB = (), SB = ()> {
     scheduler: SB,
 
     tree: Tree<ElementId, Element>,
-    key_storage: WidgetKeyStorage,
+    deferred_resolvers:
+        SparseSecondaryMap<ElementId, Arc<dyn DeferredResolver>, BuildHasherDefault<FxHasher>>,
 
     inheritance: InheritanceManager,
+
+    key_storage: WidgetKeyStorage,
 
     needs_build: Dirty<ElementId>,
 
@@ -90,6 +99,15 @@ impl<EB, SB> WidgetManager<EB, SB> {
         tracing::trace!(?element_id, "element needs build");
 
         self.needs_build.insert(element_id);
+    }
+
+    #[doc(hidden)]
+    pub fn sync_data(&self) -> SyncTreeData {
+        SyncTreeData {
+            element_tree: &self.tree,
+
+            deferred_resolvers: &self.deferred_resolvers,
+        }
     }
 }
 
@@ -223,6 +241,11 @@ where
         tracing::trace!("mounting element");
 
         self.tree.with(element_id, |tree, element| {
+            if let Element::Deferred(element) = &element {
+                self.deferred_resolvers
+                    .insert(element_id, element.create_resolver());
+            }
+
             element.mount(&mut ElementMountContext {
                 element_tree: tree,
                 inheritance: &mut self.inheritance,
@@ -254,6 +277,11 @@ where
             let new_widgets = self
                 .tree
                 .with(element_id, |tree, element| {
+                    if let Element::Deferred(element) = &element {
+                        self.deferred_resolvers
+                            .insert(element_id, element.create_resolver());
+                    }
+
                     element.build(&mut ElementBuildContext {
                         scheduler: &mut self.scheduler,
 
@@ -586,6 +614,8 @@ where
                 });
 
                 self.key_storage.remove(element_id);
+
+                self.deferred_resolvers.remove(element_id);
 
                 self.element_binding.on_element_destroyed(element_id);
 

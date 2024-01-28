@@ -2,6 +2,8 @@ use agui_core::widget::Widget;
 use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
 use agui_macros::StatelessWidget;
 
+// TODO: replace this with an custom element instead of a stateless widget
+
 #[derive(StatelessWidget)]
 pub struct Builder {
     #[allow(clippy::type_complexity)]

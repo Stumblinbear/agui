@@ -1,3 +1,4 @@
+use agui_primitives::layout_builder::LayoutBuilder;
 use agui_vello::{
     binding::VelloViewBinding,
     renderer::{window::VelloWindowRenderer, VelloRenderer},
@@ -37,14 +38,17 @@ fn main() {
                 child: <VelloViewBinding> {
                     view: view,
 
-                    child: <SizedBox>::new(200.0, 100.0) {
-                        child: <ColoredBox> {
-                            color: Color::from_rgb((0.0, 1.0, 0.0)),
+                    child: <LayoutBuilder> {
+                        resolver: |constraints| constraints,
+                        builder: |constraints| {
+                            <ColoredBox> {
+                                color: Color::from_rgb((0.0, 1.0, 0.0)),
 
-                            child: <Text> {
-                                style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                                text: "Hello, world!".into(),
-                            },
+                                child: <Text> {
+                                    style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                                    text: "Hello, world!".into(),
+                                },
+                            }
                         },
                     }
                 }

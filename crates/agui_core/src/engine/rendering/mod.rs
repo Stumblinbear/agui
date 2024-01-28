@@ -1,12 +1,15 @@
 use core::panic;
-use std::{collections::VecDeque, hash::BuildHasherDefault};
+use std::{collections::VecDeque, hash::BuildHasherDefault, sync::Arc};
 
 use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
-    element::{Element, ElementId, RenderObjectCreateContext, RenderObjectUpdateContext},
-    engine::{rendering::bindings::RenderingSchedulerBinding, Dirty},
+    element::{
+        deferred::resolver::DeferredResolver, Element, ElementId, RenderObjectCreateContext,
+        RenderObjectUpdateContext,
+    },
+    engine::{rendering::bindings::RenderingSchedulerBinding, sync_data::SyncTreeData, Dirty},
     render::{
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
         view::RenderView,
@@ -27,6 +30,9 @@ pub struct RenderManager<SB = ()> {
     tree: Tree<RenderObjectId, RenderObject>,
 
     elements: SecondaryMap<ElementId, RenderObjectId>,
+
+    deferred_resolvers:
+        SparseSecondaryMap<RenderObjectId, Arc<dyn DeferredResolver>, BuildHasherDefault<FxHasher>>,
 
     create_render_object: VecDeque<ElementId>,
     update_render_object: FxHashSet<ElementId>,
@@ -303,8 +309,8 @@ impl<SB> RenderManager<SB>
 where
     SB: RenderingSchedulerBinding,
 {
-    #[tracing::instrument(level = "trace", skip(self, element_tree))]
-    pub fn sync_render_objects(&mut self, element_tree: &Tree<ElementId, Element>) {
+    #[tracing::instrument(level = "trace", skip_all)]
+    pub fn sync_render_objects(&mut self, sync_data: SyncTreeData) {
         // No need to update render objects that are about to be created.
         if self.update_render_object.len() <= self.create_render_object.len() {
             self.update_render_object
@@ -321,7 +327,7 @@ where
                 continue;
             }
 
-            self.create_render_object(element_tree, element_id);
+            self.create_render_object(&sync_data, element_id);
         }
 
         for element_id in self
@@ -329,7 +335,8 @@ where
             .drain()
             .filter(|element_id| !self.forgotten_elements.contains(element_id))
         {
-            let element_node = element_tree
+            let element_node = sync_data
+                .element_tree
                 .get_node(element_id)
                 .expect("element missing while yodatubg render objects");
 
@@ -344,7 +351,21 @@ where
                 .get_mut(render_object_id)
                 .expect("render object missing while updating");
 
-            element_node.as_ref().update_render_object(
+            let element = element_node.as_ref();
+
+            if matches!(element, Element::Deferred(_)) {
+                self.deferred_resolvers.insert(
+                    render_object_id,
+                    Arc::clone(
+                        sync_data
+                            .deferred_resolvers
+                            .get(element_id)
+                            .expect("deferred resolver missing while updating render objects"),
+                    ),
+                );
+            }
+
+            element.update_render_object(
                 &mut RenderObjectUpdateContext {
                     scheduler: &mut self.scheduler,
 
@@ -408,21 +429,19 @@ where
                     }
                 }
 
+                self.deferred_resolvers.remove(render_object_id);
+
                 self.cached_constraints.remove(render_object_id);
             }
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, element_tree))]
-    pub fn create_render_object(
-        &mut self,
-        element_tree: &Tree<ElementId, Element>,
-        element_id: ElementId,
-    ) {
-        let (relayout_boundary_id, parent_render_object_id, parent_view_object) = element_tree
+    #[tracing::instrument(level = "trace", skip(self, sync_data))]
+    pub fn create_render_object(&mut self, sync_data: &SyncTreeData, element_id: ElementId) {
+        let (relayout_boundary_id, parent_render_object_id, parent_view_object) = sync_data.element_tree
             .get_parent(element_id)
             .map(|parent_element_id| {
-                let parent_element = element_tree
+                let parent_element = sync_data.element_tree
                     .get(parent_element_id)
                     .expect("parent element missing while creating render object");
 
@@ -465,7 +484,8 @@ where
             );
         }
 
-        let element = element_tree
+        let element = sync_data
+            .element_tree
             .get(element_id)
             .expect("element missing while creating render objects");
 
@@ -491,7 +511,17 @@ where
                     ..Default::default()
                 });
 
-                if let Element::View(element) = &element {
+                if matches!(element, Element::Deferred(_)) {
+                    self.deferred_resolvers.insert(
+                        render_object_id,
+                        Arc::clone(
+                            sync_data
+                                .deferred_resolvers
+                                .get(element_id)
+                                .expect("deferred resolver missing while creating render objects"),
+                        ),
+                    );
+                } else if let Element::View(element) = &element {
                     let mut view = element.create_view();
 
                     // Attach the render object as the root of its own view
