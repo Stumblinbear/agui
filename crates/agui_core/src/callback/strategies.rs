@@ -5,9 +5,8 @@ use crate::callback::CallbackId;
 pub trait CallbackStrategy {
     fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any + Send>);
 }
-
-#[cfg(test)]
-pub mod tests {
+#[cfg(any(test, feature = "mocks"))]
+pub mod mocks {
     use std::sync::{Arc, Mutex};
 
     use super::*;

@@ -22,12 +22,12 @@ pub trait InflateStrategy {
     fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget>;
 }
 
-#[cfg(test)]
-pub mod tests {
+#[cfg(any(test, feature = "mocks"))]
+pub mod mocks {
     use std::sync::Arc;
 
     use crate::{
-        callback::strategies::{tests::MockCallbackStratgy, CallbackStrategy},
+        callback::strategies::{mocks::MockCallbackStratgy, CallbackStrategy},
         element::ElementBuildContext,
         engine::elements::scheduler::{CreateElementTask, ElementSchedulerStrategy},
         task::{error::TaskError, TaskHandle},
