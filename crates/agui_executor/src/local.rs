@@ -1,7 +1,8 @@
 use std::{
+    any::Any,
     collections::VecDeque,
     future::{Future, IntoFuture},
-    sync::mpsc,
+    sync::{mpsc, Arc},
     time::{Duration, Instant},
 };
 
@@ -14,7 +15,7 @@ use futures::{
 };
 
 use agui_core::{
-    callback::{CallbackQueue, InvokeCallback},
+    callback::{strategies::CallbackStrategy, CallbackId},
     element::{
         Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementTaskNotifyStrategy,
         RenderingTaskNotifyStrategy,
@@ -42,6 +43,7 @@ use crate::EngineExecutor;
 
 pub struct LocalEngineExecutor {
     scheduler: EngineSchedulerStrategy,
+    callbacks: Arc<dyn CallbackStrategy>,
 
     element_tree: ElementTree,
 
@@ -49,7 +51,6 @@ pub struct LocalEngineExecutor {
     rebuild_queue: VecDeque<ElementId>,
 
     callback_rx: mpsc::Receiver<InvokeCallback>,
-    callback_queue: CallbackQueue,
 
     spawned_elements: VecDeque<ElementId>,
     updated_elements: VecDeque<ElementId>,
@@ -97,6 +98,10 @@ impl Default for LocalEngineExecutor {
 
         Self {
             scheduler: scheduler.clone(),
+            callbacks: Arc::new(EngineCallbackStrategy {
+                callback_tx,
+                element_update_tx,
+            }),
 
             element_tree: ElementTree::default(),
 
@@ -105,7 +110,6 @@ impl Default for LocalEngineExecutor {
             rebuild_queue: VecDeque::default(),
 
             callback_rx,
-            callback_queue: CallbackQueue::new(callback_tx, element_update_tx),
 
             spawned_elements: VecDeque::default(),
             updated_elements: VecDeque::default(),
@@ -131,8 +135,7 @@ impl LocalEngineExecutor {
     pub fn with_root(root: impl IntoWidget) -> Result<Self, InflateError> {
         struct InflateRootStrategy<'ctx, Sched> {
             scheduler: &'ctx mut Sched,
-
-            callback_queue: &'ctx CallbackQueue,
+            callbacks: &'ctx Arc<dyn CallbackStrategy>,
 
             spawned_elements: &'ctx mut VecDeque<ElementId>,
         }
@@ -156,11 +159,10 @@ impl LocalEngineExecutor {
             fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
                 let children = element.build(&mut ElementBuildContext {
                     scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+                    callbacks: self.callbacks,
 
                     element_tree: ctx.tree,
                     inheritance: ctx.inheritance,
-
-                    callback_queue: self.callback_queue,
 
                     element_id: ctx.element_id,
                 });
@@ -174,8 +176,7 @@ impl LocalEngineExecutor {
         executor.element_tree.spawn_and_inflate(
             &mut InflateRootStrategy {
                 scheduler: &mut executor.scheduler,
-
-                callback_queue: &executor.callback_queue,
+                callbacks: &executor.callbacks,
 
                 spawned_elements: &mut executor.spawned_elements,
             },
@@ -246,8 +247,7 @@ impl LocalEngineExecutor {
     fn flush_rebuilds(&mut self) {
         struct RebuildStrategy<'ctx, Sched> {
             scheduler: &'ctx mut Sched,
-
-            callback_queue: &'ctx CallbackQueue,
+            callbacks: &'ctx Arc<dyn CallbackStrategy>,
 
             spawned_elements: &'ctx mut VecDeque<ElementId>,
             updated_elements: &'ctx mut VecDeque<ElementId>,
@@ -278,11 +278,10 @@ impl LocalEngineExecutor {
 
                 element.build(&mut ElementBuildContext {
                     scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+                    callbacks: self.callbacks,
 
                     element_tree: ctx.tree,
                     inheritance: ctx.inheritance,
-
-                    callback_queue: self.callback_queue,
 
                     element_id: ctx.element_id,
                 })
@@ -310,8 +309,7 @@ impl LocalEngineExecutor {
             if let Err(err) = self.element_tree.build_and_realize(
                 &mut RebuildStrategy {
                     scheduler: &mut self.scheduler,
-
-                    callback_queue: &self.callback_queue,
+                    callbacks: &self.callbacks,
 
                     spawned_elements: &mut self.spawned_elements,
                     updated_elements: &mut self.updated_elements,
@@ -554,6 +552,21 @@ impl EngineExecutor for LocalEngineExecutor {
     }
 }
 
+struct EngineCallbackStrategy {
+    callback_tx: mpsc::Sender<InvokeCallback>,
+    element_update_tx: notify::Flag,
+}
+
+impl CallbackStrategy for EngineCallbackStrategy {
+    fn call_unchecked(&self, callback_id: CallbackId, arg: Box<dyn Any + Send>) {
+        if let Err(err) = self.callback_tx.send(InvokeCallback { callback_id, arg }) {
+            tracing::error!(?err, "failed to send callback");
+        } else {
+            self.element_update_tx.notify();
+        }
+    }
+}
+
 #[derive(Clone)]
 struct EngineSchedulerStrategy {
     needs_build_tx: mpsc::Sender<ElementId>,
@@ -634,6 +647,26 @@ impl RenderingSchedulerStrategy for EngineSchedulerStrategy {
             Ok(handle) => Ok(TaskHandle::from(handle)),
             Err(_) => Err(TaskError::Shutdown),
         }
+    }
+}
+
+#[non_exhaustive]
+pub struct InvokeCallback {
+    pub callback_id: CallbackId,
+    pub arg: Box<dyn Any>,
+}
+
+pub struct CallError(pub Box<dyn Any>);
+
+impl std::fmt::Debug for CallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CallError").field(&"...").finish()
+    }
+}
+
+impl std::fmt::Display for CallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("callback channel was closed")
     }
 }
 

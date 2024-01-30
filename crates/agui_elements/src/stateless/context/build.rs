@@ -1,10 +1,11 @@
 use std::{
     any::Any,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 use agui_core::{
-    callback::{Callback, CallbackId, WidgetCallback},
+    callback::{Callback, CallbackId},
     element::{ContextElement, ContextElements, Element, ElementBuildContext, ElementId},
     util::tree::Tree,
 };
@@ -56,11 +57,11 @@ where
         A: Any,
         F: Fn(&mut StatelessCallbackContext, A) + 'static,
     {
-        let callback = WidgetCallback::new::<F>(*self.element_id, self.callback_queue.clone());
+        let callback = Callback::new::<F>(Arc::clone(self.inner.callbacks), *self.element_id);
 
         self.callbacks
             .insert(callback.id(), Box::new(StatelessCallbackFn::new(func)));
 
-        Callback::Widget(callback)
+        callback
     }
 }

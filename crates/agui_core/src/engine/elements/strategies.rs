@@ -24,12 +24,10 @@ pub trait InflateStrategy {
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::mpsc;
-
-    use agui_sync::notify;
+    use std::sync::Arc;
 
     use crate::{
-        callback::CallbackQueue,
+        callback::strategies::{tests::MockCallbackStratgy, CallbackStrategy},
         element::ElementBuildContext,
         engine::elements::scheduler::{CreateElementTask, ElementSchedulerStrategy},
         task::{error::TaskError, TaskHandle},
@@ -50,7 +48,7 @@ pub mod tests {
         pub updated: Vec<ElementId>,
         pub forgotten: Vec<ElementId>,
 
-        pub callback_queue: CallbackQueue,
+        pub callbacks: Arc<dyn CallbackStrategy>,
     }
 
     impl Default for MockInflateStrategy {
@@ -60,7 +58,7 @@ pub mod tests {
                 updated: Vec::new(),
                 forgotten: Vec::new(),
 
-                callback_queue: CallbackQueue::new(mpsc::channel().0, notify::Flag::new()),
+                callbacks: Arc::new(MockCallbackStratgy::default()),
             }
         }
     }
@@ -81,10 +79,10 @@ pub mod tests {
         fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
             element.build(&mut ElementBuildContext {
                 scheduler: &mut ctx.scheduler.with_strategy(&mut MockSchedulerStratgy),
+                callbacks: &self.callbacks,
 
                 element_tree: ctx.tree,
                 inheritance: ctx.inheritance,
-                callback_queue: &self.callback_queue,
 
                 element_id: ctx.element_id,
             })

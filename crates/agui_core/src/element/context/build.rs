@@ -1,7 +1,7 @@
-use std::{any::TypeId, future::Future};
+use std::{any::TypeId, future::Future, sync::Arc};
 
 use crate::{
-    callback::CallbackQueue,
+    callback::strategies::CallbackStrategy,
     element::{
         inherited::ElementInherited, Element, ElementBuilder, ElementId, ElementTaskContext,
     },
@@ -16,10 +16,10 @@ use super::{ContextElement, ContextElements};
 
 pub struct ElementBuildContext<'ctx> {
     pub scheduler: &'ctx mut ElementScheduler<'ctx>,
+    pub callbacks: &'ctx Arc<dyn CallbackStrategy>,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub inheritance: &'ctx mut InheritanceManager,
-    pub callback_queue: &'ctx CallbackQueue,
 
     pub element_id: &'ctx ElementId,
 }
