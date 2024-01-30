@@ -7,7 +7,7 @@ use winit::window::WindowBuilder;
 use crate::{
     app::WinitCreateWindowError,
     controller::{WinitController, WinitEventLoopClosed},
-    WinitWindowHandle,
+    handle::WindowHandle,
 };
 
 #[derive(InheritedWidget)]
@@ -32,7 +32,7 @@ impl WinitWindowManager {
         &self,
         window_fn: impl FnOnce() -> WindowBuilder + Send + 'static,
         renderer: impl BindRenderer<winit::window::Window> + Send + 'static,
-        callback: Callback<Result<WinitWindowHandle, WinitCreateWindowError>>,
+        callback: Callback<Result<WindowHandle, WinitCreateWindowError>>,
     ) -> Result<(), WinitEventLoopClosed> {
         self.controller
             .create_window(window_fn, renderer, move |result| callback.call(result))

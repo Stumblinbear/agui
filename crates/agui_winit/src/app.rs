@@ -1,4 +1,4 @@
-use std::{error::Error, future::Future};
+use std::{error::Error, future::Future, sync::Arc};
 
 use agui_renderer::{FrameNotifier, Renderer};
 use agui_sync::broadcast;
@@ -11,7 +11,7 @@ use winit::{
     window::{WindowBuilder, WindowId},
 };
 
-use crate::{controller::WinitController, WinitWindowEvent, WinitWindowHandle};
+use crate::{controller::WinitController, handle::WindowHandle, WinitWindowEvent};
 
 type CreateWinitWindowFn = dyn FnOnce(
         &winit::window::Window,
@@ -33,7 +33,7 @@ pub enum WinitBindingAction {
     CreateWindow(
         Box<dyn FnOnce() -> WindowBuilder + Send>,
         Box<CreateWinitWindowFn>,
-        Box<dyn FnOnce(Result<WinitWindowHandle, WinitCreateWindowError>) + Send>,
+        Box<dyn FnOnce(Result<WindowHandle, WinitCreateWindowError>) + Send>,
     ),
 
     Render(WindowId),
@@ -137,15 +137,16 @@ impl WinitApp {
 
                         let (events_tx, _) = broadcast::unbounded();
 
-                        self.window_events.insert(window.id(), events_tx.clone());
+                        let window = WindowHandle::new(Arc::new(window), events_tx.clone());
 
-                        let window = WinitWindowHandle::new(window, events_tx.clone());
+                        let window_id = window.id();
+
+                        self.window_events.insert(window_id, events_tx);
 
                         let renderer_fut = Box::into_pin((renderer_fn)(
                             &window,
                             FrameNotifier::new({
                                 let event_loop_proxy = event_loop_proxy.clone();
-                                let window_id = window.id();
 
                                 move || {
                                     let _ = event_loop_proxy
@@ -162,7 +163,7 @@ impl WinitApp {
                             }
                         };
 
-                        self.window_renderer.insert(window.id(), renderer);
+                        self.window_renderer.insert(window_id, renderer);
 
                         callback(Ok(window));
                     }

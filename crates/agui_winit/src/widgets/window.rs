@@ -18,8 +18,8 @@ use winit::{
 };
 
 use crate::{
-    app::WinitCreateWindowError, handle::WinitWindowHandle,
-    widgets::window_layout::WinitWindowLayout, CurrentWindow, WinitWindowManager,
+    app::WinitCreateWindowError, handle::WindowHandle, widgets::window_layout::WinitWindowLayout,
+    CurrentWindow, WinitWindowManager,
 };
 
 #[derive(StatefulWidget)]
@@ -296,7 +296,7 @@ impl From<WinitWindowAttributes> for WindowBuilder {
 pub struct WinitWindowState<Renderer> {
     phantom: PhantomData<Renderer>,
 
-    window: Option<WinitWindowHandle>,
+    window: Option<WindowHandle>,
     close_event_task: Option<TaskHandle<()>>,
     resize_event_task: Option<TaskHandle<()>>,
 
@@ -340,7 +340,7 @@ where
         });
 
         let on_window_created = ctx.callback(
-            move |ctx, result: Result<WinitWindowHandle, WinitCreateWindowError>| {
+            move |ctx, result: Result<WindowHandle, WinitCreateWindowError>| {
                 let window = match result {
                     Ok(window) => window,
                     Err(err) => {

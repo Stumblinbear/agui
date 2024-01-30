@@ -4,17 +4,17 @@ use agui_core::widget::Widget;
 use agui_elements::inherited::InheritedWidget;
 use agui_macros::InheritedWidget;
 
-use crate::WinitWindowHandle;
+use crate::handle::WindowHandle;
 
 #[derive(InheritedWidget)]
 pub struct CurrentWindow {
-    handle: WinitWindowHandle,
+    handle: WindowHandle,
 
     child: Widget,
 }
 
 impl Deref for CurrentWindow {
-    type Target = WinitWindowHandle;
+    type Target = WindowHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.handle

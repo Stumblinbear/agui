@@ -5,7 +5,7 @@ use winit::{event_loop::EventLoopProxy, window::WindowBuilder};
 
 use crate::{
     app::{WinitBindingAction, WinitCreateWindowError},
-    WinitWindowHandle,
+    handle::WindowHandle,
 };
 
 #[derive(Clone)]
@@ -22,7 +22,7 @@ impl WinitController {
         &self,
         window_fn: impl FnOnce() -> WindowBuilder + Send + 'static,
         renderer: impl BindRenderer<winit::window::Window> + Send + 'static,
-        callback: impl FnOnce(Result<WinitWindowHandle, WinitCreateWindowError>) + Send + 'static,
+        callback: impl FnOnce(Result<WindowHandle, WinitCreateWindowError>) + Send + 'static,
     ) -> Result<(), WinitEventLoopClosed> {
         tracing::debug!("queueing window for creation");
 
