@@ -11,10 +11,7 @@ use crate::{
     },
     engine::elements::{
         context::ElementTreeContext,
-        errors::{
-            InflateError, RemoveElementError, SpawnElementError, UpdateElementChildrenError,
-            UpdateElementError,
-        },
+        errors::{InflateError, RemoveElementError, SpawnElementError, UpdateElementChildrenError},
         keyed::KeyedElements,
         scheduler::ElementScheduler,
         strategies::{InflateStrategy, UpdateChildrenStrategy},
@@ -142,18 +139,18 @@ impl ElementTree {
     ) -> Result<(), InflateError> {
         struct BuildAndRealizeStrategy<'inflate> {
             inner: &'inflate mut dyn InflateStrategy,
-            inflate_queue: &'inflate mut VecDeque<ElementId>,
+            build_queue: &'inflate mut VecDeque<ElementId>,
         }
 
         impl UpdateChildrenStrategy for BuildAndRealizeStrategy<'_> {
             fn on_spawned(&mut self, parent_id: Option<ElementId>, id: ElementId) {
                 self.inner.on_spawned(parent_id, id);
-                self.inflate_queue.push_back(id);
+                self.build_queue.push_back(id);
             }
 
             fn on_updated(&mut self, id: ElementId) {
                 self.inner.on_updated(id);
-                self.inflate_queue.push_back(id);
+                self.build_queue.push_back(id);
             }
 
             fn on_forgotten(&mut self, id: ElementId) {
@@ -161,14 +158,26 @@ impl ElementTree {
             }
         }
 
-        let mut inflate_queue = VecDeque::with_capacity(8);
+        let mut build_queue = VecDeque::with_capacity(8);
 
-        inflate_queue.push_back(element_id);
+        build_queue.push_back(element_id);
 
-        while let Some(element_id) = inflate_queue.pop_back() {
+        while let Some(element_id) = build_queue.pop_back() {
             let children = self
                 .tree
-                .with(element_id, |tree, element| {
+                .with(element_id, |tree, mut element| {
+                    if let Element::Inherited(element) = &mut element {
+                        if element.needs_notify() {
+                            for element_id in self
+                                .inheritance
+                                .iter_listeners(element_id)
+                                .expect("failed to get the inherited element's scope during build")
+                            {
+                                build_queue.push_back(element_id);
+                            }
+                        }
+                    }
+
                     strategy.build(
                         ElementTreeContext {
                             tree,
@@ -187,7 +196,7 @@ impl ElementTree {
             if let Err(err) = self.update_children(
                 &mut BuildAndRealizeStrategy {
                     inner: strategy,
-                    inflate_queue: &mut inflate_queue,
+                    build_queue: &mut build_queue,
                 },
                 element_id,
                 children,
@@ -257,42 +266,6 @@ impl ElementTree {
         });
 
         Ok(element_id)
-    }
-
-    /// Attempt to update the element using the given widget. If the widget is a valid
-    /// replacement for the element, it will be updated in-place.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn try_update(
-        &mut self,
-        element_id: ElementId,
-        new_widget: &Widget,
-    ) -> Result<ElementComparison, UpdateElementError> {
-        if self.broken {
-            return Err(UpdateElementError::Broken);
-        }
-
-        let element = self
-            .tree
-            .get_mut(element_id)
-            .ok_or(UpdateElementError::NotFound)?;
-
-        let comparison = element.update(new_widget);
-
-        match comparison {
-            ElementComparison::Identical => {
-                tracing::trace!("element does not need to be updated, as it is identical");
-            }
-
-            ElementComparison::Changed => {
-                tracing::trace!("element is of the same type, but it has changed");
-            }
-
-            ElementComparison::Invalid => {
-                tracing::trace!("element cannot be updated, it must be replaced");
-            }
-        }
-
-        Ok(comparison)
     }
 
     /// Updates the children of the target element in the tree, spawning and mounting
@@ -675,3 +648,315 @@ impl std::fmt::Debug for ElementTree {
             .finish_non_exhaustive()
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use std::{cell::RefCell, rc::Rc};
+
+//     use crate::{
+//         element::mock::render::{MockRenderObject, MockRenderWidget},
+//         engine::{elements::strategies::tests::MockInflateStrategy, widgets::WidgetManager},
+//     };
+
+//     // #[derive(Default, Clone)]
+//     // struct TestElementBinding {
+//     //     spawned: Rc<RefCell<FxHashSet<ElementId>>>,
+//     //     rebuilds: Rc<RefCell<Vec<ElementId>>>,
+//     //     destroyed: Rc<RefCell<FxHashSet<ElementId>>>,
+//     // }
+
+//     // impl TestElementBinding {
+//     //     fn clear(&self) {
+//     //         self.spawned.borrow_mut().clear();
+//     //         self.rebuilds.borrow_mut().clear();
+//     //         self.destroyed.borrow_mut().clear();
+//     //     }
+//     // }
+
+//     // impl ElementBinding for TestElementBinding {
+//     //     fn on_element_spawned(&mut self, _: Option<ElementId>, id: ElementId) {
+//     //         self.spawned.borrow_mut().insert(id);
+//     //     }
+
+//     //     fn on_element_built(&mut self, id: ElementId) {
+//     //         self.rebuilds.borrow_mut().push(id);
+//     //     }
+
+//     //     fn on_element_forgotten(&mut self, id: ElementId) {
+//     //         self.destroyed.borrow_mut().insert(id);
+//     //     }
+//     // }
+
+//     #[test]
+//     pub fn adding_a_root_widget() {
+//         let strategy = MockInflateStrategy::default();
+
+//         let manager = WidgetManager::builder()
+//             .with_element_binding(strategy)
+//             .build()
+//             .with_root(MockRenderWidget::dummy());
+
+//         let root_id = manager.root().expect("no root element");
+
+//         assert_eq!(
+//             hook.rebuilds.borrow().first().copied(),
+//             Some(root_id),
+//             "should have emitted a rebuild event for the root"
+//         );
+
+//         // let render_object_id = manager
+//         //     .tree()
+//         //     .get(root_id)
+//         //     .expect("no element found for the root widget")
+//         //     .render_object_id()
+//         //     .expect("no render object attached to the root element");
+
+//         // let root_render_object_id = manager.tree().root().expect("no root render object");
+
+//         // assert_eq!(render_object_id, root_render_object_id);
+
+//         // manager
+//         //     .render_objects()
+//         //     .get(render_object_id)
+//         //     .expect("should have created a render object for the root element");
+//     }
+
+//     #[test]
+//     pub fn rebuilding_widgets() {
+//         let hook = TestElementBinding::default();
+
+//         let mut manager = WidgetManager::builder()
+//             .with_element_binding(hook.clone())
+//             .build()
+//             .with_root(MockRenderWidget::dummy());
+
+//         let root_id = manager.root().expect("no root element");
+
+//         manager.mark_needs_build(root_id);
+
+//         manager.update();
+
+//         assert!(
+//             hook.rebuilds.borrow().contains(&root_id),
+//             "should have emitted a rebuild event"
+//         );
+//     }
+
+//     #[test]
+//     pub fn spawns_children() {
+//         let root_widget = MockRenderWidget::default();
+//         {
+//             root_widget
+//                 .mock()
+//                 .expect_children()
+//                 .returning(|| vec![MockRenderWidget::dummy(), MockRenderWidget::dummy()]);
+
+//             root_widget
+//                 .mock()
+//                 .expect_create_render_object()
+//                 .returning(|_| MockRenderObject::dummy());
+//         }
+
+//         let hook = TestElementBinding::default();
+
+//         let manager = WidgetManager::builder()
+//             .with_element_binding(hook.clone())
+//             .build()
+//             .with_root(MockRenderWidget::dummy());
+
+//         let root_id = manager.root().expect("no root element");
+
+//         assert_eq!(
+//             manager.tree().num_elements(),
+//             3,
+//             "children should have been added"
+//         );
+
+//         assert_eq!(
+//             manager.tree().num_elements(),
+//             3,
+//             "child render objects should have been added"
+//         );
+
+//         let children = manager.tree().as_ref().get_children(root_id).unwrap();
+
+//         assert_eq!(children.len(), 2, "root should have two children");
+
+//         assert!(
+//             hook.spawned.borrow().contains(&children[0]),
+//             "should have emitted a spawn event for the first child"
+//         );
+
+//         assert!(
+//             hook.spawned.borrow().contains(&children[1]),
+//             "should have emitted a spawn event for the second child"
+//         );
+//     }
+
+//     #[test]
+//     pub fn removes_children() {
+//         let children = Rc::new(RefCell::new({
+//             let mut children = Vec::new();
+
+//             for _ in 0..1000 {
+//                 children.push(MockRenderWidget::dummy());
+//             }
+
+//             children
+//         }));
+
+//         let root_widget = MockRenderWidget::default();
+//         {
+//             root_widget.mock().expect_children().returning_st({
+//                 let children = Rc::clone(&children);
+
+//                 move || children.borrow().clone()
+//             });
+
+//             root_widget
+//                 .mock()
+//                 .expect_create_render_object()
+//                 .returning(|_| MockRenderObject::dummy());
+//         }
+
+//         let hook = TestElementBinding::default();
+
+//         let mut manager = WidgetManager::builder()
+//             .with_element_binding(hook.clone())
+//             .build()
+//             .with_root(root_widget);
+
+//         assert_eq!(
+//             manager.tree().num_elements(),
+//             1001,
+//             "children should have been added"
+//         );
+
+//         // assert_eq!(
+//         //     manager.render_objects().len(),
+//         //     1001,
+//         //     "child render objects should have been added"
+//         // );
+
+//         children.borrow_mut().clear();
+
+//         let root_id = manager.root().expect("no root element");
+
+//         manager.mark_needs_build(root_id);
+
+//         manager.update();
+
+//         assert_eq!(
+//             manager.tree().num_elements(),
+//             1,
+//             "nested children should have been removed"
+//         );
+
+//         assert_eq!(
+//             hook.destroyed.borrow().len(),
+//             1000,
+//             "should have emitted a destroyed event for all children"
+//         );
+
+//         // assert_eq!(
+//         //     manager.render_objects().len(),
+//         //     1,
+//         //     "root root render object should remain"
+//         // );
+//     }
+
+//     #[test]
+//     pub fn rebuilds_children() {
+//         let child = Rc::new(RefCell::new(MockRenderWidget::dummy()));
+
+//         let root_widget = MockRenderWidget::default();
+//         {
+//             root_widget.mock().expect_children().returning_st({
+//                 let child = Rc::clone(&child);
+
+//                 move || vec![child.borrow().clone()]
+//             });
+
+//             root_widget
+//                 .mock()
+//                 .expect_create_render_object()
+//                 .returning(|_| MockRenderObject::dummy());
+//         }
+
+//         let hook = TestElementBinding::default();
+
+//         let mut manager = WidgetManager::builder()
+//             .with_element_binding(hook.clone())
+//             .build()
+//             .with_root(root_widget);
+
+//         let root_id = manager.root().expect("no root element");
+
+//         manager.mark_needs_build(root_id);
+
+//         *child.borrow_mut() = MockRenderWidget::dummy();
+
+//         hook.clear();
+
+//         manager.update();
+
+//         assert!(
+//             hook.rebuilds.borrow().contains(&root_id),
+//             "should have emitted a rebuild event for the root widget"
+//         );
+
+//         assert_eq!(
+//             hook.rebuilds.borrow().len(),
+//             2,
+//             "should have generated rebuild event for the child"
+//         );
+//     }
+
+//     #[test]
+//     pub fn reuses_unchanged_widgets() {
+//         let root_widget = MockRenderWidget::default();
+//         {
+//             root_widget
+//                 .mock()
+//                 .expect_children()
+//                 .returning_st(|| vec![MockRenderWidget::dummy()]);
+
+//             root_widget
+//                 .mock()
+//                 .expect_create_render_object()
+//                 .returning(|_| MockRenderObject::dummy());
+//         }
+
+//         let mut manager = WidgetManager::default_with_root(root_widget);
+
+//         let root_id = manager.root().expect("no root element");
+
+//         let element_id = manager
+//             .tree()
+//             .as_ref()
+//             .get_children(root_id)
+//             .cloned()
+//             .expect("no children");
+
+//         manager.mark_needs_build(root_id);
+
+//         manager.update();
+
+//         assert_eq!(
+//             Some(root_id),
+//             manager.root(),
+//             "root widget should have remained unchanged"
+//         );
+
+//         assert_eq!(
+//             element_id,
+//             manager
+//                 .tree()
+//                 .as_ref()
+//                 .get_children(root_id)
+//                 .cloned()
+//                 .expect("no children"),
+//             "root widget should not have regenerated its child"
+//         );
+//     }
+// }
