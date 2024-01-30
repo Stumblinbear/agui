@@ -1,55 +1,71 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
-    element::{Element, ElementBuilder, ElementId},
+    element::{widget::ElementWidget, Element, ElementBuilder, ElementId},
+    engine::elements::tree::ElementTree,
+    util::tree::TreeNode,
     widget::AnyWidget,
 };
 
-#[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
-pub struct QueryByWidget<I, W> {
-    pub(crate) iter: I,
+pub struct QueryByWidget<'query, W> {
+    tree: &'query ElementTree,
     phantom: PhantomData<W>,
 }
 
-impl<I, W> QueryByWidget<I, W> {
-    pub(super) fn new(iter: I) -> Self {
+impl<'query, W> QueryByWidget<'query, W> {
+    pub fn new(tree: &'query ElementTree) -> Self {
         Self {
-            iter,
+            tree,
             phantom: PhantomData,
         }
     }
 }
 
-impl<'query, I, W> Iterator for QueryByWidget<I, W>
+impl<'query, W> QueryByWidget<'query, W>
 where
-    W: AnyWidget + ElementBuilder + 'query,
-    I: Iterator<Item = (ElementId, &'query Element)>,
+    W: AnyWidget + ElementBuilder,
+    <W as ElementBuilder>::Element: ElementWidget,
 {
-    type Item = (ElementId, &'query Element);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find(|(_, element)| {
+    pub fn iter_nodes(&self) -> impl Iterator<Item = (ElementId, &TreeNode<ElementId, Element>)> {
+        self.tree.iter_nodes().filter(|(_, element)| {
             element
+                .value()
+                .expect("cannot query an element's widget type while it is in use")
                 .downcast::<<W as ElementBuilder>::Element>()
+                .and_then(|element| Rc::clone(element.widget()).as_any().downcast::<W>().ok())
                 .is_some()
         })
     }
 
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let (_, upper) = self.iter.size_hint();
-        (0, upper) // can't know a lower bound
+    pub fn iter(&self) -> impl Iterator<Item = (ElementId, &Element)> {
+        self.tree.iter().filter(|(_, element)| {
+            element
+                .downcast::<<W as ElementBuilder>::Element>()
+                .and_then(|element| Rc::clone(element.widget()).as_any().downcast::<W>().ok())
+                .is_some()
+        })
+    }
+
+    pub fn iter_downcast(&self) -> impl Iterator<Item = (ElementId, Rc<W>)> + '_ {
+        self.tree.iter().filter_map(|(element_id, element)| {
+            element
+                .downcast::<<W as ElementBuilder>::Element>()
+                .and_then(|element| Rc::clone(element.widget()).as_any().downcast::<W>().ok())
+                .map(|widget| (element_id, widget))
+        })
+    }
+
+    pub fn count(&self) -> usize {
+        self.iter().count()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        element::mock::{build::MockBuildWidget, render::MockRenderWidget, DummyWidget},
-        engine::widgets::WidgetManager,
-        query::WidgetQueryExt,
+        element::mock::{build::MockBuildWidget, render::MockRenderWidget},
+        engine::elements::{strategies::tests::MockInflateStrategy, tree::ElementTree},
         widget::IntoWidget,
     };
 
@@ -57,53 +73,39 @@ mod tests {
     pub fn finds_widget_by_type() {
         let root_widget = MockRenderWidget::default();
         {
-            root_widget
-                .mock
-                .borrow_mut()
-                .expect_children()
-                .returning(|| {
-                    let build_widget = MockBuildWidget::default();
-                    {
-                        build_widget
-                            .mock
-                            .borrow_mut()
-                            .expect_build()
-                            .returning(|_| {
-                                let build_widget = MockBuildWidget::default();
-                                {
-                                    build_widget
-                                        .mock
-                                        .borrow_mut()
-                                        .expect_build()
-                                        .returning(|_| DummyWidget.into_widget());
-                                }
-                                build_widget.into_widget()
-                            });
-                    }
-                    vec![build_widget.into_widget()]
-                });
+            root_widget.mock().expect_children().returning(|| {
+                let build_widget = MockBuildWidget::default();
+                {
+                    build_widget
+                        .mock
+                        .borrow_mut()
+                        .expect_build()
+                        .returning(|_| MockRenderWidget::dummy());
+                }
+                vec![build_widget.into_widget()]
+            });
         }
 
-        let mut manager = WidgetManager::with_root(root_widget);
+        let mut element_tree = ElementTree::default();
 
-        manager.update();
+        element_tree
+            .spawn_and_inflate(
+                &mut MockInflateStrategy::default(),
+                None,
+                root_widget.into_widget(),
+            )
+            .expect("failed to spawn and inflate");
 
         assert_eq!(
-            manager.query().by_widget::<MockRenderWidget>().count(),
-            1,
-            "should have found 1 widget of type MockRenderWidget"
-        );
-
-        assert_eq!(
-            manager.query().by_widget::<MockBuildWidget>().count(),
+            element_tree.query().by_widget::<MockRenderWidget>().count(),
             2,
-            "should have found 2 widgets of type MockBuildWidget"
+            "should have found 2 widgets of type MockRenderWidget"
         );
 
         assert_eq!(
-            manager.query().by_widget::<DummyWidget>().count(),
+            element_tree.query().by_widget::<MockBuildWidget>().count(),
             1,
-            "should have found 1 widget of type DummyWidget"
+            "should have found 1 widget of type MockBuildWidget"
         );
     }
 }

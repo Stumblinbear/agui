@@ -1,11 +1,11 @@
 mod local;
-#[cfg(feature = "multi-threaded")]
-mod threaded;
+// #[cfg(feature = "multi-threaded")]
+// mod threaded;
 
 use futures::prelude::Future;
 pub use local::LocalEngineExecutor;
-#[cfg(feature = "multi-threaded")]
-pub use threaded::ThreadedEngineExecutor;
+// #[cfg(feature = "multi-threaded")]
+// pub use threaded::ThreadedEngineExecutor;
 
 pub trait EngineExecutor {
     /// Updates the engine until the tree has settled.

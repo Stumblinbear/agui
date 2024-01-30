@@ -1,6 +1,10 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+    sync::Arc,
+};
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
 use crate::{
     element::{
@@ -9,6 +13,7 @@ use crate::{
         RenderObjectCreateContext, RenderObjectUpdateContext,
     },
     render::object::{MockRenderObjectImpl, RenderObject},
+    unit::HitTest,
     widget::{IntoWidget, Widget},
 };
 
@@ -39,7 +44,36 @@ pub trait RenderElement {
 
 #[derive(Clone, Default)]
 pub struct MockRenderWidget {
-    pub mock: Rc<RefCell<MockRenderElement>>,
+    mock: Rc<RefCell<MockRenderElement>>,
+}
+
+impl MockRenderWidget {
+    pub fn dummy() -> Widget {
+        let widget = MockRenderWidget::default();
+        {
+            let mut mock = widget.mock();
+
+            mock.expect_children().returning(Vec::default);
+
+            mock.expect_update().returning(|new_widget| {
+                if new_widget.downcast::<MockRenderWidget>().is_some() {
+                    ElementComparison::Changed
+                } else {
+                    ElementComparison::Invalid
+                }
+            });
+
+            mock.expect_create_render_object()
+                .returning(|_| MockRenderObject::dummy());
+
+            mock.expect_update_render_object().returning(|_, _| {});
+        }
+        widget.into_widget()
+    }
+
+    pub fn mock(&self) -> RefMut<MockRenderElement> {
+        self.mock.borrow_mut()
+    }
 }
 
 impl IntoWidget for MockRenderWidget {
@@ -53,6 +87,47 @@ impl ElementBuilder for MockRenderWidget {
 
     fn create_element(self: Rc<Self>) -> Element {
         Element::new_render(MockedElementRender::new(self))
+    }
+}
+
+#[derive(Default)]
+pub struct MockRenderObject {
+    mock: Arc<Mutex<MockRenderObjectImpl>>,
+}
+
+impl MockRenderObject {
+    pub fn dummy() -> RenderObject {
+        let mock_render_object = MockRenderObject::default();
+        {
+            let mut render_object_mock = mock_render_object.mock();
+
+            render_object_mock
+                .expect_intrinsic_size()
+                .returning(|_, _, _| 0.0);
+
+            render_object_mock
+                .expect_layout()
+                .returning(|_, contraints| contraints.smallest());
+
+            render_object_mock
+                .expect_hit_test()
+                .returning(|_, _| HitTest::Pass);
+
+            render_object_mock.expect_paint().returning(|_| {});
+        }
+        mock_render_object.create()
+    }
+
+    pub fn mock(&self) -> MutexGuard<'_, MockRenderObjectImpl> {
+        self.mock.lock()
+    }
+
+    pub fn create(self) -> RenderObject {
+        RenderObject::new(
+            Arc::into_inner(self.mock)
+                .expect("cannot convert mock to render object as a reference is still held")
+                .into_inner(),
+        )
     }
 }
 
@@ -105,20 +180,5 @@ impl ElementRender for MockedElementRender {
             .mock
             .borrow_mut()
             .update_render_object(ctx, render_object)
-    }
-}
-
-#[derive(Default)]
-pub struct MockRenderObject {
-    pub mock: Arc<Mutex<MockRenderObjectImpl>>,
-}
-
-impl From<MockRenderObject> for RenderObject {
-    fn from(value: MockRenderObject) -> Self {
-        RenderObject::new(
-            Arc::into_inner(value.mock)
-                .expect("cannot convert mock to render object as a reference is still held")
-                .into_inner(),
-        )
     }
 }

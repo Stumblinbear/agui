@@ -13,20 +13,17 @@ fn widget_manager_ops(c: &mut Criterion) {
     group.throughput(criterion::Throughput::Elements(1));
 
     group.sample_size(10000).bench_function("additions", |b| {
-        b.iter_with_setup(
-            || WidgetManager::with_root(DummyWidget.into_widget()),
-            |mut manager| manager.update(),
-        )
+        b.iter_with_setup(WidgetManager::default, |manager| {
+            manager.with_root(DummyWidget.into_widget())
+        })
     });
 
     group.sample_size(10000).bench_function("rebuilds", |b| {
         b.iter_with_setup(
             || {
-                let mut manager = WidgetManager::with_root(DummyWidget.into_widget());
+                let mut manager = WidgetManager::default_with_root(DummyWidget.into_widget());
 
-                manager.update();
-
-                manager.mark_needs_build(manager.root());
+                manager.mark_needs_build(manager.root().expect("no root element"));
 
                 manager
             },
@@ -58,13 +55,11 @@ fn widget_manager_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                let mut manager = WidgetManager::with_root(root_widget.into_widget());
-
-                manager.update();
+                let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
                 children.borrow_mut().clear();
 
-                manager.mark_needs_build(manager.root());
+                manager.mark_needs_build(manager.root().expect("no root element"));
 
                 manager
             },
@@ -106,9 +101,9 @@ fn widget_manager_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                WidgetManager::with_root(root_widget.into_widget())
+                (WidgetManager::default(), root_widget.into_widget())
             },
-            |mut manager| manager.update(),
+            |(manager, root_widget)| manager.with_root(root_widget),
         )
     });
 
@@ -140,11 +135,9 @@ fn widget_manager_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                let mut manager = WidgetManager::with_root(root_widget.into_widget());
+                let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
-                manager.update();
-
-                manager.mark_needs_build(manager.root());
+                manager.mark_needs_build(manager.root().expect("no root element"));
 
                 manager
             },
@@ -184,13 +177,11 @@ fn widget_manager_ops(c: &mut Criterion) {
                         .returning(|_| DummyRenderObject.into());
                 }
 
-                let mut manager = WidgetManager::with_root(root_widget.into_widget());
-
-                manager.update();
+                let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
                 children.borrow_mut().clear();
 
-                manager.mark_needs_build(manager.root());
+                manager.mark_needs_build(manager.root().expect("no root element"));
 
                 manager
             },

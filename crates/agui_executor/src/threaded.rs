@@ -20,7 +20,6 @@ use agui_core::{
             bindings::{RenderingSchedulerBinding, RenderingTask},
             RenderManager,
         },
-        widgets::bindings::{ElementBinding, ElementSchedulerBinding, ElementTask},
         widgets::WidgetManager,
     },
     render::RenderObjectId,

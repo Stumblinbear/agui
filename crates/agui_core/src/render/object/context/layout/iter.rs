@@ -193,24 +193,27 @@ impl ChildLayoutMut<'_> {
             .get_node(render_object_id)
             .expect("child render object missing during layout");
 
-        render_node.value().layout(
-            &mut RenderObjectLayoutContext {
-                render_object_tree: self.render_object_tree,
+        render_node
+            .value()
+            .expect("render object is currently in use")
+            .layout(
+                &mut RenderObjectLayoutContext {
+                    render_object_tree: self.render_object_tree,
 
-                parent_uses_size: &parent_uses_size,
+                    parent_uses_size: &parent_uses_size,
 
-                relayout_boundary_id: self.relayout_boundary_id,
+                    relayout_boundary_id: self.relayout_boundary_id,
 
-                render_object_id: &render_object_id,
+                    render_object_id: &render_object_id,
 
-                children: render_node.children(),
+                    children: render_node.children(),
 
-                constraints: self.constraints,
+                    constraints: self.constraints,
 
-                layout_changed: self.layout_changed,
-            },
-            constraints,
-        )
+                    layout_changed: self.layout_changed,
+                },
+                constraints,
+            )
     }
 
     pub fn set_offset(&mut self, offset: impl Into<Offset>) {

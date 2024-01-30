@@ -1,42 +1,54 @@
 use std::marker::PhantomData;
 
-use crate::element::{lifecycle::ElementLifecycle, Element, ElementId};
+use crate::{
+    element::{lifecycle::ElementLifecycle, Element, ElementId},
+    engine::elements::tree::ElementTree,
+    util::tree::TreeNode,
+};
 
-#[must_use = "iterators are lazy and do nothing unless consumed"]
 #[derive(Clone)]
-pub struct QueryByElement<I, E> {
+pub struct QueryByElement<'query, E> {
+    tree: &'query ElementTree,
     phantom: PhantomData<E>,
-
-    pub(crate) iter: I,
 }
 
-impl<I, E> QueryByElement<I, E> {
-    pub(super) fn new(iter: I) -> Self {
+impl<'query, E> QueryByElement<'query, E> {
+    pub fn new(tree: &'query ElementTree) -> Self {
         Self {
+            tree,
             phantom: PhantomData,
-
-            iter,
         }
     }
 }
 
-impl<'query, I, E> Iterator for QueryByElement<I, E>
+impl<'query, E> QueryByElement<'query, E>
 where
-    E: ElementLifecycle + 'query,
-    I: Iterator<Item = (ElementId, &'query Element)>,
+    E: ElementLifecycle,
 {
-    type Item = (ElementId, &'query Element);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .find(|(_, element)| element.downcast::<E>().is_some())
+    pub fn iter_nodes(&self) -> impl Iterator<Item = (ElementId, &TreeNode<ElementId, Element>)> {
+        self.tree.iter_nodes().filter(|(_, element)| {
+            element
+                .value()
+                .expect("cannot query an element's type while it is in use")
+                .downcast::<E>()
+                .is_some()
+        })
     }
 
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let (_, upper) = self.iter.size_hint();
-        (0, upper) // can't know a lower bound
+    pub fn iter(&self) -> impl Iterator<Item = (ElementId, &Element)> {
+        self.tree
+            .iter()
+            .filter(|(_, element)| element.downcast::<E>().is_some())
+    }
+
+    pub fn iter_downcast(&self) -> impl Iterator<Item = (ElementId, &E)> {
+        self.tree.iter().filter_map(|(element_id, element)| {
+            element.downcast::<E>().map(|element| (element_id, element))
+        })
+    }
+
+    pub fn count(&self) -> usize {
+        self.iter().count()
     }
 }
 
@@ -46,10 +58,8 @@ mod tests {
         element::mock::{
             build::{MockBuildWidget, MockedElementBuild},
             render::{MockRenderWidget, MockedElementRender},
-            DummyWidget,
         },
-        engine::widgets::WidgetManager,
-        query::WidgetQueryExt,
+        engine::elements::{strategies::tests::MockInflateStrategy, tree::ElementTree},
         widget::IntoWidget,
     };
 
@@ -57,53 +67,45 @@ mod tests {
     pub fn finds_widget_by_type() {
         let root_widget = MockRenderWidget::default();
         {
-            root_widget
-                .mock
-                .borrow_mut()
-                .expect_children()
-                .returning(|| {
-                    let build_widget = MockBuildWidget::default();
-                    {
-                        build_widget
-                            .mock
-                            .borrow_mut()
-                            .expect_build()
-                            .returning(|_| {
-                                let build_widget = MockBuildWidget::default();
-                                {
-                                    build_widget
-                                        .mock
-                                        .borrow_mut()
-                                        .expect_build()
-                                        .returning(|_| DummyWidget.into_widget());
-                                }
-                                build_widget.into_widget()
-                            });
-                    }
-                    vec![build_widget.into_widget()]
-                });
+            root_widget.mock().expect_children().returning(|| {
+                let build_widget = MockBuildWidget::default();
+                {
+                    build_widget
+                        .mock
+                        .borrow_mut()
+                        .expect_build()
+                        .returning(|_| MockRenderWidget::dummy());
+                }
+                vec![build_widget.into_widget(), MockRenderWidget::dummy()]
+            });
         }
 
-        let mut manager = WidgetManager::with_root(root_widget);
+        let mut element_tree = ElementTree::default();
 
-        manager.update();
+        element_tree
+            .spawn_and_inflate(
+                &mut MockInflateStrategy::default(),
+                None,
+                root_widget.into_widget(),
+            )
+            .expect("failed to spawn and inflate");
 
         assert_eq!(
-            manager.query().by_element::<MockedElementRender>().count(),
-            1,
+            element_tree
+                .query()
+                .by_element::<MockedElementRender>()
+                .count(),
+            3,
             "should have found 1 element of type MockedElementRender"
         );
 
         assert_eq!(
-            manager.query().by_element::<MockedElementBuild>().count(),
-            2,
+            element_tree
+                .query()
+                .by_element::<MockedElementBuild>()
+                .count(),
+            1,
             "should have found 2 elements of type MockedElementBuild"
-        );
-
-        assert_eq!(
-            manager.query().by_element::<MockedElementRender>().count(),
-            1,
-            "should have found 1 element of type MockedElementRender"
         );
     }
 }

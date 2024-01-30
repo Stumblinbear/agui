@@ -68,7 +68,7 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut manager = WidgetManager::with_root(root_widget.into_widget());
+        let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -90,7 +90,7 @@ mod tests {
         }
         .into_widget()];
 
-        manager.mark_needs_build(manager.root());
+        manager.mark_needs_build(manager.root().expect("no root element"));
 
         manager.update();
 
@@ -114,7 +114,7 @@ mod tests {
 
         *root_children.borrow_mut() = vec![DummyWidget.into_widget()];
 
-        let mut manager = WidgetManager::with_root(root_widget.into_widget());
+        let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -136,7 +136,7 @@ mod tests {
         }
         .into_widget()];
 
-        manager.mark_needs_build(manager.root());
+        manager.mark_needs_build(manager.root().expect("no root element"));
 
         manager.update();
 
@@ -153,7 +153,7 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut manager = WidgetManager::with_root(root_widget.into_widget());
+        let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -171,7 +171,7 @@ mod tests {
 
         *root_children.borrow_mut() = vec![depending_widget.clone()];
 
-        manager.mark_needs_build(manager.root());
+        manager.mark_needs_build(manager.root().expect("no root element"));
 
         manager.update();
 

@@ -5,7 +5,10 @@ use rustc_hash::FxHashSet;
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
-    engine::{rendering::bindings::RenderingSchedulerBinding, rendering::RenderManager, Dirty},
+    engine::{
+        rendering::{scheduler::RenderingSchedulerStrategy, RenderManager},
+        Dirty,
+    },
     util::tree::Tree,
 };
 
@@ -28,7 +31,7 @@ impl Default for RenderManagerBuilder<()> {
 impl RenderManagerBuilder<()> {
     pub fn with_scheduler<SB>(self, scheduler: SB) -> RenderManagerBuilder<SB>
     where
-        SB: RenderingSchedulerBinding,
+        SB: RenderingSchedulerStrategy,
     {
         RenderManagerBuilder {
             scheduler,
@@ -50,7 +53,7 @@ impl<SB> RenderManagerBuilder<SB> {
 
 impl<SB> RenderManagerBuilder<SB>
 where
-    SB: RenderingSchedulerBinding,
+    SB: RenderingSchedulerStrategy,
 {
     pub fn build(self) -> RenderManager<SB> {
         let notifier = self.notifier.unwrap_or_default();
@@ -62,11 +65,12 @@ where
 
             elements: SecondaryMap::default(),
 
-            deferred_resolvers: SparseSecondaryMap::default(),
-
             create_render_object: VecDeque::default(),
             update_render_object: FxHashSet::default(),
             forgotten_elements: FxHashSet::default(),
+
+            dirty_deferred_elements: FxHashSet::default(),
+            dirty_layout_boundaries: FxHashSet::default(),
 
             needs_layout: Dirty::new(notifier.clone()),
             needs_paint: Dirty::new(notifier),

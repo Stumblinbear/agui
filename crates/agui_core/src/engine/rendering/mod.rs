@@ -1,15 +1,16 @@
 use core::panic;
-use std::{collections::VecDeque, hash::BuildHasherDefault, sync::Arc};
+use std::{collections::VecDeque, hash::BuildHasherDefault};
 
 use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
-    element::{
-        deferred::resolver::DeferredResolver, Element, ElementId, RenderObjectCreateContext,
-        RenderObjectUpdateContext,
+    element::{Element, ElementId, RenderObjectCreateContext, RenderObjectUpdateContext},
+    engine::{
+        elements::tree::ElementTree,
+        rendering::scheduler::{RenderingScheduler, RenderingSchedulerStrategy},
+        Dirty,
     },
-    engine::{rendering::bindings::RenderingSchedulerBinding, sync_data::SyncTreeData, Dirty},
     render::{
         object::{layout_data::LayoutDataUpdate, RenderObject, RenderObjectLayoutContext},
         view::RenderView,
@@ -19,8 +20,8 @@ use crate::{
     util::tree::Tree,
 };
 
-pub mod bindings;
 mod builder;
+pub mod scheduler;
 
 pub use builder::*;
 
@@ -31,12 +32,12 @@ pub struct RenderManager<SB = ()> {
 
     elements: SecondaryMap<ElementId, RenderObjectId>,
 
-    deferred_resolvers:
-        SparseSecondaryMap<RenderObjectId, Arc<dyn DeferredResolver>, BuildHasherDefault<FxHasher>>,
-
     create_render_object: VecDeque<ElementId>,
     update_render_object: FxHashSet<ElementId>,
     forgotten_elements: FxHashSet<ElementId>,
+
+    dirty_deferred_elements: FxHashSet<ElementId>,
+    dirty_layout_boundaries: FxHashSet<RenderObjectId>,
 
     needs_layout: Dirty<RenderObjectId>,
     needs_paint: Dirty<RenderObjectId>,
@@ -76,6 +77,14 @@ impl<SB> RenderManager<SB> {
         self.update_render_object.insert(element_id);
     }
 
+    pub fn on_needs_layout(&mut self, render_object_id: RenderObjectId) {
+        self.needs_layout.insert(render_object_id);
+    }
+
+    pub fn on_needs_paint(&mut self, render_object_id: RenderObjectId) {
+        self.needs_paint.insert(render_object_id);
+    }
+
     pub fn forget_element(&mut self, element_id: ElementId) {
         self.forgotten_elements.insert(element_id);
     }
@@ -90,26 +99,85 @@ impl<SB> RenderManager<SB> {
         !self.needs_layout.is_empty() || !self.needs_paint.is_empty() || !self.needs_sync.is_empty()
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_layout(&mut self) -> bool {
-        let mut relayout_boundary_queue =
-            FxHashSet::with_capacity_and_hasher(8, BuildHasherDefault::<FxHasher>::default());
-
+    pub fn flush_needs_layout(&mut self) {
         self.needs_layout.process(|render_object_id| {
             if let Some(render_object) = self.tree.get(render_object_id) {
-                relayout_boundary_queue.insert(
+                self.dirty_layout_boundaries.insert(
                     render_object
                         .relayout_boundary_id()
                         .unwrap_or(render_object_id),
                 );
             }
         });
+    }
 
-        if relayout_boundary_queue.is_empty() {
+    // #[tracing::instrument(level = "trace", skip_all)]
+    // pub fn resolve_deferred_element(&mut self, sync_data: SyncTreeData) -> Option<ElementId> {
+    //     if self.dirty_deferred_elements.is_empty() {
+    //         return None;
+    //     }
+
+    //     // In order to resolve deferred elements, we need to perform layout on them.
+
+    //     // TODO: only perform layout on the layout boundaries that contain deferred
+    //     // elements.
+
+    //     for element_id in self.dirty_deferred_elements.drain() {
+    //         let render_object_id =
+    //             self.elements.get(element_id).copied().expect(
+    //                 "deferred element has no render object while resolving deferred elements",
+    //             );
+
+    //         let render_object = self
+    //             .tree
+    //             .get_mut(render_object_id)
+    //             .expect("render object missing while resolving deferred elements");
+
+    //         let Some(relayout_boundary_id) = render_object.relayout_boundary_id() else {
+    //             continue;
+    //         };
+
+    //         println!("relayout boundary: {:?}", relayout_boundary_id);
+    //         println!(
+    //             "dirty layout boundaries: {:?}",
+    //             self.dirty_layout_boundaries,
+    //         );
+
+    //         let deferred_resolver = sync_data
+    //             .deferred_resolvers
+    //             .get_mut(element_id)
+    //             .expect("deferred resolver missing while resolving deferred elements");
+
+    //         let constraints = if !self.dirty_layout_boundaries.contains(&relayout_boundary_id) {
+    //             // If the deferred element is not going to be laid out, we use the cached
+    //             // constraints to resolve it.
+    //             self.cached_constraints
+    //                 .get(render_object_id)
+    //                 .copied()
+    //                 .expect("deferred element was not laid out")
+    //         } else {
+    //             // TODO: perform layout on the boundary
+    //             Constraints::expand()
+    //         };
+
+    //         if !deferred_resolver.resolve(constraints) {
+    //             // The deferred element did not change, so we can skip it.
+    //             continue;
+    //         }
+
+    //         // TODO: call back to the widget tree to build the element
+    //     }
+
+    //     None
+    // }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn flush_layout(&mut self) -> bool {
+        if self.dirty_layout_boundaries.is_empty() {
             return false;
         }
 
-        let mut relayout_queue = Vec::from_iter(relayout_boundary_queue);
+        let mut relayout_queue = self.dirty_layout_boundaries.drain().collect::<Vec<_>>();
 
         relayout_queue
             .sort_by_cached_key(|render_object_id| self.tree.get_depth(*render_object_id).unwrap());
@@ -149,24 +217,27 @@ impl<SB> RenderManager<SB> {
             // during layout. This is important for performant responsivity, since
             // some elements may want to change which children they have based on
             // the parent element's size constraints.
-            render_node.value().layout(
-                &mut RenderObjectLayoutContext {
-                    render_object_tree: &self.tree,
+            render_node
+                .value()
+                .expect("render object is currently in use")
+                .layout(
+                    &mut RenderObjectLayoutContext {
+                        render_object_tree: &self.tree,
 
-                    parent_uses_size: &false,
+                        parent_uses_size: &false,
 
-                    relayout_boundary_id: &Some(render_object_id),
+                        relayout_boundary_id: &Some(render_object_id),
 
-                    render_object_id: &render_object_id,
+                        render_object_id: &render_object_id,
 
-                    children: render_node.children(),
+                        children: render_node.children(),
 
-                    constraints: &mut self.cached_constraints,
+                        constraints: &mut self.cached_constraints,
 
-                    layout_changed: &mut self.layout_changed,
-                },
-                constraints,
-            );
+                        layout_changed: &mut self.layout_changed,
+                    },
+                    constraints,
+                );
         }
 
         for (render_object_id, layout_update) in self.layout_changed.drain() {
@@ -307,10 +378,10 @@ impl<SB> RenderManager<SB> {
 
 impl<SB> RenderManager<SB>
 where
-    SB: RenderingSchedulerBinding,
+    SB: RenderingSchedulerStrategy,
 {
     #[tracing::instrument(level = "trace", skip_all)]
-    pub fn sync_render_objects(&mut self, sync_data: SyncTreeData) {
+    pub fn sync_render_objects(&mut self, element_tree: &ElementTree) {
         // No need to update render objects that are about to be created.
         if self.update_render_object.len() <= self.create_render_object.len() {
             self.update_render_object
@@ -327,7 +398,7 @@ where
                 continue;
             }
 
-            self.create_render_object(&sync_data, element_id);
+            self.create_render_object(element_tree, element_id);
         }
 
         for element_id in self
@@ -335,8 +406,8 @@ where
             .drain()
             .filter(|element_id| !self.forgotten_elements.contains(element_id))
         {
-            let element_node = sync_data
-                .element_tree
+            let element_node = element_tree
+                .as_ref()
                 .get_node(element_id)
                 .expect("element missing while yodatubg render objects");
 
@@ -354,20 +425,13 @@ where
             let element = element_node.as_ref();
 
             if matches!(element, Element::Deferred(_)) {
-                self.deferred_resolvers.insert(
-                    render_object_id,
-                    Arc::clone(
-                        sync_data
-                            .deferred_resolvers
-                            .get(element_id)
-                            .expect("deferred resolver missing while updating render objects"),
-                    ),
-                );
+                self.dirty_deferred_elements.insert(element_id);
             }
 
             element.update_render_object(
                 &mut RenderObjectUpdateContext {
-                    scheduler: &mut self.scheduler,
+                    scheduler: &mut RenderingScheduler::new(&render_object_id)
+                        .with_strategy(&mut self.scheduler),
 
                     needs_layout: &mut self.needs_layout,
                     needs_paint: &mut self.needs_paint,
@@ -429,19 +493,19 @@ where
                     }
                 }
 
-                self.deferred_resolvers.remove(render_object_id);
+                self.dirty_deferred_elements.remove(&element_id);
 
                 self.cached_constraints.remove(render_object_id);
             }
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self, sync_data))]
-    pub fn create_render_object(&mut self, sync_data: &SyncTreeData, element_id: ElementId) {
-        let (relayout_boundary_id, parent_render_object_id, parent_view_object) = sync_data.element_tree
+    #[tracing::instrument(level = "trace", skip(self, element_tree))]
+    pub fn create_render_object(&mut self, element_tree: &ElementTree, element_id: ElementId) {
+        let (relayout_boundary_id, parent_render_object_id, parent_view_object) = element_tree.as_ref()
             .get_parent(element_id)
             .map(|parent_element_id| {
-                let parent_element = sync_data.element_tree
+                let parent_element = element_tree.as_ref()
                     .get(parent_element_id)
                     .expect("parent element missing while creating render object");
 
@@ -484,8 +548,8 @@ where
             );
         }
 
-        let element = sync_data
-            .element_tree
+        let element = element_tree
+            .as_ref()
             .get(element_id)
             .expect("element missing while creating render objects");
 
@@ -495,10 +559,8 @@ where
 
                 let mut render_object =
                     element.create_render_object(&mut RenderObjectCreateContext {
-                        scheduler: &mut self.scheduler,
-
-                        needs_layout: &mut self.needs_layout,
-                        needs_paint: &mut self.needs_paint,
+                        scheduler: &mut RenderingScheduler::new(&render_object_id)
+                            .with_strategy(&mut self.scheduler),
 
                         element_id: &element_id,
                         render_object_id: &render_object_id,
@@ -512,15 +574,7 @@ where
                 });
 
                 if matches!(element, Element::Deferred(_)) {
-                    self.deferred_resolvers.insert(
-                        render_object_id,
-                        Arc::clone(
-                            sync_data
-                                .deferred_resolvers
-                                .get(element_id)
-                                .expect("deferred resolver missing while creating render objects"),
-                        ),
-                    );
+                    self.dirty_deferred_elements.insert(element_id);
                 } else if let Element::View(element) = &element {
                     let mut view = element.create_view();
 

@@ -1,12 +1,33 @@
-use crate::{
-    element::{ContextDirtyElement, ContextElement, ElementId},
-    engine::Dirty,
-};
+use crate::element::{ContextElement, ElementId};
+
+pub trait ElementTaskNotifyStrategy {
+    fn mark_needs_build(&mut self, element_id: ElementId);
+}
 
 pub struct ElementTaskContext {
-    pub(crate) element_id: ElementId,
+    notify_strategy: Option<Box<dyn ElementTaskNotifyStrategy>>,
 
-    pub(crate) needs_build: Dirty<ElementId>,
+    element_id: ElementId,
+}
+
+impl ElementTaskContext {
+    pub(crate) fn new(element_id: ElementId) -> Self {
+        ElementTaskContext {
+            notify_strategy: None,
+            element_id,
+        }
+    }
+
+    pub(crate) fn with_notify_strategy<T>(self, strategy: T) -> Self
+    where
+        T: ElementTaskNotifyStrategy + 'static,
+    {
+        Self {
+            notify_strategy: Some(Box::new(strategy)),
+
+            element_id: self.element_id,
+        }
+    }
 }
 
 impl ContextElement for ElementTaskContext {
@@ -15,11 +36,19 @@ impl ContextElement for ElementTaskContext {
     }
 }
 
-impl ContextDirtyElement for ElementTaskContext {
-    fn mark_needs_build(&mut self) {
-        tracing::trace!(element_id = ?self.element_id, "element needs build");
+impl ElementTaskContext {
+    pub fn mark_needs_build(&mut self) {
+        let Some(notify_strategy) = self.notify_strategy.as_mut() else {
+            tracing::warn!(
+                element_id = ?self.element_id,
+                "element needs to be rebuilt, but no notify strategy is set"
+            );
 
-        self.needs_build.insert(self.element_id);
-        self.needs_build.notify();
+            return;
+        };
+
+        tracing::trace!(element_id = ?self.element_id, "element needs to be rebuilt");
+
+        notify_strategy.mark_needs_build(self.element_id);
     }
 }

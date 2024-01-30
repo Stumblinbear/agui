@@ -1,4 +1,5 @@
 // mod forest;
+pub mod errors;
 pub mod iter;
 mod map;
 pub mod node;

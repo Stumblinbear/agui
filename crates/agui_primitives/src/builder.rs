@@ -39,7 +39,7 @@ mod tests {
     #[test]
     pub fn calls_func() {
         let mut manager =
-            WidgetManager::with_root(Builder::new(|_| DummyWidget.into()).into_widget());
+            WidgetManager::default_with_root(Builder::new(|_| DummyWidget.into()).into_widget());
 
         manager.update();
 

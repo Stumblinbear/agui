@@ -2,126 +2,97 @@ use std::{collections::VecDeque, sync::mpsc};
 
 use agui_sync::notify;
 use rustc_hash::FxHashSet;
-use slotmap::SparseSecondaryMap;
 
 use crate::{
     callback::CallbackQueue,
     engine::{
-        widgets::bindings::{ElementBinding, ElementSchedulerBinding},
-        widgets::{key_storage::WidgetKeyStorage, WidgetManager},
+        elements::{
+            scheduler::ElementSchedulerStrategy, strategies::InflateStrategy, tree::ElementTree,
+        },
+        widgets::WidgetManager,
         Dirty,
     },
-    inheritance::InheritanceManager,
-    util::tree::Tree,
-    widget::{IntoWidget, Widget},
 };
 
-pub struct WidgetManagerBuilder<EB, SB, const HAS_ROOT: bool> {
-    element_binding: EB,
-    scheduler: SB,
+pub struct WidgetManagerBuilder<Strat, Sched> {
+    inflate_strategy: Strat,
+    scheduler: Sched,
 
     notifier: Option<notify::Flag>,
-
-    root: Option<Widget>,
 }
 
-impl Default for WidgetManagerBuilder<(), (), false> {
+impl<Strat, Sched> Default for WidgetManagerBuilder<Strat, Sched>
+where
+    Strat: InflateStrategy + Default,
+    Sched: ElementSchedulerStrategy + Default,
+{
     fn default() -> Self {
         Self {
-            element_binding: (),
-            scheduler: (),
+            inflate_strategy: Strat::default(),
+            scheduler: Sched::default(),
 
             notifier: None,
-
-            root: None,
         }
     }
 }
 
-impl<SB, const HAS_ROOT: bool> WidgetManagerBuilder<(), SB, HAS_ROOT> {
-    pub fn with_element_binding<EB>(
+impl<Sched> WidgetManagerBuilder<(), Sched> {
+    pub fn with_element_binding<Strat>(
         self,
-        element_binding: EB,
-    ) -> WidgetManagerBuilder<EB, SB, HAS_ROOT>
+        inflate_strategy: Strat,
+    ) -> WidgetManagerBuilder<Strat, Sched>
     where
-        EB: ElementBinding,
+        Strat: InflateStrategy,
     {
         WidgetManagerBuilder {
-            element_binding,
+            inflate_strategy,
             scheduler: self.scheduler,
 
             notifier: self.notifier,
-
-            root: self.root,
         }
     }
 }
 
-impl<EB, const HAS_ROOT: bool> WidgetManagerBuilder<EB, (), HAS_ROOT> {
-    pub fn with_scheduler<SB>(self, scheduler: SB) -> WidgetManagerBuilder<EB, SB, HAS_ROOT>
+impl<Strat> WidgetManagerBuilder<Strat, ()> {
+    pub fn with_scheduler<Sched>(self, scheduler: Sched) -> WidgetManagerBuilder<Strat, Sched>
     where
-        SB: ElementSchedulerBinding,
+        Sched: ElementSchedulerStrategy,
     {
         WidgetManagerBuilder {
-            element_binding: self.element_binding,
+            inflate_strategy: self.inflate_strategy,
             scheduler,
 
             notifier: self.notifier,
-
-            root: self.root,
         }
     }
 }
 
-impl<EB, SB, const HAS_ROOT: bool> WidgetManagerBuilder<EB, SB, HAS_ROOT> {
-    pub fn with_notifier(self, notifier: notify::Flag) -> WidgetManagerBuilder<EB, SB, HAS_ROOT> {
+impl<Strat, Sched> WidgetManagerBuilder<Strat, Sched> {
+    pub fn with_notifier(self, notifier: notify::Flag) -> WidgetManagerBuilder<Strat, Sched> {
         WidgetManagerBuilder {
-            element_binding: self.element_binding,
+            inflate_strategy: self.inflate_strategy,
             scheduler: self.scheduler,
 
             notifier: Some(notifier),
-
-            root: self.root,
         }
     }
 }
 
-impl<EB, SB> WidgetManagerBuilder<EB, SB, false> {
-    pub fn with_root<W>(self, root: W) -> WidgetManagerBuilder<EB, SB, true>
-    where
-        W: IntoWidget,
-    {
-        WidgetManagerBuilder {
-            element_binding: self.element_binding,
-            scheduler: self.scheduler,
-
-            notifier: self.notifier,
-
-            root: Some(root.into_widget()),
-        }
-    }
-}
-
-impl<EB, SB> WidgetManagerBuilder<EB, SB, true>
+impl<Strat, Sched> WidgetManagerBuilder<Strat, Sched>
 where
-    EB: ElementBinding,
-    SB: ElementSchedulerBinding,
+    Strat: InflateStrategy,
+    Sched: ElementSchedulerStrategy,
 {
-    pub fn build(self) -> WidgetManager<EB, SB> {
+    pub fn build(self) -> WidgetManager<Strat, Sched> {
         let notifier = self.notifier.unwrap_or_default();
 
         let (callback_tx, callback_rx) = mpsc::channel();
 
-        let mut manager = WidgetManager {
-            element_binding: self.element_binding,
+        WidgetManager {
+            inflate_strategy: self.inflate_strategy,
             scheduler: self.scheduler,
 
-            tree: Tree::default(),
-            deferred_resolvers: SparseSecondaryMap::default(),
-
-            inheritance: InheritanceManager::default(),
-
-            key_storage: WidgetKeyStorage::default(),
+            tree: ElementTree::default(),
 
             needs_build: Dirty::new(notifier.clone()),
 
@@ -130,12 +101,6 @@ where
 
             rebuild_queue: VecDeque::default(),
             forgotten_elements: FxHashSet::default(),
-        };
-
-        let root_id = manager.process_spawn(None, self.root.unwrap());
-
-        manager.rebuild_queue.push_back(root_id);
-
-        manager
+        }
     }
 }

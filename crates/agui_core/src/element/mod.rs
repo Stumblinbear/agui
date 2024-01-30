@@ -180,23 +180,11 @@ impl Element {
         match self {
             Element::Widget(ref mut element) => element.mount(ctx),
             Element::Deferred(ref mut element) => element.mount(ctx),
-            Element::Inherited(ref mut element) => {
-                ctx.inheritance.create_scope(
-                    element.inherited_type_id(),
-                    *ctx.parent_element_id,
-                    *ctx.element_id,
-                );
-
-                element.mount(ctx);
-            }
+            Element::Inherited(ref mut element) => element.mount(ctx),
 
             Element::View(ref mut element) => element.mount(ctx),
             Element::Render(ref mut element) => element.mount(ctx),
         }
-
-        // Is it beneficial to delay building up these until an element actually needs them?
-        ctx.inheritance
-            .create_node(*ctx.parent_element_id, *ctx.element_id);
     }
 
     // pub fn remount() {
@@ -223,8 +211,6 @@ impl Element {
             Element::View(ref mut element) => element.unmount(ctx),
             Element::Render(ref mut element) => element.unmount(ctx),
         }
-
-        ctx.inheritance.remove(*ctx.element_id);
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -232,19 +218,7 @@ impl Element {
         match self {
             Element::Widget(ref mut element) => Vec::from([element.build(ctx)]),
             Element::Deferred(_) => Vec::new(),
-            Element::Inherited(ref mut element) => {
-                if element.needs_notify() {
-                    for element_id in ctx
-                        .inheritance
-                        .iter_listeners(*ctx.element_id)
-                        .expect("failed to get the inherited element's scope during build")
-                    {
-                        ctx.needs_build.insert(element_id);
-                    }
-                }
-
-                Vec::from([element.child()])
-            }
+            Element::Inherited(ref mut element) => Vec::from([element.child()]),
 
             Element::View(ref mut element) => element.children(),
             Element::Render(ref mut element) => element.children(),

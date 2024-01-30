@@ -2,10 +2,10 @@ use std::{any::TypeId, future::Future};
 
 use crate::{
     element::{
-        inherited::ElementInherited, ContextDirtyElement, ContextElement, Element, ElementBuilder,
-        ElementId, ElementTaskContext,
+        inherited::ElementInherited, ContextElement, Element, ElementBuilder, ElementId,
+        ElementTaskContext,
     },
-    engine::{widgets::bindings::ElementSchedulerBinding, Dirty},
+    engine::elements::scheduler::ElementScheduler,
     inheritance::InheritanceManager,
     task::{context::ContextSpawnElementTask, error::TaskError, TaskHandle},
     util::tree::Tree,
@@ -15,11 +15,10 @@ use crate::{
 use super::ContextElements;
 
 pub struct ElementCallbackContext<'ctx> {
-    pub(crate) scheduler: &'ctx mut dyn ElementSchedulerBinding,
+    pub scheduler: &'ctx mut ElementScheduler<'ctx>,
 
     pub element_tree: &'ctx Tree<ElementId, Element>,
     pub inheritance: &'ctx InheritanceManager,
-    pub needs_build: &'ctx mut Dirty<ElementId>,
 
     pub element_id: &'ctx ElementId,
 }
@@ -36,29 +35,15 @@ impl ContextElement for ElementCallbackContext<'_> {
     }
 }
 
-impl ContextDirtyElement for ElementCallbackContext<'_> {
-    fn mark_needs_build(&mut self) {
-        tracing::trace!(element_id = ?self.element_id, "element needs build");
-
-        self.needs_build.insert(*self.element_id);
-    }
-}
-
 impl ContextSpawnElementTask for ElementCallbackContext<'_> {
     fn spawn_task<Fut>(
-        &self,
+        &mut self,
         func: impl FnOnce(ElementTaskContext) -> Fut + 'static,
     ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + 'static,
     {
-        self.scheduler.spawn_task(
-            *self.element_id,
-            Box::pin(func(ElementTaskContext {
-                element_id: *self.element_id,
-                needs_build: self.needs_build.clone(),
-            })),
-        )
+        self.scheduler.spawn_task(func)
     }
 }
 

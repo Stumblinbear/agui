@@ -231,7 +231,7 @@ mod tests {
 
     use crate::{
         callback::WidgetCallback,
-        element::mock::{build::MockBuildWidget, DummyWidget},
+        element::mock::{build::MockBuildWidget, render::MockRenderWidget},
         engine::widgets::WidgetManager,
         widget::IntoWidget,
     };
@@ -245,17 +245,15 @@ mod tests {
 
             widget_mock
                 .expect_build()
-                .returning(|_| DummyWidget.into_widget());
+                .returning(|_| MockRenderWidget::dummy());
 
             widget_mock.expect_call().never();
         }
 
-        let mut manager = WidgetManager::builder().with_root(widget).build();
-
-        manager.update();
+        let manager = WidgetManager::default_with_root(widget);
 
         WidgetCallback::new_unchecked(
-            manager.root(),
+            manager.root().expect("no root element"),
             TypeId::of::<()>(),
             manager.callback_queue().clone(),
         )
@@ -271,17 +269,15 @@ mod tests {
 
             widget_mock
                 .expect_build()
-                .returning(|_| DummyWidget.into_widget());
+                .returning(|_| MockRenderWidget::dummy());
 
             widget_mock.expect_call().once().returning(|_, _, _| false);
         }
 
-        let mut manager = WidgetManager::builder().with_root(widget).build();
-
-        manager.update();
+        let mut manager = WidgetManager::default_with_root(widget);
 
         WidgetCallback::new_unchecked(
-            manager.root(),
+            manager.root().expect("no root element"),
             TypeId::of::<()>(),
             manager.callback_queue().clone(),
         )

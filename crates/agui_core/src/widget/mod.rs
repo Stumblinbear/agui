@@ -189,8 +189,8 @@ mod tests {
 
     #[test]
     fn strip_fat_ptr_equality() {
-        let widget1 = MockRenderWidget::default().into_widget();
-        let widget2 = MockRenderWidget::default().into_widget();
+        let widget1 = MockRenderWidget::dummy();
+        let widget2 = MockRenderWidget::dummy();
 
         // These equality checks are theoretically unstable
         #[allow(clippy::vtable_address_comparisons)]
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn exact_ptr_widget_and_rc() {
-        let widget = MockRenderWidget::default().into_widget();
+        let widget = MockRenderWidget::dummy();
         let widget_rc = widget
             .downcast::<MockRenderWidget>()
             .expect("widget should be MockRenderWidget");
@@ -263,7 +263,7 @@ mod tests {
         // will be equal.
         //
         // let test3 = IntoWidget::into_widget(
-        //     (|| MockRenderWidget::default().into_widget()) as fn() -> Widget,
+        //     (|| MockRenderWidget::dummy()) as fn() -> Widget,
         // );
         //
         // assert_eq!(
@@ -273,6 +273,6 @@ mod tests {
     }
 
     fn widget_test() -> Widget {
-        MockRenderWidget::default().into_widget()
+        MockRenderWidget::dummy()
     }
 }

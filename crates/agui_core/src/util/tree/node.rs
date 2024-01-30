@@ -1,3 +1,5 @@
+use crate::util::tree::errors::NodeInUse;
+
 #[derive(Debug)]
 pub struct TreeNode<K, V> {
     pub(super) depth: usize,
@@ -12,12 +14,12 @@ impl<K, V> TreeNode<K, V> {
         self.depth
     }
 
-    pub fn value(&self) -> &V {
-        self.value.as_ref().expect("node is currently in use")
+    pub fn value(&self) -> Result<&V, NodeInUse> {
+        self.value.as_ref().ok_or(NodeInUse)
     }
 
-    pub fn value_mut(&mut self) -> &mut V {
-        self.value.as_mut().expect("node is currently in use")
+    pub fn value_mut(&mut self) -> Result<&mut V, NodeInUse> {
+        self.value.as_mut().ok_or(NodeInUse)
     }
 }
 

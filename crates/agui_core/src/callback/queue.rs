@@ -68,7 +68,8 @@ impl SharedCallbackQueue {
     }
 }
 
-pub(crate) struct InvokeCallback {
+#[non_exhaustive]
+pub struct InvokeCallback {
     pub callback_id: CallbackId,
     pub arg: Box<dyn Any>,
 }

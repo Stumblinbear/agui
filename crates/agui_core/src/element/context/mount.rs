@@ -1,6 +1,5 @@
 use crate::{
     element::{ContextElement, Element, ElementId},
-    inheritance::InheritanceManager,
     util::tree::Tree,
 };
 
@@ -8,7 +7,6 @@ use super::ContextElements;
 
 pub struct ElementMountContext<'ctx> {
     pub element_tree: &'ctx Tree<ElementId, Element>,
-    pub(crate) inheritance: &'ctx mut InheritanceManager,
 
     pub parent_element_id: &'ctx Option<ElementId>,
     pub element_id: &'ctx ElementId,

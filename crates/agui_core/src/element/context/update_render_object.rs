@@ -1,8 +1,8 @@
 use std::future::Future;
 
 use crate::{
-    element::{ContextDirtyRenderObject, ElementId, RenderObjectTaskContext},
-    engine::{rendering::bindings::RenderingSchedulerBinding, Dirty},
+    element::{ContextDirtyRenderObject, ElementId, RenderingTaskContext},
+    engine::{rendering::scheduler::RenderingScheduler, Dirty},
     render::RenderObjectId,
     task::{context::ContextSpawnRenderingTask, error::TaskError, TaskHandle},
 };
@@ -10,7 +10,7 @@ use crate::{
 use super::{ContextElement, ContextRenderObject};
 
 pub struct RenderObjectUpdateContext<'ctx> {
-    pub(crate) scheduler: &'ctx mut dyn RenderingSchedulerBinding,
+    pub scheduler: &'ctx mut RenderingScheduler<'ctx>,
 
     pub(crate) needs_layout: &'ctx Dirty<RenderObjectId>,
     pub(crate) needs_paint: &'ctx Dirty<RenderObjectId>,
@@ -47,21 +47,12 @@ impl ContextDirtyRenderObject for RenderObjectUpdateContext<'_> {
 
 impl ContextSpawnRenderingTask for RenderObjectUpdateContext<'_> {
     fn spawn_task<Fut>(
-        &self,
-        func: impl FnOnce(RenderObjectTaskContext) -> Fut + 'static,
+        &mut self,
+        func: impl FnOnce(RenderingTaskContext) -> Fut + 'static,
     ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + Send + 'static,
     {
-        self.scheduler.spawn_task(
-            *self.render_object_id,
-            Box::pin(func(RenderObjectTaskContext {
-                element_id: *self.element_id,
-                render_object_id: *self.render_object_id,
-
-                needs_layout: self.needs_layout.clone(),
-                needs_paint: self.needs_paint.clone(),
-            })),
-        )
+        self.scheduler.spawn_task(func)
     }
 }

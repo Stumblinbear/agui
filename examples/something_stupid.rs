@@ -38,17 +38,12 @@ fn main() {
                 child: <VelloViewBinding> {
                     view: view,
 
-                    child: <LayoutBuilder> {
-                        resolver: |constraints| constraints,
-                        builder: |constraints| {
-                            <ColoredBox> {
-                                color: Color::from_rgb((0.0, 1.0, 0.0)),
+                    child: <ColoredBox> {
+                        color: Color::from_rgb((0.0, 1.0, 0.0)),
 
-                                child: <Text> {
-                                    style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                                    text: "Hello, world!".into(),
-                                },
-                            }
+                        child: <Text> {
+                            style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                            text: "Hello, world!".into(),
                         },
                     }
                 }

@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut manager = WidgetManager::with_root(build! {
+        let mut manager = WidgetManager::default_with_root(build! {
             <Column> {
                 children: [
                     <Text> {

@@ -59,11 +59,13 @@ where
     }
 
     pub fn get(&self, node_id: K) -> Option<&V> {
-        self.get_node(node_id).map(|node| node.value())
+        self.get_node(node_id)
+            .map(|node| node.value().expect("node is currently in use"))
     }
 
     pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.get_node_mut(node_id).map(|node| node.value_mut())
+        self.get_node_mut(node_id)
+            .map(|node| node.value_mut().expect("node is currently in use"))
     }
 
     pub fn get_parent(&self, node_id: K) -> Option<K> {
@@ -176,25 +178,33 @@ where
     K: slotmap::Key,
     Storage: TreeStorage,
 {
-    pub fn remove_subtree(&mut self, node_id: K) -> Option<V> {
-        // TODO: optimize this
+    pub fn remove_subtree(&mut self, node_id: K) {
+        let Some(children) = self.get_children(node_id) else {
+            return;
+        };
 
-        // Remove all children
-        if let Some(children) = self.get_children(node_id).cloned() {
-            for child_id in children.iter() {
-                self.remove_subtree(*child_id);
+        let mut remove_queue = VecDeque::with_capacity(children.len().max(8));
+
+        remove_queue.extend(children);
+
+        // We only have to normally remove the first node, since we're about
+        // to completely obliterate the rest of its subtree there's no reason
+        // to bother doing cleanup on the rest of the descendant nodes.
+        self.remove(node_id);
+
+        while let Some(node_id) = remove_queue.pop_front() {
+            if let Some(node) = self.nodes.remove(node_id) {
+                remove_queue.extend(node.children);
             }
         }
-
-        self.remove(node_id)
     }
 
-    pub fn remove(&mut self, node_id: K) -> Option<V> {
+    pub fn remove_node(&mut self, node_id: K) -> Option<TreeNode<K, V>> {
         if self.root == Some(node_id) {
             self.root = None;
         }
 
-        if let Some(mut node) = self.nodes.remove(node_id) {
+        if let Some(node) = self.nodes.remove(node_id) {
             if let Some(parent_id) = node.parent {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
                     // Remove the child from its parent
@@ -208,9 +218,42 @@ where
                 }
             }
 
+            Some(node)
+        } else {
+            None
+        }
+    }
+
+    pub fn remove(&mut self, node_id: K) -> Option<V> {
+        if let Some(mut node) = self.remove_node(node_id) {
             Some(node.value.take().expect("node is currently in use"))
         } else {
             None
+        }
+    }
+
+    pub fn retain_subtree<F>(&mut self, node_id: K, mut func: F)
+    where
+        F: FnMut(&K) -> bool,
+    {
+        if !self.contains(node_id) {
+            return;
+        }
+
+        let mut remove_queue = VecDeque::with_capacity(8);
+
+        remove_queue.push_back(node_id);
+
+        while let Some(node_id) = remove_queue.pop_front() {
+            for child_id in self.get_children(node_id).unwrap() {
+                if !func(child_id) {
+                    remove_queue.push_back(*child_id);
+                }
+            }
+
+            if !func(&node_id) {
+                self.remove(node_id);
+            }
         }
     }
 
@@ -578,30 +621,53 @@ where
     Storage: TreeStorage,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Tree")?;
+        struct DebugNodes(usize);
 
-        for node_id in self.iter_down() {
-            let depth = self.get_depth(node_id).unwrap();
+        impl std::fmt::Debug for DebugNodes {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("[")?;
 
-            f.write_str("  ")?;
+                f.write_fmt(format_args!(
+                    "..{} item{}",
+                    self.0,
+                    if self.0 == 1 { "" } else { "s" }
+                ))?;
 
-            if depth > 0 {
-                f.write_str(&"|     ".repeat(depth / 3))?;
+                f.write_str("]")
+            }
+        }
+
+        if f.alternate() {
+            write!(f, "Tree")?;
+
+            for node_id in self.iter_down() {
+                writeln!(f)?;
+
+                let depth = self.get_depth(node_id).unwrap();
+
+                f.write_str("| ")?;
+
+                f.write_str(&"    | ".repeat(depth / 3))?;
 
                 if depth % 3 == 1 {
-                    f.write_str("| ")?;
+                    f.write_str("  ")?;
                 } else if depth % 3 == 2 {
-                    f.write_str("|   ")?;
+                    f.write_str("    ")?;
                 }
-            }
 
-            if let Some(value) = self.get(node_id) {
-                value.fmt(f)?;
-            } else {
-                f.write_str("Missing")?;
-            }
+                if let Some(value) = self.get(node_id) {
+                    value.fmt(f)?;
+                } else {
+                    f.write_str("Missing")?;
+                }
 
-            writeln!(f, " ({:?})", node_id.data())?;
+                write!(f, " ({:?})", node_id.data())?;
+            }
+        } else {
+            f.debug_struct("Tree")
+                .field("root", &self.root)
+                .field("nodes", &DebugNodes(self.nodes.len()))
+                .finish()?;
         }
 
         Ok(())

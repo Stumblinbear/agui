@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn can_retrieve_from_available_fonts() {
-        let mut manager = WidgetManager::with_root(build! {
+        let mut manager = WidgetManager::default_with_root(build! {
             <Fonts> {
                 fonts: im_rc::HashMap::from_iter([(
                     String::from("test font family"),
@@ -132,8 +132,6 @@ mod tests {
                 child: <TestWidget> {},
             }
         });
-
-        manager.update();
 
         TEST_HOOK.with(|result| {
             assert_ne!(

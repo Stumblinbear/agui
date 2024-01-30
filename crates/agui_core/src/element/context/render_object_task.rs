@@ -1,43 +1,73 @@
 use crate::{
-    element::{ContextDirtyRenderObject, ContextRenderObject, ElementId},
-    engine::Dirty,
+    element::{ContextDirtyRenderObject, ContextRenderObject},
     render::RenderObjectId,
 };
 
-use super::ContextElement;
-
-pub struct RenderObjectTaskContext {
-    pub(crate) element_id: ElementId,
-    pub(crate) render_object_id: RenderObjectId,
-
-    pub(crate) needs_layout: Dirty<RenderObjectId>,
-    pub(crate) needs_paint: Dirty<RenderObjectId>,
+pub trait RenderingTaskNotifyStrategy: Send {
+    fn mark_needs_layout(&mut self, render_object_id: RenderObjectId);
+    fn mark_needs_paint(&mut self, render_object_id: RenderObjectId);
 }
 
-impl ContextElement for RenderObjectTaskContext {
-    fn element_id(&self) -> ElementId {
-        self.element_id
+pub struct RenderingTaskContext {
+    notify_strategy: Option<Box<dyn RenderingTaskNotifyStrategy>>,
+
+    render_object_id: RenderObjectId,
+}
+
+impl RenderingTaskContext {
+    pub(crate) fn new(render_object_id: RenderObjectId) -> Self {
+        RenderingTaskContext {
+            notify_strategy: None,
+            render_object_id,
+        }
+    }
+
+    pub(crate) fn with_notify_strategy<T>(self, strategy: T) -> Self
+    where
+        T: RenderingTaskNotifyStrategy + 'static,
+    {
+        Self {
+            notify_strategy: Some(Box::new(strategy)),
+
+            render_object_id: self.render_object_id,
+        }
     }
 }
 
-impl ContextRenderObject for RenderObjectTaskContext {
+impl ContextRenderObject for RenderingTaskContext {
     fn render_object_id(&self) -> RenderObjectId {
         self.render_object_id
     }
 }
 
-impl ContextDirtyRenderObject for RenderObjectTaskContext {
+impl ContextDirtyRenderObject for RenderingTaskContext {
     fn mark_needs_layout(&mut self) {
-        tracing::trace!(render_object_id = ?self.render_object_id, "render object needs layout");
+        let Some(notify_strategy) = self.notify_strategy.as_mut() else {
+            tracing::warn!(
+                render_object_id = ?self.render_object_id,
+                "render object needs to be laid out, but no notify strategy is set"
+            );
 
-        self.needs_layout.insert(self.render_object_id);
-        self.needs_layout.notify();
+            return;
+        };
+
+        tracing::trace!(render_object_id = ?self.render_object_id, "render object needs to be laid out");
+
+        notify_strategy.mark_needs_layout(self.render_object_id);
     }
 
     fn mark_needs_paint(&mut self) {
-        tracing::trace!(render_object_id = ?self.render_object_id, "render object needs paint");
+        let Some(notify_strategy) = self.notify_strategy.as_mut() else {
+            tracing::warn!(
+                render_object_id = ?self.render_object_id,
+                "render object needs to be painted, but no notify strategy is set"
+            );
 
-        self.needs_paint.insert(self.render_object_id);
-        self.needs_layout.notify();
+            return;
+        };
+
+        tracing::trace!(render_object_id = ?self.render_object_id, "render object needs to be painted");
+
+        notify_strategy.mark_needs_paint(self.render_object_id);
     }
 }

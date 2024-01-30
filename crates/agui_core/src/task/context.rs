@@ -1,13 +1,13 @@
 use std::future::Future;
 
 use crate::{
-    element::{ElementTaskContext, RenderObjectTaskContext},
+    element::{ElementTaskContext, RenderingTaskContext},
     task::{error::TaskError, TaskHandle},
 };
 
 pub trait ContextSpawnElementTask {
     fn spawn_task<Fut>(
-        &self,
+        &mut self,
         func: impl FnOnce(ElementTaskContext) -> Fut + 'static,
     ) -> Result<TaskHandle<()>, TaskError>
     where
@@ -16,8 +16,8 @@ pub trait ContextSpawnElementTask {
 
 pub trait ContextSpawnRenderingTask {
     fn spawn_task<Fut>(
-        &self,
-        func: impl FnOnce(RenderObjectTaskContext) -> Fut + 'static,
+        &mut self,
+        func: impl FnOnce(RenderingTaskContext) -> Fut + 'static,
     ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + Send + 'static;

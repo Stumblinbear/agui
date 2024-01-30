@@ -1,5 +1,6 @@
 use std::{error::Error, time::Instant};
 
+use agui_core::unit::Size;
 use agui_renderer::{BindRenderer, FrameNotifier, Renderer};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vello::{
@@ -10,42 +11,18 @@ use vello::{
 
 use crate::view::VelloViewHandle;
 
-mod sealed {
-    pub trait VelloWindowRendererState {}
-}
-
-impl sealed::VelloWindowRendererState for () {}
-
-pub struct Bound {
-    render_context: RenderContext,
-
-    render_surface: RenderSurface,
-    renderer: vello::Renderer,
-}
-
-impl sealed::VelloWindowRendererState for Bound {}
-
 #[derive(Clone)]
-pub struct VelloWindowRenderer<S>
-where
-    S: sealed::VelloWindowRendererState,
-{
+pub struct VelloWindowRenderer {
     view_handle: VelloViewHandle,
-
-    state: S,
 }
 
-impl VelloWindowRenderer<()> {
+impl VelloWindowRenderer {
     pub fn new(view_handle: VelloViewHandle) -> Self {
-        Self {
-            view_handle,
-
-            state: (),
-        }
+        Self { view_handle }
     }
 }
 
-impl<T> BindRenderer<T> for VelloWindowRenderer<()>
+impl<T> BindRenderer<T> for VelloWindowRenderer
 where
     T: HasRawWindowHandle + HasRawDisplayHandle,
 {
@@ -57,7 +34,10 @@ where
         let mut render_context =
             RenderContext::new().map_err(|err| VelloBindError::Context(format!("{:?}", err)))?;
 
-        let size = self.view_handle.with_scene(|scene| scene.size);
+        let size = self
+            .view_handle
+            .with_scene(|scene| scene.size)
+            .unwrap_or_else(|| Size::new(16.0, 16.0));
 
         let now = Instant::now();
 
@@ -82,17 +62,24 @@ where
 
         self.view_handle.set_frame_notifier(frame_notifier);
 
-        Ok(Box::new(VelloWindowRenderer {
+        Ok(Box::new(BoundVelloWindowRenderer {
             view_handle: self.view_handle,
 
-            state: Bound {
-                render_context,
+            render_context,
 
-                render_surface,
-                renderer,
-            },
+            render_surface,
+            renderer,
         }))
     }
+}
+
+struct BoundVelloWindowRenderer {
+    view_handle: VelloViewHandle,
+
+    render_context: RenderContext,
+
+    render_surface: RenderSurface,
+    renderer: vello::Renderer,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -107,24 +94,29 @@ pub enum VelloBindError {
     Renderer(String),
 }
 
-impl Renderer for VelloWindowRenderer<Bound> {
+impl Renderer for BoundVelloWindowRenderer {
     fn render(&mut self) {
         tracing::trace!("VelloWindowRenderer::render");
 
-        let render_context = &mut self.state.render_context;
-        let render_surface = &mut self.state.render_surface;
-        let renderer = &mut self.state.renderer;
+        let render_context = &mut self.render_context;
+        let render_surface = &mut self.render_surface;
+        let renderer = &mut self.renderer;
 
         let device_handle = &render_context.devices[render_surface.dev_id];
 
         self.view_handle.with_scene(|scene| {
-            if render_surface.config.width != scene.size.width as u32
-                || render_surface.config.height != scene.size.height as u32
+            let Some(size) = scene.size else {
+                tracing::warn!("scene has no size, skipping render");
+                return;
+            };
+
+            if render_surface.config.width != size.width as u32
+                || render_surface.config.height != size.height as u32
             {
                 render_context.resize_surface(
                     render_surface,
-                    scene.size.width as u32,
-                    scene.size.height as u32,
+                    size.width as u32,
+                    size.height as u32,
                 );
             }
 
@@ -135,8 +127,8 @@ impl Renderer for VelloWindowRenderer<Bound> {
 
             let render_params = vello::RenderParams {
                 base_color: vello::peniko::Color::BLACK,
-                width: scene.size.width as u32,
-                height: scene.size.height as u32,
+                width: size.width as u32,
+                height: size.height as u32,
                 antialiasing_method: AaConfig::Area,
             };
 

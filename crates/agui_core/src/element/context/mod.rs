@@ -34,10 +34,6 @@ pub trait ContextRenderObject {
     fn render_object_id(&self) -> RenderObjectId;
 }
 
-pub trait ContextDirtyElement {
-    fn mark_needs_build(&mut self);
-}
-
 pub trait ContextDirtyRenderObject {
     fn mark_needs_layout(&mut self);
 

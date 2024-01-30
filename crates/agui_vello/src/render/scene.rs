@@ -15,7 +15,7 @@ pub(crate) struct VelloScene {
 
     needs_redraw: bool,
 
-    pub size: Size,
+    pub size: Option<Size>,
     scene: Scene,
 }
 
@@ -26,7 +26,7 @@ impl Default for VelloScene {
 
             needs_redraw: true,
 
-            size: Size::new(1.0, 1.0),
+            size: None,
             scene: Scene::new(),
         };
 
@@ -67,7 +67,7 @@ impl VelloScene {
         self.needs_redraw = true;
 
         if self.tree.root() == Some(render_object_id) {
-            self.size = size;
+            self.size = Some(size);
         }
     }
 

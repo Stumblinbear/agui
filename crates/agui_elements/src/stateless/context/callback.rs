@@ -1,10 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use agui_core::{
-    element::{
-        ContextDirtyElement, ContextElement, ContextElements, Element, ElementCallbackContext,
-        ElementId,
-    },
+    element::{ContextElement, ContextElements, Element, ElementCallbackContext, ElementId},
     util::tree::Tree,
 };
 
@@ -21,12 +18,6 @@ impl ContextElements for StatelessCallbackContext<'_, '_> {
 impl ContextElement for StatelessCallbackContext<'_, '_> {
     fn element_id(&self) -> ElementId {
         self.inner.element_id()
-    }
-}
-
-impl ContextDirtyElement for StatelessCallbackContext<'_, '_> {
-    fn mark_needs_build(&mut self) {
-        self.inner.mark_needs_build();
     }
 }
 

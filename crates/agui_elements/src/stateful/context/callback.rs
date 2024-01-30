@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use agui_core::element::{ContextElements, ElementCallbackContext};
 
 use agui_core::{
-    element::{ContextDirtyElement, ContextElement, Element, ElementId},
+    element::{ContextElement, Element, ElementId},
     util::tree::Tree,
 };
 
@@ -38,15 +38,6 @@ where
 {
     fn element_id(&self) -> ElementId {
         self.inner.element_id()
-    }
-}
-
-impl<S> ContextDirtyElement for StatefulCallbackContext<'_, '_, S>
-where
-    S: WidgetState + ?Sized,
-{
-    fn mark_needs_build(&mut self) {
-        self.inner.mark_needs_build();
     }
 }
 

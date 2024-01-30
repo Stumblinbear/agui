@@ -36,9 +36,13 @@ where
         };
 
         #[cfg(not(feature = "multi-threaded"))]
-        agui_executor::LocalEngineExecutor::with_root(root).run_until(shutdown_rx.wait());
+        let executor =
+            agui_executor::LocalEngineExecutor::with_root(root).expect("failed to build tree");
+
         #[cfg(feature = "multi-threaded")]
-        agui_executor::ThreadedEngineExecutor::with_root(root).run_until(shutdown_rx.wait());
+        let executor = agui_executor::ThreadedEngineExecutor::default().with_root(root);
+
+        executor.run_until(shutdown_rx.wait());
     });
 
     winit_app.run();
