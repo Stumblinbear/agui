@@ -45,7 +45,7 @@ url = "2.4"
 smallbox = "0.8"
 
 futures = "0.3"
-futures-util = "0.3"
+futures-util = { version = "0.3", default-features = false }
 futures-lite = "2.2"
 futures-executor = "0.3"
 event-listener = "4.0"

@@ -12,6 +12,7 @@ pub mod element;
 pub mod engine;
 pub mod inheritance;
 pub mod query;
+pub mod reactivity;
 pub mod render;
 pub mod task;
 pub mod unit;

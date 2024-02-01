@@ -15,9 +15,7 @@ readme = "README.md"
 thiserror.workspace = true
 
 futures-lite.workspace = true
-futures-util = { workspace = true, default-features = false, features = [
-    "alloc",
-] }
+futures-util = { workspace = true, features = ["alloc"] }
 event-listener.workspace = true
 async-lock.workspace = true
 async-channel.workspace = true

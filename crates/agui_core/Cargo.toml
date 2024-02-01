@@ -30,10 +30,7 @@ bitflags.workspace = true
 url.workspace = true
 smallbox.workspace = true
 
-futures-util = { workspace = true, default-features = false, features = [
-    "std",
-    "channel",
-] }
+futures-util = { workspace = true, features = ["std", "channel"] }
 
 glam.workspace = true
 lyon.workspace = true
@@ -52,9 +49,10 @@ fnv = "1.0"
 concurrent-queue = "2.4"
 
 [[bench]]
-name = "widget_manager"
-path = "benches/widget_manager.rs"
+name = "element_tree"
+path = "benches/element_tree.rs"
 harness = false
+required-features = ["mocks"]
 
 [[bench]]
 name = "hashers"

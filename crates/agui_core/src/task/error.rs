@@ -8,7 +8,7 @@ pub enum TaskError {
 }
 
 impl TaskError {
-    pub(crate) fn no_scheduler() -> Self {
+    pub fn no_scheduler() -> Self {
         Self::NoScheduler(NoScheduler {})
     }
 }

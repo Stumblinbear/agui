@@ -7,7 +7,7 @@ use slotmap::{SecondaryMap, SparseSecondaryMap};
 use crate::{
     element::{Element, ElementId, RenderObjectCreateContext, RenderObjectUpdateContext},
     engine::{
-        elements::tree::ElementTree,
+        elements::ElementTree,
         rendering::scheduler::{RenderingScheduler, RenderingSchedulerStrategy},
         Dirty,
     },

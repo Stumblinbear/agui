@@ -25,7 +25,7 @@ use agui_core::{
             context::ElementTreeContext,
             errors::{InflateError, SpawnElementError},
             scheduler::{CreateElementTask, ElementSchedulerStrategy},
-            strategies::InflateStrategy,
+            strategies::InflateElementStrategy,
             tree::ElementTree,
         },
         rendering::{
@@ -140,7 +140,7 @@ impl LocalEngineExecutor {
             spawned_elements: &'ctx mut VecDeque<ElementId>,
         }
 
-        impl<Sched> InflateStrategy for InflateRootStrategy<'_, Sched>
+        impl<Sched> InflateElementStrategy for InflateRootStrategy<'_, Sched>
         where
             Sched: ElementSchedulerStrategy,
         {
@@ -227,7 +227,7 @@ impl LocalEngineExecutor {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn flush_needs_build(&mut self) -> bool {
+    fn flush_needs_build(&mut self) -> bool {
         tracing::trace!("flushing needs build");
 
         while let Ok(element_id) = self.needs_build_rx.try_recv() {
@@ -256,7 +256,7 @@ impl LocalEngineExecutor {
             rebuilt_elements: &'ctx mut FxHashSet<ElementId>,
         }
 
-        impl<Sched> InflateStrategy for RebuildStrategy<'_, Sched>
+        impl<Sched> InflateElementStrategy for RebuildStrategy<'_, Sched>
         where
             Sched: ElementSchedulerStrategy,
         {

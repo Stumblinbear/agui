@@ -6,7 +6,9 @@ use std::{
 
 use rustc_hash::FxHashMap;
 
-use crate::{element::Element, unit::Key, util::ptr_eq::PtrEqual};
+use crate::{
+    element::Element, reactivity::strategies::WithReactiveKey, unit::Key, util::ptr_eq::PtrEqual,
+};
 
 mod traits;
 
@@ -54,8 +56,14 @@ impl Widget {
         Rc::clone(&self.widget).as_any().downcast::<W>().ok()
     }
 
-    pub(crate) fn create_element(self) -> Element {
+    pub fn create_element(self) -> Element {
         self.widget.create_element()
+    }
+}
+
+impl WithReactiveKey for Widget {
+    fn key(&self) -> Option<Key> {
+        self.key
     }
 }
 

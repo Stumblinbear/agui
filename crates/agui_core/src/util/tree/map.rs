@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::util::tree::{
+    errors::{ReparentError, SwapSiblingsError},
     iter::{
         ChildIterator, DownwardIterator, IterableTree, ParentIterator, SubtreeIterator,
         UpwardIterator,
@@ -46,6 +47,7 @@ where
         self.root
     }
 
+    /// Returns [`true`] if the tree contains `node_id`.
     pub fn contains(&self, node_id: K) -> bool {
         self.nodes.contains_key(node_id)
     }
@@ -305,48 +307,99 @@ where
     K: slotmap::Key,
     Storage: TreeStorage,
 {
+    /// Swaps two siblings that are children of the same parent.
+    pub fn swap_siblings(
+        &mut self,
+        parent_id: K,
+        sibling: ChildNode<K>,
+        other_sibling: ChildNode<K>,
+    ) -> Result<(), SwapSiblingsError> {
+        let parent = self
+            .nodes
+            .get_mut(parent_id)
+            .ok_or(SwapSiblingsError::ParentNotFound)?;
+
+        if parent.children.is_empty() {
+            return Err(SwapSiblingsError::SiblingNotFound);
+        }
+
+        let mut sibling_idx = match sibling {
+            ChildNode::First => Some(0),
+            ChildNode::Last => Some(parent.children.len() - 1),
+            ChildNode::Index(idx) => Some(idx),
+            ChildNode::Id(_) => None,
+        };
+
+        let mut other_sibling_idx = match other_sibling {
+            ChildNode::First => Some(0),
+            ChildNode::Last => Some(parent.children.len() - 1),
+            ChildNode::Index(idx) => Some(idx),
+            ChildNode::Id(_) => None,
+        };
+
+        if sibling_idx.is_none() || other_sibling_idx.is_none() {
+            for (i, child_id) in parent.children.iter().enumerate() {
+                if sibling == ChildNode::Id(*child_id) {
+                    sibling_idx = Some(i);
+
+                    if other_sibling_idx.is_some() {
+                        break;
+                    }
+                }
+
+                if other_sibling == ChildNode::Id(*child_id) {
+                    other_sibling_idx = Some(i);
+
+                    if sibling_idx.is_some() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let (Some(sibling_idx), Some(other_sibling_idx)) = (sibling_idx, other_sibling_idx) {
+            parent.children.swap(sibling_idx, other_sibling_idx);
+
+            Ok(())
+        } else {
+            Err(SwapSiblingsError::SiblingNotFound)
+        }
+    }
+
     /// Moves a node from one parent to another.
-    ///
-    /// Returns `true` if the node was moved, `false` if the node was already a child of the new parent.
-    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> bool {
+    pub fn reparent(&mut self, new_parent_id: Option<K>, node_id: K) -> Result<(), ReparentError> {
+        let Some(node) = self.nodes.get(node_id) else {
+            return Err(ReparentError::NodeNotFound);
+        };
+
         if new_parent_id.is_none() {
             self.root = Some(node_id);
         } else if self.root == Some(node_id) {
             self.root = None;
         }
 
-        if let Some(node) = self.nodes.get(node_id) {
-            if let Some(parent_id) = node.parent {
-                if let Some(parent) = self.nodes.get_mut(parent_id) {
-                    let child_idx = parent
-                        .children
-                        .iter()
-                        .position(|child_id| node_id == *child_id)
-                        .expect("unable to find child in removed node's parent");
+        if let Some(parent_id) = node.parent {
+            let Some(parent) = self.nodes.get_mut(parent_id) else {
+                return Err(ReparentError::NewParentNotFound);
+            };
 
-                    // If the node isn't being moved to an entirely new parent
-                    if Some(parent_id) == new_parent_id {
-                        // If the widget is already the last child in the parent, don't do anything
-                        if child_idx == parent.children.len() - 1 {
-                            return false;
-                        }
+            let child_idx = parent
+                .children
+                .iter()
+                .position(|child_id| node_id == *child_id)
+                .expect("unable to find child in removed node's parent");
 
-                        parent.children.remove(child_idx);
-
-                        parent.children.push(node_id);
-
-                        return false;
-                    } else {
-                        // Remove the child from its parent
-                        parent.children.remove(child_idx);
-                    }
-                }
+            if Some(parent_id) == new_parent_id {
+                return Err(ReparentError::Unmoved);
             }
+
+            // Remove the child from its parent
+            parent.children.remove(child_idx);
 
             self.propagate_node(new_parent_id, node_id);
         }
 
-        true
+        Ok(())
     }
 
     fn propagate_node(&mut self, parent_id: Option<K>, node_id: K) {
@@ -711,6 +764,14 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChildNode<K> {
+    First,
+    Last,
+    Index(usize),
+    Id(K),
+}
+
 // impl<K, V, Storage> Index<K> for Tree<Storage>
 // where
 //     K: slotmap::Key,
@@ -849,6 +910,40 @@ mod tests {
         assert!(
             tree.is_last_child(child_3_1),
             "child_3_1 is the last child of the parent"
+        );
+    }
+
+    #[test]
+    fn reparenting() {
+        let mut tree: Tree<ElementId, usize> = Tree::default();
+
+        let root_id = tree.add(None, 0);
+
+        let child_1 = tree.add(Some(root_id), 1);
+        let child_1_1 = tree.add(Some(child_1), 2);
+        let child_1_1_1 = tree.add(Some(child_1_1), 3);
+
+        let child_2 = tree.add(Some(root_id), 6);
+
+        assert_eq!(
+            tree.get_parent(child_1_1),
+            Some(child_1),
+            "child_1_1 should be a child of child_1"
+        );
+
+        tree.reparent(Some(child_2), child_1_1)
+            .expect("failed to reparent");
+
+        assert_eq!(
+            tree.get_parent(child_1_1),
+            Some(child_2),
+            "child_1_1 should be a child of child_2"
+        );
+
+        assert_eq!(
+            tree.get_parent(child_1_1_1),
+            Some(child_1_1),
+            "child_1_1_1 should be a child of child_1_1"
         );
     }
 
@@ -1232,7 +1327,8 @@ mod tests {
             "child_3_1 should have depth 2"
         );
 
-        tree.reparent(Some(root_id), child_1_1);
+        tree.reparent(Some(root_id), child_1_1)
+            .expect("failed to reparent");
 
         assert_eq!(
             tree.get_depth(root_id),

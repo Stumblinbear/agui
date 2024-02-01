@@ -96,3 +96,20 @@ impl<'ctx> ElementScheduler<'ctx> {
         })
     }
 }
+
+#[cfg(any(test, feature = "mocks"))]
+pub mod mocks {
+    use crate::{
+        engine::elements::scheduler::{CreateElementTask, ElementSchedulerStrategy},
+        task::{error::TaskError, TaskHandle},
+    };
+
+    #[derive(Default)]
+    pub struct MockSchedulerStratgy {}
+
+    impl ElementSchedulerStrategy for MockSchedulerStratgy {
+        fn spawn_task(&mut self, _: CreateElementTask) -> Result<TaskHandle<()>, TaskError> {
+            Err(TaskError::no_scheduler())
+        }
+    }
+}

@@ -2,7 +2,7 @@ use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
     element::{widget::ElementWidget, Element, ElementBuilder, ElementId},
-    engine::elements::tree::ElementTree,
+    engine::elements::ElementTree,
     util::tree::TreeNode,
     widget::AnyWidget,
 };
@@ -65,7 +65,8 @@ where
 mod tests {
     use crate::{
         element::mock::{build::MockBuildWidget, render::MockRenderWidget},
-        engine::elements::{strategies::tests::MockInflateStrategy, tree::ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        query::ElementQuery,
         widget::IntoWidget,
     };
 
@@ -89,21 +90,25 @@ mod tests {
         let mut element_tree = ElementTree::default();
 
         element_tree
-            .spawn_and_inflate(
-                &mut MockInflateStrategy::default(),
+            .inflate(
+                &mut MockInflateElementStrategy::default(),
                 None,
                 root_widget.into_widget(),
             )
             .expect("failed to spawn and inflate");
 
         assert_eq!(
-            element_tree.query().by_widget::<MockRenderWidget>().count(),
+            ElementQuery::new(&element_tree)
+                .by_widget::<MockRenderWidget>()
+                .count(),
             2,
             "should have found 2 widgets of type MockRenderWidget"
         );
 
         assert_eq!(
-            element_tree.query().by_widget::<MockBuildWidget>().count(),
+            ElementQuery::new(&element_tree)
+                .by_widget::<MockBuildWidget>()
+                .count(),
             1,
             "should have found 1 widget of type MockBuildWidget"
         );

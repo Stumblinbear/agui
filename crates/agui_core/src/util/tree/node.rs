@@ -21,6 +21,10 @@ impl<K, V> TreeNode<K, V> {
     pub fn value_mut(&mut self) -> Result<&mut V, NodeInUse> {
         self.value.as_mut().ok_or(NodeInUse)
     }
+
+    pub fn take(mut self) -> Result<V, NodeInUse> {
+        self.value.take().ok_or(NodeInUse)
+    }
 }
 
 impl<K, V> TreeNode<K, V>

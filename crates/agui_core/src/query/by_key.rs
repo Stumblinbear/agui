@@ -1,6 +1,6 @@
 use crate::{
     element::{Element, ElementId},
-    engine::elements::tree::ElementTree,
+    engine::elements::ElementTree,
     unit::Key,
     util::tree::TreeNode,
 };
@@ -39,7 +39,8 @@ impl<'query> QueryByKey<'query> {
 mod tests {
     use crate::{
         element::mock::{build::MockBuildWidget, render::MockRenderWidget},
-        engine::elements::{strategies::tests::MockInflateStrategy, tree::ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        query::ElementQuery,
         unit::Key,
         widget::{IntoWidget, Widget},
     };
@@ -79,27 +80,33 @@ mod tests {
         let mut element_tree = ElementTree::default();
 
         element_tree
-            .spawn_and_inflate(
-                &mut MockInflateStrategy::default(),
+            .inflate(
+                &mut MockInflateElementStrategy::default(),
                 None,
                 root_widget.into_widget(),
             )
             .expect("failed to spawn and inflate");
 
         assert_eq!(
-            element_tree.query().by_key(Key::local(0)).count(),
+            ElementQuery::new(&element_tree)
+                .by_key(Key::local(0))
+                .count(),
             1,
             "should have found 1 widget with local key 0"
         );
 
         assert_eq!(
-            element_tree.query().by_key(Key::local(1)).count(),
+            ElementQuery::new(&element_tree)
+                .by_key(Key::local(1))
+                .count(),
             1,
             "should have found 1 widget with local key 1"
         );
 
         assert_eq!(
-            element_tree.query().by_key(Key::local(3)).count(),
+            ElementQuery::new(&element_tree)
+                .by_key(Key::local(3))
+                .count(),
             0,
             "should have found 0 widgets with local key 3"
         );

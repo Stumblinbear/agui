@@ -202,7 +202,7 @@ impl Element {
     // }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub fn unmount(&mut self, ctx: &mut ElementUnmountContext) {
+    pub fn unmount(mut self, ctx: &mut ElementUnmountContext) {
         match self {
             Element::Widget(ref mut element) => element.unmount(ctx),
             Element::Deferred(ref mut element) => element.unmount(ctx),

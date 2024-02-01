@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{
     element::{lifecycle::ElementLifecycle, Element, ElementId},
-    engine::elements::tree::ElementTree,
+    engine::elements::ElementTree,
     util::tree::TreeNode,
 };
 
@@ -59,7 +59,8 @@ mod tests {
             build::{MockBuildWidget, MockedElementBuild},
             render::{MockRenderWidget, MockedElementRender},
         },
-        engine::elements::{strategies::tests::MockInflateStrategy, tree::ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        query::ElementQuery,
         widget::IntoWidget,
     };
 
@@ -83,16 +84,15 @@ mod tests {
         let mut element_tree = ElementTree::default();
 
         element_tree
-            .spawn_and_inflate(
-                &mut MockInflateStrategy::default(),
+            .inflate(
+                &mut MockInflateElementStrategy::default(),
                 None,
                 root_widget.into_widget(),
             )
             .expect("failed to spawn and inflate");
 
         assert_eq!(
-            element_tree
-                .query()
+            ElementQuery::new(&element_tree)
                 .by_element::<MockedElementRender>()
                 .count(),
             3,
@@ -100,8 +100,7 @@ mod tests {
         );
 
         assert_eq!(
-            element_tree
-                .query()
+            ElementQuery::new(&element_tree)
                 .by_element::<MockedElementBuild>()
                 .count(),
             1,

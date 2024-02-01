@@ -6,11 +6,17 @@ use crate::{
 };
 
 pub struct ElementTreeContext<'ctx> {
-    pub tree: &'ctx Tree<ElementId, Element>,
-
     pub scheduler: ElementScheduler<'ctx>,
 
-    pub element_id: &'ctx ElementId,
-
+    pub tree: &'ctx Tree<ElementId, Element>,
     pub inheritance: &'ctx mut InheritanceManager,
+
+    pub element_id: &'ctx ElementId,
+}
+
+pub struct ElementTreeMountContext<'ctx> {
+    pub tree: &'ctx Tree<ElementId, Element>,
+
+    pub parent_element_id: &'ctx Option<ElementId>,
+    pub element_id: &'ctx ElementId,
 }

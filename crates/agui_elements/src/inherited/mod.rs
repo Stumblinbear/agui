@@ -17,13 +17,14 @@ mod tests {
     use agui_core::{
         element::{
             mock::{
-                build::MockBuildWidget, render::MockRenderWidget, DummyRenderObject, DummyWidget,
+                build::MockBuildWidget,
+                render::{MockRenderObject, MockRenderWidget},
             },
             ElementComparison,
         },
-        engine::widgets::WidgetManager,
         widget::{IntoWidget, Widget},
     };
+    use agui_executor::{EngineExecutor, LocalEngineExecutor};
     use agui_macros::InheritedWidget;
 
     use super::InheritedWidget;
@@ -68,7 +69,8 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
+        let mut manager = LocalEngineExecutor::with_root(root_widget.into_widget())
+            .expect("failed to create executor");
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -112,7 +114,7 @@ mod tests {
         }
         .into_widget();
 
-        *root_children.borrow_mut() = vec![DummyWidget.into_widget()];
+        *root_children.borrow_mut() = vec![MockRenderWidget::dummy()];
 
         let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
 
@@ -187,7 +189,7 @@ mod tests {
 
         let widget = MockRenderWidget::default();
         {
-            let mut widget_mock = widget.mock.borrow_mut();
+            let mut widget_mock = widget.mock();
 
             widget_mock.expect_children().returning_st({
                 let children = children.clone();
@@ -205,7 +207,7 @@ mod tests {
 
             widget_mock
                 .expect_create_render_object()
-                .returning(|_| DummyRenderObject.into());
+                .returning(|_| MockRenderObject::dummy());
 
             widget_mock
                 .expect_update_render_object()
@@ -233,7 +235,7 @@ mod tests {
 
                         *inherited_data.borrow_mut() = widget.map(|widget| widget.data);
 
-                        DummyWidget.into_widget()
+                        MockRenderWidget::dummy()
                     }
                 });
         }

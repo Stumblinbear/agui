@@ -18,3 +18,6 @@ agui_macros.workspace = true
 tracing.workspace = true
 
 rustc-hash.workspace = true
+
+[dev-dependencies]
+agui_executor.workspace = true
