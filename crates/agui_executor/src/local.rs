@@ -97,6 +97,7 @@ impl Default for LocalEngineExecutor {
 
         Self {
             scheduler: scheduler.clone(),
+            #[allow(clippy::arc_with_non_send_sync)]
             callbacks: Arc::new(EngineCallbackStrategy {
                 callback_tx,
                 element_update_tx,
@@ -388,8 +389,10 @@ impl LocalEngineExecutor {
         }
 
         impl<Sched> UnmountElementStrategy for SyncUnmountedStrategy<'_, Sched> {
-            fn unmount(&mut self, ctx: ElementUnmountContext, element: Element) {
+            fn unmount(&mut self, mut ctx: ElementUnmountContext, element: Element) {
                 self.render_manager.forget_element(*ctx.element_id);
+
+                element.unmount(&mut ctx);
             }
         }
 
@@ -412,9 +415,11 @@ impl LocalEngineExecutor {
 
         let update_widget_tree_end = Instant::now();
 
-        self.element_tree.cleanup(&mut SyncUnmountedStrategy {
-            render_manager: &mut self.render_manager,
-        });
+        self.element_tree
+            .cleanup(&mut SyncUnmountedStrategy {
+                render_manager: &mut self.render_manager,
+            })
+            .expect("failed to cleanup element tree");
 
         for element_id in self.spawned_elements.drain(..) {
             self.render_manager.on_create_element(element_id)
