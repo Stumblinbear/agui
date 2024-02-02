@@ -13,7 +13,10 @@ use crate::{
         },
     },
     unit::Key,
-    util::tree::{ChildNode, Tree, TreeNode},
+    util::tree::{
+        storage::{HopSlotMapStorage, TreeStorage},
+        ChildNode, Tree, TreeNode,
+    },
 };
 
 pub mod context;
@@ -23,20 +26,23 @@ pub mod strategies;
 
 pub use errors::*;
 
-pub struct ReactiveTree<K, V>
+pub struct ReactiveTree<K, V, Storage = HopSlotMapStorage>
 where
     K: slotmap::Key,
+    Storage: TreeStorage,
 {
-    tree: Tree<K, V>,
+    tree: Tree<K, V, Storage>,
 
     key_map: KeyMap<K>,
 
     broken: bool,
 }
 
-impl<K, V> Default for ReactiveTree<K, V>
+impl<K, V, Storage> Default for ReactiveTree<K, V, Storage>
 where
     K: slotmap::Key,
+    Storage: TreeStorage,
+    Storage::Container<K, TreeNode<K, V>>: Default,
 {
     fn default() -> Self {
         Self {
@@ -71,24 +77,30 @@ where
         self.tree.contains(node_id)
     }
 
-    /// Returns the number of nodes in the tree, including any that have been forgotten
-    /// but not yet destroyed.
-    pub fn num_nodes(&self) -> usize {
-        self.tree.len()
-    }
-
-    pub fn iter_nodes(&self) -> impl Iterator<Item = (K, &TreeNode<K, V>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (K, &TreeNode<K, V>)> {
         self.tree.iter()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (K, &V)> {
-        self.tree.iter().map(|(id, node)| {
-            (
-                id,
-                node.value()
-                    .expect("cannot iterate over a node that is in use"),
-            )
-        })
+    /// Returns the number of nodes in the tree, including any that have been forgotten
+    /// but not yet removed.
+    pub fn len(&self) -> usize {
+        self.tree.len()
+    }
+
+    /// Returns if the tree is empty, including of any nodes that have been forgotten but
+    /// not yet removed.
+    pub fn is_empty(&self) -> bool {
+        self.tree.is_empty()
+    }
+
+    /// Returns a reference to the node with the given ID.
+    ///
+    /// # Panics
+    ///
+    /// If the node is currently in use (i.e. it has been pulled from the tree
+    /// via [`ReactiveTree::with`]) then this method will panic.
+    pub fn get(&self, node_id: K) -> Option<&V> {
+        self.tree.get(node_id)
     }
 
     pub fn with<F, R>(&mut self, node_id: K, func: F) -> Option<R>
@@ -311,7 +323,7 @@ where
                     .tree
                     .get_node_mut(old_child_id)
                     .ok_or(UpdateChildrenError::NotFound(old_child_id))?
-                    .value_mut()
+                    .try_borrow_mut()
                     .map_err(|_| UpdateChildrenError::InUse(old_child_id))?;
 
                 match strategy.try_update(old_child_id, old_child, new_child) {
@@ -360,7 +372,7 @@ where
                     .tree
                     .get_node_mut(old_child_id)
                     .ok_or(UpdateChildrenError::NotFound(old_child_id))?
-                    .value_mut()
+                    .try_borrow_mut()
                     .map_err(|_| UpdateChildrenError::InUse(old_child_id))?;
 
                 match strategy.try_update(old_child_id, old_child, new_child) {
@@ -436,7 +448,7 @@ where
                         .tree
                         .get_node_mut(old_child_id)
                         .ok_or(UpdateChildrenError::NotFound(old_child_id))?
-                        .value_mut()
+                        .try_borrow_mut()
                         .map_err(|_| UpdateChildrenError::InUse(old_child_id))?;
 
                     if tracing::span_enabled!(tracing::Level::TRACE) {
@@ -880,7 +892,7 @@ mod tests {
 
         assert_eq!(
             tree.as_ref().get_parent(child_id),
-            Some(root_id),
+            Some(&root_id),
             "child should have the root as its parent"
         );
 
@@ -922,13 +934,13 @@ mod tests {
 
         assert_eq!(
             tree.as_ref().get_parent(child_1_id),
-            Some(root_id),
+            Some(&root_id),
             "child_1 should have the root as its parent"
         );
 
         assert_eq!(
             tree.as_ref().get_parent(child_2_id),
-            Some(child_1_id),
+            Some(&child_1_id),
             "child_2 should have child_1 as its parent"
         );
 

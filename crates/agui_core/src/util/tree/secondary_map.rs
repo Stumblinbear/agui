@@ -9,7 +9,7 @@ use slotmap::{
 };
 
 use crate::util::tree::{
-    iter::{DownwardIterator, ParentIterator, SubtreeIterator, UpwardIterator},
+    iter::{DownwardIter, ParentIterator, SubtreeIterator, UpwardIterator},
     node::TreeNode,
 };
 

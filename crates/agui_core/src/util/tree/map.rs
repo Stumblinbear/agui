@@ -3,13 +3,13 @@ use std::collections::VecDeque;
 use crate::util::tree::{
     errors::{ReparentError, SwapSiblingsError},
     iter::{
-        ChildIterator, DownwardIterator, IterableTree, ParentIterator, SubtreeIterator,
+        ChildIterator, DownwardIter, Iter, IterableTree, ParentIterator, SubtreeIterator,
         UpwardIterator,
     },
     node::TreeNode,
     storage::{
-        sealed::{TreeContainer, TreeContainerAdd, TreeContainerInsert, TreeStorage},
-        HopSlotMapStorage,
+        sealed::{TreeContainer, TreeContainerAdd, TreeContainerInsert},
+        HopSlotMapStorage, TreeStorage,
     },
 };
 
@@ -60,17 +60,27 @@ where
         self.nodes.get_mut(node_id)
     }
 
+    /// Returns a reference to the value with the given ID.
+    ///
+    /// # Panics
+    ///
+    /// If the node is currently in use (i.e. it has been pulled from the tree
+    /// via [`Tree::with`]) then this method will panic.
     pub fn get(&self, node_id: K) -> Option<&V> {
-        self.get_node(node_id)
-            .map(|node| node.value().expect("node is currently in use"))
+        self.get_node(node_id).map(|node| node.borrow())
     }
 
+    /// Returns a mutable reference to the value with the given ID.
+    ///
+    /// # Panics
+    ///
+    /// If the node is currently in use (i.e. it has been pulled from the tree
+    /// via [`Tree::with`]) then this method will panic.
     pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
-        self.get_node_mut(node_id)
-            .map(|node| node.value_mut().expect("node is currently in use"))
+        self.get_node_mut(node_id).map(|node| node.borrow_mut())
     }
 
-    pub fn get_parent(&self, node_id: K) -> Option<K> {
+    pub fn get_parent(&self, node_id: K) -> Option<&K> {
         self.get_node(node_id).and_then(|node| node.parent())
     }
 
@@ -83,10 +93,12 @@ where
         self.get_node(node_id).map(|node| &node.children)
     }
 
+    /// Returns if the tree is empty.
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
 
+    /// Returns the number of nodes in the tree.
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
@@ -505,7 +517,7 @@ where
 
     pub fn is_first_child(&self, node_id: K) -> bool {
         if let Some(parent_id) = self.get_parent(node_id) {
-            if let Some(parent) = self.nodes.get(parent_id) {
+            if let Some(parent) = self.nodes.get(*parent_id) {
                 return parent
                     .children
                     .first()
@@ -518,7 +530,7 @@ where
 
     pub fn is_last_child(&self, node_id: K) -> bool {
         if let Some(parent_id) = self.get_parent(node_id) {
-            if let Some(parent) = self.nodes.get(parent_id) {
+            if let Some(parent) = self.nodes.get(*parent_id) {
                 return parent
                     .children
                     .last()
@@ -535,15 +547,12 @@ where
     K: slotmap::Key,
     Storage: TreeStorage,
 {
-    // TODO: add our own Iter type instead of using the storage's iter type
-    pub fn iter(
-        &self,
-    ) -> <Storage::Container<K, TreeNode<K, V>> as TreeContainer<K, TreeNode<K, V>>>::Iter<'_> {
-        self.nodes.iter()
+    pub fn iter(&self) -> Iter<K, V, Storage> {
+        Iter::new(&self.nodes)
     }
 
-    pub fn iter_down(&self) -> DownwardIterator<K, Self> {
-        DownwardIterator {
+    pub fn iter_down(&self) -> DownwardIter<K, Self> {
+        DownwardIter {
             tree: self,
             node_id: self.root,
             first: true,
@@ -563,8 +572,8 @@ where
         }
     }
 
-    pub fn iter_down_from(&self, node_id: K) -> DownwardIterator<K, Self> {
-        DownwardIterator {
+    pub fn iter_down_from(&self, node_id: K) -> DownwardIter<K, Self> {
+        DownwardIter {
             tree: self,
             node_id: Some(node_id),
             first: true,
@@ -927,7 +936,7 @@ mod tests {
 
         assert_eq!(
             tree.get_parent(child_1_1),
-            Some(child_1),
+            Some(&child_1),
             "child_1_1 should be a child of child_1"
         );
 
@@ -936,13 +945,13 @@ mod tests {
 
         assert_eq!(
             tree.get_parent(child_1_1),
-            Some(child_2),
+            Some(&child_2),
             "child_1_1 should be a child of child_2"
         );
 
         assert_eq!(
             tree.get_parent(child_1_1_1),
-            Some(child_1_1),
+            Some(&child_1_1),
             "child_1_1_1 should be a child of child_1_1"
         );
     }

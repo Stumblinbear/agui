@@ -1,55 +1,68 @@
-use crate::{
-    element::{lifecycle::ElementLifecycle, Element, ElementId},
-    engine::elements::ElementTree,
-    unit::Key,
-    util::tree::TreeNode,
-    widget::AnyWidget,
-};
-
 pub mod by_element;
 pub mod by_key;
 pub mod by_widget;
 
-use self::by_element::QueryByElement;
-use self::by_key::QueryByKey;
-use self::by_widget::QueryByWidget;
+#[cfg(test)]
+mod tests {
+    use crate::{
+        element::mock::{build::MockBuildWidget, render::MockRenderWidget},
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        query::{
+            by_key::FilterKeyExt,
+            by_widget::{ExactWidgetIterator, FilterByWidgetExt},
+        },
+        unit::Key,
+        widget::{IntoWidget, Widget},
+    };
 
-#[derive(Clone)]
-pub struct ElementQuery<'query> {
-    tree: &'query ElementTree,
-}
+    #[test]
+    pub fn finds_widget_by_key_and_downcasts() {
+        let root_widget = MockRenderWidget::default();
+        {
+            root_widget.mock().expect_children().returning(|| {
+                let build_widget = MockBuildWidget::default();
+                {
+                    build_widget
+                        .mock
+                        .borrow_mut()
+                        .expect_build()
+                        .returning(|_| {
+                            let build_widget = MockBuildWidget::default();
+                            {
+                                build_widget
+                                    .mock
+                                    .borrow_mut()
+                                    .expect_build()
+                                    .returning(|_| MockRenderWidget::dummy());
+                            }
+                            build_widget.into_widget()
+                        });
+                }
+                vec![
+                    Widget::new_with_key(Key::local(0), build_widget.clone()),
+                    Widget::new_with_key(Key::local(1), build_widget.clone()),
+                    Widget::new_with_key(Key::local(2), build_widget),
+                ]
+            });
+        }
 
-impl<'query> ElementQuery<'query> {
-    pub(crate) fn new(tree: &'query ElementTree) -> ElementQuery<'query> {
-        ElementQuery { tree }
-    }
+        let mut tree = ElementTree::default();
 
-    pub fn iter_nodes(&self) -> impl Iterator<Item = (ElementId, &TreeNode<ElementId, Element>)> {
-        self.tree.iter_nodes()
-    }
+        tree.inflate(
+            &mut MockInflateElementStrategy::default(),
+            None,
+            root_widget.into_widget(),
+        )
+        .expect("failed to spawn and inflate");
 
-    pub fn iter(&self) -> impl Iterator<Item = (ElementId, &Element)> {
-        self.tree.iter()
-    }
-
-    pub fn by_key(self, key: Key) -> QueryByKey<'query>
-    where
-        Self: Sized,
-    {
-        QueryByKey::new(self.tree, key)
-    }
-
-    pub fn by_widget<W>(self) -> QueryByWidget<'query, W>
-    where
-        W: AnyWidget,
-    {
-        QueryByWidget::<W>::new(self.tree)
-    }
-
-    pub fn by_element<E>(self) -> QueryByElement<'query, E>
-    where
-        E: ElementLifecycle,
-    {
-        QueryByElement::<E>::new(self.tree)
+        assert_eq!(
+            tree.iter()
+                .filter_key(Key::local(1))
+                .filter_widget::<MockBuildWidget>()
+                .and_downcast()
+                .count(),
+            1,
+            "should have found and downcasted 1 widget with local key 1"
+        );
     }
 }

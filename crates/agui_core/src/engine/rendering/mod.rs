@@ -208,7 +208,7 @@ impl<SB> RenderManager<SB> {
             let constraints = self
                 .tree
                 .get_parent(render_object_id)
-                .and_then(|parent_id| self.cached_constraints.get(parent_id).copied())
+                .and_then(|parent_id| self.cached_constraints.get(*parent_id).copied())
                 .unwrap_or_default();
 
             tracing::trace!(?render_object_id, ?constraints, "layout constraints");
@@ -217,27 +217,24 @@ impl<SB> RenderManager<SB> {
             // during layout. This is important for performant responsivity, since
             // some elements may want to change which children they have based on
             // the parent element's size constraints.
-            render_node
-                .value()
-                .expect("render object is currently in use")
-                .layout(
-                    &mut RenderObjectLayoutContext {
-                        render_object_tree: &self.tree,
+            render_node.borrow().layout(
+                &mut RenderObjectLayoutContext {
+                    render_object_tree: &self.tree,
 
-                        parent_uses_size: &false,
+                    parent_uses_size: &false,
 
-                        relayout_boundary_id: &Some(render_object_id),
+                    relayout_boundary_id: &Some(render_object_id),
 
-                        render_object_id: &render_object_id,
+                    render_object_id: &render_object_id,
 
-                        children: render_node.children(),
+                    children: render_node.children(),
 
-                        constraints: &mut self.cached_constraints,
+                    constraints: &mut self.cached_constraints,
 
-                        layout_changed: &mut self.layout_changed,
-                    },
-                    constraints,
-                );
+                    layout_changed: &mut self.layout_changed,
+                },
+                constraints,
+            );
         }
 
         for (render_object_id, layout_update) in self.layout_changed.drain() {
@@ -422,7 +419,7 @@ where
                 .get_mut(render_object_id)
                 .expect("render object missing while updating");
 
-            let element = element_node.as_ref();
+            let element = element_node.borrow();
 
             if matches!(element, Element::Deferred(_)) {
                 self.dirty_deferred_elements.insert(element_id);
@@ -506,12 +503,12 @@ where
             .get_parent(element_id)
             .map(|parent_element_id| {
                 let parent_element = element_tree.as_ref()
-                    .get(parent_element_id)
+                    .get(*parent_element_id)
                     .expect("parent element missing while creating render object");
 
                 let Some(parent_render_object_id) = self
                 .elements
-                .get(parent_element_id)
+                .get(*parent_element_id)
                 .copied() else {
                     panic!("parent element {:?} has no render object while creating render object {:?}", parent_element_id, element_id);
                 };

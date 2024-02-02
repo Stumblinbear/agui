@@ -30,7 +30,9 @@ impl StatelessWidget for Builder {
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        element::mock::DummyWidget, engine::widgets::WidgetManager, query::WidgetQueryExt,
+        element::mock::render::MockRenderWidget,
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        query::by_widget::FilterByWidgetExt,
         widget::IntoWidget,
     };
 
@@ -38,13 +40,18 @@ mod tests {
 
     #[test]
     pub fn calls_func() {
-        let mut manager =
-            WidgetManager::default_with_root(Builder::new(|_| DummyWidget.into()).into_widget());
+        let mut tree = ElementTree::new();
 
-        manager.update();
+        tree.inflate(
+            &mut MockInflateElementStrategy::default(),
+            None,
+            Builder::new(|_| MockRenderWidget::dummy()).into_widget(),
+        )
+        .expect("failed to inflate widget");
 
-        assert!(
-            manager.query().by_widget::<DummyWidget>().next().is_some(),
+        assert_eq!(
+            tree.iter().filter_widget::<MockRenderWidget>().count(),
+            1,
             "widget should have been created"
         );
     }

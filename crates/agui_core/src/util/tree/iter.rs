@@ -1,4 +1,41 @@
-use crate::util::tree::TreeNode;
+use crate::util::tree::{
+    storage::{sealed::TreeContainer, TreeStorage},
+    TreeNode,
+};
+
+pub struct Iter<'a, K, V, Storage>
+where
+    K: slotmap::Key + 'a,
+    V: 'a,
+    Storage: TreeStorage,
+    <Storage as TreeStorage>::Container<K, TreeNode<K, V>>: 'a,
+{
+    #[allow(clippy::type_complexity)]
+    nodes: <Storage::Container<K, TreeNode<K, V>> as TreeContainer<K, TreeNode<K, V>>>::Iter<'a>,
+}
+
+impl<'a, K, V, Storage> Iter<'a, K, V, Storage>
+where
+    K: slotmap::Key,
+    Storage: TreeStorage,
+    <Storage as TreeStorage>::Container<K, TreeNode<K, V>>: 'a,
+{
+    pub fn new(tree: &'a <Storage as TreeStorage>::Container<K, TreeNode<K, V>>) -> Self {
+        Self { nodes: tree.iter() }
+    }
+}
+
+impl<'a, K, V, Storage> Iterator for Iter<'a, K, V, Storage>
+where
+    K: slotmap::Key,
+    Storage: TreeStorage,
+{
+    type Item = (K, &'a TreeNode<K, V>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.nodes.next()
+    }
+}
 
 pub trait IterableTree<K>
 where
@@ -45,13 +82,13 @@ where
     }
 }
 
-pub struct DownwardIterator<'a, K, I> {
+pub struct DownwardIter<'a, K, I> {
     pub(super) tree: &'a I,
     pub(super) node_id: Option<K>,
     pub(super) first: bool,
 }
 
-impl<'a, K, I> Iterator for DownwardIterator<'a, K, I>
+impl<'a, K, I> Iterator for DownwardIter<'a, K, I>
 where
     K: slotmap::Key,
     I: IterableTree<K>,

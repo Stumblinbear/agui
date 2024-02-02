@@ -1,92 +1,106 @@
-use std::rc::Rc;
-
-use agui_core::element::{widget::ElementWidget, Element, ElementBuilder, ElementId};
+use agui_core::{
+    element::{widget::ElementWidget, ElementBuilder},
+    engine::elements::{
+        iter::{ElementEntry, ElementTreeIterator},
+        ElementTree,
+    },
+    query::by_widget::ExactWidgetIterator,
+};
 
 use crate::text::Text;
 
-pub trait TextQueryExt<'query> {
-    fn with_text(self, text: &str) -> QueryWithText<Self>
-    where
-        Self: Sized;
-}
-
-impl<'query, I> TextQueryExt<'query> for I
-where
-    I: Iterator<Item = (ElementId, &'query Element)>,
-{
-    fn with_text(self, text: &str) -> QueryWithText<Self>
+pub trait FilterTextExt {
+    fn with_text(self, text: &str) -> FilterText<Self>
     where
         Self: Sized,
     {
-        QueryWithText::new(self, text)
+        FilterText::new(text, self)
     }
 }
 
-#[must_use = "iterators are lazy and do nothing unless consumed"]
+impl<I> FilterTextExt for I where I: ElementTreeIterator {}
+
 #[derive(Clone)]
-pub struct QueryWithText<'t, I> {
-    pub(crate) iter: I,
-    text: &'t str,
+pub struct FilterText<'query, I> {
+    text: &'query str,
+
+    inner: I,
 }
 
-impl<'t, I> QueryWithText<'t, I> {
-    fn new(iter: I, text: &'t str) -> Self {
-        Self { iter, text }
+impl<'query, I> FilterText<'query, I> {
+    pub fn new(text: &'query str, inner: I) -> Self {
+        Self { text, inner }
     }
 }
 
-impl<'query, 't, I> Iterator for QueryWithText<'t, I>
+impl<'query, I> Iterator for FilterText<'query, I>
 where
-    I: Iterator<Item = (ElementId, &'query Element)>,
+    I: ElementTreeIterator<Item = ElementEntry<'query>>,
 {
-    type Item = Rc<Text>;
+    type Item = ElementEntry<'query>;
 
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.find_map(|(_, element)| {
-            element
+        self.inner.find(|node| {
+            node.element()
                 .downcast::<<Text as ElementBuilder>::Element>()
-                .map(|element| element.widget())
-                .filter(|widget| widget.text == self.text)
-                .map(Rc::clone)
+                .filter(|element| element.widget().text == self.text)
+                .is_some()
         })
     }
+}
 
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let (_, upper) = self.iter.size_hint();
-        (0, upper) // can't know a lower bound
+impl<'query, I> ElementTreeIterator for FilterText<'query, I>
+where
+    I: ElementTreeIterator<Item = ElementEntry<'query>>,
+{
+    fn tree(&self) -> &ElementTree {
+        self.inner.tree()
     }
+}
+
+impl<I> ExactWidgetIterator for FilterText<'_, I> {
+    type Widget = Text;
 }
 
 #[cfg(test)]
 mod tests {
-    use agui_core::engine::widgets::WidgetManager;
+    use agui_core::{
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        query::by_widget::ExactWidgetIterator,
+    };
     use agui_macros::build;
 
-    use crate::{flex::Column, text::query::TextQueryExt, text::Text};
+    use crate::{
+        flex::Column,
+        text::{query::FilterTextExt, Text},
+    };
 
     #[test]
     pub fn finds_widget_with_text() {
-        let mut manager = WidgetManager::default_with_root(build! {
-            <Column> {
-                children: [
-                    <Text> {
-                        text: "foo".into(),
-                    }.into(),
-                    <Text> {
-                        text: "bar".into(),
-                    }.into(),
-                ],
-            }
-        });
+        let mut tree = ElementTree::new();
 
-        manager.update();
+        tree.inflate(
+            &mut MockInflateElementStrategy::default(),
+            None,
+            build! {
+                <Column> {
+                    children: [
+                        <Text> {
+                            text: "foo".into(),
+                        }.into(),
+                        <Text> {
+                            text: "bar".into(),
+                        }.into(),
+                    ],
+                }
+            },
+        )
+        .expect("failed to inflate widget");
 
         assert_eq!(
-            manager
-                .query()
+            tree.iter()
                 .with_text("foo")
+                .and_downcast()
                 .next()
                 .expect("should have found a widget")
                 .text,
@@ -95,9 +109,9 @@ mod tests {
         );
 
         assert_eq!(
-            manager
-                .query()
+            tree.iter()
                 .with_text("bar")
+                .and_downcast()
                 .next()
                 .expect("should have found a widget")
                 .text,

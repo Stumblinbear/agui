@@ -10,11 +10,11 @@ use crate::{
     },
     engine::elements::{
         context::{ElementTreeContext, ElementTreeMountContext},
+        iter::Iter,
         scheduler::ElementScheduler,
         strategies::{InflateElementStrategy, UnmountElementStrategy},
     },
     inheritance::InheritanceManager,
-    query::ElementQuery,
     reactivity::{
         context::{ReactiveTreeBuildContext, ReactiveTreeMountContext, ReactiveTreeUnmountContext},
         keyed::KeyMap,
@@ -24,7 +24,7 @@ use crate::{
         },
         BuildError, ReactiveTree, RemoveError,
     },
-    util::tree::{Tree, TreeNode},
+    util::tree::Tree,
 };
 
 #[derive(Default)]
@@ -54,30 +54,41 @@ impl ElementTree {
         self.tree.contains(element_id)
     }
 
-    /// Returns the number of elements in the tree, including any that have been forgotten
-    /// but not yet destroyed.
-    pub fn num_elements(&self) -> usize {
-        self.tree.num_nodes()
+    /// Get an iterator over the elements in the tree, including any that may have been
+    /// forgotten but not yet unmounted. The order of the elements is not guaranteed.
+    ///
+    /// # Panics
+    ///
+    /// If the iterator passes over an element that is currently in use (i.e. it has been
+    /// pulled from the tree via [`ElementTree::with`]) then this method will panic.
+    pub fn iter(&self) -> Iter<'_> {
+        Iter::new(self)
+    }
+
+    /// Returns the number of nodes in the tree, including any that have been forgotten
+    /// but not yet unmounted.
+    pub fn len(&self) -> usize {
+        self.tree.len()
+    }
+
+    /// Returns if the tree is empty, including of any nodes that have been forgotten but
+    /// not yet unmounted.
+    pub fn is_empty(&self) -> bool {
+        self.tree.is_empty()
     }
 
     pub fn keyed(&self) -> &KeyMap<ElementId> {
         self.tree.keyed()
     }
 
-    pub fn iter_nodes(&self) -> impl Iterator<Item = (ElementId, &TreeNode<ElementId, Element>)> {
-        self.tree.iter_nodes()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (ElementId, &Element)> {
-        self.tree.iter()
-    }
-
-    /// Query elements from the tree.
+    /// Returns a reference to the node with the given ID.
     ///
-    /// This essentially iterates the element tree's element Vec, and as such does not guarantee
-    /// the order in which elements will be returned.
-    pub fn query(&self) -> ElementQuery {
-        ElementQuery::new(self)
+    /// # Panics
+    ///
+    /// If the node is currently in use (i.e. it has been pulled from the tree
+    /// via [`ElementTree::with`]) then this method will panic.
+    pub fn get(&self, element_id: ElementId) -> Option<&Element> {
+        self.tree.get(element_id)
     }
 
     #[tracing::instrument(level = "trace", skip(self, func))]
@@ -390,7 +401,7 @@ mod tests {
             )
             .expect("failed to inflate widget");
 
-        assert_eq!(tree.num_elements(), 3, "children should have been added");
+        assert_eq!(tree.len(), 3, "children should have been added");
 
         let children = tree.as_ref().get_children(root_id).unwrap();
 
@@ -433,7 +444,7 @@ mod tests {
             )
             .expect("failed to inflate widget");
 
-        assert_eq!(tree.num_elements(), 1001, "children should have been added");
+        assert_eq!(tree.len(), 1001, "children should have been added");
 
         children.borrow_mut().clear();
 
@@ -443,11 +454,7 @@ mod tests {
         tree.cleanup(&mut MockUnmountElementStrategy::default())
             .expect("failed to cleanup");
 
-        assert_eq!(
-            tree.num_elements(),
-            1,
-            "nested children should have been removed"
-        );
+        assert_eq!(tree.len(), 1, "nested children should have been removed");
     }
 
     #[test]

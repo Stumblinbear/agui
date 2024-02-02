@@ -1,37 +1,58 @@
 use crate::{
-    element::{Element, ElementId},
-    engine::elements::ElementTree,
+    engine::elements::{
+        iter::{ElementEntry, ElementTreeIterator},
+        ElementTree,
+    },
     unit::Key,
-    util::tree::TreeNode,
 };
 
-#[derive(Clone)]
-pub struct QueryByKey<'query> {
-    tree: &'query ElementTree,
-    key: Key,
+pub trait FilterKeyExt {
+    fn filter_key(self, key: Key) -> FilterKey<Self>
+    where
+        Self: ElementTreeIterator + Sized,
+    {
+        FilterKey::new(key, self)
+    }
 }
 
-impl<'query> QueryByKey<'query> {
-    pub(super) fn new(tree: &'query ElementTree, key: Key) -> Self {
-        Self { tree, key }
-    }
+impl<I> FilterKeyExt for I where I: ElementTreeIterator {}
 
-    pub fn iter_nodes(&self) -> impl Iterator<Item = (ElementId, &TreeNode<ElementId, Element>)> {
-        // TODO: optimize for global keys
-        self.tree
-            .iter_nodes()
-            .filter(|(element_id, _)| self.tree.keyed().get_key(*element_id) == Some(self.key))
-    }
+#[derive(Clone)]
+pub struct FilterKey<I> {
+    key: Key,
 
-    pub fn iter(&self) -> impl Iterator<Item = (ElementId, &Element)> {
-        // TODO: optimize for global keys
-        self.tree
-            .iter()
-            .filter(|(element_id, _)| self.tree.keyed().get_key(*element_id) == Some(self.key))
-    }
+    inner: I,
+}
 
-    pub fn count(&self) -> usize {
-        self.iter().count()
+impl<I> FilterKey<I> {
+    pub(super) fn new(key: Key, inner: I) -> Self {
+        Self { key, inner }
+    }
+}
+
+impl<'query, I> Iterator for FilterKey<I>
+where
+    I: ElementTreeIterator<Item = ElementEntry<'query>>,
+{
+    type Item = ElementEntry<'query>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(node) = self.inner.next() {
+            if self.inner.tree().keyed().get_key(node.id()) == Some(self.key) {
+                return Some(node);
+            }
+        }
+
+        None
+    }
+}
+
+impl<'query, I> ElementTreeIterator for FilterKey<I>
+where
+    I: ElementTreeIterator<Item = ElementEntry<'query>>,
+{
+    fn tree(&self) -> &ElementTree {
+        self.inner.tree()
     }
 }
 
@@ -40,7 +61,7 @@ mod tests {
     use crate::{
         element::mock::{build::MockBuildWidget, render::MockRenderWidget},
         engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
-        query::ElementQuery,
+        query::by_key::FilterKeyExt,
         unit::Key,
         widget::{IntoWidget, Widget},
     };
@@ -77,42 +98,35 @@ mod tests {
             });
         }
 
-        let mut element_tree = ElementTree::default();
+        let mut tree = ElementTree::default();
 
-        element_tree
-            .inflate(
-                &mut MockInflateElementStrategy::default(),
-                None,
-                root_widget.into_widget(),
-            )
-            .expect("failed to spawn and inflate");
+        tree.inflate(
+            &mut MockInflateElementStrategy::default(),
+            None,
+            root_widget.into_widget(),
+        )
+        .expect("failed to spawn and inflate");
 
         assert_eq!(
-            ElementQuery::new(&element_tree)
-                .by_key(Key::local(0))
-                .count(),
+            tree.iter().filter_key(Key::local(0)).count(),
             1,
             "should have found 1 widget with local key 0"
         );
 
         assert_eq!(
-            ElementQuery::new(&element_tree)
-                .by_key(Key::local(1))
-                .count(),
+            tree.iter().filter_key(Key::local(1)).count(),
             1,
             "should have found 1 widget with local key 1"
         );
 
         assert_eq!(
-            ElementQuery::new(&element_tree)
-                .by_key(Key::local(3))
-                .count(),
+            tree.iter().filter_key(Key::local(3)).count(),
             0,
             "should have found 0 widgets with local key 3"
         );
 
         // assert_eq!(
-        //     element_tree.query().by_key(Key::global(3)).count(),
+        //     tree.iter().by_key(Key::global(3)).count(),
         //     1,
         //     "should have found 1 widget with global key 3"
         // );

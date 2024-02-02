@@ -1,12 +1,8 @@
 use slotmap::{HopSlotMap, SparseSecondaryMap};
 
-pub(super) mod sealed {
-    pub trait TreeStorage {
-        type Container<K, V>: TreeContainer<K, V>
-        where
-            K: slotmap::Key;
-    }
+use crate::util::tree::storage::sealed::TreeContainer;
 
+pub(super) mod sealed {
     pub trait TreeContainer<K, V>
     where
         K: Copy + PartialEq,
@@ -29,8 +25,10 @@ pub(super) mod sealed {
 
         fn clear(&mut self);
 
+        /// Returns if the tree is empty.
         fn is_empty(&self) -> bool;
 
+        /// Returns the number of nodes in the tree.
         fn len(&self) -> usize;
     }
 
@@ -49,9 +47,15 @@ pub(super) mod sealed {
     }
 }
 
+pub trait TreeStorage {
+    type Container<K, V>: TreeContainer<K, V>
+    where
+        K: slotmap::Key;
+}
+
 pub struct HopSlotMapStorage;
 
-impl sealed::TreeStorage for HopSlotMapStorage {
+impl TreeStorage for HopSlotMapStorage {
     type Container<K, V> = HopSlotMap<K, V>
     where
         K: slotmap::Key;
@@ -107,7 +111,7 @@ where
 
 pub struct SparseSecondaryMapStorage;
 
-impl sealed::TreeStorage for SparseSecondaryMapStorage {
+impl TreeStorage for SparseSecondaryMapStorage {
     type Container<K, V> = SparseSecondaryMap<K, V>
     where
         K: slotmap::Key;

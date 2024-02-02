@@ -14,12 +14,34 @@ impl<K, V> TreeNode<K, V> {
         self.depth
     }
 
-    pub fn value(&self) -> Result<&V, NodeInUse> {
+    #[inline]
+    pub fn try_borrow(&self) -> Result<&V, NodeInUse> {
         self.value.as_ref().ok_or(NodeInUse)
     }
 
-    pub fn value_mut(&mut self) -> Result<&mut V, NodeInUse> {
+    #[inline]
+    #[track_caller]
+    #[allow(clippy::should_implement_trait)]
+    pub fn borrow(&self) -> &V {
+        match self.try_borrow() {
+            Ok(b) => b,
+            Err(_) => panic!("node is currently in use"),
+        }
+    }
+
+    #[inline]
+    pub fn try_borrow_mut(&mut self) -> Result<&mut V, NodeInUse> {
         self.value.as_mut().ok_or(NodeInUse)
+    }
+
+    #[inline]
+    #[track_caller]
+    #[allow(clippy::should_implement_trait)]
+    pub fn borrow_mut(&mut self) -> &mut V {
+        match self.try_borrow_mut() {
+            Ok(b) => b,
+            Err(_) => panic!("node is currently in use"),
+        }
     }
 
     pub fn take(mut self) -> Result<V, NodeInUse> {
@@ -31,29 +53,11 @@ impl<K, V> TreeNode<K, V>
 where
     K: slotmap::Key,
 {
-    pub fn parent(&self) -> Option<K> {
-        self.parent
+    pub fn parent(&self) -> Option<&K> {
+        self.parent.as_ref()
     }
 
     pub fn children(&self) -> &[K] {
         &self.children
-    }
-}
-
-impl<K, V> AsRef<V> for TreeNode<K, V>
-where
-    K: slotmap::Key,
-{
-    fn as_ref(&self) -> &V {
-        self.value.as_ref().expect("node is currently in use")
-    }
-}
-
-impl<K, V> AsMut<V> for TreeNode<K, V>
-where
-    K: slotmap::Key,
-{
-    fn as_mut(&mut self) -> &mut V {
-        self.value.as_mut().expect("node is currently in use")
     }
 }
