@@ -25,6 +25,7 @@ where
     fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<K, V>);
 }
 
+// TODO: Use Activate and Deactivate instead of "forgotten"
 pub trait ForgetStrategy<K>
 where
     K: slotmap::Key,

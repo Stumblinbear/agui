@@ -398,15 +398,35 @@ where
             self.create_render_object(element_tree, element_id);
         }
 
-        for element_id in self
-            .update_render_object
-            .drain()
-            .filter(|element_id| !self.forgotten_elements.contains(element_id))
-        {
+        // Remove any render objects owned by elements that are being removed.
+        for element_id in self.forgotten_elements.drain() {
+            if let Some(render_object_id) = self.elements.remove(element_id) {
+                if let Some(render_object) = self.tree.remove(render_object_id) {
+                    if let Some(RenderView::Within(view_object_id)) = render_object.render_view() {
+                        if let Some(view_object) = self.tree.get_mut(*view_object_id) {
+                            match view_object.render_view_mut() {
+                                Some(RenderView::Owner(view)) => view.on_detach(render_object_id),
+                                _ => panic!(
+                                    "render object supplied an incorrect render view while detatching"
+                                ),
+                            }
+                        }
+                    }
+                }
+
+                self.update_render_object.remove(&element_id);
+
+                self.dirty_deferred_elements.remove(&element_id);
+
+                self.cached_constraints.remove(render_object_id);
+            }
+        }
+
+        for element_id in self.update_render_object.drain() {
             let element_node = element_tree
                 .as_ref()
                 .get_node(element_id)
-                .expect("element missing while yodatubg render objects");
+                .expect("element missing while updating render objects");
 
             let render_object_id = self
                 .elements
@@ -440,60 +460,24 @@ where
                 render_object,
             );
 
-            if let Some(render_object_id) = self.elements.get(element_id).copied() {
-                let mut first_child_render_object_id = None;
-
-                // Reorder the element children's render objects to match the element's children.
-                for child_element_id in element_node.children().iter().copied() {
-                    let child_render_object_id =
-                        self.elements.get(child_element_id).copied().expect(
-                            "child element has no render object while syncing render object",
-                        );
-
-                    self.tree
-                        .reparent(Some(render_object_id), child_render_object_id);
-
-                    if first_child_render_object_id.is_none() {
-                        first_child_render_object_id = Some(child_render_object_id);
-                    }
-                }
-
-                let mut found_child = false;
-
-                // Remove any render objects that were previously children but are no longer.
-                // Since the `reparent` call reorders them to the end of the list, we can remove
-                // every child from the beginning of the list until we reach the first child
-                // that is still a child of the element.
-                self.tree.retain_children(render_object_id, |child_id| {
-                    if first_child_render_object_id == Some(*child_id) {
-                        found_child = true;
-                    }
-
-                    found_child
-                });
-            }
-        }
-
-        // Remove any render objects owned by elements that are being removed.
-        for element_id in self.forgotten_elements.drain() {
-            if let Some(render_object_id) = self.elements.remove(element_id) {
-                if let Some(render_object) = self.tree.remove(render_object_id) {
-                    if let Some(RenderView::Within(view_object_id)) = render_object.render_view() {
-                        if let Some(view_object) = self.tree.get_mut(*view_object_id) {
-                            match view_object.render_view_mut() {
-                                Some(RenderView::Owner(view)) => view.on_detach(render_object_id),
-                                _ => panic!(
-                                    "render object supplied an incorrect render view while detatching"
-                                ),
-                            }
-                        }
-                    }
-                }
-
-                self.dirty_deferred_elements.remove(&element_id);
-
-                self.cached_constraints.remove(render_object_id);
-            }
+            // Sync the order of the render objects of the element's children. We've already
+            // created/removed all necessary render objects, so we just need to make sure
+            // that the order of the render objects matches the order of the element's children.
+            self.tree
+                .reorder_children(
+                    render_object_id,
+                    element_node
+                        .children()
+                        .iter()
+                        .copied()
+                        .map(|element_id| {
+                            *self.elements.get(element_id).expect(
+                                "child element has no render object while syncing render object",
+                            )
+                        })
+                        .collect(),
+                )
+                .expect("failed to reorder render object children");
         }
     }
 

@@ -15,6 +15,15 @@ pub enum SwapSiblingsError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum ReorderChildrenError {
+    #[error("parent node does not exist")]
+    NotFound,
+
+    #[error("the given children does not contain all children of the parent")]
+    DisjointChildren,
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum ReparentError {
     #[error("parent node does not exist")]
     NewParentNotFound,

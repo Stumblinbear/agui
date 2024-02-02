@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::util::tree::{
-    errors::{ReparentError, SwapSiblingsError},
+    errors::{ReorderChildrenError, ReparentError, SwapSiblingsError},
     iter::{
         ChildIterator, DownwardIter, Iter, IterableTree, ParentIterator, SubtreeIterator,
         UpwardIterator,
@@ -350,6 +350,22 @@ where
         };
 
         if sibling_idx.is_none() || other_sibling_idx.is_none() {
+            // If we found one of the siblings already, we check to see if the other sibling is
+            // in the same position as the sibling we found. If it is, we can bail early.
+            if let ChildNode::Id(other_sibling_id) = other_sibling {
+                if let Some(sibling_idx) = sibling_idx {
+                    if parent.children.get(sibling_idx) == Some(&other_sibling_id) {
+                        return Ok(());
+                    }
+                }
+            } else if let ChildNode::Id(sibling_id) = sibling {
+                if let Some(other_sibling_idx) = other_sibling_idx {
+                    if parent.children.get(other_sibling_idx) == Some(&sibling_id) {
+                        return Ok(());
+                    }
+                }
+            }
+
             for (i, child_id) in parent.children.iter().enumerate() {
                 if sibling == ChildNode::Id(*child_id) {
                     sibling_idx = Some(i);
@@ -376,6 +392,35 @@ where
         } else {
             Err(SwapSiblingsError::SiblingNotFound)
         }
+    }
+
+    /// Reorder all children of a node. The new children must contain all children of the parent,
+    /// and cannot contain any additional children.
+    pub fn reorder_children(
+        &mut self,
+        node_id: K,
+        new_children: Vec<K>,
+    ) -> Result<(), ReorderChildrenError> {
+        let Some(node) = self.nodes.get_mut(node_id) else {
+            return Err(ReorderChildrenError::NotFound);
+        };
+
+        if new_children.len() != node.children.len() {
+            return Err(ReorderChildrenError::DisjointChildren);
+        }
+
+        // Ensure all children are present in the new children list
+        // TODO: Switch to a hash lookup with large enough lengths?
+        #[cfg(debug_assertions)]
+        for child_id in &node.children {
+            if !new_children.contains(child_id) {
+                return Err(ReorderChildrenError::DisjointChildren);
+            }
+        }
+
+        node.children = new_children;
+
+        Ok(())
     }
 
     /// Moves a node from one parent to another.
