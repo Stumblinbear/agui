@@ -17,22 +17,22 @@ use futures::{
 use agui_core::{
     callback::{strategies::CallbackStrategy, CallbackId},
     element::{
-        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementTaskNotifyStrategy,
-        RenderingTaskNotifyStrategy,
+        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
+        ElementTaskNotifyStrategy, ElementUnmountContext, RenderingTaskNotifyStrategy,
     },
     engine::{
         elements::{
-            context::ElementTreeContext,
-            errors::{InflateError, SpawnElementError},
+            context::{ElementTreeContext, ElementTreeMountContext},
             scheduler::{CreateElementTask, ElementSchedulerStrategy},
-            strategies::InflateElementStrategy,
-            tree::ElementTree,
+            strategies::{InflateElementStrategy, UnmountElementStrategy},
+            ElementTree,
         },
         rendering::{
             scheduler::{CreateRenderingTask, RenderingSchedulerStrategy},
             RenderManager,
         },
     },
+    reactivity::{BuildError, SpawnAndInflateError},
     render::RenderObjectId,
     task::{error::TaskError, TaskHandle},
     widget::{IntoWidget, Widget},
@@ -54,7 +54,6 @@ pub struct LocalEngineExecutor {
 
     spawned_elements: VecDeque<ElementId>,
     updated_elements: VecDeque<ElementId>,
-    forgotten_elements: FxHashSet<ElementId>,
 
     element_update_rx: notify::Subscriber,
 
@@ -113,7 +112,6 @@ impl Default for LocalEngineExecutor {
 
             spawned_elements: VecDeque::default(),
             updated_elements: VecDeque::default(),
-            forgotten_elements: FxHashSet::default(),
 
             element_update_rx,
 
@@ -132,7 +130,7 @@ impl Default for LocalEngineExecutor {
 }
 
 impl LocalEngineExecutor {
-    pub fn with_root(root: impl IntoWidget) -> Result<Self, InflateError> {
+    pub fn with_root(root: impl IntoWidget) -> Result<Self, SpawnAndInflateError<ElementId>> {
         struct InflateRootStrategy<'ctx, Sched> {
             scheduler: &'ctx mut Sched,
             callbacks: &'ctx Arc<dyn CallbackStrategy>,
@@ -144,16 +142,42 @@ impl LocalEngineExecutor {
         where
             Sched: ElementSchedulerStrategy,
         {
-            fn on_spawned(&mut self, _: Option<ElementId>, id: ElementId) {
-                self.spawned_elements.push_back(id);
-            }
+            type Definition = Widget;
 
-            fn on_updated(&mut self, _: ElementId) {
-                panic!("elements should never be updated while inflating the first root widget");
+            fn mount(
+                &mut self,
+                ctx: ElementTreeMountContext,
+                definition: Self::Definition,
+            ) -> Element {
+                self.spawned_elements.push_back(*ctx.element_id);
+
+                let mut element = definition.create_element();
+
+                element.mount(&mut ElementMountContext {
+                    element_tree: ctx.tree,
+
+                    parent_element_id: ctx.parent_element_id,
+                    element_id: ctx.element_id,
+                });
+
+                element
             }
 
             fn on_forgotten(&mut self, _: ElementId) {
-                panic!("elements should never forgotten while inflating the first root widget");
+                unreachable!(
+                    "elements should never forgotten while inflating the first root widget"
+                );
+            }
+
+            fn try_update(
+                &mut self,
+                _: ElementId,
+                _: &mut Element,
+                _: &Self::Definition,
+            ) -> agui_core::element::ElementComparison {
+                unreachable!(
+                    "elements should never be updated while inflating the first root widget"
+                );
             }
 
             fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
@@ -173,14 +197,13 @@ impl LocalEngineExecutor {
 
         let mut executor = Self::default();
 
-        executor.element_tree.spawn_and_inflate(
+        executor.element_tree.inflate(
             &mut InflateRootStrategy {
                 scheduler: &mut executor.scheduler,
                 callbacks: &executor.callbacks,
 
                 spawned_elements: &mut executor.spawned_elements,
             },
-            None,
             root.into_widget(),
         )?;
 
@@ -251,7 +274,6 @@ impl LocalEngineExecutor {
 
             spawned_elements: &'ctx mut VecDeque<ElementId>,
             updated_elements: &'ctx mut VecDeque<ElementId>,
-            forgotten_elements: &'ctx mut FxHashSet<ElementId>,
 
             rebuilt_elements: &'ctx mut FxHashSet<ElementId>,
         }
@@ -260,21 +282,42 @@ impl LocalEngineExecutor {
         where
             Sched: ElementSchedulerStrategy,
         {
-            fn on_spawned(&mut self, _: Option<ElementId>, id: ElementId) {
-                self.spawned_elements.push_back(id);
+            type Definition = Widget;
+
+            fn mount(
+                &mut self,
+                ctx: ElementTreeMountContext,
+                definition: Self::Definition,
+            ) -> Element {
+                self.spawned_elements.push_back(*ctx.element_id);
+
+                let mut element = definition.create_element();
+
+                element.mount(&mut ElementMountContext {
+                    element_tree: ctx.tree,
+
+                    parent_element_id: ctx.parent_element_id,
+                    element_id: ctx.element_id,
+                });
+
+                element
             }
 
-            fn on_updated(&mut self, id: ElementId) {
+            fn on_forgotten(&mut self, _: ElementId) {}
+
+            fn try_update(
+                &mut self,
+                id: ElementId,
+                element: &mut Element,
+                definition: &Self::Definition,
+            ) -> agui_core::element::ElementComparison {
                 self.updated_elements.push_back(id);
-            }
 
-            fn on_forgotten(&mut self, id: ElementId) {
-                self.forgotten_elements.insert(id);
+                element.update(definition)
             }
 
             fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
                 self.rebuilt_elements.insert(*ctx.element_id);
-                self.forgotten_elements.remove(ctx.element_id);
 
                 element.build(&mut ElementBuildContext {
                     scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
@@ -306,29 +349,28 @@ impl LocalEngineExecutor {
                 continue;
             }
 
-            if let Err(err) = self.element_tree.build_and_realize(
+            if let Err(err) = self.element_tree.rebuild(
                 &mut RebuildStrategy {
                     scheduler: &mut self.scheduler,
                     callbacks: &self.callbacks,
 
                     spawned_elements: &mut self.spawned_elements,
                     updated_elements: &mut self.updated_elements,
-                    forgotten_elements: &mut self.forgotten_elements,
 
                     rebuilt_elements: &mut rebuilt_elements,
                 },
                 element_id,
             ) {
                 match err {
-                    InflateError::Broken | InflateError::Spawn(SpawnElementError::Broken) => {
-                        panic!("the tree is in an invalid state, aborting update");
+                    BuildError::Broken => {
+                        unreachable!("the tree is in an invalid state, aborting update");
                     }
 
-                    InflateError::Missing(element_id) => {
+                    BuildError::NotFound(element_id) => {
                         tracing::warn!(?element_id, "element was missing from the tree");
                     }
 
-                    InflateError::InUse(element_id) => {
+                    BuildError::InUse(element_id) => {
                         panic!(
                             "failed to rebuild element as it was in use: {:?}",
                             element_id
@@ -339,25 +381,18 @@ impl LocalEngineExecutor {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    fn flush_removals(&mut self) {
-        tracing::trace!("flushing removals");
-
-        for element_id in self.forgotten_elements.drain() {
-            if !self.element_tree.contains(element_id) {
-                continue;
-            }
-
-            if let Err(errs) = self.element_tree.remove(element_id) {
-                for err in errs {
-                    tracing::error!(?err, "an error occured while removing an element");
-                }
-            }
-        }
-    }
-
     #[tracing::instrument(level = "debug", skip(self))]
     fn update_widgets(&mut self) {
+        struct SyncUnmountedStrategy<'ctx, Sched> {
+            render_manager: &'ctx mut RenderManager<Sched>,
+        }
+
+        impl<Sched> UnmountElementStrategy for SyncUnmountedStrategy<'_, Sched> {
+            fn unmount(&mut self, ctx: ElementUnmountContext, element: Element) {
+                self.render_manager.forget_element(*ctx.element_id);
+            }
+        }
+
         tracing::trace!("widget update started");
 
         let start = Instant::now();
@@ -377,9 +412,9 @@ impl LocalEngineExecutor {
 
         let update_widget_tree_end = Instant::now();
 
-        for element_id in &self.forgotten_elements {
-            self.render_manager.forget_element(*element_id)
-        }
+        self.element_tree.cleanup(&mut SyncUnmountedStrategy {
+            render_manager: &mut self.render_manager,
+        });
 
         for element_id in self.spawned_elements.drain(..) {
             self.render_manager.on_create_element(element_id)
@@ -388,8 +423,6 @@ impl LocalEngineExecutor {
         for element_id in self.updated_elements.drain(..) {
             self.render_manager.on_needs_update(element_id)
         }
-
-        self.flush_removals();
 
         if self.render_manager.does_need_sync() {
             println!("syncing render tree");
