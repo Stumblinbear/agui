@@ -22,9 +22,9 @@ mod tests {
             },
             ElementComparison,
         },
+        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
         widget::{IntoWidget, Widget},
     };
-    use agui_executor::{EngineExecutor, LocalEngineExecutor};
     use agui_macros::InheritedWidget;
 
     use super::InheritedWidget;
@@ -69,16 +69,20 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut manager = LocalEngineExecutor::with_root(root_widget.into_widget())
-            .expect("failed to create executor");
-
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
             child: depending_widget.clone(),
         }
         .into_widget()];
 
-        manager.update();
+        let mut tree = ElementTree::new();
+
+        let root_id = tree
+            .inflate(
+                &mut MockInflateElementStrategy::default(),
+                root_widget.into_widget(),
+            )
+            .expect("failed to inflate widget");
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -92,9 +96,8 @@ mod tests {
         }
         .into_widget()];
 
-        manager.mark_needs_build(manager.root().expect("no root element"));
-
-        manager.update();
+        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+            .expect("failed to rebuild");
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -114,17 +117,20 @@ mod tests {
         }
         .into_widget();
 
-        *root_children.borrow_mut() = vec![MockRenderWidget::dummy()];
-
-        let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
-
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
             child: nested_scope.clone(),
         }
         .into_widget()];
 
-        manager.update();
+        let mut tree = ElementTree::new();
+
+        let root_id = tree
+            .inflate(
+                &mut MockInflateElementStrategy::default(),
+                root_widget.into_widget(),
+            )
+            .expect("failed to inflate widget");
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -138,9 +144,8 @@ mod tests {
         }
         .into_widget()];
 
-        manager.mark_needs_build(manager.root().expect("no root element"));
-
-        manager.update();
+        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+            .expect("failed to rebuild");
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -155,7 +160,7 @@ mod tests {
 
         let (depending_widget, inherited_data) = create_depending_widget();
 
-        let mut manager = WidgetManager::default_with_root(root_widget.into_widget());
+        let mut tree = ElementTree::new();
 
         *root_children.borrow_mut() = vec![TestInheritedWidget {
             data: 7,
@@ -163,7 +168,12 @@ mod tests {
         }
         .into_widget()];
 
-        manager.update();
+        let root_id = tree
+            .inflate(
+                &mut MockInflateElementStrategy::default(),
+                root_widget.into_widget(),
+            )
+            .expect("failed to inflate widget");
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -173,9 +183,8 @@ mod tests {
 
         *root_children.borrow_mut() = vec![depending_widget.clone()];
 
-        manager.mark_needs_build(manager.root().expect("no root element"));
-
-        manager.update();
+        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+            .expect("failed to rebuild");
 
         assert_eq!(
             *inherited_data.borrow(),
@@ -238,6 +247,12 @@ mod tests {
                         MockRenderWidget::dummy()
                     }
                 });
+
+            depending_widget
+                .mock
+                .borrow_mut()
+                .expect_update()
+                .returning_st(move |_| ElementComparison::Identical);
         }
         let depending_widget = depending_widget.into_widget();
 

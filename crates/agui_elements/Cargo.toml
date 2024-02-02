@@ -20,4 +20,4 @@ tracing.workspace = true
 rustc-hash.workspace = true
 
 [dev-dependencies]
-agui_executor.workspace = true
+agui_core = { workspace = true, features = ["mocks"] }
