@@ -81,7 +81,6 @@ mod tests {
 
         tree.inflate(
             &mut MockInflateElementStrategy::default(),
-            None,
             build! {
                 <Column> {
                     children: [

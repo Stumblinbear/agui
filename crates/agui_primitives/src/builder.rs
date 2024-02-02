@@ -44,7 +44,6 @@ mod tests {
 
         tree.inflate(
             &mut MockInflateElementStrategy::default(),
-            None,
             Builder::new(|_| MockRenderWidget::dummy()).into_widget(),
         )
         .expect("failed to inflate widget");
