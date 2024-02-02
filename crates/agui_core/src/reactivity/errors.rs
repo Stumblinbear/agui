@@ -3,17 +3,14 @@ pub enum SpawnError<K> {
     #[error("the tree is in an invalid state")]
     Broken,
 
-    #[error("parent node not found: {0:?}")]
-    NotFound(K),
+    #[error("failed to mount: {0:?}")]
+    Mount(#[from] MountError<K>),
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum UpdateError<K> {
-    #[error("the tree is in an invalid state")]
-    Broken,
-
-    #[error("node not found: {0:?}")]
-    NotFound(K),
+pub enum MountError<K> {
+    #[error("parent node not found: {0:?}")]
+    ParentNotFound(K),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -21,14 +18,11 @@ pub enum UpdateChildrenError<K> {
     #[error("the tree is in an invalid state")]
     Broken,
 
-    #[error("node not found: {0:?}")]
-    NotFound(K),
+    #[error("parent node not found: {0:?}")]
+    ParentNotFound(K),
 
     #[error("cannot update {0:?} as it is currently in use")]
     InUse(K),
-
-    #[error("failed to spawn child node: {0}")]
-    SpawnChild(#[from] SpawnError<K>),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,20 +42,28 @@ pub enum BuildError<K> {
     #[error("an node that was due to be rebuilt was missing from the tree")]
     Missing(K),
 
-    #[error("failed to spawn node: {0}")]
-    Spawn(#[from] SpawnError<K>),
-
     #[error("unable to update {0:?} as it is currently in use")]
     InUse(K),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SpawnAndInflateError<K> {
+    #[error("the tree is in an invalid state")]
+    Broken,
+
+    #[error("failed to mount root: {0:?}")]
+    Mount(#[from] MountError<K>),
+
+    #[error("failed to inflate: {0:?}")]
+    Inflate(#[from] BuildError<K>),
 }
 
 impl<K> From<UpdateChildrenError<K>> for BuildError<K> {
     fn from(error: UpdateChildrenError<K>) -> Self {
         match error {
             UpdateChildrenError::Broken => BuildError::Broken,
-            UpdateChildrenError::NotFound(id) => BuildError::Missing(id),
+            UpdateChildrenError::ParentNotFound(id) => BuildError::Missing(id),
             UpdateChildrenError::InUse(id) => BuildError::InUse(id),
-            UpdateChildrenError::SpawnChild(err) => BuildError::Spawn(err),
         }
     }
 }

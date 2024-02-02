@@ -128,7 +128,7 @@ where
             strategy.on_forgotten(root_id);
         }
 
-        Ok(self.mount(strategy, None, definition))
+        Ok(self.mount(strategy, None, definition)?)
     }
 
     /// Spawns a new node into the tree using the given definition. Returns the ID of the
@@ -149,14 +149,30 @@ where
             return Err(SpawnError::Broken);
         }
 
-        Ok(self.mount(strategy, Some(parent_id), definition))
+        Ok(self.mount(strategy, Some(parent_id), definition)?)
     }
 
-    fn mount<S>(&mut self, strategy: &mut S, parent_id: Option<K>, definition: S::Definition) -> K
+    /// Mounts a new node onto the tree using the given definition. Returns the ID of the
+    /// newly created node.
+    ///
+    /// This does not build the node, so it should generally be followed by a call to
+    /// `build` before it is used.
+    fn mount<S>(
+        &mut self,
+        strategy: &mut S,
+        parent_id: Option<K>,
+        definition: S::Definition,
+    ) -> Result<K, MountError<K>>
     where
         S: MountStrategy<K, V> + ?Sized,
     {
-        self.tree.add_with_key(parent_id, |tree, node_id| {
+        if let Some(parent_id) = parent_id {
+            if !self.tree.contains(parent_id) {
+                return Err(MountError::ParentNotFound(parent_id));
+            }
+        }
+
+        Ok(self.tree.add_with_key(parent_id, |tree, node_id| {
             if let Some(key) = definition.key() {
                 tracing::trace!(?node_id, ?key, "mounting node with key");
 
@@ -174,7 +190,7 @@ where
                 },
                 definition,
             )
-        })
+        }))
     }
 
     /// Recursively removes the given node and all of its children.
@@ -263,7 +279,7 @@ where
         let old_children = self
             .tree
             .get_children(node_id)
-            .ok_or(UpdateChildrenError::NotFound(node_id))?;
+            .ok_or(UpdateChildrenError::ParentNotFound(node_id))?;
 
         let new_children = new_children.into_iter();
 
@@ -281,9 +297,12 @@ where
             tracing::trace!(?node_id, "node had no children, spawning all new children");
 
             for new_child in new_children {
-                if let Err(err) = self.spawn(strategy, node_id, new_child) {
-                    self.broken = true;
-                    return Err(err.into());
+                if let Err(err) = self.mount(strategy, Some(node_id), new_child) {
+                    match err {
+                        MountError::ParentNotFound(_) => unreachable!(
+                            "parent must exist in order to have fetched the old children"
+                        ),
+                    }
                 }
             }
 
@@ -322,7 +341,7 @@ where
                 let old_child = self
                     .tree
                     .get_node_mut(old_child_id)
-                    .ok_or(UpdateChildrenError::NotFound(old_child_id))?
+                    .expect("child should exist")
                     .try_borrow_mut()
                     .map_err(|_| UpdateChildrenError::InUse(old_child_id))?;
 
@@ -371,7 +390,7 @@ where
                 let old_child = self
                     .tree
                     .get_node_mut(old_child_id)
-                    .ok_or(UpdateChildrenError::NotFound(old_child_id))?
+                    .expect("child should exist")
                     .try_borrow_mut()
                     .map_err(|_| UpdateChildrenError::InUse(old_child_id))?;
 
@@ -447,7 +466,7 @@ where
                     let old_child = self
                         .tree
                         .get_node_mut(old_child_id)
-                        .ok_or(UpdateChildrenError::NotFound(old_child_id))?
+                        .expect("child should exist")
                         .try_borrow_mut()
                         .map_err(|_| UpdateChildrenError::InUse(old_child_id))?;
 
@@ -482,7 +501,7 @@ where
             }
 
             let child_id = existing_child_id.unwrap_or_else(|| {
-                self.spawn(strategy, node_id, new_child)
+                self.mount(strategy, Some(node_id), new_child)
                     .expect("child spawn should never fail")
             });
 
@@ -616,6 +635,10 @@ where
             }
         }
 
+        if self.broken {
+            return Err(BuildError::Broken);
+        }
+
         let mut build_queue = VecDeque::with_capacity(8);
 
         build_queue.push_back(node_id);
@@ -645,6 +668,7 @@ where
                 children.into_iter(),
             ) {
                 self.broken = true;
+
                 return Err(BuildError::from(err));
             }
         }
@@ -662,15 +686,17 @@ where
         strategy: &mut S,
         parent_id: Option<K>,
         definition: S::Definition,
-    ) -> Result<K, BuildError<K>>
+    ) -> Result<K, SpawnAndInflateError<K>>
     where
         S: BuildStrategy<K, V> + ?Sized,
     {
-        let node_id = if let Some(parent_id) = parent_id {
-            self.spawn(strategy, parent_id, definition)?
-        } else {
-            self.set_root(strategy, definition)?
-        };
+        if parent_id.is_none() {
+            if let Some(root_id) = self.root() {
+                strategy.on_forgotten(root_id);
+            }
+        }
+
+        let node_id = self.mount(strategy, None, definition)?;
 
         self.build_and_realize(strategy, node_id)?;
 

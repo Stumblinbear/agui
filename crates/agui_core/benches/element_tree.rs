@@ -110,7 +110,7 @@ fn element_tree(c: &mut Criterion) {
                 )
             },
             |(mut inflate_strategy, mut tree, widget)| {
-                tree.inflate(&mut inflate_strategy, None, widget)
+                tree.inflate(&mut inflate_strategy, widget)
                     .expect("failed to spawn and inflate");
             },
         )
@@ -124,7 +124,6 @@ fn element_tree(c: &mut Criterion) {
                 let element_id = tree
                     .inflate(
                         &mut NoopInflateStrategy::default(),
-                        None,
                         MockRenderWidget::dummy(),
                     )
                     .expect("failed to spawn and inflate");
@@ -160,7 +159,7 @@ fn element_tree(c: &mut Criterion) {
 
                 let mut tree = ElementTree::default();
 
-                tree.inflate(&mut NoopInflateStrategy::default(), None, root_widget)
+                tree.inflate(&mut NoopInflateStrategy::default(), root_widget)
                     .expect("failed to spawn and inflate");
 
                 tree
@@ -207,7 +206,7 @@ fn element_tree(c: &mut Criterion) {
                 )
             },
             |(mut inflate_strategy, mut tree, widget)| {
-                tree.inflate(&mut inflate_strategy, None, widget)
+                tree.inflate(&mut inflate_strategy, widget)
                     .expect("failed to spawn and inflate")
             },
         )
@@ -238,7 +237,7 @@ fn element_tree(c: &mut Criterion) {
                 let mut tree = ElementTree::default();
 
                 let element_id = tree
-                    .inflate(&mut NoopInflateStrategy::default(), None, root_widget)
+                    .inflate(&mut NoopInflateStrategy::default(), root_widget)
                     .expect("failed to spawn and inflate");
 
                 (NoopInflateStrategy::default(), tree, element_id)
@@ -280,7 +279,7 @@ fn element_tree(c: &mut Criterion) {
 
                 let mut tree = ElementTree::default();
 
-                tree.inflate(&mut NoopInflateStrategy::default(), None, root_widget)
+                tree.inflate(&mut NoopInflateStrategy::default(), root_widget)
                     .expect("failed to spawn and inflate");
 
                 tree

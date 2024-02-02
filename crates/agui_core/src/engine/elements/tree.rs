@@ -22,7 +22,7 @@ use crate::{
             BuildStrategy, ForgetStrategy, MountStrategy, TryUpdateStrategy, UnmountStrategy,
             UpdateResult, WithReactiveKey,
         },
-        BuildError, ReactiveTree, RemoveError,
+        BuildError, ReactiveTree, RemoveError, SpawnAndInflateError,
     },
     util::tree::Tree,
 };
@@ -121,9 +121,8 @@ impl ElementTree {
     pub fn inflate<D>(
         &mut self,
         strategy: &mut dyn InflateElementStrategy<Definition = D>,
-        parent_id: Option<ElementId>,
         definition: D,
-    ) -> Result<ElementId, BuildError<ElementId>>
+    ) -> Result<ElementId, SpawnAndInflateError<ElementId>>
     where
         D: WithReactiveKey + Debug,
     {
@@ -137,7 +136,7 @@ impl ElementTree {
 
                 forgotten: &mut self.forgotten,
             },
-            parent_id,
+            None,
             definition,
         )
     }
@@ -396,7 +395,6 @@ mod tests {
         let root_id = tree
             .inflate(
                 &mut MockInflateElementStrategy::default(),
-                None,
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -439,7 +437,6 @@ mod tests {
         let root_id = tree
             .inflate(
                 &mut MockInflateElementStrategy::default(),
-                None,
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -480,7 +477,6 @@ mod tests {
         let root_id = tree
             .inflate(
                 &mut MockInflateElementStrategy::default(),
-                None,
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -524,7 +520,6 @@ mod tests {
         let root_id = tree
             .inflate(
                 &mut MockInflateElementStrategy::default(),
-                None,
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");

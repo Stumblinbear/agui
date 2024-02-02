@@ -166,7 +166,6 @@ mod tests {
 
         tree.inflate(
             &mut MockInflateElementStrategy::default(),
-            None,
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");
@@ -205,7 +204,6 @@ mod tests {
 
         tree.inflate(
             &mut MockInflateElementStrategy::default(),
-            None,
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");
