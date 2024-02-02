@@ -39,8 +39,8 @@ pub enum BuildError<K> {
     #[error("the tree is in an invalid state")]
     Broken,
 
-    #[error("an node that was due to be rebuilt was missing from the tree")]
-    Missing(K),
+    #[error("node not found: {0:?}")]
+    NotFound(K),
 
     #[error("unable to update {0:?} as it is currently in use")]
     InUse(K),
@@ -62,7 +62,7 @@ impl<K> From<UpdateChildrenError<K>> for BuildError<K> {
     fn from(error: UpdateChildrenError<K>) -> Self {
         match error {
             UpdateChildrenError::Broken => BuildError::Broken,
-            UpdateChildrenError::ParentNotFound(id) => BuildError::Missing(id),
+            UpdateChildrenError::ParentNotFound(id) => BuildError::NotFound(id),
             UpdateChildrenError::InUse(id) => BuildError::InUse(id),
         }
     }

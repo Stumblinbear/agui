@@ -656,7 +656,7 @@ where
                         build_queue: &mut build_queue,
                     })
                 })
-                .ok_or(BuildError::Missing(node_id))?;
+                .ok_or(BuildError::NotFound(node_id))?;
 
             if let Err(err) = self.update_children(
                 &mut UpdateNestedStrategy {
