@@ -44,7 +44,8 @@ impl VelloScene {
     ) {
         if self.tree.contains(render_object_id) {
             self.tree
-                .reparent(parent_render_object_id, render_object_id);
+                .reparent(parent_render_object_id, render_object_id)
+                .expect("failed to reparent render object");
         } else {
             self.tree.insert(
                 parent_render_object_id,
