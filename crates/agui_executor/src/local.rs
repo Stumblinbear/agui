@@ -2,6 +2,7 @@ use std::{
     any::Any,
     collections::VecDeque,
     future::{Future, IntoFuture},
+    hash::BuildHasherDefault,
     sync::{mpsc, Arc},
     time::{Duration, Instant},
 };
@@ -17,9 +18,9 @@ use futures::{
 use agui_core::{
     callback::{strategies::CallbackStrategy, CallbackId},
     element::{
-        Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
-        ElementTaskNotifyStrategy, ElementUnmountContext, RenderObjectCreateContext,
-        RenderObjectUpdateContext, RenderingTaskNotifyStrategy,
+        deferred::resolver::DeferredResolver, Element, ElementBuildContext, ElementCallbackContext,
+        ElementId, ElementMountContext, ElementTaskNotifyStrategy, ElementUnmountContext,
+        RenderObjectCreateContext, RenderObjectUpdateContext, RenderingTaskNotifyStrategy,
     },
     engine::{
         elements::{
@@ -32,19 +33,20 @@ use agui_core::{
             context::{RenderingLayoutContext, RenderingSpawnContext, RenderingUpdateContext},
             scheduler::{CreateRenderingTask, RenderingSchedulerStrategy},
             strategies::{
-                RenderingTreeCreateStrategy, RenderingTreeLayoutStrategy,
-                RenderingTreeUpdateStrategy,
+                RenderingTreeCleanupStrategy, RenderingTreeCreateStrategy,
+                RenderingTreeLayoutStrategy, RenderingTreeUpdateStrategy,
             },
+            view::View,
             RenderingTree,
         },
     },
     reactivity::{BuildError, SpawnAndInflateError},
-    render::{object::RenderObject, view::View, RenderObjectId},
+    render::{object::RenderObject, RenderObjectId},
     task::{error::TaskError, TaskHandle},
-    unit::{Constraints, Offset, Size},
     widget::{IntoWidget, Widget},
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashSet, FxHasher};
+use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::EngineExecutor;
 
@@ -53,6 +55,7 @@ pub struct LocalEngineExecutor {
     callbacks: Arc<dyn CallbackStrategy>,
 
     element_tree: ElementTree,
+    deferred_elements: SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
 
     needs_build_rx: mpsc::Receiver<ElementId>,
     rebuild_queue: VecDeque<ElementId>,
@@ -60,7 +63,7 @@ pub struct LocalEngineExecutor {
     callback_rx: mpsc::Receiver<InvokeCallback>,
 
     spawned_elements: VecDeque<ElementId>,
-    updated_elements: VecDeque<ElementId>,
+    updated_elements: SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
 
     element_update_rx: notify::Subscriber,
 
@@ -103,7 +106,7 @@ impl Default for LocalEngineExecutor {
         };
 
         Self {
-            scheduler: scheduler.clone(),
+            scheduler,
             #[allow(clippy::arc_with_non_send_sync)]
             callbacks: Arc::new(EngineCallbackStrategy {
                 callback_tx,
@@ -111,6 +114,7 @@ impl Default for LocalEngineExecutor {
             }),
 
             element_tree: ElementTree::default(),
+            deferred_elements: SecondaryMap::default(),
 
             needs_build_rx,
 
@@ -119,7 +123,7 @@ impl Default for LocalEngineExecutor {
             callback_rx,
 
             spawned_elements: VecDeque::default(),
-            updated_elements: VecDeque::default(),
+            updated_elements: SparseSecondaryMap::default(),
 
             element_update_rx,
 
@@ -136,11 +140,11 @@ impl Default for LocalEngineExecutor {
 
 impl LocalEngineExecutor {
     pub fn with_root(root: impl IntoWidget) -> Result<Self, SpawnAndInflateError<ElementId>> {
-        struct InflateRootStrategy<'ctx, Sched> {
-            scheduler: &'ctx mut Sched,
-            callbacks: &'ctx Arc<dyn CallbackStrategy>,
+        struct InflateRootStrategy<'inflate, Sched> {
+            scheduler: &'inflate mut Sched,
+            callbacks: &'inflate Arc<dyn CallbackStrategy>,
 
-            spawned_elements: &'ctx mut VecDeque<ElementId>,
+            spawned_elements: &'inflate mut VecDeque<ElementId>,
         }
 
         impl<Sched> InflateElementStrategy for InflateRootStrategy<'_, Sched>
@@ -166,12 +170,6 @@ impl LocalEngineExecutor {
                 });
 
                 element
-            }
-
-            fn on_forgotten(&mut self, _: ElementId) {
-                unreachable!(
-                    "elements should never forgotten while inflating the first root widget"
-                );
             }
 
             fn try_update(
@@ -273,14 +271,15 @@ impl LocalEngineExecutor {
 
     #[tracing::instrument(level = "trace", skip(self))]
     fn flush_rebuilds(&mut self) {
-        struct RebuildStrategy<'ctx, Sched> {
-            scheduler: &'ctx mut Sched,
-            callbacks: &'ctx Arc<dyn CallbackStrategy>,
+        struct RebuildStrategy<'rebuild, Sched> {
+            scheduler: &'rebuild mut Sched,
+            callbacks: &'rebuild Arc<dyn CallbackStrategy>,
 
-            spawned_elements: &'ctx mut VecDeque<ElementId>,
-            updated_elements: &'ctx mut VecDeque<ElementId>,
+            spawned_elements: &'rebuild mut VecDeque<ElementId>,
+            updated_elements:
+                &'rebuild mut SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
 
-            rebuilt_elements: &'ctx mut FxHashSet<ElementId>,
+            rebuilt_elements: &'rebuild mut FxHashSet<ElementId>,
         }
 
         impl<Sched> InflateElementStrategy for RebuildStrategy<'_, Sched>
@@ -308,15 +307,13 @@ impl LocalEngineExecutor {
                 element
             }
 
-            fn on_forgotten(&mut self, _: ElementId) {}
-
             fn try_update(
                 &mut self,
                 id: ElementId,
                 element: &mut Element,
                 definition: &Self::Definition,
             ) -> agui_core::element::ElementComparison {
-                self.updated_elements.push_back(id);
+                self.updated_elements.insert(id, ());
 
                 element.update(definition)
             }
@@ -388,8 +385,8 @@ impl LocalEngineExecutor {
 
     #[tracing::instrument(level = "debug", skip(self))]
     fn update_widgets(&mut self) {
-        struct SyncUnmountedStrategy<'ctx> {
-            rendering_tree: &'ctx mut RenderingTree,
+        struct SyncUnmountedStrategy<'cleanup> {
+            rendering_tree: &'cleanup mut RenderingTree,
         }
 
         impl UnmountElementStrategy for SyncUnmountedStrategy<'_> {
@@ -400,13 +397,15 @@ impl LocalEngineExecutor {
             }
         }
 
-        struct SyncCreateRenderObjectStrategy<'ctx> {
-            scheduler: &'ctx mut EngineSchedulerStrategy,
+        struct SyncCreateRenderObjectStrategy<'create> {
+            scheduler: &'create mut EngineSchedulerStrategy,
 
-            element_tree: &'ctx ElementTree,
+            element_tree: &'create ElementTree,
+            deferred_elements:
+                &'create mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
 
-            needs_layout: &'ctx mut Vec<RenderObjectId>,
-            needs_paint: &'ctx mut Vec<RenderObjectId>,
+            needs_layout: &'create mut SparseSecondaryMap<RenderObjectId, ()>,
+            needs_paint: &'create mut FxHashSet<RenderObjectId>,
         }
 
         impl RenderingTreeCreateStrategy for SyncCreateRenderObjectStrategy<'_> {
@@ -415,7 +414,21 @@ impl LocalEngineExecutor {
                 ctx: RenderingSpawnContext,
                 element_id: ElementId,
             ) -> RenderObject {
-                self.element_tree
+                let element = self
+                    .element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while creating render object");
+
+                if let Element::Deferred(element) = element {
+                    self.deferred_elements.insert(
+                        *ctx.render_object_id,
+                        (element_id, element.create_resolver()),
+                    );
+                }
+
+                let render_object = self
+                    .element_tree
                     .as_ref()
                     .get(element_id)
                     .expect("element missing while creating render object")
@@ -423,7 +436,16 @@ impl LocalEngineExecutor {
                         scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
 
                         render_object_id: ctx.render_object_id,
-                    })
+                    });
+
+                // TODO: can we insert the relayout boundary here, instead?
+                self.needs_layout.insert(*ctx.render_object_id, ());
+
+                if render_object.does_paint() {
+                    self.needs_paint.insert(*ctx.render_object_id);
+                }
+
+                render_object
             }
 
             fn create_view(&mut self, element_id: ElementId) -> Option<Box<dyn View + Send>> {
@@ -438,23 +460,15 @@ impl LocalEngineExecutor {
                     None
                 }
             }
-
-            fn mark_needs_layout(&mut self, id: RenderObjectId) {
-                self.needs_layout.push(id);
-            }
-
-            fn mark_needs_paint(&mut self, id: RenderObjectId) {
-                self.needs_paint.push(id);
-            }
         }
 
-        struct SyncUpdateRenderObjectStrategy<'ctx> {
-            scheduler: &'ctx mut EngineSchedulerStrategy,
+        struct SyncUpdateRenderObjectStrategy<'update> {
+            scheduler: &'update mut EngineSchedulerStrategy,
 
-            element_tree: &'ctx ElementTree,
+            element_tree: &'update ElementTree,
 
-            needs_layout: &'ctx mut Vec<RenderObjectId>,
-            needs_paint: &'ctx mut Vec<RenderObjectId>,
+            needs_layout: &'update mut SparseSecondaryMap<RenderObjectId, ()>,
+            needs_paint: &'update mut FxHashSet<RenderObjectId>,
         }
 
         impl RenderingTreeUpdateStrategy for SyncUpdateRenderObjectStrategy<'_> {
@@ -491,9 +505,9 @@ impl LocalEngineExecutor {
                     );
 
                 if needs_layout {
-                    self.needs_layout.push(*ctx.render_object_id);
+                    self.needs_layout.insert(*ctx.render_object_id, ());
                 } else if needs_paint {
-                    self.needs_paint.push(*ctx.render_object_id);
+                    self.needs_paint.insert(*ctx.render_object_id);
                 }
             }
         }
@@ -523,8 +537,8 @@ impl LocalEngineExecutor {
             })
             .expect("failed to cleanup element tree");
 
-        let mut needs_layout = Vec::new();
-        let mut needs_paint = Vec::new();
+        let mut needs_layout = SparseSecondaryMap::default();
+        let mut needs_paint = FxHashSet::default();
 
         for element_id in self.spawned_elements.drain(..) {
             self.rendering_tree.create(
@@ -532,6 +546,7 @@ impl LocalEngineExecutor {
                     scheduler: &mut self.scheduler,
 
                     element_tree: &self.element_tree,
+                    deferred_elements: &mut self.deferred_elements,
 
                     needs_layout: &mut needs_layout,
                     needs_paint: &mut needs_paint,
@@ -539,9 +554,11 @@ impl LocalEngineExecutor {
                 self.element_tree.as_ref().get_parent(element_id).copied(),
                 element_id,
             );
+
+            self.updated_elements.remove(element_id);
         }
 
-        for element_id in self.updated_elements.drain(..) {
+        for element_id in self.updated_elements.drain().map(|(id, _)| id) {
             self.rendering_tree.update(
                 &mut SyncUpdateRenderObjectStrategy {
                     scheduler: &mut self.scheduler,
@@ -555,11 +572,10 @@ impl LocalEngineExecutor {
             );
         }
 
-        self.element_tree
-            .cleanup(&mut SyncUnmountedStrategy {
-                rendering_tree: &mut self.rendering_tree,
-            })
-            .expect("failed to cleanup element tree");
+        self.rendering_tree
+            .cleanup(&mut SyncCleanupRenderingStrategy {
+                deferred_elements: &mut self.deferred_elements,
+            });
 
         let sync_render_tree_end = Instant::now();
 
@@ -575,45 +591,59 @@ impl LocalEngineExecutor {
             num_iterations = num_iterations,
             "widget update complete"
         );
+
+        if !needs_layout.is_empty() || !needs_paint.is_empty() {
+            self.rendering_tree.layout(
+                &mut SyncLayoutRenderObjectStrategy {
+                    scheduler: &mut self.scheduler,
+                    callbacks: &self.callbacks,
+
+                    element_tree: &mut self.element_tree,
+
+                    deferred_elements: &mut self.deferred_elements,
+
+                    needs_paint: &mut needs_paint,
+                },
+                needs_layout.into_iter().map(|(id, _)| id),
+            );
+
+            for render_object_id in needs_paint {
+                self.rendering_tree.paint(render_object_id);
+            }
+
+            self.rendering_tree.sync_views();
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     fn update_renderer(&mut self) {
-        struct SyncLayoutRenderObjectStrategy {}
-
-        impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy {
-            fn on_constraints_changed(
-                &mut self,
-                ctx: RenderingLayoutContext,
-                constraints: Constraints,
-            ) {
-                println!(
-                    "constraints changed: {:?} {:?}",
-                    ctx.render_object_id, constraints
-                );
-            }
-
-            fn on_size_changed(&mut self, ctx: RenderingLayoutContext, size: Size) {
-                println!("size changed: {:?} {:?}", ctx.render_object_id, size);
-            }
-
-            fn on_offset_changed(&mut self, ctx: RenderingLayoutContext, offset: Offset) {
-                println!("offset changed: {:?} {:?}", ctx.render_object_id, offset);
-            }
-        }
-
         tracing::debug!("renderer update started");
 
         let start = Instant::now();
 
-        self.rendering_tree.layout_many(
-            &mut SyncLayoutRenderObjectStrategy {},
+        let mut needs_paint = FxHashSet::default();
+
+        self.rendering_tree.layout(
+            &mut SyncLayoutRenderObjectStrategy {
+                scheduler: &mut self.scheduler,
+                callbacks: &self.callbacks,
+
+                element_tree: &mut self.element_tree,
+
+                deferred_elements: &mut self.deferred_elements,
+
+                needs_paint: &mut needs_paint,
+            },
             self.needs_layout_rx.try_iter(),
         );
 
-        self.rendering_tree.sync_views();
-
         let layout_end = Instant::now();
+
+        // TODO: it's entirely possible for paint to be called multiple times on the
+        // same render object.
+        for render_object_id in needs_paint {
+            self.rendering_tree.paint(render_object_id);
+        }
 
         for render_object_id in self.needs_paint_rx.try_iter() {
             self.rendering_tree.paint(render_object_id);
@@ -817,6 +847,329 @@ impl RenderingSchedulerStrategy for EngineSchedulerStrategy {
             Ok(handle) => Ok(TaskHandle::from(handle)),
             Err(_) => Err(TaskError::Shutdown),
         }
+    }
+}
+
+struct SyncLayoutRenderObjectStrategy<'layout> {
+    scheduler: &'layout mut EngineSchedulerStrategy,
+    callbacks: &'layout Arc<dyn CallbackStrategy>,
+
+    element_tree: &'layout mut ElementTree,
+
+    deferred_elements:
+        &'layout mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+
+    needs_paint: &'layout mut FxHashSet<RenderObjectId>,
+}
+
+impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
+    fn on_constraints_changed(
+        &mut self,
+        ctx: RenderingLayoutContext,
+        render_object: &RenderObject,
+    ) {
+        struct DeferredRebuildStrategy<'rebuild, Sched> {
+            scheduler: &'rebuild mut Sched,
+            callbacks: &'rebuild Arc<dyn CallbackStrategy>,
+
+            spawned_elements: &'rebuild mut VecDeque<ElementId>,
+            updated_elements:
+                &'rebuild mut SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
+
+            rebuilt_elements: &'rebuild mut FxHashSet<ElementId>,
+        }
+
+        impl<Sched> InflateElementStrategy for DeferredRebuildStrategy<'_, Sched>
+        where
+            Sched: ElementSchedulerStrategy,
+        {
+            type Definition = Widget;
+
+            fn mount(
+                &mut self,
+                ctx: ElementTreeMountContext,
+                definition: Self::Definition,
+            ) -> Element {
+                self.spawned_elements.push_back(*ctx.element_id);
+
+                let mut element = definition.create_element();
+
+                element.mount(&mut ElementMountContext {
+                    element_tree: ctx.tree,
+
+                    parent_element_id: ctx.parent_element_id,
+                    element_id: ctx.element_id,
+                });
+
+                element
+            }
+
+            fn try_update(
+                &mut self,
+                id: ElementId,
+                element: &mut Element,
+                definition: &Self::Definition,
+            ) -> agui_core::element::ElementComparison {
+                self.updated_elements.insert(id, ());
+
+                element.update(definition)
+            }
+
+            fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
+                self.rebuilt_elements.insert(*ctx.element_id);
+
+                element.build(&mut ElementBuildContext {
+                    scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+                    callbacks: self.callbacks,
+
+                    element_tree: ctx.tree,
+                    inheritance: ctx.inheritance,
+
+                    element_id: ctx.element_id,
+                })
+            }
+        }
+
+        struct DeferredCreateRenderObjectStrategy<'create> {
+            scheduler: &'create mut EngineSchedulerStrategy,
+
+            element_tree: &'create ElementTree,
+            deferred_elements:
+                &'create mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+
+            needs_paint: &'create mut FxHashSet<RenderObjectId>,
+        }
+
+        impl RenderingTreeCreateStrategy for DeferredCreateRenderObjectStrategy<'_> {
+            fn create(
+                &mut self,
+                ctx: RenderingSpawnContext,
+                element_id: ElementId,
+            ) -> RenderObject {
+                let element = self
+                    .element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while creating render object");
+
+                if let Element::Deferred(element) = element {
+                    self.deferred_elements.insert(
+                        *ctx.render_object_id,
+                        (element_id, element.create_resolver()),
+                    );
+                }
+
+                let render_object = self
+                    .element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while creating render object")
+                    .create_render_object(&mut RenderObjectCreateContext {
+                        scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+
+                        render_object_id: ctx.render_object_id,
+                    });
+
+                // We shouldn't need to mark needs_layout here, since the deferred element is
+                // already in the middle of a layout pass.
+
+                if render_object.does_paint() {
+                    self.needs_paint.insert(*ctx.render_object_id);
+                }
+
+                render_object
+            }
+
+            fn create_view(&mut self, element_id: ElementId) -> Option<Box<dyn View + Send>> {
+                if let Element::View(view) = self
+                    .element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while creating view")
+                {
+                    Some(view.create_view())
+                } else {
+                    None
+                }
+            }
+        }
+
+        struct SyncUpdateRenderObjectStrategy<'update> {
+            scheduler: &'update mut EngineSchedulerStrategy,
+
+            element_tree: &'update ElementTree,
+
+            needs_paint: &'update mut FxHashSet<RenderObjectId>,
+        }
+
+        impl RenderingTreeUpdateStrategy for SyncUpdateRenderObjectStrategy<'_> {
+            fn get_children(&self, element_id: ElementId) -> &[ElementId] {
+                self.element_tree
+                    .as_ref()
+                    .get_children(element_id)
+                    .expect("element missing while updating render object")
+            }
+
+            fn update(
+                &mut self,
+                ctx: RenderingUpdateContext,
+                element_id: ElementId,
+                render_object: &mut RenderObject,
+            ) {
+                let mut needs_paint = false;
+
+                self.element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while updating render object")
+                    .update_render_object(
+                        &mut RenderObjectUpdateContext {
+                            scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+
+                            needs_layout: &mut false,
+                            needs_paint: &mut needs_paint,
+
+                            render_object_id: ctx.render_object_id,
+                        },
+                        render_object,
+                    );
+
+                if needs_paint {
+                    self.needs_paint.insert(*ctx.render_object_id);
+                }
+            }
+        }
+
+        struct DeferredUnmountedStrategy<'cleanup> {
+            rendering_tree: &'cleanup mut RenderingTree,
+        }
+
+        impl UnmountElementStrategy for DeferredUnmountedStrategy<'_> {
+            fn unmount(&mut self, mut ctx: ElementUnmountContext, element: Element) {
+                self.rendering_tree.forget(*ctx.element_id);
+
+                element.unmount(&mut ctx);
+            }
+        }
+
+        if let Some((deferred_element_id, resolver)) =
+            self.deferred_elements.get_mut(*ctx.render_object_id)
+        {
+            tracing::trace!(
+                render_object_id = ?ctx.render_object_id,
+                element_id = ?deferred_element_id,
+                "deferred element constraints changed, checking resolver",
+            );
+
+            if resolver.resolve(
+                render_object
+                    .constraints()
+                    .expect("no constraints set for deferred render object"),
+            ) {
+                tracing::debug!("deferred resolver indicated a change, rebuilding subtree");
+
+                let mut spawned_elements = VecDeque::new();
+                let mut updated_elements = SparseSecondaryMap::default();
+                let mut rebuilt_elements = FxHashSet::default();
+
+                self.element_tree
+                    .resolve_deferred(
+                        &mut DeferredRebuildStrategy {
+                            scheduler: self.scheduler,
+                            callbacks: self.callbacks,
+
+                            spawned_elements: &mut spawned_elements,
+                            updated_elements: &mut updated_elements,
+
+                            rebuilt_elements: &mut rebuilt_elements,
+                        },
+                        *deferred_element_id,
+                        resolver.as_ref(),
+                    )
+                    .expect("failed to build deferred element subtree");
+
+                self.element_tree
+                    .cleanup(&mut DeferredUnmountedStrategy {
+                        rendering_tree: ctx.tree,
+                    })
+                    .expect("failed to cleanup element tree");
+
+                for element_id in spawned_elements.drain(..) {
+                    ctx.tree.create(
+                        &mut DeferredCreateRenderObjectStrategy {
+                            scheduler: self.scheduler,
+
+                            element_tree: self.element_tree,
+                            deferred_elements: self.deferred_elements,
+
+                            needs_paint: self.needs_paint,
+                        },
+                        self.element_tree.as_ref().get_parent(element_id).copied(),
+                        element_id,
+                    );
+
+                    updated_elements.remove(element_id);
+                }
+
+                for element_id in updated_elements.drain().map(|(id, _)| id) {
+                    ctx.tree.update(
+                        &mut SyncUpdateRenderObjectStrategy {
+                            scheduler: self.scheduler,
+
+                            element_tree: self.element_tree,
+
+                            needs_paint: self.needs_paint,
+                        },
+                        element_id,
+                    );
+                }
+
+                ctx.tree.cleanup(&mut SyncCleanupRenderingStrategy {
+                    deferred_elements: self.deferred_elements,
+                });
+            } else {
+                // No need to do anything, since the resolver has indicated no change.
+            }
+        } else {
+            tracing::trace!(
+                render_object_id = ?ctx.render_object_id,
+                constraints = ?render_object.constraints(),
+                "constraints changed",
+            );
+        }
+    }
+
+    fn on_size_changed(&mut self, ctx: RenderingLayoutContext, render_object: &RenderObject) {
+        if render_object.does_paint() {
+            self.needs_paint.insert(*ctx.render_object_id);
+        }
+
+        tracing::trace!(
+            render_object_id = ?ctx.render_object_id,
+            size = ?render_object.size(),
+            "size changed",
+        );
+    }
+
+    fn on_offset_changed(&mut self, ctx: RenderingLayoutContext, render_object: &RenderObject) {
+        tracing::trace!(
+            render_object_id = ?ctx.render_object_id,
+            offset = ?render_object.offset(),
+            "offset changed",
+        );
+    }
+}
+
+struct SyncCleanupRenderingStrategy<'cleanup> {
+    deferred_elements:
+        &'cleanup mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+}
+
+impl RenderingTreeCleanupStrategy for SyncCleanupRenderingStrategy<'_> {
+    fn on_removed(&mut self, render_object_id: RenderObjectId) {
+        tracing::trace!(?render_object_id, "removed render object");
+
+        self.deferred_elements.remove(render_object_id);
     }
 }
 
