@@ -30,7 +30,7 @@ fn main() {
         build! {
             <WinitWindow> {
                 attributes: WinitWindowAttributes::builder()
-                    .title("Hello, world!")
+                    .title("Responsive widgets")
                     .build(),
 
                 renderer: VelloWindowRenderer::new(view_handle),
@@ -38,12 +38,28 @@ fn main() {
                 child: <VelloViewBinding> {
                     view: view,
 
-                    child: <ColoredBox> {
-                        color: Color::from_rgb((0.0, 1.0, 0.0)),
+                    child: <LayoutBuilder> {
+                        resolver: |constraints| constraints.min_width() > 500.0,
+                        builder: |is_larger| {
+                            if *is_larger {
+                                <ColoredBox> {
+                                    color: Color::from_rgb((0.0, 1.0, 0.0)),
 
-                        child: <Text> {
-                            style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                            text: "Hello, world!".into(),
+                                    child: <Text> {
+                                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                                        text: "Hello, world!".into(),
+                                    },
+                                }
+                            }else{
+                                <ColoredBox> {
+                                    color: Color::from_rgb((0.0, 0.0, 1.0)),
+
+                                    child: <Text> {
+                                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                                        text: "Hello, world!".into(),
+                                    },
+                                }
+                            }
                         },
                     }
                 }
