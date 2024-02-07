@@ -1,7 +1,6 @@
-use std::{fmt::Debug, hash::BuildHasherDefault};
+use std::fmt::Debug;
 
-use rustc_hash::{FxHashSet, FxHasher};
-use slotmap::SparseSecondaryMap;
+use rustc_hash::FxHashSet;
 
 use crate::{
     element::{
@@ -25,6 +24,7 @@ use crate::{
         BuildError, ReactiveTree, RemoveError, SpawnAndInflateError,
     },
     util::tree::Tree,
+    widget::Widget,
 };
 
 #[derive(Default)]
@@ -32,9 +32,6 @@ pub struct ElementTree {
     tree: ReactiveTree<ElementId, Element>,
 
     inheritance: InheritanceManager,
-
-    deferred_resolvers:
-        SparseSecondaryMap<ElementId, Box<dyn DeferredResolver>, BuildHasherDefault<FxHasher>>,
 
     forgotten: FxHashSet<ElementId>,
 }
@@ -81,12 +78,6 @@ impl ElementTree {
         self.tree.keyed()
     }
 
-    /// Returns a reference to the node with the given ID.
-    ///
-    /// # Panics
-    ///
-    /// If the node is currently in use (i.e. it has been pulled from the tree
-    /// via [`ElementTree::with`]) then this method will panic.
     pub fn get(&self, element_id: ElementId) -> Option<&Element> {
         self.tree.get(element_id)
     }
@@ -132,13 +123,38 @@ impl ElementTree {
 
                 inheritance: &mut self.inheritance,
 
-                deferred_resolvers: &mut self.deferred_resolvers,
-
                 forgotten: &mut self.forgotten,
             },
             None,
             definition,
         )
+    }
+
+    pub fn resolve_deferred(
+        &mut self,
+        strategy: &mut dyn InflateElementStrategy<Definition = Widget>,
+        element_id: ElementId,
+        resolver: &dyn DeferredResolver,
+    ) -> Result<(), BuildError<ElementId>> {
+        let Element::Deferred(element) = self
+            .tree
+            .get(element_id)
+            .ok_or(BuildError::NotFound(element_id))?
+        else {
+            panic!("cannot resolve a non-deferred element");
+        };
+
+        Ok(self.tree.update_children(
+            &mut ElementTreeStrategy {
+                inner: strategy,
+
+                inheritance: &mut self.inheritance,
+
+                forgotten: &mut self.forgotten,
+            },
+            element_id,
+            std::iter::once(element.build(resolver)),
+        )?)
     }
 
     /// Rebuilds the given element in the tree, recursively building it and any children
@@ -161,8 +177,6 @@ impl ElementTree {
 
                 inheritance: &mut self.inheritance,
 
-                deferred_resolvers: &mut self.deferred_resolvers,
-
                 forgotten: &mut self.forgotten,
             },
             element_id,
@@ -178,8 +192,6 @@ impl ElementTree {
                 inner: strategy,
 
                 inheritance: &mut self.inheritance,
-
-                deferred_resolvers: &mut self.deferred_resolvers,
             },
             self.forgotten.drain(),
         )
@@ -215,12 +227,6 @@ struct ElementTreeStrategy<'inflate, Strat: ?Sized> {
 
     inheritance: &'inflate mut InheritanceManager,
 
-    deferred_resolvers: &'inflate mut SparseSecondaryMap<
-        ElementId,
-        Box<dyn DeferredResolver>,
-        BuildHasherDefault<FxHasher>,
-    >,
-
     forgotten: &'inflate mut FxHashSet<ElementId>,
 }
 
@@ -245,11 +251,6 @@ where
             definition,
         );
 
-        if let Element::Deferred(element) = &element {
-            self.deferred_resolvers
-                .insert(*ctx.node_id, element.create_resolver());
-        }
-
         if let Element::Inherited(element) = &element {
             self.inheritance.create_scope(
                 element.inherited_type_id(),
@@ -270,8 +271,6 @@ where
 {
     fn on_forgotten(&mut self, id: ElementId) {
         self.forgotten.insert(id);
-
-        self.inner.on_forgotten(id);
     }
 }
 
@@ -332,23 +331,13 @@ struct ElementTreeUnmountStrategy<'inflate, Strat: ?Sized> {
     inner: &'inflate mut Strat,
 
     inheritance: &'inflate mut InheritanceManager,
-
-    deferred_resolvers: &'inflate mut SparseSecondaryMap<
-        ElementId,
-        Box<dyn DeferredResolver>,
-        BuildHasherDefault<FxHasher>,
-    >,
 }
 
 impl<Strat> UnmountStrategy<ElementId, Element> for ElementTreeUnmountStrategy<'_, Strat>
 where
     Strat: UnmountElementStrategy + ?Sized,
 {
-    fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<ElementId, Element>) {
-        if matches!(ctx.value, Element::Deferred(_)) {
-            self.deferred_resolvers.remove(*ctx.node_id);
-        }
-
+    fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<ElementId, Element>, element: Element) {
         self.inheritance.remove(*ctx.node_id);
 
         self.inner.unmount(
@@ -357,7 +346,7 @@ where
 
                 element_id: ctx.node_id,
             },
-            ctx.value,
+            element,
         );
     }
 }

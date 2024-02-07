@@ -56,7 +56,9 @@ impl VelloScene {
     }
 
     pub fn detatch(&mut self, render_object_id: RenderObjectId) {
-        self.tree.remove(render_object_id);
+        self.tree
+            .remove(render_object_id)
+            .expect("failed to remove render object");
     }
 
     pub fn set_size(&mut self, render_object_id: RenderObjectId, size: Size) {

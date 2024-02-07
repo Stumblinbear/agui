@@ -1,10 +1,7 @@
 use std::future::Future;
 
 use crate::{
-    element::{
-        ContextDirtyRenderObject, ContextElement, ContextRenderObject, ElementId,
-        RenderingTaskContext,
-    },
+    element::{ContextDirtyRenderObject, ContextRenderObject, RenderingTaskContext},
     engine::rendering::scheduler::RenderingScheduler,
     render::RenderObjectId,
     task::{context::ContextSpawnRenderingTask, error::TaskError, TaskHandle},
@@ -13,14 +10,7 @@ use crate::{
 pub struct RenderObjectCreateContext<'ctx> {
     pub scheduler: &'ctx mut RenderingScheduler<'ctx>,
 
-    pub element_id: &'ctx ElementId,
     pub render_object_id: &'ctx RenderObjectId,
-}
-
-impl ContextElement for RenderObjectCreateContext<'_> {
-    fn element_id(&self) -> ElementId {
-        *self.element_id
-    }
 }
 
 impl ContextRenderObject for RenderObjectCreateContext<'_> {

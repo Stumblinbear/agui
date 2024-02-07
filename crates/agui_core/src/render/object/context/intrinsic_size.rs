@@ -1,14 +1,11 @@
 use crate::{
     element::ContextRenderObject,
-    render::{
-        object::{context::IterChildrenLayout, RenderObject},
-        RenderObjectId,
-    },
-    util::tree::Tree,
+    engine::rendering::RenderingTree,
+    render::{object::context::IterChildrenLayout, RenderObjectId},
 };
 
 pub struct RenderObjectIntrinsicSizeContext<'ctx> {
-    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) tree: &'ctx RenderingTree,
 
     pub render_object_id: &'ctx RenderObjectId,
 
@@ -32,9 +29,9 @@ impl<'ctx> RenderObjectIntrinsicSizeContext<'ctx> {
 
     pub fn iter_children(&self) -> IterChildrenLayout {
         IterChildrenLayout {
-            index: 0,
+            tree: self.tree,
 
-            render_object_tree: self.render_object_tree,
+            index: 0,
 
             children: self.children,
         }

@@ -13,7 +13,7 @@ pub struct IterChildrenHitTest<'ctx> {
     pub(crate) front_index: usize,
     pub(crate) back_index: usize,
 
-    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub(crate) children: &'ctx [RenderObjectId],
 
@@ -31,7 +31,7 @@ impl IterChildrenHitTest<'_> {
         self.front_index += 1;
 
         Some(ChildHitTest {
-            render_object_tree: self.render_object_tree,
+            tree: self.tree,
 
             result: self.result,
 
@@ -49,7 +49,7 @@ impl IterChildrenHitTest<'_> {
         self.back_index -= 1;
 
         Some(ChildHitTest {
-            render_object_tree: self.render_object_tree,
+            tree: self.tree,
 
             index: self.back_index,
 
@@ -61,7 +61,7 @@ impl IterChildrenHitTest<'_> {
 }
 
 pub struct ChildHitTest<'ctx> {
-    render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     index: usize,
 
@@ -82,7 +82,7 @@ impl ChildHitTest<'_> {
     pub fn offset(&self) -> Offset {
         let render_object_id = self.render_object_id();
 
-        self.render_object_tree
+        self.tree
             .get(render_object_id)
             .expect("child render object missing during hit test")
             .offset()
@@ -96,13 +96,13 @@ impl ChildHitTest<'_> {
         let render_object_id = self.render_object_id();
 
         let render_object = self
-            .render_object_tree
+            .tree
             .get(render_object_id)
             .expect("child render object missing during hit test");
 
         render_object.hit_test(
             RenderObjectContext {
-                render_object_tree: self.render_object_tree,
+                tree: self.tree,
 
                 render_object_id: &render_object_id,
             },

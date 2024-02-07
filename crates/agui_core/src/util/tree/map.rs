@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::util::tree::{
-    errors::{ReorderChildrenError, ReparentError, SwapSiblingsError},
+    errors::{NodeInUse, ReorderChildrenError, ReparentError, SwapSiblingsError},
     iter::{
         ChildIterator, DownwardIter, Iter, IterableTree, ParentIterator, SubtreeIterator,
         UpwardIterator,
@@ -204,7 +204,7 @@ where
         // We only have to normally remove the first node, since we're about
         // to completely obliterate the rest of its subtree there's no reason
         // to bother doing cleanup on the rest of the descendant nodes.
-        self.remove(node_id);
+        let _ = self.remove(node_id);
 
         while let Some(node_id) = remove_queue.pop_front() {
             if let Some(node) = self.nodes.remove(node_id) {
@@ -238,11 +238,11 @@ where
         }
     }
 
-    pub fn remove(&mut self, node_id: K) -> Option<V> {
+    pub fn remove(&mut self, node_id: K) -> Result<Option<V>, NodeInUse> {
         if let Some(mut node) = self.remove_node(node_id) {
-            Some(node.value.take().expect("node is currently in use"))
+            Ok(Some(node.take()?))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -266,7 +266,7 @@ where
             }
 
             if !func(&node_id) {
-                self.remove(node_id);
+                let _ = self.remove(node_id);
             }
         }
     }
@@ -763,9 +763,11 @@ where
                 }
 
                 if let Some(value) = self.get(node_id) {
-                    value.fmt(f)?;
+                    // We don't propagate the alternative formatting because otherwise the tree
+                    // would be completely unreadable.
+                    write!(f, "{:?}", value)?;
                 } else {
-                    f.write_str("Missing")?;
+                    f.write_str("In use")?;
                 }
 
                 write!(f, " ({:?})", node_id.data())?;

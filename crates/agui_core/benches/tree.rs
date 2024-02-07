@@ -39,7 +39,7 @@ fn tree_ops(c: &mut Criterion) {
             },
             |(mut tree, widget_ids)| {
                 for widget_id in widget_ids {
-                    tree.remove(widget_id);
+                    let _ = tree.remove(widget_id);
                 }
             },
         )

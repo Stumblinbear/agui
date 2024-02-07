@@ -3,10 +3,8 @@ use agui_core::{
         lifecycle::ElementLifecycle, render::ElementRender, view::ElementView, Element,
         ElementBuilder, ElementComparison, RenderObjectCreateContext, RenderObjectUpdateContext,
     },
-    render::{
-        object::{RenderObject, RenderObjectImpl},
-        view::View,
-    },
+    engine::rendering::view::View,
+    render::object::{RenderObject, RenderObjectImpl},
     widget::{IntoWidget, Widget},
 };
 use agui_macros::WidgetProps;

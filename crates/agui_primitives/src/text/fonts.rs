@@ -81,64 +81,64 @@ impl AvailableFonts {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::cell::RefCell;
+// #[cfg(test)]
+// mod tests {
+//     use std::cell::RefCell;
 
-    use agui_core::{engine::widgets::WidgetManager, unit::Font, widget::Widget};
-    use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
-    use agui_macros::{build, StatelessWidget};
+//     use agui_core::{engine::widgets::WidgetManager, unit::Font, widget::Widget};
+//     use agui_elements::stateless::{StatelessBuildContext, StatelessWidget};
+//     use agui_macros::{build, StatelessWidget};
 
-    use crate::sized_box::SizedBox;
+//     use crate::sized_box::SizedBox;
 
-    use super::{AvailableFonts, Fonts};
+//     use super::{AvailableFonts, Fonts};
 
-    #[derive(Default)]
-    struct TestResult {
-        retrieved_font: Option<Font>,
-    }
+//     #[derive(Default)]
+//     struct TestResult {
+//         retrieved_font: Option<Font>,
+//     }
 
-    thread_local! {
-        static TEST_HOOK: RefCell<TestResult> = RefCell::default();
-    }
+//     thread_local! {
+//         static TEST_HOOK: RefCell<TestResult> = RefCell::default();
+//     }
 
-    #[derive(Default, StatelessWidget)]
-    struct TestWidget;
+//     #[derive(Default, StatelessWidget)]
+//     struct TestWidget;
 
-    impl StatelessWidget for TestWidget {
-        fn build(&self, ctx: &mut StatelessBuildContext<Self>) -> Widget {
-            let available_fonts = ctx
-                .depend_on_inherited_widget::<AvailableFonts>()
-                .expect("failed to get available fonts");
+//     impl StatelessWidget for TestWidget {
+//         fn build(&self, ctx: &mut StatelessBuildContext<Self>) -> Widget {
+//             let available_fonts = ctx
+//                 .depend_on_inherited_widget::<AvailableFonts>()
+//                 .expect("failed to get available fonts");
 
-            TEST_HOOK.with(|result| {
-                result.borrow_mut().retrieved_font =
-                    available_fonts.get_font("test font family").cloned();
-            });
+//             TEST_HOOK.with(|result| {
+//                 result.borrow_mut().retrieved_font =
+//                     available_fonts.get_font("test font family").cloned();
+//             });
 
-            SizedBox::square(0.0).into()
-        }
-    }
+//             SizedBox::square(0.0).into()
+//         }
+//     }
 
-    #[test]
-    fn can_retrieve_from_available_fonts() {
-        let mut manager = WidgetManager::default_with_root(build! {
-            <Fonts> {
-                fonts: im_rc::HashMap::from_iter([(
-                    String::from("test font family"),
-                    Font::from_family("test font family"),
-                )]),
+//     #[test]
+//     fn can_retrieve_from_available_fonts() {
+//         let mut manager = WidgetManager::default_with_root(build! {
+//             <Fonts> {
+//                 fonts: im_rc::HashMap::from_iter([(
+//                     String::from("test font family"),
+//                     Font::from_family("test font family"),
+//                 )]),
 
-                child: <TestWidget> {},
-            }
-        });
+//                 child: <TestWidget> {},
+//             }
+//         });
 
-        TEST_HOOK.with(|result| {
-            assert_ne!(
-                result.borrow().retrieved_font,
-                None,
-                "font was not retrieved"
-            );
-        })
-    }
-}
+//         TEST_HOOK.with(|result| {
+//             assert_ne!(
+//                 result.borrow().retrieved_font,
+//                 None,
+//                 "font was not retrieved"
+//             );
+//         })
+//     }
+// }

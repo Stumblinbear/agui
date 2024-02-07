@@ -1,24 +1,18 @@
-use std::hash::BuildHasherDefault;
-
-use rustc_hash::FxHasher;
-use slotmap::{SecondaryMap, SparseSecondaryMap};
-
 use crate::{
+    engine::rendering::{
+        context::RenderingLayoutContext, strategies::RenderingTreeLayoutStrategy, RenderingTree,
+    },
     render::{
-        object::{
-            layout_data::LayoutDataUpdate, RenderObject, RenderObjectContext,
-            RenderObjectLayoutContext,
-        },
+        object::{RenderObjectIntrinsicSizeContext, RenderObjectLayoutContext},
         RenderObjectId,
     },
     unit::{Constraints, IntrinsicDimension, Offset, Size},
-    util::tree::Tree,
 };
 
 pub struct IterChildrenLayout<'ctx> {
-    pub(crate) index: usize,
+    pub(crate) tree: &'ctx RenderingTree,
 
-    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) index: usize,
 
     pub(crate) children: &'ctx [RenderObjectId],
 }
@@ -34,7 +28,7 @@ impl<'ctx> Iterator for IterChildrenLayout<'ctx> {
         self.index += 1;
 
         Some(ChildLayout {
-            render_object_tree: self.render_object_tree,
+            tree: self.tree,
 
             index: self.index - 1,
 
@@ -43,8 +37,14 @@ impl<'ctx> Iterator for IterChildrenLayout<'ctx> {
     }
 }
 
+impl ExactSizeIterator for IterChildrenLayout<'_> {
+    fn len(&self) -> usize {
+        self.children.len() - self.index
+    }
+}
+
 pub struct ChildLayout<'ctx> {
-    render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    tree: &'ctx RenderingTree,
 
     index: usize,
 
@@ -63,16 +63,19 @@ impl ChildLayout<'_> {
     pub fn compute_intrinsic_size(&self, dimension: IntrinsicDimension, cross_extent: f32) -> f32 {
         let render_object_id = self.render_object_id();
 
-        let render_object = self
-            .render_object_tree
-            .get(render_object_id)
+        let render_object_node = self
+            .tree
+            .as_ref()
+            .get_node(render_object_id)
             .expect("child render object missing during layout");
 
-        render_object.intrinsic_size(
-            RenderObjectContext {
-                render_object_tree: self.render_object_tree,
+        render_object_node.borrow().intrinsic_size(
+            &mut RenderObjectIntrinsicSizeContext {
+                tree: self.tree,
 
                 render_object_id: &render_object_id,
+
+                children: render_object_node.children(),
             },
             dimension,
             cross_extent,
@@ -81,21 +84,15 @@ impl ChildLayout<'_> {
 }
 
 pub struct IterChildrenLayoutMut<'ctx> {
-    pub(crate) index: usize,
+    pub(crate) strategy: &'ctx mut dyn RenderingTreeLayoutStrategy,
 
-    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) tree: &'ctx mut RenderingTree,
+
+    pub(crate) index: usize,
 
     pub(crate) relayout_boundary_id: &'ctx Option<RenderObjectId>,
 
     pub(crate) children: &'ctx [RenderObjectId],
-
-    pub(crate) constraints: &'ctx mut SecondaryMap<RenderObjectId, Constraints>,
-
-    pub(crate) layout_changed: &'ctx mut SparseSecondaryMap<
-        RenderObjectId,
-        LayoutDataUpdate,
-        BuildHasherDefault<FxHasher>,
-    >,
 }
 
 // TODO: refactor to LendingIterator when possible
@@ -109,37 +106,29 @@ impl IterChildrenLayoutMut<'_> {
         self.index += 1;
 
         Some(ChildLayoutMut {
-            render_object_tree: self.render_object_tree,
+            strategy: self.strategy,
+
+            tree: self.tree,
 
             relayout_boundary_id: self.relayout_boundary_id,
 
             index: self.index - 1,
 
             children: self.children,
-
-            constraints: self.constraints,
-
-            layout_changed: self.layout_changed,
         })
     }
 }
 
 pub struct ChildLayoutMut<'ctx> {
-    render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    strategy: &'ctx mut dyn RenderingTreeLayoutStrategy,
+
+    tree: &'ctx mut RenderingTree,
 
     relayout_boundary_id: &'ctx Option<RenderObjectId>,
 
     index: usize,
 
     children: &'ctx [RenderObjectId],
-
-    constraints: &'ctx mut SecondaryMap<RenderObjectId, Constraints>,
-
-    layout_changed: &'ctx mut SparseSecondaryMap<
-        RenderObjectId,
-        LayoutDataUpdate,
-        BuildHasherDefault<FxHasher>,
-    >,
 }
 
 impl ChildLayoutMut<'_> {
@@ -154,16 +143,19 @@ impl ChildLayoutMut<'_> {
     pub fn compute_intrinsic_size(&self, dimension: IntrinsicDimension, cross_extent: f32) -> f32 {
         let render_object_id = self.render_object_id();
 
-        let render_object = self
-            .render_object_tree
-            .get(render_object_id)
+        let render_object_node = self
+            .tree
+            .as_ref()
+            .get_node(render_object_id)
             .expect("child render object missing during layout");
 
-        render_object.intrinsic_size(
-            RenderObjectContext {
-                render_object_tree: self.render_object_tree,
+        render_object_node.borrow().intrinsic_size(
+            &mut RenderObjectIntrinsicSizeContext {
+                tree: self.tree,
 
                 render_object_id: &render_object_id,
+
+                children: render_object_node.children(),
             },
             dimension,
             cross_extent,
@@ -188,51 +180,57 @@ impl ChildLayoutMut<'_> {
     fn do_layout(&mut self, constraints: Constraints, parent_uses_size: bool) -> Size {
         let render_object_id = self.render_object_id();
 
-        let render_node = self
-            .render_object_tree
-            .get_node(render_object_id)
-            .expect("child render object missing during layout");
+        self.tree
+            .with(render_object_id, |tree, render_object| {
+                // TODO: figure out how to not clone this
+                let children = tree
+                    .as_ref()
+                    .get_children(render_object_id)
+                    .cloned()
+                    .unwrap_or_default();
 
-        render_node.borrow().layout(
-            &mut RenderObjectLayoutContext {
-                render_object_tree: self.render_object_tree,
+                render_object.layout(
+                    &mut RenderObjectLayoutContext {
+                        strategy: self.strategy,
 
-                parent_uses_size: &parent_uses_size,
+                        tree,
 
-                relayout_boundary_id: self.relayout_boundary_id,
+                        parent_uses_size: &parent_uses_size,
 
-                render_object_id: &render_object_id,
+                        relayout_boundary_id: self.relayout_boundary_id,
 
-                children: render_node.children(),
+                        render_object_id: &render_object_id,
 
-                constraints: self.constraints,
-
-                layout_changed: self.layout_changed,
-            },
-            constraints,
-        )
+                        children: &children,
+                    },
+                    constraints,
+                )
+            })
+            .expect("child render object missing during layout")
     }
 
     pub fn set_offset(&mut self, offset: impl Into<Offset>) {
-        let child_id = self.children[self.index];
+        let render_object_id = self.render_object_id();
 
-        let child_render_object = self
-            .render_object_tree
-            .get(child_id)
-            .expect("child render object missing during layout");
+        self.tree
+            .with(render_object_id, |tree, render_object| {
+                let offset = offset.into();
 
-        let offset = offset.into();
+                // is it worth even checking if this is equal there, or should
+                // it just be set unconditionally and checked later?
+                if render_object.offset() == offset {
+                    return;
+                }
 
-        // is it worth even checking if this is equal there, or should
-        // it just be set unconditionally and checked later?
-        if child_render_object.offset() == offset {
-            return;
-        }
+                self.strategy.on_offset_changed(
+                    RenderingLayoutContext {
+                        tree,
 
-        self.layout_changed
-            .entry(child_id)
-            .unwrap()
-            .or_default()
-            .offset = Some(offset);
+                        render_object_id: &render_object_id,
+                    },
+                    render_object,
+                );
+            })
+            .expect("child render object missing while setting its offset")
     }
 }

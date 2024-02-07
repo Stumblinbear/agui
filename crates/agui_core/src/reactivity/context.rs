@@ -31,5 +31,4 @@ where
     pub tree: &'ctx Tree<K, V>,
 
     pub node_id: &'ctx K,
-    pub value: V,
 }

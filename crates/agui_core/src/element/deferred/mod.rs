@@ -16,9 +16,9 @@ pub mod resolver;
 /// value if it is absolutely necessary, as it will stall the rendering phase in
 /// order to rebuild the element leading to a poor user experience.
 pub trait ElementDeferred: ElementLifecycle {
-    type Param: PartialEq + Send + Sync;
+    type Param: PartialEq + Send;
 
-    fn create_resolver(&self) -> impl Fn(Constraints) -> Self::Param + Send + Sync + 'static;
+    fn create_resolver(&self) -> impl Fn(Constraints) -> Self::Param + Send + 'static;
 
     fn build(&self, param: &Self::Param) -> Widget;
 }

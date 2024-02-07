@@ -271,7 +271,7 @@ impl Element {
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub(crate) fn update_render_object(
+    pub fn update_render_object(
         &self,
         ctx: &mut RenderObjectUpdateContext,
         render_object: &mut RenderObject,

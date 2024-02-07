@@ -18,7 +18,8 @@ use agui_core::{
     callback::{strategies::CallbackStrategy, CallbackId},
     element::{
         Element, ElementBuildContext, ElementCallbackContext, ElementId, ElementMountContext,
-        ElementTaskNotifyStrategy, ElementUnmountContext, RenderingTaskNotifyStrategy,
+        ElementTaskNotifyStrategy, ElementUnmountContext, RenderObjectCreateContext,
+        RenderObjectUpdateContext, RenderingTaskNotifyStrategy,
     },
     engine::{
         elements::{
@@ -28,13 +29,19 @@ use agui_core::{
             ElementTree,
         },
         rendering::{
+            context::{RenderingLayoutContext, RenderingSpawnContext, RenderingUpdateContext},
             scheduler::{CreateRenderingTask, RenderingSchedulerStrategy},
-            RenderManager,
+            strategies::{
+                RenderingTreeCreateStrategy, RenderingTreeLayoutStrategy,
+                RenderingTreeUpdateStrategy,
+            },
+            RenderingTree,
         },
     },
     reactivity::{BuildError, SpawnAndInflateError},
-    render::RenderObjectId,
+    render::{object::RenderObject, view::View, RenderObjectId},
     task::{error::TaskError, TaskHandle},
+    unit::{Constraints, Offset, Size},
     widget::{IntoWidget, Widget},
 };
 use rustc_hash::FxHashSet;
@@ -57,7 +64,7 @@ pub struct LocalEngineExecutor {
 
     element_update_rx: notify::Subscriber,
 
-    render_manager: RenderManager<EngineSchedulerStrategy>,
+    rendering_tree: RenderingTree,
     render_update_rx: notify::Subscriber,
 
     needs_layout_rx: mpsc::Receiver<RenderObjectId>,
@@ -90,7 +97,7 @@ impl Default for LocalEngineExecutor {
             needs_layout_tx,
             needs_paint_tx,
 
-            render_update_tx: render_update_tx.clone(),
+            render_update_tx,
 
             spawner: pool.spawner(),
         };
@@ -116,10 +123,7 @@ impl Default for LocalEngineExecutor {
 
             element_update_rx,
 
-            render_manager: RenderManager::builder()
-                .with_scheduler(scheduler)
-                .with_notifier(render_update_tx)
-                .build(),
+            rendering_tree: RenderingTree::default(),
             render_update_rx,
 
             needs_layout_rx,
@@ -384,15 +388,113 @@ impl LocalEngineExecutor {
 
     #[tracing::instrument(level = "debug", skip(self))]
     fn update_widgets(&mut self) {
-        struct SyncUnmountedStrategy<'ctx, Sched> {
-            render_manager: &'ctx mut RenderManager<Sched>,
+        struct SyncUnmountedStrategy<'ctx> {
+            rendering_tree: &'ctx mut RenderingTree,
         }
 
-        impl<Sched> UnmountElementStrategy for SyncUnmountedStrategy<'_, Sched> {
+        impl UnmountElementStrategy for SyncUnmountedStrategy<'_> {
             fn unmount(&mut self, mut ctx: ElementUnmountContext, element: Element) {
-                self.render_manager.forget_element(*ctx.element_id);
+                self.rendering_tree.forget(*ctx.element_id);
 
                 element.unmount(&mut ctx);
+            }
+        }
+
+        struct SyncCreateRenderObjectStrategy<'ctx> {
+            scheduler: &'ctx mut EngineSchedulerStrategy,
+
+            element_tree: &'ctx ElementTree,
+
+            needs_layout: &'ctx mut Vec<RenderObjectId>,
+            needs_paint: &'ctx mut Vec<RenderObjectId>,
+        }
+
+        impl RenderingTreeCreateStrategy for SyncCreateRenderObjectStrategy<'_> {
+            fn create(
+                &mut self,
+                ctx: RenderingSpawnContext,
+                element_id: ElementId,
+            ) -> RenderObject {
+                self.element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while creating render object")
+                    .create_render_object(&mut RenderObjectCreateContext {
+                        scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+
+                        render_object_id: ctx.render_object_id,
+                    })
+            }
+
+            fn create_view(&mut self, element_id: ElementId) -> Option<Box<dyn View + Send>> {
+                if let Element::View(view) = self
+                    .element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while creating view")
+                {
+                    Some(view.create_view())
+                } else {
+                    None
+                }
+            }
+
+            fn mark_needs_layout(&mut self, id: RenderObjectId) {
+                self.needs_layout.push(id);
+            }
+
+            fn mark_needs_paint(&mut self, id: RenderObjectId) {
+                self.needs_paint.push(id);
+            }
+        }
+
+        struct SyncUpdateRenderObjectStrategy<'ctx> {
+            scheduler: &'ctx mut EngineSchedulerStrategy,
+
+            element_tree: &'ctx ElementTree,
+
+            needs_layout: &'ctx mut Vec<RenderObjectId>,
+            needs_paint: &'ctx mut Vec<RenderObjectId>,
+        }
+
+        impl RenderingTreeUpdateStrategy for SyncUpdateRenderObjectStrategy<'_> {
+            fn get_children(&self, element_id: ElementId) -> &[ElementId] {
+                self.element_tree
+                    .as_ref()
+                    .get_children(element_id)
+                    .expect("element missing while updating render object")
+            }
+
+            fn update(
+                &mut self,
+                ctx: RenderingUpdateContext,
+                element_id: ElementId,
+                render_object: &mut RenderObject,
+            ) {
+                let mut needs_layout = false;
+                let mut needs_paint = false;
+
+                self.element_tree
+                    .as_ref()
+                    .get(element_id)
+                    .expect("element missing while updating render object")
+                    .update_render_object(
+                        &mut RenderObjectUpdateContext {
+                            scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
+
+                            needs_layout: &mut needs_layout,
+                            needs_paint: &mut needs_paint,
+
+                            render_object_id: ctx.render_object_id,
+                        },
+                        render_object,
+                    );
+
+                if needs_layout {
+                    self.needs_layout.push(*ctx.render_object_id);
+                } else if needs_paint {
+                    self.needs_paint.push(*ctx.render_object_id);
+                }
             }
         }
 
@@ -417,25 +519,47 @@ impl LocalEngineExecutor {
 
         self.element_tree
             .cleanup(&mut SyncUnmountedStrategy {
-                render_manager: &mut self.render_manager,
+                rendering_tree: &mut self.rendering_tree,
             })
             .expect("failed to cleanup element tree");
 
+        let mut needs_layout = Vec::new();
+        let mut needs_paint = Vec::new();
+
         for element_id in self.spawned_elements.drain(..) {
-            self.render_manager.on_create_element(element_id)
+            self.rendering_tree.create(
+                &mut SyncCreateRenderObjectStrategy {
+                    scheduler: &mut self.scheduler,
+
+                    element_tree: &self.element_tree,
+
+                    needs_layout: &mut needs_layout,
+                    needs_paint: &mut needs_paint,
+                },
+                self.element_tree.as_ref().get_parent(element_id).copied(),
+                element_id,
+            );
         }
 
         for element_id in self.updated_elements.drain(..) {
-            self.render_manager.on_needs_update(element_id)
+            self.rendering_tree.update(
+                &mut SyncUpdateRenderObjectStrategy {
+                    scheduler: &mut self.scheduler,
+
+                    element_tree: &self.element_tree,
+
+                    needs_layout: &mut needs_layout,
+                    needs_paint: &mut needs_paint,
+                },
+                element_id,
+            );
         }
 
-        if self.render_manager.does_need_sync() {
-            println!("syncing render tree");
-
-            self.render_manager.sync_render_objects(&self.element_tree);
-        }
-
-        self.render_manager.flush_needs_layout();
+        self.element_tree
+            .cleanup(&mut SyncUnmountedStrategy {
+                rendering_tree: &mut self.rendering_tree,
+            })
+            .expect("failed to cleanup element tree");
 
         let sync_render_tree_end = Instant::now();
 
@@ -453,35 +577,51 @@ impl LocalEngineExecutor {
         );
     }
 
-    fn flush_needs_layout(&mut self) {
-        while let Ok(id) = self.needs_layout_rx.try_recv() {
-            self.render_manager.on_needs_layout(id);
-        }
-    }
-
-    fn flush_needs_paint(&mut self) {
-        while let Ok(id) = self.needs_paint_rx.try_recv() {
-            self.render_manager.on_needs_paint(id);
-        }
-    }
-
     #[tracing::instrument(level = "debug", skip(self))]
     fn update_renderer(&mut self) {
+        struct SyncLayoutRenderObjectStrategy {}
+
+        impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy {
+            fn on_constraints_changed(
+                &mut self,
+                ctx: RenderingLayoutContext,
+                constraints: Constraints,
+            ) {
+                println!(
+                    "constraints changed: {:?} {:?}",
+                    ctx.render_object_id, constraints
+                );
+            }
+
+            fn on_size_changed(&mut self, ctx: RenderingLayoutContext, size: Size) {
+                println!("size changed: {:?} {:?}", ctx.render_object_id, size);
+            }
+
+            fn on_offset_changed(&mut self, ctx: RenderingLayoutContext, offset: Offset) {
+                println!("offset changed: {:?} {:?}", ctx.render_object_id, offset);
+            }
+        }
+
         tracing::debug!("renderer update started");
 
         let start = Instant::now();
 
-        self.render_manager.flush_needs_layout();
+        self.rendering_tree.layout_many(
+            &mut SyncLayoutRenderObjectStrategy {},
+            self.needs_layout_rx.try_iter(),
+        );
 
-        self.render_manager.flush_layout();
+        self.rendering_tree.sync_views();
 
         let layout_end = Instant::now();
 
-        self.render_manager.flush_paint();
+        for render_object_id in self.needs_paint_rx.try_iter() {
+            self.rendering_tree.paint(render_object_id);
+        }
 
         let paint_end = Instant::now();
 
-        self.render_manager.sync_views();
+        self.rendering_tree.sync_views();
 
         let sync_views_end = Instant::now();
 
@@ -502,12 +642,7 @@ impl EngineExecutor for LocalEngineExecutor {
     fn update(&mut self) {
         self.update_widgets();
 
-        self.flush_needs_layout();
-        self.flush_needs_paint();
-
-        if self.render_manager.does_need_update() {
-            self.update_renderer();
-        }
+        self.update_renderer();
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -572,10 +707,7 @@ impl EngineExecutor for LocalEngineExecutor {
                 self.update_widgets();
             }
 
-            self.flush_needs_layout();
-            self.flush_needs_paint();
-
-            if render_future.is_terminated() || self.render_manager.does_need_update() {
+            if render_future.is_terminated() {
                 self.update_renderer();
             }
 

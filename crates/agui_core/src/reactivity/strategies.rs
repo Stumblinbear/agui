@@ -22,7 +22,7 @@ pub trait UnmountStrategy<K, V>
 where
     K: slotmap::Key,
 {
-    fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<K, V>);
+    fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<K, V>, value: V);
 }
 
 // TODO: Use Activate and Deactivate instead of "forgotten"

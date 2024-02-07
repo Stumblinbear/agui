@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use agui_core::{
     element::{Element, ElementBuilder},
     unit::Constraints,
@@ -14,19 +12,18 @@ mod element;
 #[derive(WidgetProps, Debug)]
 pub struct LayoutBuilder<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
     Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
-    #[prop(into)]
-    pub resolver: Arc<ResolverFn>,
+    pub resolver: ResolverFn,
     pub builder: BuildFn,
 }
 
 impl<ResolverFn, Param, BuildFn> IntoWidget for LayoutBuilder<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
     fn into_widget(self) -> Widget {
@@ -36,8 +33,8 @@ where
 
 impl<ResolverFn, Param, BuildFn> ElementBuilder for LayoutBuilder<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
     type Element = LayoutBuilderElement<ResolverFn, Param, BuildFn>;

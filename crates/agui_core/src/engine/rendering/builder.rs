@@ -5,10 +5,7 @@ use rustc_hash::FxHashSet;
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
-    engine::{
-        rendering::{scheduler::RenderingSchedulerStrategy, RenderManager},
-        Dirty,
-    },
+    engine::{rendering::scheduler::RenderingSchedulerStrategy, Dirty},
     util::tree::Tree,
 };
 

@@ -9,8 +9,6 @@ pub trait InflateElementStrategy {
 
     fn mount(&mut self, ctx: ElementTreeMountContext, definition: Self::Definition) -> Element;
 
-    fn on_forgotten(&mut self, id: ElementId);
-
     fn try_update(
         &mut self,
         id: ElementId,
@@ -50,7 +48,6 @@ pub mod mocks {
         pub spawned: Vec<ElementId>,
         pub updated: Vec<ElementId>,
         pub built: Vec<ElementId>,
-        pub forgotten: Vec<ElementId>,
     }
 
     impl Default for MockInflateElementStrategy {
@@ -62,7 +59,6 @@ pub mod mocks {
                 spawned: Vec::new(),
                 updated: Vec::new(),
                 built: Vec::new(),
-                forgotten: Vec::new(),
             }
         }
     }
@@ -83,10 +79,6 @@ pub mod mocks {
             });
 
             element
-        }
-
-        fn on_forgotten(&mut self, id: ElementId) {
-            self.forgotten.push(id);
         }
 
         fn try_update(

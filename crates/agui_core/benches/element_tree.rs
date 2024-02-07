@@ -46,8 +46,6 @@ impl InflateElementStrategy for NoopInflateStrategy {
         element
     }
 
-    fn on_forgotten(&mut self, _: ElementId) {}
-
     fn try_update(
         &mut self,
         _: ElementId,

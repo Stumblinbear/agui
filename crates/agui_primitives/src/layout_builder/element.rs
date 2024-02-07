@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::rc::Rc;
 
 use agui_core::{
     element::{deferred::ElementDeferred, lifecycle::ElementLifecycle, ElementComparison},
@@ -11,8 +11,8 @@ use crate::layout_builder::LayoutBuilder;
 
 pub struct LayoutBuilderElement<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
     pub(crate) widget: Rc<LayoutBuilder<ResolverFn, Param, BuildFn>>,
@@ -20,8 +20,8 @@ where
 
 impl<ResolverFn, Param, BuildFn> LayoutBuilderElement<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
     pub fn new(widget: Rc<LayoutBuilder<ResolverFn, Param, BuildFn>>) -> Self {
@@ -32,8 +32,8 @@ where
 impl<ResolverFn, Param, BuildFn> ElementLifecycle
     for LayoutBuilderElement<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
@@ -55,15 +55,14 @@ where
 impl<ResolverFn, Param, BuildFn> ElementDeferred
     for LayoutBuilderElement<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
 {
     type Param = Param;
 
-    fn create_resolver(&self) -> impl Fn(Constraints) -> Self::Param + Send + Sync + 'static {
-        let resolver = Arc::clone(&self.widget.resolver);
-        move |constraints| (resolver)(constraints)
+    fn create_resolver(&self) -> impl Fn(Constraints) -> Self::Param + Send + 'static {
+        self.widget.resolver.clone()
     }
 
     fn build(&self, param: &Self::Param) -> Widget {
@@ -74,8 +73,8 @@ where
 impl<ResolverFn, Param, BuildFn> std::fmt::Debug
     for LayoutBuilderElement<ResolverFn, Param, BuildFn>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: PartialEq + Send + Sync + 'static,
+    ResolverFn: Fn(Constraints) -> Param + Clone + Send + 'static,
+    Param: PartialEq + Send + 'static,
     BuildFn: Fn(&Param) -> Widget + 'static,
     LayoutBuilder<ResolverFn, Param, BuildFn>: std::fmt::Debug,
 {

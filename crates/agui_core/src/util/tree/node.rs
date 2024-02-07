@@ -44,7 +44,7 @@ impl<K, V> TreeNode<K, V> {
         }
     }
 
-    pub fn take(mut self) -> Result<V, NodeInUse> {
+    pub fn take(&mut self) -> Result<V, NodeInUse> {
         self.value.take().ok_or(NodeInUse)
     }
 }

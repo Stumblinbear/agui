@@ -12,7 +12,7 @@ mod iter;
 pub use iter::*;
 
 pub struct RenderObjectHitTestContext<'ctx> {
-    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub render_object_id: &'ctx RenderObjectId,
 
@@ -47,7 +47,7 @@ impl RenderObjectHitTestContext<'_> {
             front_index: 0,
             back_index: self.children.len(),
 
-            render_object_tree: self.render_object_tree,
+            tree: self.tree,
 
             children: self.children,
 

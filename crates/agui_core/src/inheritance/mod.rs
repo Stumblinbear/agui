@@ -1,15 +1,11 @@
 use std::any::TypeId;
 
-use crate::{
-    element::{Element, ElementId},
-    engine::Dirty,
-    inheritance::{node::InheritanceNode, scope::InheritanceScope},
-    util::{
-        map::{TypeIdMap, TypeIdSet},
-        tree::Tree,
-    },
-};
 use rustc_hash::FxHashMap;
+
+use crate::{
+    element::ElementId,
+    inheritance::{node::InheritanceNode, scope::InheritanceScope},
+};
 
 mod node;
 mod scope;
@@ -140,202 +136,202 @@ impl InheritanceManager {
             .map(|scope| scope.iter_listeners())
     }
 
-    pub(crate) fn update_inheritance_scope(
-        &mut self,
-        tree: &Tree<ElementId, Element>,
-        needs_build: &mut Dirty<ElementId>,
-        element_id: ElementId,
-        new_scope_id: Option<ElementId>,
-    ) {
-        match self
-            .get(element_id)
-            .expect("element missing from inheritance tree")
-        {
-            Inheritance::Scope(scope) => {
-                // We cannot necessarily skip updating if our scope is already the same as the new scope,
-                // since it may be that its available scopes have changed.
+    // pub(crate) fn update_inheritance_scope(
+    //     &mut self,
+    //     tree: &Tree<ElementId, Element>,
+    //     needs_build: &mut Dirty<ElementId>,
+    //     element_id: ElementId,
+    //     new_scope_id: Option<ElementId>,
+    // ) {
+    //     match self
+    //         .get(element_id)
+    //         .expect("element missing from inheritance tree")
+    //     {
+    //         Inheritance::Scope(scope) => {
+    //             // We cannot necessarily skip updating if our scope is already the same as the new scope,
+    //             // since it may be that its available scopes have changed.
 
-                let child_scope_ids = self
-                    .update_ancestor_scope(
-                        needs_build,
-                        element_id,
-                        scope.ancestor_scope(),
-                        new_scope_id,
-                    )
-                    .to_vec();
+    //             let child_scope_ids = self
+    //                 .update_ancestor_scope(
+    //                     needs_build,
+    //                     element_id,
+    //                     scope.ancestor_scope(),
+    //                     new_scope_id,
+    //                 )
+    //                 .to_vec();
 
-                for child_scope_id in child_scope_ids {
-                    self.update_inheritance_scope(tree, needs_build, child_scope_id, new_scope_id);
-                }
-            }
+    //             for child_scope_id in child_scope_ids {
+    //                 self.update_inheritance_scope(tree, needs_build, child_scope_id, new_scope_id);
+    //             }
+    //         }
 
-            Inheritance::Node(node) => {
-                // If our scope is already the same as the new scope, we can skip updating.
-                if node.scope() == new_scope_id {
-                    return;
-                }
+    //         Inheritance::Node(node) => {
+    //             // If our scope is already the same as the new scope, we can skip updating.
+    //             if node.scope() == new_scope_id {
+    //                 return;
+    //             }
 
-                self.update_scope(needs_build, element_id, node.scope(), new_scope_id);
+    //             self.update_scope(needs_build, element_id, node.scope(), new_scope_id);
 
-                for child_id in tree
-                    .get_children(element_id)
-                    .expect("element missing from tree while updating its inheritance scope")
-                    .iter()
-                    .copied()
-                {
-                    self.update_inheritance_scope(tree, needs_build, child_id, new_scope_id);
-                }
-            }
-        }
-    }
+    //             for child_id in tree
+    //                 .get_children(element_id)
+    //                 .expect("element missing from tree while updating its inheritance scope")
+    //                 .iter()
+    //                 .copied()
+    //             {
+    //                 self.update_inheritance_scope(tree, needs_build, child_id, new_scope_id);
+    //             }
+    //         }
+    //     }
+    // }
 
-    // Updates a scopes's ancestor scope. This removes it from the old ancestor scope and adds it to the new one,
-    // updating the available scopes and any dependents as necessary. Returns the list of child scopes that
-    // must be updated.
-    fn update_ancestor_scope(
-        &mut self,
-        needs_build: &mut Dirty<ElementId>,
-        element_id: ElementId,
-        old_ancestor_scope_id: Option<ElementId>,
-        new_ancestor_scope_id: Option<ElementId>,
-    ) -> Vec<ElementId> {
-        if old_ancestor_scope_id != new_ancestor_scope_id {
-            // Remove the scope from the old ancestor scope if necessary
-            if let Some(old_ancestor_scope_id) = old_ancestor_scope_id {
-                let old_ancestor_scope = self.get_as_scope_mut(old_ancestor_scope_id).expect(
-                    "failed to find the old ancestor scope while updating its ancestor scope",
-                );
+    // // Updates a scopes's ancestor scope. This removes it from the old ancestor scope and adds it to the new one,
+    // // updating the available scopes and any dependents as necessary. Returns the list of child scopes that
+    // // must be updated.
+    // fn update_ancestor_scope(
+    //     &mut self,
+    //     needs_build: &mut Dirty<ElementId>,
+    //     element_id: ElementId,
+    //     old_ancestor_scope_id: Option<ElementId>,
+    //     new_ancestor_scope_id: Option<ElementId>,
+    // ) -> Vec<ElementId> {
+    //     if old_ancestor_scope_id != new_ancestor_scope_id {
+    //         // Remove the scope from the old ancestor scope if necessary
+    //         if let Some(old_ancestor_scope_id) = old_ancestor_scope_id {
+    //             let old_ancestor_scope = self.get_as_scope_mut(old_ancestor_scope_id).expect(
+    //                 "failed to find the old ancestor scope while updating its ancestor scope",
+    //             );
 
-                old_ancestor_scope.remove_child_scope(element_id);
-            }
-        }
+    //             old_ancestor_scope.remove_child_scope(element_id);
+    //         }
+    //     }
 
-        let new_available_scopes = if let Some(new_ancestor_scope_id) = new_ancestor_scope_id {
-            let new_ancestor_scope = self
-                .get_as_scope_mut(new_ancestor_scope_id)
-                .expect("failed to find the new ancestor scope while updating its ancestor scope");
+    //     let new_available_scopes = if let Some(new_ancestor_scope_id) = new_ancestor_scope_id {
+    //         let new_ancestor_scope = self
+    //             .get_as_scope_mut(new_ancestor_scope_id)
+    //             .expect("failed to find the new ancestor scope while updating its ancestor scope");
 
-            if old_ancestor_scope_id != Some(new_ancestor_scope_id) {
-                // Add the scope to the new ancestor scope if necessary
-                new_ancestor_scope.add_child_scope(element_id);
-            }
+    //         if old_ancestor_scope_id != Some(new_ancestor_scope_id) {
+    //             // Add the scope to the new ancestor scope if necessary
+    //             new_ancestor_scope.add_child_scope(element_id);
+    //         }
 
-            new_ancestor_scope.available_scopes().clone()
-        } else {
-            Default::default()
-        };
+    //         new_ancestor_scope.available_scopes().clone()
+    //     } else {
+    //         Default::default()
+    //     };
 
-        self.with(element_id, |inheritance_manager, scope| {
-            let scope = if let Inheritance::Scope(scope) = scope {
-                scope
-            } else {
-                panic!("element is not an inheritance scope");
-            };
+    //     self.with(element_id, |inheritance_manager, scope| {
+    //         let scope = if let Inheritance::Scope(scope) = scope {
+    //             scope
+    //         } else {
+    //             panic!("element is not an inheritance scope");
+    //         };
 
-            scope.set_ancestor_scope(new_ancestor_scope_id);
+    //         scope.set_ancestor_scope(new_ancestor_scope_id);
 
-            let old_available_scopes = scope.available_scopes().clone();
+    //         let old_available_scopes = scope.available_scopes().clone();
 
-            let new_available_scopes = scope.update_available_scopes(new_available_scopes);
+    //         let new_available_scopes = scope.update_available_scopes(new_available_scopes);
 
-            let changed_dependencies = old_available_scopes
-                .keys()
-                .chain(new_available_scopes.keys())
-                .copied()
-                .collect::<TypeIdSet>()
-                .into_iter()
-                .filter(|type_id| {
-                    old_available_scopes.get(type_id) != new_available_scopes.get(type_id)
-                })
-                .collect::<Vec<_>>();
+    //         let changed_dependencies = old_available_scopes
+    //             .keys()
+    //             .chain(new_available_scopes.keys())
+    //             .copied()
+    //             .collect::<TypeIdSet>()
+    //             .into_iter()
+    //             .filter(|type_id| {
+    //                 old_available_scopes.get(type_id) != new_available_scopes.get(type_id)
+    //             })
+    //             .collect::<Vec<_>>();
 
-            // If the scopes that are available are the same, then we don't need to update anything.
-            if changed_dependencies.is_empty() {
-                return Vec::new();
-            }
+    //         // If the scopes that are available are the same, then we don't need to update anything.
+    //         if changed_dependencies.is_empty() {
+    //             return Vec::new();
+    //         }
 
-            for type_id in changed_dependencies {
-                // Remove the listener from the old scope if necessary
-                if let Some(old_scope_id) = old_available_scopes.get(&type_id).copied() {
-                    let old_scope = inheritance_manager
-                        .get_as_scope_mut(old_scope_id)
-                        .expect("failed to find the old scope while updating dependencies");
+    //         for type_id in changed_dependencies {
+    //             // Remove the listener from the old scope if necessary
+    //             if let Some(old_scope_id) = old_available_scopes.get(&type_id).copied() {
+    //                 let old_scope = inheritance_manager
+    //                     .get_as_scope_mut(old_scope_id)
+    //                     .expect("failed to find the old scope while updating dependencies");
 
-                    old_scope.remove_listener(element_id);
-                }
+    //                 old_scope.remove_listener(element_id);
+    //             }
 
-                // No need to update the new scope with the listener, as we'll do that when it rebuilds
+    //             // No need to update the new scope with the listener, as we'll do that when it rebuilds
 
-                // Mark every element that depends on this type dirty
-                scope
-                    .get_dependents(&type_id)
-                    .for_each(|element_id| needs_build.insert(element_id));
-            }
+    //             // Mark every element that depends on this type dirty
+    //             scope
+    //                 .get_dependents(&type_id)
+    //                 .for_each(|element_id| needs_build.insert(element_id));
+    //         }
 
-            scope.child_scopes().to_vec()
-        })
-        .expect("failed to find the scope while updating its ancestor scope")
-    }
+    //         scope.child_scopes().to_vec()
+    //     })
+    //     .expect("failed to find the scope while updating its ancestor scope")
+    // }
 
-    // Updates a node's to a new scope. This removes it from the old scope and adds it to the new one,
-    // marking it as dirty if necessary.
-    fn update_scope(
-        &mut self,
-        needs_build: &mut Dirty<ElementId>,
-        element_id: ElementId,
-        old_scope_id: Option<ElementId>,
-        new_scope_id: Option<ElementId>,
-    ) {
-        let mut dependencies = self
-            .get_as_node(element_id)
-            .expect("failed to find the node while updating its inheritance scope")
-            .iter_dependencies()
-            .map(|type_id| (type_id, None))
-            .collect::<TypeIdMap<Option<ElementId>>>();
+    // // Updates a node's to a new scope. This removes it from the old scope and adds it to the new one,
+    // // marking it as dirty if necessary.
+    // fn update_scope(
+    //     &mut self,
+    //     needs_build: &mut Dirty<ElementId>,
+    //     element_id: ElementId,
+    //     old_scope_id: Option<ElementId>,
+    //     new_scope_id: Option<ElementId>,
+    // ) {
+    //     let mut dependencies = self
+    //         .get_as_node(element_id)
+    //         .expect("failed to find the node while updating its inheritance scope")
+    //         .iter_dependencies()
+    //         .map(|type_id| (type_id, None))
+    //         .collect::<TypeIdMap<Option<ElementId>>>();
 
-        // Remove the tracked dependencies from the node's old scope
-        if let Some(old_scope_id) = old_scope_id {
-            let old_scope = self
-                .get_as_scope_mut(old_scope_id)
-                .expect("failed to find the node's old scope while updating its inheritance scope");
+    //     // Remove the tracked dependencies from the node's old scope
+    //     if let Some(old_scope_id) = old_scope_id {
+    //         let old_scope = self
+    //             .get_as_scope_mut(old_scope_id)
+    //             .expect("failed to find the node's old scope while updating its inheritance scope");
 
-            for (type_id, old_dependency_id) in &mut dependencies {
-                // Grab the old dependency from the old scope so we can cross-reference it with the new scope
-                *old_dependency_id = old_scope.available_scopes().get(type_id).copied();
+    //         for (type_id, old_dependency_id) in &mut dependencies {
+    //             // Grab the old dependency from the old scope so we can cross-reference it with the new scope
+    //             *old_dependency_id = old_scope.available_scopes().get(type_id).copied();
 
-                // We've changed scopes, so we need to remove the node from the old scope's dependents
-                old_scope.remove_dependent(type_id, element_id);
-            }
-        }
+    //             // We've changed scopes, so we need to remove the node from the old scope's dependents
+    //             old_scope.remove_dependent(type_id, element_id);
+    //         }
+    //     }
 
-        // Update the node's scope if necessary
-        if old_scope_id != new_scope_id {
-            let node = self
-                .get_as_node_mut(element_id)
-                .expect("failed to find the node while updating its inheritance scope");
+    //     // Update the node's scope if necessary
+    //     if old_scope_id != new_scope_id {
+    //         let node = self
+    //             .get_as_node_mut(element_id)
+    //             .expect("failed to find the node while updating its inheritance scope");
 
-            node.set_scope(new_scope_id);
-        }
+    //         node.set_scope(new_scope_id);
+    //     }
 
-        let available_scopes = new_scope_id.map(|new_scope_id| {
-            self.get_as_scope(new_scope_id)
-                .expect("failed to find the node's new scope while updating its inheritance scope")
-                .available_scopes()
-        });
+    //     let available_scopes = new_scope_id.map(|new_scope_id| {
+    //         self.get_as_scope(new_scope_id)
+    //             .expect("failed to find the node's new scope while updating its inheritance scope")
+    //             .available_scopes()
+    //     });
 
-        // Check if any dependencies changed
-        for (type_id, old_dependency_id) in dependencies {
-            if old_dependency_id
-                != available_scopes
-                    .and_then(|available_scopes| available_scopes.get(&type_id).copied())
-            {
-                // If the new dependency is different from the old one, mark the node as dirty
-                needs_build.insert(element_id);
+    //     // Check if any dependencies changed
+    //     for (type_id, old_dependency_id) in dependencies {
+    //         if old_dependency_id
+    //             != available_scopes
+    //                 .and_then(|available_scopes| available_scopes.get(&type_id).copied())
+    //         {
+    //             // If the new dependency is different from the old one, mark the node as dirty
+    //             needs_build.insert(element_id);
 
-                break;
-            }
-        }
-    }
+    //             break;
+    //         }
+    //     }
+    // }
 
     #[tracing::instrument(skip(self))]
     pub(crate) fn create_scope(

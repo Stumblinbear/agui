@@ -17,7 +17,7 @@ pub use mount::*;
 pub use unmount::*;
 
 pub struct RenderObjectContext<'ctx> {
-    pub(crate) render_object_tree: &'ctx Tree<RenderObjectId, RenderObject>,
+    pub(crate) tree: &'ctx Tree<RenderObjectId, RenderObject>,
 
     pub render_object_id: &'ctx RenderObjectId,
 }

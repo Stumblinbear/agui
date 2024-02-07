@@ -103,6 +103,16 @@ where
         self.tree.get(node_id)
     }
 
+    /// Returns a mutable reference to the node with the given ID.
+    ///
+    /// # Panics
+    ///
+    /// If the node is currently in use (i.e. it has been pulled from the tree
+    /// via [`ReactiveTree::with`]) then this method will panic.
+    pub fn get_mut(&mut self, node_id: K) -> Option<&mut V> {
+        self.tree.get_mut(node_id)
+    }
+
     pub fn with<F, R>(&mut self, node_id: K, func: F) -> Option<R>
     where
         F: FnOnce(&Tree<K, V>, &mut V) -> R,
@@ -216,7 +226,7 @@ where
         while let Some(key) = destroy_queue.pop_front() {
             tracing::trace!(?key, "removing from the tree");
 
-            let Some(node) = self.tree.remove_node(key) else {
+            let Some(node) = self.tree.get_node_mut(key) else {
                 continue;
             };
 
@@ -233,12 +243,14 @@ where
                 }
             };
 
-            strategy.unmount(ReactiveTreeUnmountContext {
-                tree: &self.tree,
+            strategy.unmount(
+                ReactiveTreeUnmountContext {
+                    tree: &self.tree,
 
-                node_id: &key,
+                    node_id: &key,
+                },
                 value,
-            })
+            )
         }
 
         for key in subtree_roots {
@@ -599,8 +611,8 @@ where
             K: slotmap::Key,
             S: UnmountStrategy<K, V> + ?Sized,
         {
-            fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<K, V>) {
-                self.inner.unmount(ctx)
+            fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<K, V>, value: V) {
+                self.inner.unmount(ctx, value)
             }
         }
 
@@ -992,7 +1004,7 @@ mod tests {
     }
 
     impl UnmountStrategy<TestId, TestValue> for TestUnmountStrategy {
-        fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<TestId, TestValue>) {
+        fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<TestId, TestValue>, _: TestValue) {
             self.unmounted.insert(*ctx.node_id);
         }
     }

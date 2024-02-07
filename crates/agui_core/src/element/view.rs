@@ -1,6 +1,6 @@
-use crate::{element::render::ElementRender, render::view::View};
+use crate::{element::render::ElementRender, engine::rendering::view::View};
 
 pub trait ElementView: ElementRender {
-    /// Creates a the view for this subtree.
+    /// Creates a view for this subtree.
     fn create_view(&self) -> Box<dyn View + Send>;
 }

@@ -4,7 +4,8 @@ use std::{
 };
 
 use agui_core::{
-    render::{canvas::Canvas, view::View, RenderObjectId},
+    engine::rendering::view::View,
+    render::{canvas::Canvas, RenderObjectId},
     unit::{Offset, Size},
     util::ptr_eq::PtrEqual,
 };

@@ -50,8 +50,8 @@ pub(crate) struct ErasedDeferredResolver<ResolverFn, Param> {
 
 impl<ResolverFn, Param> DeferredResolver for ErasedDeferredResolver<ResolverFn, Param>
 where
-    ResolverFn: Fn(Constraints) -> Param + Send + Sync + 'static,
-    Param: Any + PartialEq + Send + Sync,
+    ResolverFn: Fn(Constraints) -> Param + Send + 'static,
+    Param: Any + PartialEq + Send,
 {
     fn resolve(&mut self, constraints: Constraints) -> bool {
         let param = (self.resolver)(constraints);
