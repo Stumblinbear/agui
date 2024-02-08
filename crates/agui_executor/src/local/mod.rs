@@ -18,7 +18,7 @@ use agui_core::{
     widget::IntoWidget,
 };
 use rustc_hash::{FxHashSet, FxHasher};
-use slotmap::{SecondaryMap, SparseSecondaryMap};
+use slotmap::SparseSecondaryMap;
 
 use crate::{
     local::{
@@ -46,29 +46,28 @@ mod unmount;
 mod update_render_object;
 
 pub struct LocalEngineExecutor {
+    pool: LocalPool,
     scheduler: LocalScheduler,
+
     callbacks: Arc<dyn CallbackStrategy>,
 
     element_tree: ElementTree,
-    deferred_elements: SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+    rendering_tree: RenderingTree,
+
+    deferred_elements: SparseSecondaryMap<
+        RenderObjectId,
+        (ElementId, Box<dyn DeferredResolver>),
+        BuildHasherDefault<FxHasher>,
+    >,
 
     needs_build_rx: mpsc::Receiver<ElementId>,
-    rebuild_queue: VecDeque<ElementId>,
-
     callback_rx: mpsc::Receiver<InvokeCallback>,
 
-    spawned_elements: VecDeque<ElementId>,
-    updated_elements: SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
-
     element_update_rx: notify::Subscriber,
-
-    rendering_tree: RenderingTree,
     render_update_rx: notify::Subscriber,
 
     needs_layout_rx: mpsc::Receiver<RenderObjectId>,
     needs_paint_rx: mpsc::Receiver<RenderObjectId>,
-
-    pool: LocalPool,
 }
 
 impl Default for LocalEngineExecutor {
@@ -100,35 +99,33 @@ impl Default for LocalEngineExecutor {
             spawner: pool.spawner(),
         };
 
+        let callbacks = LocalCallbacks {
+            callback_tx,
+            element_update_tx,
+        };
+
         Self {
+            pool,
             scheduler,
+
             #[allow(clippy::arc_with_non_send_sync)]
-            callbacks: Arc::new(LocalCallbacks {
-                callback_tx,
-                element_update_tx,
-            }),
+            callbacks: Arc::new(callbacks),
 
             element_tree: ElementTree::default(),
-            deferred_elements: SecondaryMap::default(),
+            rendering_tree: RenderingTree::default(),
+
+            deferred_elements: SparseSecondaryMap::default(),
 
             needs_build_rx,
 
-            rebuild_queue: VecDeque::default(),
-
             callback_rx,
-
-            spawned_elements: VecDeque::default(),
-            updated_elements: SparseSecondaryMap::default(),
 
             element_update_rx,
 
-            rendering_tree: RenderingTree::default(),
             render_update_rx,
 
             needs_layout_rx,
             needs_paint_rx,
-
-            pool,
         }
     }
 }
@@ -137,31 +134,93 @@ impl LocalEngineExecutor {
     pub fn with_root(root: impl IntoWidget) -> Result<Self, SpawnAndInflateError<ElementId>> {
         let mut executor = Self::default();
 
+        let mut spawned_elements = VecDeque::<ElementId>::default();
+
         executor.element_tree.inflate(
             &mut InflateRoot {
                 scheduler: &mut executor.scheduler,
                 callbacks: &executor.callbacks,
 
-                spawned_elements: &mut executor.spawned_elements,
+                spawned_elements: &mut spawned_elements,
             },
             root.into_widget(),
         )?;
+
+        let mut needs_layout = SparseSecondaryMap::default();
+        let mut needs_paint = FxHashSet::default();
+
+        for element_id in spawned_elements.drain(..) {
+            executor.rendering_tree.create(
+                &mut ImmediatelyCreateRenderObjects {
+                    scheduler: &mut executor.scheduler,
+
+                    element_tree: &executor.element_tree,
+                    deferred_elements: &mut executor.deferred_elements,
+
+                    needs_layout: &mut needs_layout,
+                    needs_paint: &mut needs_paint,
+                },
+                executor
+                    .element_tree
+                    .as_ref()
+                    .get_parent(element_id)
+                    .copied(),
+                element_id,
+            );
+        }
+
+        executor.rendering_tree.layout(
+            &mut LayoutRenderObjects {
+                scheduler: &mut executor.scheduler,
+                callbacks: &executor.callbacks,
+
+                element_tree: &mut executor.element_tree,
+
+                deferred_elements: &mut executor.deferred_elements,
+
+                needs_paint: &mut needs_paint,
+            },
+            needs_layout.into_iter().map(|(id, _)| id),
+        );
+
+        for render_object_id in needs_paint {
+            executor.rendering_tree.paint(render_object_id);
+        }
+
+        executor.rendering_tree.sync_views();
 
         Ok(executor)
     }
 }
 
 impl LocalEngineExecutor {
-    #[tracing::instrument(level = "trace", skip(self))]
-    fn flush_callbacks(&mut self) {
-        tracing::trace!("flushing callbacks");
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn update_widgets(&mut self) {
+        tracing::trace!("widget update started");
 
-        while let Ok(invoke) = self.callback_rx.try_recv() {
+        let start = Instant::now();
+
+        let mut needs_build = VecDeque::<ElementId>::default();
+
+        tracing::trace!("executing pending callbacks");
+
+        // There's no particular reason to prefer callback rebuilds over scheduler rebuilds,
+        // I just had to pick one.
+        //
+        // We collect this so that callbacks that execute other callbacks don't cause the
+        // executor to hang.
+        for invoke in self.callback_rx.try_iter().collect::<Vec<_>>() {
             let element_id = invoke.callback_id.element_id();
 
             let existed = self
                 .element_tree
                 .with(invoke.callback_id.element_id(), |ctx, element| {
+                    // let exec_start = if tracing::span_enabled!(tracing::Level::DEBUG) {
+                    //     Some(Instant::now())
+                    // } else {
+                    //     None
+                    // };
+
                     let changed = element.call(
                         &mut ElementCallbackContext {
                             scheduler: &mut ctx.scheduler.with_strategy(&mut self.scheduler),
@@ -175,10 +234,16 @@ impl LocalEngineExecutor {
                         invoke.arg,
                     );
 
+                    // if let Some(exec_start) = exec_start {
+                    //     let duration = exec_start.elapsed();
+
+                    //     tracing::debug!(?element_id, ?duration, ?changed, "executed callback");
+                    // }
+
                     if changed {
                         tracing::trace!("callback updated element, queueing for rebuild");
 
-                        self.rebuild_queue.push_back(element_id);
+                        needs_build.push_back(element_id);
                     }
                 })
                 .is_some();
@@ -187,36 +252,34 @@ impl LocalEngineExecutor {
                 tracing::warn!("callback invoked on an element that does not exist");
             }
         }
-    }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    fn flush_needs_build(&mut self) -> bool {
-        tracing::trace!("flushing needs build");
+        let execute_callbacks_end = Instant::now();
 
-        while let Ok(element_id) = self.needs_build_rx.try_recv() {
+        tracing::trace!("flushing scheduler rebuilds");
+
+        for element_id in self.needs_build_rx.try_iter() {
             if self.element_tree.contains(element_id) {
                 tracing::trace!(?element_id, "queueing element for rebuild");
 
-                self.rebuild_queue.push_back(element_id);
+                needs_build.push_back(element_id);
             } else {
                 tracing::warn!("queued an element for rebuild, but it does not exist in the tree");
             }
         }
 
-        !self.rebuild_queue.is_empty()
-    }
+        let flush_scheduler_end = Instant::now();
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    fn flush_rebuilds(&mut self) {
-        tracing::trace!("flushing rebuilds");
+        let mut spawned_elements = VecDeque::<ElementId>::default();
+        let mut updated_elements =
+            SparseSecondaryMap::<ElementId, (), BuildHasherDefault<FxHasher>>::default();
 
         // Keep track of which elements ended up being rebuilt, since build_and_realize
         // may end up rebuilding one that's currently in the queue.
         let mut rebuilt_elements = FxHashSet::default();
 
-        rebuilt_elements.reserve(self.rebuild_queue.len().min(8));
+        rebuilt_elements.reserve(needs_build.len().min(8));
 
-        while let Some(element_id) = self.rebuild_queue.pop_front() {
+        for element_id in needs_build {
             if rebuilt_elements.contains(&element_id) {
                 tracing::trace!(
                     ?element_id,
@@ -231,8 +294,8 @@ impl LocalEngineExecutor {
                     scheduler: &mut self.scheduler,
                     callbacks: &self.callbacks,
 
-                    spawned_elements: &mut self.spawned_elements,
-                    updated_elements: &mut self.updated_elements,
+                    spawned_elements: &mut spawned_elements,
+                    updated_elements: &mut updated_elements,
 
                     rebuilt_elements: &mut rebuilt_elements,
                 },
@@ -256,26 +319,6 @@ impl LocalEngineExecutor {
                 }
             }
         }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn update_widgets(&mut self) {
-        tracing::trace!("widget update started");
-
-        let start = Instant::now();
-
-        self.flush_callbacks();
-
-        let mut num_iterations = 0;
-
-        // Rebuild the tree in a loop until it's fully settled. This is necessary as some
-        // widgets being build may cause other widgets to be marked as dirty, which would
-        // otherwise be missed in a single pass.
-        while !self.rebuild_queue.is_empty() || self.flush_needs_build() {
-            num_iterations += 1;
-
-            self.flush_rebuilds();
-        }
 
         let update_widget_tree_end = Instant::now();
 
@@ -283,14 +326,14 @@ impl LocalEngineExecutor {
             .cleanup(&mut ElementTreeUnmount {
                 rendering_tree: &mut self.rendering_tree,
 
-                updated_elements: &mut self.updated_elements,
+                updated_elements: &mut updated_elements,
             })
             .expect("failed to cleanup element tree");
 
         let mut needs_layout = SparseSecondaryMap::default();
         let mut needs_paint = FxHashSet::default();
 
-        for element_id in self.spawned_elements.drain(..) {
+        for element_id in spawned_elements.drain(..) {
             self.rendering_tree.create(
                 &mut ImmediatelyCreateRenderObjects {
                     scheduler: &mut self.scheduler,
@@ -305,10 +348,10 @@ impl LocalEngineExecutor {
                 element_id,
             );
 
-            self.updated_elements.remove(element_id);
+            updated_elements.remove(element_id);
         }
 
-        for element_id in self.updated_elements.drain().map(|(id, _)| id) {
+        for element_id in updated_elements.drain().map(|(id, _)| id) {
             self.rendering_tree.update(
                 &mut ImmediatelyUpdateRenderObjects {
                     scheduler: &mut self.scheduler,
@@ -333,15 +376,13 @@ impl LocalEngineExecutor {
         let timings = WidgetUpdateTimings {
             duration: start.elapsed(),
 
-            update_widget_tree: update_widget_tree_end - start,
+            execute_callbacks: execute_callbacks_end - start,
+            flush_scheduler: flush_scheduler_end - execute_callbacks_end,
+            update_widget_tree: update_widget_tree_end - flush_scheduler_end,
             sync_render_tree: sync_render_tree_end - update_widget_tree_end,
         };
 
-        tracing::debug!(
-            ?timings,
-            num_iterations = num_iterations,
-            "widget update complete"
-        );
+        tracing::debug!(?timings, "widget update complete");
 
         if !needs_layout.is_empty() || !needs_paint.is_empty() {
             self.rendering_tree.layout(
@@ -368,7 +409,7 @@ impl LocalEngineExecutor {
 
     #[tracing::instrument(level = "debug", skip(self))]
     fn update_renderer(&mut self) {
-        tracing::debug!("renderer update started");
+        tracing::trace!("renderer update started");
 
         let start = Instant::now();
 
@@ -506,6 +547,8 @@ impl EngineExecutor for LocalEngineExecutor {
 struct WidgetUpdateTimings {
     duration: Duration,
 
+    execute_callbacks: Duration,
+    flush_scheduler: Duration,
     update_widget_tree: Duration,
     sync_render_tree: Duration,
 }
