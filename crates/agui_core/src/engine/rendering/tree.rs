@@ -1,5 +1,5 @@
 use core::panic;
-use std::{collections::VecDeque, hash::BuildHasherDefault};
+use std::hash::BuildHasherDefault;
 
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 use slotmap::{SecondaryMap, SparseSecondaryMap};
@@ -8,6 +8,7 @@ use crate::{
     element::ElementId,
     engine::rendering::{
         context::{RenderingLayoutContext, RenderingSpawnContext, RenderingUpdateContext},
+        errors::RemoveError,
         scheduler::RenderingScheduler,
         strategies::{
             RenderingTreeCleanupStrategy, RenderingTreeCreateStrategy, RenderingTreeLayoutStrategy,
@@ -57,8 +58,8 @@ impl RenderingTree {
 
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn forget(&mut self, element_id: ElementId) {
-        if let Some(render_object_id) = self.element_mapping.get(element_id) {
-            self.forgotten_elements.insert(*render_object_id, ());
+        if let Some(render_object_id) = self.element_mapping.remove(element_id) {
+            self.forgotten_elements.insert(render_object_id, ());
         }
     }
 
@@ -147,11 +148,6 @@ impl RenderingTree {
             .copied()
             .expect("element has no render object to update");
 
-        // TODO: maybe return an error?
-        if self.forgotten_elements.contains_key(render_object_id) {
-            return;
-        }
-
         let render_object = self
             .tree
             .get_mut(render_object_id)
@@ -187,34 +183,44 @@ impl RenderingTree {
             .expect("failed to reorder render object children");
     }
 
-    pub fn cleanup(&mut self, strategy: &mut dyn RenderingTreeCleanupStrategy) {
+    pub fn cleanup(
+        &mut self,
+        strategy: &mut dyn RenderingTreeCleanupStrategy,
+    ) -> Result<(), Vec<RemoveError<RenderObjectId>>> {
         let subtree_roots = self
             .forgotten_elements
             .drain()
             .map(|(id, _)| id)
             .collect::<Vec<_>>();
 
-        let mut destroy_queue = VecDeque::from_iter(subtree_roots.iter().copied());
+        let mut failed_to_unmount = Vec::new();
 
-        while let Some(render_object_id) = destroy_queue.pop_front() {
+        for render_object_id in &subtree_roots {
             tracing::trace!(?render_object_id, "removing from the tree");
 
-            let Some(node) = self.tree.get_node_mut(render_object_id) else {
+            let Some(node) = self.tree.get_node_mut(*render_object_id) else {
                 continue;
             };
 
-            // Queue the node's children for removal
-            destroy_queue.extend(node.children());
+            match node.take() {
+                Ok(value) => value,
+                Err(_) => {
+                    failed_to_unmount.push(RemoveError::InUse(*render_object_id));
+                    continue;
+                }
+            };
 
-            if node.take().is_err() {
-                tracing::warn!(?render_object_id, "removed a render object that was in use");
-            }
-
-            strategy.on_removed(render_object_id);
+            strategy.on_removed(*render_object_id);
         }
 
         for render_object_id in subtree_roots {
             self.tree.remove_subtree(render_object_id);
+        }
+
+        if failed_to_unmount.is_empty() {
+            Ok(())
+        } else {
+            Err(failed_to_unmount)
         }
     }
 
