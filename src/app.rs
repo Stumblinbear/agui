@@ -1,5 +1,3 @@
-use std::thread;
-
 use agui_core::widget::IntoWidget;
 use agui_executor::EngineExecutor;
 use agui_macros::build;
@@ -26,24 +24,27 @@ where
     let shutdown_tx = notify::Flag::new();
     let mut shutdown_rx = shutdown_tx.subscribe();
 
-    let handle = thread::spawn(move || {
-        let root = build! {
-            <WinitWindowManager> {
-                controller: controller,
+    let handle = std::thread::Builder::new()
+        .name("agui executor".to_string())
+        .spawn(move || {
+            let root = build! {
+                <WinitWindowManager> {
+                    controller: controller,
 
-                child: (func)().into_widget()
-            }
-        };
+                    child: (func)().into_widget()
+                }
+            };
 
-        #[cfg(not(feature = "multi-threaded"))]
-        let executor =
-            agui_executor::LocalEngineExecutor::with_root(root).expect("failed to build tree");
+            #[cfg(not(feature = "multi-threaded"))]
+            let executor =
+                agui_executor::LocalEngineExecutor::with_root(root).expect("failed to build tree");
 
-        #[cfg(feature = "multi-threaded")]
-        let executor = agui_executor::ThreadedEngineExecutor::default().with_root(root);
+            #[cfg(feature = "multi-threaded")]
+            let executor = agui_executor::ThreadedEngineExecutor::default().with_root(root);
 
-        executor.run_until(shutdown_rx.wait());
-    });
+            executor.run_until(shutdown_rx.wait());
+        })
+        .expect("failed to spawn thread");
 
     winit_app.run();
 

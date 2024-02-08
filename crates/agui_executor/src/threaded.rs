@@ -50,45 +50,47 @@ impl ThreadedEngineExecutor {
 
         let (tx, rx) = mpsc::sync_channel(0);
 
-        std::thread::spawn({
-            move || {
-                let (task_tx, mut task_rx) = futures::channel::mpsc::unbounded();
+        std::thread::Builder::new()
+            .name("agui rendering tree".to_string())
+            .spawn({
+                move || {
+                    let (task_tx, mut task_rx) = futures::channel::mpsc::unbounded();
 
-                let render_tx = notify::Flag::new();
-                let render_rx = render_tx.subscribe();
+                    let render_tx = notify::Flag::new();
+                    let render_rx = render_tx.subscribe();
 
-                let render_manager = Arc::new(Mutex::new(
-                    RenderManager::builder()
-                        .with_scheduler(SharedEngineSchedulerBinding { task_tx })
-                        .with_notifier(render_tx)
-                        .build(),
-                ));
+                    let render_manager = Arc::new(Mutex::new(
+                        RenderManager::builder()
+                            .with_scheduler(SharedEngineSchedulerBinding { task_tx })
+                            .with_notifier(render_tx)
+                            .build(),
+                    ));
 
-                let _ = tx.send(Arc::clone(&render_manager));
+                    let _ = tx.send(Arc::clone(&render_manager));
 
-                let pool = LocalPool::default();
+                    let pool = LocalPool::default();
 
-                let spawner = pool.spawner();
+                    let spawner = pool.spawner();
 
-                let _ = pool.spawner().spawn_local(async move {
-                    while let Some(task) = task_rx.next().await {
-                        if let Ok(handle) = spawner.spawn_local_with_handle(task.task) {
-                            let _ = task.reply_tx.send(handle);
+                    let _ = pool.spawner().spawn_local(async move {
+                        while let Some(task) = task_rx.next().await {
+                            if let Ok(handle) = spawner.spawn_local_with_handle(task.task) {
+                                let _ = task.reply_tx.send(handle);
+                            }
                         }
+                    });
+
+                    ThreadedEngineRendering {
+                        render_manager,
+
+                        sync_rx,
+                        render_rx,
+
+                        pool,
                     }
-                });
-
-                ThreadedEngineRendering {
-                    render_manager,
-
-                    sync_rx,
-                    render_rx,
-
-                    pool,
+                    .run();
                 }
-                .run();
-            }
-        });
+            });
 
         let render_manager = rx.recv().expect("failed to receive render manager");
 
