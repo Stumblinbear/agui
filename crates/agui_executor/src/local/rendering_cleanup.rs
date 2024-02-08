@@ -1,13 +1,19 @@
+use std::hash::BuildHasherDefault;
+
 use agui_core::{
     element::{deferred::resolver::DeferredResolver, ElementId},
     engine::rendering::strategies::RenderingTreeCleanupStrategy,
     render::RenderObjectId,
 };
-use slotmap::SecondaryMap;
+use rustc_hash::FxHasher;
+use slotmap::SparseSecondaryMap;
 
 pub struct RenderingTreeCleanup<'cleanup> {
-    pub deferred_elements:
-        &'cleanup mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+    pub deferred_elements: &'cleanup mut SparseSecondaryMap<
+        RenderObjectId,
+        (ElementId, Box<dyn DeferredResolver>),
+        BuildHasherDefault<FxHasher>,
+    >,
 }
 
 impl RenderingTreeCleanupStrategy for RenderingTreeCleanup<'_> {

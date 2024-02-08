@@ -32,7 +32,7 @@ pub struct RenderingTree {
 
     forgotten_elements: SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
 
-    render_views: SparseSecondaryMap<RenderObjectId, RenderView>,
+    render_views: SparseSecondaryMap<RenderObjectId, RenderView, BuildHasherDefault<FxHasher>>,
     needs_sync: SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
 }
 

@@ -28,7 +28,7 @@ use agui_core::{
     widget::Widget,
 };
 use rustc_hash::{FxHashSet, FxHasher};
-use slotmap::{SecondaryMap, SparseSecondaryMap};
+use slotmap::SparseSecondaryMap;
 
 use crate::local::{rendering_cleanup::RenderingTreeCleanup, scheduler::LocalScheduler};
 
@@ -38,8 +38,11 @@ pub struct LayoutRenderObjects<'layout> {
 
     pub element_tree: &'layout mut ElementTree,
 
-    pub deferred_elements:
-        &'layout mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+    pub deferred_elements: &'layout mut SparseSecondaryMap<
+        RenderObjectId,
+        (ElementId, Box<dyn DeferredResolver>),
+        BuildHasherDefault<FxHasher>,
+    >,
 
     pub needs_paint: &'layout mut FxHashSet<RenderObjectId>,
 }
@@ -120,8 +123,11 @@ impl RenderingTreeLayoutStrategy for LayoutRenderObjects<'_> {
             scheduler: &'create mut LocalScheduler,
 
             element_tree: &'create ElementTree,
-            deferred_elements:
-                &'create mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+            deferred_elements: &'create mut SparseSecondaryMap<
+                RenderObjectId,
+                (ElementId, Box<dyn DeferredResolver>),
+                BuildHasherDefault<FxHasher>,
+            >,
 
             needs_paint: &'create mut FxHashSet<RenderObjectId>,
         }

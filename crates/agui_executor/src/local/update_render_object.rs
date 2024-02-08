@@ -1,3 +1,5 @@
+use std::hash::BuildHasherDefault;
+
 use agui_core::{
     element::{ElementId, RenderObjectUpdateContext},
     engine::{
@@ -6,7 +8,7 @@ use agui_core::{
     },
     render::{object::RenderObject, RenderObjectId},
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::SparseSecondaryMap;
 
 use crate::local::scheduler::LocalScheduler;
@@ -16,7 +18,8 @@ pub struct ImmediatelyUpdateRenderObjects<'update> {
 
     pub element_tree: &'update ElementTree,
 
-    pub needs_layout: &'update mut SparseSecondaryMap<RenderObjectId, ()>,
+    pub needs_layout:
+        &'update mut SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
     pub needs_paint: &'update mut FxHashSet<RenderObjectId>,
 }
 

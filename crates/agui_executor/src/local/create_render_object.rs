@@ -1,3 +1,5 @@
+use std::hash::BuildHasherDefault;
+
 use agui_core::{
     element::{
         deferred::resolver::DeferredResolver, Element, ElementId, RenderObjectCreateContext,
@@ -10,8 +12,8 @@ use agui_core::{
     },
     render::{object::RenderObject, RenderObjectId},
 };
-use rustc_hash::FxHashSet;
-use slotmap::{SecondaryMap, SparseSecondaryMap};
+use rustc_hash::{FxHashSet, FxHasher};
+use slotmap::SparseSecondaryMap;
 
 use crate::local::scheduler::LocalScheduler;
 
@@ -19,10 +21,14 @@ pub struct ImmediatelyCreateRenderObjects<'create> {
     pub scheduler: &'create mut LocalScheduler,
 
     pub element_tree: &'create ElementTree,
-    pub deferred_elements:
-        &'create mut SecondaryMap<RenderObjectId, (ElementId, Box<dyn DeferredResolver>)>,
+    pub deferred_elements: &'create mut SparseSecondaryMap<
+        RenderObjectId,
+        (ElementId, Box<dyn DeferredResolver>),
+        BuildHasherDefault<FxHasher>,
+    >,
 
-    pub needs_layout: &'create mut SparseSecondaryMap<RenderObjectId, ()>,
+    pub needs_layout:
+        &'create mut SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
     pub needs_paint: &'create mut FxHashSet<RenderObjectId>,
 }
 
