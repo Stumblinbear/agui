@@ -288,6 +288,7 @@ impl LocalEngineExecutor {
         {
             type Definition = Widget;
 
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn mount(
                 &mut self,
                 ctx: ElementTreeMountContext,
@@ -307,6 +308,7 @@ impl LocalEngineExecutor {
                 element
             }
 
+            #[tracing::instrument(level = "debug", skip(self))]
             fn try_update(
                 &mut self,
                 id: ElementId,
@@ -318,6 +320,7 @@ impl LocalEngineExecutor {
                 element.update(definition)
             }
 
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
                 self.rebuilt_elements.insert(*ctx.element_id);
 
@@ -387,11 +390,17 @@ impl LocalEngineExecutor {
     fn update_widgets(&mut self) {
         struct SyncUnmountedStrategy<'cleanup> {
             rendering_tree: &'cleanup mut RenderingTree,
+
+            updated_elements:
+                &'cleanup mut SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
         }
 
         impl UnmountElementStrategy for SyncUnmountedStrategy<'_> {
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn unmount(&mut self, mut ctx: ElementUnmountContext, element: Element) {
                 self.rendering_tree.forget(*ctx.element_id);
+
+                self.updated_elements.remove(*ctx.element_id);
 
                 element.unmount(&mut ctx);
             }
@@ -409,6 +418,7 @@ impl LocalEngineExecutor {
         }
 
         impl RenderingTreeCreateStrategy for SyncCreateRenderObjectStrategy<'_> {
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn create(
                 &mut self,
                 ctx: RenderingSpawnContext,
@@ -448,6 +458,7 @@ impl LocalEngineExecutor {
                 render_object
             }
 
+            #[tracing::instrument(level = "debug", skip(self))]
             fn create_view(&mut self, element_id: ElementId) -> Option<Box<dyn View + Send>> {
                 if let Element::View(view) = self
                     .element_tree
@@ -479,6 +490,7 @@ impl LocalEngineExecutor {
                     .expect("element missing while updating render object")
             }
 
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn update(
                 &mut self,
                 ctx: RenderingUpdateContext,
@@ -534,6 +546,8 @@ impl LocalEngineExecutor {
         self.element_tree
             .cleanup(&mut SyncUnmountedStrategy {
                 rendering_tree: &mut self.rendering_tree,
+
+                updated_elements: &mut self.updated_elements,
             })
             .expect("failed to cleanup element tree");
 
@@ -575,7 +589,8 @@ impl LocalEngineExecutor {
         self.rendering_tree
             .cleanup(&mut SyncCleanupRenderingStrategy {
                 deferred_elements: &mut self.deferred_elements,
-            });
+            })
+            .expect("failed to cleanup rendering tree");
 
         let sync_render_tree_end = Instant::now();
 
@@ -675,7 +690,6 @@ impl EngineExecutor for LocalEngineExecutor {
         self.update_renderer();
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
     fn run_until_stalled(&mut self) {
         'update_tree: loop {
             let update_future = self.element_update_rx.wait().fuse();
@@ -746,7 +760,6 @@ impl EngineExecutor for LocalEngineExecutor {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
     fn run(self) {
         self.run_until(std::future::pending::<()>())
     }
@@ -782,6 +795,7 @@ struct EngineSchedulerStrategy {
 }
 
 impl ElementSchedulerStrategy for EngineSchedulerStrategy {
+    #[tracing::instrument(level = "trace", skip(self, task))]
     fn spawn_task(&mut self, task: CreateElementTask) -> Result<TaskHandle<()>, TaskError> {
         struct NotifyStrategy {
             needs_build_tx: mpsc::Sender<ElementId>,
@@ -812,6 +826,7 @@ impl ElementSchedulerStrategy for EngineSchedulerStrategy {
 }
 
 impl RenderingSchedulerStrategy for EngineSchedulerStrategy {
+    #[tracing::instrument(level = "trace", skip(self, task))]
     fn spawn_task(&mut self, task: CreateRenderingTask) -> Result<TaskHandle<()>, TaskError> {
         struct NotifyStrategy {
             needs_layout_tx: mpsc::Sender<RenderObjectId>,
@@ -863,6 +878,7 @@ struct SyncLayoutRenderObjectStrategy<'layout> {
 }
 
 impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
+    #[tracing::instrument(level = "debug", skip(self, ctx))]
     fn on_constraints_changed(
         &mut self,
         ctx: RenderingLayoutContext,
@@ -885,6 +901,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
         {
             type Definition = Widget;
 
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn mount(
                 &mut self,
                 ctx: ElementTreeMountContext,
@@ -904,6 +921,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
                 element
             }
 
+            #[tracing::instrument(level = "debug", skip(self))]
             fn try_update(
                 &mut self,
                 id: ElementId,
@@ -915,6 +933,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
                 element.update(definition)
             }
 
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn build(&mut self, ctx: ElementTreeContext, element: &mut Element) -> Vec<Widget> {
                 self.rebuilt_elements.insert(*ctx.element_id);
 
@@ -941,6 +960,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
         }
 
         impl RenderingTreeCreateStrategy for DeferredCreateRenderObjectStrategy<'_> {
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn create(
                 &mut self,
                 ctx: RenderingSpawnContext,
@@ -980,6 +1000,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
                 render_object
             }
 
+            #[tracing::instrument(level = "debug", skip(self))]
             fn create_view(&mut self, element_id: ElementId) -> Option<Box<dyn View + Send>> {
                 if let Element::View(view) = self
                     .element_tree
@@ -1010,6 +1031,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
                     .expect("element missing while updating render object")
             }
 
+            #[tracing::instrument(level = "debug", skip(self, ctx))]
             fn update(
                 &mut self,
                 ctx: RenderingUpdateContext,
@@ -1042,11 +1064,16 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
 
         struct DeferredUnmountedStrategy<'cleanup> {
             rendering_tree: &'cleanup mut RenderingTree,
+
+            updated_elements:
+                &'cleanup mut SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
         }
 
         impl UnmountElementStrategy for DeferredUnmountedStrategy<'_> {
             fn unmount(&mut self, mut ctx: ElementUnmountContext, element: Element) {
                 self.rendering_tree.forget(*ctx.element_id);
+
+                self.updated_elements.remove(*ctx.element_id);
 
                 element.unmount(&mut ctx);
             }
@@ -1091,6 +1118,8 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
                 self.element_tree
                     .cleanup(&mut DeferredUnmountedStrategy {
                         rendering_tree: ctx.tree,
+
+                        updated_elements: &mut updated_elements,
                     })
                     .expect("failed to cleanup element tree");
 
@@ -1124,9 +1153,11 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
                     );
                 }
 
-                ctx.tree.cleanup(&mut SyncCleanupRenderingStrategy {
-                    deferred_elements: self.deferred_elements,
-                });
+                ctx.tree
+                    .cleanup(&mut SyncCleanupRenderingStrategy {
+                        deferred_elements: self.deferred_elements,
+                    })
+                    .expect("failed to cleanup rendering tree");
             } else {
                 // No need to do anything, since the resolver has indicated no change.
             }
@@ -1139,6 +1170,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(self, ctx))]
     fn on_size_changed(&mut self, ctx: RenderingLayoutContext, render_object: &RenderObject) {
         if render_object.does_paint() {
             self.needs_paint.insert(*ctx.render_object_id);
@@ -1151,6 +1183,7 @@ impl RenderingTreeLayoutStrategy for SyncLayoutRenderObjectStrategy<'_> {
         );
     }
 
+    #[tracing::instrument(level = "debug", skip(self, ctx))]
     fn on_offset_changed(&mut self, ctx: RenderingLayoutContext, render_object: &RenderObject) {
         tracing::trace!(
             render_object_id = ?ctx.render_object_id,
