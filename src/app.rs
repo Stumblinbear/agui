@@ -44,6 +44,7 @@ where
 
             executor.run_until(shutdown_rx.wait());
         })
+        // TODO: Fall back to single threaded?
         .expect("failed to spawn thread");
 
     winit_app.run();
