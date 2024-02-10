@@ -195,6 +195,8 @@ impl RenderingTree {
 
         let mut failed_to_unmount = Vec::new();
 
+        let mut views_to_remove = Vec::new();
+
         for render_object_id in &subtree_roots {
             tracing::trace!(?render_object_id, "removing from the tree");
 
@@ -210,11 +212,41 @@ impl RenderingTree {
                 }
             };
 
+            if let Some(render_view) = self.render_views.get_mut(*render_object_id) {
+                let (view_object_id, view) = match render_view {
+                    RenderView::Owner(ref mut view) => {
+                        views_to_remove.push(*render_object_id);
+
+                        (*render_object_id, view)
+                    }
+                    RenderView::Within(view_object_id) => {
+                        let view_object_id = *view_object_id;
+
+                        self.render_views.remove(*render_object_id);
+
+                        match self.render_views.get_mut(view_object_id) {
+                            Some(RenderView::Owner(view)) => (view_object_id, view),
+                            _ => panic!(
+                                "render object supplied an incorrect render view while syncing"
+                            ),
+                        }
+                    }
+                };
+
+                view.on_detach(*render_object_id);
+
+                self.needs_sync.insert(view_object_id, ());
+            }
+
             strategy.on_removed(*render_object_id);
         }
 
         for render_object_id in subtree_roots {
             self.tree.remove_subtree(render_object_id);
+        }
+
+        for render_object_id in views_to_remove {
+            self.render_views.remove(render_object_id);
         }
 
         if failed_to_unmount.is_empty() {
