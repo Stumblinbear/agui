@@ -424,13 +424,12 @@ impl LocalEngineExecutor {
 
         let layout_end = Instant::now();
 
-        // TODO: it's entirely possible for paint to be called multiple times on the
-        // same render object.
-        for render_object_id in needs_paint {
-            self.rendering_tree.paint(render_object_id);
-        }
+        let needs_paint = needs_paint
+            .into_iter()
+            .chain(self.needs_paint_rx.try_iter())
+            .collect::<FxHashSet<_>>();
 
-        for render_object_id in self.needs_paint_rx.try_iter() {
+        for render_object_id in needs_paint {
             self.rendering_tree.paint(render_object_id);
         }
 
