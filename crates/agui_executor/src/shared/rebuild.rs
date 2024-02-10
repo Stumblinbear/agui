@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, hash::BuildHasherDefault, sync::Arc};
+use std::{hash::BuildHasherDefault, sync::Arc};
 
 use agui_core::{
     callback::strategies::CallbackStrategy,
@@ -17,7 +17,7 @@ pub struct RebuildStrategy<'rebuild, Sched> {
     pub scheduler: &'rebuild mut Sched,
     pub callbacks: &'rebuild Arc<dyn CallbackStrategy>,
 
-    pub spawned_elements: &'rebuild mut VecDeque<ElementId>,
+    pub spawned_elements: &'rebuild mut Vec<ElementId>,
     pub updated_elements:
         &'rebuild mut SparseSecondaryMap<ElementId, (), BuildHasherDefault<FxHasher>>,
 
@@ -32,7 +32,7 @@ where
 
     #[tracing::instrument(level = "debug", skip(self, ctx))]
     fn mount(&mut self, ctx: ElementTreeMountContext, definition: Self::Definition) -> Element {
-        self.spawned_elements.push_back(*ctx.element_id);
+        self.spawned_elements.push(*ctx.element_id);
 
         let mut element = definition.create_element();
 

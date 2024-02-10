@@ -8,7 +8,7 @@ use agui_core::{
 use rustc_hash::FxHasher;
 use slotmap::SparseSecondaryMap;
 
-pub struct RenderingTreeCleanup<'cleanup> {
+pub struct CleanupRenderingTree<'cleanup> {
     pub deferred_elements: &'cleanup mut SparseSecondaryMap<
         RenderObjectId,
         (ElementId, Box<dyn DeferredResolver>),
@@ -16,7 +16,7 @@ pub struct RenderingTreeCleanup<'cleanup> {
     >,
 }
 
-impl RenderingTreeCleanupStrategy for RenderingTreeCleanup<'_> {
+impl RenderingTreeCleanupStrategy for CleanupRenderingTree<'_> {
     fn on_removed(&mut self, render_object_id: RenderObjectId) {
         tracing::trace!(?render_object_id, "removed render object");
 

@@ -1,5 +1,3 @@
-use std::hash::BuildHasherDefault;
-
 use agui_core::{
     element::{
         deferred::resolver::DeferredResolver, Element, ElementId, RenderObjectCreateContext,
@@ -7,31 +5,31 @@ use agui_core::{
     engine::{
         elements::ElementTree,
         rendering::{
-            context::RenderingSpawnContext, strategies::RenderingTreeCreateStrategy, view::View,
+            context::RenderingSpawnContext, scheduler::RenderingSchedulerStrategy,
+            strategies::RenderingTreeCreateStrategy, view::View,
         },
     },
     render::{object::RenderObject, RenderObjectId},
 };
-use rustc_hash::{FxHashSet, FxHasher};
-use slotmap::SparseSecondaryMap;
+use rustc_hash::FxHashSet;
 
-use crate::local::scheduler::LocalScheduler;
-
-pub struct ImmediatelyCreateRenderObjects<'create> {
-    pub scheduler: &'create mut LocalScheduler,
+pub struct ImmediatelyCreateRenderObjects<'create, Sched> {
+    pub scheduler: &'create mut Sched,
 
     pub element_tree: &'create ElementTree,
-    pub deferred_elements: &'create mut SparseSecondaryMap<
-        RenderObjectId,
-        (ElementId, Box<dyn DeferredResolver>),
-        BuildHasherDefault<FxHasher>,
-    >,
+
+    #[allow(clippy::type_complexity)]
+    pub new_deferred_elements:
+        &'create mut Vec<(RenderObjectId, (ElementId, Box<dyn DeferredResolver>))>,
 
     pub needs_layout: &'create mut FxHashSet<RenderObjectId>,
     pub needs_paint: &'create mut FxHashSet<RenderObjectId>,
 }
 
-impl RenderingTreeCreateStrategy for ImmediatelyCreateRenderObjects<'_> {
+impl<Sched> RenderingTreeCreateStrategy for ImmediatelyCreateRenderObjects<'_, Sched>
+where
+    Sched: RenderingSchedulerStrategy,
+{
     #[tracing::instrument(level = "debug", skip(self, ctx))]
     fn create(&mut self, ctx: RenderingSpawnContext, element_id: ElementId) -> RenderObject {
         let element = self
@@ -41,10 +39,10 @@ impl RenderingTreeCreateStrategy for ImmediatelyCreateRenderObjects<'_> {
             .expect("element missing while creating render object");
 
         if let Element::Deferred(element) = element {
-            self.deferred_elements.insert(
+            self.new_deferred_elements.push((
                 *ctx.render_object_id,
                 (element_id, element.create_resolver()),
-            );
+            ));
         }
 
         let render_object = self

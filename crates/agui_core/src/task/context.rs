@@ -17,7 +17,7 @@ pub trait ContextSpawnElementTask {
 pub trait ContextSpawnRenderingTask {
     fn spawn_task<Fut>(
         &mut self,
-        func: impl FnOnce(RenderingTaskContext) -> Fut + 'static,
+        func: impl FnOnce(RenderingTaskContext) -> Fut + Send + 'static,
     ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + Send + 'static;

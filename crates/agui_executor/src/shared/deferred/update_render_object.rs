@@ -1,29 +1,28 @@
-use std::hash::BuildHasherDefault;
-
 use agui_core::{
     element::{ElementId, RenderObjectUpdateContext},
     engine::{
         elements::ElementTree,
-        rendering::{context::RenderingUpdateContext, strategies::RenderingTreeUpdateStrategy},
+        rendering::{
+            context::RenderingUpdateContext, scheduler::RenderingSchedulerStrategy,
+            strategies::RenderingTreeUpdateStrategy,
+        },
     },
     render::{object::RenderObject, RenderObjectId},
 };
-use rustc_hash::{FxHashSet, FxHasher};
-use slotmap::SparseSecondaryMap;
+use rustc_hash::FxHashSet;
 
-use crate::local::scheduler::LocalScheduler;
-
-pub struct ImmediatelyUpdateRenderObjects<'update> {
-    pub scheduler: &'update mut LocalScheduler,
+pub struct DeferredUpdateRenderObjectStrategy<'update, Sched> {
+    pub scheduler: &'update mut Sched,
 
     pub element_tree: &'update ElementTree,
 
-    pub needs_layout:
-        &'update mut SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
     pub needs_paint: &'update mut FxHashSet<RenderObjectId>,
 }
 
-impl RenderingTreeUpdateStrategy for ImmediatelyUpdateRenderObjects<'_> {
+impl<Sched> RenderingTreeUpdateStrategy for DeferredUpdateRenderObjectStrategy<'_, Sched>
+where
+    Sched: RenderingSchedulerStrategy,
+{
     fn get_children(&self, element_id: ElementId) -> &[ElementId] {
         self.element_tree
             .as_ref()
@@ -38,7 +37,6 @@ impl RenderingTreeUpdateStrategy for ImmediatelyUpdateRenderObjects<'_> {
         element_id: ElementId,
         render_object: &mut RenderObject,
     ) {
-        let mut needs_layout = false;
         let mut needs_paint = false;
 
         self.element_tree
@@ -49,7 +47,7 @@ impl RenderingTreeUpdateStrategy for ImmediatelyUpdateRenderObjects<'_> {
                 &mut RenderObjectUpdateContext {
                     scheduler: &mut ctx.scheduler.with_strategy(self.scheduler),
 
-                    needs_layout: &mut needs_layout,
+                    needs_layout: &mut false,
                     needs_paint: &mut needs_paint,
 
                     render_object_id: ctx.render_object_id,
@@ -57,9 +55,7 @@ impl RenderingTreeUpdateStrategy for ImmediatelyUpdateRenderObjects<'_> {
                 render_object,
             );
 
-        if needs_layout {
-            self.needs_layout.insert(*ctx.render_object_id, ());
-        } else if needs_paint {
+        if needs_paint {
             self.needs_paint.insert(*ctx.render_object_id);
         }
     }

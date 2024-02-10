@@ -21,37 +21,35 @@ use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::SparseSecondaryMap;
 
 use crate::{
-    local::{
-        callback::{InvokeCallback, LocalCallbacks},
-        create_render_object::ImmediatelyCreateRenderObjects,
+    local::{create_render_object::ImmediatelyCreateRenderObjects, scheduler::LocalScheduler},
+    shared::{
+        callbacks::{InvokeCallback, QueueCallbacks},
+        cleanup_rendering_tree::CleanupRenderingTree,
         inflate_root::InflateRoot,
-        layout::LayoutRenderObjects,
+        layout_render_objects::LayoutRenderingTree,
         rebuild::RebuildStrategy,
-        rendering_cleanup::RenderingTreeCleanup,
-        scheduler::LocalScheduler,
         unmount::ElementTreeUnmount,
         update_render_object::ImmediatelyUpdateRenderObjects,
     },
     EngineExecutor,
 };
 
-mod callback;
 mod create_render_object;
-mod inflate_root;
-mod layout;
-mod rebuild;
-mod rendering_cleanup;
 mod scheduler;
-mod unmount;
-mod update_render_object;
 
 pub struct LocalEngineExecutor {
     pool: LocalPool,
     scheduler: LocalScheduler,
 
-    callbacks: Arc<dyn CallbackStrategy>,
-
     element_tree: ElementTree,
+
+    callbacks: Arc<dyn CallbackStrategy>,
+    callback_rx: mpsc::Receiver<InvokeCallback>,
+
+    needs_build_rx: mpsc::Receiver<ElementId>,
+
+    element_update_rx: notify::Subscriber,
+
     rendering_tree: RenderingTree,
 
     deferred_elements: SparseSecondaryMap<
@@ -60,29 +58,26 @@ pub struct LocalEngineExecutor {
         BuildHasherDefault<FxHasher>,
     >,
 
-    needs_build_rx: mpsc::Receiver<ElementId>,
-    callback_rx: mpsc::Receiver<InvokeCallback>,
-
-    element_update_rx: notify::Subscriber,
-    render_update_rx: notify::Subscriber,
-
     needs_layout_rx: mpsc::Receiver<RenderObjectId>,
     needs_paint_rx: mpsc::Receiver<RenderObjectId>,
+
+    render_update_rx: notify::Subscriber,
 }
 
 impl Default for LocalEngineExecutor {
     fn default() -> Self {
-        let (needs_build_tx, needs_build_rx) = mpsc::channel();
         let (callback_tx, callback_rx) = mpsc::channel();
+
+        let (needs_build_tx, needs_build_rx) = mpsc::channel();
 
         let element_update_tx = notify::Flag::new();
         let element_update_rx = element_update_tx.subscribe();
 
-        let render_update_tx = notify::Flag::new();
-        let render_update_rx = render_update_tx.subscribe();
-
         let (needs_layout_tx, needs_layout_rx) = mpsc::channel();
         let (needs_paint_tx, needs_paint_rx) = mpsc::channel();
+
+        let render_update_tx = notify::Flag::new();
+        let render_update_rx = render_update_tx.subscribe();
 
         let pool = LocalPool::default();
 
@@ -99,33 +94,31 @@ impl Default for LocalEngineExecutor {
             spawner: pool.spawner(),
         };
 
-        let callbacks = LocalCallbacks {
-            callback_tx,
-            element_update_tx,
-        };
-
         Self {
             pool,
             scheduler,
 
-            #[allow(clippy::arc_with_non_send_sync)]
-            callbacks: Arc::new(callbacks),
-
             element_tree: ElementTree::default(),
+
+            #[allow(clippy::arc_with_non_send_sync)]
+            callbacks: Arc::new(QueueCallbacks {
+                callback_tx,
+                element_update_tx,
+            }),
+            callback_rx,
+
+            needs_build_rx,
+
+            element_update_rx,
+
             rendering_tree: RenderingTree::default(),
 
             deferred_elements: SparseSecondaryMap::default(),
 
-            needs_build_rx,
-
-            callback_rx,
-
-            element_update_rx,
-
-            render_update_rx,
-
             needs_layout_rx,
             needs_paint_rx,
+
+            render_update_rx,
         }
     }
 }
@@ -146,10 +139,10 @@ impl LocalEngineExecutor {
             root.into_widget(),
         )?;
 
-        let mut needs_layout = SparseSecondaryMap::default();
+        let mut needs_layout = FxHashSet::default();
         let mut needs_paint = FxHashSet::default();
 
-        for element_id in spawned_elements.drain(..) {
+        for element_id in spawned_elements {
             executor.rendering_tree.create(
                 &mut ImmediatelyCreateRenderObjects {
                     scheduler: &mut executor.scheduler,
@@ -170,7 +163,7 @@ impl LocalEngineExecutor {
         }
 
         executor.rendering_tree.layout(
-            &mut LayoutRenderObjects {
+            &mut LayoutRenderingTree {
                 scheduler: &mut executor.scheduler,
                 callbacks: &executor.callbacks,
 
@@ -180,7 +173,7 @@ impl LocalEngineExecutor {
 
                 needs_paint: &mut needs_paint,
             },
-            needs_layout.into_iter().map(|(id, _)| id),
+            needs_layout,
         );
 
         for render_object_id in needs_paint {
@@ -269,7 +262,7 @@ impl LocalEngineExecutor {
 
         let flush_scheduler_end = Instant::now();
 
-        let mut spawned_elements = VecDeque::<ElementId>::default();
+        let mut spawned_elements = Vec::<ElementId>::default();
         let mut updated_elements =
             SparseSecondaryMap::<ElementId, (), BuildHasherDefault<FxHasher>>::default();
 
@@ -330,10 +323,10 @@ impl LocalEngineExecutor {
             })
             .expect("failed to cleanup element tree");
 
-        let mut needs_layout = SparseSecondaryMap::default();
+        let mut needs_layout = FxHashSet::default();
         let mut needs_paint = FxHashSet::default();
 
-        for element_id in spawned_elements.drain(..) {
+        for element_id in spawned_elements {
             self.rendering_tree.create(
                 &mut ImmediatelyCreateRenderObjects {
                     scheduler: &mut self.scheduler,
@@ -366,7 +359,7 @@ impl LocalEngineExecutor {
         }
 
         self.rendering_tree
-            .cleanup(&mut RenderingTreeCleanup {
+            .cleanup(&mut CleanupRenderingTree {
                 deferred_elements: &mut self.deferred_elements,
             })
             .expect("failed to cleanup rendering tree");
@@ -386,7 +379,7 @@ impl LocalEngineExecutor {
 
         if !needs_layout.is_empty() || !needs_paint.is_empty() {
             self.rendering_tree.layout(
-                &mut LayoutRenderObjects {
+                &mut LayoutRenderingTree {
                     scheduler: &mut self.scheduler,
                     callbacks: &self.callbacks,
 
@@ -396,7 +389,7 @@ impl LocalEngineExecutor {
 
                     needs_paint: &mut needs_paint,
                 },
-                needs_layout.into_iter().map(|(id, _)| id),
+                needs_layout,
             );
 
             for render_object_id in needs_paint {
@@ -416,7 +409,7 @@ impl LocalEngineExecutor {
         let mut needs_paint = FxHashSet::default();
 
         self.rendering_tree.layout(
-            &mut LayoutRenderObjects {
+            &mut LayoutRenderingTree {
                 scheduler: &mut self.scheduler,
                 callbacks: &self.callbacks,
 

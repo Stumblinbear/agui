@@ -7,7 +7,8 @@ use agui_core::{
     engine::{
         elements::ElementTree,
         rendering::{
-            context::RenderingSpawnContext, strategies::RenderingTreeCreateStrategy, view::View,
+            context::RenderingSpawnContext, scheduler::RenderingSchedulerStrategy,
+            strategies::RenderingTreeCreateStrategy, view::View,
         },
     },
     render::{object::RenderObject, RenderObjectId},
@@ -15,10 +16,8 @@ use agui_core::{
 use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::SparseSecondaryMap;
 
-use crate::local::scheduler::LocalScheduler;
-
-pub struct ImmediatelyCreateRenderObjects<'create> {
-    pub scheduler: &'create mut LocalScheduler,
+pub struct DeferredCreateRenderObjectStrategy<'create, Sched> {
+    pub scheduler: &'create mut Sched,
 
     pub element_tree: &'create ElementTree,
     pub deferred_elements: &'create mut SparseSecondaryMap<
@@ -27,11 +26,13 @@ pub struct ImmediatelyCreateRenderObjects<'create> {
         BuildHasherDefault<FxHasher>,
     >,
 
-    pub needs_layout: &'create mut FxHashSet<RenderObjectId>,
     pub needs_paint: &'create mut FxHashSet<RenderObjectId>,
 }
 
-impl RenderingTreeCreateStrategy for ImmediatelyCreateRenderObjects<'_> {
+impl<Sched> RenderingTreeCreateStrategy for DeferredCreateRenderObjectStrategy<'_, Sched>
+where
+    Sched: RenderingSchedulerStrategy,
+{
     #[tracing::instrument(level = "debug", skip(self, ctx))]
     fn create(&mut self, ctx: RenderingSpawnContext, element_id: ElementId) -> RenderObject {
         let element = self
@@ -58,8 +59,8 @@ impl RenderingTreeCreateStrategy for ImmediatelyCreateRenderObjects<'_> {
                 render_object_id: ctx.render_object_id,
             });
 
-        // TODO: can we insert the relayout boundary here, instead?
-        self.needs_layout.insert(*ctx.render_object_id);
+        // We shouldn't need to mark needs_layout here, since the deferred element is
+        // already in the middle of a layout pass.
 
         if render_object.does_paint() {
             self.needs_paint.insert(*ctx.render_object_id);

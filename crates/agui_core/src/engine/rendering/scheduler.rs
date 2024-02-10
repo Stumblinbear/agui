@@ -12,7 +12,7 @@ use crate::{
 pub struct CreateRenderingTask {
     ctx: RenderingTaskContext,
     #[allow(clippy::type_complexity)]
-    func: Box<dyn FnOnce(RenderingTaskContext) -> Pin<Box<dyn Future<Output = ()>>>>,
+    func: Box<dyn FnOnce(RenderingTaskContext) -> Pin<Box<dyn Future<Output = ()>>> + Send>,
 }
 
 impl CreateRenderingTask {
@@ -81,7 +81,7 @@ impl<'ctx> RenderingScheduler<'ctx> {
 
     pub fn spawn_task<Fut>(
         &mut self,
-        func: impl FnOnce(RenderingTaskContext) -> Fut + 'static,
+        func: impl FnOnce(RenderingTaskContext) -> Fut + Send + 'static,
     ) -> Result<TaskHandle<()>, TaskError>
     where
         Fut: Future<Output = ()> + 'static,

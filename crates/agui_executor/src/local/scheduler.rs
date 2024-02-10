@@ -42,7 +42,7 @@ impl ElementSchedulerStrategy for LocalScheduler {
             }
         }
 
-        tracing::trace!("spawning local task for {:?}", task.element_id());
+        tracing::trace!("spawning task for {:?}", task.element_id());
 
         let fut = task
             .with_notify_strategy(NotifyStrategy {
@@ -80,7 +80,7 @@ impl RenderingSchedulerStrategy for LocalScheduler {
             }
         }
 
-        tracing::trace!("spawning shared task for {:?}", task.render_object_id());
+        tracing::trace!("spawning task for {:?}", task.render_object_id());
 
         let fut = task
             .with_notify_strategy(NotifyStrategy {
