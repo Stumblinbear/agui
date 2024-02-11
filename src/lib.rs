@@ -30,6 +30,7 @@ pub mod prelude {
             Row, VerticalDirection,
         },
         intrinsic::{IntrinsicAxis, IntrinsicHeight, IntrinsicWidth},
+        layout_builder::LayoutBuilder,
         padding::Padding,
         sized_box::SizedBox,
         stack::Stack,
