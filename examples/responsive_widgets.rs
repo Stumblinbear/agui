@@ -1,13 +1,15 @@
-use agui_primitives::layout_builder::LayoutBuilder;
-use agui_vello::{
-    binding::VelloViewBinding,
-    renderer::{window::VelloWindowRenderer, VelloRenderer},
-};
-use agui_winit::{WinitWindow, WinitWindowAttributes};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*};
+use agui::{
+    app::run_app,
+    prelude::*,
+    vello::{
+        binding::VelloViewBinding,
+        renderer::{window::VelloWindowRenderer, VelloRenderer},
+    },
+    winit::{WinitWindow, WinitWindowAttributes},
+};
 
 fn main() {
     let filter = EnvFilter::from_default_env()
