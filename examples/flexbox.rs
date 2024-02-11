@@ -1,8 +1,15 @@
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*, winit::Window};
-use winit::{dpi::PhysicalSize, window::WindowBuilder};
+use agui::{
+    app::run_app,
+    prelude::*,
+    vello::{
+        binding::VelloViewBinding,
+        renderer::{window::VelloWindowRenderer, VelloRenderer},
+    },
+    winit::{WinitWindow, WinitWindowAttributes},
+};
 
 fn main() {
     let filter = EnvFilter::from_default_env()
@@ -17,47 +24,60 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    run_app(build! {
-        <Window> {
-            window: || WindowBuilder::new()
-                .with_title("agui flexbox")
-                .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+    let vello_renderer = VelloRenderer::default();
 
-            child: <Column> {
-                main_axis_size: MainAxisSize::Min,
-                main_axis_alignment: MainAxisAlignment::Start,
+    run_app(move || {
+        let (view, view_handle) = vello_renderer.new_view();
 
-                children: [
-                    <ColoredBox> {
-                        color: Color::from_rgb((1.0, 0.0, 0.0)),
+        build! {
+            <WinitWindow> {
+                attributes: WinitWindowAttributes::builder()
+                    .title("agui flexbox")
+                    .build(),
 
-                        child: <SizedBox>::new(10.0, 10.0),
-                    },
-                    <Flexible> {
-                        flex: Some(2.0),
+                renderer: VelloWindowRenderer::new(view_handle),
 
-                        child: <ColoredBox> {
-                            color: Color::from_rgb((0.0, 1.0, 0.0)),
+                child: <VelloViewBinding> {
+                    view: view,
 
-                            child: <SizedBox>::new(20.0, 10.0),
-                        },
-                    },
-                    <ColoredBox> {
-                        color: Color::from_rgb((0.0, 0.0, 1.0)),
+                    child: <Column> {
+                        main_axis_size: MainAxisSize::Min,
+                        main_axis_alignment: MainAxisAlignment::Start,
 
-                        child: <SizedBox>::new(30.0, 10.0),
-                    },
-                    <Flexible> {
-                        flex: Some(1.0),
+                        children: [
+                            <ColoredBox> {
+                                color: Color::from_rgb((1.0, 0.0, 0.0)),
 
-                        child: <ColoredBox> {
-                            color: Color::from_rgb((1.0, 1.0, 0.0)),
+                                child: <SizedBox>::new(10.0, 10.0),
+                            },
+                            <Flexible> {
+                                flex: Some(2.0),
 
-                            child: <SizedBox>::new(30.0, 10.0),
-                        },
-                    },
-                ]
-            },
+                                child: <ColoredBox> {
+                                    color: Color::from_rgb((0.0, 1.0, 0.0)),
+
+                                    child: <SizedBox>::new(20.0, 10.0),
+                                },
+                            },
+                            <ColoredBox> {
+                                color: Color::from_rgb((0.0, 0.0, 1.0)),
+
+                                child: <SizedBox>::new(30.0, 10.0),
+                            },
+                            <Flexible> {
+                                flex: Some(1.0),
+
+                                child: <ColoredBox> {
+                                    color: Color::from_rgb((1.0, 1.0, 0.0)),
+
+                                    child: <SizedBox>::new(30.0, 10.0),
+                                },
+                            },
+                        ]
+                    }
+                }
+            }
         }
-    });
+    })
+    .expect("Failed to run app");
 }
