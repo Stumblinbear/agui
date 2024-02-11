@@ -134,3 +134,35 @@ opt-level = 1
 
 [profile.dev.package.agui_winit]
 opt-level = 1
+
+[[example]]
+name = "alternating_windows"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "clipping"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "current_window"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "flexbox"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "hello_world"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "multiple_windows"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "responsive_widgets"
+required-features = ["app", "winit-vello", "vello"]
+
+[[example]]
+name = "system_info"
+required-features = ["app", "winit-vello", "vello"]

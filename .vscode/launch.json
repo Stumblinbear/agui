@@ -1,0 +1,157 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'alternating_windows'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=alternating_windows",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "alternating_windows",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'clipping'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=clipping",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "clipping",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'current_window'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=current_window",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "current_window",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'flexbox'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=flexbox",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "flexbox",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'hello_world'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=hello_world",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "hello_world",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'multiple_windows'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=multiple_windows",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "multiple_windows",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'responsive_widgets'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=responsive_widgets",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "responsive_widgets",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'system_info'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=system_info",
+                    "--package=agui",
+                    "--features=app,winit-vello,multi-threaded"
+                ],
+                "filter": {
+                    "name": "system_info",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
