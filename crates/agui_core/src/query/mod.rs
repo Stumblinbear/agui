@@ -6,7 +6,7 @@ pub mod by_widget;
 mod tests {
     use crate::{
         element::mock::{build::MockBuildWidget, render::MockRenderWidget},
-        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         query::{
             by_key::FilterKeyExt,
             by_widget::{ExactWidgetIterator, FilterByWidgetExt},
@@ -49,7 +49,7 @@ mod tests {
         let mut tree = ElementTree::default();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");

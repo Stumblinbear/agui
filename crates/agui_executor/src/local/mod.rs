@@ -27,7 +27,7 @@ use crate::{
         cleanup_rendering_tree::CleanupRenderingTree,
         inflate_root::InflateRoot,
         layout_render_objects::LayoutRenderingTree,
-        rebuild::RebuildStrategy,
+        rebuild::RebuildElements,
         unmount::ElementTreeUnmount,
         update_render_object::ImmediatelyUpdateRenderObjects,
     },
@@ -283,7 +283,7 @@ impl LocalEngineExecutor {
             }
 
             if let Err(err) = self.element_tree.rebuild(
-                &mut RebuildStrategy {
+                &mut RebuildElements {
                     scheduler: &mut self.scheduler,
                     callbacks: &self.callbacks,
 

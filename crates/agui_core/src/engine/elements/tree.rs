@@ -358,7 +358,7 @@ mod tests {
     use crate::{
         element::mock::render::{MockRenderObject, MockRenderWidget},
         engine::elements::{
-            strategies::mocks::{MockInflateElementStrategy, MockUnmountElementStrategy},
+            strategies::mocks::{MockInflateElements, MockUnmountElements},
             ElementTree,
         },
         widget::IntoWidget,
@@ -383,7 +383,7 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -425,7 +425,7 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -434,10 +434,10 @@ mod tests {
 
         children.borrow_mut().clear();
 
-        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+        tree.rebuild(&mut MockInflateElements::default(), root_id)
             .expect("failed to rebuild");
 
-        tree.cleanup(&mut MockUnmountElementStrategy::default())
+        tree.cleanup(&mut MockUnmountElements::default())
             .expect("failed to cleanup");
 
         assert_eq!(tree.len(), 1, "nested children should have been removed");
@@ -465,14 +465,14 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
 
         *child.borrow_mut() = MockRenderWidget::dummy();
 
-        let mut update = MockInflateElementStrategy::default();
+        let mut update = MockInflateElements::default();
 
         tree.rebuild(&mut update, root_id)
             .expect("failed to rebuild");
@@ -508,7 +508,7 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -519,7 +519,7 @@ mod tests {
             .cloned()
             .expect("no children");
 
-        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+        tree.rebuild(&mut MockInflateElements::default(), root_id)
             .expect("failed to rebuild");
 
         assert_eq!(

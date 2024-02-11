@@ -18,11 +18,11 @@ use agui_core::{
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 
-pub struct NoopInflateStrategy {
+pub struct NoopInflateElements {
     callbacks: Arc<dyn CallbackStrategy>,
 }
 
-impl Default for NoopInflateStrategy {
+impl Default for NoopInflateElements {
     fn default() -> Self {
         Self {
             callbacks: Arc::new(NoopCallbackStratgy::default()),
@@ -30,7 +30,7 @@ impl Default for NoopInflateStrategy {
     }
 }
 
-impl InflateElementStrategy for NoopInflateStrategy {
+impl InflateElementStrategy for NoopInflateElements {
     type Definition = Widget;
 
     fn mount(&mut self, ctx: ElementTreeMountContext, definition: Self::Definition) -> Element {
@@ -71,9 +71,9 @@ impl InflateElementStrategy for NoopInflateStrategy {
 }
 
 #[derive(Default, Clone)]
-struct NoopUnmountStrategy {}
+struct NoopUnmountElements {}
 
-impl UnmountElementStrategy for NoopUnmountStrategy {
+impl UnmountElementStrategy for NoopUnmountElements {
     fn unmount(&mut self, _: ElementUnmountContext, _: Element) {}
 }
 
@@ -102,7 +102,7 @@ fn element_tree(c: &mut Criterion) {
         b.iter_with_setup(
             || {
                 (
-                    NoopInflateStrategy::default(),
+                    NoopInflateElements::default(),
                     ElementTree::default(),
                     MockRenderWidget::dummy(),
                 )
@@ -121,12 +121,12 @@ fn element_tree(c: &mut Criterion) {
 
                 let element_id = tree
                     .inflate(
-                        &mut NoopInflateStrategy::default(),
+                        &mut NoopInflateElements::default(),
                         MockRenderWidget::dummy(),
                     )
                     .expect("failed to spawn and inflate");
 
-                (NoopInflateStrategy::default(), tree, element_id)
+                (NoopInflateElements::default(), tree, element_id)
             },
             |(mut inflate_strategy, mut tree, element_id)| {
                 tree.rebuild(&mut inflate_strategy, element_id)
@@ -157,13 +157,13 @@ fn element_tree(c: &mut Criterion) {
 
                 let mut tree = ElementTree::default();
 
-                tree.inflate(&mut NoopInflateStrategy::default(), root_widget)
+                tree.inflate(&mut NoopInflateElements::default(), root_widget)
                     .expect("failed to spawn and inflate");
 
                 tree
             },
             |mut tree| {
-                tree.clear(&mut NoopUnmountStrategy::default())
+                tree.clear(&mut NoopUnmountElements::default())
                     .expect("failed to clear tree")
             },
         )
@@ -198,7 +198,7 @@ fn element_tree(c: &mut Criterion) {
                 let root_widget = root_widget.into_widget();
 
                 (
-                    NoopInflateStrategy::default(),
+                    NoopInflateElements::default(),
                     ElementTree::default(),
                     root_widget,
                 )
@@ -235,10 +235,10 @@ fn element_tree(c: &mut Criterion) {
                 let mut tree = ElementTree::default();
 
                 let element_id = tree
-                    .inflate(&mut NoopInflateStrategy::default(), root_widget)
+                    .inflate(&mut NoopInflateElements::default(), root_widget)
                     .expect("failed to spawn and inflate");
 
-                (NoopInflateStrategy::default(), tree, element_id)
+                (NoopInflateElements::default(), tree, element_id)
             },
             |(mut inflate_strategy, mut tree, element_id)| {
                 tree.rebuild(&mut inflate_strategy, element_id)
@@ -277,13 +277,13 @@ fn element_tree(c: &mut Criterion) {
 
                 let mut tree = ElementTree::default();
 
-                tree.inflate(&mut NoopInflateStrategy::default(), root_widget)
+                tree.inflate(&mut NoopInflateElements::default(), root_widget)
                     .expect("failed to spawn and inflate");
 
                 tree
             },
             |mut tree| {
-                tree.clear(&mut NoopUnmountStrategy::default())
+                tree.clear(&mut NoopUnmountElements::default())
                     .expect("failed to clear tree")
             },
         )

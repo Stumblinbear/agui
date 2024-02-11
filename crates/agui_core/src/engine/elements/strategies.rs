@@ -41,7 +41,7 @@ pub mod mocks {
         widget::Widget,
     };
 
-    pub struct MockInflateElementStrategy {
+    pub struct MockInflateElements {
         pub scheduler: MockSchedulerStratgy,
         pub callbacks: Arc<dyn CallbackStrategy>,
 
@@ -50,7 +50,7 @@ pub mod mocks {
         pub built: Vec<ElementId>,
     }
 
-    impl Default for MockInflateElementStrategy {
+    impl Default for MockInflateElements {
         fn default() -> Self {
             Self {
                 scheduler: MockSchedulerStratgy::default(),
@@ -63,7 +63,7 @@ pub mod mocks {
         }
     }
 
-    impl InflateElementStrategy for MockInflateElementStrategy {
+    impl InflateElementStrategy for MockInflateElements {
         type Definition = Widget;
 
         fn mount(&mut self, ctx: ElementTreeMountContext, definition: Self::Definition) -> Element {
@@ -112,11 +112,11 @@ pub mod mocks {
     }
 
     #[derive(Default)]
-    pub struct MockUnmountElementStrategy {
+    pub struct MockUnmountElements {
         pub unmounted: Vec<ElementId>,
     }
 
-    impl UnmountElementStrategy for MockUnmountElementStrategy {
+    impl UnmountElementStrategy for MockUnmountElements {
         fn unmount(&mut self, mut ctx: ElementUnmountContext, element: Element) {
             self.unmounted.push(*ctx.element_id);
 

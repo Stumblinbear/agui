@@ -16,7 +16,7 @@ use agui_core::{
 use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::SparseSecondaryMap;
 
-pub struct DeferredCreateRenderObjectStrategy<'create, Sched> {
+pub struct DeferredCreateRenderObjects<'create, Sched> {
     pub scheduler: &'create mut Sched,
 
     pub element_tree: &'create ElementTree,
@@ -29,7 +29,7 @@ pub struct DeferredCreateRenderObjectStrategy<'create, Sched> {
     pub needs_paint: &'create mut FxHashSet<RenderObjectId>,
 }
 
-impl<Sched> RenderingTreeCreateStrategy for DeferredCreateRenderObjectStrategy<'_, Sched>
+impl<Sched> RenderingTreeCreateStrategy for DeferredCreateRenderObjects<'_, Sched>
 where
     Sched: RenderingSchedulerStrategy,
 {

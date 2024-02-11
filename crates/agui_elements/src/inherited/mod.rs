@@ -22,7 +22,7 @@ mod tests {
             },
             ElementComparison,
         },
-        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         widget::{IntoWidget, Widget},
     };
     use agui_macros::InheritedWidget;
@@ -79,7 +79,7 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -96,7 +96,7 @@ mod tests {
         }
         .into_widget()];
 
-        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+        tree.rebuild(&mut MockInflateElements::default(), root_id)
             .expect("failed to rebuild");
 
         assert_eq!(
@@ -127,7 +127,7 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -144,7 +144,7 @@ mod tests {
         }
         .into_widget()];
 
-        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+        tree.rebuild(&mut MockInflateElements::default(), root_id)
             .expect("failed to rebuild");
 
         assert_eq!(
@@ -170,7 +170,7 @@ mod tests {
 
         let root_id = tree
             .inflate(
-                &mut MockInflateElementStrategy::default(),
+                &mut MockInflateElements::default(),
                 root_widget.into_widget(),
             )
             .expect("failed to inflate widget");
@@ -183,7 +183,7 @@ mod tests {
 
         *root_children.borrow_mut() = vec![depending_widget.clone()];
 
-        tree.rebuild(&mut MockInflateElementStrategy::default(), root_id)
+        tree.rebuild(&mut MockInflateElements::default(), root_id)
             .expect("failed to rebuild");
 
         assert_eq!(

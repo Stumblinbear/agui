@@ -140,7 +140,7 @@ where
 mod tests {
     use crate::{
         element::mock::{build::MockBuildWidget, render::MockRenderWidget},
-        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         query::by_widget::{ExactWidgetIterator, FilterByWidgetExt},
         widget::IntoWidget,
     };
@@ -165,7 +165,7 @@ mod tests {
         let mut tree = ElementTree::default();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");
@@ -203,7 +203,7 @@ mod tests {
         let mut tree = ElementTree::default();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");

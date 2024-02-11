@@ -11,7 +11,7 @@ use agui_core::{
 };
 use rustc_hash::FxHashSet;
 
-pub struct DeferredUpdateRenderObjectStrategy<'update, Sched> {
+pub struct DeferredUpdateRenderObjects<'update, Sched> {
     pub scheduler: &'update mut Sched,
 
     pub element_tree: &'update ElementTree,
@@ -19,7 +19,7 @@ pub struct DeferredUpdateRenderObjectStrategy<'update, Sched> {
     pub needs_paint: &'update mut FxHashSet<RenderObjectId>,
 }
 
-impl<Sched> RenderingTreeUpdateStrategy for DeferredUpdateRenderObjectStrategy<'_, Sched>
+impl<Sched> RenderingTreeUpdateStrategy for DeferredUpdateRenderObjects<'_, Sched>
 where
     Sched: RenderingSchedulerStrategy,
 {

@@ -582,13 +582,13 @@ where
     where
         S: BuildStrategy<K, V> + ?Sized,
     {
-        struct UpdateNestedStrategy<'life, K, S: ?Sized> {
+        struct UpdateNested<'life, K, S: ?Sized> {
             inner: &'life mut S,
 
             build_queue: &'life mut VecDeque<K>,
         }
 
-        impl<K, V, S> MountStrategy<K, V> for UpdateNestedStrategy<'_, K, S>
+        impl<K, V, S> MountStrategy<K, V> for UpdateNested<'_, K, S>
         where
             K: slotmap::Key,
             S: MountStrategy<K, V> + ?Sized,
@@ -606,7 +606,7 @@ where
             }
         }
 
-        impl<K, V, S> UnmountStrategy<K, V> for UpdateNestedStrategy<'_, K, S>
+        impl<K, V, S> UnmountStrategy<K, V> for UpdateNested<'_, K, S>
         where
             K: slotmap::Key,
             S: UnmountStrategy<K, V> + ?Sized,
@@ -616,7 +616,7 @@ where
             }
         }
 
-        impl<K, S> ForgetStrategy<K> for UpdateNestedStrategy<'_, K, S>
+        impl<K, S> ForgetStrategy<K> for UpdateNested<'_, K, S>
         where
             K: slotmap::Key,
             S: ForgetStrategy<K> + ?Sized,
@@ -626,7 +626,7 @@ where
             }
         }
 
-        impl<K, V, S> TryUpdateStrategy<K, V> for UpdateNestedStrategy<'_, K, S>
+        impl<K, V, S> TryUpdateStrategy<K, V> for UpdateNested<'_, K, S>
         where
             K: slotmap::Key,
             S: TryUpdateStrategy<K, V> + ?Sized,
@@ -671,7 +671,7 @@ where
                 .ok_or(BuildError::NotFound(node_id))?;
 
             if let Err(err) = self.update_children(
-                &mut UpdateNestedStrategy {
+                &mut UpdateNested {
                     inner: strategy,
 
                     build_queue: &mut build_queue,
@@ -786,12 +786,12 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestMountRootStrategy {
+    struct TestMountRoot {
         mounted: FxHashSet<TestId>,
         forgotten: FxHashSet<TestId>,
     }
 
-    impl MountStrategy<TestId, TestValue> for TestMountRootStrategy {
+    impl MountStrategy<TestId, TestValue> for TestMountRoot {
         type Definition = TestDefinition;
 
         fn mount(
@@ -810,7 +810,7 @@ mod tests {
         }
     }
 
-    impl ForgetStrategy<TestId> for TestMountRootStrategy {
+    impl ForgetStrategy<TestId> for TestMountRoot {
         fn on_forgotten(&mut self, id: TestId) {
             self.forgotten.insert(id);
         }
@@ -820,7 +820,7 @@ mod tests {
     pub fn set_root_mounts_node() {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
-        let mut update = TestMountRootStrategy::default();
+        let mut update = TestMountRoot::default();
 
         let root_id = tree
             .set_root(&mut update, TestDefinition::default())
@@ -848,13 +848,10 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let initial_root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn initial root");
 
-        let mut update = TestMountRootStrategy::default();
+        let mut update = TestMountRoot::default();
 
         let new_root_id = tree
             .set_root(&mut update, TestDefinition::default())
@@ -888,11 +885,11 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestMountStrategy {
+    struct TestMount {
         mounted: FxHashSet<TestId>,
     }
 
-    impl MountStrategy<TestId, TestValue> for TestMountStrategy {
+    impl MountStrategy<TestId, TestValue> for TestMount {
         type Definition = TestDefinition;
 
         fn mount(
@@ -916,13 +913,10 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
-        let mut update = TestMountStrategy::default();
+        let mut update = TestMount::default();
 
         let child_id = tree
             .spawn(&mut update, root_id, TestDefinition::default())
@@ -950,21 +944,18 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         let child_1_id = tree
             .spawn(
-                &mut TestMountStrategy::default(),
+                &mut TestMount::default(),
                 root_id,
                 TestDefinition::default(),
             )
             .expect("failed to spawn child_1");
 
-        let mut update = TestMountStrategy::default();
+        let mut update = TestMount::default();
 
         let child_2_id = tree
             .spawn(&mut update, child_1_id, TestDefinition::default())
@@ -999,11 +990,11 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestUnmountStrategy {
+    struct TestUnmount {
         unmounted: FxHashSet<TestId>,
     }
 
-    impl UnmountStrategy<TestId, TestValue> for TestUnmountStrategy {
+    impl UnmountStrategy<TestId, TestValue> for TestUnmount {
         fn unmount(&mut self, ctx: ReactiveTreeUnmountContext<TestId, TestValue>, _: TestValue) {
             self.unmounted.insert(*ctx.node_id);
         }
@@ -1014,13 +1005,10 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
-        let mut update = TestUnmountStrategy::default();
+        let mut update = TestUnmount::default();
 
         tree.remove(&mut update, root_id)
             .expect("failed to remove root");
@@ -1036,21 +1024,18 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         let child_id = tree
             .spawn(
-                &mut TestMountStrategy::default(),
+                &mut TestMount::default(),
                 root_id,
                 TestDefinition::default(),
             )
             .expect("failed to spawn child");
 
-        let mut update = TestUnmountStrategy::default();
+        let mut update = TestUnmount::default();
 
         tree.remove(&mut update, child_id)
             .expect("failed to remove child");
@@ -1071,15 +1056,12 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         let child_1_id = tree
             .spawn(
-                &mut TestMountStrategy::default(),
+                &mut TestMount::default(),
                 root_id,
                 TestDefinition::default(),
             )
@@ -1087,7 +1069,7 @@ mod tests {
 
         let child_1_1_id = tree
             .spawn(
-                &mut TestMountStrategy::default(),
+                &mut TestMount::default(),
                 child_1_id,
                 TestDefinition::default(),
             )
@@ -1095,13 +1077,13 @@ mod tests {
 
         let child_2_id = tree
             .spawn(
-                &mut TestMountStrategy::default(),
+                &mut TestMount::default(),
                 root_id,
                 TestDefinition::default(),
             )
             .expect("failed to spawn child_2");
 
-        let mut update = TestUnmountStrategy::default();
+        let mut update = TestUnmount::default();
 
         tree.remove(&mut update, child_1_id)
             .expect("failed to remove child_1");
@@ -1128,13 +1110,13 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestUpdateChildrenStrategy {
+    struct TestUpdateChildren {
         mounted: FxHashSet<TestId>,
         try_updates: FxHashMap<TestId, UpdateResult>,
         forgotten: FxHashSet<TestId>,
     }
 
-    impl MountStrategy<TestId, TestValue> for TestUpdateChildrenStrategy {
+    impl MountStrategy<TestId, TestValue> for TestUpdateChildren {
         type Definition = TestDefinition;
 
         fn mount(
@@ -1153,13 +1135,13 @@ mod tests {
         }
     }
 
-    impl ForgetStrategy<TestId> for TestUpdateChildrenStrategy {
+    impl ForgetStrategy<TestId> for TestUpdateChildren {
         fn on_forgotten(&mut self, id: TestId) {
             self.forgotten.insert(id);
         }
     }
 
-    impl TryUpdateStrategy<TestId, TestValue> for TestUpdateChildrenStrategy {
+    impl TryUpdateStrategy<TestId, TestValue> for TestUpdateChildren {
         fn try_update(
             &mut self,
             id: TestId,
@@ -1189,13 +1171,10 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
-        let mut update = TestUpdateChildrenStrategy::default();
+        let mut update = TestUpdateChildren::default();
 
         tree.update_children(
             &mut update,
@@ -1234,14 +1213,11 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         tree.update_children(
-            &mut TestUpdateChildrenStrategy::default(),
+            &mut TestUpdateChildren::default(),
             root_id,
             (0..NUM_CHILDREN).map(|i| TestDefinition {
                 discriminator: i,
@@ -1257,7 +1233,7 @@ mod tests {
             .expect("failed to get initial children")
             .clone();
 
-        let mut update = TestUpdateChildrenStrategy::default();
+        let mut update = TestUpdateChildren::default();
 
         tree.update_children(
             &mut update,
@@ -1320,14 +1296,11 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         tree.update_children(
-            &mut TestUpdateChildrenStrategy::default(),
+            &mut TestUpdateChildren::default(),
             root_id,
             (0..(NUM_LEADING_CHILDREN + NUM_MIDDLE_CHILDREN + NUM_FOLLOWING_CHILDREN)).map(|i| {
                 TestDefinition {
@@ -1345,7 +1318,7 @@ mod tests {
             .expect("failed to get initial children")
             .clone();
 
-        let mut update = TestUpdateChildrenStrategy::default();
+        let mut update = TestUpdateChildren::default();
 
         tree.update_children(
             &mut update,
@@ -1425,14 +1398,11 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         tree.update_children(
-            &mut TestUpdateChildrenStrategy::default(),
+            &mut TestUpdateChildren::default(),
             root_id,
             (0..(NUM_LEADING_CHILDREN + NUM_MIDDLE_KEYED_CHILDREN + NUM_FOLLOWING_CHILDREN)).map(
                 |i| TestDefinition {
@@ -1461,7 +1431,7 @@ mod tests {
             .expect("failed to get initial children")
             .clone();
 
-        let mut update = TestUpdateChildrenStrategy::default();
+        let mut update = TestUpdateChildren::default();
 
         tree.update_children(
             &mut update,
@@ -1541,14 +1511,11 @@ mod tests {
         let mut tree = ReactiveTree::<TestId, TestValue>::default();
 
         let root_id = tree
-            .set_root(
-                &mut TestMountRootStrategy::default(),
-                TestDefinition::default(),
-            )
+            .set_root(&mut TestMountRoot::default(), TestDefinition::default())
             .expect("failed to spawn root");
 
         tree.update_children(
-            &mut TestUpdateChildrenStrategy::default(),
+            &mut TestUpdateChildren::default(),
             root_id,
             [
                 TestDefinition {
@@ -1579,7 +1546,7 @@ mod tests {
         )
         .expect("failed to update initial children");
 
-        let mut update = TestUpdateChildrenStrategy::default();
+        let mut update = TestUpdateChildren::default();
 
         tree.update_children(
             &mut update,
@@ -1633,14 +1600,14 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestBuildStrategy {
+    struct TestBuild {
         mounted: FxHashSet<TestId>,
         try_updates: FxHashMap<TestId, UpdateResult>,
         built: FxHashSet<TestId>,
         forgotten: FxHashSet<TestId>,
     }
 
-    impl MountStrategy<TestId, TestValue> for TestBuildStrategy {
+    impl MountStrategy<TestId, TestValue> for TestBuild {
         type Definition = TestDefinition;
 
         fn mount(
@@ -1659,13 +1626,13 @@ mod tests {
         }
     }
 
-    impl ForgetStrategy<TestId> for TestBuildStrategy {
+    impl ForgetStrategy<TestId> for TestBuild {
         fn on_forgotten(&mut self, id: TestId) {
             self.forgotten.insert(id);
         }
     }
 
-    impl TryUpdateStrategy<TestId, TestValue> for TestBuildStrategy {
+    impl TryUpdateStrategy<TestId, TestValue> for TestBuild {
         fn try_update(
             &mut self,
             id: TestId,
@@ -1688,7 +1655,7 @@ mod tests {
         }
     }
 
-    impl BuildStrategy<TestId, TestValue> for TestBuildStrategy {
+    impl BuildStrategy<TestId, TestValue> for TestBuild {
         fn build(
             &mut self,
             ctx: ReactiveTreeBuildContext<TestId, TestValue>,
@@ -1707,7 +1674,7 @@ mod tests {
 
         let root_id = tree
             .set_root(
-                &mut TestMountRootStrategy::default(),
+                &mut TestMountRoot::default(),
                 TestDefinition {
                     children: (0..NUM_DIRECT_CHILDREN)
                         .map(|i| TestDefinition {
@@ -1727,7 +1694,7 @@ mod tests {
             )
             .expect("failed to spawn root");
 
-        let mut update = TestBuildStrategy::default();
+        let mut update = TestBuild::default();
 
         tree.build_and_realize(&mut update, root_id)
             .expect("failed to build and realize root");
@@ -1798,7 +1765,7 @@ mod tests {
 
         let root_id = tree
             .set_root(
-                &mut TestMountRootStrategy::default(),
+                &mut TestMountRoot::default(),
                 TestDefinition {
                     children: (0..NUM_DIRECT_CHILDREN)
                         .map(|i| TestDefinition {
@@ -1818,14 +1785,14 @@ mod tests {
             )
             .expect("failed to spawn root");
 
-        tree.build_and_realize(&mut TestBuildStrategy::default(), root_id)
+        tree.build_and_realize(&mut TestBuild::default(), root_id)
             .expect("failed to build and realize root");
 
         tree.with(root_id, |_, value| {
             value.children[1].data = 3;
         });
 
-        let mut update = TestBuildStrategy::default();
+        let mut update = TestBuild::default();
 
         tree.build_and_realize(&mut update, root_id)
             .expect("failed to rebuild and realize root");
@@ -1858,7 +1825,7 @@ mod tests {
 
         let root_id = tree
             .set_root(
-                &mut TestMountRootStrategy::default(),
+                &mut TestMountRoot::default(),
                 TestDefinition {
                     children: (0..NUM_DIRECT_CHILDREN)
                         .map(|i| TestDefinition {
@@ -1878,14 +1845,14 @@ mod tests {
             )
             .expect("failed to spawn root");
 
-        tree.build_and_realize(&mut TestBuildStrategy::default(), root_id)
+        tree.build_and_realize(&mut TestBuild::default(), root_id)
             .expect("failed to build and realize root");
 
         tree.with(root_id, |_, value| {
             value.children[1].children[0].discriminator = 99999;
         });
 
-        let mut update = TestBuildStrategy::default();
+        let mut update = TestBuild::default();
 
         tree.build_and_realize(&mut update, root_id)
             .expect("failed to rebuild and realize root");

@@ -26,11 +26,11 @@ use crate::{
         callbacks::{InvokeCallback, QueueCallbacks},
         cleanup_rendering_tree::CleanupRenderingTree,
         deferred::{
-            create_render_object::DeferredCreateRenderObjectStrategy,
-            update_render_object::DeferredUpdateRenderObjectStrategy,
+            create_render_object::DeferredCreateRenderObjects,
+            update_render_object::DeferredUpdateRenderObjects,
         },
         inflate_root::InflateRoot,
-        rebuild::RebuildStrategy,
+        rebuild::RebuildElements,
         unmount::ElementTreeUnmount,
         update_render_object::ImmediatelyUpdateRenderObjects,
     },
@@ -263,7 +263,7 @@ impl ThreadedEngineExecutor {
             .expect("deferred element not found");
 
         let result = self.element_tree.resolve_deferred(
-            &mut RebuildStrategy {
+            &mut RebuildElements {
                 scheduler: &mut self.scheduler,
                 callbacks: &self.callbacks,
 
@@ -310,7 +310,7 @@ impl ThreadedEngineExecutor {
 
         for element_id in spawned_elements {
             rendering_tree.create(
-                &mut DeferredCreateRenderObjectStrategy {
+                &mut DeferredCreateRenderObjects {
                     scheduler: &mut self.rendering_scheduler,
 
                     element_tree: &self.element_tree,
@@ -327,7 +327,7 @@ impl ThreadedEngineExecutor {
 
         for element_id in updated_elements.drain().map(|(id, _)| id) {
             rendering_tree.update(
-                &mut DeferredUpdateRenderObjectStrategy {
+                &mut DeferredUpdateRenderObjects {
                     scheduler: &mut self.rendering_scheduler,
 
                     element_tree: &self.element_tree,
@@ -453,7 +453,7 @@ impl EngineExecutor for ThreadedEngineExecutor {
             }
 
             if let Err(err) = self.element_tree.rebuild(
-                &mut RebuildStrategy {
+                &mut RebuildElements {
                     scheduler: &mut self.scheduler,
                     callbacks: &self.callbacks,
 

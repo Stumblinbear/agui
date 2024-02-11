@@ -129,7 +129,7 @@ mod tests {
             build::{MockBuildWidget, MockedElementBuild},
             render::{MockRenderWidget, MockedElementRender},
         },
-        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         query::by_element::{ExactElementIterator, FilterByElementExt},
         widget::IntoWidget,
     };
@@ -154,7 +154,7 @@ mod tests {
         let mut tree = ElementTree::default();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");
@@ -192,7 +192,7 @@ mod tests {
         let mut tree = ElementTree::default();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             root_widget.into_widget(),
         )
         .expect("failed to spawn and inflate");

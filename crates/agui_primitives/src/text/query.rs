@@ -65,7 +65,7 @@ impl<I> ExactWidgetIterator for FilterText<'_, I> {
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         query::by_widget::ExactWidgetIterator,
     };
     use agui_macros::build;
@@ -80,7 +80,7 @@ mod tests {
         let mut tree = ElementTree::new();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             build! {
                 <Column> {
                     children: [

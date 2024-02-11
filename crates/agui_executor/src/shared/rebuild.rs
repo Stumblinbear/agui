@@ -13,7 +13,7 @@ use agui_core::{
 use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::SparseSecondaryMap;
 
-pub struct RebuildStrategy<'rebuild, Sched> {
+pub struct RebuildElements<'rebuild, Sched> {
     pub scheduler: &'rebuild mut Sched,
     pub callbacks: &'rebuild Arc<dyn CallbackStrategy>,
 
@@ -24,7 +24,7 @@ pub struct RebuildStrategy<'rebuild, Sched> {
     pub rebuilt_elements: &'rebuild mut FxHashSet<ElementId>,
 }
 
-impl<Sched> InflateElementStrategy for RebuildStrategy<'_, Sched>
+impl<Sched> InflateElementStrategy for RebuildElements<'_, Sched>
 where
     Sched: ElementSchedulerStrategy,
 {

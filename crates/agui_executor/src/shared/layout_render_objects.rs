@@ -18,10 +18,10 @@ use slotmap::SparseSecondaryMap;
 use crate::shared::{
     cleanup_rendering_tree::CleanupRenderingTree,
     deferred::{
-        create_render_object::DeferredCreateRenderObjectStrategy,
-        update_render_object::DeferredUpdateRenderObjectStrategy,
+        create_render_object::DeferredCreateRenderObjects,
+        update_render_object::DeferredUpdateRenderObjects,
     },
-    rebuild::RebuildStrategy,
+    rebuild::RebuildElements,
     unmount::ElementTreeUnmount,
 };
 
@@ -73,7 +73,7 @@ where
 
                 self.element_tree
                     .resolve_deferred(
-                        &mut RebuildStrategy {
+                        &mut RebuildElements {
                             scheduler: self.scheduler,
                             callbacks: self.callbacks,
 
@@ -97,7 +97,7 @@ where
 
                 for element_id in spawned_elements {
                     ctx.tree.create(
-                        &mut DeferredCreateRenderObjectStrategy {
+                        &mut DeferredCreateRenderObjects {
                             scheduler: self.scheduler,
 
                             element_tree: self.element_tree,
@@ -114,7 +114,7 @@ where
 
                 for element_id in updated_elements.drain().map(|(id, _)| id) {
                     ctx.tree.update(
-                        &mut DeferredUpdateRenderObjectStrategy {
+                        &mut DeferredUpdateRenderObjects {
                             scheduler: self.scheduler,
 
                             element_tree: self.element_tree,

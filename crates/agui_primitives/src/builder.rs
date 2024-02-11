@@ -31,7 +31,7 @@ impl StatelessWidget for Builder {
 mod tests {
     use agui_core::{
         element::mock::render::MockRenderWidget,
-        engine::elements::{strategies::mocks::MockInflateElementStrategy, ElementTree},
+        engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         query::by_widget::FilterByWidgetExt,
         widget::IntoWidget,
     };
@@ -43,7 +43,7 @@ mod tests {
         let mut tree = ElementTree::new();
 
         tree.inflate(
-            &mut MockInflateElementStrategy::default(),
+            &mut MockInflateElements::default(),
             Builder::new(|_| MockRenderWidget::dummy()).into_widget(),
         )
         .expect("failed to inflate widget");
