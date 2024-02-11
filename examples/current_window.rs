@@ -1,4 +1,4 @@
-use std::{thread, time::Duration};
+use std::time::Duration;
 
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
@@ -6,9 +6,13 @@ use tracing_subscriber::EnvFilter;
 use agui::{
     app::run_app,
     prelude::*,
-    winit::{CurrentWindow, Window},
+    task::{context::ContextSpawnElementTask, TaskHandle},
+    vello::{
+        binding::VelloViewBinding,
+        renderer::{window::VelloWindowRenderer, VelloRenderer},
+    },
+    winit::{CurrentWindow, WinitWindow, WinitWindowAttributes},
 };
-use winit::{dpi::PhysicalSize, window::WindowBuilder};
 
 fn main() {
     let filter = EnvFilter::from_default_env()
@@ -23,15 +27,29 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    run_app(build! {
-        <Window> {
-            window: || WindowBuilder::new()
-                    .with_title("agui hello world")
-                    .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+    run_app(move || {
+        let vello_renderer = VelloRenderer::default();
 
-            child: <ExampleMain>::default(),
+        let (view, view_handle) = vello_renderer.new_view();
+
+        build! {
+            <WinitWindow> {
+                attributes: WinitWindowAttributes::builder()
+                    .title("agui hello world")
+                    .inner_size(Size::new(800.0, 600.0))
+                    .build(),
+
+                renderer: VelloWindowRenderer::new(view_handle),
+
+                child: <VelloViewBinding> {
+                    view: view,
+
+                    child: <ExampleMain>::default()
+                }
+            }
         }
-    });
+    })
+    .expect("Failed to run app");
 }
 
 #[derive(StatefulWidget, PartialEq, Default)]
@@ -48,6 +66,8 @@ impl StatefulWidget for ExampleMain {
 #[derive(Default)]
 struct ExampleMainState {
     update_count: usize,
+
+    handle: Option<TaskHandle<()>>,
 }
 
 impl WidgetState for ExampleMainState {
@@ -60,11 +80,15 @@ impl WidgetState for ExampleMainState {
             });
         });
 
-        thread::spawn(move || loop {
-            thread::sleep(Duration::from_millis(1000));
+        self.handle = ctx
+            .spawn_task(|_| async move {
+                loop {
+                    futures_timer::Delay::new(Duration::from_millis(1000)).await;
 
-            callback.call(());
-        });
+                    callback.call(());
+                }
+            })
+            .ok();
     }
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {

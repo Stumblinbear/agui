@@ -1,8 +1,15 @@
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*, winit::Window};
-use winit::{dpi::PhysicalSize, window::WindowBuilder};
+use agui::{
+    app::run_app,
+    prelude::*,
+    vello::{
+        binding::VelloViewBinding,
+        renderer::{window::VelloWindowRenderer, VelloRenderer},
+    },
+    winit::{WinitWindow, WinitWindowAttributes},
+};
 
 fn main() {
     let filter = EnvFilter::from_default_env()
@@ -17,30 +24,55 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    run_app(build! {
-        <Stack> {
-            children: [
-                <Window> {
-                    window: || WindowBuilder::new()
-                        .with_title("agui hello world")
-                        .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+    run_app(move || {
+        let vello_renderer = VelloRenderer::default();
 
-                    child: <Text> {
-                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                        text: "Hello, world!".into(),
-                    },
-                },
-                <Window> {
-                    window: || WindowBuilder::new()
-                        .with_title("agui goodbye world")
-                        .with_inner_size(PhysicalSize::new(400.0, 300.0)),
+        let (view1, view1_handle) = vello_renderer.new_view();
+        let (view2, view2_handle) = vello_renderer.new_view();
 
-                    child: <Text> {
-                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
-                        text: "Goodbye, world!".into(),
+        build! {
+            <Stack> {
+                children: [
+                    <WinitWindow> {
+                        attributes: WinitWindowAttributes::builder()
+                            .title("agui window 1")
+                            .inner_size(Size::new(800.0, 600.0))
+                            .build(),
+
+                        renderer: VelloWindowRenderer::new(view1_handle),
+
+                        child: <VelloViewBinding> {
+                            view: view1,
+
+                            child: <Text> {
+                                style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                                text: "Hello, world!".into(),
+                            }
+                        }
                     },
-                },
-            ],
+
+                    <WinitWindow> {
+                        exit_on_close: false,
+
+                        attributes: WinitWindowAttributes::builder()
+                            .title("agui window 2")
+                            .inner_size(Size::new(400.0, 300.0))
+                            .build(),
+
+                        renderer: VelloWindowRenderer::new(view2_handle),
+
+                        child: <VelloViewBinding> {
+                            view: view2,
+
+                            child: <Text> {
+                                style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                                text: "Goodbye, world!".into(),
+                            }
+                        }
+                    },
+                ],
+            }
         }
-    });
+    })
+    .expect("Failed to run app");
 }

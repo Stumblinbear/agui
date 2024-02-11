@@ -4,25 +4,6 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug example 'alternating_windows'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--example=alternating_windows",
-                    "--package=agui",
-                    "--features=app,winit-vello,multi-threaded"
-                ],
-                "filter": {
-                    "name": "alternating_windows",
-                    "kind": "example"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
             "name": "Debug example 'clipping'",
             "cargo": {
                 "args": [

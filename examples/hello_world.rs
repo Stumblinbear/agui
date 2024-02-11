@@ -1,12 +1,15 @@
-use agui_vello::{
-    binding::VelloViewBinding,
-    renderer::{window::VelloWindowRenderer, VelloRenderer},
-};
-use agui_winit::{WinitWindow, WinitWindowAttributes};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*};
+use agui::{
+    app::run_app,
+    prelude::*,
+    vello::{
+        binding::VelloViewBinding,
+        renderer::{window::VelloWindowRenderer, VelloRenderer},
+    },
+    winit::{WinitWindow, WinitWindowAttributes},
+};
 
 fn main() {
     let filter = EnvFilter::from_default_env()
@@ -21,15 +24,15 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    let vello_renderer = VelloRenderer::default();
-
     run_app(move || {
+        let vello_renderer = VelloRenderer::default();
+
         let (view, view_handle) = vello_renderer.new_view();
 
         build! {
             <WinitWindow> {
                 attributes: WinitWindowAttributes::builder()
-                    .title("Hello, world!")
+                    .title("agui hello world")
                     .build(),
 
                 renderer: VelloWindowRenderer::new(view_handle),

@@ -24,9 +24,9 @@ fn main() {
         .with_env_filter(filter)
         .init();
 
-    let vello_renderer = VelloRenderer::default();
-
     run_app(move || {
+        let vello_renderer = VelloRenderer::default();
+
         let (view, view_handle) = vello_renderer.new_view();
 
         build! {

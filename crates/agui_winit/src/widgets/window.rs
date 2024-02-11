@@ -59,9 +59,9 @@ where
 }
 
 #[derive(PartialEq, Clone, WidgetProps)]
-#[props(default)]
+#[props(default, into)]
 pub struct WinitWindowAttributes {
-    #[prop(!default, into)]
+    #[prop(!default)]
     title: Cow<'static, str>,
 
     inner_size: Option<Size>,

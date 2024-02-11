@@ -1,16 +1,24 @@
-use std::{thread, time::Duration};
+use std::time::Duration;
 
 use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-use agui::{app::run_app, prelude::*, winit::Window};
-use winit::{dpi::PhysicalSize, window::WindowBuilder};
+use agui::{
+    app::run_app,
+    prelude::*,
+    task::{context::ContextSpawnElementTask, TaskHandle},
+    vello::{
+        binding::VelloViewBinding,
+        renderer::{window::VelloWindowRenderer, VelloRenderer},
+    },
+    winit::{WinitWindow, WinitWindowAttributes},
+};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
-        .add_directive(format!("agui={}", LevelFilter::DEBUG).parse().unwrap());
+        .add_directive(format!("agui={}", LevelFilter::INFO).parse().unwrap());
 
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
@@ -20,15 +28,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(filter)
         .init();
 
-    run_app(build! {
-        <Window> {
-            window: || WindowBuilder::new()
-                .with_title("agui os info")
-                .with_inner_size(PhysicalSize::new(800.0, 600.0)),
+    run_app(move || {
+        let vello_renderer = VelloRenderer::default();
 
-            child: <ExampleMain>::default(),
+        let (view, view_handle) = vello_renderer.new_view();
+
+        build! {
+            <WinitWindow> {
+                attributes: WinitWindowAttributes::builder()
+                    .title("agui hello world")
+                    .inner_size(Size::new(800.0, 600.0))
+                    .build(),
+
+                renderer: VelloWindowRenderer::new(view_handle),
+
+                child: <VelloViewBinding> {
+                    view: view,
+
+                    child: <ExampleMain>::default()
+                }
+            }
         }
     })
+    .expect("Failed to run app");
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +83,8 @@ impl StatefulWidget for ExampleMain {
 #[derive(Default)]
 struct ExampleMainState {
     system_info: Option<SystemInfo>,
+
+    handle: Option<TaskHandle<()>>,
 }
 
 impl WidgetState for ExampleMainState {
@@ -73,28 +97,32 @@ impl WidgetState for ExampleMainState {
             });
         });
 
-        thread::spawn(move || loop {
-            thread::sleep(Duration::from_millis(1000));
+        self.handle = ctx
+            .spawn_task(move |_| async move {
+                loop {
+                    futures_timer::Delay::new(Duration::from_millis(1000)).await;
 
-            let mut system = System::new_all();
+                    let mut system = System::new_all();
 
-            system.refresh_all();
+                    system.refresh_all();
 
-            callback.call(SystemInfo {
-                total_memory: system.total_memory(),
-                used_memory: system.used_memory(),
+                    callback.call(SystemInfo {
+                        total_memory: system.total_memory(),
+                        used_memory: system.used_memory(),
 
-                total_swap: system.total_swap(),
-                used_swap: system.used_swap(),
+                        total_swap: system.total_swap(),
+                        used_swap: system.used_swap(),
 
-                name: system.name().unwrap_or_else(|| "---".into()),
-                kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
-                os_version: system.os_version().unwrap_or_else(|| "---".into()),
-                host_name: system.host_name().unwrap_or_else(|| "---".into()),
+                        name: system.name().unwrap_or_else(|| "---".into()),
+                        kernel_version: system.kernel_version().unwrap_or_else(|| "---".into()),
+                        os_version: system.os_version().unwrap_or_else(|| "---".into()),
+                        host_name: system.host_name().unwrap_or_else(|| "---".into()),
 
-                processors: system.cpus().len(),
-            });
-        });
+                        processors: system.cpus().len(),
+                    });
+                }
+            })
+            .ok();
     }
 
     fn build(&mut self, _: &mut StatefulBuildContext<Self>) -> Widget {
@@ -131,6 +159,7 @@ impl WidgetState for ExampleMainState {
                                 style: TextStyle::default().color(Color::from_rgb((0.0, 0.0, 0.0))),
                                 text: entry.into(),
                             })
+                            .collect::<Vec<_>>()
                     }
                 }
             }

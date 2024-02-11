@@ -107,6 +107,7 @@ agui = { path = "." }
 
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+futures-timer = "3.0"
 sysinfo = "0.29"
 
 slotmap.workspace = true
@@ -134,10 +135,6 @@ opt-level = 1
 
 [profile.dev.package.agui_winit]
 opt-level = 1
-
-[[example]]
-name = "alternating_windows"
-required-features = ["app", "winit-vello", "vello"]
 
 [[example]]
 name = "clipping"
