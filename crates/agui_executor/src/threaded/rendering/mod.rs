@@ -78,8 +78,6 @@ impl ThreadedRenderingExecutor {
 
         let layout_end = Instant::now();
 
-        // TODO: it's entirely possible for paint to be called multiple times on the
-        // same render object.
         for render_object_id in needs_paint {
             rendering_tree.paint(render_object_id);
         }
