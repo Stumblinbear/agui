@@ -82,6 +82,10 @@ impl ElementTree {
         self.tree.get(element_id)
     }
 
+    pub fn get_mut(&mut self, element_id: ElementId) -> Option<&mut Element> {
+        self.tree.get_mut(element_id)
+    }
+
     #[tracing::instrument(level = "trace", skip(self, func))]
     pub fn with<F, R>(&mut self, element_id: ElementId, func: F) -> Option<R>
     where

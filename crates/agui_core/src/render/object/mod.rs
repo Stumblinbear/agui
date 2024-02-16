@@ -94,6 +94,10 @@ impl RenderObject {
         self.offset
     }
 
+    pub(crate) fn set_offset(&mut self, offset: Offset) {
+        self.offset = offset;
+    }
+
     #[tracing::instrument(level = "trace", skip(self, ctx))]
     pub fn intrinsic_size<'ctx>(
         &self,
@@ -330,7 +334,7 @@ pub trait RenderObjectImpl: AsAny + Send {
             // By default, we take the intrinsic size of the child.
             ctx.iter_children()
                 .next()
-                .expect("child render object missing while computing intrinsic size")
+                .unwrap()
                 .compute_intrinsic_size(dimension, cross_extent)
         } else {
             0.0

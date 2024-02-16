@@ -113,7 +113,7 @@ impl RenderObjectImpl for RenderWinitWindowLayout {
         let mut children = ctx.iter_children_mut();
 
         while let Some(mut child) = children.next() {
-            child.layout(Constraints::from(size));
+            child.layout(Constraints::tight(size));
         }
 
         size

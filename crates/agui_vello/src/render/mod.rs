@@ -1,4 +1,3 @@
-// mod fonts;
 mod object;
 mod scene;
 

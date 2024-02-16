@@ -17,8 +17,10 @@ pub struct VelloWindowRenderer {
 }
 
 impl VelloWindowRenderer {
-    pub fn new(view_handle: VelloViewHandle) -> Self {
-        Self { view_handle }
+    pub fn new(view_handle: &VelloViewHandle) -> Self {
+        Self {
+            view_handle: view_handle.clone(),
+        }
     }
 }
 
@@ -37,6 +39,7 @@ where
         let size = self
             .view_handle
             .with_scene(|scene| scene.size)
+            .and_then(|size| if size.is_finite() { Some(size) } else { None })
             .unwrap_or_else(|| Size::new(16.0, 16.0));
 
         let now = Instant::now();
@@ -105,7 +108,10 @@ impl Renderer for BoundVelloWindowRenderer {
         let device_handle = &render_context.devices[render_surface.dev_id];
 
         self.view_handle.with_scene(|scene| {
-            let Some(size) = scene.size else {
+            let Some(size) = scene
+                .size
+                .and_then(|size| if size.is_finite() { Some(size) } else { None })
+            else {
                 tracing::warn!("scene has no size, skipping render");
                 return;
             };

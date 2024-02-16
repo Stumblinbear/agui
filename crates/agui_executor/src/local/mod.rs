@@ -143,21 +143,23 @@ impl LocalEngineExecutor {
         let mut needs_paint = FxHashSet::default();
 
         for element_id in spawned_elements {
+            let parent_element_id = executor
+                .element_tree
+                .as_ref()
+                .get_parent(element_id)
+                .copied();
+
             executor.rendering_tree.create(
                 &mut ImmediatelyCreateRenderObjects {
                     scheduler: &mut executor.scheduler,
 
-                    element_tree: &executor.element_tree,
+                    element_tree: &mut executor.element_tree,
                     deferred_elements: &mut executor.deferred_elements,
 
                     needs_layout: &mut needs_layout,
                     needs_paint: &mut needs_paint,
                 },
-                executor
-                    .element_tree
-                    .as_ref()
-                    .get_parent(element_id)
-                    .copied(),
+                parent_element_id,
                 element_id,
             );
         }
@@ -327,17 +329,19 @@ impl LocalEngineExecutor {
         let mut needs_paint = FxHashSet::default();
 
         for element_id in spawned_elements {
+            let parent_element_id = self.element_tree.as_ref().get_parent(element_id).copied();
+
             self.rendering_tree.create(
                 &mut ImmediatelyCreateRenderObjects {
                     scheduler: &mut self.scheduler,
 
-                    element_tree: &self.element_tree,
+                    element_tree: &mut self.element_tree,
                     deferred_elements: &mut self.deferred_elements,
 
                     needs_layout: &mut needs_layout,
                     needs_paint: &mut needs_paint,
                 },
-                self.element_tree.as_ref().get_parent(element_id).copied(),
+                parent_element_id,
                 element_id,
             );
 

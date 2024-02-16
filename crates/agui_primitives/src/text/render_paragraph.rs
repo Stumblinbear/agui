@@ -38,31 +38,25 @@ impl RenderParagraph {
 impl RenderObjectImpl for RenderParagraph {
     fn intrinsic_size(
         &self,
-        _: &mut RenderObjectIntrinsicSizeContext,
+        ctx: &mut RenderObjectIntrinsicSizeContext,
         dimension: IntrinsicDimension,
         _: f32,
     ) -> f32 {
-        // self.delegate.as_ref().map_or(0.0, |delegate| {
-        //     delegate.compute_intrinsic_size(
-        //         &self.style,
-        //         Cow::clone(&self.text),
-        //         dimension,
-        //         self.style.size,
-        //     )
-        // })
-        0.0
+        ctx.text_layout().map_or(0.0, |text_layout| {
+            text_layout.compute_intrinsic_size(&self.style, &self.text, dimension, self.style.size)
+        })
     }
 
     fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
-        // let size = if let Some(delegate) = self.delegate.as_ref() {
-        //     delegate.compute_layout(&self.style, Cow::clone(&self.text), constraints)
-        // } else {
-        //     constraints.smallest()
-        // };
+        let size = if let Some(text_layout) = ctx.text_layout() {
+            text_layout.compute_size(&self.style, &self.text, constraints)
+        } else {
+            constraints.smallest()
+        };
 
-        // if let Some(mut child) = ctx.iter_children_mut().next() {
-        //     child.compute_layout(size);
-        // }
+        if let Some(mut child) = ctx.iter_children_mut().next() {
+            child.layout(Constraints::tight(size));
+        }
 
         constraints.smallest()
     }

@@ -1,7 +1,7 @@
 use core::panic;
 use std::hash::BuildHasherDefault;
 
-use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+use rustc_hash::{FxHashSet, FxHasher};
 use slotmap::{SecondaryMap, SparseSecondaryMap};
 
 use crate::{
@@ -14,13 +14,13 @@ use crate::{
             RenderingTreeCleanupStrategy, RenderingTreeCreateStrategy, RenderingTreeLayoutStrategy,
             RenderingTreeUpdateStrategy,
         },
-        view::RenderView,
+        view::View,
+        RenderViews,
     },
     render::{
         object::{RenderObject, RenderObjectLayoutContext},
         RenderObjectId,
     },
-    unit::{Offset, Size},
     util::tree::Tree,
 };
 
@@ -32,8 +32,7 @@ pub struct RenderingTree {
 
     forgotten_elements: SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
 
-    render_views: SparseSecondaryMap<RenderObjectId, RenderView, BuildHasherDefault<FxHasher>>,
-    needs_sync: SparseSecondaryMap<RenderObjectId, (), BuildHasherDefault<FxHasher>>,
+    render_views: RenderViews,
 }
 
 impl RenderingTree {
@@ -86,13 +85,8 @@ impl RenderingTree {
                 .expect("parent element has no render object while creating render object")
         });
 
-        let parent_view_id = parent_render_object_id.and_then(|parent_render_object_id| match self
-            .render_views
-            .get(parent_render_object_id)
-        {
-            Some(RenderView::Owner(_)) => Some(parent_render_object_id),
-            Some(RenderView::Within(view_object_id)) => Some(*view_object_id),
-            None => None,
+        let parent_view_id = parent_render_object_id.and_then(|parent_render_object_id| {
+            self.render_views.get_owner_id(parent_render_object_id)
         });
 
         self.tree
@@ -103,6 +97,7 @@ impl RenderingTree {
                     RenderingSpawnContext {
                         scheduler: RenderingScheduler::new(&render_object_id),
 
+                        parent_render_object_id: &parent_render_object_id,
                         render_object_id: &render_object_id,
                     },
                     element_id,
@@ -112,26 +107,18 @@ impl RenderingTree {
                     // Attach the render object as the root of its own view
                     render_view.on_attach(None, render_object_id);
 
-                    self.render_views
-                        .insert(render_object_id, RenderView::Owner(render_view));
+                    self.render_views.create_view(render_object_id, render_view);
                 } else if let Some(parent_view_id) = parent_view_id {
-                    let view =
-                        match self.render_views.get_mut(parent_view_id).expect(
-                            "parent render object has no view while creating render objects",
-                        ) {
-                            RenderView::Owner(ref mut view) => view,
-                            _ => panic!(
-                            "parent render object is not a view owner while creating render objects"
-                        ),
-                        };
+                    let view = self
+                        .render_views
+                        .get_mut(parent_view_id)
+                        .expect("parent render object has no view while creating render objects");
 
                     view.on_attach(parent_render_object_id, render_object_id);
 
                     self.render_views
-                        .insert(render_object_id, RenderView::Within(parent_view_id));
+                        .set_within_view(render_object_id, parent_view_id);
                 };
-
-                self.needs_sync.insert(render_object_id, ());
 
                 render_object
             })
@@ -212,30 +199,10 @@ impl RenderingTree {
                 }
             };
 
-            if let Some(render_view) = self.render_views.get_mut(*render_object_id) {
-                let (view_object_id, view) = match render_view {
-                    RenderView::Owner(ref mut view) => {
-                        views_to_remove.push(*render_object_id);
-
-                        (*render_object_id, view)
-                    }
-                    RenderView::Within(view_object_id) => {
-                        let view_object_id = *view_object_id;
-
-                        self.render_views.remove(*render_object_id);
-
-                        match self.render_views.get_mut(view_object_id) {
-                            Some(RenderView::Owner(view)) => (view_object_id, view),
-                            _ => panic!(
-                                "render object supplied an incorrect render view while syncing"
-                            ),
-                        }
-                    }
-                };
-
-                view.on_detach(*render_object_id);
-
-                self.needs_sync.insert(view_object_id, ());
+            if self.render_views.is_owner(*render_object_id) {
+                views_to_remove.push(*render_object_id);
+            } else {
+                self.render_views.remove_within(*render_object_id);
             }
 
             strategy.on_removed(*render_object_id);
@@ -246,7 +213,7 @@ impl RenderingTree {
         }
 
         for render_object_id in views_to_remove {
-            self.render_views.remove(render_object_id);
+            self.render_views.remove_view(render_object_id);
         }
 
         if failed_to_unmount.is_empty() {
@@ -265,8 +232,6 @@ impl RenderingTree {
     {
         struct LayoutStrategy<'layout, S> {
             inner: &'layout mut S,
-
-            changed: &'layout mut FxHashMap<RenderObjectId, (Option<Size>, Option<Offset>)>,
 
             laid_out: &'layout mut FxHashSet<RenderObjectId>,
         }
@@ -288,8 +253,11 @@ impl RenderingTree {
                 ctx: RenderingLayoutContext,
                 render_object: &RenderObject,
             ) {
-                self.changed.entry(*ctx.render_object_id).or_default().0 =
-                    Some(render_object.size());
+                if let Some(view) = ctx.tree.render_views.get_mut(*ctx.render_object_id) {
+                    view.on_size_changed(*ctx.render_object_id, render_object.size());
+
+                    ctx.tree.render_views.mark_needs_sync(*ctx.render_object_id);
+                }
 
                 self.inner.on_size_changed(ctx, render_object);
             }
@@ -299,8 +267,11 @@ impl RenderingTree {
                 ctx: RenderingLayoutContext,
                 render_object: &RenderObject,
             ) {
-                self.changed.entry(*ctx.render_object_id).or_default().1 =
-                    Some(render_object.offset());
+                if let Some(view) = ctx.tree.render_views.get_mut(*ctx.render_object_id) {
+                    view.on_offset_changed(*ctx.render_object_id, render_object.offset());
+
+                    ctx.tree.render_views.mark_needs_sync(*ctx.render_object_id);
+                }
 
                 self.inner.on_offset_changed(ctx, render_object);
             }
@@ -312,12 +283,21 @@ impl RenderingTree {
             }
         }
 
-        let mut changed = FxHashMap::default();
-
         let mut laid_out = FxHashSet::default();
 
-        // TODO: can we have this collect only the relayout boundaries?
-        let mut needs_layout = needs_layout.into_iter().collect::<Vec<_>>();
+        let mut needs_layout = needs_layout
+            .into_iter()
+            .map(|render_object_id| {
+                self.tree
+                    .get(render_object_id)
+                    .unwrap()
+                    .relayout_boundary_id()
+                    .unwrap_or(render_object_id)
+            })
+            // Is it worth collecting into a HashSet first to filter out duplicate boundaries?
+            // .collect::<FxHashSet<_>>()
+            // .into_iter()
+            .collect::<Vec<_>>();
 
         needs_layout
             .sort_by_cached_key(|render_object_id| self.tree.get_depth(*render_object_id).unwrap());
@@ -355,8 +335,6 @@ impl RenderingTree {
                         strategy: &mut LayoutStrategy {
                             inner: strategy,
 
-                            changed: &mut changed,
-
                             laid_out: &mut laid_out,
                         },
 
@@ -375,34 +353,6 @@ impl RenderingTree {
             })
             .expect("render object missing while laying out");
         }
-
-        for (render_object_id, (new_size, new_offset)) in changed {
-            if let Some(render_view) = self.render_views.get_mut(render_object_id) {
-                let (view_object_id, view) = match render_view {
-                    RenderView::Owner(ref mut view) => (render_object_id, view),
-                    RenderView::Within(view_object_id) => {
-                        let view_object_id = *view_object_id;
-
-                        match self.render_views.get_mut(view_object_id) {
-                            Some(RenderView::Owner(view)) => (view_object_id, view),
-                            _ => panic!(
-                                "render object supplied an incorrect render view while syncing"
-                            ),
-                        }
-                    }
-                };
-
-                if let Some(new_size) = new_size {
-                    view.on_size_changed(render_object_id, new_size);
-                }
-
-                if let Some(new_offset) = new_offset {
-                    view.on_offset_changed(render_object_id, new_offset);
-                }
-
-                self.needs_sync.insert(view_object_id, ());
-            }
-        }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -414,54 +364,31 @@ impl RenderingTree {
             .get_mut(render_object_id)
             .expect("render object missing while flushing paint");
 
-        let Some(render_view) = self.render_views.get_mut(render_object_id) else {
+        let Some(view) = self.render_views.get_mut(render_object_id) else {
             return;
         };
 
         let canvas = render_object.paint();
 
-        let (view_object_id, view) = match render_view {
-            RenderView::Owner(ref mut view) => (render_object_id, view),
-            RenderView::Within(view_object_id) => {
-                let view_object_id = *view_object_id;
-
-                match self.render_views.get_mut(view_object_id) {
-                    Some(RenderView::Owner(view)) => (view_object_id, view),
-                    _ => panic!(
-                        "render object supplied an incorrect render view while flushing paint"
-                    ),
-                }
-            }
-        };
-
         view.on_paint(render_object_id, canvas);
 
-        self.needs_sync.insert(view_object_id, ());
+        self.render_views.mark_needs_sync(render_object_id);
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn sync_views(&mut self) {
-        for render_object_id in self.needs_sync.drain().map(|(id, _)| id) {
-            tracing::trace!(?render_object_id, "syncing render object's view");
+        self.render_views.sync();
+    }
 
-            if let Some(render_view) = self.render_views.get_mut(render_object_id) {
-                let view = match render_view {
-                    RenderView::Owner(ref mut view) => view,
-                    RenderView::Within(view_object_id) => {
-                        let view_object_id = *view_object_id;
+    pub(crate) fn get_view(&self, render_object_id: RenderObjectId) -> Option<&dyn View> {
+        self.render_views.get(render_object_id)
+    }
 
-                        match self.render_views.get_mut(view_object_id) {
-                            Some(RenderView::Owner(view)) => view,
-                            _ => panic!(
-                                "render object supplied an incorrect render view while syncing"
-                            ),
-                        }
-                    }
-                };
-
-                view.on_sync();
-            }
-        }
+    pub(crate) fn get_view_mut(
+        &mut self,
+        render_object_id: RenderObjectId,
+    ) -> Option<&mut dyn View> {
+        self.render_views.get_mut(render_object_id)
     }
 }
 

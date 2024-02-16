@@ -4,7 +4,7 @@ use std::{
 };
 
 use agui_core::{
-    engine::rendering::view::View,
+    engine::rendering::{strategies::RenderingTreeTextLayoutStrategy, view::View},
     render::{canvas::Canvas, RenderObjectId},
     unit::{Offset, Size},
     util::ptr_eq::PtrEqual,
@@ -12,10 +12,11 @@ use agui_core::{
 use agui_renderer::FrameNotifier;
 use parking_lot::{Mutex, RwLock};
 
-use crate::render::VelloScene;
+use crate::{render::VelloScene, renderer::fonts::VelloFonts};
 
-#[derive(Default)]
 pub struct VelloView {
+    text_layout: Box<dyn RenderingTreeTextLayoutStrategy + Send>,
+
     scene: Arc<RwLock<VelloScene>>,
 
     changes: Vec<Change>,
@@ -37,8 +38,16 @@ impl VelloViewHandle {
 }
 
 impl VelloView {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(fonts: Arc<Mutex<VelloFonts>>) -> Self {
+        Self {
+            text_layout: Box::new(VelloTextLayout { fonts }),
+
+            scene: Arc::default(),
+
+            changes: Vec::default(),
+
+            frame_notifier: Arc::default(),
+        }
     }
 
     pub fn is_same_view(&self, other: &Self) -> bool {
@@ -48,16 +57,6 @@ impl VelloView {
     pub(crate) fn handle(&self) -> VelloViewHandle {
         VelloViewHandle {
             scene: Arc::clone(&self.scene),
-
-            frame_notifier: Arc::clone(&self.frame_notifier),
-        }
-    }
-
-    pub(crate) fn clone(&self) -> VelloView {
-        VelloView {
-            scene: Arc::clone(&self.scene),
-
-            changes: Vec::new(),
 
             frame_notifier: Arc::clone(&self.frame_notifier),
         }
@@ -76,6 +75,14 @@ impl VelloViewHandle {
 }
 
 impl View for VelloView {
+    fn text_layout(&self) -> &dyn RenderingTreeTextLayoutStrategy {
+        self.text_layout.as_ref()
+    }
+
+    fn text_layout_mut(&mut self) -> &mut dyn RenderingTreeTextLayoutStrategy {
+        self.text_layout.as_mut()
+    }
+
     fn on_attach(
         &mut self,
         parent_render_object_id: Option<RenderObjectId>,
@@ -224,6 +231,32 @@ enum Change {
         render_object_id: RenderObjectId,
         canvas: Canvas,
     },
+}
+
+#[derive(Clone)]
+struct VelloTextLayout {
+    fonts: Arc<Mutex<VelloFonts>>,
+}
+
+impl RenderingTreeTextLayoutStrategy for VelloTextLayout {
+    fn compute_intrinsic_size(
+        &self,
+        font_style: &agui_core::unit::TextStyle,
+        text: &str,
+        dimension: agui_core::unit::IntrinsicDimension,
+        cross_axis: f32,
+    ) -> f32 {
+        0.0
+    }
+
+    fn compute_size(
+        &mut self,
+        font_style: &agui_core::unit::TextStyle,
+        text: &str,
+        constraints: agui_core::unit::Constraints,
+    ) -> Size {
+        Size::ZERO
+    }
 }
 
 #[derive(Debug)]

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use agui_vello::create_view::CreateVelloView;
 use sysinfo::{System, SystemExt};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
@@ -8,10 +9,7 @@ use agui::{
     app::run_app,
     prelude::*,
     task::{context::ContextSpawnElementTask, TaskHandle},
-    vello::{
-        binding::VelloViewBinding,
-        renderer::{window::VelloWindowRenderer, VelloRenderer},
-    },
+    vello::renderer::{window::VelloWindowRenderer, VelloRenderer},
     winit::{WinitWindow, WinitWindowAttributes},
 };
 
@@ -31,19 +29,17 @@ fn main() {
     run_app(move || {
         let vello_renderer = VelloRenderer::default();
 
-        let (view, view_handle) = vello_renderer.new_view();
-
         build! {
-            <WinitWindow> {
-                attributes: WinitWindowAttributes::builder()
-                    .title("agui hello world")
-                    .inner_size(Size::new(800.0, 600.0))
-                    .build(),
+            <CreateVelloView> {
+                renderer: vello_renderer,
 
-                renderer: VelloWindowRenderer::new(view_handle),
+                builder: |view_handle| <WinitWindow> {
+                    attributes: WinitWindowAttributes::builder()
+                        .title("agui hello world")
+                        .inner_size(Size::new(800.0, 600.0))
+                        .build(),
 
-                child: <VelloViewBinding> {
-                    view: view,
+                    renderer: VelloWindowRenderer::new(view_handle),
 
                     child: <ExampleMain>::default()
                 }

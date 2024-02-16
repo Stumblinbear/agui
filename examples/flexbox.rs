@@ -1,13 +1,11 @@
+use agui_vello::create_view::CreateVelloView;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
     app::run_app,
     prelude::*,
-    vello::{
-        binding::VelloViewBinding,
-        renderer::{window::VelloWindowRenderer, VelloRenderer},
-    },
+    vello::renderer::{window::VelloWindowRenderer, VelloRenderer},
     winit::{WinitWindow, WinitWindowAttributes},
 };
 
@@ -27,18 +25,16 @@ fn main() {
     run_app(move || {
         let vello_renderer = VelloRenderer::default();
 
-        let (view, view_handle) = vello_renderer.new_view();
-
         build! {
-            <WinitWindow> {
-                attributes: WinitWindowAttributes::builder()
-                    .title("agui flexbox")
-                    .build(),
+            <CreateVelloView> {
+                renderer: vello_renderer,
 
-                renderer: VelloWindowRenderer::new(view_handle),
+                builder: |view_handle| <WinitWindow> {
+                    attributes: WinitWindowAttributes::builder()
+                        .title("agui flexbox")
+                        .build(),
 
-                child: <VelloViewBinding> {
-                    view: view,
+                    renderer: VelloWindowRenderer::new(view_handle),
 
                     child: <Column> {
                         main_axis_size: MainAxisSize::Min,

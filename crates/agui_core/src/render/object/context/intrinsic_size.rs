@@ -1,6 +1,6 @@
 use crate::{
     element::ContextRenderObject,
-    engine::rendering::RenderingTree,
+    engine::rendering::{strategies::RenderingTreeTextLayoutStrategy, RenderingTree},
     render::{object::context::IterChildrenLayout, RenderObjectId},
 };
 
@@ -35,5 +35,9 @@ impl<'ctx> RenderObjectIntrinsicSizeContext<'ctx> {
 
             children: self.children,
         }
+    }
+
+    pub fn text_layout(&self) -> Option<&dyn RenderingTreeTextLayoutStrategy> {
+        Some(self.tree.get_view(*self.render_object_id)?.text_layout())
     }
 }

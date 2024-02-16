@@ -8,8 +8,6 @@ use vello::{
 pub struct VelloFonts {
     glyph_context: GlyphContext,
     fonts: FxHashMap<Font, FontRef<'static>>,
-
-    default_font: Option<Font>,
 }
 
 impl Default for VelloFonts {
@@ -17,8 +15,6 @@ impl Default for VelloFonts {
         Self {
             glyph_context: GlyphContext::new(),
             fonts: FxHashMap::default(),
-
-            default_font: None,
         }
     }
 }
@@ -58,17 +54,5 @@ impl VelloFonts {
 
     pub fn get(&self, font: Font) -> Option<FontRef<'static>> {
         self.fonts.get(&font).cloned()
-    }
-
-    pub fn get_default(&self) -> Option<FontRef<'static>> {
-        self.default_font.and_then(|font| self.get(font))
-    }
-
-    pub fn get_or_default(&self, font: Option<Font>) -> Option<FontRef<'static>> {
-        if let Some(font) = font {
-            self.get(font).or_else(|| self.get_default())
-        } else {
-            self.get_default()
-        }
     }
 }

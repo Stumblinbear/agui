@@ -1,6 +1,9 @@
 use crate::{
     element::ContextRenderObject,
-    engine::rendering::{strategies::RenderingTreeLayoutStrategy, RenderingTree},
+    engine::rendering::{
+        strategies::{RenderingTreeLayoutStrategy, RenderingTreeTextLayoutStrategy},
+        RenderingTree,
+    },
     render::RenderObjectId,
 };
 
@@ -57,11 +60,11 @@ impl RenderObjectLayoutContext<'_> {
         IterChildrenLayoutMut {
             strategy: self.strategy,
 
+            tree: self.tree,
+
             index: 0,
 
             relayout_boundary_id: self.relayout_boundary_id,
-
-            tree: self.tree,
 
             children: self.children,
         }
@@ -73,5 +76,13 @@ impl RenderObjectLayoutContext<'_> {
 
     pub fn relayout_boundary_id(&self) -> Option<RenderObjectId> {
         *self.relayout_boundary_id
+    }
+
+    pub fn text_layout(&mut self) -> Option<&mut dyn RenderingTreeTextLayoutStrategy> {
+        Some(
+            self.tree
+                .get_view_mut(*self.render_object_id)?
+                .text_layout_mut(),
+        )
     }
 }

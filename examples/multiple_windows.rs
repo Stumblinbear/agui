@@ -1,13 +1,11 @@
+use agui_vello::create_view::CreateVelloView;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
     app::run_app,
     prelude::*,
-    vello::{
-        binding::VelloViewBinding,
-        renderer::{window::VelloWindowRenderer, VelloRenderer},
-    },
+    vello::renderer::{window::VelloWindowRenderer, VelloRenderer},
     winit::{WinitWindow, WinitWindowAttributes},
 };
 
@@ -27,22 +25,19 @@ fn main() {
     run_app(move || {
         let vello_renderer = VelloRenderer::default();
 
-        let (view1, view1_handle) = vello_renderer.new_view();
-        let (view2, view2_handle) = vello_renderer.new_view();
-
         build! {
             <Stack> {
                 children: [
-                    <WinitWindow> {
-                        attributes: WinitWindowAttributes::builder()
-                            .title("agui window 1")
-                            .inner_size(Size::new(800.0, 600.0))
-                            .build(),
+                    <CreateVelloView> {
+                        renderer: vello_renderer.clone(),
 
-                        renderer: VelloWindowRenderer::new(view1_handle),
+                        builder: |view_handle| <WinitWindow> {
+                            attributes: WinitWindowAttributes::builder()
+                                .title("agui window 1")
+                                .inner_size(Size::new(800.0, 600.0))
+                                .build(),
 
-                        child: <VelloViewBinding> {
-                            view: view1,
+                            renderer: VelloWindowRenderer::new(view_handle),
 
                             child: <Text> {
                                 style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
@@ -51,18 +46,18 @@ fn main() {
                         }
                     },
 
-                    <WinitWindow> {
-                        exit_on_close: false,
+                    <CreateVelloView> {
+                        renderer: vello_renderer,
 
-                        attributes: WinitWindowAttributes::builder()
-                            .title("agui window 2")
-                            .inner_size(Size::new(400.0, 300.0))
-                            .build(),
+                        builder: |view_handle| <WinitWindow> {
+                            exit_on_close: false,
 
-                        renderer: VelloWindowRenderer::new(view2_handle),
+                            attributes: WinitWindowAttributes::builder()
+                                .title("agui window 2")
+                                .inner_size(Size::new(400.0, 300.0))
+                                .build(),
 
-                        child: <VelloViewBinding> {
-                            view: view2,
+                            renderer: VelloWindowRenderer::new(view_handle),
 
                             child: <Text> {
                                 style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),

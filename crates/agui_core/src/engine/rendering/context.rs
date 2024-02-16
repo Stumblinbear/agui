@@ -6,6 +6,7 @@ use crate::{
 pub struct RenderingSpawnContext<'ctx> {
     pub scheduler: RenderingScheduler<'ctx>,
 
+    pub parent_render_object_id: &'ctx Option<RenderObjectId>,
     pub render_object_id: &'ctx RenderObjectId,
 }
 

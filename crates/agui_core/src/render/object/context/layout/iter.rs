@@ -216,11 +216,11 @@ impl ChildLayoutMut<'_> {
             .with(render_object_id, |tree, render_object| {
                 let offset = offset.into();
 
-                // is it worth even checking if this is equal there, or should
-                // it just be set unconditionally and checked later?
                 if render_object.offset() == offset {
                     return;
                 }
+
+                render_object.set_offset(offset);
 
                 self.strategy.on_offset_changed(
                     RenderingLayoutContext {

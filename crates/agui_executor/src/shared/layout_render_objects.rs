@@ -96,6 +96,9 @@ where
                     .expect("failed to cleanup element tree");
 
                 for element_id in spawned_elements {
+                    let parent_element_id =
+                        self.element_tree.as_ref().get_parent(element_id).copied();
+
                     ctx.tree.create(
                         &mut DeferredCreateRenderObjects {
                             scheduler: self.scheduler,
@@ -105,7 +108,7 @@ where
 
                             needs_paint: self.needs_paint,
                         },
-                        self.element_tree.as_ref().get_parent(element_id).copied(),
+                        parent_element_id,
                         element_id,
                     );
 

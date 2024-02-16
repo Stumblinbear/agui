@@ -1,13 +1,11 @@
+use agui_vello::create_view::CreateVelloView;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use agui::{
     app::run_app,
     prelude::*,
-    vello::{
-        binding::VelloViewBinding,
-        renderer::{window::VelloWindowRenderer, VelloRenderer},
-    },
+    vello::renderer::{window::VelloWindowRenderer, VelloRenderer},
     winit::{WinitWindow, WinitWindowAttributes},
 };
 
@@ -27,20 +25,18 @@ fn main() {
     run_app(move || {
         let vello_renderer = VelloRenderer::default();
 
-        let (view, view_handle) = vello_renderer.new_view();
-
         build! {
-            <WinitWindow> {
-                attributes: WinitWindowAttributes::builder()
-                    .title("Responsive widgets")
-                    .build(),
+            <CreateVelloView> {
+                renderer: vello_renderer,
 
-                renderer: VelloWindowRenderer::new(view_handle),
+                builder: |view_handle| <WinitWindow> {
+                    attributes: WinitWindowAttributes::builder()
+                        .title("Responsive widgets")
+                        .build(),
 
-                child: <VelloViewBinding> {
-                    view: view,
+                    renderer: VelloWindowRenderer::new(view_handle),
 
-                    child: <LayoutBuilder> {
+                    child:  <LayoutBuilder> {
                         resolver: |constraints| constraints.min_width() > 500.0,
                         builder: |is_larger| {
                             if *is_larger {

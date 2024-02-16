@@ -5,6 +5,7 @@ use crate::{
         view::View,
     },
     render::{object::RenderObject, RenderObjectId},
+    unit::{Constraints, IntrinsicDimension, Size, TextStyle},
 };
 
 pub trait RenderingTreeCreateStrategy {
@@ -46,4 +47,21 @@ pub trait RenderingTreeLayoutStrategy {
 
     #[allow(unused_variables)]
     fn on_laid_out(&mut self, ctx: RenderingLayoutContext, render_object: &RenderObject) {}
+}
+
+pub trait RenderingTreeTextLayoutStrategy {
+    fn compute_intrinsic_size(
+        &self,
+        font_style: &TextStyle,
+        text: &str,
+        dimension: IntrinsicDimension,
+        cross_axis: f32,
+    ) -> f32;
+
+    fn compute_size(
+        &mut self,
+        font_style: &TextStyle,
+        text: &str,
+        constraints: Constraints,
+    ) -> Size;
 }

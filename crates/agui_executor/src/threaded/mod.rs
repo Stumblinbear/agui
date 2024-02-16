@@ -215,17 +215,19 @@ impl ThreadedEngineExecutor {
         let mut sync_tree = SyncRenderingTree::default();
 
         for element_id in spawned_elements {
+            let parent_element_id = self.element_tree.as_ref().get_parent(element_id).copied();
+
             rendering_tree.create(
                 &mut ImmediatelyCreateRenderObjects {
                     scheduler: &mut self.rendering_scheduler,
 
-                    element_tree: &self.element_tree,
+                    element_tree: &mut self.element_tree,
                     new_deferred_elements: &mut sync_tree.new_deferred_elements,
 
                     needs_layout: &mut sync_tree.needs_layout,
                     needs_paint: &mut sync_tree.needs_paint,
                 },
-                self.element_tree.as_ref().get_parent(element_id).copied(),
+                parent_element_id,
                 element_id,
             );
         }
@@ -309,16 +311,18 @@ impl ThreadedEngineExecutor {
             .expect("failed to cleanup element tree");
 
         for element_id in spawned_elements {
+            let parent_element_id = self.element_tree.as_ref().get_parent(element_id).copied();
+
             rendering_tree.create(
                 &mut DeferredCreateRenderObjects {
                     scheduler: &mut self.rendering_scheduler,
 
-                    element_tree: &self.element_tree,
+                    element_tree: &mut self.element_tree,
                     deferred_elements: &mut deferred_elements,
 
                     needs_paint: &mut needs_paint,
                 },
-                self.element_tree.as_ref().get_parent(element_id).copied(),
+                parent_element_id,
                 element_id,
             );
 
@@ -506,17 +510,19 @@ impl EngineExecutor for ThreadedEngineExecutor {
             let mut sync_tree = SyncRenderingTree::default();
 
             for element_id in spawned_elements {
+                let parent_element_id = self.element_tree.as_ref().get_parent(element_id).copied();
+
                 rendering_tree.create(
                     &mut ImmediatelyCreateRenderObjects {
                         scheduler: &mut self.rendering_scheduler,
 
-                        element_tree: &self.element_tree,
+                        element_tree: &mut self.element_tree,
                         new_deferred_elements: &mut sync_tree.new_deferred_elements,
 
                         needs_layout: &mut sync_tree.needs_layout,
                         needs_paint: &mut sync_tree.needs_paint,
                     },
-                    self.element_tree.as_ref().get_parent(element_id).copied(),
+                    parent_element_id,
                     element_id,
                 );
 

@@ -19,7 +19,7 @@ use slotmap::SparseSecondaryMap;
 pub struct DeferredCreateRenderObjects<'create, Sched> {
     pub scheduler: &'create mut Sched,
 
-    pub element_tree: &'create ElementTree,
+    pub element_tree: &'create mut ElementTree,
     pub deferred_elements: &'create mut SparseSecondaryMap<
         RenderObjectId,
         (ElementId, Box<dyn DeferredResolver>),
@@ -73,8 +73,7 @@ where
     fn create_view(&mut self, element_id: ElementId) -> Option<Box<dyn View + Send>> {
         if let Element::View(view) = self
             .element_tree
-            .as_ref()
-            .get(element_id)
+            .get_mut(element_id)
             .expect("element missing while creating view")
         {
             Some(view.create_view())

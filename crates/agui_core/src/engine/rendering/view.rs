@@ -1,9 +1,14 @@
 use crate::{
+    engine::rendering::strategies::RenderingTreeTextLayoutStrategy,
     render::{canvas::Canvas, RenderObjectId},
     unit::{Offset, Size},
 };
 
 pub trait View {
+    fn text_layout(&self) -> &dyn RenderingTreeTextLayoutStrategy;
+
+    fn text_layout_mut(&mut self) -> &mut dyn RenderingTreeTextLayoutStrategy;
+
     /// Called when a new render object is attached (or moved) within this element's
     /// view.
     fn on_attach(

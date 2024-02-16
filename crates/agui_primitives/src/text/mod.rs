@@ -10,7 +10,6 @@ use agui_macros::RenderObjectWidget;
 
 pub mod edit;
 pub mod fonts;
-pub mod layout_controller;
 pub mod query;
 mod render_paragraph;
 

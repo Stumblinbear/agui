@@ -512,9 +512,3 @@ impl RemAssign<Constraints> for Constraints {
         self.max_height %= other.max_height;
     }
 }
-
-impl From<Size> for Constraints {
-    fn from(size: Size) -> Self {
-        Constraints::tight(size)
-    }
-}
