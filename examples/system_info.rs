@@ -13,6 +13,8 @@ use agui::{
     winit::{WinitWindow, WinitWindowAttributes},
 };
 
+const DEJA_VU_FONT: &[u8] = include_bytes!("./fonts/DejaVuSans.ttf");
+
 fn main() {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
@@ -152,7 +154,16 @@ impl WidgetState for ExampleMainState {
                         children: lines
                             .into_iter()
                             .map(|entry| <Text> {
-                                style: TextStyle::default().color(Color::from_rgb((0.0, 0.0, 0.0))),
+                                style: TextStyle {
+                                    font: Font::from_bytes(DEJA_VU_FONT.to_vec()),
+
+                                    size: 16.0,
+                                    color: Color::from_rgb((0.0, 0.0, 0.0)),
+
+                                    h_align: HorizontalAlign::default(),
+                                    v_align: VerticalAlign::default(),
+                                },
+
                                 text: entry.into(),
                             })
                             .collect::<Vec<_>>()

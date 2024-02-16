@@ -6,15 +6,17 @@ use std::{
 use agui_core::{
     engine::rendering::{strategies::RenderingTreeTextLayoutStrategy, view::View},
     render::{canvas::Canvas, RenderObjectId},
-    unit::{Offset, Size},
+    unit::{Constraints, IntrinsicDimension, Offset, Size, TextStyle},
     util::ptr_eq::PtrEqual,
 };
 use agui_renderer::FrameNotifier;
 use parking_lot::{Mutex, RwLock};
+use vello::glyph::skrifa::MetadataProvider;
 
 use crate::{render::VelloScene, renderer::fonts::VelloFonts};
 
 pub struct VelloView {
+    fonts: Arc<Mutex<VelloFonts>>,
     text_layout: Box<dyn RenderingTreeTextLayoutStrategy + Send>,
 
     scene: Arc<RwLock<VelloScene>>,
@@ -38,8 +40,10 @@ impl VelloViewHandle {
 }
 
 impl VelloView {
-    pub fn new(fonts: Arc<Mutex<VelloFonts>>) -> Self {
+    pub(crate) fn new(fonts: Arc<Mutex<VelloFonts>>) -> Self {
         Self {
+            fonts: Arc::clone(&fonts),
+
             text_layout: Box::new(VelloTextLayout { fonts }),
 
             scene: Arc::default(),
@@ -152,6 +156,8 @@ impl View for VelloView {
 
         let lock_scene_end = Instant::now();
 
+        let mut fonts = self.fonts.lock();
+
         for change in self.changes.drain(..) {
             match change {
                 Change::Attach {
@@ -174,7 +180,7 @@ impl View for VelloView {
                 Change::Paint {
                     render_object_id,
                     canvas,
-                } => scene.paint(render_object_id, canvas),
+                } => scene.paint(&mut fonts, render_object_id, canvas),
             }
         }
 
@@ -241,21 +247,125 @@ struct VelloTextLayout {
 impl RenderingTreeTextLayoutStrategy for VelloTextLayout {
     fn compute_intrinsic_size(
         &self,
-        font_style: &agui_core::unit::TextStyle,
+        text_style: &TextStyle,
         text: &str,
-        dimension: agui_core::unit::IntrinsicDimension,
+        dimension: IntrinsicDimension,
         cross_axis: f32,
     ) -> f32 {
-        0.0
+        let mut fonts = self.fonts.lock();
+
+        let font = fonts.get_or_insert(text_style.font.clone());
+        let font_ref = VelloFonts::to_font_ref(font).expect("failed to get font ref");
+
+        let axes = font_ref.axes();
+        let font_size = vello::skrifa::instance::Size::new(text_style.size);
+        let var_loc = axes.location(&[] as &[(&str, f32)]);
+        let charmap = font_ref.charmap();
+        let metrics = font_ref.metrics(font_size, &var_loc);
+        let line_height = metrics.ascent - metrics.descent + metrics.leading;
+        let glyph_metrics = font_ref.glyph_metrics(font_size, &var_loc);
+
+        let mut pen_x = 0f32;
+        let mut pen_y = 0f32;
+
+        match dimension {
+            IntrinsicDimension::MinWidth => {
+                todo!("minimum text intrinsic width is not yet not implemented");
+            }
+
+            // The maximum intrinsic width is the width of the widest line without wrapping
+            IntrinsicDimension::MaxWidth => {
+                for ch in text.chars() {
+                    if ch == '\n' {
+                        pen_y += line_height;
+                        pen_x = 0.0;
+                        continue;
+                    }
+
+                    let gid = charmap.map(ch).unwrap_or_default();
+                    let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+
+                    pen_x += advance;
+                }
+
+                pen_x
+            }
+
+            // The height of the text necessary to fit within the given width (`cross_axis`)
+            IntrinsicDimension::MinHeight | IntrinsicDimension::MaxHeight => {
+                for ch in text.chars() {
+                    if ch == '\n' {
+                        pen_y += line_height;
+                        pen_x = 0.0;
+                        continue;
+                    }
+
+                    let gid = charmap.map(ch).unwrap_or_default();
+                    let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+
+                    // Naive wrapping (doesn't account for word boundaries)
+                    if pen_x + advance > cross_axis {
+                        pen_y += line_height;
+                        pen_x = 0.0;
+                    }
+
+                    pen_x += advance;
+                }
+
+                pen_y + line_height
+            }
+        }
     }
 
     fn compute_size(
         &mut self,
-        font_style: &agui_core::unit::TextStyle,
+        text_style: &TextStyle,
         text: &str,
-        constraints: agui_core::unit::Constraints,
+        constraints: Constraints,
     ) -> Size {
-        Size::ZERO
+        if text.is_empty() {
+            return Size::ZERO;
+        }
+
+        let mut fonts = self.fonts.lock();
+
+        let font = fonts.get_or_insert(text_style.font.clone());
+        let font_ref = VelloFonts::to_font_ref(font).expect("failed to get font ref");
+
+        let axes = font_ref.axes();
+        let font_size = vello::skrifa::instance::Size::new(text_style.size);
+        let var_loc = axes.location(&[] as &[(&str, f32)]);
+        let charmap = font_ref.charmap();
+        let metrics = font_ref.metrics(font_size, &var_loc);
+        let line_height = metrics.ascent - metrics.descent + metrics.leading;
+        let glyph_metrics = font_ref.glyph_metrics(font_size, &var_loc);
+
+        let mut pen_x = 0f32;
+
+        let mut size = Size::new(0.0, line_height);
+
+        for ch in text.chars() {
+            if ch == '\n' {
+                size.height += line_height;
+                pen_x = 0.0;
+                continue;
+            }
+
+            let gid = charmap.map(ch).unwrap_or_default();
+            let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+
+            // Naive wrapping (doesn't account for word boundaries)
+            if pen_x + advance > constraints.max_width() {
+                size.height += line_height;
+                pen_x = 0.0;
+            }
+
+            pen_x += advance;
+
+            size.width = size.width.max(pen_x);
+        }
+
+        size
     }
 }
 

@@ -1,13 +1,18 @@
-use agui_core::unit::Font;
+use std::sync::Arc;
+
+use agui_core::unit::{Font, FontData};
 use rustc_hash::FxHashMap;
 use vello::{
-    fello::{raw::FontRef, FontKey, Setting},
-    glyph::{GlyphContext, GlyphProvider},
+    glyph::{
+        skrifa::{setting::Setting, FontRef},
+        GlyphContext, GlyphProvider,
+    },
+    peniko::{self, Blob},
 };
 
 pub struct VelloFonts {
     glyph_context: GlyphContext,
-    fonts: FxHashMap<Font, FontRef<'static>>,
+    fonts: FxHashMap<Font, peniko::Font>,
 }
 
 impl Default for VelloFonts {
@@ -27,7 +32,6 @@ impl VelloFonts {
     pub fn new_provider<'a, V>(
         &'a mut self,
         font: &FontRef<'a>,
-        font_id: Option<FontKey>,
         ppem: f32,
         hint: bool,
         variations: V,
@@ -37,22 +41,33 @@ impl VelloFonts {
         V::Item: Into<Setting<f32>>,
     {
         self.glyph_context
-            .new_provider(font, font_id, ppem, hint, variations)
+            .new_provider(font, ppem, hint, variations)
     }
 
-    // pub fn add_font(&mut self, font: FontRef<'static>) -> Font {
-    //     let font_id = Font::by_id(self.fonts.len());
+    pub fn get(&self, font: &Font) -> Option<&peniko::Font> {
+        self.fonts.get(font)
+    }
 
-    //     self.fonts.insert(font_id, font);
+    pub fn get_or_insert(&mut self, font: Font) -> &peniko::Font {
+        self.fonts
+            .entry(font)
+            .or_insert_with_key(|font| match font.as_ref() {
+                FontData::Bytes(bytes) => {
+                    peniko::Font::new(Blob::new(Arc::clone(bytes) as Arc<_>), 0)
+                }
 
-    //     if self.default_font.is_none() {
-    //         self.default_font = Some(font_id);
-    //     }
+                _ => todo!("font data not supported"),
+            })
+    }
 
-    //     font_id
-    // }
+    pub fn to_font_ref(font: &peniko::Font) -> Option<FontRef<'_>> {
+        use vello::skrifa::raw::FileRef;
 
-    pub fn get(&self, font: Font) -> Option<FontRef<'static>> {
-        self.fonts.get(&font).cloned()
+        let file_ref = FileRef::new(font.data.as_ref()).ok()?;
+
+        match file_ref {
+            FileRef::Font(font) => Some(font),
+            FileRef::Collection(collection) => collection.get(font.index).ok(),
+        }
     }
 }

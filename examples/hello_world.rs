@@ -9,6 +9,8 @@ use agui::{
     winit::{WinitWindow, WinitWindowAttributes},
 };
 
+const DEJA_VU_FONT: &[u8] = include_bytes!("./fonts/DejaVuSans.ttf");
+
 fn main() {
     let filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::ERROR.into())
@@ -37,7 +39,16 @@ fn main() {
                     renderer: VelloWindowRenderer::new(view_handle),
 
                     child: <Text> {
-                        style: TextStyle::default().color(Color::from_rgb((1.0, 1.0, 1.0))),
+                        style: TextStyle {
+                            font: Font::from_bytes(DEJA_VU_FONT.to_vec()),
+
+                            size: 16.0,
+                            color: Color::from_rgb((1.0, 1.0, 1.0)),
+
+                            h_align: HorizontalAlign::default(),
+                            v_align: VerticalAlign::default(),
+                        },
+
                         text: "Hello, world!".into(),
                     }
                 }

@@ -67,6 +67,7 @@ mod tests {
     use agui_core::{
         engine::elements::{strategies::mocks::MockInflateElements, ElementTree},
         query::by_widget::ExactWidgetIterator,
+        unit::{Color, Font, HorizontalAlign, TextStyle, VerticalAlign},
     };
     use agui_macros::build;
 
@@ -85,9 +86,29 @@ mod tests {
                 <Column> {
                     children: [
                         <Text> {
+                            style: TextStyle {
+                                font: Font::from_family("Arial"),
+
+                                size: 16.0,
+                                color: Color::from_rgb((0.0, 0.0, 0.0)),
+
+                                h_align: HorizontalAlign::default(),
+                                v_align: VerticalAlign::default(),
+                            },
+
                             text: "foo".into(),
                         }.into(),
                         <Text> {
+                            style: TextStyle {
+                                font: Font::from_family("Arial"),
+
+                                size: 16.0,
+                                color: Color::from_rgb((0.0, 0.0, 0.0)),
+
+                                h_align: HorizontalAlign::default(),
+                                v_align: VerticalAlign::default(),
+                            },
+
                             text: "bar".into(),
                         }.into(),
                     ],

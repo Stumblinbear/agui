@@ -26,7 +26,6 @@ pub enum TextBaseline {
 
 #[derive(RenderObjectWidget, Debug)]
 pub struct Text {
-    #[prop(default)]
     pub style: TextStyle,
 
     pub text: Cow<'static, str>,

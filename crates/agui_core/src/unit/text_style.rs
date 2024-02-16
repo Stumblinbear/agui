@@ -2,7 +2,7 @@ use super::{Color, Font};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
-    pub font: Option<Font>,
+    pub font: Font,
 
     pub size: f32,
     pub color: Color,
@@ -11,32 +11,9 @@ pub struct TextStyle {
     pub v_align: VerticalAlign,
 }
 
-impl Default for TextStyle {
-    fn default() -> Self {
-        Self {
-            font: None,
-
-            size: 16.0,
-            color: Color {
-                red: 0.0,
-                green: 0.0,
-                blue: 0.0,
-                alpha: 1.0,
-            },
-
-            h_align: HorizontalAlign::Left,
-            v_align: VerticalAlign::Top,
-        }
-    }
-}
-
 impl TextStyle {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn font(mut self, font: Font) -> Self {
-        self.font = Some(font);
+        self.font = font;
         self
     }
 
@@ -63,14 +40,14 @@ impl TextStyle {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HorizontalAlign {
-    Left,
+    Start,
     Center,
-    Right,
+    End,
 }
 
 impl Default for HorizontalAlign {
     fn default() -> Self {
-        Self::Left
+        Self::Start
     }
 }
 

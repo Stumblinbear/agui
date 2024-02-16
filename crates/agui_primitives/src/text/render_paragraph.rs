@@ -23,6 +23,7 @@ impl RenderParagraph {
 
         self.style = style;
         ctx.mark_needs_layout();
+        ctx.mark_needs_paint();
     }
 
     pub fn update_text(&mut self, ctx: &mut RenderObjectUpdateContext, text: Cow<'static, str>) {
@@ -32,6 +33,7 @@ impl RenderParagraph {
 
         self.text = text;
         ctx.mark_needs_layout();
+        ctx.mark_needs_paint();
     }
 }
 
@@ -48,17 +50,19 @@ impl RenderObjectImpl for RenderParagraph {
     }
 
     fn layout(&self, ctx: &mut RenderObjectLayoutContext, constraints: Constraints) -> Size {
-        let size = if let Some(text_layout) = ctx.text_layout() {
+        assert_eq!(
+            ctx.child_count(),
+            0,
+            "RenderParagraph should have no children"
+        );
+
+        if let Some(text_layout) = ctx.text_layout() {
             text_layout.compute_size(&self.style, &self.text, constraints)
         } else {
+            tracing::warn!("No text layout delegate available");
+
             constraints.smallest()
-        };
-
-        if let Some(mut child) = ctx.iter_children_mut().next() {
-            child.layout(Constraints::tight(size));
         }
-
-        constraints.smallest()
     }
 
     fn does_paint(&self) -> bool {

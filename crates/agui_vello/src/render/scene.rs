@@ -5,10 +5,10 @@ use agui_core::{
 };
 use vello::{
     kurbo::{Affine, Vec2},
-    Scene, SceneBuilder,
+    Scene,
 };
 
-use crate::render::VelloRenderObject;
+use crate::{render::VelloRenderObject, renderer::fonts::VelloFonts};
 
 pub(crate) struct VelloScene {
     tree: Tree<RenderObjectId, VelloRenderObject, SparseSecondaryMapStorage>,
@@ -83,13 +83,18 @@ impl VelloScene {
         self.needs_redraw = true;
     }
 
-    pub fn paint(&mut self, render_object_id: RenderObjectId, canvas: Canvas) {
+    pub fn paint(
+        &mut self,
+        fonts: &mut VelloFonts,
+        render_object_id: RenderObjectId,
+        canvas: Canvas,
+    ) {
         let object = self
             .tree
             .get_mut(render_object_id)
             .expect("received canvas for a removed object");
 
-        object.canvas.update(canvas);
+        object.canvas.update(fonts, canvas);
 
         // TODO: check if the canvas actually changed
         self.needs_redraw = true;
@@ -103,7 +108,7 @@ impl VelloScene {
 
         self.needs_redraw = false;
 
-        let mut builder = SceneBuilder::for_scene(&mut self.scene);
+        self.scene.reset();
 
         let mut object_stack = Vec::<(usize, RenderObjectId, Affine)>::new();
 
@@ -119,7 +124,7 @@ impl VelloScene {
             {
                 let object = self.tree.get(object_id).unwrap();
 
-                object.canvas.end(*transform, &mut builder);
+                object.canvas.end(*transform, &mut self.scene);
 
                 object_stack.pop();
             }
@@ -134,7 +139,7 @@ impl VelloScene {
             let transform =
                 transform * Affine::translate(Vec2::new(offset.x as f64, offset.y as f64));
 
-            object.canvas.begin(transform, &mut builder);
+            object.canvas.begin(transform, &mut self.scene);
 
             object_stack.push((object_depth, object_id, transform));
         }
@@ -143,7 +148,7 @@ impl VelloScene {
         while let Some((_, object_id, transform)) = object_stack.pop() {
             let object = self.tree.get(object_id).unwrap();
 
-            object.canvas.end(transform, &mut builder);
+            object.canvas.end(transform, &mut self.scene);
         }
     }
 }

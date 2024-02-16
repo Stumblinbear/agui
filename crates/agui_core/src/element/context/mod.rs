@@ -35,8 +35,12 @@ pub trait ContextRenderObject {
 }
 
 pub trait ContextDirtyRenderObject {
+    /// Marks the render object as needing layout.
+    ///
+    /// This will cause a layout pass from its nearest ancestor layout boundary.
     fn mark_needs_layout(&mut self);
 
+    /// Marks the render object as needing paint.
     fn mark_needs_paint(&mut self);
 }
 

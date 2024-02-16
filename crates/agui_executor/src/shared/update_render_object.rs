@@ -59,7 +59,9 @@ where
 
         if needs_layout {
             self.needs_layout.insert(*ctx.render_object_id);
-        } else if needs_paint {
+        }
+
+        if needs_paint {
             self.needs_paint.insert(*ctx.render_object_id);
         }
     }

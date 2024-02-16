@@ -6,7 +6,7 @@ use lyon::{
 
 use crate::unit::Rect;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub enum Shape {
     #[default]
     Rect,
@@ -112,6 +112,39 @@ impl Shape {
             }
 
             Self::Path(path) => path.clone(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct DebugNonExhaustive;
+
+        impl std::fmt::Debug for DebugNonExhaustive {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("..")
+            }
+        }
+
+        match self {
+            Shape::Rect => f.write_str("Rect"),
+
+            Shape::RoundedRect {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => f
+                .debug_struct("RoundedRect")
+                .field("top_left", &top_left)
+                .field("top_right", &top_right)
+                .field("bottom_right", &bottom_right)
+                .field("bottom_left", &bottom_left)
+                .finish(),
+
+            Shape::Circle => f.write_str("Circle"),
+
+            Shape::Path(_) => f.debug_tuple("Path").field(&DebugNonExhaustive).finish(),
         }
     }
 }
