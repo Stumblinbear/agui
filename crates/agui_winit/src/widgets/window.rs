@@ -51,8 +51,6 @@ where
             close_event_task: None,
             resize_event_task: None,
 
-            did_set_initial_visibility: false,
-
             window_size_rx: None,
         }
     }
@@ -300,8 +298,6 @@ pub struct WinitWindowState<Renderer> {
     close_event_task: Option<TaskHandle<()>>,
     resize_event_task: Option<TaskHandle<()>>,
 
-    did_set_initial_visibility: bool,
-
     window_size_rx: Option<watch::Receiver<Size>>,
 }
 
@@ -462,12 +458,6 @@ where
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         if let Some(window) = &self.window {
-            if !self.did_set_initial_visibility {
-                self.did_set_initial_visibility = true;
-
-                window.set_visible(ctx.widget.attributes.visible.unwrap_or(true));
-            }
-
             build! {
                 <WinitWindowLayout> {
                     size_rx: self.window_size_rx.clone(),

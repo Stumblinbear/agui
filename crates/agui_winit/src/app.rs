@@ -1,4 +1,8 @@
-use std::{error::Error, future::Future, sync::Arc};
+use std::{
+    error::Error,
+    future::Future,
+    sync::{Arc, Weak},
+};
 
 use agui_renderer::{FrameNotifier, Renderer};
 use agui_sync::broadcast;
@@ -46,6 +50,8 @@ pub struct WinitApp {
 
     window_events: FxHashMap<WindowId, broadcast::UnboundedSender<WinitWindowEvent>>,
     window_renderer: FxHashMap<WindowId, Box<dyn Renderer>>,
+
+    window_visibility_pending: FxHashMap<WindowId, Weak<winit::window::Window>>,
 }
 
 impl Default for WinitApp {
@@ -55,6 +61,8 @@ impl Default for WinitApp {
 
             window_events: FxHashMap::default(),
             window_renderer: FxHashMap::default(),
+
+            window_visibility_pending: FxHashMap::default(),
         }
     }
 }
@@ -116,6 +124,13 @@ impl WinitApp {
                     | WinitEvent::UserEvent(WinitBindingAction::Render(window_id)) => {
                         if let Some(renderer) = self.window_renderer.get_mut(&window_id) {
                             renderer.render();
+
+                            if let Some(window) = self.window_visibility_pending.remove(&window_id)
+                            {
+                                if let Some(window) = window.upgrade() {
+                                    window.set_visible(true);
+                                }
+                            }
                         } else {
                             tracing::warn!("no renderer for window {:?}", window_id);
                         }
@@ -130,6 +145,8 @@ impl WinitApp {
 
                         tracing::trace!("creating window: {:?}", window_builder);
 
+                        let is_initially_visible = window_builder.window_attributes().visible;
+
                         let window = match window_builder.with_visible(false).build(window_target) {
                             Ok(window) => window,
                             Err(err) => return callback(Err(err.into())),
@@ -137,9 +154,16 @@ impl WinitApp {
 
                         let (events_tx, _) = broadcast::unbounded();
 
-                        let window = WindowHandle::new(Arc::new(window), events_tx.clone());
-
                         let window_id = window.id();
+
+                        let window = Arc::new(window);
+
+                        if is_initially_visible {
+                            self.window_visibility_pending
+                                .insert(window_id, Arc::downgrade(&window));
+                        }
+
+                        let window = WindowHandle::new(window, events_tx.clone());
 
                         self.window_events.insert(window_id, events_tx);
 
