@@ -36,7 +36,7 @@ fn main() {
 
                 builder: |view_handle| <WinitWindow> {
                     attributes: WinitWindowAttributes::builder()
-                        .title("agui hello world")
+                        .title("agui current window")
                         .inner_size(Size::new(800.0, 600.0))
                         .build(),
 
@@ -91,7 +91,7 @@ impl WidgetState for ExampleMainState {
 
     fn build(&mut self, ctx: &mut StatefulBuildContext<Self>) -> Widget {
         if let Some(current_window) = ctx.depend_on_inherited_widget::<CurrentWindow>() {
-            current_window.set_title(&format!("agui hello world - {}", self.update_count));
+            current_window.set_title(&format!("agui current window - {}", self.update_count));
         } else {
             tracing::error!("CurrentWindow not found in the widget tree");
         }

@@ -37,7 +37,7 @@ fn main() {
 
                 builder: |view_handle| <WinitWindow> {
                     attributes: WinitWindowAttributes::builder()
-                        .title("agui hello world")
+                        .title("agui system info")
                         .inner_size(Size::new(800.0, 600.0))
                         .build(),
 
