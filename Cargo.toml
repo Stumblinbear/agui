@@ -138,28 +138,28 @@ opt-level = 1
 
 [[example]]
 name = "clipping"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
 
 [[example]]
 name = "current_window"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
 
 [[example]]
 name = "flexbox"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
 
 [[example]]
 name = "hello_world"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
 
 [[example]]
 name = "multiple_windows"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
 
 [[example]]
 name = "responsive_widgets"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
 
 [[example]]
 name = "system_info"
-required-features = ["app", "winit-vello", "vello"]
+required-features = ["app", "winit-vello"]
