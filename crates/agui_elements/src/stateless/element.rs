@@ -6,7 +6,6 @@ use agui_core::{
         build::ElementBuild, lifecycle::ElementLifecycle, widget::ElementWidget,
         ElementBuildContext, ElementCallbackContext, ElementComparison,
     },
-    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 use rustc_hash::FxHashMap;
@@ -36,7 +35,7 @@ where
     W: AnyWidget + StatelessWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
-        if new_widget.is_exact_ptr(&self.widget) {
+        if new_widget == &self.widget {
             return ElementComparison::Identical;
         }
 

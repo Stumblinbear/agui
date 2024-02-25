@@ -7,7 +7,6 @@ use agui_core::{
     engine::rendering::{strategies::RenderingTreeTextLayoutStrategy, view::View},
     render::{canvas::Canvas, RenderObjectId},
     unit::{Constraints, IntrinsicDimension, Offset, Size, TextStyle},
-    util::ptr_eq::PtrEqual,
 };
 use agui_renderer::FrameNotifier;
 use parking_lot::{Mutex, RwLock};
@@ -52,10 +51,6 @@ impl VelloView {
 
             frame_notifier: Arc::default(),
         }
-    }
-
-    pub fn is_same_view(&self, other: &Self) -> bool {
-        self.scene.is_exact_ptr(&other.scene)
     }
 
     pub(crate) fn handle(&self) -> VelloViewHandle {

@@ -6,9 +6,7 @@ use std::{
 
 use rustc_hash::FxHashMap;
 
-use crate::{
-    element::Element, reactivity::strategies::WithReactiveKey, unit::Key, util::ptr_eq::PtrEqual,
-};
+use crate::{element::Element, reactivity::strategies::WithReactiveKey, unit::Key};
 
 mod traits;
 
@@ -73,13 +71,7 @@ impl PartialEq for Widget {
             return self.key == other.key;
         }
 
-        self.widget.is_exact_ptr(&other.widget)
-    }
-}
-
-impl PtrEqual for Widget {
-    fn is_exact_ptr(&self, other_widget: &Widget) -> bool {
-        self.widget.is_exact_ptr(&other_widget.widget)
+        Rc::ptr_eq(&self.widget, &other.widget)
     }
 }
 
@@ -95,18 +87,6 @@ where
     }
 }
 
-impl<T> PtrEqual<Rc<T>> for Widget
-where
-    T: AnyWidget,
-{
-    fn is_exact_ptr(&self, other_widget: &Rc<T>) -> bool {
-        std::ptr::eq(
-            Rc::as_ptr(&self.widget) as *const _ as *const (),
-            Rc::as_ptr(other_widget) as *const _ as *const (),
-        )
-    }
-}
-
 impl Eq for Widget {}
 
 impl Hash for Widget {
@@ -117,7 +97,6 @@ impl Hash for Widget {
             return;
         }
 
-        // more war crimes
         std::ptr::hash(Rc::as_ptr(&self.widget) as *const _ as *const (), state);
     }
 }
@@ -182,105 +161,5 @@ impl IntoWidget for WidgetFn {
 
             widgets.entry(self).or_insert_with(self).clone()
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{ptr, rc::Rc};
-
-    use crate::{
-        element::mock::render::MockRenderWidget,
-        util::ptr_eq::PtrEqual,
-        widget::{IntoWidget, Widget},
-    };
-
-    #[test]
-    fn strip_fat_ptr_equality() {
-        let widget1 = MockRenderWidget::dummy();
-        let widget2 = MockRenderWidget::dummy();
-
-        // These equality checks are theoretically unstable
-        #[allow(clippy::vtable_address_comparisons)]
-        {
-            assert!(
-                !Rc::ptr_eq(&widget1.widget, &widget2.widget),
-                "Rc::ptr_eq(widget1, widget2) should never be equal, but is theoretically unstable"
-            );
-
-            assert!(
-                Rc::ptr_eq(&widget1.widget, &widget1.widget),
-                "Rc::ptr_eq(widget1, &widget1) should always be equal, but is theoretically unstable"
-            );
-        }
-
-        // Black magic fuckery to remove the vtable from the pointer
-        assert!(
-            !ptr::eq(
-                Rc::as_ptr(&widget1.widget) as *const _ as *const (),
-                Rc::as_ptr(&widget2.widget) as *const _ as *const ()
-            ),
-            "ptr::eq(widget1, widget2) should never be equal"
-        );
-
-        assert!(
-            ptr::eq(
-                Rc::as_ptr(&widget1.widget) as *const _ as *const (),
-                Rc::as_ptr(&widget1.widget) as *const _ as *const ()
-            ),
-            "ptr::eq(widget1, widget2) should always be equal"
-        );
-
-        // Therefore, this should be stable
-        assert_ne!(
-            widget1, widget2,
-            "widget1 should should never be equal to widget2"
-        );
-
-        assert_eq!(
-            widget1, widget1,
-            "widget1 should should always be equal to itself"
-        );
-    }
-
-    #[test]
-    fn exact_ptr_widget_and_rc() {
-        let widget = MockRenderWidget::dummy();
-        let widget_rc = widget
-            .downcast::<MockRenderWidget>()
-            .expect("widget should be MockRenderWidget");
-
-        assert!(
-            widget.is_exact_ptr(&widget_rc),
-            "widget should be equal to widget_rc"
-        );
-    }
-
-    #[test]
-    fn widget_fn_usage() {
-        let test1 = IntoWidget::into_widget(widget_test as fn() -> Widget);
-        let test2 = IntoWidget::into_widget(widget_test as fn() -> Widget);
-
-        assert_eq!(
-            test1, test2,
-            "widgets derived from the same function should be equal"
-        );
-
-        // This assert isn't true! At higher levels of optimization, the compiler
-        // may combine the two functions into one, and therefore the widgets
-        // will be equal.
-        //
-        // let test3 = IntoWidget::into_widget(
-        //     (|| MockRenderWidget::dummy()) as fn() -> Widget,
-        // );
-        //
-        // assert_eq!(
-        //     test1, test3,
-        //     "widgets derived from different functions should not be equal"
-        // );
-    }
-
-    fn widget_test() -> Widget {
-        MockRenderWidget::dummy()
     }
 }

@@ -6,7 +6,6 @@ use agui_core::{
         ElementComparison, RenderObjectUpdateContext,
     },
     render::object::RenderObject,
-    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 
@@ -27,7 +26,7 @@ where
     W: AnyWidget + RenderObjectWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
-        if new_widget.is_exact_ptr(&self.widget) {
+        if new_widget == &self.widget {
             return ElementComparison::Identical;
         }
 

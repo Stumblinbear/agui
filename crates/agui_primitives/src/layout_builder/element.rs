@@ -3,7 +3,6 @@ use std::rc::Rc;
 use agui_core::{
     element::{deferred::ElementDeferred, lifecycle::ElementLifecycle, ElementComparison},
     unit::Constraints,
-    util::ptr_eq::PtrEqual,
     widget::Widget,
 };
 
@@ -37,7 +36,7 @@ where
     BuilderFn: Fn(&Param) -> Widget + 'static,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
-        if new_widget.is_exact_ptr(&self.widget) {
+        if new_widget == &self.widget {
             return ElementComparison::Identical;
         }
 

@@ -5,7 +5,6 @@ use agui_core::{
         inherited::ElementInherited, lifecycle::ElementLifecycle, widget::ElementWidget,
         ElementComparison,
     },
-    util::ptr_eq::PtrEqual,
     widget::{AnyWidget, Widget},
 };
 
@@ -35,7 +34,7 @@ where
     I: AnyWidget + InheritedWidget,
 {
     fn update(&mut self, new_widget: &Widget) -> ElementComparison {
-        if new_widget.is_exact_ptr(&self.widget) {
+        if new_widget == &self.widget {
             return ElementComparison::Identical;
         }
 
