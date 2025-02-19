@@ -12,64 +12,68 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [features]
-mocks = ["dep:mockall", "dep:parking_lot"]
+# mocks = ["dep:mockall", "dep:parking_lot"]
 
 [dependencies]
-agui_sync.workspace = true
+bon.workspace = true
+glam.workspace = true
+typed_floats.workspace = true
 
-tracing.workspace = true
+# agui_sync.workspace = true
+
+# tracing.workspace = true
 
 thiserror.workspace = true
 
-rand.workspace = true
-rustc-hash.workspace = true
-slotmap.workspace = true
-parking_lot = { workspace = true, optional = true }
-im-rc.workspace = true
-bitflags.workspace = true
-url.workspace = true
-smallbox.workspace = true
+# rand.workspace = true
+# rustc-hash.workspace = true
+# slotmap.workspace = true
+# parking_lot = { workspace = true, optional = true }
+# im-rc.workspace = true
+# bitflags.workspace = true
+# url.workspace = true
+# smallbox.workspace = true
 
-futures-util = { workspace = true, features = ["std", "channel"] }
+# futures-util = { workspace = true, features = ["std", "channel"] }
 
-glam.workspace = true
-lyon.workspace = true
+# glam.workspace = true
+# lyon.workspace = true
 
-mockall = { workspace = true, optional = true }
+# mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-agui_macros.workspace = true
+# agui_macros.workspace = true
 
-parking_lot.workspace = true
+# parking_lot.workspace = true
 
-mockall.workspace = true
-criterion.workspace = true
+# mockall.workspace = true
+# criterion.workspace = true
 
-fnv = "1.0"
-concurrent-queue = "2.4"
+# fnv = "1.0"
+# concurrent-queue = "2.4"
 
-[[bench]]
-name = "element_tree"
-path = "benches/element_tree.rs"
-harness = false
-required-features = ["mocks"]
+# [[bench]]
+# name = "element_tree"
+# path = "benches/element_tree.rs"
+# harness = false
+# required-features = ["mocks"]
 
-[[bench]]
-name = "hashers"
-path = "benches/hashers.rs"
-harness = false
+# [[bench]]
+# name = "hashers"
+# path = "benches/hashers.rs"
+# harness = false
 
-[[bench]]
-name = "reference_patterns"
-path = "benches/reference_patterns.rs"
-harness = false
+# [[bench]]
+# name = "reference_patterns"
+# path = "benches/reference_patterns.rs"
+# harness = false
 
-[[bench]]
-name = "dirty_queue"
-path = "benches/dirty_queue.rs"
-harness = false
+# [[bench]]
+# name = "dirty_queue"
+# path = "benches/dirty_queue.rs"
+# harness = false
 
-[[bench]]
-name = "tree"
-path = "benches/tree.rs"
-harness = false
+# [[bench]]
+# name = "tree"
+# path = "benches/tree.rs"
+# harness = false

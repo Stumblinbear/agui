@@ -7,31 +7,18 @@
 
 // #![warn(missing_docs)]
 
-pub mod callback;
-pub mod element;
-pub mod engine;
-pub mod inheritance;
-pub mod query;
-pub mod reactivity;
-pub mod render;
-pub mod task;
-pub mod unit;
-pub mod util;
-pub mod widget;
-
-#[doc(hidden)]
-pub trait Optional<T> {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
-}
-
-impl<T> Optional<T> for () {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
-        default()
-    }
-}
-
-impl<T> Optional<T> for (T,) {
-    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
-        self.0
-    }
-}
+pub mod axis;
+pub mod constraints;
+pub mod context;
+pub mod edge_insets;
+pub mod hit_test;
+pub mod offset;
+pub mod rect;
+pub mod renderer;
+pub mod size;
+pub mod text_baseline;
+pub mod text_direction;
+pub mod tree;
+pub mod view;
+pub mod view_id;
+pub mod widgets;

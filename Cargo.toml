@@ -16,24 +16,26 @@ readme = "README.md"
 members = ["crates/*"]
 
 [workspace.dependencies]
-agui_sync = { path = "crates/agui_sync", version = "0.3" }
+# agui_sync = { path = "crates/agui_sync", version = "0.3" }
 agui_core = { path = "crates/agui_core", version = "0.3" }
-agui_executor = { path = "crates/agui_executor", version = "0.3" }
-agui_macros = { path = "crates/agui_macros", version = "0.3" }
+# agui_executor = { path = "crates/agui_executor", version = "0.3" }
+# agui_macros = { path = "crates/agui_macros", version = "0.3" }
 
-agui_elements = { path = "crates/agui_elements", version = "0.3" }
-agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
+# agui_elements = { path = "crates/agui_elements", version = "0.3" }
+# agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
 
-agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
-agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
+# agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
+# agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
 
-agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
-agui_winit = { path = "crates/agui_winit", version = "0.1" }
-agui_vello = { path = "crates/agui_vello", version = "0.1" }
+# agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
+# agui_winit = { path = "crates/agui_winit", version = "0.1" }
+# agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
-tracing = "0.1"
-
+bon = "3.3.2"
+enterpolation = "0.2"
 thiserror = "1.0"
+tracing = "0.1"
+typed_floats = "1.0.2"
 
 rand = "0.8"
 rustc-hash = "1.1"
@@ -57,55 +59,54 @@ async-channel = "2.1"
 mockall = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 
-glam = "0.24"
+glam = "0.29"
 lyon = "1.0"
 
 raw-window-handle = "0.5"
 
 winit = { version = "0.28" }
-vello = { git = "https://github.com/linebender/vello.git", version = "0.0.1", rev = "d902830c2e92c5d1341530e3404c4c981530aed6" }
 
 [features]
-default = ["primitives", "widgets", "macros"]
-primitives = ["agui_primitives"]
-widgets = ["primitives", "agui_widgets"]
-macros = ["agui_macros"]
+# default = ["primitives", "widgets", "macros"]
+# primitives = ["agui_primitives"]
+# widgets = ["primitives", "agui_widgets"]
+# macros = ["agui_macros"]
 
-app = ["rustc-hash", "parking_lot"]
-multi-threaded = ["agui_executor/multi-threaded"]
+# app = ["rustc-hash", "parking_lot"]
+# multi-threaded = ["agui_executor/multi-threaded"]
 
-winit = ["agui_renderer/window", "agui_winit", "dep:winit"]
-vello = ["agui_renderer/window", "agui_vello", "dep:vello"]
-winit-vello = ["winit", "vello", "agui_vello/window"]
+# winit = ["agui_renderer/window", "agui_winit", "dep:winit"]
+# vello = ["agui_renderer/window", "agui_vello", "dep:vello"]
+# winit-vello = ["winit", "vello", "agui_vello/window"]
 
-mocks = ["agui_core/mocks"]
+# mocks = ["agui_core/mocks"]
 
 [dependencies]
-agui_sync.workspace = true
-agui_core.workspace = true
-agui_executor.workspace = true
-agui_macros = { workspace = true, optional = true }
+# agui_sync.workspace = true
+# agui_core.workspace = true
+# agui_executor.workspace = true
+# agui_macros = { workspace = true, optional = true }
 
-agui_elements.workspace = true
-agui_primitives = { workspace = true, optional = true }
-agui_widgets = { workspace = true, optional = true }
+# agui_elements.workspace = true
+# agui_primitives = { workspace = true, optional = true }
+# agui_widgets = { workspace = true, optional = true }
 
-agui_renderer = { workspace = true, optional = true }
-agui_winit = { workspace = true, optional = true }
-agui_vello = { workspace = true, optional = true }
+# agui_renderer = { workspace = true, optional = true }
+# agui_winit = { workspace = true, optional = true }
+# agui_vello = { workspace = true, optional = true }
 
-tracing.workspace = true
+# tracing.workspace = true
 
-rustc-hash = { workspace = true, optional = true }
-parking_lot = { workspace = true, optional = true }
+# rustc-hash = { workspace = true, optional = true }
+# parking_lot = { workspace = true, optional = true }
 
-winit = { workspace = true, optional = true }
-vello = { workspace = true, optional = true }
+# winit = { workspace = true, optional = true }
+# vello = { workspace = true, optional = true }
 
 [dev-dependencies]
 agui = { path = "." }
 
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 futures-timer = "3.0"
 sysinfo = "0.29"
@@ -121,45 +122,45 @@ debug = true
 [profile.dev.package."*"]
 opt-level = 3
 
-[profile.dev.package.agui_core]
-opt-level = 1
+# [profile.dev.package.agui_core]
+# opt-level = 1
 
-[profile.dev.package.agui_primitives]
-opt-level = 1
+# [profile.dev.package.agui_primitives]
+# opt-level = 1
 
-[profile.dev.package.agui_widgets]
-opt-level = 1
+# [profile.dev.package.agui_widgets]
+# opt-level = 1
 
-[profile.dev.package.agui_vello]
-opt-level = 1
+# [profile.dev.package.agui_vello]
+# opt-level = 1
 
-[profile.dev.package.agui_winit]
-opt-level = 1
+# [profile.dev.package.agui_winit]
+# opt-level = 1
 
-[[example]]
-name = "clipping"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "clipping"
+# required-features = ["app", "winit-vello"]
 
-[[example]]
-name = "current_window"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "current_window"
+# required-features = ["app", "winit-vello"]
 
-[[example]]
-name = "flexbox"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "flexbox"
+# required-features = ["app", "winit-vello"]
 
-[[example]]
-name = "hello_world"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "hello_world"
+# required-features = ["app", "winit-vello"]
 
-[[example]]
-name = "multiple_windows"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "multiple_windows"
+# required-features = ["app", "winit-vello"]
 
-[[example]]
-name = "responsive_widgets"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "responsive_widgets"
+# required-features = ["app", "winit-vello"]
 
-[[example]]
-name = "system_info"
-required-features = ["app", "winit-vello"]
+# [[example]]
+# name = "system_info"
+# required-features = ["app", "winit-vello"]
