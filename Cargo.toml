@@ -32,7 +32,8 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 # agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
 bon = "3.3.2"
-enterpolation = "0.2"
+glam = "0.29"
+smallvec = "1.14.0"
 thiserror = "1.0"
 tracing = "0.1"
 typed_floats = "1.0.2"
@@ -59,7 +60,6 @@ async-channel = "2.1"
 mockall = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 
-glam = "0.29"
 lyon = "1.0"
 
 raw-window-handle = "0.5"

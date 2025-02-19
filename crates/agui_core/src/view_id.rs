@@ -14,8 +14,8 @@ impl ViewId {
         Self(id)
     }
 
-    pub const fn get(&self) -> usize {
-        self.0 as usize
+    pub const fn get(self) -> u32 {
+        self.0
     }
 }
 

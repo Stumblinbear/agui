@@ -1,76 +1,174 @@
-use bon::Builder;
+use std::marker::PhantomData;
+
 use typed_floats::{as_const, Positive, PositiveFinite};
 
 use crate::{
     constraints::Constraints,
-    context::{LayoutCtx, MessageCtx, UpdateCtx},
+    context::{MessageCtx, UpdateCtx},
+    element::{Element, ElementState},
     hit_test::HitTestResult,
     offset::Offset,
     size::Size,
     text_baseline::TextBaseline,
-    tree::{Tree, TreeState},
-    view::{View, ViewDraw, ViewLayout, ViewLifecycle},
-    view_id::ViewId,
+    view::{
+        Bounded, InheritedBound, ResolveConstraintOr, ResolveLayoutConstraint, Unbounded, View,
+        ViewDraw, ViewLayout, ViewLayoutConstraints, ViewLifecycle,
+    },
 };
 
-#[derive(Builder)]
-pub struct SizedBox<Child> {
+pub struct SizedBox<Constraints, Child> {
     width: Option<Positive<f32>>,
     height: Option<Positive<f32>>,
 
     child: Child,
+
+    _phantom: PhantomData<Constraints>,
 }
 
-impl SizedBox<()> {
-    pub fn new(width: Option<Positive<f32>>, height: Option<Positive<f32>>) -> Self {
+impl Default for SizedBox<(InheritedBound, InheritedBound), ()> {
+    fn default() -> Self {
         SizedBox {
-            width,
-            height,
+            width: None,
+            height: None,
 
             child: (),
+
+            _phantom: PhantomData,
         }
     }
+}
 
+impl SizedBox<(InheritedBound, InheritedBound), ()> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl SizedBox<(Bounded, Bounded), ()> {
     pub fn shrink() -> Self {
         Self {
             width: Some(as_const!(Positive, f32, 0.0)),
             height: Some(as_const!(Positive, f32, 0.0)),
 
             child: (),
+
+            _phantom: PhantomData,
         }
     }
+}
 
+impl SizedBox<(Unbounded, Unbounded), ()> {
     pub fn expand() -> Self {
         Self {
             width: Some(as_const!(Positive, f32, f32::INFINITY)),
             height: Some(as_const!(Positive, f32, f32::INFINITY)),
 
             child: (),
+
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<Height> SizedBox<(InheritedBound, Height), ()> {
+    pub fn width<T>(self, width: T) -> SizedBox<(Bounded, Height), ()>
+    where
+        PositiveFinite<f32>: TryFrom<T>,
+        <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
+        SizedBox {
+            width: Some(
+                PositiveFinite::try_from(width)
+                    .expect("invalid width given to SizedBox")
+                    .into(),
+            ),
+            height: self.height,
+
+            child: self.child,
+
+            _phantom: PhantomData,
         }
     }
 
-    pub fn child<Child>(self, child: Child) -> SizedBox<Child> {
+    pub fn expand_width(self) -> SizedBox<(Unbounded, Height), ()> {
+        SizedBox {
+            width: Some(as_const!(Positive, f32, f32::INFINITY)),
+            height: self.height,
+
+            child: self.child,
+
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<Width> SizedBox<(Width, InheritedBound), ()> {
+    pub fn height<T>(self, height: T) -> SizedBox<(Width, Bounded), ()>
+    where
+        PositiveFinite<f32>: TryFrom<T>,
+        <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
+        SizedBox {
+            width: self.width,
+            height: Some(
+                PositiveFinite::try_from(height)
+                    .expect("invalid height given to SizedBox")
+                    .into(),
+            ),
+
+            child: self.child,
+
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn expand_height(self) -> SizedBox<(Width, Unbounded), ()> {
+        SizedBox {
+            width: self.width,
+            height: Some(as_const!(Positive, f32, f32::INFINITY)),
+
+            child: self.child,
+
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<AdditionalConstraints> SizedBox<AdditionalConstraints, ()> {
+    pub fn child<Child>(self, child: Child) -> SizedBox<AdditionalConstraints, Child> {
         SizedBox {
             width: self.width,
             height: self.height,
 
             child,
+
+            _phantom: PhantomData,
         }
     }
 }
 
-impl From<Size> for SizedBox<()> {
+impl From<Size> for SizedBox<(Bounded, Bounded), ()> {
     fn from(size: Size) -> Self {
         Self {
-            width: Some(Positive::<f32>::try_from(size.width).expect("width must be positive")),
-            height: Some(Positive::<f32>::try_from(size.height).expect("height must be positive")),
+            width: Some(
+                PositiveFinite::<f32>::try_from(size.width)
+                    .expect("width must be a positive finite number")
+                    .into(),
+            ),
+            height: Some(
+                PositiveFinite::<f32>::try_from(size.height)
+                    .expect("height must be a positive finite number")
+                    .into(),
+            ),
 
             child: (),
+
+            _phantom: PhantomData,
         }
     }
 }
 
-impl<Child> SizedBox<Child> {
+impl<AdditionalConstraints, Child> SizedBox<AdditionalConstraints, Child> {
     fn additional_constraints(&self) -> Constraints {
         let mut constraints = Constraints::default();
 
@@ -86,126 +184,189 @@ impl<Child> SizedBox<Child> {
     }
 }
 
-const CHILD_ID: ViewId = ViewId::new(0);
-
-impl<Child> ViewLifecycle for SizedBox<Child>
+impl<AdditionalConstraints, Child> ViewLifecycle for SizedBox<AdditionalConstraints, Child>
 where
     Child: ViewLifecycle,
 {
-    fn state(&self) -> TreeState {
-        TreeState::none()
+    fn state(&self) -> ElementState {
+        ElementState::none()
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.child)]
+    fn children(&self) -> Vec<Element> {
+        vec![Element::new(&self.child)]
     }
 
     fn update(&self, mut ctx: UpdateCtx) {
-        ctx.child(CHILD_ID, |ctx| self.child.update(ctx));
+        ctx.child(0, |ctx| self.child.update(ctx));
     }
 
     fn message(&self, ctx: MessageCtx) {
         match ctx.routing_id() {
-            Some(CHILD_ID) => self.child.message(ctx),
+            Some(0) => self.child.message(ctx),
             _ => unreachable!(),
         }
     }
 }
 
-impl<Child> ViewLayout for SizedBox<Child>
+impl<Width, Height, Child> ViewLayoutConstraints for SizedBox<(Width, Height), Child>
 where
+    Child: ViewLayout,
+    Child::Width: ResolveLayoutConstraint,
+    Child::Height: ResolveLayoutConstraint,
+    ResolveConstraintOr<Width, <Child as ViewLayoutConstraints>::Width>: ResolveLayoutConstraint,
+    ResolveConstraintOr<Height, <Child as ViewLayoutConstraints>::Height>: ResolveLayoutConstraint,
+{
+    type Width = <ResolveConstraintOr<Width, Child::Width> as ResolveLayoutConstraint>::Value;
+    type Height = <ResolveConstraintOr<Height, Child::Height> as ResolveLayoutConstraint>::Value;
+}
+
+impl<AdditionalConstraints, Child> ViewLayout for SizedBox<AdditionalConstraints, Child>
+where
+    Self: ViewLayoutConstraints,
     Child: ViewLayout,
 {
     fn min_intrinsic_width(
         &self,
-        tree: &Tree,
+        element: &Element,
         height: Positive<f32>,
     ) -> Option<PositiveFinite<f32>> {
         self.width
             .and_then(|width| PositiveFinite::try_from(width).ok())
-            .or_else(|| self.child.min_intrinsic_width(tree.child(CHILD_ID), height))
+            .or_else(|| element.child(0, &self.child).min_intrinsic_width(height))
     }
 
     fn max_intrinsic_width(
         &self,
-        tree: &Tree,
+        element: &Element,
         height: Positive<f32>,
     ) -> Option<PositiveFinite<f32>> {
         self.width
             .and_then(|width| PositiveFinite::try_from(width).ok())
-            .or_else(|| self.child.max_intrinsic_width(tree.child(CHILD_ID), height))
+            .or_else(|| element.child(0, &self.child).max_intrinsic_width(height))
     }
 
     fn min_intrinsic_height(
         &self,
-        tree: &Tree,
+        element: &Element,
         width: Positive<f32>,
     ) -> Option<PositiveFinite<f32>> {
         self.height
             .and_then(|height| PositiveFinite::try_from(height).ok())
-            .or_else(|| self.child.min_intrinsic_height(tree.child(CHILD_ID), width))
+            .or_else(|| element.child(0, &self.child).min_intrinsic_height(width))
     }
 
     fn max_intrinsic_height(
         &self,
-        tree: &Tree,
+        element: &Element,
         width: Positive<f32>,
     ) -> Option<PositiveFinite<f32>> {
         self.height
             .and_then(|height| PositiveFinite::try_from(height).ok())
-            .or_else(|| self.child.max_intrinsic_height(tree.child(CHILD_ID), width))
+            .or_else(|| element.child(0, &self.child).max_intrinsic_height(width))
     }
 
-    fn measure(&self, tree: &Tree, constraints: Constraints) -> Size {
-        self.child
-            .measure(tree, self.additional_constraints().enforce(constraints))
+    fn measure(&self, element: &Element, constraints: Constraints) -> Size {
+        element
+            .child(0, &self.child)
+            .measure(self.additional_constraints().enforce(constraints))
     }
 
-    fn layout(&self, mut ctx: LayoutCtx, constraints: Constraints) {
-        ctx.size = ctx
-            .child(CHILD_ID, |ctx| {
-                self.child
-                    .layout(ctx, self.additional_constraints().enforce(constraints))
-            })
-            .size();
+    fn layout(&self, element: &mut Element, constraints: Constraints) -> Size {
+        element
+            .child_mut(0, &self.child)
+            .layout(self.additional_constraints().enforce(constraints))
+            .size()
     }
 
     fn measure_baseline(
         &self,
-        tree: &Tree,
+        element: &Element,
         constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
-        self.child.measure_baseline(
-            tree.child(CHILD_ID),
-            self.additional_constraints().enforce(constraints),
-            baseline,
-        )
+        element
+            .child(0, &self.child)
+            .measure_baseline(self.additional_constraints().enforce(constraints), baseline)
     }
 
     fn distance_to_baseline(
         &self,
-        tree: &mut Tree,
+        element: &mut Element,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
-        self.child
-            .distance_to_baseline(tree.child_mut(CHILD_ID), baseline)
+        element
+            .child_mut(0, &self.child)
+            .distance_to_baseline(baseline)
     }
 
-    fn hit_test(&self, tree: &Tree, result: &mut HitTestResult, position: Offset) -> bool {
-        if !tree.size.contains(position) {
+    fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool {
+        if !element.size().contains(position) {
             return false;
         }
 
-        self.child.hit_test(tree.child(CHILD_ID), result, position)
+        element.child(0, &self.child).hit_test(result, position)
     }
 }
-impl<Renderer, Child> ViewDraw<Renderer> for SizedBox<Child>
+
+impl<AdditionalConstraints, Renderer, Child> ViewDraw<Renderer>
+    for SizedBox<AdditionalConstraints, Child>
 where
     Renderer: crate::renderer::Renderer,
     Child: View<Renderer>,
 {
-    fn draw(&self, tree: &mut Tree, renderer: &mut Renderer) {
-        self.child.draw(tree.child_mut(CHILD_ID), renderer);
+    fn draw(&self, element: &mut Element, renderer: &mut Renderer) {
+        element.child_mut(0, &self.child).draw(renderer);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::widgets::sized_box::SizedBox;
+
+    use super::*;
+
+    #[test]
+    fn sized_box() {
+        let mut element = Element::empty();
+
+        let sized_box = SizedBox::new().width(16).height(48);
+        element.update(&sized_box);
+        assert_eq!(
+            sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            Size::new(16, 48),
+            "should use the given sizes"
+        );
+
+        let sized_box = SizedBox::new().width(0).height(16);
+        element.update(&sized_box);
+        assert_eq!(
+            sized_box.layout(&mut element, Constraints::new(16, 128, 32, 128)),
+            Size::new(16, 32),
+            "should ignore the given sizes and use the smallest size allowed by the constraints"
+        );
+
+        let sized_box = SizedBox::shrink();
+        element.update(&sized_box);
+        assert_eq!(
+            sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            Size::new(0, 0),
+            "should shrink to the smallest size possible"
+        );
+
+        let sized_box = SizedBox::shrink();
+        element.update(&sized_box);
+        assert_eq!(
+            sized_box.layout(&mut element, Constraints::new(10, 128, 20, 128)),
+            Size::new(10, 20),
+            "should shrink to the smallest size possible within the constraints"
+        );
+
+        let sized_box = SizedBox::expand();
+        element.update(&sized_box);
+        assert_eq!(
+            sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            Size::new(128, 128),
+            "should expand to the largest size possible within the constraints"
+        );
     }
 }

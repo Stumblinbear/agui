@@ -17,6 +17,7 @@ readme = "README.md"
 [dependencies]
 bon.workspace = true
 glam.workspace = true
+smallvec.workspace = true
 typed_floats.workspace = true
 
 # agui_sync.workspace = true

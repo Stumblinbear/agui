@@ -1,29 +1,28 @@
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-};
+use std::any::Any;
 
-use crate::{tree::Tree, view_id::ViewId};
+use crate::{element::Element, view_id::ViewId};
 
 pub struct MessageCtx<'a> {
-    tree: &'a mut Tree,
+    pub element: &'a mut Element,
+
     path: &'a [ViewId],
 
     message: Option<Box<dyn Any>>,
 }
 
 impl<'a> MessageCtx<'a> {
-    pub fn new(tree: &'a mut Tree, path: &'a [ViewId], message: Box<dyn Any>) -> Self {
+    pub fn new(element: &'a mut Element, path: &'a [ViewId], message: Box<dyn Any>) -> Self {
         Self {
-            tree,
+            element,
+
             path,
 
             message: Some(message),
         }
     }
 
-    pub fn routing_id(&self) -> Option<ViewId> {
-        self.path.first().copied()
+    pub fn routing_id(&self) -> Option<u32> {
+        self.path.first().copied().map(ViewId::get)
     }
 
     pub fn take<T>(mut self) -> T
@@ -45,30 +44,17 @@ impl<'a> MessageCtx<'a> {
 
     pub fn child(mut self, view_id: ViewId, func: impl FnOnce(MessageCtx)) {
         let child = self
-            .tree
+            .element
             .children
-            .get_mut(view_id.get())
+            .get_mut(view_id.get() as usize)
             .expect("child not found");
 
         func(MessageCtx {
-            tree: child,
-            path: &mut self.path,
+            element: child,
+
+            path: self.path,
 
             message: self.message,
         });
-    }
-}
-
-impl<'a> Deref for MessageCtx<'a> {
-    type Target = Tree;
-
-    fn deref(&self) -> &Self::Target {
-        self.tree
-    }
-}
-
-impl<'a> DerefMut for MessageCtx<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.tree
     }
 }

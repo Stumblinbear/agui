@@ -2,25 +2,29 @@ use typed_floats::{as_const, Positive, PositiveFinite};
 
 use crate::{
     constraints::Constraints,
-    context::{LayoutCtx, MessageCtx, UpdateCtx},
+    context::{MessageCtx, UpdateCtx},
+    element::{Element, ElementState},
     hit_test::HitTestResult,
     offset::Offset,
     size::Size,
     text_baseline::TextBaseline,
-    tree::{Tree, TreeState},
 };
 
-pub trait ViewLifecycle {
-    fn state(&self) -> TreeState;
+mod layout_constraints;
 
-    fn children(&self) -> Vec<Tree>;
+pub use layout_constraints::*;
+
+pub trait ViewLifecycle {
+    fn state(&self) -> ElementState;
+
+    fn children(&self) -> Vec<Element>;
 
     fn update(&self, ctx: UpdateCtx);
 
     fn message(&self, ctx: MessageCtx);
 }
 
-pub trait ViewLayout {
+pub trait ViewLayout: ViewLayoutConstraints {
     /// Returns the minimum width that this box could be without failing to
     /// correctly paint its contents within itself, without clipping.
     ///
@@ -36,7 +40,7 @@ pub trait ViewLayout {
     /// Calling this function is expensive as it can result in O(N^2) behavior.
     fn min_intrinsic_width(
         &self,
-        tree: &Tree,
+        element: &Element,
         height: Positive<f32>,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -56,7 +60,7 @@ pub trait ViewLayout {
     /// Calling this function is expensive as it can result in O(N^2) behavior.
     fn max_intrinsic_width(
         &self,
-        tree: &Tree,
+        element: &Element,
         height: Positive<f32>,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -75,7 +79,7 @@ pub trait ViewLayout {
     /// Calling this function is expensive as it can result in O(N^2) behavior.
     fn min_intrinsic_height(
         &self,
-        tree: &Tree,
+        element: &Element,
         width: Positive<f32>,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -95,7 +99,7 @@ pub trait ViewLayout {
     /// Calling this function is expensive as it can result in O(N^2) behavior.
     fn max_intrinsic_height(
         &self,
-        tree: &Tree,
+        element: &Element,
         width: Positive<f32>,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -111,9 +115,9 @@ pub trait ViewLayout {
     /// changes, the parent is also laid out.
     ///
     /// Calling this function is expensive as it can result in O(N^2) behavior.
-    fn measure(&self, tree: &Tree, constraints: Constraints) -> Size;
+    fn measure(&self, element: &Element, constraints: Constraints) -> Size;
 
-    fn layout(&self, ctx: LayoutCtx, constraints: Constraints);
+    fn layout(&self, element: &mut Element, constraints: Constraints) -> Size;
 
     /// Returns the distance from the top of the box to the first baseline of the
     /// box's contents for the given `constraints`, or [`None`] if this [`View`]
@@ -128,7 +132,7 @@ pub trait ViewLayout {
     /// performance, where N is the number of render objects in the render subtree.
     fn measure_baseline(
         &self,
-        tree: &Tree,
+        element: &Element,
         constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>>;
@@ -146,7 +150,7 @@ pub trait ViewLayout {
     /// during that parent's [performLayout] or [paint] functions.
     fn distance_to_baseline(
         &self,
-        tree: &mut Tree,
+        element: &mut Element,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -166,23 +170,37 @@ pub trait ViewLayout {
     /// to be up-to-date. That means an [`View`] can rely upon [`View::layout`]
     /// having been called in [`View::hit_test`] but cannot rely upon [`View::draw`]
     /// having been called.
-    fn hit_test(&self, tree: &Tree, result: &mut HitTestResult, position: Offset) -> bool;
+    fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool;
 }
 
 pub trait ViewDraw<Renderer = ()> {
-    fn draw(&self, tree: &mut Tree, renderer: &mut Renderer);
+    fn draw(&self, element: &mut Element, renderer: &mut Renderer);
 }
 
-pub trait View<Renderer = ()>: ViewLifecycle + ViewLayout + ViewDraw<Renderer> {}
+pub trait View<Renderer = ()>: ViewLifecycle + ViewLayout + ViewDraw<Renderer> {
+    fn as_dyn_view(&self) -> &dyn View<Renderer, Width = Self::Width, Height = Self::Height>
+    where
+        Self: Sized,
+    {
+        self
+    }
+
+    fn into_boxed_view(self) -> Box<dyn View<Renderer, Width = Self::Width, Height = Self::Height>>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(self)
+    }
+}
 
 impl<T, Renderer> View<Renderer> for T where T: ViewLifecycle + ViewLayout + ViewDraw<Renderer> {}
 
 impl ViewLifecycle for () {
-    fn state(&self) -> TreeState {
-        TreeState::none()
+    fn state(&self) -> ElementState {
+        ElementState::none()
     }
 
-    fn children(&self) -> Vec<Tree> {
+    fn children(&self) -> Vec<Element> {
         Vec::new()
     }
 
@@ -191,50 +209,59 @@ impl ViewLifecycle for () {
     fn message(&self, _: MessageCtx) {}
 }
 
+impl ViewLayoutConstraints for () {
+    type Width = Bounded;
+    type Height = Bounded;
+}
+
 impl ViewLayout for () {
-    fn min_intrinsic_width(&self, _: &Tree, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn min_intrinsic_width(&self, _: &Element, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
 
-    fn max_intrinsic_width(&self, _: &Tree, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_width(&self, _: &Element, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
 
-    fn min_intrinsic_height(&self, _: &Tree, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn min_intrinsic_height(&self, _: &Element, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
 
-    fn max_intrinsic_height(&self, _: &Tree, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_height(&self, _: &Element, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
 
-    fn measure(&self, _: &Tree, constraints: Constraints) -> Size {
+    fn measure(&self, _: &Element, constraints: Constraints) -> Size {
         constraints.smallest()
     }
 
-    fn layout(&self, mut ctx: LayoutCtx, constraints: Constraints) {
-        ctx.size = constraints.smallest();
+    fn layout(&self, _: &mut Element, constraints: Constraints) -> Size {
+        constraints.smallest()
     }
 
     fn measure_baseline(
         &self,
-        _: &Tree,
+        _: &Element,
         _: Constraints,
         _: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn distance_to_baseline(&self, _: &mut Tree, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+    fn distance_to_baseline(
+        &self,
+        _: &mut Element,
+        _: TextBaseline,
+    ) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn hit_test(&self, _: &Tree, _: &mut HitTestResult, _: Offset) -> bool {
+    fn hit_test(&self, _: &Element, _: &mut HitTestResult, _: Offset) -> bool {
         // TODO(trevin): should this add itself to the hit test result?
         false
     }
 }
 
 impl<Renderer> ViewDraw<Renderer> for () {
-    fn draw(&self, _: &mut Tree, _: &mut Renderer) {}
+    fn draw(&self, _: &mut Element, _: &mut Renderer) {}
 }

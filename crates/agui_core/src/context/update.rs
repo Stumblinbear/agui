@@ -1,48 +1,32 @@
-use std::{
-    collections::VecDeque,
-    ops::{Deref, DerefMut},
-};
+use std::collections::VecDeque;
 
-use crate::{tree::Tree, view_id::ViewId};
+use crate::{element::Element, view_id::ViewId};
 
 pub struct UpdateCtx<'a> {
-    tree: &'a mut Tree,
+    pub element: &'a mut Element,
+
     path: &'a mut VecDeque<ViewId>,
 }
 
 impl<'a> UpdateCtx<'a> {
-    pub fn new(tree: &'a mut Tree, path: &'a mut VecDeque<ViewId>) -> Self {
-        Self { tree, path }
+    pub fn new(element: &'a mut Element, path: &'a mut VecDeque<ViewId>) -> Self {
+        Self { element, path }
     }
 
-    pub fn child(&mut self, view_id: ViewId, func: impl FnOnce(UpdateCtx)) {
-        self.path.push_back(view_id);
+    pub fn child(&mut self, idx: u32, func: impl FnOnce(UpdateCtx)) {
+        self.path.push_back(ViewId::new(idx));
 
         let child = self
-            .tree
+            .element
             .children
-            .get_mut(view_id.get())
+            .get_mut(idx as usize)
             .expect("child not found");
 
         func(UpdateCtx {
-            tree: child,
+            element: child,
             path: self.path,
         });
 
         self.path.pop_back();
-    }
-}
-
-impl Deref for UpdateCtx<'_> {
-    type Target = Tree;
-
-    fn deref(&self) -> &Self::Target {
-        self.tree
-    }
-}
-
-impl DerefMut for UpdateCtx<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.tree
     }
 }
