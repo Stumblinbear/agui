@@ -19,9 +19,9 @@ pub trait ViewLifecycle {
 
     fn children(&self) -> Vec<Element>;
 
-    fn update(&self, ctx: UpdateCtx);
+    fn update(&self, element: &mut Element, ctx: UpdateCtx);
 
-    fn message(&self, ctx: MessageCtx);
+    fn message(&self, element: &mut Element, ctx: MessageCtx);
 }
 
 pub trait ViewLayout: ViewLayoutConstraints {
@@ -204,9 +204,9 @@ impl ViewLifecycle for () {
         Vec::new()
     }
 
-    fn update(&self, _: UpdateCtx) {}
+    fn update(&self, _: &mut Element, _: UpdateCtx) {}
 
-    fn message(&self, _: MessageCtx) {}
+    fn message(&self, _: &mut Element, _: MessageCtx) {}
 }
 
 impl ViewLayoutConstraints for () {

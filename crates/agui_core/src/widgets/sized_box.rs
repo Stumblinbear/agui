@@ -196,13 +196,13 @@ where
         vec![Element::new(&self.child)]
     }
 
-    fn update(&self, mut ctx: UpdateCtx) {
-        ctx.child(0, |ctx| self.child.update(ctx));
+    fn update(&self, element: &mut Element, ctx: UpdateCtx) {
+        element.child_mut(0, &self.child).update(ctx);
     }
 
-    fn message(&self, ctx: MessageCtx) {
+    fn message(&self, element: &mut Element, ctx: MessageCtx) {
         match ctx.routing_id() {
-            Some(0) => self.child.message(ctx),
+            Some(0) => element.child_mut(0, &self.child).message(ctx),
             _ => unreachable!(),
         }
     }

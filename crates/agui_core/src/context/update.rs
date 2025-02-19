@@ -1,31 +1,24 @@
 use std::collections::VecDeque;
 
-use crate::{element::Element, view_id::ViewId};
+use crate::view_id::ViewId;
 
 pub struct UpdateCtx<'a> {
-    pub element: &'a mut Element,
-
     path: &'a mut VecDeque<ViewId>,
 }
 
 impl<'a> UpdateCtx<'a> {
-    pub fn new(element: &'a mut Element, path: &'a mut VecDeque<ViewId>) -> Self {
-        Self { element, path }
+    pub fn new(path: &'a mut VecDeque<ViewId>) -> Self {
+        Self { path }
     }
 
-    pub fn child(&mut self, idx: u32, func: impl FnOnce(UpdateCtx)) {
-        self.path.push_back(ViewId::new(idx));
+    pub fn path(&self) -> impl Iterator<Item = &ViewId> {
+        self.path.iter()
+    }
 
-        let child = self
-            .element
-            .children
-            .get_mut(idx as usize)
-            .expect("child not found");
+    pub(crate) fn with_view(&mut self, id: ViewId, func: impl FnOnce(UpdateCtx)) {
+        self.path.push_back(id);
 
-        func(UpdateCtx {
-            element: child,
-            path: self.path,
-        });
+        func(UpdateCtx { path: self.path });
 
         self.path.pop_back();
     }

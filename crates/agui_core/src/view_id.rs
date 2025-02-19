@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ViewId(u32);
+pub struct ViewId(u16);
 
 impl ViewId {
-    pub const fn new(id: u32) -> Self {
+    pub const fn new(id: u16) -> Self {
         Self(id)
     }
 
@@ -14,7 +14,7 @@ impl ViewId {
         Self(id)
     }
 
-    pub const fn get(self) -> u32 {
+    pub const fn get(self) -> u16 {
         self.0
     }
 }

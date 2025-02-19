@@ -94,15 +94,14 @@ impl Element {
             .expect("node state downcast failed")
     }
 
-    pub fn child<'a, Child>(&'a self, idx: u32, view: &'a Child) -> ElementRef<'a, Child> {
+    pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child> {
         ElementRef {
-            view_id: ViewId::new(idx),
             element: &self.children[idx as usize],
             view,
         }
     }
 
-    pub fn child_mut<'a, Child>(&'a mut self, idx: u32, view: &'a Child) -> ElementMut<'a, Child> {
+    pub fn child_mut<'a, Child>(&'a mut self, idx: u16, view: &'a Child) -> ElementMut<'a, Child> {
         ElementMut {
             view_id: ViewId::new(idx),
             element: &mut self.children[idx as usize],
@@ -116,22 +115,8 @@ impl Element {
 }
 
 pub struct ElementRef<'a, Child> {
-    view_id: ViewId,
     element: &'a Element,
     view: &'a Child,
-}
-
-impl<Child> ElementRef<'_, Child>
-where
-    Child: ViewLifecycle,
-{
-    pub fn update(&self, ctx: UpdateCtx) {
-        self.view.update(ctx)
-    }
-
-    pub fn message(&self, ctx: MessageCtx) {
-        self.view.message(ctx)
-    }
 }
 
 impl<Child> ElementRef<'_, Child>
@@ -182,12 +167,12 @@ impl<Child> ElementMut<'_, Child>
 where
     Child: ViewLifecycle,
 {
-    pub fn update(&self, ctx: UpdateCtx) {
-        self.view.update(ctx)
+    pub fn update(&mut self, mut ctx: UpdateCtx) {
+        ctx.with_view(self.view_id, |ctx| self.view.update(self.element, ctx))
     }
 
-    pub fn message(&self, ctx: MessageCtx) {
-        self.view.message(ctx)
+    pub fn message(self, ctx: MessageCtx) {
+        self.view.message(self.element, ctx)
     }
 }
 
