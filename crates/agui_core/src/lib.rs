@@ -21,4 +21,3 @@ pub mod text_baseline;
 pub mod text_direction;
 pub mod view;
 pub mod view_id;
-pub mod widgets;

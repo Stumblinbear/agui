@@ -293,7 +293,7 @@ mod tests {
         renderer::Canvas,
         size::Size,
         text_baseline::TextBaseline,
-        view::{AsAnyView, HasIntrinsic, NoIntrinsic, Unbounded, View, ViewLayoutMarker},
+        view::{AsAnyView, NoIntrinsic, Unbounded, View, ViewLayoutMarker},
     };
 
     struct TestView<T> {

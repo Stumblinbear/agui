@@ -381,9 +381,94 @@ impl<T> AsAnyView for T where T: View {}
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use crate::widgets::sized_box::SizedBox;
+    use crate::view::{NoIntrinsic, Unbounded};
 
     use super::*;
+
+    pub struct TestView;
+
+    impl ViewLayoutMarker for TestView {
+        type Width = Unbounded;
+        type Height = Unbounded;
+
+        type WidthIntrinsic = NoIntrinsic;
+        type HeightIntrinsic = NoIntrinsic;
+    }
+
+    impl View for TestView {
+        type State = ();
+
+        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+            (vec![], Default::default())
+        }
+
+        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+
+        fn message(&self, _: &mut Element, _: MessageCtx) {}
+
+        fn min_intrinsic_width(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_width(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn min_intrinsic_height(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_height(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn measure(&self, _: &Element, _: Constraints) -> Size {
+            Size::ZERO
+        }
+
+        fn layout(&self, _: &mut Element, _: Constraints) -> Size {
+            Size::ZERO
+        }
+
+        fn measure_baseline(
+            &self,
+            _: &Element,
+            _: Constraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn distance_to_baseline(
+            &self,
+            _: &mut Element,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn hit_test(&self, _: &Element, _: &mut HitTestResult, _: Offset) -> bool {
+            false
+        }
+
+        fn draw(&self, _: &mut Element, _: &mut Canvas) {}
+    }
 
     #[test]
     fn mounting_dyn_views() {
@@ -391,10 +476,8 @@ mod tests {
         let mut path = VecDeque::new();
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
-        let sized_box = SizedBox::new().width(10);
+        let _ = Element::new(&TestView.as_dyn_view(), &mut update_ctx);
 
-        let _ = Element::new(&sized_box.as_dyn_view(), &mut update_ctx);
-
-        let _ = Element::new(&sized_box.into_boxed_view(), &mut update_ctx);
+        let _ = Element::new(&TestView.into_boxed_view(), &mut update_ctx);
     }
 }

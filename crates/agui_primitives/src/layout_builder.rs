@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use typed_floats::{Positive, PositiveFinite};
 
-use crate::{
+use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     element::Element,

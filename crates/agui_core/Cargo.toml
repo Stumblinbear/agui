@@ -3,16 +3,13 @@ name = "agui_core"
 version = "0.3.0"
 edition = "2021"
 resolver = "2"
-description = "The core library of agui"
+description = "The core library of Agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
 categories = ["gui"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-
-[features]
-# mocks = ["dep:mockall", "dep:parking_lot"]
 
 [dependencies]
 bon.workspace = true

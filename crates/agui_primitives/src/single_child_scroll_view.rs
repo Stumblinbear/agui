@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use crate::{
+use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     element::Element,
@@ -138,7 +138,7 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use crate::widgets::sized_box::SizedBox;
+    use crate::sized_box::SizedBox;
 
     use super::*;
 

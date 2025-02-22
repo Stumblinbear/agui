@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use typed_floats::{as_const, Positive, PositiveFinite};
 
-use crate::{
+use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     element::Element,
@@ -311,7 +311,7 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use crate::widgets::sized_box::SizedBox;
+    use crate::sized_box::SizedBox;
 
     use super::*;
 

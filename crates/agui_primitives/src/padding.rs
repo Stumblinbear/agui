@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{as_const, Positive, PositiveFinite};
 
-use crate::{
+use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     edge_insets::EdgeInsetsGeometry,
@@ -242,8 +242,10 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
+    use agui_core::edge_insets::EdgeInsets;
+
     use super::*;
-    use crate::{edge_insets::EdgeInsets, widgets::sized_box::SizedBox};
+    use crate::sized_box::SizedBox;
 
     #[test]
     fn padding() {
