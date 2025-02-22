@@ -10,7 +10,7 @@ use crate::{
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{Bounded, View, ViewLayoutConstraints},
+    view::{Bounded, View, ViewLayoutMarker},
 };
 
 #[derive(Builder)]
@@ -18,18 +18,22 @@ use crate::{
 #[builder(finish_fn = child)]
 pub struct SingleChildScrollView<Child>
 where
-    Child: ViewLayoutConstraints<Height = Bounded>,
+    Child: ViewLayoutMarker<Height = Bounded>,
 {
     #[builder(finish_fn)]
     child: Child,
 }
 
-impl<Child> ViewLayoutConstraints for SingleChildScrollView<Child>
+impl<Child> ViewLayoutMarker for SingleChildScrollView<Child>
 where
-    Child: ViewLayoutConstraints<Height = Bounded>,
+    Child: ViewLayoutMarker<Height = Bounded>,
 {
     type Width = Bounded;
     type Height = Bounded;
+
+    // TODO(trevin): should this support intrinsic dimensions?
+    type WidthIntrinsic = Child::WidthIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
 }
 
 impl<Child> View for SingleChildScrollView<Child>

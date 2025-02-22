@@ -12,8 +12,8 @@ use crate::{
     size::Size,
     text_baseline::TextBaseline,
     view::{
-        Bounded, InheritedBound, ResolveConstraintOr, ResolveLayoutConstraint, Unbounded, View,
-        ViewLayoutConstraints,
+        Bounded, InheritedBound, ResolveLayoutMarker, ResolveLayoutMarkerOr, Unbounded, View,
+        ViewLayoutMarker,
     },
 };
 
@@ -185,21 +185,22 @@ impl<AdditionalConstraints, Child> SizedBox<AdditionalConstraints, Child> {
     }
 }
 
-impl<Width, Height, Child> ViewLayoutConstraints for SizedBox<(Width, Height), Child>
+impl<Width, Height, Child> ViewLayoutMarker for SizedBox<(Width, Height), Child>
 where
-    Child: ViewLayoutConstraints,
-    Child::Width: ResolveLayoutConstraint,
-    Child::Height: ResolveLayoutConstraint,
-    ResolveConstraintOr<Width, <Child as ViewLayoutConstraints>::Width>: ResolveLayoutConstraint,
-    ResolveConstraintOr<Height, <Child as ViewLayoutConstraints>::Height>: ResolveLayoutConstraint,
+    Child: ViewLayoutMarker,
+    ResolveLayoutMarkerOr<Width, <Child as ViewLayoutMarker>::Width>: ResolveLayoutMarker,
+    ResolveLayoutMarkerOr<Height, <Child as ViewLayoutMarker>::Height>: ResolveLayoutMarker,
 {
-    type Width = <ResolveConstraintOr<Width, Child::Width> as ResolveLayoutConstraint>::Value;
-    type Height = <ResolveConstraintOr<Height, Child::Height> as ResolveLayoutConstraint>::Value;
+    type Width = <ResolveLayoutMarkerOr<Width, Child::Width> as ResolveLayoutMarker>::Value;
+    type Height = <ResolveLayoutMarkerOr<Height, Child::Height> as ResolveLayoutMarker>::Value;
+
+    type WidthIntrinsic = Child::WidthIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
 }
 
 impl<AdditionalConstraints, Child> View for SizedBox<AdditionalConstraints, Child>
 where
-    Self: ViewLayoutConstraints,
+    Self: ViewLayoutMarker,
     Child: View,
 {
     type State = ();

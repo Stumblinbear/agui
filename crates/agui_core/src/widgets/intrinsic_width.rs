@@ -10,7 +10,7 @@ use crate::{
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{View, ViewLayoutConstraints},
+    view::{HasIntrinsic, View, ViewLayoutMarker},
 };
 
 #[derive(Builder)]
@@ -21,17 +21,20 @@ pub struct IntrinsicWidth<Child> {
     child: Child,
 }
 
-impl<Child> ViewLayoutConstraints for IntrinsicWidth<Child>
+impl<Child> ViewLayoutMarker for IntrinsicWidth<Child>
 where
-    Child: View,
+    Child: View<WidthIntrinsic = HasIntrinsic>,
 {
     type Width = Child::Width;
     type Height = Child::Height;
+
+    type WidthIntrinsic = HasIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
 }
 
 impl<Child> View for IntrinsicWidth<Child>
 where
-    Child: View,
+    Child: View<WidthIntrinsic = HasIntrinsic>,
 {
     type State = ();
 

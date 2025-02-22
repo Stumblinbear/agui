@@ -12,7 +12,7 @@ use crate::{
     size::Size,
     text_baseline::TextBaseline,
     text_direction::TextDirection,
-    view::{View, ViewLayoutConstraints},
+    view::{View, ViewLayoutMarker},
 };
 
 #[derive(Builder)]
@@ -35,12 +35,15 @@ pub struct PaddingState {
     child_offset: Offset,
 }
 
-impl<EdgeGeometry, Child> ViewLayoutConstraints for Padding<EdgeGeometry, Child>
+impl<EdgeGeometry, Child> ViewLayoutMarker for Padding<EdgeGeometry, Child>
 where
     Child: View,
 {
     type Width = Child::Width;
     type Height = Child::Height;
+
+    type WidthIntrinsic = Child::WidthIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
 }
 
 impl<EdgeGeometry, Child> View for Padding<EdgeGeometry, Child>
@@ -173,7 +176,7 @@ where
             .layout(inner_constraints)
             .size();
 
-        element.state_mut::<Self>().child_offset =
+        element.state.downcast_mut::<Self>().child_offset =
             Offset::new(self.padding.left(self.text_direction), self.padding.top());
 
         constraints
@@ -206,8 +209,10 @@ where
             .child_mut(0, &self.child)
             .distance_to_baseline(baseline)
             .map(|distance| {
-                PositiveFinite::try_from(distance + element.state::<Self>().child_offset.y)
-                    .expect("distance to baseline of padding was not a positive finite number")
+                PositiveFinite::try_from(
+                    distance + element.state.downcast_ref::<Self>().child_offset.y,
+                )
+                .expect("distance to baseline of padding was not a positive finite number")
             })
     }
 
@@ -217,7 +222,7 @@ where
         }
 
         result.with_offset(
-            element.state::<Self>().child_offset,
+            element.state.downcast_ref::<Self>().child_offset,
             position,
             |result, transformed| element.child(0, &self.child).hit_test(result, transformed),
         )

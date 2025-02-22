@@ -11,10 +11,10 @@ use crate::{
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{LayoutConstraintMarker, View, ViewLayoutConstraints},
+    view::{LayoutBoundMarker, LayoutIntrinsicMarker, View, ViewLayoutMarker},
 };
 
-pub trait AnyView: ViewLayoutConstraints {
+pub trait AnyView: ViewLayoutMarker {
     fn as_any(&self) -> &dyn Any;
 
     fn view_name(&self) -> &str;
@@ -24,7 +24,12 @@ pub trait AnyView: ViewLayoutConstraints {
     fn dyn_update(
         &self,
         element: &mut Element,
-        old: &dyn AnyView<Width = Self::Width, Height = Self::Height>,
+        old: &dyn AnyView<
+            Width = Self::Width,
+            Height = Self::Height,
+            WidthIntrinsic = Self::WidthIntrinsic,
+            HeightIntrinsic = Self::HeightIntrinsic,
+        >,
         ctx: &mut UpdateCtx,
     );
 
@@ -81,8 +86,8 @@ impl<T, Width, Height> AnyView for T
 where
     T: Any,
     T: View<Width = Width, Height = Height>,
-    Width: LayoutConstraintMarker,
-    Height: LayoutConstraintMarker,
+    Width: LayoutBoundMarker,
+    Height: LayoutBoundMarker,
 {
     fn as_any(&self) -> &dyn Any {
         self
@@ -95,13 +100,18 @@ where
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
         let (children, state) = self.mount(ctx);
 
-        (children, smallbox::smallbox!(state))
+        (children, ElementState::new(state))
     }
 
     fn dyn_update(
         &self,
         element: &mut Element,
-        old: &dyn AnyView<Width = Self::Width, Height = Self::Height>,
+        old: &dyn AnyView<
+            Width = Self::Width,
+            Height = Self::Height,
+            WidthIntrinsic = Self::WidthIntrinsic,
+            HeightIntrinsic = Self::HeightIntrinsic,
+        >,
         ctx: &mut UpdateCtx,
     ) {
         let old = old
@@ -187,10 +197,47 @@ where
     }
 }
 
-macros::impl_view!(&dyn AnyView<Width = Width, Height = Height>);
-macros::impl_view!(Box<dyn AnyView<Width = Width, Height = Height>>);
-macros::impl_view!(Rc<dyn AnyView<Width = Width, Height = Height>>);
-macros::impl_view!(Arc<dyn AnyView<Width = Width, Height = Height>>);
+macros::impl_view!(
+    &dyn AnyView<
+        Width = Width,
+        Height = Height,
+        WidthIntrinsic = WidthIntrinsic,
+        HeightIntrinsic = HeightIntrinsic,
+    >
+);
+
+macros::impl_view!(
+    Box<
+        dyn AnyView<
+            Width = Width,
+            Height = Height,
+            WidthIntrinsic = WidthIntrinsic,
+            HeightIntrinsic = HeightIntrinsic,
+        >,
+    >
+);
+
+macros::impl_view!(
+    Rc<
+        dyn AnyView<
+            Width = Width,
+            Height = Height,
+            WidthIntrinsic = WidthIntrinsic,
+            HeightIntrinsic = HeightIntrinsic,
+        >,
+    >
+);
+
+macros::impl_view!(
+    Arc<
+        dyn AnyView<
+            Width = Width,
+            Height = Height,
+            WidthIntrinsic = WidthIntrinsic,
+            HeightIntrinsic = HeightIntrinsic,
+        >,
+    >
+);
 
 mod macros {
     // Used to implement View for the given smart pointer (e.g. Box, Rc, Arc)
@@ -199,10 +246,12 @@ mod macros {
             // The smart pointer type
             $ptr:ty
         ) => {
-            impl<Width, Height> View for $ptr
+            impl<Width, Height, WidthIntrinsic, HeightIntrinsic> View for $ptr
             where
-                Width: LayoutConstraintMarker,
-                Height: LayoutConstraintMarker,
+                Width: LayoutBoundMarker,
+                Height: LayoutBoundMarker,
+                WidthIntrinsic: LayoutIntrinsicMarker,
+                HeightIntrinsic: LayoutIntrinsicMarker,
             {
                 type State = ElementState;
 
@@ -295,14 +344,30 @@ mod macros {
 }
 
 pub trait AsAnyView: View {
-    fn as_dyn_view(&self) -> &(dyn AnyView<Width = Self::Width, Height = Self::Height>)
+    fn as_dyn_view(
+        &self,
+    ) -> &(dyn AnyView<
+        Width = Self::Width,
+        Height = Self::Height,
+        WidthIntrinsic = Self::WidthIntrinsic,
+        HeightIntrinsic = Self::HeightIntrinsic,
+    >)
     where
         Self: Sized + 'static,
     {
         self
     }
 
-    fn into_boxed_view(self) -> Box<dyn AnyView<Width = Self::Width, Height = Self::Height>>
+    fn into_boxed_view(
+        self,
+    ) -> Box<
+        dyn AnyView<
+            Width = Self::Width,
+            Height = Self::Height,
+            WidthIntrinsic = Self::WidthIntrinsic,
+            HeightIntrinsic = Self::HeightIntrinsic,
+        >,
+    >
     where
         Self: Sized + 'static,
     {
@@ -321,12 +386,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mounting_boxed_views() {
+    fn mounting_dyn_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
-        let boxed_view = SizedBox::new().width(10);
-        let _ = Element::new(&boxed_view.as_dyn_view(), &mut update_ctx);
+        let sized_box = SizedBox::new().width(10);
+
+        let _ = Element::new(&sized_box.as_dyn_view(), &mut update_ctx);
+
+        let _ = Element::new(&sized_box.into_boxed_view(), &mut update_ctx);
     }
 }

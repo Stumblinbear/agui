@@ -17,12 +17,12 @@ use crate::{
 };
 
 mod any_view;
-mod layout_constraints;
+mod layout_marker;
 
 pub use any_view::*;
-pub use layout_constraints::*;
+pub use layout_marker::*;
 
-pub trait View: ViewLayoutConstraints {
+pub trait View: ViewLayoutMarker {
     type State: Any
     where
         Self: Sized;
@@ -220,13 +220,16 @@ where
             return (elements, state);
         }
 
-        (elements, smallbox::smallbox!(state))
+        (elements, ElementState::new(state))
     }
 }
 
-impl ViewLayoutConstraints for () {
+impl ViewLayoutMarker for () {
     type Width = Bounded;
     type Height = Bounded;
+
+    type WidthIntrinsic = HasIntrinsic;
+    type HeightIntrinsic = HasIntrinsic;
 }
 
 impl View for () {

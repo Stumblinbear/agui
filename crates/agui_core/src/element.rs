@@ -15,10 +15,43 @@ use crate::{
     view_id::ViewId,
 };
 
-pub(crate) type ElementState = SmallBox<dyn Any, smallbox::space::S2>;
+pub struct ElementState(SmallBox<dyn Any, smallbox::space::S2>);
+
+impl ElementState {
+    pub fn empty() -> Self {
+        Self(smallbox::smallbox!(()))
+    }
+
+    pub fn new<S>(state: S) -> Self
+    where
+        S: Any,
+    {
+        Self(smallbox::smallbox!(state))
+    }
+
+    pub fn is_heap(&self) -> bool {
+        self.0.is_heap()
+    }
+
+    pub fn downcast_ref<V>(&self) -> &<V as View>::State
+    where
+        V: View,
+        V::State: Any,
+    {
+        self.0.downcast_ref().expect("node state downcast failed")
+    }
+
+    pub fn downcast_mut<V>(&mut self) -> &mut <V as View>::State
+    where
+        V: View,
+        V::State: Any,
+    {
+        self.0.downcast_mut().expect("node state downcast failed")
+    }
+}
 
 pub struct Element {
-    state: ElementState,
+    pub state: ElementState,
 
     pub children: Vec<Element>,
 
@@ -28,7 +61,7 @@ pub struct Element {
 impl Element {
     pub fn empty() -> Self {
         Self {
-            state: smallbox::smallbox!(()),
+            state: ElementState::empty(),
 
             children: Vec::default(),
 
@@ -51,39 +84,28 @@ impl Element {
         }
     }
 
-    pub fn state<V>(&self) -> &<V as View>::State
-    where
-        V: View,
-        V::State: Any,
-    {
-        self.state
-            .downcast_ref()
-            .expect("node state downcast failed")
-    }
-
-    pub fn state_mut<V>(&mut self) -> &mut <V as View>::State
-    where
-        V: View,
-        V::State: Any,
-    {
-        self.state
-            .downcast_mut()
-            .expect("node state downcast failed")
-    }
-
     pub const fn size(&self) -> Size {
         self.size
     }
 
-    pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child> {
+    pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child>
+    where
+        Child: View,
+    {
         self.children[idx as usize].as_ref(ViewId::new(idx), view)
     }
 
-    pub fn child_mut<'a, Child>(&'a mut self, idx: u16, view: &'a Child) -> ElementMut<'a, Child> {
+    pub fn child_mut<'a, Child>(&'a mut self, idx: u16, view: &'a Child) -> ElementMut<'a, Child>
+    where
+        Child: View,
+    {
         self.children[idx as usize].as_mut(ViewId::new(idx), view)
     }
 
-    pub fn as_ref<'a, V>(&'a self, view_id: ViewId, view: &'a V) -> ElementRef<'a, V> {
+    pub fn as_ref<'a, V>(&'a self, view_id: ViewId, view: &'a V) -> ElementRef<'a, V>
+    where
+        V: View,
+    {
         ElementRef {
             view_id,
             element: self,
@@ -91,7 +113,10 @@ impl Element {
         }
     }
 
-    pub fn as_mut<'a, V>(&'a mut self, view_id: ViewId, view: &'a V) -> ElementMut<'a, V> {
+    pub fn as_mut<'a, V>(&'a mut self, view_id: ViewId, view: &'a V) -> ElementMut<'a, V>
+    where
+        V: View,
+    {
         ElementMut {
             view_id,
             element: self,
@@ -156,7 +181,13 @@ where
     Child: View,
 {
     pub fn update(&mut self, old: &Child, ctx: &mut UpdateCtx) {
-        ctx.with_view(self.view_id, |ctx| self.view.update(self.element, old, ctx))
+        ctx.with_view(self.view_id, |ctx| {
+            if self.view.is_similar(&self.element.state) {
+                self.view.update(self.element, old, ctx)
+            } else {
+                *self.element = Element::new(self.view, ctx)
+            }
+        })
     }
 
     pub fn message(self, ctx: MessageCtx) {
@@ -262,7 +293,7 @@ mod tests {
         renderer::Canvas,
         size::Size,
         text_baseline::TextBaseline,
-        view::{AsAnyView, Unbounded, View, ViewLayoutConstraints},
+        view::{AsAnyView, HasIntrinsic, NoIntrinsic, Unbounded, View, ViewLayoutMarker},
     };
 
     struct TestView<T> {
@@ -277,9 +308,12 @@ mod tests {
         }
     }
 
-    impl<T> ViewLayoutConstraints for TestView<T> {
+    impl<T> ViewLayoutMarker for TestView<T> {
         type Width = Unbounded;
         type Height = Unbounded;
+
+        type WidthIntrinsic = NoIntrinsic;
+        type HeightIntrinsic = NoIntrinsic;
     }
 
     impl<T> View for TestView<T>

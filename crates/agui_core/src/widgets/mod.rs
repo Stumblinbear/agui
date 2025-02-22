@@ -21,7 +21,7 @@ mod tests {
         renderer::Canvas,
         size::Size,
         text_baseline::TextBaseline,
-        view::{View, ViewLayoutConstraints},
+        view::{View, ViewLayoutMarker},
     };
 
     struct TestListener<Child> {
@@ -33,12 +33,15 @@ mod tests {
         event_tx: Option<mpsc::Sender<()>>,
     }
 
-    impl<Child> ViewLayoutConstraints for TestListener<Child>
+    impl<Child> ViewLayoutMarker for TestListener<Child>
     where
         Child: View,
     {
         type Width = Child::Width;
         type Height = Child::Height;
+
+        type WidthIntrinsic = Child::WidthIntrinsic;
+        type HeightIntrinsic = Child::HeightIntrinsic;
     }
 
     impl<Child> View for TestListener<Child>
@@ -52,7 +55,7 @@ mod tests {
         }
 
         fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-            element.state_mut::<Self>().event_tx = Some(ctx.event_tx());
+            element.state.downcast_mut::<Self>().event_tx = Some(ctx.event_tx());
 
             element.child_mut(0, &self.child).update(&old.child, ctx);
         }
