@@ -33,6 +33,7 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 
 bon = "3.3.2"
 glam = "0.29"
+smallbox = "0.8"
 smallvec = "1.14.0"
 thiserror = "1.0"
 tracing = "0.1"
@@ -45,7 +46,6 @@ parking_lot = "0.12"
 im-rc = "15.1"
 bitflags = "2.4"
 url = "2.4"
-smallbox = "0.8"
 
 futures = "0.3"
 futures-util = { version = "0.3", default-features = false }
@@ -82,6 +82,7 @@ winit = { version = "0.28" }
 # mocks = ["agui_core/mocks"]
 
 [dependencies]
+smallbox.workspace = true
 # agui_sync.workspace = true
 # agui_core.workspace = true
 # agui_executor.workspace = true

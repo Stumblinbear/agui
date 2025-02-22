@@ -1,69 +1,66 @@
 use std::{marker::PhantomData, rc::Rc, sync::Arc};
 
-use crate::view::View;
+use crate::view::AnyView;
 
-mod sealed {
-    pub trait LayoutConstraint {}
-}
+pub trait LayoutConstraintMarker: 'static {}
 
 /// Indicates that the view has no upper bound for the given axis and will expand to fill as much
 /// space as possible.
 pub struct Unbounded;
-impl sealed::LayoutConstraint for Unbounded {}
+impl LayoutConstraintMarker for Unbounded {}
 
 /// Indicates that the view has an upper bound for the given axis that is not infinite.
 pub struct Bounded;
-impl sealed::LayoutConstraint for Bounded {}
+impl LayoutConstraintMarker for Bounded {}
 
 /// Used to indicate that the view does not have a constraint for the given axis and will inherit
 /// the constraint from its child.
 pub struct InheritedBound;
-impl sealed::LayoutConstraint for InheritedBound {}
+impl LayoutConstraintMarker for InheritedBound {}
 
-#[diagnostic::on_unimplemented(message = "fireuhgiu")]
 pub trait ViewLayoutConstraints {
-    type Width: sealed::LayoutConstraint;
-    type Height: sealed::LayoutConstraint;
+    type Width: LayoutConstraintMarker;
+    type Height: LayoutConstraintMarker;
 }
 
-impl<Width, Height> ViewLayoutConstraints for &dyn View<Width = Width, Height = Height>
+impl<Width, Height> ViewLayoutConstraints for &dyn AnyView<Width = Width, Height = Height>
 where
-    Width: sealed::LayoutConstraint,
-    Height: sealed::LayoutConstraint,
+    Width: LayoutConstraintMarker,
+    Height: LayoutConstraintMarker,
 {
     type Width = Width;
     type Height = Height;
 }
 
-impl<Width, Height> ViewLayoutConstraints for Box<dyn View<Width = Width, Height = Height>>
+impl<Width, Height> ViewLayoutConstraints for Box<dyn AnyView<Width = Width, Height = Height>>
 where
-    Width: sealed::LayoutConstraint,
-    Height: sealed::LayoutConstraint,
+    Width: LayoutConstraintMarker,
+    Height: LayoutConstraintMarker,
 {
     type Width = Width;
     type Height = Height;
 }
 
-impl<Width, Height> ViewLayoutConstraints for Rc<dyn View<Width = Width, Height = Height>>
+impl<Width, Height> ViewLayoutConstraints for Rc<dyn AnyView<Width = Width, Height = Height>>
 where
-    Width: sealed::LayoutConstraint,
-    Height: sealed::LayoutConstraint,
+    Width: LayoutConstraintMarker,
+    Height: LayoutConstraintMarker,
 {
     type Width = Width;
     type Height = Height;
 }
 
-impl<Width, Height> ViewLayoutConstraints for Arc<dyn View<Width = Width, Height = Height>>
+impl<Width, Height> ViewLayoutConstraints for Arc<dyn AnyView<Width = Width, Height = Height>>
 where
-    Width: sealed::LayoutConstraint,
-    Height: sealed::LayoutConstraint,
+    Width: LayoutConstraintMarker,
+    Height: LayoutConstraintMarker,
 {
     type Width = Width;
     type Height = Height;
 }
 
 pub trait ResolveLayoutConstraint {
-    type Value: sealed::LayoutConstraint;
+    type Value: LayoutConstraintMarker;
 }
 
 impl ResolveLayoutConstraint for Unbounded {

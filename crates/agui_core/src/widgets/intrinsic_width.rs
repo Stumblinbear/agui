@@ -4,12 +4,13 @@ use typed_floats::{Positive, PositiveFinite};
 use crate::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
-    element::{Element, ElementState},
+    element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{View, ViewDraw, ViewLayout, ViewLayoutConstraints, ViewLifecycle},
+    view::{View, ViewLayoutConstraints},
 };
 
 #[derive(Builder)]
@@ -20,20 +21,26 @@ pub struct IntrinsicWidth<Child> {
     child: Child,
 }
 
-impl<Child> ViewLifecycle for IntrinsicWidth<Child>
+impl<Child> ViewLayoutConstraints for IntrinsicWidth<Child>
 where
-    Child: ViewLifecycle,
+    Child: View,
 {
-    fn state(&self) -> ElementState {
-        ElementState::none()
+    type Width = Child::Width;
+    type Height = Child::Height;
+}
+
+impl<Child> View for IntrinsicWidth<Child>
+where
+    Child: View,
+{
+    type State = ();
+
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        (vec![Element::new(&self.child, ctx)], ())
     }
 
-    fn children(&self) -> Vec<Element> {
-        vec![Element::new(&self.child)]
-    }
-
-    fn update(&self, element: &mut Element, ctx: UpdateCtx) {
-        element.child_mut(0, &self.child).update(ctx);
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.child_mut(0, &self.child).update(&old.child, ctx);
     }
 
     fn message(&self, element: &mut Element, ctx: MessageCtx) {
@@ -42,20 +49,7 @@ where
             _ => unreachable!(),
         }
     }
-}
 
-impl<Child> ViewLayoutConstraints for IntrinsicWidth<Child>
-where
-    Child: ViewLayout,
-{
-    type Width = Child::Width;
-    type Height = Child::Height;
-}
-
-impl<Child> ViewLayout for IntrinsicWidth<Child>
-where
-    Child: ViewLayout,
-{
     fn min_intrinsic_width(
         &self,
         element: &Element,
@@ -178,14 +172,8 @@ where
 
         element.child(0, &self.child).hit_test(result, position)
     }
-}
-impl<Renderer, Child> ViewDraw<Renderer> for IntrinsicWidth<Child>
-where
-    Renderer: crate::renderer::Renderer,
-    Child: View<Renderer>,
-    Child: ViewLayout,
-{
-    fn draw(&self, element: &mut Element, renderer: &mut Renderer) {
-        element.child_mut(0, &self.child).draw(renderer);
+
+    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
+        element.child_mut(0, &self.child).draw(canvas);
     }
 }

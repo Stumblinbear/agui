@@ -1,3 +1,8 @@
+use std::{
+    any::{Any, TypeId},
+    mem::ManuallyDrop,
+};
+
 use typed_floats::{as_const, Positive, PositiveFinite};
 
 use crate::{
@@ -6,25 +11,37 @@ use crate::{
     element::{Element, ElementState},
     hit_test::HitTestResult,
     offset::Offset,
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };
 
+mod any_view;
 mod layout_constraints;
 
+pub use any_view::*;
 pub use layout_constraints::*;
 
-pub trait ViewLifecycle {
-    fn state(&self) -> ElementState;
+pub trait View: ViewLayoutConstraints {
+    type State: Any
+    where
+        Self: Sized;
 
-    fn children(&self) -> Vec<Element>;
+    fn is_similar(&self, other_state: &dyn Any) -> bool
+    where
+        Self: Sized,
+    {
+        TypeId::of::<Self::State>() == other_state.type_id()
+    }
 
-    fn update(&self, element: &mut Element, ctx: UpdateCtx);
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State)
+    where
+        Self: Sized;
+
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx);
 
     fn message(&self, element: &mut Element, ctx: MessageCtx);
-}
 
-pub trait ViewLayout: ViewLayoutConstraints {
     /// Returns the minimum width that this box could be without failing to
     /// correctly paint its contents within itself, without clipping.
     ///
@@ -171,42 +188,40 @@ pub trait ViewLayout: ViewLayoutConstraints {
     /// having been called in [`View::hit_test`] but cannot rely upon [`View::draw`]
     /// having been called.
     fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool;
+
+    fn draw(&self, element: &mut Element, canvas: &mut Canvas);
 }
 
-pub trait ViewDraw<Renderer = ()> {
-    fn draw(&self, element: &mut Element, renderer: &mut Renderer);
+#[diagnostic::on_unimplemented(
+    message = "Trait bound View is not satisfied.",
+    note = "dyn View is not supported, use dyn AnyView via .as_dyn_view() or .into_boxed_view() instead."
+)]
+pub trait MountView {
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState);
 }
 
-pub trait View<Renderer = ()>: ViewLifecycle + ViewLayout + ViewDraw<Renderer> {
-    fn as_dyn_view(&self) -> &dyn View<Renderer, Width = Self::Width, Height = Self::Height>
-    where
-        Self: Sized,
-    {
-        self
+impl<T> MountView for T
+where
+    T: View,
+{
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
+        let (elements, state) = <T as View>::mount(self, ctx);
+
+        if TypeId::of::<T::State>() == TypeId::of::<ElementState>()
+            && size_of::<T::State>() == size_of::<ElementState>()
+        {
+            // Since this is an owned value, we need to mark it as a manually dropped value so that
+            // it doesn't get immediately dropped when we return it after transmuting it.
+            let state = ManuallyDrop::new(state);
+
+            // SAFETY: This is probably safe so long as there are no TypeId + size collisions
+            let state = unsafe { std::mem::transmute_copy::<T::State, ElementState>(&state) };
+
+            return (elements, state);
+        }
+
+        (elements, smallbox::smallbox!(state))
     }
-
-    fn into_boxed_view(self) -> Box<dyn View<Renderer, Width = Self::Width, Height = Self::Height>>
-    where
-        Self: Sized + 'static,
-    {
-        Box::new(self)
-    }
-}
-
-impl<T, Renderer> View<Renderer> for T where T: ViewLifecycle + ViewLayout + ViewDraw<Renderer> {}
-
-impl ViewLifecycle for () {
-    fn state(&self) -> ElementState {
-        ElementState::none()
-    }
-
-    fn children(&self) -> Vec<Element> {
-        Vec::new()
-    }
-
-    fn update(&self, _: &mut Element, _: UpdateCtx) {}
-
-    fn message(&self, _: &mut Element, _: MessageCtx) {}
 }
 
 impl ViewLayoutConstraints for () {
@@ -214,7 +229,17 @@ impl ViewLayoutConstraints for () {
     type Height = Bounded;
 }
 
-impl ViewLayout for () {
+impl View for () {
+    type State = ();
+
+    fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        (Vec::new(), ())
+    }
+
+    fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+
+    fn message(&self, _: &mut Element, _: MessageCtx) {}
+
     fn min_intrinsic_width(&self, _: &Element, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
@@ -260,8 +285,6 @@ impl ViewLayout for () {
         // TODO(trevin): should this add itself to the hit test result?
         false
     }
-}
 
-impl<Renderer> ViewDraw<Renderer> for () {
-    fn draw(&self, _: &mut Element, _: &mut Renderer) {}
+    fn draw(&self, _: &mut Element, _: &mut Canvas) {}
 }

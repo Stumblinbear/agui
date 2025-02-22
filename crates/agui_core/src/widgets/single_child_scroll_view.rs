@@ -4,12 +4,13 @@ use typed_floats::{Positive, PositiveFinite};
 use crate::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
-    element::{Element, ElementState},
+    element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{Bounded, View, ViewDraw, ViewLayout, ViewLayoutConstraints, ViewLifecycle},
+    view::{Bounded, View, ViewLayoutConstraints},
 };
 
 #[derive(Builder)]
@@ -23,21 +24,26 @@ where
     child: Child,
 }
 
-impl<Child> ViewLifecycle for SingleChildScrollView<Child>
+impl<Child> ViewLayoutConstraints for SingleChildScrollView<Child>
 where
-    Child: ViewLifecycle,
     Child: ViewLayoutConstraints<Height = Bounded>,
 {
-    fn state(&self) -> ElementState {
-        ElementState::none()
+    type Width = Bounded;
+    type Height = Bounded;
+}
+
+impl<Child> View for SingleChildScrollView<Child>
+where
+    Child: View<Height = Bounded>,
+{
+    type State = ();
+
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        (vec![Element::new(&self.child, ctx)], ())
     }
 
-    fn children(&self) -> Vec<Element> {
-        vec![Element::new(&self.child)]
-    }
-
-    fn update(&self, element: &mut Element, ctx: UpdateCtx) {
-        element.child_mut(0, &self.child).update(ctx);
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.child_mut(0, &self.child).update(&old.child, ctx);
     }
 
     fn message(&self, element: &mut Element, ctx: MessageCtx) {
@@ -46,22 +52,7 @@ where
             _ => unreachable!(),
         }
     }
-}
 
-impl<Child> ViewLayoutConstraints for SingleChildScrollView<Child>
-where
-    Child: ViewLayout,
-    Child: ViewLayoutConstraints<Height = Bounded>,
-{
-    type Width = Bounded;
-    type Height = Bounded;
-}
-
-impl<Child> ViewLayout for SingleChildScrollView<Child>
-where
-    Child: ViewLayout,
-    Child: ViewLayoutConstraints<Height = Bounded>,
-{
     fn min_intrinsic_width(
         &self,
         element: &Element,
@@ -133,31 +124,28 @@ where
 
         element.child(0, &self.child).hit_test(result, position)
     }
-}
-impl<Renderer, Child> ViewDraw<Renderer> for SingleChildScrollView<Child>
-where
-    Renderer: crate::renderer::Renderer,
-    Child: View<Renderer>,
-    Child: ViewLayout,
-    Child: ViewLayoutConstraints<Height = Bounded>,
-{
-    fn draw(&self, element: &mut Element, renderer: &mut Renderer) {
-        element.child_mut(0, &self.child).draw(renderer);
+
+    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
+        element.child_mut(0, &self.child).draw(canvas);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::VecDeque, sync::mpsc};
+
     use crate::widgets::sized_box::SizedBox;
 
     use super::*;
 
     #[test]
     fn intrinsic_width() {
-        let mut element = Element::empty();
+        let (tx, _) = mpsc::channel();
+        let mut path = VecDeque::new();
+        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(10));
-        element.update(&scroll_view);
+        let mut element = Element::new(&scroll_view, &mut update_ctx);
         assert_eq!(
             scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(10, 0),
@@ -165,7 +153,7 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(256));
-        element.update(&scroll_view);
+        let mut element = Element::new(&scroll_view, &mut update_ctx);
         assert_eq!(
             scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(128, 0),
@@ -173,7 +161,7 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(10).height(16));
-        element.update(&scroll_view);
+        let mut element = Element::new(&scroll_view, &mut update_ctx);
         assert_eq!(
             scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(10, 16),
@@ -182,7 +170,7 @@ mod tests {
 
         let scroll_view =
             SingleChildScrollView::new().child(SizedBox::new().expand_width().height(16));
-        element.update(&scroll_view);
+        let mut element = Element::new(&scroll_view, &mut update_ctx);
         assert_eq!(
             scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(128, 16),
@@ -191,7 +179,7 @@ mod tests {
 
         let scroll_view =
             SingleChildScrollView::new().child(SizedBox::new().width(256).height(256));
-        element.update(&scroll_view);
+        let mut element = Element::new(&scroll_view, &mut update_ctx);
         assert_eq!(
             scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(128, 128),

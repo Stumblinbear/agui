@@ -1,5 +1,6 @@
 use std::any::{type_name_of_val, Any};
 
+use smallbox::SmallBox;
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
@@ -7,121 +8,108 @@ use crate::{
     context::{MessageCtx, UpdateCtx},
     hit_test::HitTestResult,
     offset::Offset,
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{ViewDraw, ViewLayout, ViewLifecycle},
+    view::{MountView, View},
     view_id::ViewId,
 };
 
-pub struct ElementState(Option<Box<dyn Any>>);
-
-impl ElementState {
-    pub fn none() -> Self {
-        Self(None)
-    }
-
-    pub fn new<T>(value: T) -> Self
-    where
-        T: Any,
-    {
-        Self(Some(Box::new(value)))
-    }
-
-    pub fn as_ref(&self) -> Option<&dyn Any> {
-        self.0.as_deref()
-    }
-
-    pub fn as_mut(&mut self) -> Option<&mut dyn Any> {
-        self.0.as_deref_mut()
-    }
-}
+pub(crate) type ElementState = SmallBox<dyn Any, smallbox::space::S2>;
 
 pub struct Element {
     state: ElementState,
 
     pub children: Vec<Element>,
 
-    pub(crate) size: Size,
+    size: Size,
 }
 
 impl Element {
     pub fn empty() -> Self {
         Self {
-            state: ElementState::none(),
+            state: smallbox::smallbox!(()),
 
-            children: Vec::new(),
-
-            size: Size::ZERO,
-        }
-    }
-
-    pub fn new(view: &impl ViewLifecycle) -> Self {
-        Self {
-            state: view.state(),
-
-            children: view.children(),
+            children: Vec::default(),
 
             size: Size::ZERO,
         }
     }
 
-    pub fn update(&mut self, view: &impl ViewLifecycle) {
-        // TODO(trevin): diff the tree
-
-        self.state = view.state();
-        self.children = view.children();
-    }
-
-    pub fn state<T>(&self) -> &T
+    pub fn new<V>(view: &V, ctx: &mut UpdateCtx) -> Self
     where
-        T: Any,
+        V: MountView,
+    {
+        let (children, state) = view.mount(ctx);
+
+        Self {
+            state,
+
+            children,
+
+            size: Size::ZERO,
+        }
+    }
+
+    pub fn state<V>(&self) -> &<V as View>::State
+    where
+        V: View,
+        V::State: Any,
     {
         self.state
-            .as_ref()
-            .expect("no state")
             .downcast_ref()
             .expect("node state downcast failed")
     }
 
-    pub fn state_mut<T>(&mut self) -> &mut T
+    pub fn state_mut<V>(&mut self) -> &mut <V as View>::State
     where
-        T: Any,
+        V: View,
+        V::State: Any,
     {
         self.state
-            .as_mut()
-            .expect("no state")
             .downcast_mut()
             .expect("node state downcast failed")
-    }
-
-    pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child> {
-        ElementRef {
-            element: &self.children[idx as usize],
-            view,
-        }
-    }
-
-    pub fn child_mut<'a, Child>(&'a mut self, idx: u16, view: &'a Child) -> ElementMut<'a, Child> {
-        ElementMut {
-            view_id: ViewId::new(idx),
-            element: &mut self.children[idx as usize],
-            view,
-        }
     }
 
     pub const fn size(&self) -> Size {
         self.size
     }
+
+    pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child> {
+        self.children[idx as usize].as_ref(ViewId::new(idx), view)
+    }
+
+    pub fn child_mut<'a, Child>(&'a mut self, idx: u16, view: &'a Child) -> ElementMut<'a, Child> {
+        self.children[idx as usize].as_mut(ViewId::new(idx), view)
+    }
+
+    pub fn as_ref<'a, V>(&'a self, view_id: ViewId, view: &'a V) -> ElementRef<'a, V> {
+        ElementRef {
+            view_id,
+            element: self,
+            view,
+        }
+    }
+
+    pub fn as_mut<'a, V>(&'a mut self, view_id: ViewId, view: &'a V) -> ElementMut<'a, V> {
+        ElementMut {
+            view_id,
+            element: self,
+            view,
+        }
+    }
 }
 
 pub struct ElementRef<'a, Child> {
+    #[allow(dead_code)]
+    view_id: ViewId,
     element: &'a Element,
     view: &'a Child,
 }
 
 impl<Child> ElementRef<'_, Child>
 where
-    Child: ViewLayout,
+    Child: View,
 {
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.view.min_intrinsic_width(self.element, height)
@@ -165,21 +153,16 @@ pub struct ElementMut<'a, Child> {
 
 impl<Child> ElementMut<'_, Child>
 where
-    Child: ViewLifecycle,
+    Child: View,
 {
-    pub fn update(&mut self, mut ctx: UpdateCtx) {
-        ctx.with_view(self.view_id, |ctx| self.view.update(self.element, ctx))
+    pub fn update(&mut self, old: &Child, ctx: &mut UpdateCtx) {
+        ctx.with_view(self.view_id, |ctx| self.view.update(self.element, old, ctx))
     }
 
     pub fn message(self, ctx: MessageCtx) {
         self.view.message(self.element, ctx)
     }
-}
 
-impl<Child> ElementMut<'_, Child>
-where
-    Child: ViewLayout,
-{
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.view.min_intrinsic_width(self.element, height)
     }
@@ -245,14 +228,12 @@ where
     pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
         self.view.hit_test(self.element, result, position)
     }
-}
 
-impl<Child> ElementMut<'_, Child> {
-    pub fn draw<Renderer>(&mut self, renderer: &mut Renderer)
+    pub fn draw(&mut self, canvas: &mut Canvas)
     where
-        Child: ViewDraw<Renderer>,
+        Child: View,
     {
-        self.view.draw(self.element, renderer)
+        self.view.draw(self.element, canvas)
     }
 }
 
@@ -263,5 +244,176 @@ pub struct ChildLayoutRef<'a> {
 impl ChildLayoutRef<'_> {
     pub const fn size(self) -> Size {
         self.element.size()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::VecDeque, marker::PhantomData, sync::mpsc};
+
+    use typed_floats::{Positive, PositiveFinite};
+
+    use crate::{
+        constraints::Constraints,
+        context::{MessageCtx, UpdateCtx},
+        element::Element,
+        hit_test::HitTestResult,
+        offset::Offset,
+        renderer::Canvas,
+        size::Size,
+        text_baseline::TextBaseline,
+        view::{AsAnyView, Unbounded, View, ViewLayoutConstraints},
+    };
+
+    struct TestView<T> {
+        _phantom: PhantomData<T>,
+    }
+
+    impl<T> Default for TestView<T> {
+        fn default() -> Self {
+            Self {
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    impl<T> ViewLayoutConstraints for TestView<T> {
+        type Width = Unbounded;
+        type Height = Unbounded;
+    }
+
+    impl<T> View for TestView<T>
+    where
+        T: Default + 'static,
+    {
+        type State = T;
+
+        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+            (vec![], T::default())
+        }
+
+        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+
+        fn message(&self, _: &mut Element, _: MessageCtx) {}
+
+        fn min_intrinsic_width(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_width(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn min_intrinsic_height(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_height(
+            &self,
+            _: &Element,
+            _: Positive<f32>,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn measure(&self, _: &Element, _: Constraints) -> Size {
+            Size::ZERO
+        }
+
+        fn layout(&self, _: &mut Element, _: Constraints) -> Size {
+            Size::ZERO
+        }
+
+        fn measure_baseline(
+            &self,
+            _: &Element,
+            _: Constraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn distance_to_baseline(
+            &self,
+            _: &mut Element,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn hit_test(&self, _: &Element, _: &mut HitTestResult, _: Offset) -> bool {
+            false
+        }
+
+        fn draw(&self, _: &mut Element, _: &mut Canvas) {}
+    }
+
+    #[test]
+    fn unit_state_is_inline() {
+        let (tx, _) = mpsc::channel();
+        let mut path = VecDeque::new();
+        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
+
+        let view = TestView::<()>::default();
+
+        let element = Element::new(&view, &mut update_ctx);
+        assert!(
+            !element.state.is_heap(),
+            "concrete View should result in an inline state"
+        );
+
+        let element = Element::new(&view.into_boxed_view(), &mut update_ctx);
+        assert!(
+            !element.state.is_heap(),
+            "dyn View should result in an inline state"
+        );
+    }
+
+    #[test]
+    fn small_states_are_inline() {
+        let (tx, _) = mpsc::channel();
+        let mut path = VecDeque::new();
+        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
+
+        let view = TestView::<u16>::default();
+
+        let element = Element::new(&view, &mut update_ctx);
+        assert!(
+            !element.state.is_heap(),
+            "concrete View should result in an inline state"
+        );
+
+        let element = Element::new(&view.into_boxed_view(), &mut update_ctx);
+        assert!(
+            !element.state.is_heap(),
+            "dyn View should result in an inline state"
+        );
+    }
+
+    #[test]
+    fn large_states_are_heaped() {
+        let (tx, _) = mpsc::channel();
+        let mut path = VecDeque::new();
+        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
+
+        let view = TestView::<[u64; 16]>::default();
+
+        let element = Element::new(&view.into_boxed_view(), &mut update_ctx);
+        assert!(
+            element.state.is_heap(),
+            "dyn View should result in a heaped state"
+        );
     }
 }

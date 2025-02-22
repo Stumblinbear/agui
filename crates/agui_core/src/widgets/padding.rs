@@ -5,13 +5,14 @@ use crate::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     edge_insets::EdgeInsetsGeometry,
-    element::{Element, ElementState},
+    element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
     text_direction::TextDirection,
-    view::{View, ViewDraw, ViewLayout, ViewLayoutConstraints, ViewLifecycle},
+    view::{View, ViewLayoutConstraints},
 };
 
 #[derive(Builder)]
@@ -29,26 +30,35 @@ pub struct Padding<EdgeGeometry, Child> {
 }
 
 #[derive(Default)]
-struct State {
+#[doc(hidden)]
+pub struct PaddingState {
     child_offset: Offset,
 }
 
-impl<EdgeGeometry, Child> ViewLifecycle for Padding<EdgeGeometry, Child>
+impl<EdgeGeometry, Child> ViewLayoutConstraints for Padding<EdgeGeometry, Child>
+where
+    Child: View,
+{
+    type Width = Child::Width;
+    type Height = Child::Height;
+}
+
+impl<EdgeGeometry, Child> View for Padding<EdgeGeometry, Child>
 where
     EdgeGeometry: EdgeInsetsGeometry,
-    Child: ViewLifecycle,
-    Child: ViewLayout,
+    Child: View,
 {
-    fn state(&self) -> ElementState {
-        ElementState::new(State::default())
+    type State = PaddingState;
+
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        (
+            vec![Element::new(&self.child, ctx)],
+            PaddingState::default(),
+        )
     }
 
-    fn children(&self) -> Vec<Element> {
-        vec![Element::new(&self.child)]
-    }
-
-    fn update(&self, element: &mut Element, ctx: UpdateCtx) {
-        element.child_mut(0, &self.child).update(ctx);
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.child_mut(0, &self.child).update(&old.child, ctx);
     }
 
     fn message(&self, element: &mut Element, ctx: MessageCtx) {
@@ -57,21 +67,7 @@ where
             _ => unreachable!(),
         }
     }
-}
 
-impl<EdgeGeometry, Child> ViewLayoutConstraints for Padding<EdgeGeometry, Child>
-where
-    Child: ViewLayout,
-{
-    type Width = Child::Width;
-    type Height = Child::Height;
-}
-
-impl<EdgeGeometry, Child> ViewLayout for Padding<EdgeGeometry, Child>
-where
-    EdgeGeometry: EdgeInsetsGeometry,
-    Child: ViewLayout,
-{
     fn min_intrinsic_width(
         &self,
         element: &Element,
@@ -177,7 +173,7 @@ where
             .layout(inner_constraints)
             .size();
 
-        element.state_mut::<State>().child_offset =
+        element.state_mut::<Self>().child_offset =
             Offset::new(self.padding.left(self.text_direction), self.padding.top());
 
         constraints
@@ -210,7 +206,7 @@ where
             .child_mut(0, &self.child)
             .distance_to_baseline(baseline)
             .map(|distance| {
-                PositiveFinite::try_from(distance + element.state::<State>().child_offset.y)
+                PositiveFinite::try_from(distance + element.state::<Self>().child_offset.y)
                     .expect("distance to baseline of padding was not a positive finite number")
             })
     }
@@ -221,54 +217,51 @@ where
         }
 
         result.with_offset(
-            element.state::<State>().child_offset,
+            element.state::<Self>().child_offset,
             position,
             |result, transformed| element.child(0, &self.child).hit_test(result, transformed),
         )
     }
-}
-impl<Renderer, EdgeGeometry, Child> ViewDraw<Renderer> for Padding<EdgeGeometry, Child>
-where
-    Renderer: crate::renderer::Renderer,
-    EdgeGeometry: EdgeInsetsGeometry,
-    Child: View<Renderer>,
-    Child: ViewLayout,
-{
-    fn draw(&self, element: &mut Element, renderer: &mut Renderer) {
+
+    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
         let left = self.padding.left(self.text_direction);
         let top = self.padding.top();
 
-        renderer.with_offset(Offset::new(left, top), |renderer| {
-            element.child_mut(0, &self.child).draw(renderer);
+        canvas.with_offset(Offset::new(left, top), |canvas| {
+            element.child_mut(0, &self.child).draw(canvas);
         });
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::VecDeque, sync::mpsc};
+
     use super::*;
     use crate::{edge_insets::EdgeInsets, widgets::sized_box::SizedBox};
 
     #[test]
     fn padding() {
-        let mut element = Element::empty();
+        let (tx, _) = mpsc::channel();
+        let mut path = VecDeque::new();
+        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let padding = Padding::new(EdgeInsets::all(10.0)).child(());
-        element.update(&padding);
+        let mut element = Element::new(&padding, &mut update_ctx);
         assert_eq!(
             padding.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(20.0, 20.0)
         );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
-        element.update(&padding);
+        let mut element = Element::new(&padding, &mut update_ctx);
         assert_eq!(
             padding.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(100.0, 100.0)
         );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
-        element.update(&padding);
+        let mut element = Element::new(&padding, &mut update_ctx);
         assert_eq!(
             padding.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(128.0, 128.0)

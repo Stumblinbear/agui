@@ -5,14 +5,15 @@ use typed_floats::{as_const, Positive, PositiveFinite};
 use crate::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
-    element::{Element, ElementState},
+    element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
     view::{
         Bounded, InheritedBound, ResolveConstraintOr, ResolveLayoutConstraint, Unbounded, View,
-        ViewDraw, ViewLayout, ViewLayoutConstraints, ViewLifecycle,
+        ViewLayoutConstraints,
     },
 };
 
@@ -184,33 +185,9 @@ impl<AdditionalConstraints, Child> SizedBox<AdditionalConstraints, Child> {
     }
 }
 
-impl<AdditionalConstraints, Child> ViewLifecycle for SizedBox<AdditionalConstraints, Child>
-where
-    Child: ViewLifecycle,
-{
-    fn state(&self) -> ElementState {
-        ElementState::none()
-    }
-
-    fn children(&self) -> Vec<Element> {
-        vec![Element::new(&self.child)]
-    }
-
-    fn update(&self, element: &mut Element, ctx: UpdateCtx) {
-        element.child_mut(0, &self.child).update(ctx);
-    }
-
-    fn message(&self, element: &mut Element, ctx: MessageCtx) {
-        match ctx.routing_id() {
-            Some(0) => element.child_mut(0, &self.child).message(ctx),
-            _ => unreachable!(),
-        }
-    }
-}
-
 impl<Width, Height, Child> ViewLayoutConstraints for SizedBox<(Width, Height), Child>
 where
-    Child: ViewLayout,
+    Child: ViewLayoutConstraints,
     Child::Width: ResolveLayoutConstraint,
     Child::Height: ResolveLayoutConstraint,
     ResolveConstraintOr<Width, <Child as ViewLayoutConstraints>::Width>: ResolveLayoutConstraint,
@@ -220,11 +197,28 @@ where
     type Height = <ResolveConstraintOr<Height, Child::Height> as ResolveLayoutConstraint>::Value;
 }
 
-impl<AdditionalConstraints, Child> ViewLayout for SizedBox<AdditionalConstraints, Child>
+impl<AdditionalConstraints, Child> View for SizedBox<AdditionalConstraints, Child>
 where
     Self: ViewLayoutConstraints,
-    Child: ViewLayout,
+    Child: View,
 {
+    type State = ();
+
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        (vec![Element::new(&self.child, ctx)], ())
+    }
+
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.child_mut(0, &self.child).update(&old.child, ctx);
+    }
+
+    fn message(&self, element: &mut Element, ctx: MessageCtx) {
+        match ctx.routing_id() {
+            Some(0) => element.child_mut(0, &self.child).message(ctx),
+            _ => unreachable!(),
+        }
+    }
+
     fn min_intrinsic_width(
         &self,
         element: &Element,
@@ -306,31 +300,28 @@ where
 
         element.child(0, &self.child).hit_test(result, position)
     }
-}
 
-impl<AdditionalConstraints, Renderer, Child> ViewDraw<Renderer>
-    for SizedBox<AdditionalConstraints, Child>
-where
-    Renderer: crate::renderer::Renderer,
-    Child: View<Renderer>,
-{
-    fn draw(&self, element: &mut Element, renderer: &mut Renderer) {
-        element.child_mut(0, &self.child).draw(renderer);
+    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
+        element.child_mut(0, &self.child).draw(canvas);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::VecDeque, sync::mpsc};
+
     use crate::widgets::sized_box::SizedBox;
 
     use super::*;
 
     #[test]
     fn sized_box() {
-        let mut element = Element::empty();
+        let (tx, _) = mpsc::channel();
+        let mut path = VecDeque::new();
+        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let sized_box = SizedBox::new().width(16).height(48);
-        element.update(&sized_box);
+        let mut element = Element::new(&sized_box, &mut update_ctx);
         assert_eq!(
             sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(16, 48),
@@ -338,7 +329,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::new().width(0).height(16);
-        element.update(&sized_box);
+        let mut element = Element::new(&sized_box, &mut update_ctx);
         assert_eq!(
             sized_box.layout(&mut element, Constraints::new(16, 128, 32, 128)),
             Size::new(16, 32),
@@ -346,7 +337,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::shrink();
-        element.update(&sized_box);
+        let mut element = Element::new(&sized_box, &mut update_ctx);
         assert_eq!(
             sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(0, 0),
@@ -354,7 +345,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::shrink();
-        element.update(&sized_box);
+        let mut element = Element::new(&sized_box, &mut update_ctx);
         assert_eq!(
             sized_box.layout(&mut element, Constraints::new(10, 128, 20, 128)),
             Size::new(10, 20),
@@ -362,7 +353,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::expand();
-        element.update(&sized_box);
+        let mut element = Element::new(&sized_box, &mut update_ctx);
         assert_eq!(
             sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
             Size::new(128, 128),
