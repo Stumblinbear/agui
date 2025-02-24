@@ -1,16 +1,9 @@
-use std::any::{type_name_of_val, Any};
+use std::any::Any;
 
 use smallbox::SmallBox;
-use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
-    constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
-    hit_test::HitTestResult,
-    offset::Offset,
-    renderer::Canvas,
-    size::Size,
-    text_baseline::TextBaseline,
     view::{MountView, View},
     view_id::ViewId,
 };
@@ -54,8 +47,6 @@ pub struct Element {
     pub state: ElementState,
 
     pub children: Vec<Element>,
-
-    size: Size,
 }
 
 impl Element {
@@ -64,8 +55,6 @@ impl Element {
             state: ElementState::empty(),
 
             children: Vec::default(),
-
-            size: Size::ZERO,
         }
     }
 
@@ -75,17 +64,7 @@ impl Element {
     {
         let (children, state) = view.mount(ctx);
 
-        Self {
-            state,
-
-            children,
-
-            size: Size::ZERO,
-        }
-    }
-
-    pub const fn size(&self) -> Size {
-        self.size
+        Self { state, children }
     }
 
     pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child>
@@ -136,37 +115,12 @@ impl<Child> ElementRef<'_, Child>
 where
     Child: View,
 {
-    pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.min_intrinsic_width(self.element, height)
+    pub fn create_render_object(&self) -> Child::Render {
+        self.view.create_render_object(self.element)
     }
 
-    pub fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.max_intrinsic_width(self.element, height)
-    }
-
-    pub fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.min_intrinsic_height(self.element, width)
-    }
-
-    pub fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.max_intrinsic_height(self.element, width)
-    }
-
-    pub fn measure(&self, constraints: Constraints) -> Size {
-        self.view.measure(self.element, constraints)
-    }
-
-    pub fn measure_baseline(
-        &self,
-        constraints: Constraints,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        self.view
-            .measure_baseline(self.element, constraints, baseline)
-    }
-
-    pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        self.view.hit_test(self.element, result, position)
+    pub fn update_render_object(&self, render_object: &mut Child::Render) {
+        self.view.update_render_object(self.element, render_object)
     }
 }
 
@@ -194,87 +148,12 @@ where
         self.view.message(self.element, ctx)
     }
 
-    pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.min_intrinsic_width(self.element, height)
+    pub fn create_render_object(&self) -> Child::Render {
+        self.view.create_render_object(self.element)
     }
 
-    pub fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.max_intrinsic_width(self.element, height)
-    }
-
-    pub fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.min_intrinsic_height(self.element, width)
-    }
-
-    pub fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.view.max_intrinsic_height(self.element, width)
-    }
-
-    pub fn measure(&self, constraints: Constraints) -> Size {
-        self.view.measure(self.element, constraints)
-    }
-
-    pub fn layout(&mut self, constraints: Constraints) -> ChildLayoutRef {
-        let size = self.view.layout(self.element, constraints);
-
-        #[cfg(debug_assertions)]
-        if !size.is_finite() {
-            panic!(
-                "{} was given an infinite size during layout. The given constraints were: {:?}",
-                type_name_of_val(self.view),
-                constraints
-            );
-        }
-
-        #[cfg(debug_assertions)]
-        if !constraints.is_satisfied_by(size) {
-            panic!(
-                "{} did not satisfy the given constraints. The given constraints were: {:?}, but the size was: {:?}",
-                type_name_of_val(self.view),
-                constraints,
-                size
-            );
-        }
-
-        self.element.size = size;
-
-        ChildLayoutRef {
-            element: self.element,
-        }
-    }
-
-    pub fn measure_baseline(
-        &self,
-        constraints: Constraints,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        self.view
-            .measure_baseline(self.element, constraints, baseline)
-    }
-
-    pub fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
-        self.view.distance_to_baseline(self.element, baseline)
-    }
-
-    pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        self.view.hit_test(self.element, result, position)
-    }
-
-    pub fn draw(&mut self, canvas: &mut Canvas)
-    where
-        Child: View,
-    {
-        self.view.draw(self.element, canvas)
-    }
-}
-
-pub struct ChildLayoutRef<'a> {
-    element: &'a Element,
-}
-
-impl ChildLayoutRef<'_> {
-    pub const fn size(self) -> Size {
-        self.element.size()
+    pub fn update_render_object(&self, render_object: &mut Child::Render) {
+        self.view.update_render_object(self.element, render_object)
     }
 }
 
@@ -282,18 +161,11 @@ impl ChildLayoutRef<'_> {
 mod tests {
     use std::{collections::VecDeque, marker::PhantomData, sync::mpsc};
 
-    use typed_floats::{Positive, PositiveFinite};
-
     use crate::{
-        constraints::Constraints,
         context::{MessageCtx, UpdateCtx},
         element::Element,
-        hit_test::HitTestResult,
-        offset::Offset,
-        renderer::Canvas,
-        size::Size,
-        text_baseline::TextBaseline,
-        view::{AsAnyView, NoIntrinsic, Unbounded, View, ViewLayoutMarker},
+        render_object::RenderLeaf,
+        view::{AsAnyView, View},
     };
 
     struct TestView<T> {
@@ -308,18 +180,12 @@ mod tests {
         }
     }
 
-    impl<T> ViewLayoutMarker for TestView<T> {
-        type Width = Unbounded;
-        type Height = Unbounded;
-
-        type WidthIntrinsic = NoIntrinsic;
-        type HeightIntrinsic = NoIntrinsic;
-    }
-
     impl<T> View for TestView<T>
     where
         T: Default + 'static,
     {
+        type Render = RenderLeaf;
+
         type State = T;
 
         fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
@@ -330,68 +196,11 @@ mod tests {
 
         fn message(&self, _: &mut Element, _: MessageCtx) {}
 
-        fn min_intrinsic_width(
-            &self,
-            _: &Element,
-            _: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            None
+        fn create_render_object(&self, _: &Element) -> Self::Render {
+            RenderLeaf::default()
         }
 
-        fn max_intrinsic_width(
-            &self,
-            _: &Element,
-            _: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn min_intrinsic_height(
-            &self,
-            _: &Element,
-            _: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn max_intrinsic_height(
-            &self,
-            _: &Element,
-            _: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn measure(&self, _: &Element, _: Constraints) -> Size {
-            Size::ZERO
-        }
-
-        fn layout(&self, _: &mut Element, _: Constraints) -> Size {
-            Size::ZERO
-        }
-
-        fn measure_baseline(
-            &self,
-            _: &Element,
-            _: Constraints,
-            _: TextBaseline,
-        ) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn distance_to_baseline(
-            &self,
-            _: &mut Element,
-            _: TextBaseline,
-        ) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn hit_test(&self, _: &Element, _: &mut HitTestResult, _: Offset) -> bool {
-            false
-        }
-
-        fn draw(&self, _: &mut Element, _: &mut Canvas) {}
+        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
     }
 
     #[test]

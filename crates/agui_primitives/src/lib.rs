@@ -10,18 +10,11 @@ pub mod stack;
 mod tests {
     use std::sync::mpsc;
 
-    use typed_floats::{Positive, PositiveFinite};
-
     use agui_core::{
-        constraints::Constraints,
         context::{MessageCtx, UpdateCtx},
         element::Element,
-        hit_test::HitTestResult,
-        offset::Offset,
-        renderer::Canvas,
-        size::Size,
-        text_baseline::TextBaseline,
-        view::{View, ViewLayoutMarker},
+        render_object::RenderLeaf,
+        view::View,
     };
 
     struct TestListener<Child> {
@@ -33,21 +26,12 @@ mod tests {
         event_tx: Option<mpsc::Sender<()>>,
     }
 
-    impl<Child> ViewLayoutMarker for TestListener<Child>
-    where
-        Child: View,
-    {
-        type Width = Child::Width;
-        type Height = Child::Height;
-
-        type WidthIntrinsic = Child::WidthIntrinsic;
-        type HeightIntrinsic = Child::HeightIntrinsic;
-    }
-
     impl<Child> View for TestListener<Child>
     where
         Child: View,
     {
+        type Render = RenderLeaf;
+
         type State = State;
 
         fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
@@ -67,83 +51,11 @@ mod tests {
             }
         }
 
-        fn min_intrinsic_width(
-            &self,
-            element: &Element,
-            height: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            element.child(0, &self.child).min_intrinsic_width(height)
+        fn create_render_object(&self, _: &Element) -> Self::Render {
+            RenderLeaf::default()
         }
 
-        fn max_intrinsic_width(
-            &self,
-            element: &Element,
-            height: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            element.child(0, &self.child).max_intrinsic_width(height)
-        }
-
-        fn min_intrinsic_height(
-            &self,
-            element: &Element,
-            width: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            element.child(0, &self.child).min_intrinsic_height(width)
-        }
-
-        fn max_intrinsic_height(
-            &self,
-            element: &Element,
-            width: Positive<f32>,
-        ) -> Option<PositiveFinite<f32>> {
-            element.child(0, &self.child).max_intrinsic_height(width)
-        }
-
-        fn measure(&self, element: &Element, constraints: Constraints) -> Size {
-            element.child(0, &self.child).measure(constraints)
-        }
-
-        fn layout(&self, element: &mut Element, constraints: Constraints) -> Size {
-            element.child(0, &self.child).measure(constraints)
-        }
-
-        fn measure_baseline(
-            &self,
-            element: &Element,
-            constraints: Constraints,
-            baseline: TextBaseline,
-        ) -> Option<PositiveFinite<f32>> {
-            element
-                .child(0, &self.child)
-                .measure_baseline(constraints, baseline)
-        }
-
-        fn distance_to_baseline(
-            &self,
-            element: &mut Element,
-            baseline: TextBaseline,
-        ) -> Option<PositiveFinite<f32>> {
-            element
-                .child_mut(0, &self.child)
-                .distance_to_baseline(baseline)
-        }
-
-        fn hit_test(
-            &self,
-            element: &Element,
-            result: &mut HitTestResult,
-            position: Offset,
-        ) -> bool {
-            if !element.size().contains(position) {
-                return false;
-            }
-
-            element.child(0, &self.child).hit_test(result, position)
-        }
-
-        fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
-            element.child_mut(0, &self.child).draw(canvas)
-        }
+        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
     }
 
     #[test]

@@ -4,15 +4,16 @@ use typed_floats::{as_const, Positive, PositiveFinite};
 use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
-    edge_insets::EdgeInsetsGeometry,
+    edge_insets::{EdgeInsets, EdgeInsetsGeometry},
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    render_object::RenderObject,
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
     text_direction::TextDirection,
-    view::{View, ViewLayoutMarker},
+    view::View,
 };
 
 #[derive(Builder)]
@@ -29,35 +30,17 @@ pub struct Padding<EdgeGeometry, Child> {
     text_direction: TextDirection,
 }
 
-#[derive(Default)]
-#[doc(hidden)]
-pub struct PaddingState {
-    child_offset: Offset,
-}
-
-impl<EdgeGeometry, Child> ViewLayoutMarker for Padding<EdgeGeometry, Child>
-where
-    Child: View,
-{
-    type Width = Child::Width;
-    type Height = Child::Height;
-
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-}
-
 impl<EdgeGeometry, Child> View for Padding<EdgeGeometry, Child>
 where
     EdgeGeometry: EdgeInsetsGeometry,
     Child: View,
 {
-    type State = PaddingState;
+    type Render = RenderPadding<Child::Render>;
+
+    type State = ();
 
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        (
-            vec![Element::new(&self.child, ctx)],
-            PaddingState::default(),
-        )
+        (vec![Element::new(&self.child, ctx)], ())
     }
 
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
@@ -71,11 +54,67 @@ where
         }
     }
 
-    fn min_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
+    fn create_render_object(&self, element: &Element) -> Self::Render {
+        RenderPadding {
+            padding: EdgeInsets {
+                left: self.padding.left(self.text_direction),
+                top: self.padding.top(),
+                right: self.padding.right(self.text_direction),
+                bottom: self.padding.bottom(),
+            },
+
+            child: element.child(0, &self.child).create_render_object(),
+            child_offset: Offset::ZERO,
+
+            size: Size::ZERO,
+        }
+    }
+
+    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+        let padding = EdgeInsets {
+            left: self.padding.left(self.text_direction),
+            top: self.padding.top(),
+            right: self.padding.right(self.text_direction),
+            bottom: self.padding.bottom(),
+        };
+
+        // TODO(trevin): mark for re-layout if padding changes
+        render_object.padding = padding;
+
+        element
+            .child(0, &self.child)
+            .update_render_object(&mut render_object.child);
+    }
+}
+
+pub struct RenderPadding<Child> {
+    padding: EdgeInsets,
+
+    child: Child,
+    child_offset: Offset,
+
+    size: Size,
+}
+
+impl<Child> RenderObject for RenderPadding<Child>
+where
+    Child: RenderObject,
+{
+    type Width = Child::Width;
+    type Height = Child::Height;
+
+    type WidthIntrinsic = Child::WidthIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
+
+    fn mount(&mut self, _: &mut UpdateCtx) {}
+
+    fn unmount(&mut self, _: &mut UpdateCtx) {}
+
+    fn size(&self) -> Size {
+        self.size
+    }
+
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         let inner_height = unsafe {
             Positive::<f32>::new_unchecked(
                 as_const!(NonNaN, f32, 0.0)
@@ -84,20 +123,13 @@ where
             )
         };
 
-        element
-            .child(0, &self.child)
-            .min_intrinsic_width(inner_height)
-            .map(|width| {
-                PositiveFinite::try_from(width + self.padding.horizontal())
-                    .expect("minimum intrinsic width of padding must be finite")
-            })
+        self.child.min_intrinsic_width(inner_height).map(|width| {
+            PositiveFinite::try_from(width + self.padding.horizontal())
+                .expect("minimum intrinsic width of padding must be finite")
+        })
     }
 
-    fn max_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         let inner_height = unsafe {
             Positive::<f32>::new_unchecked(
                 as_const!(NonNaN, f32, 0.0)
@@ -106,20 +138,13 @@ where
             )
         };
 
-        element
-            .child(0, &self.child)
-            .max_intrinsic_width(inner_height)
-            .map(|width| {
-                PositiveFinite::try_from(width + self.padding.horizontal())
-                    .expect("minimum intrinsic width of padding must be finite")
-            })
+        self.child.max_intrinsic_width(inner_height).map(|width| {
+            PositiveFinite::try_from(width + self.padding.horizontal())
+                .expect("minimum intrinsic width of padding must be finite")
+        })
     }
 
-    fn min_intrinsic_height(
-        &self,
-        element: &Element,
-        width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         let inner_width = unsafe {
             Positive::<f32>::new_unchecked(
                 as_const!(NonNaN, f32, 0.0)
@@ -128,20 +153,13 @@ where
             )
         };
 
-        element
-            .child(0, &self.child)
-            .min_intrinsic_height(inner_width)
-            .map(|height| {
-                PositiveFinite::try_from(height + self.padding.vertical())
-                    .expect("minimum intrinsic height of padding must be finite")
-            })
+        self.child.min_intrinsic_height(inner_width).map(|height| {
+            PositiveFinite::try_from(height + self.padding.vertical())
+                .expect("minimum intrinsic height of padding must be finite")
+        })
     }
 
-    fn max_intrinsic_height(
-        &self,
-        element: &Element,
-        width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         let inner_width = unsafe {
             Positive::<f32>::new_unchecked(
                 as_const!(NonNaN, f32, 0.0)
@@ -150,49 +168,41 @@ where
             )
         };
 
-        element
-            .child(0, &self.child)
-            .max_intrinsic_height(inner_width)
-            .map(|height| {
-                PositiveFinite::try_from(height + self.padding.vertical())
-                    .expect("minimum intrinsic height of padding must be finite")
-            })
+        self.child.max_intrinsic_height(inner_width).map(|height| {
+            PositiveFinite::try_from(height + self.padding.vertical())
+                .expect("minimum intrinsic height of padding must be finite")
+        })
     }
 
-    fn measure(&self, element: &Element, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: Constraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
 
-        let child_size = element.child(0, &self.child).measure(inner_constraints);
+        let child_size = self.child.measure(inner_constraints);
 
         constraints
             .constrain(Size::new(self.padding.horizontal(), self.padding.vertical()) + child_size)
     }
 
-    fn layout(&self, element: &mut Element, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints) {
         let inner_constraints = constraints.deflate(&self.padding);
 
-        let child_size = element
-            .child_mut(0, &self.child)
-            .layout(inner_constraints)
-            .size();
+        self.child.layout(inner_constraints);
 
-        element.state.downcast_mut::<Self>().child_offset =
-            Offset::new(self.padding.left(self.text_direction), self.padding.top());
+        self.child_offset = Offset::new(self.padding.left, self.padding.top);
 
-        constraints
-            .constrain(Size::new(self.padding.horizontal(), self.padding.vertical()) + child_size)
+        self.size = constraints.constrain(
+            Size::new(self.padding.horizontal(), self.padding.vertical()) + self.child.size(),
+        )
     }
 
     fn measure_baseline(
         &self,
-        element: &Element,
         constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         let inner_constraints = constraints.deflate(&self.padding);
 
-        element
-            .child(0, &self.child)
+        self.child
             .measure_baseline(inner_constraints, baseline)
             .map(|baseline| {
                 PositiveFinite::try_from(baseline + self.padding.top())
@@ -200,40 +210,26 @@ where
             })
     }
 
-    fn distance_to_baseline(
-        &self,
-        element: &mut Element,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        element
-            .child_mut(0, &self.child)
-            .distance_to_baseline(baseline)
-            .map(|distance| {
-                PositiveFinite::try_from(
-                    distance + element.state.downcast_ref::<Self>().child_offset.y,
-                )
+    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        self.child.distance_to_baseline(baseline).map(|distance| {
+            PositiveFinite::try_from(distance + self.child_offset.y)
                 .expect("distance to baseline of padding was not a positive finite number")
-            })
+        })
     }
 
-    fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool {
-        if !element.size().contains(position) {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size().contains(position) {
             return false;
         }
 
-        result.with_offset(
-            element.state.downcast_ref::<Self>().child_offset,
-            position,
-            |result, transformed| element.child(0, &self.child).hit_test(result, transformed),
-        )
+        result.with_offset(self.child_offset, position, |result, transformed| {
+            self.child.hit_test(result, transformed)
+        })
     }
 
-    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
-        let left = self.padding.left(self.text_direction);
-        let top = self.padding.top();
-
-        canvas.with_offset(Offset::new(left, top), |canvas| {
-            element.child_mut(0, &self.child).draw(canvas);
+    fn draw(&mut self, canvas: &mut Canvas) {
+        canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
+            self.child.draw(canvas);
         });
     }
 }
@@ -242,7 +238,7 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use agui_core::edge_insets::EdgeInsets;
+    use agui_core::{edge_insets::EdgeInsets, view_id::ViewId};
 
     use super::*;
     use crate::sized_box::SizedBox;
@@ -254,24 +250,24 @@ mod tests {
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let padding = Padding::new(EdgeInsets::all(10.0)).child(());
-        let mut element = Element::new(&padding, &mut update_ctx);
-        assert_eq!(
-            padding.layout(&mut element, Constraints::new(0, 128, 0, 128)),
-            Size::new(20.0, 20.0)
-        );
+        let mut render_object = Element::new(&padding, &mut update_ctx)
+            .as_ref(ViewId::new(0), &padding)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
+        assert_eq!(render_object.size(), Size::new(20.0, 20.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
-        let mut element = Element::new(&padding, &mut update_ctx);
-        assert_eq!(
-            padding.layout(&mut element, Constraints::new(0, 128, 0, 128)),
-            Size::new(100.0, 100.0)
-        );
+        let mut render_object = Element::new(&padding, &mut update_ctx)
+            .as_ref(ViewId::new(0), &padding)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
+        assert_eq!(render_object.size(), Size::new(100.0, 100.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
-        let mut element = Element::new(&padding, &mut update_ctx);
-        assert_eq!(
-            padding.layout(&mut element, Constraints::new(0, 128, 0, 128)),
-            Size::new(128.0, 128.0)
-        );
+        let mut render_object = Element::new(&padding, &mut update_ctx)
+            .as_ref(ViewId::new(0), &padding)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
+        assert_eq!(render_object.size(), Size::new(128.0, 128.0));
     }
 }

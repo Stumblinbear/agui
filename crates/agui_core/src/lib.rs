@@ -15,6 +15,7 @@ pub mod element;
 pub mod hit_test;
 pub mod offset;
 pub mod rect;
+pub mod render_object;
 pub mod renderer;
 pub mod size;
 pub mod text_baseline;

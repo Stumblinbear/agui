@@ -8,13 +8,14 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    render_object::{
+        Bounded, InheritedBound, LayoutBoundMarker, RenderObject, ResolveLayoutMarker,
+        ResolveLayoutMarkerOr, Unbounded,
+    },
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{
-        Bounded, InheritedBound, ResolveLayoutMarker, ResolveLayoutMarkerOr, Unbounded, View,
-        ViewLayoutMarker,
-    },
+    view::View,
 };
 
 pub struct SizedBox<Constraints, Child> {
@@ -169,40 +170,18 @@ impl From<Size> for SizedBox<(Bounded, Bounded), ()> {
     }
 }
 
-impl<AdditionalConstraints, Child> SizedBox<AdditionalConstraints, Child> {
-    fn additional_constraints(&self) -> Constraints {
-        let mut constraints = Constraints::default();
-
-        if let Some(width) = self.width {
-            constraints = constraints.tighten_width(width.get());
-        }
-
-        if let Some(height) = self.height {
-            constraints = constraints.tighten_height(height.get());
-        }
-
-        constraints
-    }
-}
-
-impl<Width, Height, Child> ViewLayoutMarker for SizedBox<(Width, Height), Child>
+impl<Width, Height, Child> View for SizedBox<(Width, Height), Child>
 where
-    Child: ViewLayoutMarker,
-    ResolveLayoutMarkerOr<Width, <Child as ViewLayoutMarker>::Width>: ResolveLayoutMarker,
-    ResolveLayoutMarkerOr<Height, <Child as ViewLayoutMarker>::Height>: ResolveLayoutMarker,
-{
-    type Width = <ResolveLayoutMarkerOr<Width, Child::Width> as ResolveLayoutMarker>::Value;
-    type Height = <ResolveLayoutMarkerOr<Height, Child::Height> as ResolveLayoutMarker>::Value;
-
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-}
-
-impl<AdditionalConstraints, Child> View for SizedBox<AdditionalConstraints, Child>
-where
-    Self: ViewLayoutMarker,
     Child: View,
+    ResolveLayoutMarkerOr<Width, <Child::Render as RenderObject>::Width>: ResolveLayoutMarker,
+    ResolveLayoutMarkerOr<Height, <Child::Render as RenderObject>::Height>: ResolveLayoutMarker,
 {
+    type Render = RenderSizedBox<
+        <ResolveLayoutMarkerOr<Width, <Child::Render as RenderObject>::Width> as ResolveLayoutMarker>::Value,
+        <ResolveLayoutMarkerOr<Height, <Child::Render as RenderObject>::Height> as ResolveLayoutMarker>::Value,
+        Child::Render,
+    >;
+
     type State = ();
 
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
@@ -220,96 +199,137 @@ where
         }
     }
 
-    fn min_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        self.width
-            .and_then(|width| PositiveFinite::try_from(width).ok())
-            .or_else(|| element.child(0, &self.child).min_intrinsic_width(height))
+    fn create_render_object(&self, element: &Element) -> Self::Render {
+        RenderSizedBox {
+            width: self.width,
+            height: self.height,
+
+            child: element.child(0, &self.child).create_render_object(),
+
+            _phantom: PhantomData,
+        }
     }
 
-    fn max_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        self.width
-            .and_then(|width| PositiveFinite::try_from(width).ok())
-            .or_else(|| element.child(0, &self.child).max_intrinsic_width(height))
-    }
+    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+        // TODO(trevin): mark it for re-layout if these have changed
+        render_object.width = self.width;
+        render_object.height = self.height;
 
-    fn min_intrinsic_height(
-        &self,
-        element: &Element,
-        width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        self.height
-            .and_then(|height| PositiveFinite::try_from(height).ok())
-            .or_else(|| element.child(0, &self.child).min_intrinsic_height(width))
-    }
-
-    fn max_intrinsic_height(
-        &self,
-        element: &Element,
-        width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        self.height
-            .and_then(|height| PositiveFinite::try_from(height).ok())
-            .or_else(|| element.child(0, &self.child).max_intrinsic_height(width))
-    }
-
-    fn measure(&self, element: &Element, constraints: Constraints) -> Size {
         element
             .child(0, &self.child)
+            .update_render_object(&mut render_object.child);
+    }
+}
+pub struct RenderSizedBox<Width, Height, Child> {
+    width: Option<Positive<f32>>,
+    height: Option<Positive<f32>>,
+
+    child: Child,
+
+    _phantom: PhantomData<(Width, Height)>,
+}
+
+impl<Width, Height, Child> RenderSizedBox<Width, Height, Child> {
+    fn additional_constraints(&self) -> Constraints {
+        let mut constraints = Constraints::default();
+
+        if let Some(width) = self.width {
+            constraints = constraints.tighten_width(width.get());
+        }
+
+        if let Some(height) = self.height {
+            constraints = constraints.tighten_height(height.get());
+        }
+
+        constraints
+    }
+}
+
+impl<Width, Height, Child> RenderObject for RenderSizedBox<Width, Height, Child>
+where
+    Child: RenderObject,
+    Width: LayoutBoundMarker,
+    Height: LayoutBoundMarker,
+{
+    type Width = Width;
+    type Height = Height;
+
+    type WidthIntrinsic = Child::WidthIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
+
+    fn mount(&mut self, _: &mut UpdateCtx) {}
+
+    fn unmount(&mut self, _: &mut UpdateCtx) {}
+
+    fn size(&self) -> Size {
+        self.child.size()
+    }
+
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.width
+            .and_then(|width| PositiveFinite::try_from(width).ok())
+            .or_else(|| self.child.min_intrinsic_width(height))
+    }
+
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.width
+            .and_then(|width| PositiveFinite::try_from(width).ok())
+            .or_else(|| self.child.max_intrinsic_width(height))
+    }
+
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.height
+            .and_then(|height| PositiveFinite::try_from(height).ok())
+            .or_else(|| self.child.min_intrinsic_height(width))
+    }
+
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.height
+            .and_then(|height| PositiveFinite::try_from(height).ok())
+            .or_else(|| self.child.max_intrinsic_height(width))
+    }
+
+    fn measure(&self, constraints: Constraints) -> Size {
+        self.child
             .measure(self.additional_constraints().enforce(constraints))
     }
 
-    fn layout(&self, element: &mut Element, constraints: Constraints) -> Size {
-        element
-            .child_mut(0, &self.child)
-            .layout(self.additional_constraints().enforce(constraints))
-            .size()
+    fn layout(&mut self, constraints: Constraints) {
+        self.child
+            .layout(self.additional_constraints().enforce(constraints));
     }
 
     fn measure_baseline(
         &self,
-        element: &Element,
         constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
-        element
-            .child(0, &self.child)
+        self.child
             .measure_baseline(self.additional_constraints().enforce(constraints), baseline)
     }
 
-    fn distance_to_baseline(
-        &self,
-        element: &mut Element,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        element
-            .child_mut(0, &self.child)
-            .distance_to_baseline(baseline)
+    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        self.child.distance_to_baseline(baseline)
     }
 
-    fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool {
-        if !element.size().contains(position) {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size().contains(position) {
             return false;
         }
 
-        element.child(0, &self.child).hit_test(result, position)
+        self.child.hit_test(result, position)
     }
 
-    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
-        element.child_mut(0, &self.child).draw(canvas);
+    fn draw(&mut self, canvas: &mut Canvas) {
+        self.child.draw(canvas);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
+
+    use agui_core::view_id::ViewId;
 
     use crate::sized_box::SizedBox;
 
@@ -322,41 +342,56 @@ mod tests {
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let sized_box = SizedBox::new().width(16).height(48);
-        let mut element = Element::new(&sized_box, &mut update_ctx);
+        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+            .as_ref(ViewId::new(0), &sized_box)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(16, 48),
             "should use the given sizes"
         );
 
         let sized_box = SizedBox::new().width(0).height(16);
-        let mut element = Element::new(&sized_box, &mut update_ctx);
+        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+            .as_ref(ViewId::new(0), &sized_box)
+            .create_render_object();
+        render_object.layout(Constraints::new(16, 128, 32, 128));
         assert_eq!(
-            sized_box.layout(&mut element, Constraints::new(16, 128, 32, 128)),
+            render_object.size(),
             Size::new(16, 32),
             "should ignore the given sizes and use the smallest size allowed by the constraints"
         );
 
         let sized_box = SizedBox::shrink();
-        let mut element = Element::new(&sized_box, &mut update_ctx);
+        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+            .as_ref(ViewId::new(0), &sized_box)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(0, 0),
             "should shrink to the smallest size possible"
         );
 
         let sized_box = SizedBox::shrink();
-        let mut element = Element::new(&sized_box, &mut update_ctx);
+        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+            .as_ref(ViewId::new(0), &sized_box)
+            .create_render_object();
+        render_object.layout(Constraints::new(10, 128, 20, 128));
         assert_eq!(
-            sized_box.layout(&mut element, Constraints::new(10, 128, 20, 128)),
+            render_object.size(),
             Size::new(10, 20),
             "should shrink to the smallest size possible within the constraints"
         );
 
         let sized_box = SizedBox::expand();
-        let mut element = Element::new(&sized_box, &mut update_ctx);
+        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+            .as_ref(ViewId::new(0), &sized_box)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            sized_box.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(128, 128),
             "should expand to the largest size possible within the constraints"
         );

@@ -7,10 +7,11 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    render_object::{HasIntrinsic, RenderObject},
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{HasIntrinsic, View, ViewLayoutMarker},
+    view::View,
 };
 
 #[derive(Builder)]
@@ -21,21 +22,13 @@ pub struct IntrinsicWidth<Child> {
     child: Child,
 }
 
-impl<Child> ViewLayoutMarker for IntrinsicWidth<Child>
-where
-    Child: View<WidthIntrinsic = HasIntrinsic>,
-{
-    type Width = Child::Width;
-    type Height = Child::Height;
-
-    type WidthIntrinsic = HasIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-}
-
 impl<Child> View for IntrinsicWidth<Child>
 where
-    Child: View<WidthIntrinsic = HasIntrinsic>,
+    Child: View,
+    Child::Render: RenderObject<WidthIntrinsic = HasIntrinsic>,
 {
+    type Render = RenderIntrinsicWidth<Child::Render>;
+
     type State = ();
 
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
@@ -53,60 +46,80 @@ where
         }
     }
 
-    fn min_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        element.child(0, &self.child).max_intrinsic_width(height)
+    fn create_render_object(&self, element: &Element) -> Self::Render {
+        RenderIntrinsicWidth {
+            child: element.child(0, &self.child).create_render_object(),
+        }
     }
 
-    fn max_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        element.child(0, &self.child).max_intrinsic_width(height)
+    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+        element
+            .child(0, &self.child)
+            .update_render_object(&mut render_object.child);
+    }
+}
+
+pub struct RenderIntrinsicWidth<Child> {
+    child: Child,
+}
+
+impl<Child> RenderObject for RenderIntrinsicWidth<Child>
+where
+    Child: RenderObject<WidthIntrinsic = HasIntrinsic>,
+{
+    type Width = Child::Width;
+    type Height = Child::Height;
+
+    type WidthIntrinsic = HasIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
+
+    fn mount(&mut self, _: &mut UpdateCtx) {}
+
+    fn unmount(&mut self, _: &mut UpdateCtx) {}
+
+    fn size(&self) -> Size {
+        self.child.size()
     }
 
-    fn min_intrinsic_height(
-        &self,
-        element: &Element,
-        mut width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.max_intrinsic_width(height)
+    }
+
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.max_intrinsic_width(height)
+    }
+
+    fn min_intrinsic_height(&self, mut width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         if width.is_finite() {
             width = self
-                .max_intrinsic_width(element, width)
+                .max_intrinsic_width(width)
                 .expect(
                     "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
                 )
                 .into();
         }
 
-        element.child(0, &self.child).min_intrinsic_height(width)
+        self.child.min_intrinsic_height(width)
     }
 
-    fn max_intrinsic_height(
-        &self,
-        element: &Element,
-        mut width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_height(&self, mut width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         if width.is_finite() {
             width = self
-                .max_intrinsic_width(element, width)
+                .max_intrinsic_width(width)
                 .expect(
                     "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
                 )
                 .into();
         }
 
-        element.child(0, &self.child).max_intrinsic_height(width)
+        self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, element: &Element, mut constraints: Constraints) -> Size {
+    fn measure(&self, mut constraints: Constraints) -> Size {
         if !constraints.has_tight_width() {
-            constraints = constraints.tighten_width(self
-                .max_intrinsic_width(element, constraints.max_height())
+            constraints = constraints.tighten_width(
+                self
+                .max_intrinsic_width(constraints.max_height())
                 .expect(
                     "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
                 ).get());
@@ -116,13 +129,13 @@ where
             // to know if this is happening.
         }
 
-        element.child(0, &self.child).measure(constraints)
+        self.child.measure(constraints)
     }
 
-    fn layout(&self, element: &mut Element, mut constraints: Constraints) -> Size {
+    fn layout(&mut self, mut constraints: Constraints) {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(self
-                .max_intrinsic_width(element, constraints.max_height())
+                .max_intrinsic_width(constraints.max_height())
                 .expect(
                     "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
                 ).get());
@@ -132,18 +145,17 @@ where
             // to know if this is happening.
         }
 
-        element.child_mut(0, &self.child).layout(constraints).size()
+        self.child.layout(constraints);
     }
 
     fn measure_baseline(
         &self,
-        element: &Element,
         mut constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(self
-                .max_intrinsic_width(element, constraints.max_height())
+                .max_intrinsic_width(constraints.max_height())
                 .expect(
                     "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
                 ).get());
@@ -153,30 +165,22 @@ where
             // to know if this is happening.
         }
 
-        element
-            .child(0, &self.child)
-            .measure_baseline(constraints, baseline)
+        self.child.measure_baseline(constraints, baseline)
     }
 
-    fn distance_to_baseline(
-        &self,
-        element: &mut Element,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        element
-            .child_mut(0, &self.child)
-            .distance_to_baseline(baseline)
+    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        self.child.distance_to_baseline(baseline)
     }
 
-    fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool {
-        if !element.size().contains(position) {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.child.size().contains(position) {
             return false;
         }
 
-        element.child(0, &self.child).hit_test(result, position)
+        self.child.hit_test(result, position)
     }
 
-    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
-        element.child_mut(0, &self.child).draw(canvas);
+    fn draw(&mut self, canvas: &mut Canvas) {
+        self.child.draw(canvas);
     }
 }

@@ -7,10 +7,11 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
+    render_object::{Bounded, RenderObject, Unbounded},
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
-    view::{Bounded, View, ViewLayoutMarker},
+    view::View,
 };
 
 #[derive(Builder)]
@@ -18,28 +19,20 @@ use agui_core::{
 #[builder(finish_fn = child)]
 pub struct SingleChildScrollView<Child>
 where
-    Child: ViewLayoutMarker<Height = Bounded>,
+    Child: View,
+    Child::Render: RenderObject<Height = Bounded>,
 {
     #[builder(finish_fn)]
     child: Child,
 }
 
-impl<Child> ViewLayoutMarker for SingleChildScrollView<Child>
-where
-    Child: ViewLayoutMarker<Height = Bounded>,
-{
-    type Width = Bounded;
-    type Height = Bounded;
-
-    // TODO(trevin): should this support intrinsic dimensions?
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-}
-
 impl<Child> View for SingleChildScrollView<Child>
 where
-    Child: View<Height = Bounded>,
+    Child: View,
+    Child::Render: RenderObject<Height = Bounded>,
 {
+    type Render = RenderSingleChildScrollView<Child::Render>;
+
     type State = ();
 
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
@@ -57,86 +50,98 @@ where
         }
     }
 
-    fn min_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        element.child(0, &self.child).min_intrinsic_width(height)
+    fn create_render_object(&self, element: &Element) -> Self::Render {
+        RenderSingleChildScrollView {
+            child: element.child(0, &self.child).create_render_object(),
+
+            size: Size::ZERO,
+        }
     }
 
-    fn max_intrinsic_width(
-        &self,
-        element: &Element,
-        height: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        element.child(0, &self.child).max_intrinsic_width(height)
-    }
-
-    fn min_intrinsic_height(
-        &self,
-        element: &Element,
-        width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        element.child(0, &self.child).min_intrinsic_height(width)
-    }
-
-    fn max_intrinsic_height(
-        &self,
-        element: &Element,
-        width: Positive<f32>,
-    ) -> Option<PositiveFinite<f32>> {
-        element.child(0, &self.child).max_intrinsic_height(width)
-    }
-
-    fn measure(&self, element: &Element, constraints: Constraints) -> Size {
+    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
         element
             .child(0, &self.child)
-            .measure(constraints.only_width())
+            .update_render_object(&mut render_object.child);
+    }
+}
+pub struct RenderSingleChildScrollView<Child> {
+    child: Child,
+
+    size: Size,
+}
+
+impl<Child> RenderObject for RenderSingleChildScrollView<Child>
+where
+    Child: RenderObject<Height = Bounded>,
+{
+    type Width = Unbounded;
+    type Height = Bounded;
+
+    // TODO(trevin): should this support intrinsic dimensions?
+    type WidthIntrinsic = Child::WidthIntrinsic;
+    type HeightIntrinsic = Child::HeightIntrinsic;
+
+    fn mount(&mut self, _: &mut UpdateCtx) {}
+
+    fn unmount(&mut self, _: &mut UpdateCtx) {}
+
+    fn size(&self) -> Size {
+        self.size
     }
 
-    fn layout(&self, element: &mut Element, constraints: Constraints) -> Size {
-        let child_size = element
-            .child_mut(0, &self.child)
-            .layout(constraints.only_width())
-            .size();
-
-        constraints.constrain(child_size)
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.min_intrinsic_width(height)
     }
 
-    fn measure_baseline(
-        &self,
-        _: &Element,
-        _: Constraints,
-        _: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.max_intrinsic_width(height)
+    }
+
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.min_intrinsic_height(width)
+    }
+
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.max_intrinsic_height(width)
+    }
+
+    fn measure(&self, constraints: Constraints) -> Size {
+        self.child.measure(constraints.only_width())
+    }
+
+    fn layout(&mut self, constraints: Constraints) {
+        self.child.layout(constraints.only_width());
+
+        // TODO(trevin): mark this as dependent on the child size
+        self.size = constraints.constrain(self.child.size());
+    }
+
+    fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn distance_to_baseline(
-        &self,
-        _: &mut Element,
-        _: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
+    fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn hit_test(&self, element: &Element, result: &mut HitTestResult, position: Offset) -> bool {
-        if !element.size().contains(position) {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size().contains(position) {
             return false;
         }
 
-        element.child(0, &self.child).hit_test(result, position)
+        self.child.hit_test(result, position)
     }
 
-    fn draw(&self, element: &mut Element, canvas: &mut Canvas) {
-        element.child_mut(0, &self.child).draw(canvas);
+    fn draw(&mut self, canvas: &mut Canvas) {
+        self.child.draw(canvas);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
+
+    use agui_core::view_id::ViewId;
 
     use crate::sized_box::SizedBox;
 
@@ -149,43 +154,58 @@ mod tests {
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(10));
-        let mut element = Element::new(&scroll_view, &mut update_ctx);
+        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+            .as_ref(ViewId::new(0), &scroll_view)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(10, 0),
             "should only be the width of the child"
         );
 
         let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(256));
-        let mut element = Element::new(&scroll_view, &mut update_ctx);
+        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+            .as_ref(ViewId::new(0), &scroll_view)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(128, 0),
             "should not exceed the width of the constraints"
         );
 
         let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(10).height(16));
-        let mut element = Element::new(&scroll_view, &mut update_ctx);
+        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+            .as_ref(ViewId::new(0), &scroll_view)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(10, 16),
             "should be the width of the child and the height of the child"
         );
 
         let scroll_view =
             SingleChildScrollView::new().child(SizedBox::new().expand_width().height(16));
-        let mut element = Element::new(&scroll_view, &mut update_ctx);
+        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+            .as_ref(ViewId::new(0), &scroll_view)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(128, 16),
             "should not exceed the width of the constraints and be the height of the child"
         );
 
         let scroll_view =
             SingleChildScrollView::new().child(SizedBox::new().width(256).height(256));
-        let mut element = Element::new(&scroll_view, &mut update_ctx);
+        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+            .as_ref(ViewId::new(0), &scroll_view)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            scroll_view.layout(&mut element, Constraints::new(0, 128, 0, 128)),
+            render_object.size(),
             Size::new(128, 128),
             "should not exceed the width or height of the constraints"
         );
