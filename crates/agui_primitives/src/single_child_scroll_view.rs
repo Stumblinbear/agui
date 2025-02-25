@@ -49,7 +49,7 @@ where
     }
 
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &self.child).update(&old.child, ctx);
+        element.child_mut(0, &old.child).update(&self.child, ctx);
     }
 
     fn message(&self, element: &mut Element, ctx: MessageCtx) {
@@ -158,10 +158,9 @@ mod tests {
     fn requires_child_with_intrinsic_width() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
-        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -172,7 +171,7 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
-        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -183,7 +182,7 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
-        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -194,7 +193,7 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
-        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -205,7 +204,7 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
-        let mut render_object = Element::new(&scroll_view, &mut update_ctx)
+        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));

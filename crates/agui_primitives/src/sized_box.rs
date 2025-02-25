@@ -189,7 +189,7 @@ where
     }
 
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &self.child).update(&old.child, ctx);
+        element.child_mut(0, &old.child).update(&self.child, ctx);
     }
 
     fn message(&self, element: &mut Element, ctx: MessageCtx) {
@@ -334,13 +334,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sized_box() {
+    fn results_in_correct_sizing() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let sized_box = SizedBox::new().width(16).height(48);
-        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -351,7 +350,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::new().width(0).height(16);
-        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(16, 128, 32, 128));
@@ -362,7 +361,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::shrink();
-        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -373,7 +372,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::shrink();
-        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(10, 128, 20, 128));
@@ -384,7 +383,7 @@ mod tests {
         );
 
         let sized_box = SizedBox::expand();
-        let mut render_object = Element::new(&sized_box, &mut update_ctx)
+        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));

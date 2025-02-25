@@ -132,8 +132,8 @@ impl<Child> ElementMut<'_, Child>
 where
     Child: View,
 {
-    pub fn update(&mut self, old: &Child, ctx: &mut UpdateCtx) {
-        self.view.update(self.element, old, ctx)
+    pub fn update(self, new_view: &Child, ctx: &mut UpdateCtx) {
+        new_view.update(self.element, self.view, ctx)
     }
 
     pub fn message(self, ctx: MessageCtx) {

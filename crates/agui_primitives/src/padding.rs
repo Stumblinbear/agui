@@ -51,7 +51,7 @@ where
     }
 
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &self.child).update(&old.child, ctx);
+        element.child_mut(0, &old.child).update(&self.child, ctx);
     }
 
     fn message(&self, element: &mut Element, ctx: MessageCtx) {
@@ -254,24 +254,23 @@ mod tests {
     fn adds_correct_padding() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let padding = Padding::new(EdgeInsets::all(10.0)).child(());
-        let mut render_object = Element::new(&padding, &mut update_ctx)
+        let mut render_object = Element::new(&padding, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(20.0, 20.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
-        let mut render_object = Element::new(&padding, &mut update_ctx)
+        let mut render_object = Element::new(&padding, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(100.0, 100.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
-        let mut render_object = Element::new(&padding, &mut update_ctx)
+        let mut render_object = Element::new(&padding, &mut UpdateCtx::new(&tx, &mut path))
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
