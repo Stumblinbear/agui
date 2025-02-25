@@ -32,6 +32,7 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 # agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
 bon = "3.3.2"
+fnv = "1.0"
 glam = "0.29"
 smallbox = "0.8"
 smallvec = "1.14.0"

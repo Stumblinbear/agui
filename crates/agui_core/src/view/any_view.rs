@@ -3,6 +3,7 @@ use std::{any::Any, rc::Rc, sync::Arc};
 use crate::{
     context::{MessageCtx, UpdateCtx},
     element::{Element, ElementState},
+    key::AnyKeyable,
     render_object::{AnyRenderObject, RenderObject},
     view::{MountView, View},
 };
@@ -13,8 +14,6 @@ pub trait AnyView {
     fn as_any(&self) -> &dyn Any;
 
     fn view_name(&self) -> &str;
-
-    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool;
 
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState);
 
@@ -30,6 +29,10 @@ pub trait AnyView {
     fn dyn_create_render_object(&self, element: &Element) -> Self::Render;
 
     fn dyn_update_render_object(&self, element: &Element, render_object: &mut Self::Render);
+
+    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool;
+
+    fn dyn_key(&self) -> Option<&dyn AnyKeyable>;
 }
 
 impl<T, Render> AnyView for T
@@ -46,14 +49,6 @@ where
 
     fn view_name(&self) -> &str {
         std::any::type_name::<T>()
-    }
-
-    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<Self>() {
-            self.is_same_type(other)
-        } else {
-            false
-        }
     }
 
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
@@ -86,6 +81,18 @@ where
     fn dyn_update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
         self.update_render_object(element, render_object);
     }
+
+    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self.is_same_type(other)
+        } else {
+            false
+        }
+    }
+
+    fn dyn_key(&self) -> Option<&dyn AnyKeyable> {
+        self.key()
+    }
 }
 
 macros::impl_view!(&dyn AnyView<Render = Render>);
@@ -111,10 +118,6 @@ mod macros {
 
                 type State = ElementState;
 
-                fn is_same_type(&self, other: &Self) -> bool {
-                    (**self).dyn_is_same_type(&**other)
-                }
-
                 fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
                     (**self).dyn_mount(ctx)
                 }
@@ -137,6 +140,14 @@ mod macros {
                     render_object: &mut Self::Render,
                 ) {
                     (**self).dyn_update_render_object(element, render_object);
+                }
+
+                fn is_same_type(&self, other: &Self) -> bool {
+                    (**self).dyn_is_same_type(&**other)
+                }
+
+                fn key(&self) -> Option<&dyn AnyKeyable> {
+                    (**self).dyn_key()
                 }
             }
         };
@@ -165,10 +176,6 @@ where
 
     type State = T::State;
 
-    fn is_same_type(&self, other: &Self) -> bool {
-        self.inner.is_same_type(&other.inner)
-    }
-
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
         self.inner.mount(ctx)
     }
@@ -191,6 +198,14 @@ where
         } else {
             *render_object = Box::new(self.inner.dyn_create_render_object(element));
         }
+    }
+
+    fn is_same_type(&self, other: &Self) -> bool {
+        self.inner.is_same_type(&other.inner)
+    }
+
+    fn key(&self) -> Option<&dyn AnyKeyable> {
+        self.inner.key()
     }
 }
 
@@ -242,6 +257,12 @@ mod tests {
         value: T,
     }
 
+    impl<T> TestView<T> {
+        pub fn new(value: T) -> Self {
+            Self { value }
+        }
+    }
+
     impl<T> View for TestView<T>
     where
         T: Clone + 'static,
@@ -277,7 +298,7 @@ mod tests {
         let mut path = VecDeque::new();
 
         let element = Element::new(
-            &TestView { value: 7_usize }.as_dyn_view(),
+            &TestView::new(7_usize).as_dyn_view(),
             &mut UpdateCtx::new(&tx, &mut path),
         );
 
@@ -292,7 +313,7 @@ mod tests {
         let mut path = VecDeque::new();
 
         let element = Element::new(
-            &TestView { value: 1_usize }.into_boxed_view(),
+            &TestView::new(1_usize).into_boxed_view(),
             &mut UpdateCtx::new(&tx, &mut path),
         );
 
@@ -306,16 +327,16 @@ mod tests {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
 
-        let view = TestView { value: 2_usize }.as_dyn_view();
+        let view = TestView::new(2_usize);
 
-        let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
+        let mut element = Element::new(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element.as_mut(&view).update(
-            &TestView { value: 9_usize }.as_dyn_view(),
+        element.as_mut(&view.as_dyn_view()).update(
+            &TestView::new(9_usize).as_dyn_view(),
             &mut UpdateCtx::new(&tx, &mut path),
         );
 
@@ -329,7 +350,7 @@ mod tests {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
 
-        let view = TestView { value: 2_usize }.into_boxed_view();
+        let view = TestView::new(2_usize).into_boxed_view();
 
         let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
 
@@ -338,7 +359,7 @@ mod tests {
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element.as_mut(&view).update(
-            &TestView { value: 9_usize }.into_boxed_view(),
+            &TestView::new(9_usize).into_boxed_view(),
             &mut UpdateCtx::new(&tx, &mut path),
         );
 
@@ -352,7 +373,7 @@ mod tests {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
 
-        let view = TestView { value: 2_usize };
+        let view = TestView::new(2_usize);
 
         let mut element = Element::new(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
 
@@ -361,7 +382,7 @@ mod tests {
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element.as_mut(&view.as_dyn_view()).update(
-            &TestView { value: 7_u8 }.as_dyn_view(),
+            &TestView::new(7_u8).as_dyn_view(),
             &mut UpdateCtx::new(&tx, &mut path),
         );
 
@@ -375,14 +396,14 @@ mod tests {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
 
-        let view = TestView { value: 2_usize }.into_boxed_view();
+        let view = TestView::new(2_usize).into_boxed_view();
 
         let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element.as_mut(&view).update(
-            &TestView { value: 7_u8 }.into_boxed_view(),
+            &TestView::new(7_u8).into_boxed_view(),
             &mut UpdateCtx::new(&tx, &mut path),
         );
 

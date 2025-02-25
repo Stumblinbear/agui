@@ -13,6 +13,7 @@ pub mod context;
 pub mod edge_insets;
 pub mod element;
 pub mod hit_test;
+pub mod key;
 pub mod offset;
 pub mod rect;
 pub mod render_object;

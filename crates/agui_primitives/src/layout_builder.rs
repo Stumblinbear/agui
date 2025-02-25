@@ -184,7 +184,11 @@ where
 
     fn mount(&mut self, _: &mut UpdateCtx) {}
 
-    fn unmount(&mut self, _: &mut UpdateCtx) {}
+    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+        if let Some(mut child_render) = self.child_render.take() {
+            child_render.unmount(ctx);
+        }
+    }
 
     fn size(&self) -> Size {
         self.child_render

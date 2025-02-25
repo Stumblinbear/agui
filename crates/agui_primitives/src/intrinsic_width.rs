@@ -72,9 +72,13 @@ where
     type WidthIntrinsic = HasIntrinsic;
     type HeightIntrinsic = Child::HeightIntrinsic;
 
-    fn mount(&mut self, _: &mut UpdateCtx) {}
+    fn mount(&mut self, ctx: &mut UpdateCtx) {
+        self.child.mount(ctx);
+    }
 
-    fn unmount(&mut self, _: &mut UpdateCtx) {}
+    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+        self.child.unmount(ctx);
+    }
 
     fn size(&self) -> Size {
         self.child.size()

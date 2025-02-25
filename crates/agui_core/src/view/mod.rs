@@ -6,6 +6,7 @@ use std::{
 use crate::{
     context::{MessageCtx, UpdateCtx},
     element::{Element, ElementState},
+    key::AnyKeyable,
     render_object::{RenderLeaf, RenderObject},
 };
 
@@ -20,11 +21,6 @@ pub trait View {
     where
         Self: Sized;
 
-    fn is_same_type(&self, other: &Self) -> bool {
-        let _ = other;
-        true
-    }
-
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State)
     where
         Self: Sized;
@@ -37,6 +33,16 @@ pub trait View {
     fn create_render_object(&self, element: &Element) -> Self::Render;
 
     fn update_render_object(&self, element: &Element, render_object: &mut Self::Render);
+
+    fn is_same_type(&self, other: &Self) -> bool {
+        let _ = other;
+        true
+    }
+
+    /// This is an implementation detail of element keys and should not be overriden by any user code.
+    fn key(&self) -> Option<&dyn AnyKeyable> {
+        None
+    }
 }
 
 #[diagnostic::on_unimplemented(

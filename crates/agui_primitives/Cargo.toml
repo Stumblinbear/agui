@@ -15,5 +15,6 @@ readme = "README.md"
 agui_core.workspace = true
 
 bon.workspace = true
+fnv.workspace = true
 tracing.workspace = true
 typed_floats.workspace = true

@@ -1,3 +1,4 @@
+pub mod flex;
 pub mod intrinsic_width;
 pub mod layout_builder;
 pub mod padding;
