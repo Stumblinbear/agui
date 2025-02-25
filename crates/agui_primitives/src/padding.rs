@@ -17,17 +17,24 @@ use agui_core::{
 };
 
 #[derive(Builder)]
-#[builder(start_fn = new)]
 #[builder(finish_fn = child)]
 pub struct Padding<EdgeGeometry, Child> {
-    #[builder(start_fn)]
-    padding: EdgeGeometry,
-
     #[builder(finish_fn)]
     child: Child,
 
+    padding: EdgeGeometry,
+
     #[builder(default)]
     text_direction: TextDirection,
+}
+
+impl<EdgeGeometry, Child> Padding<EdgeGeometry, Child> {
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new(
+        padding: EdgeGeometry,
+    ) -> PaddingBuilder<EdgeGeometry, Child, padding_builder::SetPadding> {
+        Self::builder().padding(padding)
+    }
 }
 
 impl<EdgeGeometry, Child> View for Padding<EdgeGeometry, Child>
@@ -238,34 +245,34 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use agui_core::{edge_insets::EdgeInsets, view_id::ViewId};
+    use agui_core::edge_insets::EdgeInsets;
 
     use super::*;
     use crate::sized_box::SizedBox;
 
     #[test]
-    fn padding() {
+    fn adds_correct_padding() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let padding = Padding::new(EdgeInsets::all(10.0)).child(());
         let mut render_object = Element::new(&padding, &mut update_ctx)
-            .as_ref(ViewId::new(0), &padding)
+            .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(20.0, 20.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
         let mut render_object = Element::new(&padding, &mut update_ctx)
-            .as_ref(ViewId::new(0), &padding)
+            .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(100.0, 100.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
         let mut render_object = Element::new(&padding, &mut update_ctx)
-            .as_ref(ViewId::new(0), &padding)
+            .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(128.0, 128.0));

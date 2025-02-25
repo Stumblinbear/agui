@@ -2,7 +2,7 @@ use std::any::Any;
 
 use glam::{Mat4, Vec3};
 
-use crate::{offset::Offset, view_id::ViewPath};
+use crate::{offset::Offset, routing_id::RoutingPath};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HitTest {
@@ -108,7 +108,7 @@ impl HitTestResult {
         )
     }
 
-    pub fn add(&mut self, view_path: ViewPath) {
+    pub fn add(&mut self, path: RoutingPath) {
         // self.path.push(HitTestEntry {
         //     element_id,
         //     data: None,

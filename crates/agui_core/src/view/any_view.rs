@@ -14,6 +14,8 @@ pub trait AnyView {
 
     fn view_name(&self) -> &str;
 
+    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool;
+
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState);
 
     fn dyn_update(
@@ -46,6 +48,10 @@ where
         std::any::type_name::<T>()
     }
 
+    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
+        other.as_any().is::<Self>()
+    }
+
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
         MountView::mount(self, ctx)
     }
@@ -56,6 +62,8 @@ where
         old: &dyn AnyView<Render = Self::Render>,
         ctx: &mut UpdateCtx,
     ) {
+        // Since we've erased the concrete View, this view will be not be re-mounted if the old view is not of the same type,
+        // so we need to conditionally replace the element if the new view is not of the same type as the old view.
         if let Some(old) = old.as_any().downcast_ref::<Self>() {
             self.update(element, old, ctx);
         } else {
@@ -98,6 +106,10 @@ mod macros {
                 type Render = Render;
 
                 type State = ElementState;
+
+                fn is_same_type(&self, other: &Self) -> bool {
+                    (**self).dyn_is_same_type(&**other)
+                }
 
                 fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
                     (**self).dyn_mount(ctx)
@@ -174,43 +186,42 @@ where
     }
 }
 
-pub trait AsAnyView: View {
+#[allow(type_alias_bounds)]
+pub type BoxedRenderObject<RO: RenderObject> = Box<
+    dyn AnyRenderObject<
+        Width = RO::Width,
+        Height = RO::Height,
+        WidthIntrinsic = RO::WidthIntrinsic,
+        HeightIntrinsic = RO::HeightIntrinsic,
+    >,
+>;
+
+#[allow(type_alias_bounds)]
+pub type BoxedView<V: View> = Box<dyn AnyView<Render = BoxedRenderObject<V::Render>>>;
+
+pub trait AsAnyView: View + 'static {
     fn as_dyn_view(&self) -> &(dyn AnyView<Render = Self::Render>)
     where
-        Self: Sized + 'static,
+        Self: Sized,
     {
         self
     }
 
-    #[allow(clippy::type_complexity)]
-    fn into_boxed_view(
-        self,
-    ) -> Box<
-        dyn AnyView<
-            Render = Box<
-                dyn AnyRenderObject<
-                    Width = <Self::Render as RenderObject>::Width,
-                    Height = <Self::Render as RenderObject>::Height,
-                    WidthIntrinsic = <Self::Render as RenderObject>::WidthIntrinsic,
-                    HeightIntrinsic = <Self::Render as RenderObject>::HeightIntrinsic,
-                >,
-            >,
-        >,
-    >
+    fn into_boxed_view(self) -> BoxedView<Self>
     where
-        Self: Sized + 'static,
+        Self: Sized,
     {
         Box::new(AnyViewWrapper { inner: self })
     }
 }
 
-impl<T> AsAnyView for T where T: View {}
+impl<T: 'static> AsAnyView for T where T: View {}
 
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, collections::VecDeque, sync::mpsc};
 
-    use crate::{render_object::RenderLeaf, view_id::ViewId};
+    use crate::render_object::RenderLeaf;
 
     use super::*;
 
@@ -256,9 +267,11 @@ mod tests {
     fn mounting_dyn_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
-        let element = Element::new(&TestView { value: 7_usize }.as_dyn_view(), &mut update_ctx);
+        let element = Element::new(
+            &TestView { value: 7_usize }.as_dyn_view(),
+            &mut UpdateCtx::new(&tx, &mut path),
+        );
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -269,11 +282,10 @@ mod tests {
     fn mounting_boxed_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let element = Element::new(
             &TestView { value: 1_usize }.into_boxed_view(),
-            &mut update_ctx,
+            &mut UpdateCtx::new(&tx, &mut path),
         );
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
@@ -285,19 +297,18 @@ mod tests {
     fn updating_dyn_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView { value: 2_usize }.as_dyn_view();
 
-        let mut element = Element::new(&view, &mut update_ctx);
+        let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element
-            .as_mut(ViewId::new(0), &TestView { value: 9_usize }.as_dyn_view())
-            .update(&view, &mut update_ctx);
+            .as_mut(&TestView { value: 9_usize }.as_dyn_view())
+            .update(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
@@ -308,22 +319,18 @@ mod tests {
     fn updating_boxed_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView { value: 2_usize }.into_boxed_view();
 
-        let mut element = Element::new(&view, &mut update_ctx);
+        let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element
-            .as_mut(
-                ViewId::new(0),
-                &TestView { value: 9_usize }.into_boxed_view(),
-            )
-            .update(&view, &mut update_ctx);
+            .as_mut(&TestView { value: 9_usize }.into_boxed_view())
+            .update(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
@@ -334,19 +341,18 @@ mod tests {
     fn replacing_dyn_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView { value: 2_usize };
 
-        let mut element = Element::new(&view.as_dyn_view(), &mut update_ctx);
+        let mut element = Element::new(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element
-            .as_mut(ViewId::new(0), &TestView { value: 7_u8 }.as_dyn_view())
-            .update(&view.as_dyn_view(), &mut update_ctx);
+            .as_mut(&TestView { value: 7_u8 }.as_dyn_view())
+            .update(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -357,17 +363,16 @@ mod tests {
     fn replacing_boxed_views() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView { value: 2_usize }.into_boxed_view();
 
-        let mut element = Element::new(&view, &mut update_ctx);
+        let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
         element
-            .as_mut(ViewId::new(0), &TestView { value: 7_u8 }.into_boxed_view())
-            .update(&view, &mut update_ctx);
+            .as_mut(&TestView { value: 7_u8 }.into_boxed_view())
+            .update(&view, &mut UpdateCtx::new(&tx, &mut path));
 
         assert_eq!(element.state.downcast_ref::<TestView<u8>>(), &7);
     }

@@ -20,17 +20,16 @@ pub trait View {
     where
         Self: Sized;
 
-    fn is_similar(&self, other_state: &dyn Any) -> bool
-    where
-        Self: Sized,
-    {
-        TypeId::of::<Self::State>() == other_state.type_id()
+    fn is_same_type(&self, other: &Self) -> bool {
+        let _ = other;
+        true
     }
 
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State)
     where
         Self: Sized;
 
+    /// Called when the tree is updated and the `state` in the [`Element`] is of the same type as `Self::State`.
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx);
 
     fn message(&self, element: &mut Element, ctx: MessageCtx);

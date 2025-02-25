@@ -1,15 +1,15 @@
 use std::{collections::VecDeque, sync::mpsc};
 
-use crate::view_id::ViewId;
+use crate::routing_id::RoutingId;
 
 pub struct UpdateCtx<'a> {
     event_tx: &'a mpsc::Sender<()>,
 
-    path: &'a mut VecDeque<ViewId>,
+    path: &'a mut VecDeque<RoutingId>,
 }
 
 impl<'a> UpdateCtx<'a> {
-    pub fn new(event_tx: &'a mpsc::Sender<()>, path: &'a mut VecDeque<ViewId>) -> Self {
+    pub fn new(event_tx: &'a mpsc::Sender<()>, path: &'a mut VecDeque<RoutingId>) -> Self {
         Self { event_tx, path }
     }
 
@@ -17,15 +17,21 @@ impl<'a> UpdateCtx<'a> {
         self.event_tx.clone()
     }
 
-    pub fn path(&self) -> impl DoubleEndedIterator<Item = &ViewId> + ExactSizeIterator {
+    pub fn path(&self) -> impl DoubleEndedIterator<Item = &RoutingId> + ExactSizeIterator {
         self.path.iter()
     }
 
-    pub(crate) fn with_view(&mut self, id: ViewId, func: impl FnOnce(&mut UpdateCtx)) {
+    pub fn with_routing_id<T>(
+        &mut self,
+        id: RoutingId,
+        func: impl FnOnce(&mut UpdateCtx) -> T,
+    ) -> T {
         self.path.push_back(id);
 
-        func(self);
+        let ret = func(self);
 
         self.path.pop_back();
+
+        ret
     }
 }

@@ -20,10 +20,6 @@ pub trait RenderObject: 'static {
     type WidthIntrinsic: LayoutIntrinsicMarker;
     type HeightIntrinsic: LayoutIntrinsicMarker;
 
-    fn is_similar(&self, other: &dyn Any) -> bool {
-        TypeId::of::<Self>() == other.type_id()
-    }
-
     fn mount(&mut self, ctx: &mut UpdateCtx);
 
     fn unmount(&mut self, ctx: &mut UpdateCtx);

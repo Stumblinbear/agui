@@ -13,7 +13,6 @@ use agui_core::{
     size::Size,
     text_baseline::TextBaseline,
     view::View,
-    view_id::ViewId,
 };
 
 pub struct LayoutBuilder<F, Child> {
@@ -70,9 +69,7 @@ where
                 // TODO(trevin): try to use the element of the previously created child
                 let mut element = Element::new(&child, &mut UpdateCtx::new(&tx, &mut path));
 
-                let child_render = element
-                    .as_mut(ViewId::new(0), &child)
-                    .create_render_object();
+                let child_render = element.as_mut(&child).create_render_object();
 
                 child_view.replace(Some((element, child)));
 
@@ -110,9 +107,7 @@ where
                     // TODO(trevin): try to use the element of the previously created child
                     let mut element = Element::new(&child, &mut UpdateCtx::new(&tx, &mut path));
 
-                    let child_render = element
-                        .as_mut(ViewId::new(0), &child)
-                        .create_render_object();
+                    let child_render = element.as_mut(&child).create_render_object();
 
                     child_view.replace(Some((element, child)));
 
@@ -133,9 +128,7 @@ where
             panic!("child was sent a message before being laid out");
         };
 
-        child_element
-            .as_mut(ViewId::new(0), child_view)
-            .message(ctx);
+        child_element.as_mut(child_view).message(ctx);
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {

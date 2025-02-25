@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ViewId(u16);
+pub struct RoutingId(u16);
 
-impl ViewId {
+impl RoutingId {
     pub const fn new(id: u16) -> Self {
         Self(id)
     }
@@ -20,10 +20,10 @@ impl ViewId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ViewPath(Arc<[ViewId]>);
+pub struct RoutingPath(Arc<[RoutingId]>);
 
-impl From<Vec<ViewId>> for ViewPath {
-    fn from(path: Vec<ViewId>) -> Self {
+impl From<Vec<RoutingId>> for RoutingPath {
+    fn from(path: Vec<RoutingId>) -> Self {
         Self(path.into())
     }
 }

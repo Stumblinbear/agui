@@ -329,8 +329,6 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use agui_core::view_id::ViewId;
-
     use crate::sized_box::SizedBox;
 
     use super::*;
@@ -343,7 +341,7 @@ mod tests {
 
         let sized_box = SizedBox::new().width(16).height(48);
         let mut render_object = Element::new(&sized_box, &mut update_ctx)
-            .as_ref(ViewId::new(0), &sized_box)
+            .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
@@ -354,7 +352,7 @@ mod tests {
 
         let sized_box = SizedBox::new().width(0).height(16);
         let mut render_object = Element::new(&sized_box, &mut update_ctx)
-            .as_ref(ViewId::new(0), &sized_box)
+            .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(16, 128, 32, 128));
         assert_eq!(
@@ -365,7 +363,7 @@ mod tests {
 
         let sized_box = SizedBox::shrink();
         let mut render_object = Element::new(&sized_box, &mut update_ctx)
-            .as_ref(ViewId::new(0), &sized_box)
+            .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
@@ -376,7 +374,7 @@ mod tests {
 
         let sized_box = SizedBox::shrink();
         let mut render_object = Element::new(&sized_box, &mut update_ctx)
-            .as_ref(ViewId::new(0), &sized_box)
+            .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(10, 128, 20, 128));
         assert_eq!(
@@ -387,7 +385,7 @@ mod tests {
 
         let sized_box = SizedBox::expand();
         let mut render_object = Element::new(&sized_box, &mut update_ctx)
-            .as_ref(ViewId::new(0), &sized_box)
+            .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(

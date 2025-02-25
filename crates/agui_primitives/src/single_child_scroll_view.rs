@@ -15,7 +15,6 @@ use agui_core::{
 };
 
 #[derive(Builder)]
-#[builder(start_fn = new)]
 #[builder(finish_fn = child)]
 pub struct SingleChildScrollView<Child>
 where
@@ -24,6 +23,16 @@ where
 {
     #[builder(finish_fn)]
     child: Child,
+}
+
+impl<Child> SingleChildScrollView<Child>
+where
+    Child: View,
+    Child::Render: RenderObject<Height = Bounded>,
+{
+    pub fn new(child: Child) -> Self {
+        Self::builder().child(child)
+    }
 }
 
 impl<Child> View for SingleChildScrollView<Child>
@@ -141,21 +150,19 @@ where
 mod tests {
     use std::{collections::VecDeque, sync::mpsc};
 
-    use agui_core::view_id::ViewId;
-
     use crate::sized_box::SizedBox;
 
     use super::*;
 
     #[test]
-    fn intrinsic_width() {
+    fn requires_child_with_intrinsic_width() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
         let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
-        let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(10));
+        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
         let mut render_object = Element::new(&scroll_view, &mut update_ctx)
-            .as_ref(ViewId::new(0), &scroll_view)
+            .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
@@ -164,9 +171,9 @@ mod tests {
             "should only be the width of the child"
         );
 
-        let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(256));
+        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
         let mut render_object = Element::new(&scroll_view, &mut update_ctx)
-            .as_ref(ViewId::new(0), &scroll_view)
+            .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
@@ -175,9 +182,9 @@ mod tests {
             "should not exceed the width of the constraints"
         );
 
-        let scroll_view = SingleChildScrollView::new().child(SizedBox::new().width(10).height(16));
+        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
         let mut render_object = Element::new(&scroll_view, &mut update_ctx)
-            .as_ref(ViewId::new(0), &scroll_view)
+            .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
@@ -186,10 +193,9 @@ mod tests {
             "should be the width of the child and the height of the child"
         );
 
-        let scroll_view =
-            SingleChildScrollView::new().child(SizedBox::new().expand_width().height(16));
+        let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
         let mut render_object = Element::new(&scroll_view, &mut update_ctx)
-            .as_ref(ViewId::new(0), &scroll_view)
+            .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
@@ -198,10 +204,9 @@ mod tests {
             "should not exceed the width of the constraints and be the height of the child"
         );
 
-        let scroll_view =
-            SingleChildScrollView::new().child(SizedBox::new().width(256).height(256));
+        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
         let mut render_object = Element::new(&scroll_view, &mut update_ctx)
-            .as_ref(ViewId::new(0), &scroll_view)
+            .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(

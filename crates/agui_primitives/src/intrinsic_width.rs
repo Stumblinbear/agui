@@ -15,7 +15,6 @@ use agui_core::{
 };
 
 #[derive(Builder)]
-#[builder(start_fn = new)]
 #[builder(finish_fn = child)]
 pub struct IntrinsicWidth<Child> {
     #[builder(finish_fn)]

@@ -1,20 +1,20 @@
 use std::any::Any;
 
-use crate::view_id::ViewId;
+use crate::routing_id::RoutingId;
 
 pub struct MessageCtx<'a> {
-    path: &'a [ViewId],
+    path: &'a [RoutingId],
 
     message: Box<dyn Any>,
 }
 
 impl<'a> MessageCtx<'a> {
-    pub fn new(path: &'a [ViewId], message: Box<dyn Any>) -> Self {
+    pub fn new(path: &'a [RoutingId], message: Box<dyn Any>) -> Self {
         Self { path, message }
     }
 
     pub fn routing_id(&self) -> Option<u16> {
-        self.path.first().copied().map(ViewId::get)
+        self.path.first().copied().map(RoutingId::get)
     }
 
     pub fn consume<T>(self) -> T

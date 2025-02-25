@@ -5,7 +5,6 @@ use smallbox::SmallBox;
 use crate::{
     context::{MessageCtx, UpdateCtx},
     view::{MountView, View},
-    view_id::ViewId,
 };
 
 pub struct ElementState(SmallBox<dyn Any, smallbox::space::S2>);
@@ -67,37 +66,39 @@ impl Element {
         Self { state, children }
     }
 
-    pub fn child<'a, Child>(&'a self, idx: u16, view: &'a Child) -> ElementRef<'a, Child>
+    pub fn child<'a, Child>(&'a self, idx: usize, view: &'a Child) -> ElementRef<'a, Child>
     where
         Child: View,
     {
-        self.children[idx as usize].as_ref(ViewId::new(idx), view)
+        debug_assert!(self.children.len() > idx, "child index out of bounds");
+
+        self.children[idx].as_ref(view)
     }
 
-    pub fn child_mut<'a, Child>(&'a mut self, idx: u16, view: &'a Child) -> ElementMut<'a, Child>
+    pub fn child_mut<'a, Child>(&'a mut self, idx: usize, view: &'a Child) -> ElementMut<'a, Child>
     where
         Child: View,
     {
-        self.children[idx as usize].as_mut(ViewId::new(idx), view)
+        debug_assert!(self.children.len() > idx, "child index out of bounds");
+
+        self.children[idx].as_mut(view)
     }
 
-    pub fn as_ref<'a, V>(&'a self, view_id: ViewId, view: &'a V) -> ElementRef<'a, V>
+    pub fn as_ref<'a, V>(&'a self, view: &'a V) -> ElementRef<'a, V>
     where
         V: View,
     {
         ElementRef {
-            view_id,
             element: self,
             view,
         }
     }
 
-    pub fn as_mut<'a, V>(&'a mut self, view_id: ViewId, view: &'a V) -> ElementMut<'a, V>
+    pub fn as_mut<'a, V>(&'a mut self, view: &'a V) -> ElementMut<'a, V>
     where
         V: View,
     {
         ElementMut {
-            view_id,
             element: self,
             view,
         }
@@ -105,8 +106,6 @@ impl Element {
 }
 
 pub struct ElementRef<'a, Child> {
-    #[allow(dead_code)]
-    view_id: ViewId,
     element: &'a Element,
     view: &'a Child,
 }
@@ -125,7 +124,6 @@ where
 }
 
 pub struct ElementMut<'a, Child> {
-    view_id: ViewId,
     element: &'a mut Element,
     view: &'a Child,
 }
@@ -135,13 +133,7 @@ where
     Child: View,
 {
     pub fn update(&mut self, old: &Child, ctx: &mut UpdateCtx) {
-        ctx.with_view(self.view_id, |ctx| {
-            if self.view.is_similar(&self.element.state) {
-                self.view.update(self.element, old, ctx)
-            } else {
-                *self.element = Element::new(self.view, ctx)
-            }
-        })
+        self.view.update(self.element, old, ctx)
     }
 
     pub fn message(self, ctx: MessageCtx) {
@@ -207,17 +199,16 @@ mod tests {
     fn unit_state_is_inline() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView::<()>::default();
 
-        let element = Element::new(&view, &mut update_ctx);
+        let element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
         assert!(
             !element.state.is_heap(),
             "concrete View should result in an inline state"
         );
 
-        let element = Element::new(&view.into_boxed_view(), &mut update_ctx);
+        let element = Element::new(&view.into_boxed_view(), &mut UpdateCtx::new(&tx, &mut path));
         assert!(
             !element.state.is_heap(),
             "dyn View should result in an inline state"
@@ -228,17 +219,16 @@ mod tests {
     fn small_states_are_inline() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView::<u16>::default();
 
-        let element = Element::new(&view, &mut update_ctx);
+        let element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
         assert!(
             !element.state.is_heap(),
             "concrete View should result in an inline state"
         );
 
-        let element = Element::new(&view.into_boxed_view(), &mut update_ctx);
+        let element = Element::new(&view.into_boxed_view(), &mut UpdateCtx::new(&tx, &mut path));
         assert!(
             !element.state.is_heap(),
             "dyn View should result in an inline state"
@@ -249,11 +239,10 @@ mod tests {
     fn large_states_are_heaped() {
         let (tx, _) = mpsc::channel();
         let mut path = VecDeque::new();
-        let mut update_ctx = UpdateCtx::new(&tx, &mut path);
 
         let view = TestView::<[u64; 16]>::default();
 
-        let element = Element::new(&view.into_boxed_view(), &mut update_ctx);
+        let element = Element::new(&view.into_boxed_view(), &mut UpdateCtx::new(&tx, &mut path));
         assert!(
             element.state.is_heap(),
             "dyn View should result in a heaped state"

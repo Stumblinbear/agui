@@ -1,4 +1,3 @@
-pub mod column;
 pub mod intrinsic_width;
 pub mod layout_builder;
 pub mod padding;
@@ -41,7 +40,7 @@ mod tests {
         fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
             element.state.downcast_mut::<Self>().event_tx = Some(ctx.event_tx());
 
-            element.child_mut(0, &self.child).update(&old.child, ctx);
+            element.child_mut(0, &old.child).update(&self.child, ctx);
         }
 
         fn message(&self, element: &mut Element, ctx: MessageCtx) {
