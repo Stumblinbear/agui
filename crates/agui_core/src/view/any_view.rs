@@ -49,7 +49,11 @@ where
     }
 
     fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
-        other.as_any().is::<Self>()
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self.is_same_type(other)
+        } else {
+            false
+        }
     }
 
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
@@ -160,6 +164,10 @@ where
     >;
 
     type State = T::State;
+
+    fn is_same_type(&self, other: &Self) -> bool {
+        self.inner.is_same_type(&other.inner)
+    }
 
     fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
         self.inner.mount(ctx)
@@ -306,9 +314,10 @@ mod tests {
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element
-            .as_mut(&TestView { value: 9_usize }.as_dyn_view())
-            .update(&view, &mut UpdateCtx::new(&tx, &mut path));
+        element.as_mut(&view).update(
+            &TestView { value: 9_usize }.as_dyn_view(),
+            &mut UpdateCtx::new(&tx, &mut path),
+        );
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
@@ -328,9 +337,10 @@ mod tests {
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element
-            .as_mut(&TestView { value: 9_usize }.into_boxed_view())
-            .update(&view, &mut UpdateCtx::new(&tx, &mut path));
+        element.as_mut(&view).update(
+            &TestView { value: 9_usize }.into_boxed_view(),
+            &mut UpdateCtx::new(&tx, &mut path),
+        );
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
@@ -350,9 +360,10 @@ mod tests {
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element
-            .as_mut(&TestView { value: 7_u8 }.as_dyn_view())
-            .update(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
+        element.as_mut(&view.as_dyn_view()).update(
+            &TestView { value: 7_u8 }.as_dyn_view(),
+            &mut UpdateCtx::new(&tx, &mut path),
+        );
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -370,9 +381,10 @@ mod tests {
 
         assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element
-            .as_mut(&TestView { value: 7_u8 }.into_boxed_view())
-            .update(&view, &mut UpdateCtx::new(&tx, &mut path));
+        element.as_mut(&view).update(
+            &TestView { value: 7_u8 }.into_boxed_view(),
+            &mut UpdateCtx::new(&tx, &mut path),
+        );
 
         assert_eq!(element.state.downcast_ref::<TestView<u8>>(), &7);
     }
