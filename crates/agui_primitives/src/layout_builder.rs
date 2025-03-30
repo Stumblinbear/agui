@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::VecDeque, marker::PhantomData, rc::Rc, sync::mpsc};
+use std::{cell::RefCell, collections::VecDeque, marker::PhantomData, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -8,7 +8,10 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
-    render_object::{NoIntrinsic, RenderObject},
+    render_object::{
+        box_layout::{BoxLayout, RenderBox},
+        NoIntrinsic, RenderObject,
+    },
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -47,27 +50,34 @@ impl<F, Child> View for LayoutBuilder<F, Child>
 where
     F: Fn(Constraints) -> Child + 'static,
     Child: View + 'static,
+    Child::Render: RenderBox,
 {
     type Render = RenderLayoutBuilder<Child::Render>;
 
     type State = LayoutBuilderState<Child>;
 
-    fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
         let child_view = Rc::<RefCell<Option<(Element, Child)>>>::default();
 
         let builder = {
             let builder = Rc::clone(&self.builder);
             let child_view = Rc::clone(&child_view);
 
+            let driver = Rc::clone(ctx.driver());
+            let event_tx = ctx.event_tx().clone();
+            let routing_path = ctx.routing_path().copied().collect::<VecDeque<_>>();
+            let provide_scope = ctx.provide_scope().clone();
+
             Rc::new(move |constraints| {
+                let mut routing_path = routing_path.clone();
+
                 let child = (builder)(constraints);
 
-                // TODO(trevin): actually hook this up
-                let (tx, _) = mpsc::channel();
-                let mut path = VecDeque::new();
-
                 // TODO(trevin): try to use the element of the previously created child
-                let mut element = Element::new(&child, &mut UpdateCtx::new(&tx, &mut path));
+                let mut element = Element::new(
+                    &child,
+                    &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
+                );
 
                 let child_render = element.as_mut(&child).create_render_object();
 
@@ -87,7 +97,7 @@ where
         )
     }
 
-    fn update(&self, element: &mut Element, old: &Self, _: &mut UpdateCtx) {
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
         if !Rc::ptr_eq(&self.builder, &old.builder) {
             let state = element.state.downcast_mut::<Self>();
 
@@ -97,15 +107,21 @@ where
                 let builder = Rc::clone(&self.builder);
                 let child_view = Rc::clone(&state.child_view);
 
+                let driver = Rc::clone(ctx.driver());
+                let event_tx = ctx.event_tx().clone();
+                let routing_path = ctx.routing_path().copied().collect::<VecDeque<_>>();
+                let provide_scope = ctx.provide_scope().clone();
+
                 Rc::new(move |constraints| {
                     let child = (builder)(constraints);
 
-                    // TODO(trevin): actually hook this up
-                    let (tx, _) = mpsc::channel();
-                    let mut path = VecDeque::new();
+                    let mut routing_path = routing_path.clone();
 
                     // TODO(trevin): try to use the element of the previously created child
-                    let mut element = Element::new(&child, &mut UpdateCtx::new(&tx, &mut path));
+                    let mut element = Element::new(
+                        &child,
+                        &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
+                    );
 
                     let child_render = element.as_mut(&child).create_render_object();
 
@@ -174,14 +190,8 @@ pub struct RenderLayoutBuilder<Child> {
 
 impl<Child> RenderObject for RenderLayoutBuilder<Child>
 where
-    Child: RenderObject,
+    Child: RenderBox,
 {
-    type Width = Child::Width;
-    type Height = Child::Height;
-
-    type WidthIntrinsic = NoIntrinsic;
-    type HeightIntrinsic = NoIntrinsic;
-
     fn mount(&mut self, _: &mut UpdateCtx) {}
 
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
@@ -190,10 +200,35 @@ where
         }
     }
 
+    fn hit_test(&self, result: &mut HitTestResult, offset: Offset) -> bool {
+        if let Some(child_render) = self.child_render.as_ref() {
+            child_render.hit_test(result, offset)
+        } else {
+            false
+        }
+    }
+
+    fn draw(&mut self, canvas: &mut Canvas) {
+        if let Some(child_render) = self.child_render.as_mut() {
+            child_render.draw(canvas);
+        }
+    }
+}
+
+impl<Child> BoxLayout for RenderLayoutBuilder<Child>
+where
+    Child: RenderBox,
+{
+    type PreferredWidth = Child::PreferredWidth;
+    type PreferredHeight = Child::PreferredHeight;
+
+    type IntrinsicWidth = NoIntrinsic;
+    type IntrinsicHeight = NoIntrinsic;
+
     fn size(&self) -> Size {
         self.child_render
             .as_ref()
-            .map(RenderObject::size)
+            .map(BoxLayout::size)
             .unwrap_or(Size::ZERO)
     }
 
@@ -225,6 +260,10 @@ where
 
             self.child_render.replace(child);
         }
+
+        if let Some(child_render) = self.child_render.as_mut() {
+            child_render.layout(constraints);
+        }
     }
 
     fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -234,18 +273,43 @@ where
     fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
+}
 
-    fn hit_test(&self, result: &mut HitTestResult, offset: Offset) -> bool {
-        if let Some(child_render) = self.child_render.as_ref() {
-            child_render.hit_test(result, offset)
-        } else {
-            false
-        }
-    }
+#[cfg(test)]
+mod tests {
+    use agui_core::{test_harness::TestHarness, view::AsAnyView};
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        if let Some(child_render) = self.child_render.as_mut() {
-            child_render.draw(canvas);
-        }
+    use super::*;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn calls_closure_during_layout() {
+        let build_count = Rc::new(RefCell::new(0));
+
+        let layout_builder = LayoutBuilder::new({
+            let build_count = Rc::clone(&build_count);
+
+            move |constraints| {
+                *build_count.borrow_mut() += 1;
+
+                if constraints.max_width() > 100.0 {
+                    SizedBox::expand().into_boxed_view()
+                } else {
+                    SizedBox::shrink().mark_unbounded().into_boxed_view()
+                }
+            }
+        });
+
+        let mut render_object = TestHarness::mount(&layout_builder)
+            .root
+            .as_ref(&layout_builder)
+            .create_render_object();
+        render_object.layout(Constraints::new(0, 50, 0, 50));
+        assert_eq!(*build_count.borrow(), 1);
+        assert_eq!(render_object.size(), Size::new(0.0, 0.0));
+
+        render_object.layout(Constraints::new(0, 150, 0, 150));
+        assert_eq!(*build_count.borrow(), 2);
+        assert_eq!(render_object.size(), Size::new(150.0, 150.0));
     }
 }

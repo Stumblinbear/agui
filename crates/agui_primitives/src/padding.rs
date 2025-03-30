@@ -8,7 +8,10 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
-    render_object::RenderObject,
+    render_object::{
+        box_layout::{BoxLayout, RenderBox},
+        AsAnyRenderObject, RenderObject,
+    },
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -41,6 +44,7 @@ impl<EdgeGeometry, Child> View for Padding<EdgeGeometry, Child>
 where
     EdgeGeometry: EdgeInsetsGeometry,
     Child: View,
+    Child::Render: RenderBox,
 {
     type Render = RenderPadding<Child::Render>;
 
@@ -105,14 +109,8 @@ pub struct RenderPadding<Child> {
 
 impl<Child> RenderObject for RenderPadding<Child>
 where
-    Child: RenderObject,
+    Child: RenderBox,
 {
-    type Width = Child::Width;
-    type Height = Child::Height;
-
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
     }
@@ -120,6 +118,33 @@ where
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.child.unmount(ctx);
     }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size().contains(position) {
+            return false;
+        }
+
+        result.with_offset(self.child_offset, position, |result, transformed| {
+            self.child.hit_test(result, transformed)
+        })
+    }
+
+    fn draw(&mut self, canvas: &mut Canvas) {
+        canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
+            self.child.draw(canvas);
+        });
+    }
+}
+
+impl<Child> BoxLayout for RenderPadding<Child>
+where
+    Child: RenderBox,
+{
+    type PreferredWidth = Child::PreferredWidth;
+    type PreferredHeight = Child::PreferredHeight;
+
+    type IntrinsicWidth = Child::IntrinsicWidth;
+    type IntrinsicHeight = Child::IntrinsicHeight;
 
     fn size(&self) -> Size {
         self.size
@@ -227,54 +252,57 @@ where
                 .expect("distance to baseline of padding was not a positive finite number")
         })
     }
+}
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        if !self.size().contains(position) {
-            return false;
-        }
+impl<Child> AsAnyRenderObject for RenderPadding<Child>
+where
+    Self: RenderBox,
+{
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
+        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
+        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
+        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
+        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
+    >;
 
-        result.with_offset(self.child_offset, position, |result, transformed| {
-            self.child.hit_test(result, transformed)
-        })
+    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
+        self
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
-            self.child.draw(canvas);
-        });
+    fn into_boxed_render_object(self) -> Box<Self::Output> {
+        Box::new(self)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, sync::mpsc};
-
-    use agui_core::edge_insets::EdgeInsets;
+    use agui_core::{edge_insets::EdgeInsets, test_harness::TestHarness};
 
     use super::*;
     use crate::sized_box::SizedBox;
 
     #[test]
     fn adds_correct_padding() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let padding = Padding::new(EdgeInsets::all(10.0)).child(());
-        let mut render_object = Element::new(&padding, &mut UpdateCtx::new(&tx, &mut path))
+
+        let mut render_object = TestHarness::mount(&padding)
+            .root
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(20.0, 20.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
-        let mut render_object = Element::new(&padding, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&padding)
+            .root
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(render_object.size(), Size::new(100.0, 100.0));
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
-        let mut render_object = Element::new(&padding, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&padding)
+            .root
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));

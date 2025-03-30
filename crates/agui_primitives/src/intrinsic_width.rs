@@ -7,7 +7,10 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
-    render_object::{HasIntrinsic, RenderObject},
+    render_object::{
+        box_layout::{BoxLayout, RenderBox},
+        AsAnyRenderObject, HasIntrinsic, RenderObject,
+    },
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -24,7 +27,7 @@ pub struct IntrinsicWidth<Child> {
 impl<Child> View for IntrinsicWidth<Child>
 where
     Child: View,
-    Child::Render: RenderObject<WidthIntrinsic = HasIntrinsic>,
+    Child::Render: RenderBox<IntrinsicWidth = HasIntrinsic>,
 {
     type Render = RenderIntrinsicWidth<Child::Render>;
 
@@ -64,14 +67,8 @@ pub struct RenderIntrinsicWidth<Child> {
 
 impl<Child> RenderObject for RenderIntrinsicWidth<Child>
 where
-    Child: RenderObject<WidthIntrinsic = HasIntrinsic>,
+    Child: RenderBox<IntrinsicWidth = HasIntrinsic>,
 {
-    type Width = Child::Width;
-    type Height = Child::Height;
-
-    type WidthIntrinsic = HasIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
     }
@@ -79,6 +76,29 @@ where
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.child.unmount(ctx);
     }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.child.size().contains(position) {
+            return false;
+        }
+
+        self.child.hit_test(result, position)
+    }
+
+    fn draw(&mut self, canvas: &mut Canvas) {
+        self.child.draw(canvas);
+    }
+}
+
+impl<Child> BoxLayout for RenderIntrinsicWidth<Child>
+where
+    Child: RenderBox<IntrinsicWidth = HasIntrinsic>,
+{
+    type PreferredWidth = <Child as BoxLayout>::PreferredWidth;
+    type PreferredHeight = <Child as BoxLayout>::PreferredHeight;
+
+    type IntrinsicWidth = HasIntrinsic;
+    type IntrinsicHeight = Child::IntrinsicHeight;
 
     fn size(&self) -> Size {
         self.child.size()
@@ -174,16 +194,24 @@ where
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         self.child.distance_to_baseline(baseline)
     }
+}
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        if !self.child.size().contains(position) {
-            return false;
-        }
+impl<Child> AsAnyRenderObject for RenderIntrinsicWidth<Child>
+where
+    Self: RenderBox,
+{
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
+        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
+        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
+        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
+        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
+    >;
 
-        self.child.hit_test(result, position)
+    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
+        self
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        self.child.draw(canvas);
+    fn into_boxed_render_object(self) -> Box<Self::Output> {
+        Box::new(self)
     }
 }

@@ -44,7 +44,7 @@ rand = "0.8"
 rustc-hash = "1.1"
 slotmap = "1.0"
 parking_lot = "0.12"
-im-rc = "15.1"
+imbl = "5.0"
 bitflags = "2.4"
 url = "2.4"
 
@@ -83,7 +83,6 @@ winit = { version = "0.28" }
 # mocks = ["agui_core/mocks"]
 
 [dependencies]
-smallbox.workspace = true
 # agui_sync.workspace = true
 # agui_core.workspace = true
 # agui_executor.workspace = true

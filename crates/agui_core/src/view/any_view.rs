@@ -4,7 +4,7 @@ use crate::{
     context::{MessageCtx, UpdateCtx},
     element::{Element, ElementState},
     key::AnyKeyable,
-    render_object::{AnyRenderObject, RenderObject},
+    render_object::{AnyRenderObject, AsAnyRenderObject, RenderObject},
     view::{MountView, View},
 };
 
@@ -164,15 +164,9 @@ impl<T> View for AnyViewWrapper<T>
 where
     T: View + 'static,
     T::Render: Any,
+    T::Render: AsAnyRenderObject,
 {
-    type Render = Box<
-        dyn AnyRenderObject<
-            Width = <T::Render as RenderObject>::Width,
-            Height = <T::Render as RenderObject>::Height,
-            WidthIntrinsic = <T::Render as RenderObject>::WidthIntrinsic,
-            HeightIntrinsic = <T::Render as RenderObject>::HeightIntrinsic,
-        >,
-    >;
+    type Render = Box<<T::Render as AsAnyRenderObject>::Output>;
 
     type State = T::State;
 
@@ -189,14 +183,19 @@ where
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
-        Box::new(self.inner.dyn_create_render_object(element))
+        self.inner
+            .dyn_create_render_object(element)
+            .into_boxed_render_object()
     }
 
     fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
         if let Some(render_object) = render_object.as_any_mut().downcast_mut::<T::Render>() {
             self.inner.update_render_object(element, render_object);
         } else {
-            *render_object = Box::new(self.inner.dyn_create_render_object(element));
+            *render_object = self
+                .inner
+                .dyn_create_render_object(element)
+                .into_boxed_render_object();
         }
     }
 
@@ -210,17 +209,8 @@ where
 }
 
 #[allow(type_alias_bounds)]
-pub type BoxedRenderObject<RO: RenderObject> = Box<
-    dyn AnyRenderObject<
-        Width = RO::Width,
-        Height = RO::Height,
-        WidthIntrinsic = RO::WidthIntrinsic,
-        HeightIntrinsic = RO::HeightIntrinsic,
-    >,
->;
-
-#[allow(type_alias_bounds)]
-pub type BoxedView<V: View> = Box<dyn AnyView<Render = BoxedRenderObject<V::Render>>>;
+pub type BoxedView<V: View> =
+    Box<dyn AnyView<Render = Box<<V::Render as AsAnyRenderObject>::Output>>>;
 
 pub trait AsAnyView: View + 'static {
     fn as_dyn_view(&self) -> &(dyn AnyView<Render = Self::Render>)
@@ -230,9 +220,12 @@ pub trait AsAnyView: View + 'static {
         self
     }
 
-    fn into_boxed_view(self) -> BoxedView<Self>
+    fn into_boxed_view(
+        self,
+    ) -> Box<dyn AnyView<Render = Box<<Self::Render as AsAnyRenderObject>::Output>>>
     where
         Self: Sized,
+        Self::Render: AsAnyRenderObject,
     {
         Box::new(AnyViewWrapper { inner: self })
     }
@@ -240,11 +233,73 @@ pub trait AsAnyView: View + 'static {
 
 impl<T: 'static> AsAnyView for T where T: View {}
 
+// pub trait BoxedViewExt {
+//     type Width: LayoutBoundMarker;
+//     type Height: LayoutBoundMarker;
+
+//     type WidthIntrinsic: LayoutIntrinsicMarker;
+//     type HeightIntrinsic: LayoutIntrinsicMarker;
+
+//     fn unbounded(
+//         self,
+//     ) -> Box<
+//         dyn AnyView<
+//             Render = BoxedRenderObject<
+//                 Unbounded,
+//                 Unbounded,
+//                 Self::WidthIntrinsic,
+//                 Self::HeightIntrinsic,
+//             >,
+//         >,
+//     >;
+// }
+
+// impl<Width, Height, WidthIntrinsic, HeightIntrinsic> BoxedViewExt
+//     for Box<
+//         dyn AnyView<
+//             Render = Box<
+//                 dyn AnyRenderObject<
+//                     Width = Width,
+//                     Height = Height,
+//                     WidthIntrinsic = WidthIntrinsic,
+//                     HeightIntrinsic = HeightIntrinsic,
+//                 >,
+//             >,
+//         >,
+//     >
+// where
+//     Width: LayoutBoundMarker,
+//     Height: LayoutBoundMarker,
+//     WidthIntrinsic: LayoutIntrinsicMarker,
+//     HeightIntrinsic: LayoutIntrinsicMarker,
+// {
+//     type Width = Width;
+//     type Height = Height;
+
+//     type WidthIntrinsic = WidthIntrinsic;
+//     type HeightIntrinsic = HeightIntrinsic;
+
+//     fn unbounded(
+//         self,
+//     ) -> Box<
+//         dyn AnyView<
+//             Render = BoxedRenderObject<
+//                 Unbounded,
+//                 Unbounded,
+//                 Self::WidthIntrinsic,
+//                 Self::HeightIntrinsic,
+//             >,
+//         >,
+//     > {
+//         unsafe { std::mem::transmute(self) }
+//     }
+// }
+
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, collections::VecDeque, sync::mpsc};
+    use std::cell::RefCell;
 
-    use crate::render_object::RenderLeaf;
+    use crate::{render_object::RenderLeaf, test_harness::TestHarness};
 
     use super::*;
 
@@ -294,119 +349,83 @@ mod tests {
 
     #[test]
     fn mounting_dyn_views() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
-        let element = Element::new(
-            &TestView::new(7_usize).as_dyn_view(),
-            &mut UpdateCtx::new(&tx, &mut path),
-        );
+        let harness = TestHarness::mount(&TestView::new(7_usize).as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &7);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &7);
     }
 
     #[test]
     fn mounting_boxed_views() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
-        let element = Element::new(
-            &TestView::new(1_usize).into_boxed_view(),
-            &mut UpdateCtx::new(&tx, &mut path),
-        );
+        let harness = TestHarness::mount(&TestView::new(1_usize).into_boxed_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &1);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &1);
     }
 
     #[test]
     fn updating_dyn_views() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::new(2_usize);
 
-        let mut element = Element::new(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&view.as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element.as_mut(&view.as_dyn_view()).update(
-            &TestView::new(9_usize).as_dyn_view(),
-            &mut UpdateCtx::new(&tx, &mut path),
-        );
+        harness.update(&view.as_dyn_view(), &TestView::new(9_usize).as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &9);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &9);
     }
 
     #[test]
     fn updating_boxed_views() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::new(2_usize).into_boxed_view();
 
-        let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&view);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element.as_mut(&view).update(
-            &TestView::new(9_usize).into_boxed_view(),
-            &mut UpdateCtx::new(&tx, &mut path),
-        );
+        harness.update(&view, &TestView::new(9_usize).into_boxed_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &9);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &9);
     }
 
     #[test]
     fn replacing_dyn_views() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::new(2_usize);
 
-        let mut element = Element::new(&view.as_dyn_view(), &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&view.as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element.as_mut(&view.as_dyn_view()).update(
-            &TestView::new(7_u8).as_dyn_view(),
-            &mut UpdateCtx::new(&tx, &mut path),
-        );
+        harness.update(&view.as_dyn_view(), &TestView::new(7_u8).as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(element.state.downcast_ref::<TestView<u8>>(), &7);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<u8>>(), &7);
     }
 
     #[test]
     fn replacing_boxed_views() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::new(2_usize).into_boxed_view();
 
-        let mut element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&view);
 
-        assert_eq!(element.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
 
-        element.as_mut(&view).update(
-            &TestView::new(7_u8).into_boxed_view(),
-            &mut UpdateCtx::new(&tx, &mut path),
-        );
+        harness.update(&view, &TestView::new(7_u8).into_boxed_view());
 
-        assert_eq!(element.state.downcast_ref::<TestView<u8>>(), &7);
+        assert_eq!(harness.root.state.downcast_ref::<TestView<u8>>(), &7);
     }
 }

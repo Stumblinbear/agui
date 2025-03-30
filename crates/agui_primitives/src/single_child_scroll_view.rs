@@ -7,7 +7,10 @@ use agui_core::{
     element::Element,
     hit_test::HitTestResult,
     offset::Offset,
-    render_object::{Bounded, RenderObject, Unbounded},
+    render_object::{
+        box_layout::{BoxLayout, RenderBox},
+        AsAnyRenderObject, Bounded, RenderObject, Unbounded,
+    },
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -19,7 +22,7 @@ use agui_core::{
 pub struct SingleChildScrollView<Child>
 where
     Child: View,
-    Child::Render: RenderObject<Height = Bounded>,
+    Child::Render: RenderBox<PreferredHeight = Bounded>,
 {
     #[builder(finish_fn)]
     child: Child,
@@ -28,7 +31,7 @@ where
 impl<Child> SingleChildScrollView<Child>
 where
     Child: View,
-    Child::Render: RenderObject<Height = Bounded>,
+    Child::Render: RenderBox<PreferredHeight = Bounded>,
 {
     pub fn new(child: Child) -> Self {
         Self::builder().child(child)
@@ -38,7 +41,7 @@ where
 impl<Child> View for SingleChildScrollView<Child>
 where
     Child: View,
-    Child::Render: RenderObject<Height = Bounded>,
+    Child::Render: RenderBox<PreferredHeight = Bounded>,
 {
     type Render = RenderSingleChildScrollView<Child::Render>;
 
@@ -81,15 +84,8 @@ pub struct RenderSingleChildScrollView<Child> {
 
 impl<Child> RenderObject for RenderSingleChildScrollView<Child>
 where
-    Child: RenderObject<Height = Bounded>,
+    Child: RenderBox<PreferredHeight = Bounded>,
 {
-    type Width = Unbounded;
-    type Height = Bounded;
-
-    // TODO(trevin): should this support intrinsic dimensions?
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
     }
@@ -97,6 +93,30 @@ where
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.child.unmount(ctx);
     }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size().contains(position) {
+            return false;
+        }
+
+        self.child.hit_test(result, position)
+    }
+
+    fn draw(&mut self, canvas: &mut Canvas) {
+        self.child.draw(canvas);
+    }
+}
+
+impl<Child> BoxLayout for RenderSingleChildScrollView<Child>
+where
+    Child: RenderBox<PreferredHeight = Bounded>,
+{
+    type PreferredWidth = Unbounded;
+    type PreferredHeight = Bounded;
+
+    // TODO(trevin): should this support intrinsic dimensions?
+    type IntrinsicWidth = Child::IntrinsicWidth;
+    type IntrinsicHeight = Child::IntrinsicHeight;
 
     fn size(&self) -> Size {
         self.size
@@ -136,23 +156,31 @@ where
     fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
+}
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        if !self.size().contains(position) {
-            return false;
-        }
+impl<Child> AsAnyRenderObject for RenderSingleChildScrollView<Child>
+where
+    Self: RenderBox,
+{
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
+        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
+        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
+        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
+        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
+    >;
 
-        self.child.hit_test(result, position)
+    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
+        self
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        self.child.draw(canvas);
+    fn into_boxed_render_object(self) -> Box<Self::Output> {
+        Box::new(self)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, sync::mpsc};
+    use agui_core::test_harness::TestHarness;
 
     use crate::sized_box::SizedBox;
 
@@ -160,11 +188,9 @@ mod tests {
 
     #[test]
     fn requires_child_with_intrinsic_width() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
-        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&scroll_view)
+            .root
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -175,7 +201,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
-        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&scroll_view)
+            .root
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -186,7 +213,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
-        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&scroll_view)
+            .root
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -197,7 +225,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
-        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&scroll_view)
+            .root
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -208,7 +237,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
-        let mut render_object = Element::new(&scroll_view, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&scroll_view)
+            .root
             .as_ref(&scroll_view)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));

@@ -7,7 +7,10 @@ use agui_core::{
     hit_test::HitTestResult,
     key::AnyKeyable,
     offset::Offset,
-    render_object::RenderObject,
+    render_object::{
+        box_layout::{BoxLayout, RenderBox},
+        AsAnyRenderObject, RenderObject,
+    },
     renderer::Canvas,
     routing_id::RoutingId,
     size::Size,
@@ -45,6 +48,7 @@ pub struct Column<Children> {
 impl<Children, S: column_builder::State> ColumnBuilder<Children, S>
 where
     Children: AsAnyView,
+    Children::Render: AsAnyRenderObject,
 {
     #[allow(deprecated)]
     pub fn dyn_children(
@@ -380,12 +384,6 @@ impl<Child> RenderObject for RenderFlex<Child>
 where
     Child: RenderObject,
 {
-    type Width = Child::Width;
-    type Height = Child::Height;
-
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         for child in &mut self.children {
             child.mount(ctx);
@@ -397,6 +395,27 @@ where
             child.unmount(ctx);
         }
     }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size.contains(position) {
+            return false;
+        }
+
+        false
+    }
+
+    fn draw(&mut self, canvas: &mut Canvas) {}
+}
+
+impl<Child> BoxLayout for RenderFlex<Child>
+where
+    Child: RenderBox,
+{
+    type PreferredWidth = Child::PreferredWidth;
+    type PreferredHeight = Child::PreferredHeight;
+
+    type IntrinsicWidth = Child::IntrinsicWidth;
+    type IntrinsicHeight = Child::IntrinsicHeight;
 
     fn size(&self) -> Size {
         self.size
@@ -435,23 +454,35 @@ where
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
+}
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        if !self.size.contains(position) {
-            return false;
-        }
+impl<Child> AsAnyRenderObject for RenderFlex<Child>
+where
+    Self: RenderBox,
+{
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
+        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
+        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
+        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
+        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
+    >;
 
-        false
+    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
+        self
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {}
+    fn into_boxed_render_object(self) -> Box<Self::Output> {
+        Box::new(self)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, collections::VecDeque, sync::mpsc};
+    use std::cell::RefCell;
 
-    use agui_core::{key::Key, render_object::RenderLeaf, view::AsAnyView};
+    use agui_core::{
+        key::Key, render_object::RenderLeaf, test_harness::TestHarness, view::AsAnyView,
+    };
 
     use super::*;
 
@@ -532,9 +563,6 @@ mod tests {
 
     #[test]
     fn adds_all_children() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column = Column::builder()
             .children([
                 TestView::new(0).into(),
@@ -543,15 +571,13 @@ mod tests {
             ])
             .build();
 
-        let element = Element::new(&column, &mut UpdateCtx::new(&tx, &mut path));
-        assert_eq!(element.children.len(), 3);
+        let harness = TestHarness::mount(&column);
+
+        assert_eq!(harness.root.children.len(), 3);
     }
 
     #[test]
     fn only_remounts_children_when_children_replaced() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column_1 = Column::builder()
             .children([
                 TestView::<usize>::new(0).into_boxed_view().into(),
@@ -559,7 +585,7 @@ mod tests {
             ])
             .build();
 
-        let mut element = Element::new(&column_1, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -571,9 +597,7 @@ mod tests {
             ])
             .build();
 
-        element
-            .as_mut(&column_1)
-            .update(&column_2, &mut UpdateCtx::new(&tx, &mut path));
+        harness.update(&column_1, &column_2);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 4);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -581,9 +605,6 @@ mod tests {
 
     #[test]
     fn only_updates_children_when_children_unchanged() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column_1 = Column::builder()
             .children([
                 TestView::<usize>::new(0).into(),
@@ -591,7 +612,7 @@ mod tests {
             ])
             .build();
 
-        let mut element = Element::new(&column_1, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -603,9 +624,7 @@ mod tests {
             ])
             .build();
 
-        element
-            .as_mut(&column_1)
-            .update(&column_2, &mut UpdateCtx::new(&tx, &mut path));
+        harness.update(&column_1, &column_2);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -613,9 +632,6 @@ mod tests {
 
     #[test]
     fn retains_leading_unchanged_children() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column_1 = Column::builder()
             .children([
                 TestView::<usize>::new(0).into_boxed_view().into(),
@@ -626,7 +642,7 @@ mod tests {
             ])
             .build();
 
-        let mut element = Element::new(&column_1, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -639,9 +655,7 @@ mod tests {
             ])
             .build();
 
-        element
-            .as_mut(&column_1)
-            .update(&column_2, &mut UpdateCtx::new(&tx, &mut path));
+        harness.update(&column_1, &column_2);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -649,9 +663,6 @@ mod tests {
 
     #[test]
     fn retains_following_unchanged_children() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column_1 = Column::builder()
             .children([
                 TestView::<usize>::new(0).into_boxed_view().into(),
@@ -662,7 +673,7 @@ mod tests {
             ])
             .build();
 
-        let mut element = Element::new(&column_1, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -675,9 +686,7 @@ mod tests {
             ])
             .build();
 
-        element
-            .as_mut(&column_1)
-            .update(&column_2, &mut UpdateCtx::new(&tx, &mut path));
+        harness.update(&column_1, &column_2);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -685,9 +694,6 @@ mod tests {
 
     #[test]
     fn retains_leading_and_following_unchanged_children() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column_1 = Column::builder()
             .children([
                 TestView::<usize>::new(0).into_boxed_view().into(),
@@ -698,7 +704,7 @@ mod tests {
             ])
             .build();
 
-        let mut element = Element::new(&column_1, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -714,9 +720,7 @@ mod tests {
             ])
             .build();
 
-        element
-            .as_mut(&column_1)
-            .update(&column_2, &mut UpdateCtx::new(&tx, &mut path));
+        harness.update(&column_1, &column_2);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 7);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 4);
@@ -724,9 +728,6 @@ mod tests {
 
     #[test]
     fn retains_middle_keyed_child() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let column_1 = Column::builder()
             .children([
                 TestView::<usize>::new(0).into_boxed_view().into(),
@@ -742,7 +743,7 @@ mod tests {
             ])
             .build();
 
-        let mut element = Element::new(&column_1, &mut UpdateCtx::new(&tx, &mut path));
+        let mut harness = TestHarness::mount(&column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -760,9 +761,7 @@ mod tests {
             ])
             .build();
 
-        element
-            .as_mut(&column_1)
-            .update(&column_2, &mut UpdateCtx::new(&tx, &mut path));
+        harness.update(&column_1, &column_2);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 9);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);

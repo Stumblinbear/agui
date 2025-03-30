@@ -13,7 +13,9 @@ readme = "README.md"
 
 [dependencies]
 bon.workspace = true
+fnv.workspace = true
 glam.workspace = true
+imbl.workspace = true
 smallbox.workspace = true
 typed_floats.workspace = true
 

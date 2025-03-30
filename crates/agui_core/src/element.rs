@@ -151,12 +151,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, marker::PhantomData, sync::mpsc};
+    use std::marker::PhantomData;
 
     use crate::{
         context::{MessageCtx, UpdateCtx},
         element::Element,
         render_object::RenderLeaf,
+        test_harness::TestHarness,
         view::{AsAnyView, View},
     };
 
@@ -197,54 +198,50 @@ mod tests {
 
     #[test]
     fn unit_state_is_inline() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::<()>::default();
 
-        let element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
+        let harness = TestHarness::mount(&view);
+
         assert!(
-            !element.state.is_heap(),
+            !harness.root.state.is_heap(),
             "concrete View should result in an inline state"
         );
 
-        let element = Element::new(&view.into_boxed_view(), &mut UpdateCtx::new(&tx, &mut path));
+        let harness = TestHarness::mount(&view.into_boxed_view());
+
         assert!(
-            !element.state.is_heap(),
+            !harness.root.state.is_heap(),
             "dyn View should result in an inline state"
         );
     }
 
     #[test]
     fn small_states_are_inline() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::<u16>::default();
 
-        let element = Element::new(&view, &mut UpdateCtx::new(&tx, &mut path));
+        let harness = TestHarness::mount(&view);
+
         assert!(
-            !element.state.is_heap(),
+            !harness.root.state.is_heap(),
             "concrete View should result in an inline state"
         );
 
-        let element = Element::new(&view.into_boxed_view(), &mut UpdateCtx::new(&tx, &mut path));
+        let harness = TestHarness::mount(&view.into_boxed_view());
+
         assert!(
-            !element.state.is_heap(),
+            !harness.root.state.is_heap(),
             "dyn View should result in an inline state"
         );
     }
 
     #[test]
     fn large_states_are_heaped() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let view = TestView::<[u64; 16]>::default();
 
-        let element = Element::new(&view.into_boxed_view(), &mut UpdateCtx::new(&tx, &mut path));
+        let harness = TestHarness::mount(&view.into_boxed_view());
+
         assert!(
-            element.state.is_heap(),
+            harness.root.state.is_heap(),
             "dyn View should result in a heaped state"
         );
     }

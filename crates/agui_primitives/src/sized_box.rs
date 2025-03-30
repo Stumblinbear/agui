@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Add};
 
 use typed_floats::{as_const, Positive, PositiveFinite};
 
@@ -9,8 +9,9 @@ use agui_core::{
     hit_test::HitTestResult,
     offset::Offset,
     render_object::{
-        Bounded, InheritedBound, LayoutBoundMarker, RenderObject, ResolveLayoutMarker,
-        ResolveLayoutMarkerOr, Unbounded,
+        box_layout::{BoxLayout, RenderBox},
+        AsAnyRenderObject, Bounded, InheritedBound, LayoutBoundMarker, RenderObject,
+        ResolveLayoutMarker, ResolveLayoutMarkerOr, Unbounded,
     },
     renderer::Canvas,
     size::Size,
@@ -137,6 +138,19 @@ impl<Width> SizedBox<(Width, InheritedBound), ()> {
 }
 
 impl<AdditionalConstraints> SizedBox<AdditionalConstraints, ()> {
+    pub fn mark_unbounded(self) -> SizedBox<(Unbounded, Unbounded), ()> {
+        SizedBox {
+            width: self.width,
+            height: self.height,
+
+            child: self.child,
+
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<AdditionalConstraints> SizedBox<AdditionalConstraints, ()> {
     pub fn child<Child>(self, child: Child) -> SizedBox<AdditionalConstraints, Child> {
         SizedBox {
             width: self.width,
@@ -173,12 +187,14 @@ impl From<Size> for SizedBox<(Bounded, Bounded), ()> {
 impl<Width, Height, Child> View for SizedBox<(Width, Height), Child>
 where
     Child: View,
-    ResolveLayoutMarkerOr<Width, <Child::Render as RenderObject>::Width>: ResolveLayoutMarker,
-    ResolveLayoutMarkerOr<Height, <Child::Render as RenderObject>::Height>: ResolveLayoutMarker,
+    Child::Render: RenderBox,
+    ResolveLayoutMarkerOr<Width, <Child::Render as BoxLayout>::PreferredWidth>: ResolveLayoutMarker,
+    ResolveLayoutMarkerOr<Height, <Child::Render as BoxLayout>::PreferredHeight>:
+        ResolveLayoutMarker,
 {
     type Render = RenderSizedBox<
-        <ResolveLayoutMarkerOr<Width, <Child::Render as RenderObject>::Width> as ResolveLayoutMarker>::Value,
-        <ResolveLayoutMarkerOr<Height, <Child::Render as RenderObject>::Height> as ResolveLayoutMarker>::Value,
+        <ResolveLayoutMarkerOr<Width, <Child::Render as BoxLayout>::PreferredWidth> as ResolveLayoutMarker>::Value,
+        <ResolveLayoutMarkerOr<Height, <Child::Render as BoxLayout>::PreferredHeight> as ResolveLayoutMarker>::Value,
         Child::Render,
     >;
 
@@ -247,16 +263,10 @@ impl<Width, Height, Child> RenderSizedBox<Width, Height, Child> {
 
 impl<Width, Height, Child> RenderObject for RenderSizedBox<Width, Height, Child>
 where
-    Child: RenderObject,
+    Child: RenderBox,
     Width: LayoutBoundMarker,
     Height: LayoutBoundMarker,
 {
-    type Width = Width;
-    type Height = Height;
-
-    type WidthIntrinsic = Child::WidthIntrinsic;
-    type HeightIntrinsic = Child::HeightIntrinsic;
-
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
     }
@@ -264,6 +274,31 @@ where
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.child.unmount(ctx);
     }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+        if !self.size().contains(position) {
+            return false;
+        }
+
+        self.child.hit_test(result, position)
+    }
+
+    fn draw(&mut self, canvas: &mut Canvas) {
+        self.child.draw(canvas);
+    }
+}
+
+impl<Width, Height, Child> BoxLayout for RenderSizedBox<Width, Height, Child>
+where
+    Child: RenderBox,
+    Width: LayoutBoundMarker,
+    Height: LayoutBoundMarker,
+{
+    type PreferredWidth = Width;
+    type PreferredHeight = Height;
+
+    type IntrinsicWidth = <Child as BoxLayout>::IntrinsicWidth;
+    type IntrinsicHeight = Child::IntrinsicHeight;
 
     fn size(&self) -> Size {
         self.child.size()
@@ -315,23 +350,31 @@ where
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         self.child.distance_to_baseline(baseline)
     }
+}
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
-        if !self.size().contains(position) {
-            return false;
-        }
+impl<Width, Height, Child> AsAnyRenderObject for RenderSizedBox<Width, Height, Child>
+where
+    Self: RenderBox,
+{
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
+        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
+        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
+        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
+        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
+    >;
 
-        self.child.hit_test(result, position)
+    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
+        self
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        self.child.draw(canvas);
+    fn into_boxed_render_object(self) -> Box<Self::Output> {
+        Box::new(self)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::VecDeque, sync::mpsc};
+    use agui_core::test_harness::TestHarness;
 
     use crate::sized_box::SizedBox;
 
@@ -339,11 +382,9 @@ mod tests {
 
     #[test]
     fn results_in_correct_sizing() {
-        let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
-
         let sized_box = SizedBox::new().width(16).height(48);
-        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&sized_box)
+            .root
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -354,7 +395,8 @@ mod tests {
         );
 
         let sized_box = SizedBox::new().width(0).height(16);
-        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&sized_box)
+            .root
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(16, 128, 32, 128));
@@ -365,7 +407,8 @@ mod tests {
         );
 
         let sized_box = SizedBox::shrink();
-        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&sized_box)
+            .root
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
@@ -376,7 +419,8 @@ mod tests {
         );
 
         let sized_box = SizedBox::shrink();
-        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&sized_box)
+            .root
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(10, 128, 20, 128));
@@ -387,7 +431,8 @@ mod tests {
         );
 
         let sized_box = SizedBox::expand();
-        let mut render_object = Element::new(&sized_box, &mut UpdateCtx::new(&tx, &mut path))
+        let mut render_object = TestHarness::mount(&sized_box)
+            .root
             .as_ref(&sized_box)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
