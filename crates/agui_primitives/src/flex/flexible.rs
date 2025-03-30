@@ -1,4 +1,3 @@
-use agui_core::view::BoxedView;
 use bon::Builder;
 
 use crate::flex::FlexFit;

@@ -5,6 +5,7 @@ use crate::{
     element::{Element, ElementState},
     key::AnyKeyable,
     render_object::{AnyRenderObject, AsAnyRenderObject, RenderObject},
+    routing_id::RoutingId,
     view::{MountView, View},
 };
 
@@ -83,16 +84,17 @@ where
     }
 
     fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<Self>() {
-            self.is_same_type(other)
-        } else {
-            false
-        }
+        other.as_any().is::<Self>()
     }
 
     fn dyn_key(&self) -> Option<&dyn AnyKeyable> {
         self.key()
     }
+}
+
+#[repr(transparent)]
+pub struct AnyViewState {
+    generation: u16,
 }
 
 macros::impl_view!(&dyn AnyView<Render = Render>);
@@ -116,22 +118,49 @@ mod macros {
             {
                 type Render = Render;
 
-                type State = ElementState;
+                type State = AnyViewState;
 
                 fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-                    (**self).dyn_mount(ctx)
+                    let (children, state) =
+                        ctx.with_routing_id(RoutingId::new(0), |ctx| (**self).dyn_mount(ctx));
+
+                    (
+                        vec![Element { state, children }],
+                        AnyViewState { generation: 0 },
+                    )
                 }
 
                 fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-                    (**self).dyn_update(element, &**old, ctx);
+                    let state = element.state.downcast_mut::<Self>();
+
+                    // If the type of the old view is not the same as the new view, we need to increment
+                    // the generation. This is because events may have been queued up for the old view,
+                    // and we don't want them to be erroneously sent to the new view. The generation
+                    // is the routing id, so the new view will receive a new routing id, and thus won't
+                    // receive the events that were queued up for the old view.
+                    if !(**self).dyn_is_same_type(&**old) {
+                        state.generation = state.generation.wrapping_add(1);
+                    }
+
+                    ctx.with_routing_id(RoutingId::new(state.generation), |ctx| {
+                        (**self).dyn_update(&mut element.children[0], &**old, ctx)
+                    });
                 }
 
                 fn message(&self, element: &mut Element, ctx: MessageCtx) {
-                    (**self).dyn_message(element, ctx);
+                    let state = element.state.downcast_mut::<Self>();
+
+                    // If the routing id is not the same as the generation, we don't want to send the message
+                    // to the inner element since it has been replaced.
+                    if ctx.routing_id() != Some(state.generation) {
+                        return;
+                    }
+
+                    (**self).dyn_message(&mut element.children[0], ctx);
                 }
 
                 fn create_render_object(&self, element: &Element) -> Self::Render {
-                    (**self).dyn_create_render_object(element)
+                    (**self).dyn_create_render_object(&element.children[0])
                 }
 
                 fn update_render_object(
@@ -139,7 +168,7 @@ mod macros {
                     element: &Element,
                     render_object: &mut Self::Render,
                 ) {
-                    (**self).dyn_update_render_object(element, render_object);
+                    (**self).dyn_update_render_object(&element.children[0], render_object);
                 }
 
                 fn is_same_type(&self, other: &Self) -> bool {
@@ -353,7 +382,12 @@ mod tests {
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &7);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &7
+        );
     }
 
     #[test]
@@ -362,7 +396,12 @@ mod tests {
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &1);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &1
+        );
     }
 
     #[test]
@@ -373,13 +412,23 @@ mod tests {
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &2
+        );
 
         harness.update(&view.as_dyn_view(), &TestView::new(9_usize).as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &9);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &9
+        );
     }
 
     #[test]
@@ -390,13 +439,23 @@ mod tests {
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &2
+        );
 
         harness.update(&view, &TestView::new(9_usize).into_boxed_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &9);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &9
+        );
     }
 
     #[test]
@@ -407,13 +466,23 @@ mod tests {
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &2
+        );
 
         harness.update(&view.as_dyn_view(), &TestView::new(7_u8).as_dyn_view());
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-        assert_eq!(harness.root.state.downcast_ref::<TestView<u8>>(), &7);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<u8>>(),
+            &7
+        );
     }
 
     #[test]
@@ -422,10 +491,20 @@ mod tests {
 
         let mut harness = TestHarness::mount(&view);
 
-        assert_eq!(harness.root.state.downcast_ref::<TestView<usize>>(), &2);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<usize>>(),
+            &2
+        );
 
         harness.update(&view, &TestView::new(7_u8).into_boxed_view());
 
-        assert_eq!(harness.root.state.downcast_ref::<TestView<u8>>(), &7);
+        assert_eq!(
+            harness.root.children[0]
+                .state
+                .downcast_ref::<TestView<u8>>(),
+            &7
+        );
     }
 }

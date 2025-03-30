@@ -25,6 +25,7 @@ impl ElementState {
         self.0.is_heap()
     }
 
+    #[track_caller]
     pub fn downcast_ref<V>(&self) -> &<V as View>::State
     where
         V: View,
@@ -33,6 +34,7 @@ impl ElementState {
         self.0.downcast_ref().expect("node state downcast failed")
     }
 
+    #[track_caller]
     pub fn downcast_mut<V>(&mut self) -> &mut <V as View>::State
     where
         V: View,
@@ -158,7 +160,7 @@ mod tests {
         element::Element,
         render_object::RenderLeaf,
         test_harness::TestHarness,
-        view::{AsAnyView, View},
+        view::View,
     };
 
     struct TestView<T> {
@@ -206,13 +208,6 @@ mod tests {
             !harness.root.state.is_heap(),
             "concrete View should result in an inline state"
         );
-
-        let harness = TestHarness::mount(&view.into_boxed_view());
-
-        assert!(
-            !harness.root.state.is_heap(),
-            "dyn View should result in an inline state"
-        );
     }
 
     #[test]
@@ -225,24 +220,17 @@ mod tests {
             !harness.root.state.is_heap(),
             "concrete View should result in an inline state"
         );
-
-        let harness = TestHarness::mount(&view.into_boxed_view());
-
-        assert!(
-            !harness.root.state.is_heap(),
-            "dyn View should result in an inline state"
-        );
     }
 
     #[test]
     fn large_states_are_heaped() {
         let view = TestView::<[u64; 16]>::default();
 
-        let harness = TestHarness::mount(&view.into_boxed_view());
+        let harness = TestHarness::mount(&view);
 
         assert!(
             harness.root.state.is_heap(),
-            "dyn View should result in a heaped state"
+            "should result in a heaped state"
         );
     }
 }
