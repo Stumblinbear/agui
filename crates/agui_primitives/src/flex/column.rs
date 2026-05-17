@@ -4,7 +4,7 @@ use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     element::Element,
-    hit_test::HitTestResult,
+    hit_test::{HitTest, HitTestResult},
     key::AnyKeyable,
     offset::Offset,
     render_object::{
@@ -396,12 +396,12 @@ where
         }
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         if !self.size.contains(position) {
-            return false;
+            return HitTest::Pass;
         }
 
-        false
+        HitTest::Pass
     }
 
     fn draw(&mut self, canvas: &mut Canvas) {}

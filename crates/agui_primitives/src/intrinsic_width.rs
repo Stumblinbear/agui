@@ -5,7 +5,7 @@ use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     element::Element,
-    hit_test::HitTestResult,
+    hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
@@ -77,9 +77,9 @@ where
         self.child.unmount(ctx);
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         if !self.child.size().contains(position) {
-            return false;
+            return HitTest::Pass;
         }
 
         self.child.hit_test(result, position)

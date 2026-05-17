@@ -1,7 +1,10 @@
 use std::any::Any;
 
 use crate::{
-    context::UpdateCtx, hit_test::HitTestResult, offset::Offset, render_object::RenderObject,
+    context::UpdateCtx,
+    hit_test::{HitTest, HitTestResult},
+    offset::Offset,
+    render_object::RenderObject,
     renderer::Canvas,
 };
 
@@ -16,7 +19,7 @@ pub trait AnyRenderObject {
 
     fn dyn_unmount(&mut self, ctx: &mut UpdateCtx);
 
-    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool;
+    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
     fn dyn_draw(&mut self, canvas: &mut Canvas);
 }
@@ -46,7 +49,7 @@ where
         self.unmount(ctx);
     }
 
-    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.hit_test(result, position)
     }
 
@@ -67,7 +70,7 @@ where
         (**self).dyn_unmount(ctx);
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         (**self).dyn_hit_test(result, position)
     }
 

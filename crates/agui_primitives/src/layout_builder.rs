@@ -6,7 +6,7 @@ use agui_core::{
     constraints::Constraints,
     context::{MessageCtx, UpdateCtx},
     element::Element,
-    hit_test::HitTestResult,
+    hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
@@ -200,11 +200,11 @@ where
         }
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, offset: Offset) -> bool {
+    fn hit_test(&self, result: &mut HitTestResult, offset: Offset) -> HitTest {
         if let Some(child_render) = self.child_render.as_ref() {
             child_render.hit_test(result, offset)
         } else {
-            false
+            HitTest::Pass
         }
     }
 

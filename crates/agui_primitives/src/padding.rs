@@ -6,7 +6,7 @@ use agui_core::{
     context::{MessageCtx, UpdateCtx},
     edge_insets::{EdgeInsets, EdgeInsetsGeometry},
     element::Element,
-    hit_test::HitTestResult,
+    hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
@@ -119,9 +119,9 @@ where
         self.child.unmount(ctx);
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         if !self.size().contains(position) {
-            return false;
+            return HitTest::Pass;
         }
 
         result.with_offset(self.child_offset, position, |result, transformed| {

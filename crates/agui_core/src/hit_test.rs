@@ -53,8 +53,8 @@ impl HitTestResult {
         &mut self,
         mut transform: Mat4,
         position: Offset,
-        func: impl FnOnce(&mut Self, Offset) -> bool,
-    ) -> bool {
+        func: impl FnOnce(&mut Self, Offset) -> HitTest,
+    ) -> HitTest {
         // Remove the perspective transform from the matrix
         transform.z_axis[0] = 0.0;
         transform.z_axis[1] = 0.0;
@@ -68,7 +68,7 @@ impl HitTestResult {
 
         if transform.determinant() == 0.0 {
             // Elements are not visible on screen and cannot be hit-tested.
-            return false;
+            return HitTest::Pass;
         }
 
         self.with_raw_transform(transform, position, func)
@@ -78,8 +78,8 @@ impl HitTestResult {
         &mut self,
         transform: Mat4,
         position: Offset,
-        func: impl FnOnce(&mut Self, Offset) -> bool,
-    ) -> bool {
+        func: impl FnOnce(&mut Self, Offset) -> HitTest,
+    ) -> HitTest {
         // Transform the given position by the current transform
         let transformed_position = transform.transform_point3(position.into());
 
@@ -99,8 +99,8 @@ impl HitTestResult {
         &mut self,
         offset: Offset,
         position: Offset,
-        func: impl FnOnce(&mut Self, Offset) -> bool,
-    ) -> bool {
+        func: impl FnOnce(&mut Self, Offset) -> HitTest,
+    ) -> HitTest {
         self.with_raw_transform(
             Mat4::from_translation(Vec3::new(-offset.x.get(), -offset.y.get(), 0.0)),
             position - offset,

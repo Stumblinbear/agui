@@ -3,7 +3,7 @@ use typed_floats::{as_const, Positive, PositiveFinite};
 use crate::{
     constraints::Constraints,
     context::UpdateCtx,
-    hit_test::HitTestResult,
+    hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::box_layout::{AnyRenderBox, BoxLayout, RenderBox},
     renderer::Canvas,
@@ -23,10 +23,11 @@ pub trait RenderObject: 'static {
 
     /// Determines the set of [`View`]s located at the given position.
     ///
-    /// Returns true, and adds any [`View`]s that contain the point to the
-    /// given hit test result, if this [`View`] or one of its descendants
-    /// absorbs the hit (preventing [`View`]s below this one from being hit).
-    /// Returns false if the hit can continue to other [`View`]s below this one.
+    /// Returns [`HitTest::Absorb`], and adds any [`View`]s that contain the
+    /// point to the given hit test result, if this [`View`] or one of its
+    /// descendants absorbs the hit (preventing [`View`]s below this one from
+    /// being hit). Returns [`HitTest::Pass`] if the hit can continue to other
+    /// [`View`]s below this one.
     ///
     /// The caller is responsible for transforming `position` from global
     /// coordinates to its location relative to the origin of this [`View`].
@@ -37,7 +38,7 @@ pub trait RenderObject: 'static {
     /// to be up-to-date. That means an [`View`] can rely upon [`View::layout`]
     /// having been called in [`View::hit_test`] but cannot rely upon [`View::draw`]
     /// having been called.
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> bool;
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
     fn draw(&mut self, canvas: &mut Canvas);
 }
@@ -52,9 +53,9 @@ impl RenderObject for RenderLeaf {
 
     fn unmount(&mut self, _: &mut UpdateCtx) {}
 
-    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> bool {
+    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
         // TODO(trevin): should this add itself to the hit test result?
-        false
+        HitTest::Pass
     }
 
     fn draw(&mut self, _: &mut Canvas) {}
