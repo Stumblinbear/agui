@@ -1,10 +1,7 @@
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
-    constraints::Constraints,
-    render_object::{LayoutBoundMarker, LayoutIntrinsicMarker, RenderObject},
-    size::Size,
-    text_baseline::TextBaseline,
+    constraints::Constraints, render_object::RenderObject, size::Size, text_baseline::TextBaseline,
 };
 
 mod any_render_box;
@@ -12,12 +9,6 @@ mod any_render_box;
 pub use any_render_box::*;
 
 pub trait BoxLayout {
-    type PreferredWidth: LayoutBoundMarker;
-    type PreferredHeight: LayoutBoundMarker;
-
-    type IntrinsicWidth: LayoutIntrinsicMarker;
-    type IntrinsicHeight: LayoutIntrinsicMarker;
-
     fn size(&self) -> Size;
 
     /// Returns the minimum width that this box could be without failing to

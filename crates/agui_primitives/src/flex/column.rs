@@ -411,12 +411,6 @@ impl<Child> BoxLayout for RenderFlex<Child>
 where
     Child: RenderBox,
 {
-    type PreferredWidth = Child::PreferredWidth;
-    type PreferredHeight = Child::PreferredHeight;
-
-    type IntrinsicWidth = Child::IntrinsicWidth;
-    type IntrinsicHeight = Child::IntrinsicHeight;
-
     fn size(&self) -> Size {
         self.size
     }
@@ -460,12 +454,7 @@ impl<Child> AsAnyRenderObject for RenderFlex<Child>
 where
     Self: RenderBox,
 {
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
-        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
-        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
-        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
-        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
-    >;
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
 
     fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
         self

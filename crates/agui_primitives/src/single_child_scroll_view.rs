@@ -9,7 +9,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
-        AsAnyRenderObject, Bounded, RenderObject, Unbounded,
+        AsAnyRenderObject, RenderObject,
     },
     renderer::Canvas,
     size::Size,
@@ -22,7 +22,7 @@ use agui_core::{
 pub struct SingleChildScrollView<Child>
 where
     Child: View,
-    Child::Render: RenderBox<PreferredHeight = Bounded>,
+    Child::Render: RenderBox,
 {
     #[builder(finish_fn)]
     child: Child,
@@ -31,7 +31,7 @@ where
 impl<Child> SingleChildScrollView<Child>
 where
     Child: View,
-    Child::Render: RenderBox<PreferredHeight = Bounded>,
+    Child::Render: RenderBox,
 {
     pub fn new(child: Child) -> Self {
         Self::builder().child(child)
@@ -41,7 +41,7 @@ where
 impl<Child> View for SingleChildScrollView<Child>
 where
     Child: View,
-    Child::Render: RenderBox<PreferredHeight = Bounded>,
+    Child::Render: RenderBox,
 {
     type Render = RenderSingleChildScrollView<Child::Render>;
 
@@ -84,7 +84,7 @@ pub struct RenderSingleChildScrollView<Child> {
 
 impl<Child> RenderObject for RenderSingleChildScrollView<Child>
 where
-    Child: RenderBox<PreferredHeight = Bounded>,
+    Child: RenderBox,
 {
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
@@ -109,15 +109,8 @@ where
 
 impl<Child> BoxLayout for RenderSingleChildScrollView<Child>
 where
-    Child: RenderBox<PreferredHeight = Bounded>,
+    Child: RenderBox,
 {
-    type PreferredWidth = Unbounded;
-    type PreferredHeight = Bounded;
-
-    // TODO(trevin): should this support intrinsic dimensions?
-    type IntrinsicWidth = Child::IntrinsicWidth;
-    type IntrinsicHeight = Child::IntrinsicHeight;
-
     fn size(&self) -> Size {
         self.size
     }
@@ -162,12 +155,7 @@ impl<Child> AsAnyRenderObject for RenderSingleChildScrollView<Child>
 where
     Self: RenderBox,
 {
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
-        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
-        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
-        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
-        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
-    >;
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
 
     fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
         self

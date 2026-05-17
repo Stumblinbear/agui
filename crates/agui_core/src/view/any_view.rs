@@ -242,7 +242,7 @@ pub type BoxedView<V: View> =
     Box<dyn AnyView<Render = Box<<V::Render as AsAnyRenderObject>::Output>>>;
 
 pub trait AsAnyView: View + 'static {
-    fn as_dyn_view(&self) -> &(dyn AnyView<Render = Self::Render>)
+    fn as_dyn_view(&self) -> &dyn AnyView<Render = Self::Render>
     where
         Self: Sized,
     {

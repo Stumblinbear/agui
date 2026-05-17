@@ -13,10 +13,8 @@ use crate::{
 
 mod any_render_object;
 pub mod box_layout;
-mod layout_marker;
 
 pub use any_render_object::*;
-pub use layout_marker::*;
 
 pub trait RenderObject: 'static {
     fn mount(&mut self, ctx: &mut UpdateCtx);
@@ -63,12 +61,6 @@ impl RenderObject for RenderLeaf {
 }
 
 impl BoxLayout for RenderLeaf {
-    type PreferredWidth = Bounded;
-    type PreferredHeight = Bounded;
-
-    type IntrinsicWidth = HasIntrinsic;
-    type IntrinsicHeight = HasIntrinsic;
-
     fn size(&self) -> Size {
         self.size
     }
@@ -110,12 +102,7 @@ impl AsAnyRenderObject for RenderLeaf
 where
     Self: RenderBox,
 {
-    type Output = dyn AnyRenderBox<
-        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
-        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
-        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
-        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
-    >;
+    type Output = dyn AnyRenderBox;
 
     fn as_dyn_render_object(&self) -> &dyn AnyRenderObject {
         self

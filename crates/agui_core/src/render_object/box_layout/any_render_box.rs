@@ -6,19 +6,13 @@ use crate::{
     constraints::Constraints,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
-        AnyRenderObject, LayoutBoundMarker, LayoutIntrinsicMarker,
+        AnyRenderObject,
     },
     size::Size,
     text_baseline::TextBaseline,
 };
 
 pub trait AnyRenderBox: AnyRenderObject {
-    type PreferredWidth: LayoutBoundMarker;
-    type PreferredHeight: LayoutBoundMarker;
-
-    type IntrinsicWidth: LayoutIntrinsicMarker;
-    type IntrinsicHeight: LayoutIntrinsicMarker;
-
     fn dyn_size(&self) -> Size;
 
     fn dyn_min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>>;
@@ -42,26 +36,11 @@ pub trait AnyRenderBox: AnyRenderObject {
     fn dyn_distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>>;
 }
 
-impl<T, PreferredWidth, PreferredHeight, IntrinsicWidth, IntrinsicHeight> AnyRenderBox for T
+impl<T> AnyRenderBox for T
 where
     T: Any,
-    T: RenderBox<
-        PreferredWidth = PreferredWidth,
-        PreferredHeight = PreferredHeight,
-        IntrinsicWidth = IntrinsicWidth,
-        IntrinsicHeight = IntrinsicHeight,
-    >,
-    PreferredWidth: LayoutBoundMarker,
-    PreferredHeight: LayoutBoundMarker,
-    IntrinsicWidth: LayoutIntrinsicMarker,
-    IntrinsicHeight: LayoutIntrinsicMarker,
+    T: RenderBox,
 {
-    type PreferredWidth = PreferredWidth;
-    type PreferredHeight = PreferredHeight;
-
-    type IntrinsicWidth = IntrinsicWidth;
-    type IntrinsicHeight = IntrinsicHeight;
-
     fn dyn_size(&self) -> Size {
         self.size()
     }
@@ -103,26 +82,10 @@ where
     }
 }
 
-impl<T, PreferredWidth, PreferredHeight, IntrinsicWidth, IntrinsicHeight> BoxLayout for Box<T>
+impl<T> BoxLayout for Box<T>
 where
-    T: AnyRenderBox<
-            PreferredWidth = PreferredWidth,
-            PreferredHeight = PreferredHeight,
-            IntrinsicWidth = IntrinsicWidth,
-            IntrinsicHeight = IntrinsicHeight,
-        > + ?Sized
-        + 'static,
-    PreferredWidth: LayoutBoundMarker,
-    PreferredHeight: LayoutBoundMarker,
-    IntrinsicWidth: LayoutIntrinsicMarker,
-    IntrinsicHeight: LayoutIntrinsicMarker,
+    T: AnyRenderBox + ?Sized + 'static,
 {
-    type PreferredWidth = PreferredWidth;
-    type PreferredHeight = PreferredHeight;
-
-    type IntrinsicWidth = IntrinsicWidth;
-    type IntrinsicHeight = IntrinsicHeight;
-
     fn size(&self) -> Size {
         (**self).dyn_size()
     }

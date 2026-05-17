@@ -10,7 +10,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
-        NoIntrinsic, RenderObject,
+        RenderObject,
     },
     renderer::Canvas,
     size::Size,
@@ -219,12 +219,6 @@ impl<Child> BoxLayout for RenderLayoutBuilder<Child>
 where
     Child: RenderBox,
 {
-    type PreferredWidth = Child::PreferredWidth;
-    type PreferredHeight = Child::PreferredHeight;
-
-    type IntrinsicWidth = NoIntrinsic;
-    type IntrinsicHeight = NoIntrinsic;
-
     fn size(&self) -> Size {
         self.child_render
             .as_ref()
@@ -295,7 +289,7 @@ mod tests {
                 if constraints.max_width() > 100.0 {
                     SizedBox::expand().into_boxed_view()
                 } else {
-                    SizedBox::shrink().mark_unbounded().into_boxed_view()
+                    SizedBox::shrink().into_boxed_view()
                 }
             }
         });

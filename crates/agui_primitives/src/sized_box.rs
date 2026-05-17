@@ -1,5 +1,3 @@
-use std::{marker::PhantomData, ops::Add};
-
 use typed_floats::{as_const, Positive, PositiveFinite};
 
 use agui_core::{
@@ -10,8 +8,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
-        AsAnyRenderObject, Bounded, InheritedBound, LayoutBoundMarker, RenderObject,
-        ResolveLayoutMarker, ResolveLayoutMarkerOr, Unbounded,
+        AsAnyRenderObject, RenderObject,
     },
     renderer::Canvas,
     size::Size,
@@ -19,62 +16,54 @@ use agui_core::{
     view::View,
 };
 
-pub struct SizedBox<Constraints, Child> {
+pub struct SizedBox<Child> {
     width: Option<Positive<f32>>,
     height: Option<Positive<f32>>,
 
     child: Child,
-
-    _phantom: PhantomData<Constraints>,
 }
 
-impl Default for SizedBox<(InheritedBound, InheritedBound), ()> {
+impl Default for SizedBox<()> {
     fn default() -> Self {
         SizedBox {
             width: None,
             height: None,
 
             child: (),
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl SizedBox<(InheritedBound, InheritedBound), ()> {
+impl SizedBox<()> {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl SizedBox<(Bounded, Bounded), ()> {
+impl SizedBox<()> {
     pub fn shrink() -> Self {
         Self {
             width: Some(as_const!(Positive, f32, 0.0)),
             height: Some(as_const!(Positive, f32, 0.0)),
 
             child: (),
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl SizedBox<(Unbounded, Unbounded), ()> {
+impl SizedBox<()> {
     pub fn expand() -> Self {
         Self {
             width: Some(as_const!(Positive, f32, f32::INFINITY)),
             height: Some(as_const!(Positive, f32, f32::INFINITY)),
 
             child: (),
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<Height> SizedBox<(InheritedBound, Height), ()> {
-    pub fn width<T>(self, width: T) -> SizedBox<(Bounded, Height), ()>
+impl SizedBox<()> {
+    pub fn width<T>(self, width: T) -> SizedBox<()>
     where
         PositiveFinite<f32>: TryFrom<T>,
         <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
@@ -88,25 +77,21 @@ impl<Height> SizedBox<(InheritedBound, Height), ()> {
             height: self.height,
 
             child: self.child,
-
-            _phantom: PhantomData,
         }
     }
 
-    pub fn expand_width(self) -> SizedBox<(Unbounded, Height), ()> {
+    pub fn expand_width(self) -> SizedBox<()> {
         SizedBox {
             width: Some(as_const!(Positive, f32, f32::INFINITY)),
             height: self.height,
 
             child: self.child,
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<Width> SizedBox<(Width, InheritedBound), ()> {
-    pub fn height<T>(self, height: T) -> SizedBox<(Width, Bounded), ()>
+impl SizedBox<()> {
+    pub fn height<T>(self, height: T) -> SizedBox<()>
     where
         PositiveFinite<f32>: TryFrom<T>,
         <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
@@ -120,50 +105,31 @@ impl<Width> SizedBox<(Width, InheritedBound), ()> {
             ),
 
             child: self.child,
-
-            _phantom: PhantomData,
         }
     }
 
-    pub fn expand_height(self) -> SizedBox<(Width, Unbounded), ()> {
+    pub fn expand_height(self) -> SizedBox<()> {
         SizedBox {
             width: self.width,
             height: Some(as_const!(Positive, f32, f32::INFINITY)),
 
             child: self.child,
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<AdditionalConstraints> SizedBox<AdditionalConstraints, ()> {
-    pub fn mark_unbounded(self) -> SizedBox<(Unbounded, Unbounded), ()> {
-        SizedBox {
-            width: self.width,
-            height: self.height,
-
-            child: self.child,
-
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<AdditionalConstraints> SizedBox<AdditionalConstraints, ()> {
-    pub fn child<Child>(self, child: Child) -> SizedBox<AdditionalConstraints, Child> {
+impl SizedBox<()> {
+    pub fn child<Child>(self, child: Child) -> SizedBox<Child> {
         SizedBox {
             width: self.width,
             height: self.height,
 
             child,
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl From<Size> for SizedBox<(Bounded, Bounded), ()> {
+impl From<Size> for SizedBox<()> {
     fn from(size: Size) -> Self {
         Self {
             width: Some(
@@ -178,25 +144,16 @@ impl From<Size> for SizedBox<(Bounded, Bounded), ()> {
             ),
 
             child: (),
-
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<Width, Height, Child> View for SizedBox<(Width, Height), Child>
+impl<Child> View for SizedBox<Child>
 where
     Child: View,
     Child::Render: RenderBox,
-    ResolveLayoutMarkerOr<Width, <Child::Render as BoxLayout>::PreferredWidth>: ResolveLayoutMarker,
-    ResolveLayoutMarkerOr<Height, <Child::Render as BoxLayout>::PreferredHeight>:
-        ResolveLayoutMarker,
 {
-    type Render = RenderSizedBox<
-        <ResolveLayoutMarkerOr<Width, <Child::Render as BoxLayout>::PreferredWidth> as ResolveLayoutMarker>::Value,
-        <ResolveLayoutMarkerOr<Height, <Child::Render as BoxLayout>::PreferredHeight> as ResolveLayoutMarker>::Value,
-        Child::Render,
-    >;
+    type Render = RenderSizedBox<Child::Render>;
 
     type State = ();
 
@@ -221,8 +178,6 @@ where
             height: self.height,
 
             child: element.child(0, &self.child).create_render_object(),
-
-            _phantom: PhantomData,
         }
     }
 
@@ -236,16 +191,14 @@ where
             .update_render_object(&mut render_object.child);
     }
 }
-pub struct RenderSizedBox<Width, Height, Child> {
+pub struct RenderSizedBox<Child> {
     width: Option<Positive<f32>>,
     height: Option<Positive<f32>>,
 
     child: Child,
-
-    _phantom: PhantomData<(Width, Height)>,
 }
 
-impl<Width, Height, Child> RenderSizedBox<Width, Height, Child> {
+impl<Child> RenderSizedBox<Child> {
     fn additional_constraints(&self) -> Constraints {
         let mut constraints = Constraints::default();
 
@@ -261,11 +214,9 @@ impl<Width, Height, Child> RenderSizedBox<Width, Height, Child> {
     }
 }
 
-impl<Width, Height, Child> RenderObject for RenderSizedBox<Width, Height, Child>
+impl<Child> RenderObject for RenderSizedBox<Child>
 where
     Child: RenderBox,
-    Width: LayoutBoundMarker,
-    Height: LayoutBoundMarker,
 {
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
@@ -288,18 +239,10 @@ where
     }
 }
 
-impl<Width, Height, Child> BoxLayout for RenderSizedBox<Width, Height, Child>
+impl<Child> BoxLayout for RenderSizedBox<Child>
 where
     Child: RenderBox,
-    Width: LayoutBoundMarker,
-    Height: LayoutBoundMarker,
 {
-    type PreferredWidth = Width;
-    type PreferredHeight = Height;
-
-    type IntrinsicWidth = <Child as BoxLayout>::IntrinsicWidth;
-    type IntrinsicHeight = Child::IntrinsicHeight;
-
     fn size(&self) -> Size {
         self.child.size()
     }
@@ -352,16 +295,11 @@ where
     }
 }
 
-impl<Width, Height, Child> AsAnyRenderObject for RenderSizedBox<Width, Height, Child>
+impl<Child> AsAnyRenderObject for RenderSizedBox<Child>
 where
     Self: RenderBox,
 {
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
-        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
-        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
-        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
-        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
-    >;
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
 
     fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
         self

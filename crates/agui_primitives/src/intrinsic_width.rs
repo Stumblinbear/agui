@@ -9,7 +9,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         box_layout::{BoxLayout, RenderBox},
-        AsAnyRenderObject, HasIntrinsic, RenderObject,
+        AsAnyRenderObject, RenderObject,
     },
     renderer::Canvas,
     size::Size,
@@ -27,7 +27,7 @@ pub struct IntrinsicWidth<Child> {
 impl<Child> View for IntrinsicWidth<Child>
 where
     Child: View,
-    Child::Render: RenderBox<IntrinsicWidth = HasIntrinsic>,
+    Child::Render: RenderBox,
 {
     type Render = RenderIntrinsicWidth<Child::Render>;
 
@@ -67,7 +67,7 @@ pub struct RenderIntrinsicWidth<Child> {
 
 impl<Child> RenderObject for RenderIntrinsicWidth<Child>
 where
-    Child: RenderBox<IntrinsicWidth = HasIntrinsic>,
+    Child: RenderBox,
 {
     fn mount(&mut self, ctx: &mut UpdateCtx) {
         self.child.mount(ctx);
@@ -92,14 +92,8 @@ where
 
 impl<Child> BoxLayout for RenderIntrinsicWidth<Child>
 where
-    Child: RenderBox<IntrinsicWidth = HasIntrinsic>,
+    Child: RenderBox,
 {
-    type PreferredWidth = <Child as BoxLayout>::PreferredWidth;
-    type PreferredHeight = <Child as BoxLayout>::PreferredHeight;
-
-    type IntrinsicWidth = HasIntrinsic;
-    type IntrinsicHeight = Child::IntrinsicHeight;
-
     fn size(&self) -> Size {
         self.child.size()
     }
@@ -200,12 +194,7 @@ impl<Child> AsAnyRenderObject for RenderIntrinsicWidth<Child>
 where
     Self: RenderBox,
 {
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox<
-        PreferredWidth = <Self as BoxLayout>::PreferredWidth,
-        PreferredHeight = <Self as BoxLayout>::PreferredHeight,
-        IntrinsicWidth = <Self as BoxLayout>::IntrinsicWidth,
-        IntrinsicHeight = <Self as BoxLayout>::IntrinsicHeight,
-    >;
+    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
 
     fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
         self
