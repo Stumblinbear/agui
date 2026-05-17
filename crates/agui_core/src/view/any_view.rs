@@ -262,68 +262,6 @@ pub trait AsAnyView: View + 'static {
 
 impl<T: 'static> AsAnyView for T where T: View {}
 
-// pub trait BoxedViewExt {
-//     type Width: LayoutBoundMarker;
-//     type Height: LayoutBoundMarker;
-
-//     type WidthIntrinsic: LayoutIntrinsicMarker;
-//     type HeightIntrinsic: LayoutIntrinsicMarker;
-
-//     fn unbounded(
-//         self,
-//     ) -> Box<
-//         dyn AnyView<
-//             Render = BoxedRenderObject<
-//                 Unbounded,
-//                 Unbounded,
-//                 Self::WidthIntrinsic,
-//                 Self::HeightIntrinsic,
-//             >,
-//         >,
-//     >;
-// }
-
-// impl<Width, Height, WidthIntrinsic, HeightIntrinsic> BoxedViewExt
-//     for Box<
-//         dyn AnyView<
-//             Render = Box<
-//                 dyn AnyRenderObject<
-//                     Width = Width,
-//                     Height = Height,
-//                     WidthIntrinsic = WidthIntrinsic,
-//                     HeightIntrinsic = HeightIntrinsic,
-//                 >,
-//             >,
-//         >,
-//     >
-// where
-//     Width: LayoutBoundMarker,
-//     Height: LayoutBoundMarker,
-//     WidthIntrinsic: LayoutIntrinsicMarker,
-//     HeightIntrinsic: LayoutIntrinsicMarker,
-// {
-//     type Width = Width;
-//     type Height = Height;
-
-//     type WidthIntrinsic = WidthIntrinsic;
-//     type HeightIntrinsic = HeightIntrinsic;
-
-//     fn unbounded(
-//         self,
-//     ) -> Box<
-//         dyn AnyView<
-//             Render = BoxedRenderObject<
-//                 Unbounded,
-//                 Unbounded,
-//                 Self::WidthIntrinsic,
-//                 Self::HeightIntrinsic,
-//             >,
-//         >,
-//     > {
-//         unsafe { std::mem::transmute(self) }
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
