@@ -22,6 +22,7 @@ pub mod render_object;
 pub mod renderer;
 pub mod routing_id;
 pub mod size;
+pub mod task;
 #[cfg(test)]
 pub mod test_fixtures;
 pub mod test_harness;
