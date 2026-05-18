@@ -455,111 +455,76 @@ mod tests {
 
     use std::{cell::Cell, rc::Rc};
 
-    struct SharedRecorder {
-        message_calls: Rc<Cell<usize>>,
-        rebuild_calls: Rc<Cell<usize>>,
-        last_payload: Rc<Cell<Option<u32>>>,
-    }
-
-    struct RecorderHandle {
-        message_calls: Rc<Cell<usize>>,
-        rebuild_calls: Rc<Cell<usize>>,
-        last_payload: Rc<Cell<Option<u32>>>,
-    }
-
-    impl SharedRecorder {
-        fn new() -> (Self, RecorderHandle) {
-            let message_calls = Rc::new(Cell::new(0));
-            let rebuild_calls = Rc::new(Cell::new(0));
-            let last_payload = Rc::new(Cell::new(None));
-            (
-                SharedRecorder {
-                    message_calls: Rc::clone(&message_calls),
-                    rebuild_calls: Rc::clone(&rebuild_calls),
-                    last_payload: Rc::clone(&last_payload),
-                },
-                RecorderHandle {
-                    message_calls,
-                    rebuild_calls,
-                    last_payload,
-                },
-            )
-        }
-    }
-
-    impl View for SharedRecorder {
-        type Render = RenderLeaf;
-        type State = ();
-
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (Vec::new(), ())
-        }
-
-        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
-
-        fn dispatch(&self, _: &mut Element, path: &[RoutingId], action: Dispatch) {
-            debug_assert!(path.is_empty(), "SharedRecorder has nothing to route to");
-
-            match action {
-                Dispatch::Message(ctx) => {
-                    self.message_calls.set(self.message_calls.get() + 1);
-                    self.last_payload.set(Some(ctx.consume::<u32>()));
-                }
-
-                Dispatch::Rebuild(_ctx) => {
-                    self.rebuild_calls.set(self.rebuild_calls.get() + 1);
-                }
-            }
-        }
-
-        fn create_render_object(&self, _: &Element) -> Self::Render {
-            RenderLeaf::default()
-        }
-
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
-    }
+    use crate::test_fixtures::Leaf;
 
     #[test]
     fn dispatch_message_through_boundary_with_matching_generation() {
-        let (recorder, handle) = SharedRecorder::new();
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let messages = Rc::new(Cell::new(0_usize));
+        let payload = Rc::new(Cell::new(None::<u32>));
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(
+            Leaf::new().on_message({
+                let messages = Rc::clone(&messages);
+                let payload = Rc::clone(&payload);
+                move |ctx| {
+                    messages.set(messages.get() + 1);
+                    payload.set(Some(ctx.consume::<u32>()));
+                }
+            }),
+        );
         let mut harness = TestHarness::mount(&view);
 
         // Initial generation is 0, so a routing id of 0 forwards to the inner view.
         let _ = harness.dispatch_message(&view, &[RoutingId::new(0)], Box::new(123_u32));
 
-        assert_eq!(handle.message_calls.get(), 1);
-        assert_eq!(handle.last_payload.get(), Some(123));
+        assert_eq!(messages.get(), 1);
+        assert_eq!(payload.get(), Some(123));
     }
 
     #[test]
     fn dispatch_rebuild_through_boundary_reaches_inner() {
-        let (recorder, handle) = SharedRecorder::new();
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let rebuilds = Rc::new(Cell::new(0_usize));
+        let messages = Rc::new(Cell::new(0_usize));
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(
+            Leaf::new()
+                .on_message({
+                    let messages = Rc::clone(&messages);
+                    move |_| messages.set(messages.get() + 1)
+                })
+                .on_rebuild({
+                    let rebuilds = Rc::clone(&rebuilds);
+                    move |_| rebuilds.set(rebuilds.get() + 1)
+                }),
+        );
         let mut harness = TestHarness::mount(&view);
 
         harness.dispatch_rebuild(&view, &[RoutingId::new(0)]);
 
-        assert_eq!(handle.rebuild_calls.get(), 1);
-        assert_eq!(handle.message_calls.get(), 0);
+        assert_eq!(rebuilds.get(), 1);
+        assert_eq!(messages.get(), 0);
     }
 
     #[test]
     fn dispatch_with_stale_generation_is_silently_dropped() {
-        let (recorder, handle) = SharedRecorder::new();
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let messages = Rc::new(Cell::new(0_usize));
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+            let messages = Rc::clone(&messages);
+            move |_| messages.set(messages.get() + 1)
+        }));
         let mut harness = TestHarness::mount(&view);
 
         // Initial generation is 0, so a routing id of 1 is stale and should be dropped.
         let _ = harness.dispatch_message(&view, &[RoutingId::new(1)], Box::new(7_u32));
 
-        assert_eq!(handle.message_calls.get(), 0);
+        assert_eq!(messages.get(), 0);
     }
 
     #[test]
     fn type_swap_increments_generation_dropping_old_dispatches() {
-        let (recorder, handle) = SharedRecorder::new();
-        let view_a: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let messages = Rc::new(Cell::new(0_usize));
+        let view_a: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+            let messages = Rc::clone(&messages);
+            move |_| messages.set(messages.get() + 1)
+        }));
         let mut harness = TestHarness::mount(&view_a);
 
         // Swap to a different concrete type, which forces a generation increment.
@@ -571,7 +536,7 @@ mod tests {
         let _ = harness.dispatch_message(&view_b, &[RoutingId::new(0)], Box::new(42_u32));
 
         assert_eq!(
-            handle.message_calls.get(),
+            messages.get(),
             0,
             "the replaced inner must not receive messages addressed to the old generation"
         );

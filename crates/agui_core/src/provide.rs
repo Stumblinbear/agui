@@ -62,7 +62,7 @@ impl Hasher for TypeIdHasher {
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, fmt::Debug, rc::Rc};
+    use std::{any::Any, rc::Rc};
 
     use crate::{
         context::{Dispatch, UpdateCtx},
@@ -70,6 +70,7 @@ mod tests {
         provide::ProvideScope,
         render_object::RenderLeaf,
         routing_id::RoutingId,
+        test_fixtures::Leaf,
         test_harness::TestHarness,
         view::View,
     };
@@ -115,41 +116,6 @@ mod tests {
         fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
     }
 
-    struct TestConsumerView<T> {
-        expect: T,
-    }
-
-    impl<T> TestConsumerView<T> {
-        pub fn new(expect: T) -> Self {
-            Self { expect }
-        }
-    }
-
-    impl<T> View for TestConsumerView<T>
-    where
-        T: Any + PartialEq + Debug,
-    {
-        type Render = RenderLeaf;
-
-        type State = ();
-
-        fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            assert_eq!(ctx.get_provided::<T>(), Some(&self.expect));
-
-            (vec![], ())
-        }
-
-        fn update(&self, _: &mut Element, _: &Self, ctx: &mut UpdateCtx) {
-            assert_eq!(ctx.get_provided::<T>(), Some(&self.expect));
-        }
-
-        fn create_render_object(&self, _: &Element) -> Self::Render {
-            RenderLeaf::default()
-        }
-
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
-    }
-
     #[test]
     fn scope_can_provide_and_get_types() {
         let scope = ProvideScope::new();
@@ -163,16 +129,16 @@ mod tests {
     fn elements_can_provide_and_get_types() {
         let view_3 = TestProviderView {
             value: Rc::new(3_usize),
-
-            child: TestConsumerView::new(3_usize),
+            child: Leaf::new()
+                .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
         };
 
         let mut harness = TestHarness::mount(&view_3);
 
         let view_6 = TestProviderView {
             value: Rc::new(6_usize),
-
-            child: TestConsumerView::new(6_usize),
+            child: Leaf::new()
+                .on_update(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&6))),
         };
 
         harness.update(&view_3, &view_6);
@@ -182,11 +148,10 @@ mod tests {
     fn nested_elements_to_provide_multiple_types() {
         let view = TestProviderView {
             value: Rc::new(3_usize),
-
             child: TestProviderView {
                 value: Rc::new(6_i32),
-
-                child: TestConsumerView::new(3_usize),
+                child: Leaf::new()
+                    .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
             },
         };
 

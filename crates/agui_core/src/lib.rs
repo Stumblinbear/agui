@@ -22,6 +22,8 @@ pub mod render_object;
 pub mod renderer;
 pub mod routing_id;
 pub mod size;
+#[cfg(test)]
+pub mod test_fixtures;
 pub mod test_harness;
 pub mod text_baseline;
 pub mod text_direction;
