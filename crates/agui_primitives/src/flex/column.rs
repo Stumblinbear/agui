@@ -2,14 +2,14 @@ use bon::Builder;
 
 use agui_core::{
     constraints::Constraints,
-    context::{Dispatch, MessageCtx, UpdateCtx},
+    context::{Dispatch, UpdateCtx},
     element::Element,
     hit_test::{HitTest, HitTestResult},
     key::AnyKeyable,
     offset::Offset,
     render_object::{
-        box_layout::{BoxLayout, RenderBox},
         AsAnyRenderObject, RenderObject,
+        box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
     routing_id::RoutingId,
@@ -237,13 +237,13 @@ where
 
             let mut existing_child_idx: Option<usize> = None;
 
-            if have_old_children {
-                if let Some(old_child_idx) = new_child.child.key().and_then(|key| {
+            if have_old_children
+                && let Some(old_child_idx) = new_child.child.key().and_then(|key| {
                     // Remove it from the list so that we don't try to use it again.
                     old_keyed_children.remove(&key)
-                }) {
-                    existing_child_idx = Some(old_child_idx);
-                }
+                })
+            {
+                existing_child_idx = Some(old_child_idx);
             }
 
             if let Some(existing_child_idx) = existing_child_idx {
@@ -304,16 +304,6 @@ where
             old_children_top += 1;
         }
     }
-
-    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-        for (idx, flexible) in self.children.iter().enumerate() {
-            ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
-                element.child_mut(idx, &flexible.child).rebuild(ctx);
-            });
-        }
-    }
-
-    fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
 
     fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
         let Some((head, rest)) = path.split_first() else {
@@ -451,7 +441,7 @@ where
 
     fn measure_baseline(
         &self,
-        mut constraints: Constraints,
+        constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         None
@@ -520,15 +510,6 @@ mod tests {
             UPDATE_COUNT.with(|count| *count.borrow_mut() += 1);
 
             *element.state.downcast_mut::<Self>() = self.value.clone();
-        }
-
-        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {}
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
-        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-            debug_assert!(path.is_empty(), "leaf view has no children to route to");
-            element.dispatch(self, action);
         }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {

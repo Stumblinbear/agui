@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    context::{Dispatch, MessageCtx, UpdateCtx},
+    context::{Dispatch, UpdateCtx},
     element::{Element, ElementState},
     key::AnyKeyable,
     render_object::{RenderLeaf, RenderObject},
@@ -29,16 +29,10 @@ pub trait View {
     /// Called when the tree is updated and the `state` in the [`Element`] is of the same type as `Self::State`.
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx);
 
-    /// Called when this view's own state has changed and the framework needs the children to be
-    /// reconciled against the current state.
-    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx);
-
-    /// Deliver a message to this element. May call [`MessageCtx::request_rebuild`] to mark this element
-    /// for rebuild.
-    fn message(&self, element: &mut Element, ctx: &mut MessageCtx);
-
     /// Route a [`Dispatch`] along `path` to the destination element.
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch);
+    fn dispatch(&self, _element: &mut Element, path: &[RoutingId], _action: Dispatch) {
+        debug_assert!(path.is_empty(), "view has nothing to route to");
+    }
 
     fn create_render_object(&self, element: &Element) -> Self::Render;
 
@@ -98,15 +92,6 @@ impl View for () {
 
     fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
 
-    fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {}
-
-    fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        debug_assert!(path.is_empty(), "() has no children to route to");
-        element.dispatch(self, action);
-    }
-
     fn create_render_object(&self, _: &Element) -> Self::Render {
         RenderLeaf::default()
     }
@@ -162,26 +147,30 @@ mod dispatch_tests {
 
         fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
 
-        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {
-            self.rebuild_calls.set(self.rebuild_calls.get() + 1);
-        }
-
-        fn message(&self, _: &mut Element, ctx: &mut MessageCtx) {
-            self.message_calls.set(self.message_calls.get() + 1);
-            self.last_payload.set(Some(ctx.consume::<u32>()));
-            if self.request_rebuild_on_message {
-                ctx.request_rebuild();
-            }
-        }
-
         fn dispatch(
             &self,
-            element: &mut Element,
+            _element: &mut Element,
             path: &[crate::routing_id::RoutingId],
             action: Dispatch,
         ) {
             debug_assert!(path.is_empty(), "Recorder is a leaf");
-            element.dispatch(self, action);
+
+            if !path.is_empty() {
+                return;
+            }
+
+            match action {
+                Dispatch::Message(ctx) => {
+                    self.message_calls.set(self.message_calls.get() + 1);
+                    self.last_payload.set(Some(ctx.consume::<u32>()));
+                    if self.request_rebuild_on_message {
+                        ctx.request_rebuild();
+                    }
+                }
+                Dispatch::Rebuild(_ctx) => {
+                    self.rebuild_calls.set(self.rebuild_calls.get() + 1);
+                }
+            }
         }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {
@@ -274,12 +263,6 @@ mod dispatch_tests {
             element.child_mut(0, &old.child).update(&self.child, ctx);
         }
 
-        fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-            element.child_mut(0, &self.child).rebuild(ctx);
-        }
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
         fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
             element.child_mut(0, &self.child).dispatch(path, action)
         }
@@ -316,22 +299,13 @@ mod dispatch_tests {
 
         fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
 
-        fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-            for (idx, child) in self.children.iter().enumerate() {
-                ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
-                    element.child_mut(idx, child).rebuild(ctx);
-                });
-            }
-        }
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
         fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
             let Some((head, rest)) = path.split_first() else {
-                element.dispatch(self, action);
                 return;
             };
+
             let idx = head.get() as usize;
+
             element
                 .child_mut(idx, &self.children[idx])
                 .dispatch(rest, action)

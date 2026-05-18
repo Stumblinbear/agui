@@ -65,7 +65,7 @@ mod tests {
     use std::{any::Any, fmt::Debug, rc::Rc};
 
     use crate::{
-        context::{Dispatch, MessageCtx, UpdateCtx},
+        context::{Dispatch, UpdateCtx},
         element::Element,
         provide::ProvideScope,
         render_object::RenderLeaf,
@@ -104,14 +104,6 @@ mod tests {
             })
         }
 
-        fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-            ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                element.child_mut(0, &self.child).rebuild(ctx)
-            })
-        }
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
         fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
             element.child_mut(0, &self.child).dispatch(path, action)
         }
@@ -149,17 +141,6 @@ mod tests {
 
         fn update(&self, _: &mut Element, _: &Self, ctx: &mut UpdateCtx) {
             assert_eq!(ctx.get_provided::<T>(), Some(&self.expect));
-        }
-
-        fn rebuild(&self, _: &mut Element, ctx: &mut UpdateCtx) {
-            assert_eq!(ctx.get_provided::<T>(), Some(&self.expect));
-        }
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
-        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-            debug_assert!(path.is_empty(), "leaf view has no children to route to");
-            element.dispatch(self, action);
         }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {

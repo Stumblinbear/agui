@@ -3,7 +3,7 @@ use std::any::Any;
 use smallbox::SmallBox;
 
 use crate::{
-    context::{Dispatch, MessageCtx, UpdateCtx},
+    context::{Dispatch, UpdateCtx},
     routing_id::RoutingId,
     view::{MountView, View},
 };
@@ -106,19 +106,6 @@ impl Element {
             view,
         }
     }
-
-    /// Invoke the leaf method on `view` matching the [`Dispatch`] variant. Called by a
-    /// view's `dispatch` body when the routing path is empty (i.e. this element is
-    /// the destination).
-    pub fn dispatch<V>(&mut self, view: &V, action: Dispatch)
-    where
-        V: View,
-    {
-        match action {
-            Dispatch::Message(msg) => view.message(self, msg),
-            Dispatch::Rebuild(ctx) => view.rebuild(self, ctx),
-        }
-    }
 }
 
 pub struct ElementRef<'a, Child> {
@@ -152,14 +139,6 @@ where
         new_view.update(self.element, self.view, ctx)
     }
 
-    pub fn rebuild(self, ctx: &mut UpdateCtx) {
-        self.view.rebuild(self.element, ctx)
-    }
-
-    pub fn message(self, ctx: &mut MessageCtx) {
-        self.view.message(self.element, ctx)
-    }
-
     pub fn dispatch(self, path: &[RoutingId], action: Dispatch) {
         self.view.dispatch(self.element, path, action)
     }
@@ -178,11 +157,7 @@ mod tests {
     use std::marker::PhantomData;
 
     use crate::{
-        context::{Dispatch, MessageCtx, UpdateCtx},
-        element::Element,
-        render_object::RenderLeaf,
-        routing_id::RoutingId,
-        test_harness::TestHarness,
+        context::UpdateCtx, element::Element, render_object::RenderLeaf, test_harness::TestHarness,
         view::View,
     };
 
@@ -211,15 +186,6 @@ mod tests {
         }
 
         fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
-
-        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {}
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
-        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-            debug_assert!(path.is_empty(), "leaf view has no children to route to");
-            element.dispatch(self, action);
-        }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {
             RenderLeaf::default()

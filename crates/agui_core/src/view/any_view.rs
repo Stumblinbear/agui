@@ -1,7 +1,7 @@
 use std::{any::Any, rc::Rc, sync::Arc};
 
 use crate::{
-    context::{Dispatch, MessageCtx, UpdateCtx},
+    context::{Dispatch, UpdateCtx},
     element::{Element, ElementState},
     key::AnyKeyable,
     render_object::{AnyRenderObject, AsAnyRenderObject, RenderObject},
@@ -24,10 +24,6 @@ pub trait AnyView {
         old: &dyn AnyView<Render = Self::Render>,
         ctx: &mut UpdateCtx,
     );
-
-    fn dyn_rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx);
-
-    fn dyn_message(&self, element: &mut Element, ctx: &mut MessageCtx);
 
     fn dyn_dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch);
 
@@ -73,14 +69,6 @@ where
         } else {
             *element = Element::new(self, ctx);
         }
-    }
-
-    fn dyn_rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-        self.rebuild(element, ctx);
-    }
-
-    fn dyn_message(&self, element: &mut Element, ctx: &mut MessageCtx) {
-        self.message(element, ctx)
     }
 
     fn dyn_dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
@@ -159,18 +147,6 @@ mod macros {
                     });
                 }
 
-                fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-                    let generation = element.state.downcast_ref::<Self>().generation;
-
-                    ctx.with_routing_id(RoutingId::new(generation), |ctx| {
-                        (**self).dyn_rebuild(&mut element.children[0], ctx)
-                    });
-                }
-
-                fn message(&self, element: &mut Element, ctx: &mut MessageCtx) {
-                    (**self).dyn_message(&mut element.children[0], ctx)
-                }
-
                 fn dispatch(
                     &self,
                     element: &mut Element,
@@ -238,14 +214,6 @@ where
 
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
         self.inner.update(element, &old.inner, ctx);
-    }
-
-    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-        self.inner.rebuild(element, ctx);
-    }
-
-    fn message(&self, element: &mut Element, ctx: &mut MessageCtx) {
-        self.inner.message(element, ctx)
     }
 
     fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
@@ -344,16 +312,6 @@ mod tests {
             UPDATE_COUNT.with(|count| *count.borrow_mut() += 1);
 
             *element.state.downcast_mut::<Self>() = self.value.clone();
-        }
-
-        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {}
-
-        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
-
-        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-            debug_assert!(path.is_empty(), "leaf view has no children to route to");
-
-            element.dispatch(self, action);
         }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {
@@ -539,18 +497,19 @@ mod tests {
 
         fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
 
-        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {
-            self.rebuild_calls.set(self.rebuild_calls.get() + 1);
-        }
+        fn dispatch(&self, _: &mut Element, path: &[RoutingId], action: Dispatch) {
+            debug_assert!(path.is_empty(), "SharedRecorder has nothing to route to");
 
-        fn message(&self, _: &mut Element, ctx: &mut MessageCtx) {
-            self.message_calls.set(self.message_calls.get() + 1);
-            self.last_payload.set(Some(ctx.consume::<u32>()));
-        }
+            match action {
+                Dispatch::Message(ctx) => {
+                    self.message_calls.set(self.message_calls.get() + 1);
+                    self.last_payload.set(Some(ctx.consume::<u32>()));
+                }
 
-        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-            debug_assert!(path.is_empty(), "SharedRecorder is a leaf");
-            element.dispatch(self, action);
+                Dispatch::Rebuild(_ctx) => {
+                    self.rebuild_calls.set(self.rebuild_calls.get() + 1);
+                }
+            }
         }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {

@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
 
-use typed_floats::{as_const, NonNaN};
+use typed_floats::{NonNaN, as_const};
 
 use crate::{axis::Axis, offset::Offset, rect::Rect};
 
@@ -38,6 +38,9 @@ impl Size {
         }
     }
 
+    /// # Safety
+    ///
+    /// The caller must ensure that neither width nor height is NaN.
     pub unsafe fn new_unchecked(width: f32, height: f32) -> Self {
         unsafe {
             Self {

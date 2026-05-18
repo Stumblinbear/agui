@@ -3,13 +3,13 @@ use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
     constraints::Constraints,
-    context::{Dispatch, MessageCtx, UpdateCtx},
+    context::{Dispatch, UpdateCtx},
     element::Element,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        box_layout::{BoxLayout, RenderBox},
         AsAnyRenderObject, RenderObject,
+        box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
     routing_id::RoutingId,
@@ -41,12 +41,6 @@ where
     fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
         element.child_mut(0, &old.child).update(&self.child, ctx);
     }
-
-    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &self.child).rebuild(ctx);
-    }
-
-    fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
 
     fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
         element.child_mut(0, &self.child).dispatch(path, action)

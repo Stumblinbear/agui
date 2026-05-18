@@ -179,6 +179,7 @@ fn bench_sweep(c: &mut Criterion) {
     let depths = [3usize, 6, 10, 15];
     let counts = [32usize, 64, 128, 256, 512, 1024];
 
+    #[allow(clippy::type_complexity)]
     let workloads: &[(&str, fn(usize, usize) -> Vec<RoutingPath>)] = &[
         ("uniform", generate_uniform),
         ("overlap", |n, d| generate_clustered(n, d, 4)),
