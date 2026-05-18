@@ -1,10 +1,13 @@
 use std::{any::Any, rc::Rc, sync::mpsc};
 
-use crate::{driver::Driver, provide::ProvideScope, routing_id::RoutingId};
+use crate::{
+    driver::Driver,
+    provide::ProvideScope,
+    routing_id::{RoutingId, RoutingPath},
+};
 
 pub struct UpdateCtx<'a> {
     driver: &'a Rc<dyn Driver>,
-
     event_tx: &'a mpsc::Sender<()>,
 
     routing_path: &'a mut Vec<RoutingId>,
@@ -38,8 +41,8 @@ impl<'a> UpdateCtx<'a> {
         self.event_tx.clone()
     }
 
-    pub fn routing_path(&self) -> impl DoubleEndedIterator<Item = &RoutingId> + ExactSizeIterator {
-        self.routing_path.iter()
+    pub fn routing_path(&self) -> RoutingPath {
+        RoutingPath::from(self.routing_path.clone())
     }
 
     pub fn provide_scope(&self) -> &ProvideScope {

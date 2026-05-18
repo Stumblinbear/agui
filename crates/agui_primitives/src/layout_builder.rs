@@ -66,11 +66,11 @@ where
 
             let driver = Rc::clone(ctx.driver());
             let event_tx = ctx.event_tx().clone();
-            let routing_path = ctx.routing_path().copied().collect::<Vec<_>>();
+            let routing_path = ctx.routing_path();
             let provide_scope = ctx.provide_scope().clone();
 
             Rc::new(move |constraints| {
-                let mut routing_path = routing_path.clone();
+                let mut routing_path = routing_path.to_vec();
 
                 let child = (builder)(constraints);
 
@@ -110,13 +110,13 @@ where
 
                 let driver = Rc::clone(ctx.driver());
                 let event_tx = ctx.event_tx().clone();
-                let routing_path = ctx.routing_path().copied().collect::<Vec<_>>();
+                let routing_path = ctx.routing_path();
                 let provide_scope = ctx.provide_scope().clone();
 
                 Rc::new(move |constraints| {
                     let child = (builder)(constraints);
 
-                    let mut routing_path = routing_path.clone();
+                    let mut routing_path = routing_path.to_vec();
 
                     // TODO(trevin): try to use the element of the previously created child
                     let mut element = Element::new(
