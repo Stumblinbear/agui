@@ -2,7 +2,7 @@ use bon::Builder;
 
 use agui_core::{
     constraints::Constraints,
-    context::{MessageCtx, UpdateCtx},
+    context::{Dispatch, MessageCtx, UpdateCtx},
     element::Element,
     hit_test::{HitTest, HitTestResult},
     key::AnyKeyable,
@@ -305,14 +305,26 @@ where
         }
     }
 
-    fn message(&self, element: &mut Element, ctx: MessageCtx) {
-        let Some(child_idx) = ctx.routing_id() else {
-            unreachable!();
+    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+        for (idx, flexible) in self.children.iter().enumerate() {
+            ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
+                element.child_mut(idx, &flexible.child).rebuild(ctx);
+            });
+        }
+    }
+
+    fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
+
+    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+        let Some((head, rest)) = path.split_first() else {
+            unreachable!("dispatch path cannot be empty");
         };
 
+        let child_idx = head.get() as usize;
+
         element
-            .child_mut(child_idx as usize, &self.children[child_idx as usize].child)
-            .message(ctx);
+            .child_mut(child_idx, &self.children[child_idx].child)
+            .dispatch(rest, action)
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
@@ -510,7 +522,14 @@ mod tests {
             *element.state.downcast_mut::<Self>() = self.value.clone();
         }
 
-        fn message(&self, _: &mut Element, _: MessageCtx) {}
+        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {}
+
+        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
+
+        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+            debug_assert!(path.is_empty(), "leaf view has no children to route to");
+            element.dispatch(self, action);
+        }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {
             RenderLeaf::default()

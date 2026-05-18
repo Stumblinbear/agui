@@ -11,9 +11,10 @@ mod tests {
     use std::sync::mpsc;
 
     use agui_core::{
-        context::{MessageCtx, UpdateCtx},
+        context::{Dispatch, MessageCtx, UpdateCtx},
         element::Element,
         render_object::RenderLeaf,
+        routing_id::RoutingId,
         view::View,
     };
 
@@ -44,11 +45,14 @@ mod tests {
             element.child_mut(0, &old.child).update(&self.child, ctx);
         }
 
-        fn message(&self, element: &mut Element, ctx: MessageCtx) {
-            match ctx.routing_id() {
-                Some(0) => element.child_mut(0, &self.child).message(ctx),
-                _ => unreachable!(),
-            }
+        fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+            element.child_mut(0, &self.child).rebuild(ctx);
+        }
+
+        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
+
+        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+            element.child_mut(0, &self.child).dispatch(path, action)
         }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {

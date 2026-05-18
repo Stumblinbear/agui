@@ -6,8 +6,9 @@ use std::{
 use bon::Builder;
 
 use crate::{
-    context::{MessageCtx, UpdateCtx},
+    context::{Dispatch, MessageCtx, UpdateCtx},
     element::Element,
+    routing_id::RoutingId,
     view::View,
 };
 
@@ -70,8 +71,16 @@ where
         element.child_mut(0, &old.child).update(&self.child, ctx);
     }
 
-    fn message(&self, element: &mut Element, ctx: MessageCtx) {
-        element.child_mut(0, &self.child).message(ctx);
+    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+        element.child_mut(0, &self.child).rebuild(ctx);
+    }
+
+    fn message(&self, element: &mut Element, ctx: &mut MessageCtx) {
+        element.child_mut(0, &self.child).message(ctx)
+    }
+
+    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+        element.child_mut(0, &self.child).dispatch(path, action)
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {

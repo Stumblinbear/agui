@@ -1,34 +1,40 @@
 use std::any::Any;
 
-use crate::routing_id::RoutingId;
-
-pub struct MessageCtx<'a> {
-    path: &'a [RoutingId],
-
-    message: Box<dyn Any>,
+pub struct MessageCtx {
+    message: Option<Box<dyn Any>>,
+    rebuild_requested: bool,
 }
 
-impl<'a> MessageCtx<'a> {
-    pub fn new(path: &'a [RoutingId], message: Box<dyn Any>) -> Self {
-        Self { path, message }
+impl MessageCtx {
+    pub fn new(message: Box<dyn Any>) -> Self {
+        Self {
+            message: Some(message),
+            rebuild_requested: false,
+        }
     }
 
-    pub fn routing_id(&self) -> Option<u16> {
-        self.path.first().copied().map(RoutingId::get)
-    }
-
-    pub fn consume<T>(self) -> T
+    /// Take the message payload, downcasting to the expected type. Panics if already
+    /// consumed or if the type doesn't match.
+    pub fn consume<T>(&mut self) -> T
     where
         T: Any,
     {
-        assert!(
-            self.path.is_empty(),
-            "cannot take message as it is destined for a child",
-        );
-
-        *self
+        let msg = self
             .message
-            .downcast::<T>()
-            .expect("message downcast failed")
+            .take()
+            .expect("message has already been consumed");
+
+        *msg.downcast::<T>().expect("message downcast failed")
+    }
+
+    /// Mark the dispatched element as needing a rebuild. The dispatcher reads this
+    /// after `dispatch` returns and queues the dispatched path for reconciliation.
+    pub fn request_rebuild(&mut self) {
+        self.rebuild_requested = true;
+    }
+
+    /// Whether `request_rebuild` was called during the dispatch.
+    pub fn rebuild_requested(&self) -> bool {
+        self.rebuild_requested
     }
 }

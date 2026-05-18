@@ -1,7 +1,7 @@
 use std::{any::Any, rc::Rc, sync::Arc};
 
 use crate::{
-    context::{MessageCtx, UpdateCtx},
+    context::{Dispatch, MessageCtx, UpdateCtx},
     element::{Element, ElementState},
     key::AnyKeyable,
     render_object::{AnyRenderObject, AsAnyRenderObject, RenderObject},
@@ -25,7 +25,11 @@ pub trait AnyView {
         ctx: &mut UpdateCtx,
     );
 
-    fn dyn_message(&self, element: &mut Element, ctx: MessageCtx);
+    fn dyn_rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx);
+
+    fn dyn_message(&self, element: &mut Element, ctx: &mut MessageCtx);
+
+    fn dyn_dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch);
 
     fn dyn_create_render_object(&self, element: &Element) -> Self::Render;
 
@@ -71,8 +75,16 @@ where
         }
     }
 
-    fn dyn_message(&self, element: &mut Element, ctx: MessageCtx) {
-        self.message(element, ctx);
+    fn dyn_rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+        self.rebuild(element, ctx);
+    }
+
+    fn dyn_message(&self, element: &mut Element, ctx: &mut MessageCtx) {
+        self.message(element, ctx)
+    }
+
+    fn dyn_dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+        self.dispatch(element, path, action)
     }
 
     fn dyn_create_render_object(&self, element: &Element) -> Self::Render {
@@ -147,16 +159,37 @@ mod macros {
                     });
                 }
 
-                fn message(&self, element: &mut Element, ctx: MessageCtx) {
-                    let state = element.state.downcast_mut::<Self>();
+                fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+                    let generation = element.state.downcast_ref::<Self>().generation;
+
+                    ctx.with_routing_id(RoutingId::new(generation), |ctx| {
+                        (**self).dyn_rebuild(&mut element.children[0], ctx)
+                    });
+                }
+
+                fn message(&self, element: &mut Element, ctx: &mut MessageCtx) {
+                    (**self).dyn_message(&mut element.children[0], ctx)
+                }
+
+                fn dispatch(
+                    &self,
+                    element: &mut Element,
+                    path: &[crate::routing_id::RoutingId],
+                    action: crate::context::Dispatch,
+                ) {
+                    let generation = element.state.downcast_ref::<Self>().generation;
+
+                    let Some((head, rest)) = path.split_first() else {
+                        unreachable!("dispatch path cannot be empty");
+                    };
 
                     // If the routing id is not the same as the generation, we don't want to send the message
                     // to the inner element since it has been replaced.
-                    if ctx.routing_id() != Some(state.generation) {
+                    if head.get() != generation {
                         return;
                     }
 
-                    (**self).dyn_message(&mut element.children[0], ctx);
+                    (**self).dyn_dispatch(&mut element.children[0], rest, action)
                 }
 
                 fn create_render_object(&self, element: &Element) -> Self::Render {
@@ -207,8 +240,16 @@ where
         self.inner.update(element, &old.inner, ctx);
     }
 
-    fn message(&self, element: &mut Element, ctx: MessageCtx) {
-        self.inner.message(element, ctx);
+    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+        self.inner.rebuild(element, ctx);
+    }
+
+    fn message(&self, element: &mut Element, ctx: &mut MessageCtx) {
+        self.inner.message(element, ctx)
+    }
+
+    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+        self.inner.dispatch(element, path, action)
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
@@ -305,7 +346,15 @@ mod tests {
             *element.state.downcast_mut::<Self>() = self.value.clone();
         }
 
-        fn message(&self, _: &mut Element, _: MessageCtx) {}
+        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {}
+
+        fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
+
+        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+            debug_assert!(path.is_empty(), "leaf view has no children to route to");
+
+            element.dispatch(self, action);
+        }
 
         fn create_render_object(&self, _: &Element) -> Self::Render {
             RenderLeaf::default()
@@ -443,6 +492,129 @@ mod tests {
                 .state
                 .downcast_ref::<TestView<u8>>(),
             &7
+        );
+    }
+
+    use std::{cell::Cell, rc::Rc};
+
+    struct SharedRecorder {
+        message_calls: Rc<Cell<usize>>,
+        rebuild_calls: Rc<Cell<usize>>,
+        last_payload: Rc<Cell<Option<u32>>>,
+    }
+
+    struct RecorderHandle {
+        message_calls: Rc<Cell<usize>>,
+        rebuild_calls: Rc<Cell<usize>>,
+        last_payload: Rc<Cell<Option<u32>>>,
+    }
+
+    impl SharedRecorder {
+        fn new() -> (Self, RecorderHandle) {
+            let message_calls = Rc::new(Cell::new(0));
+            let rebuild_calls = Rc::new(Cell::new(0));
+            let last_payload = Rc::new(Cell::new(None));
+            (
+                SharedRecorder {
+                    message_calls: Rc::clone(&message_calls),
+                    rebuild_calls: Rc::clone(&rebuild_calls),
+                    last_payload: Rc::clone(&last_payload),
+                },
+                RecorderHandle {
+                    message_calls,
+                    rebuild_calls,
+                    last_payload,
+                },
+            )
+        }
+    }
+
+    impl View for SharedRecorder {
+        type Render = RenderLeaf;
+        type State = ();
+
+        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+            (Vec::new(), ())
+        }
+
+        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+
+        fn rebuild(&self, _: &mut Element, _: &mut UpdateCtx) {
+            self.rebuild_calls.set(self.rebuild_calls.get() + 1);
+        }
+
+        fn message(&self, _: &mut Element, ctx: &mut MessageCtx) {
+            self.message_calls.set(self.message_calls.get() + 1);
+            self.last_payload.set(Some(ctx.consume::<u32>()));
+        }
+
+        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+            debug_assert!(path.is_empty(), "SharedRecorder is a leaf");
+            element.dispatch(self, action);
+        }
+
+        fn create_render_object(&self, _: &Element) -> Self::Render {
+            RenderLeaf::default()
+        }
+
+        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+    }
+
+    #[test]
+    fn dispatch_message_through_boundary_with_matching_generation() {
+        let (recorder, handle) = SharedRecorder::new();
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let mut harness = TestHarness::mount(&view);
+
+        // Initial generation is 0, so a routing id of 0 forwards to the inner view.
+        let _ = harness.dispatch_message(&view, &[RoutingId::new(0)], Box::new(123_u32));
+
+        assert_eq!(handle.message_calls.get(), 1);
+        assert_eq!(handle.last_payload.get(), Some(123));
+    }
+
+    #[test]
+    fn dispatch_rebuild_through_boundary_reaches_inner() {
+        let (recorder, handle) = SharedRecorder::new();
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let mut harness = TestHarness::mount(&view);
+
+        harness.dispatch_rebuild(&view, &[RoutingId::new(0)]);
+
+        assert_eq!(handle.rebuild_calls.get(), 1);
+        assert_eq!(handle.message_calls.get(), 0);
+    }
+
+    #[test]
+    fn dispatch_with_stale_generation_is_silently_dropped() {
+        let (recorder, handle) = SharedRecorder::new();
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let mut harness = TestHarness::mount(&view);
+
+        // Initial generation is 0, so a routing id of 1 is stale and should be dropped.
+        let _ = harness.dispatch_message(&view, &[RoutingId::new(1)], Box::new(7_u32));
+
+        assert_eq!(handle.message_calls.get(), 0);
+    }
+
+    #[test]
+    fn type_swap_increments_generation_dropping_old_dispatches() {
+        let (recorder, handle) = SharedRecorder::new();
+        let view_a: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(recorder);
+        let mut harness = TestHarness::mount(&view_a);
+
+        // Swap to a different concrete type, which forces a generation increment.
+        let view_b: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(TestView::new(0_u8));
+        harness.update(&view_a, &view_b);
+
+        // The old generation (0) is stale, so the dispatch should be dropped at the boundary
+        // and never reach the replaced inner.
+        let _ = harness.dispatch_message(&view_b, &[RoutingId::new(0)], Box::new(42_u32));
+
+        assert_eq!(
+            handle.message_calls.get(),
+            0,
+            "the replaced inner must not receive messages addressed to the old generation"
         );
     }
 }

@@ -1,8 +1,12 @@
 use std::{collections::VecDeque, rc::Rc, sync::mpsc};
 
 use crate::{
-    context::UpdateCtx, driver::Driver, element::Element, provide::ProvideScope,
-    routing_id::RoutingId, view::View,
+    context::{Dispatch, MessageCtx, UpdateCtx},
+    driver::Driver,
+    element::Element,
+    provide::ProvideScope,
+    routing_id::RoutingId,
+    view::View,
 };
 
 pub struct NoopTestDriver;
@@ -56,5 +60,35 @@ impl TestHarness {
                 &self.provide_scope,
             ),
         );
+    }
+
+    /// Dispatch a message along `path` to a view in the tree. Returns the
+    /// [`MessageCtx`] so the caller can inspect [`MessageCtx::rebuild_requested`].
+    pub fn dispatch_message<V>(
+        &mut self,
+        view: &V,
+        path: &[RoutingId],
+        message: Box<dyn std::any::Any>,
+    ) -> MessageCtx
+    where
+        V: View,
+    {
+        let mut msg_ctx = MessageCtx::new(message);
+        view.dispatch(&mut self.root, path, Dispatch::Message(&mut msg_ctx));
+        msg_ctx
+    }
+
+    /// Dispatch a rebuild along `path` to a view in the tree.
+    pub fn dispatch_rebuild<V>(&mut self, view: &V, path: &[RoutingId])
+    where
+        V: View,
+    {
+        let mut update_ctx = UpdateCtx::new(
+            &self.driver,
+            &self.event_tx,
+            &mut self.path,
+            &self.provide_scope,
+        );
+        view.dispatch(&mut self.root, path, Dispatch::Rebuild(&mut update_ctx));
     }
 }

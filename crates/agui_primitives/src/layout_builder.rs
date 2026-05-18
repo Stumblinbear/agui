@@ -4,7 +4,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
     constraints::Constraints,
-    context::{MessageCtx, UpdateCtx},
+    context::{Dispatch, MessageCtx, UpdateCtx},
     element::Element,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
@@ -13,6 +13,7 @@ use agui_core::{
         RenderObject,
     },
     renderer::Canvas,
+    routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
     view::View,
@@ -133,18 +134,24 @@ where
         }
     }
 
-    fn message(&self, element: &mut Element, ctx: MessageCtx) {
-        let Some(0) = ctx.routing_id() else {
-            unreachable!();
-        };
+    fn rebuild(&self, element: &mut Element, ctx: &mut UpdateCtx) {
+        let mut child_view = element.state.downcast_ref::<Self>().child_view.borrow_mut();
 
+        if let Some((child_element, child_view)) = child_view.as_mut() {
+            child_element.as_mut(child_view).rebuild(ctx);
+        }
+    }
+
+    fn message(&self, _: &mut Element, _: &mut MessageCtx) {}
+
+    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
         let mut child_view = element.state.downcast_ref::<Self>().child_view.borrow_mut();
 
         let Some((child_element, child_view)) = child_view.as_mut() else {
-            panic!("child was sent a message before being laid out");
+            panic!("child was dispatched to before being laid out");
         };
 
-        child_element.as_mut(child_view).message(ctx);
+        child_element.as_mut(child_view).dispatch(path, action)
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
