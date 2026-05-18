@@ -1,11 +1,8 @@
-use std::{
-    any::{Any, TypeId},
-    mem::ManuallyDrop,
-};
+use std::any::Any;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{Element, ElementState},
+    element::Element,
     key::AnyKeyable,
     render_object::{RenderLeaf, RenderObject},
     routing_id::RoutingId,
@@ -46,38 +43,6 @@ pub trait View {
     /// This is an implementation detail of element keys and should not be overriden by any user code.
     fn key(&self) -> Option<&dyn AnyKeyable> {
         None
-    }
-}
-
-#[diagnostic::on_unimplemented(
-    message = "Trait bound View is not satisfied.",
-    note = "dyn View is not supported, use dyn AnyView via .as_dyn_view() or .into_boxed_view() instead."
-)]
-pub trait MountView {
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState);
-}
-
-impl<T> MountView for T
-where
-    T: View,
-{
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
-        let (children, state) = <T as View>::mount(self, ctx);
-
-        if TypeId::of::<T::State>() == TypeId::of::<ElementState>()
-            && size_of::<T::State>() == size_of::<ElementState>()
-        {
-            // Since this is an owned value, we need to mark it as a manually dropped value so that
-            // it doesn't get immediately dropped when we return it after transmuting it.
-            let state = ManuallyDrop::new(state);
-
-            // SAFETY: This is probably safe so long as there are no TypeId + size collisions
-            let state = unsafe { std::mem::transmute_copy::<T::State, ElementState>(&state) };
-
-            return (children, state);
-        }
-
-        (children, ElementState::new(state))
     }
 }
 
@@ -336,5 +301,60 @@ mod dispatch_tests {
         assert_eq!(payload.get(), Some(77));
         assert_eq!(m10.get(), 0);
         assert_eq!(m11.get(), 0);
+    }
+
+    #[test]
+    fn update_through_routing_view_reaches_correct_child() {
+        let updates = [Cell::new(0_usize), Cell::new(0_usize)];
+        let old_view = MultiChild {
+            children: vec![
+                Leaf::new().on_update(|_| updates[0].set(updates[0].get() + 1)),
+                Leaf::new().on_update(|_| updates[1].set(updates[1].get() + 1)),
+            ],
+        };
+        let mut harness = TestHarness::mount(&old_view);
+
+        let new_view = MultiChild {
+            children: vec![
+                Leaf::new().on_update(|_| updates[0].set(updates[0].get() + 1)),
+                Leaf::new().on_update(|_| updates[1].set(updates[1].get() + 1)),
+            ],
+        };
+        harness.update(&old_view, &new_view);
+
+        assert_eq!(updates[0].get(), 1);
+        assert_eq!(updates[1].get(), 1);
+    }
+
+    #[test]
+    fn dispatch_after_update_reaches_correct_child() {
+        let messages = Cell::new(0_usize);
+        let payload = Cell::new(None::<u32>);
+        let old_view = MultiChild {
+            children: vec![
+                Leaf::new(),
+                Leaf::new().on_message(|ctx| {
+                    messages.set(messages.get() + 1);
+                    payload.set(Some(ctx.consume::<u32>()));
+                }),
+            ],
+        };
+        let mut harness = TestHarness::mount(&old_view);
+
+        let new_view = MultiChild {
+            children: vec![
+                Leaf::new(),
+                Leaf::new().on_message(|ctx| {
+                    messages.set(messages.get() + 1);
+                    payload.set(Some(ctx.consume::<u32>()));
+                }),
+            ],
+        };
+        harness.update(&old_view, &new_view);
+
+        let _ = harness.dispatch_message(&new_view, &[RoutingId::new(1)], Box::new(55_u32));
+
+        assert_eq!(messages.get(), 1);
+        assert_eq!(payload.get(), Some(55));
     }
 }

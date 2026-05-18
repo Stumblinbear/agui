@@ -5,7 +5,7 @@ use smallbox::SmallBox;
 use crate::{
     context::{Dispatch, UpdateCtx},
     routing_id::RoutingId,
-    view::{MountView, View},
+    view::View,
 };
 
 pub struct ElementState(SmallBox<dyn Any, smallbox::space::S2>);
@@ -62,11 +62,15 @@ impl Element {
 
     pub fn new<V>(view: &V, ctx: &mut UpdateCtx) -> Self
     where
-        V: MountView,
+        V: View,
     {
         let (children, state) = view.mount(ctx);
 
-        Self { state, children }
+        Self {
+            state: ElementState::new(state),
+
+            children,
+        }
     }
 
     pub fn child<'a, Child>(&'a self, idx: usize, view: &'a Child) -> ElementRef<'a, Child>

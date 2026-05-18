@@ -150,8 +150,24 @@ mod tests {
             value: Rc::new(3_usize),
             child: TestProviderView {
                 value: Rc::new(6_i32),
+                child: Leaf::new().on_mount(|ctx| {
+                    assert_eq!(ctx.get_provided::<usize>(), Some(&3));
+                    assert_eq!(ctx.get_provided::<i32>(), Some(&6));
+                }),
+            },
+        };
+
+        let _ = TestHarness::mount(&view);
+    }
+
+    #[test]
+    fn providing_same_type_twice_returns_latest() {
+        let view = TestProviderView {
+            value: Rc::new(1_usize),
+            child: TestProviderView {
+                value: Rc::new(2_usize),
                 child: Leaf::new()
-                    .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
+                    .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&2))),
             },
         };
 

@@ -135,7 +135,18 @@ impl<Child: View> View for MultiChild<Child> {
         (children, ())
     }
 
-    fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        for (idx, (new_child, old_child)) in
+            self.children.iter().zip(old.children.iter()).enumerate()
+        {
+            ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
+                element.child_mut(idx, old_child).update(new_child, ctx)
+            });
+        }
+
+        // Remove any children at the end of the list that are not in the new children
+        element.children.truncate(element.children.len());
+    }
 
     fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
         let Some((head, rest)) = path.split_first() else {

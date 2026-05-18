@@ -134,4 +134,95 @@ mod tests {
         assert_eq!(r1.get(), 1);
         assert_eq!(r2.get(), 0);
     }
+
+    #[test]
+    fn rebuild_dirty_with_multiple_paths() {
+        let r0 = Cell::new(0_usize);
+        let r1 = Cell::new(0_usize);
+        let r2 = Cell::new(0_usize);
+
+        let view = MultiChild {
+            children: vec![
+                Transparent {
+                    child: Leaf::new()
+                        .on_message(|ctx| ctx.request_rebuild())
+                        .on_rebuild(|_| r0.set(r0.get() + 1)),
+                },
+                Transparent {
+                    child: Leaf::new().on_rebuild(|_| r1.set(r1.get() + 1)),
+                },
+                Transparent {
+                    child: Leaf::new()
+                        .on_message(|ctx| ctx.request_rebuild())
+                        .on_rebuild(|_| r2.set(r2.get() + 1)),
+                },
+            ],
+        };
+
+        let driver: Rc<dyn Driver> = Rc::new(NoopDriver);
+        let (event_tx, _event_rx) = mpsc::channel();
+        let provide_scope = ProvideScope::new();
+
+        let mut routing_path = Vec::new();
+        let mut root = Element::new(
+            &view,
+            &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
+        );
+
+        let path_0: RoutingPath = vec![RoutingId::new(0)].into();
+        let path_2: RoutingPath = vec![RoutingId::new(2)].into();
+        let messages = vec![
+            (path_0, Box::new(1_u32) as Box<dyn std::any::Any>),
+            (path_2, Box::new(2_u32) as Box<dyn std::any::Any>),
+        ];
+
+        let mut dirty: Vec<RoutingPath> = Vec::new();
+        dispatch_messages(&mut root, &view, messages.into_iter(), |path| {
+            dirty.push(path)
+        });
+
+        assert_eq!(dirty.len(), 2);
+
+        rebuild_dirty(
+            &driver,
+            &event_tx,
+            &provide_scope,
+            &mut root,
+            &view,
+            dirty.into_iter(),
+        );
+
+        assert_eq!(r0.get(), 1);
+        assert_eq!(r1.get(), 0);
+        assert_eq!(r2.get(), 1);
+    }
+
+    #[test]
+    fn rebuild_dirty_with_empty_set_is_noop() {
+        let r0 = Cell::new(0_usize);
+
+        let view = Leaf::new().on_rebuild(|_| r0.set(r0.get() + 1));
+
+        let driver: Rc<dyn Driver> = Rc::new(NoopDriver);
+        let (event_tx, _event_rx) = mpsc::channel();
+        let provide_scope = ProvideScope::new();
+
+        let mut routing_path = Vec::new();
+        let mut root = Element::new(
+            &view,
+            &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
+        );
+
+        let dirty: Vec<RoutingPath> = Vec::new();
+        rebuild_dirty(
+            &driver,
+            &event_tx,
+            &provide_scope,
+            &mut root,
+            &view,
+            dirty.into_iter(),
+        );
+
+        assert_eq!(r0.get(), 0);
+    }
 }

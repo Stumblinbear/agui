@@ -1,6 +1,6 @@
 use std::ops::{Div, Mul, MulAssign};
 
-use typed_floats::{as_const, Positive, StrictlyPositiveFinite};
+use typed_floats::{Positive, StrictlyPositiveFinite, as_const};
 
 use crate::{axis::Axis, edge_insets::EdgeInsetsGeometry, size::Size};
 
@@ -567,5 +567,270 @@ impl Div<f32> for Constraints {
             self.min_height.get() / rhs,
             self.max_height.get() / rhs,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{axis::Axis, edge_insets::EdgeInsets, size::Size};
+
+    use super::*;
+
+    #[test]
+    fn default_is_unconstrained() {
+        let c = Constraints::default();
+        assert_eq!(c.min_width().get(), 0.0);
+        assert_eq!(c.min_height().get(), 0.0);
+        assert!(c.max_width().is_infinite());
+        assert!(c.max_height().is_infinite());
+    }
+
+    #[test]
+    fn new_stores_bounds() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 20.0_f32, 200.0_f32);
+        assert_eq!(c.min_width().get(), 10.0);
+        assert_eq!(c.max_width().get(), 100.0);
+        assert_eq!(c.min_height().get(), 20.0);
+        assert_eq!(c.max_height().get(), 200.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "mininimum width must not be greater than the maximum width")]
+    fn new_panics_when_min_width_exceeds_max() {
+        Constraints::new(100.0_f32, 10.0_f32, 0.0_f32, 100.0_f32);
+    }
+
+    #[test]
+    #[should_panic(expected = "mininimum height must not be greater than the maximum height")]
+    fn new_panics_when_min_height_exceeds_max() {
+        Constraints::new(0.0_f32, 100.0_f32, 100.0_f32, 10.0_f32);
+    }
+
+    #[test]
+    fn tight_sets_min_eq_max() {
+        let c = Constraints::tight(Size::new(50.0_f32, 30.0_f32));
+        assert!(c.is_tight());
+        assert_eq!(c.min_width().get(), 50.0);
+        assert_eq!(c.max_width().get(), 50.0);
+        assert_eq!(c.min_height().get(), 30.0);
+        assert_eq!(c.max_height().get(), 30.0);
+    }
+
+    #[test]
+    fn loose_sets_zero_min() {
+        let c = Constraints::loose(Size::new(80.0_f32, 60.0_f32));
+        assert_eq!(c.min_width().get(), 0.0);
+        assert_eq!(c.max_width().get(), 80.0);
+        assert_eq!(c.min_height().get(), 0.0);
+        assert_eq!(c.max_height().get(), 60.0);
+    }
+
+    #[test]
+    fn along_axis_horizontal() {
+        let c = Constraints::along_axis(Axis::Horizontal, 10.0, 50.0);
+        assert_eq!(c.min_width().get(), 10.0);
+        assert_eq!(c.max_width().get(), 50.0);
+        assert_eq!(c.min_height().get(), 0.0);
+        assert!(c.max_height().is_infinite());
+    }
+
+    #[test]
+    fn along_axis_vertical() {
+        let c = Constraints::along_axis(Axis::Vertical, 10.0, 50.0);
+        assert_eq!(c.min_width().get(), 0.0);
+        assert!(c.max_width().is_infinite());
+        assert_eq!(c.min_height().get(), 10.0);
+        assert_eq!(c.max_height().get(), 50.0);
+    }
+
+    #[test]
+    fn loosen_removes_minimums() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 20.0_f32, 200.0_f32).loosen();
+        assert_eq!(c.min_width().get(), 0.0);
+        assert_eq!(c.max_width().get(), 100.0);
+        assert_eq!(c.min_height().get(), 0.0);
+        assert_eq!(c.max_height().get(), 200.0);
+    }
+
+    #[test]
+    fn deflate_shrinks_by_insets() {
+        let c = Constraints::new(40.0_f32, 100.0_f32, 40.0_f32, 100.0_f32);
+        let insets = EdgeInsets::all(10.0);
+        let d = c.deflate(&insets);
+        // horizontal = 20, vertical = 20
+        assert_eq!(d.min_width().get(), 20.0);
+        assert_eq!(d.max_width().get(), 80.0);
+        assert_eq!(d.min_height().get(), 20.0);
+        assert_eq!(d.max_height().get(), 80.0);
+    }
+
+    #[test]
+    fn deflate_clamps_to_zero() {
+        let c = Constraints::new(5.0_f32, 10.0_f32, 5.0_f32, 10.0_f32);
+        let insets = EdgeInsets::all(20.0);
+        let d = c.deflate(&insets);
+        assert_eq!(d.min_width().get(), 0.0);
+        assert_eq!(d.max_width().get(), 0.0);
+    }
+
+    #[test]
+    fn enforce_clamps_to_other() {
+        let c = Constraints::new(0.0_f32, 200.0_f32, 0.0_f32, 200.0_f32);
+        let bounds = Constraints::new(10.0_f32, 50.0_f32, 20.0_f32, 60.0_f32);
+        let e = c.enforce(bounds);
+        assert_eq!(e.min_width().get(), 10.0);
+        assert_eq!(e.max_width().get(), 50.0);
+        assert_eq!(e.min_height().get(), 20.0);
+        assert_eq!(e.max_height().get(), 60.0);
+    }
+
+    #[test]
+    fn tighten_width_clamps_within_bounds() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 0.0_f32, 100.0_f32);
+        let t = c.tighten_width(50.0);
+        assert_eq!(t.min_width().get(), 50.0);
+        assert_eq!(t.max_width().get(), 50.0);
+
+        // Clamped to max
+        let t = c.tighten_width(200.0);
+        assert_eq!(t.min_width().get(), 100.0);
+        assert_eq!(t.max_width().get(), 100.0);
+
+        // Clamped to min
+        let t = c.tighten_width(5.0);
+        assert_eq!(t.min_width().get(), 10.0);
+        assert_eq!(t.max_width().get(), 10.0);
+    }
+
+    #[test]
+    fn tighten_height_clamps_within_bounds() {
+        let c = Constraints::new(0.0_f32, 100.0_f32, 10.0_f32, 100.0_f32);
+        let t = c.tighten_height(50.0);
+        assert_eq!(t.min_height().get(), 50.0);
+        assert_eq!(t.max_height().get(), 50.0);
+    }
+
+    #[test]
+    fn tighten_clamps_both_axes() {
+        let c = Constraints::new(0.0_f32, 100.0_f32, 0.0_f32, 100.0_f32);
+        let t = c.tighten(Size::new(40.0_f32, 60.0_f32));
+        assert!(t.is_tight());
+        assert_eq!(t.min_width().get(), 40.0);
+        assert_eq!(t.min_height().get(), 60.0);
+    }
+
+    #[test]
+    fn constrain_clamps_size() {
+        let c = Constraints::new(10.0_f32, 50.0_f32, 10.0_f32, 50.0_f32);
+
+        let s = c.constrain(Size::new(30.0_f32, 30.0_f32));
+        assert_eq!(s.width.get(), 30.0);
+        assert_eq!(s.height.get(), 30.0);
+
+        let s = c.constrain(Size::new(0.0_f32, 100.0_f32));
+        assert_eq!(s.width.get(), 10.0);
+        assert_eq!(s.height.get(), 50.0);
+    }
+
+    #[test]
+    fn constrain_preserve_aspect_ratio_scales_down() {
+        let c = Constraints::new(0.0_f32, 100.0_f32, 0.0_f32, 50.0_f32);
+        let s = c.constrain_preserve_aspect_ratio(Size::new(200.0_f32, 100.0_f32));
+        assert_eq!(s.width.get(), 100.0);
+        assert_eq!(s.height.get(), 50.0);
+    }
+
+    #[test]
+    fn constrain_preserve_aspect_ratio_scales_up_to_min() {
+        let c = Constraints::new(100.0_f32, 200.0_f32, 50.0_f32, 100.0_f32);
+        let s = c.constrain_preserve_aspect_ratio(Size::new(20.0_f32, 10.0_f32));
+        assert_eq!(s.width.get(), 100.0);
+        assert_eq!(s.height.get(), 50.0);
+    }
+
+    #[test]
+    fn flip_swaps_axes() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 20.0_f32, 200.0_f32);
+        let f = c.flip();
+        assert_eq!(f.min_width().get(), 20.0);
+        assert_eq!(f.max_width().get(), 200.0);
+        assert_eq!(f.min_height().get(), 10.0);
+        assert_eq!(f.max_height().get(), 100.0);
+    }
+
+    #[test]
+    fn smallest_and_biggest() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 20.0_f32, 200.0_f32);
+        let s = c.smallest();
+        assert_eq!(s.width.get(), 10.0);
+        assert_eq!(s.height.get(), 20.0);
+        let b = c.biggest();
+        assert_eq!(b.width.get(), 100.0);
+        assert_eq!(b.height.get(), 200.0);
+    }
+
+    #[test]
+    fn has_tight_and_bounded_queries() {
+        let tight = Constraints::tight(Size::new(10.0_f32, 20.0_f32));
+        assert!(tight.has_tight_width());
+        assert!(tight.has_tight_height());
+        assert!(tight.is_tight());
+        assert!(tight.has_bounded_width());
+        assert!(tight.has_bounded_height());
+        assert!(!tight.has_infinite_width());
+        assert!(!tight.has_infinite_height());
+
+        let expand = Constraints::expand();
+        assert!(!expand.has_tight_width());
+        assert!(!expand.has_tight_height());
+        assert!(!expand.has_bounded_width());
+        assert!(expand.has_infinite_width());
+        assert!(expand.has_infinite_height());
+    }
+
+    #[test]
+    fn is_satisfied_by() {
+        let c = Constraints::new(10.0_f32, 50.0_f32, 10.0_f32, 50.0_f32);
+        assert!(c.is_satisfied_by(Size::new(30.0_f32, 30.0_f32)));
+        assert!(c.is_satisfied_by(Size::new(10.0_f32, 50.0_f32)));
+        assert!(!c.is_satisfied_by(Size::new(5.0_f32, 30.0_f32)));
+        assert!(!c.is_satisfied_by(Size::new(30.0_f32, 60.0_f32)));
+    }
+
+    #[test]
+    fn only_width_and_only_height() {
+        let c = Constraints::new(10.0_f32, 50.0_f32, 20.0_f32, 60.0_f32);
+
+        let w = c.only_width();
+        assert_eq!(w.min_width().get(), 10.0);
+        assert_eq!(w.max_width().get(), 50.0);
+        assert_eq!(w.min_height().get(), 0.0);
+        assert!(w.max_height().is_infinite());
+
+        let h = c.only_height();
+        assert_eq!(h.min_width().get(), 0.0);
+        assert!(h.max_width().is_infinite());
+        assert_eq!(h.min_height().get(), 20.0);
+        assert_eq!(h.max_height().get(), 60.0);
+    }
+
+    #[test]
+    fn mul_scales_all_bounds() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 20.0_f32, 200.0_f32);
+        let scaled = c * 2.0;
+        assert_eq!(scaled.min_width().get(), 20.0);
+        assert_eq!(scaled.max_width().get(), 200.0);
+        assert_eq!(scaled.min_height().get(), 40.0);
+        assert_eq!(scaled.max_height().get(), 400.0);
+    }
+
+    #[test]
+    fn div_scales_all_bounds() {
+        let c = Constraints::new(10.0_f32, 100.0_f32, 20.0_f32, 200.0_f32);
+        let scaled = c / 2.0;
+        assert_eq!(scaled.min_width().get(), 5.0);
+        assert_eq!(scaled.max_width().get(), 50.0);
+        assert_eq!(scaled.min_height().get(), 10.0);
+        assert_eq!(scaled.max_height().get(), 100.0);
     }
 }

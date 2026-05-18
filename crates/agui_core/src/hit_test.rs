@@ -124,3 +124,100 @@ impl HitTestResult {
     //         });
     //     }
 }
+
+#[cfg(test)]
+mod tests {
+    use glam::Mat4;
+
+    use crate::offset::Offset;
+
+    use super::*;
+
+    fn empty_result() -> HitTestResult {
+        HitTestResult {
+            path: Vec::new(),
+            transforms: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn default_transform_is_identity() {
+        let result = empty_result();
+        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+    }
+
+    #[test]
+    fn push_and_pop_transform() {
+        let mut result = empty_result();
+        let t = Mat4::from_translation(glam::Vec3::new(10.0, 20.0, 0.0));
+
+        result.push_transform(t);
+        assert_eq!(result.current_transform(), t);
+
+        result.pop_transform();
+        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+    }
+
+    #[test]
+    fn nested_transforms_compose() {
+        let mut result = empty_result();
+        let t1 = Mat4::from_translation(glam::Vec3::new(10.0, 0.0, 0.0));
+        let t2 = Mat4::from_translation(glam::Vec3::new(0.0, 20.0, 0.0));
+
+        result.push_transform(t1);
+        result.push_transform(t2);
+
+        let expected = t1 * t2;
+        assert_eq!(result.current_transform(), expected);
+
+        result.pop_transform();
+        assert_eq!(result.current_transform(), t1);
+    }
+
+    #[test]
+    fn with_offset_translates_position() {
+        let mut result = empty_result();
+        let offset = Offset::new(10.0_f32, 20.0_f32);
+        let position = Offset::new(15.0_f32, 25.0_f32);
+
+        let hit = result.with_offset(offset, position, |_, local_pos| {
+            assert_eq!(local_pos.x.get(), 5.0);
+            assert_eq!(local_pos.y.get(), 5.0);
+            HitTest::Absorb
+        });
+
+        assert_eq!(hit, HitTest::Absorb);
+        // Transform stack restored after callback
+        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+    }
+
+    #[test]
+    fn with_transform_strips_perspective_and_bails_on_singular() {
+        let mut result = empty_result();
+
+        // A zero matrix has determinant 0 after perspective stripping
+        let singular = Mat4::ZERO;
+        let hit = result.with_transform(singular, Offset::ZERO, |_, _| {
+            panic!("should not be called for singular matrix");
+        });
+
+        assert_eq!(hit, HitTest::Pass);
+    }
+
+    #[test]
+    fn with_raw_transform_restores_stack() {
+        let mut result = empty_result();
+        let t = Mat4::from_scale(glam::Vec3::new(2.0, 2.0, 1.0));
+
+        result.with_raw_transform(t, Offset::new(5.0_f32, 10.0_f32), |inner, pos| {
+            // Position is transformed by the scale matrix
+            assert_eq!(pos.x.get(), 10.0);
+            assert_eq!(pos.y.get(), 20.0);
+            // Inner transform stack should have the transform
+            assert_eq!(inner.current_transform(), t);
+            HitTest::Pass
+        });
+
+        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+    }
+}

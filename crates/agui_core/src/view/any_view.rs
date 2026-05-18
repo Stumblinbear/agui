@@ -6,7 +6,7 @@ use crate::{
     key::AnyKeyable,
     render_object::{AnyRenderObject, AsAnyRenderObject, RenderObject},
     routing_id::RoutingId,
-    view::{MountView, View},
+    view::View,
 };
 
 pub trait AnyView {
@@ -53,7 +53,9 @@ where
     }
 
     fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
-        MountView::mount(self, ctx)
+        let (children, state) = self.mount(ctx);
+
+        (children, ElementState::new(state))
     }
 
     fn dyn_update(
@@ -273,24 +275,25 @@ impl<T: 'static> AsAnyView for T where T: View {}
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::{cell::Cell, rc::Rc};
 
-    use crate::{render_object::RenderLeaf, test_harness::TestHarness};
+    use crate::{render_object::RenderLeaf, test_fixtures::Leaf, test_harness::TestHarness};
 
     use super::*;
 
-    thread_local! {
-        static MOUNT_COUNT: RefCell<usize> = const { RefCell::new(0) };
-        static UPDATE_COUNT: RefCell<usize> = const { RefCell::new(0) };
-    }
-
     pub struct TestView<T> {
         value: T,
+        mounts: Cell<usize>,
+        updates: Cell<usize>,
     }
 
     impl<T> TestView<T> {
         pub fn new(value: T) -> Self {
-            Self { value }
+            Self {
+                value,
+                mounts: Cell::new(0),
+                updates: Cell::new(0),
+            }
         }
     }
 
@@ -303,13 +306,13 @@ mod tests {
         type State = T;
 
         fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            MOUNT_COUNT.with(|count| *count.borrow_mut() += 1);
+            self.mounts.set(self.mounts.get() + 1);
 
             (vec![], self.value.clone())
         }
 
         fn update(&self, element: &mut Element, _: &Self, _: &mut UpdateCtx) {
-            UPDATE_COUNT.with(|count| *count.borrow_mut() += 1);
+            self.updates.set(self.updates.get() + 1);
 
             *element.state.downcast_mut::<Self>() = self.value.clone();
         }
@@ -323,10 +326,11 @@ mod tests {
 
     #[test]
     fn mounting_dyn_views() {
-        let harness = TestHarness::mount(&TestView::new(7_usize).as_dyn_view());
+        let view = TestView::new(7_usize);
+        let harness = TestHarness::mount(&view.as_dyn_view());
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
+        assert_eq!(view.mounts.get(), 1);
+        assert_eq!(view.updates.get(), 0);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -337,10 +341,9 @@ mod tests {
 
     #[test]
     fn mounting_boxed_views() {
-        let harness = TestHarness::mount(&TestView::new(1_usize).into_boxed_view());
+        let view = TestView::new(1_usize);
+        let harness = TestHarness::mount(&view.into_boxed_view());
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -355,8 +358,8 @@ mod tests {
 
         let mut harness = TestHarness::mount(&view.as_dyn_view());
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
+        assert_eq!(view.mounts.get(), 1);
+        assert_eq!(view.updates.get(), 0);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -364,10 +367,11 @@ mod tests {
             &2
         );
 
-        harness.update(&view.as_dyn_view(), &TestView::new(9_usize).as_dyn_view());
+        let new_view = TestView::new(9_usize);
+        harness.update(&view.as_dyn_view(), &new_view.as_dyn_view());
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
+        assert_eq!(new_view.mounts.get(), 0);
+        assert_eq!(new_view.updates.get(), 1);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -382,8 +386,6 @@ mod tests {
 
         let mut harness = TestHarness::mount(&view);
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -391,10 +393,9 @@ mod tests {
             &2
         );
 
-        harness.update(&view, &TestView::new(9_usize).into_boxed_view());
+        let new_view = TestView::new(9_usize).into_boxed_view();
+        harness.update(&view, &new_view);
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -409,8 +410,8 @@ mod tests {
 
         let mut harness = TestHarness::mount(&view.as_dyn_view());
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 1);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
+        assert_eq!(view.mounts.get(), 1);
+        assert_eq!(view.updates.get(), 0);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -418,10 +419,12 @@ mod tests {
             &2
         );
 
-        harness.update(&view.as_dyn_view(), &TestView::new(7_u8).as_dyn_view());
+        let new_view = TestView::new(7_u8);
+        harness.update(&view.as_dyn_view(), &new_view.as_dyn_view());
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
+        // Type changed, so mount is called on the new view (not update)
+        assert_eq!(new_view.mounts.get(), 1);
+        assert_eq!(new_view.updates.get(), 0);
         assert_eq!(
             harness.root.children[0]
                 .state
@@ -453,24 +456,18 @@ mod tests {
         );
     }
 
-    use std::{cell::Cell, rc::Rc};
-
-    use crate::test_fixtures::Leaf;
-
     #[test]
     fn dispatch_message_through_boundary_with_matching_generation() {
         let messages = Rc::new(Cell::new(0_usize));
         let payload = Rc::new(Cell::new(None::<u32>));
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(
-            Leaf::new().on_message({
-                let messages = Rc::clone(&messages);
-                let payload = Rc::clone(&payload);
-                move |ctx| {
-                    messages.set(messages.get() + 1);
-                    payload.set(Some(ctx.consume::<u32>()));
-                }
-            }),
-        );
+        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+            let messages = Rc::clone(&messages);
+            let payload = Rc::clone(&payload);
+            move |ctx| {
+                messages.set(messages.get() + 1);
+                payload.set(Some(ctx.consume::<u32>()));
+            }
+        }));
         let mut harness = TestHarness::mount(&view);
 
         // Initial generation is 0, so a routing id of 0 forwards to the inner view.
