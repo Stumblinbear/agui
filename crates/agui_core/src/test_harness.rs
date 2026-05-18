@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc::Rc, sync::mpsc};
+use std::{rc::Rc, sync::mpsc};
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
@@ -16,7 +16,7 @@ impl Driver for NoopTestDriver {}
 pub struct TestHarness {
     pub driver: Rc<dyn Driver>,
     pub event_tx: mpsc::Sender<()>,
-    pub path: VecDeque<RoutingId>,
+    pub path: Vec<RoutingId>,
     pub provide_scope: ProvideScope,
 
     pub root: Element,
@@ -29,7 +29,7 @@ impl TestHarness {
     {
         let driver: Rc<dyn Driver> = Rc::new(NoopTestDriver);
         let (tx, _) = mpsc::channel();
-        let mut path = VecDeque::new();
+        let mut path = Vec::new();
         let provide_scope = ProvideScope::new();
 
         let root = Element::new(

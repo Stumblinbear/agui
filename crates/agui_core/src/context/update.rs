@@ -1,4 +1,4 @@
-use std::{any::Any, collections::VecDeque, rc::Rc, sync::mpsc};
+use std::{any::Any, rc::Rc, sync::mpsc};
 
 use crate::{driver::Driver, provide::ProvideScope, routing_id::RoutingId};
 
@@ -7,7 +7,7 @@ pub struct UpdateCtx<'a> {
 
     event_tx: &'a mpsc::Sender<()>,
 
-    routing_path: &'a mut VecDeque<RoutingId>,
+    routing_path: &'a mut Vec<RoutingId>,
 
     provide_scope: &'a ProvideScope,
 }
@@ -16,7 +16,7 @@ impl<'a> UpdateCtx<'a> {
     pub fn new(
         driver: &'a Rc<dyn Driver>,
         event_tx: &'a mpsc::Sender<()>,
-        routing_path: &'a mut VecDeque<RoutingId>,
+        routing_path: &'a mut Vec<RoutingId>,
         provide_scope: &'a ProvideScope,
     ) -> Self {
         Self {
@@ -58,11 +58,11 @@ impl<'a> UpdateCtx<'a> {
         id: RoutingId,
         func: impl FnOnce(&mut UpdateCtx) -> T,
     ) -> T {
-        self.routing_path.push_back(id);
+        self.routing_path.push(id);
 
         let ret = func(self);
 
-        self.routing_path.pop_back();
+        self.routing_path.pop();
 
         ret
     }

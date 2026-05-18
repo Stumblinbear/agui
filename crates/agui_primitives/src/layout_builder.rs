@@ -66,7 +66,7 @@ where
 
             let driver = Rc::clone(ctx.driver());
             let event_tx = ctx.event_tx().clone();
-            let routing_path = ctx.routing_path().copied().collect::<VecDeque<_>>();
+            let routing_path = ctx.routing_path().copied().collect::<Vec<_>>();
             let provide_scope = ctx.provide_scope().clone();
 
             Rc::new(move |constraints| {
@@ -110,7 +110,7 @@ where
 
                 let driver = Rc::clone(ctx.driver());
                 let event_tx = ctx.event_tx().clone();
-                let routing_path = ctx.routing_path().copied().collect::<VecDeque<_>>();
+                let routing_path = ctx.routing_path().copied().collect::<Vec<_>>();
                 let provide_scope = ctx.provide_scope().clone();
 
                 Rc::new(move |constraints| {
