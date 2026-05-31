@@ -1,4 +1,4 @@
-use typed_floats::{as_const, Positive, PositiveFinite};
+use typed_floats::{Positive, PositiveFinite, as_const};
 
 use crate::{
     constraints::Constraints,
@@ -13,8 +13,10 @@ use crate::{
 
 mod any_render_object;
 pub mod box_layout;
+mod node;
 
 pub use any_render_object::*;
+pub use node::*;
 
 pub trait RenderObject: 'static {
     fn mount(&mut self, ctx: &mut UpdateCtx);
@@ -40,13 +42,11 @@ pub trait RenderObject: 'static {
     /// having been called.
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
-    fn draw(&mut self, canvas: &mut Canvas);
+    fn paint(&mut self, canvas: &mut Canvas);
 }
 
 #[derive(Default)]
-pub struct RenderLeaf {
-    size: Size,
-}
+pub struct RenderLeaf {}
 
 impl RenderObject for RenderLeaf {
     fn mount(&mut self, _: &mut UpdateCtx) {}
@@ -58,14 +58,10 @@ impl RenderObject for RenderLeaf {
         HitTest::Pass
     }
 
-    fn draw(&mut self, _: &mut Canvas) {}
+    fn paint(&mut self, _: &mut Canvas) {}
 }
 
 impl BoxLayout for RenderLeaf {
-    fn size(&self) -> Size {
-        self.size
-    }
-
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
@@ -86,8 +82,8 @@ impl BoxLayout for RenderLeaf {
         constraints.smallest()
     }
 
-    fn layout(&mut self, constraints: Constraints) {
-        self.size = constraints.smallest();
+    fn layout(&mut self, constraints: Constraints) -> Size {
+        constraints.smallest()
     }
 
     fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {

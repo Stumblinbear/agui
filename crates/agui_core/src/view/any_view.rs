@@ -229,7 +229,7 @@ where
     }
 
     fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
-        if let Some(render_object) = render_object.as_any_mut().downcast_mut::<T::Render>() {
+        if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
             self.inner.update_render_object(element, render_object);
         } else {
             *render_object = self
@@ -536,6 +536,52 @@ mod tests {
             messages.get(),
             0,
             "the replaced inner must not receive messages addressed to the old generation"
+        );
+    }
+
+    struct Counted {
+        creates: Rc<Cell<usize>>,
+    }
+
+    impl View for Counted {
+        type Render = RenderLeaf;
+        type State = ();
+
+        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+            (vec![], ())
+        }
+
+        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+
+        fn create_render_object(&self, _: &Element) -> Self::Render {
+            self.creates.set(self.creates.get() + 1);
+
+            RenderLeaf::default()
+        }
+
+        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+    }
+
+    #[test]
+    fn updating_boxed_view_reuses_render_object() {
+        let creates = Rc::new(Cell::new(0usize));
+
+        let view = Counted {
+            creates: Rc::clone(&creates),
+        }
+        .into_boxed_view();
+
+        let harness = TestHarness::mount(&view);
+
+        let mut ro = view.create_render_object(&harness.root);
+        assert_eq!(creates.get(), 1);
+
+        view.update_render_object(&harness.root, &mut ro);
+
+        assert_eq!(
+            creates.get(),
+            1,
+            "same-type update must reuse the render object, not recreate it"
         );
     }
 }

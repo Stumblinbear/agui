@@ -406,17 +406,13 @@ where
         HitTest::Pass
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {}
+    fn paint(&mut self, canvas: &mut Canvas) {}
 }
 
 impl<Child> BoxLayout for RenderFlex<Child>
 where
     Child: RenderBox,
 {
-    fn size(&self) -> Size {
-        self.size
-    }
-
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
@@ -437,7 +433,9 @@ where
         Size::ZERO
     }
 
-    fn layout(&mut self, constraints: Constraints) {}
+    fn layout(&mut self, constraints: Constraints) -> Size {
+        Size::ZERO
+    }
 
     fn measure_baseline(
         &self,

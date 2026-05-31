@@ -7,7 +7,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderObject,
+        AsAnyRenderObject, RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -175,7 +175,7 @@ where
             width: self.width,
             height: self.height,
 
-            child: element.child(0, &self.child).create_render_object(),
+            child: RenderNode::new(element.child(0, &self.child).create_render_object()),
         }
     }
 
@@ -186,14 +186,15 @@ where
 
         element
             .child(0, &self.child)
-            .update_render_object(&mut render_object.child);
+            .update_render_object(&mut render_object.child.object);
     }
 }
+
 pub struct RenderSizedBox<Child> {
     width: Option<Positive<f32>>,
     height: Option<Positive<f32>>,
 
-    child: Child,
+    child: RenderNode<Child, Option<Size>>,
 }
 
 impl<Child> RenderSizedBox<Child> {
@@ -225,15 +226,21 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        if !self.size().contains(position) {
+        let child_size = self
+            .child
+            .parent_data
+            .as_ref()
+            .expect("child has not been laid out");
+
+        if !child_size.contains(position) {
             return HitTest::Pass;
         }
 
         self.child.hit_test(result, position)
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        self.child.draw(canvas);
+    fn paint(&mut self, canvas: &mut Canvas) {
+        self.child.paint(canvas);
     }
 }
 
@@ -241,10 +248,6 @@ impl<Child> BoxLayout for RenderSizedBox<Child>
 where
     Child: RenderBox,
 {
-    fn size(&self) -> Size {
-        self.child.size()
-    }
-
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.width
             .and_then(|width| PositiveFinite::try_from(width).ok())
@@ -274,9 +277,14 @@ where
             .measure(self.additional_constraints().enforce(constraints))
     }
 
-    fn layout(&mut self, constraints: Constraints) {
-        self.child
-            .layout(self.additional_constraints().enforce(constraints));
+    fn layout(&mut self, constraints: Constraints) -> Size {
+        let child_size = self
+            .child
+            .layout_and_get_size(self.additional_constraints().enforce(constraints));
+
+        self.child.parent_data = Some(child_size);
+
+        child_size
     }
 
     fn measure_baseline(
@@ -325,8 +333,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(16, 48),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(16, 48)),
             "should use the given sizes"
         );
 
@@ -337,8 +345,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(16, 128, 32, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(16, 32),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(16, 32)),
             "should ignore the given sizes and use the smallest size allowed by the constraints"
         );
 
@@ -349,8 +357,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(0, 0),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(0, 0)),
             "should shrink to the smallest size possible"
         );
 
@@ -361,8 +369,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(10, 128, 20, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(10, 20),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(10, 20)),
             "should shrink to the smallest size possible within the constraints"
         );
 
@@ -373,8 +381,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(128, 128),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(128, 128)),
             "should expand to the largest size possible within the constraints"
         );
     }

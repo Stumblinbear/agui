@@ -8,7 +8,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderObject,
+        AsAnyRenderObject, RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -48,19 +48,19 @@ where
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
         RenderIntrinsicWidth {
-            child: element.child(0, &self.child).create_render_object(),
+            child: RenderNode::new(element.child(0, &self.child).create_render_object()),
         }
     }
 
     fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
         element
             .child(0, &self.child)
-            .update_render_object(&mut render_object.child);
+            .update_render_object(&mut render_object.child.object);
     }
 }
 
 pub struct RenderIntrinsicWidth<Child> {
-    child: Child,
+    child: RenderNode<Child, Option<Size>>,
 }
 
 impl<Child> RenderObject for RenderIntrinsicWidth<Child>
@@ -76,15 +76,20 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        if !self.child.size().contains(position) {
+        if !self
+            .child
+            .parent_data
+            .expect("child has not been laid out")
+            .contains(position)
+        {
             return HitTest::Pass;
         }
 
         self.child.hit_test(result, position)
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        self.child.draw(canvas);
+    fn paint(&mut self, canvas: &mut Canvas) {
+        self.child.paint(canvas);
     }
 }
 
@@ -92,10 +97,6 @@ impl<Child> BoxLayout for RenderIntrinsicWidth<Child>
 where
     Child: RenderBox,
 {
-    fn size(&self) -> Size {
-        self.child.size()
-    }
-
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.max_intrinsic_width(height)
     }
@@ -147,7 +148,7 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, mut constraints: Constraints) {
+    fn layout(&mut self, mut constraints: Constraints) -> Size {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(self
                 .max_intrinsic_width(constraints.max_height())
@@ -160,7 +161,9 @@ where
             // to know if this is happening.
         }
 
-        self.child.layout(constraints);
+        let size = self.child.layout_and_get_size(constraints);
+        self.child.parent_data = Some(size);
+        size
     }
 
     fn measure_baseline(

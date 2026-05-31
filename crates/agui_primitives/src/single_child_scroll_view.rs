@@ -8,7 +8,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderObject,
+        AsAnyRenderObject, RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -62,22 +62,19 @@ where
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
         RenderSingleChildScrollView {
-            child: element.child(0, &self.child).create_render_object(),
-
-            size: Size::ZERO,
+            child: RenderNode::new(element.child(0, &self.child).create_render_object()),
         }
     }
 
     fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
         element
             .child(0, &self.child)
-            .update_render_object(&mut render_object.child);
+            .update_render_object(&mut render_object.child.object);
     }
 }
-pub struct RenderSingleChildScrollView<Child> {
-    child: Child,
 
-    size: Size,
+pub struct RenderSingleChildScrollView<Child> {
+    child: RenderNode<Child, Option<Size>>,
 }
 
 impl<Child> RenderObject for RenderSingleChildScrollView<Child>
@@ -93,15 +90,21 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        if !self.size().contains(position) {
+        let child_size = self
+            .child
+            .parent_data
+            .as_ref()
+            .expect("child has not been laid out");
+
+        if !child_size.contains(position) {
             return HitTest::Pass;
         }
 
         self.child.hit_test(result, position)
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        self.child.draw(canvas);
+    fn paint(&mut self, canvas: &mut Canvas) {
+        self.child.paint(canvas);
     }
 }
 
@@ -109,10 +112,6 @@ impl<Child> BoxLayout for RenderSingleChildScrollView<Child>
 where
     Child: RenderBox,
 {
-    fn size(&self) -> Size {
-        self.size
-    }
-
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }
@@ -133,11 +132,12 @@ where
         self.child.measure(constraints.only_width())
     }
 
-    fn layout(&mut self, constraints: Constraints) {
-        self.child.layout(constraints.only_width());
+    fn layout(&mut self, constraints: Constraints) -> Size {
+        let child_size = self.child.layout_and_get_size(constraints.only_width());
 
-        // TODO(trevin): mark this as dependent on the child size
-        self.size = constraints.constrain(self.child.size());
+        self.child.parent_data = Some(child_size);
+
+        constraints.constrain(child_size)
     }
 
     fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -181,8 +181,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(10, 0),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(10, 0)),
             "should only be the width of the child"
         );
 
@@ -193,8 +193,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(128, 0),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(128, 0)),
             "should not exceed the width of the constraints"
         );
 
@@ -205,8 +205,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(10, 16),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(10, 16)),
             "should be the width of the child and the height of the child"
         );
 
@@ -217,8 +217,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(128, 16),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(128, 16)),
             "should not exceed the width of the constraints and be the height of the child"
         );
 
@@ -229,8 +229,8 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.size(),
-            Size::new(128, 128),
+            render_object.child.parent_data.as_ref(),
+            Some(&Size::new(128, 128)),
             "should not exceed the width or height of the constraints"
         );
     }

@@ -9,7 +9,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        RenderObject,
+        RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -168,7 +168,9 @@ where
 
         if let Some((element, child)) = child_view.as_ref() {
             if let Some(child_render) = &mut render_object.child_render {
-                element.child(0, child).update_render_object(child_render);
+                element
+                    .child(0, child)
+                    .update_render_object(&mut child_render.object);
             }
         } else if render_object.child_render.is_some() {
             // TODO(trevin): mark for re-layout
@@ -182,7 +184,7 @@ pub struct RenderLayoutBuilder<Child> {
 
     old_constraints: Constraints,
 
-    child_render: Option<Child>,
+    child_render: Option<RenderNode<Child, Option<Size>>>,
 }
 
 impl<Child> RenderObject for RenderLayoutBuilder<Child>
@@ -205,9 +207,9 @@ where
         }
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
+    fn paint(&mut self, canvas: &mut Canvas) {
         if let Some(child_render) = self.child_render.as_mut() {
-            child_render.draw(canvas);
+            child_render.paint(canvas);
         }
     }
 }
@@ -216,13 +218,6 @@ impl<Child> BoxLayout for RenderLayoutBuilder<Child>
 where
     Child: RenderBox,
 {
-    fn size(&self) -> Size {
-        self.child_render
-            .as_ref()
-            .map(BoxLayout::size)
-            .unwrap_or(Size::ZERO)
-    }
-
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
@@ -243,17 +238,21 @@ where
         Size::ZERO
     }
 
-    fn layout(&mut self, constraints: Constraints) {
+    fn layout(&mut self, constraints: Constraints) -> Size {
         if self.child_render.is_none() || self.old_constraints != constraints {
             self.old_constraints = constraints;
 
             let child = (self.builder)(constraints);
 
-            self.child_render.replace(child);
+            self.child_render.replace(RenderNode::new(child));
         }
 
         if let Some(child_render) = self.child_render.as_mut() {
-            child_render.layout(constraints);
+            let size = child_render.layout_and_get_size(constraints);
+            child_render.parent_data = Some(size);
+            size
+        } else {
+            Size::ZERO
         }
     }
 
@@ -297,10 +296,16 @@ mod tests {
             .create_render_object();
         render_object.layout(Constraints::new(0, 50, 0, 50));
         assert_eq!(*build_count.borrow(), 1);
-        assert_eq!(render_object.size(), Size::new(0.0, 0.0));
+        assert_eq!(
+            render_object.child_render.as_ref().unwrap().parent_data,
+            Some(Size::new(0.0, 0.0))
+        );
 
         render_object.layout(Constraints::new(0, 150, 0, 150));
         assert_eq!(*build_count.borrow(), 2);
-        assert_eq!(render_object.size(), Size::new(150.0, 150.0));
+        assert_eq!(
+            render_object.child_render.as_ref().unwrap().parent_data,
+            Some(Size::new(150.0, 150.0))
+        );
     }
 }

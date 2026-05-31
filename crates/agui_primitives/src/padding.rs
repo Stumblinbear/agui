@@ -9,7 +9,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderObject,
+        AsAnyRenderObject, RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -72,10 +72,7 @@ where
                 bottom: self.padding.bottom(),
             },
 
-            child: element.child(0, &self.child).create_render_object(),
-            child_offset: Offset::ZERO,
-
-            size: Size::ZERO,
+            child: RenderNode::new(element.child(0, &self.child).create_render_object()),
         }
     }
 
@@ -92,17 +89,20 @@ where
 
         element
             .child(0, &self.child)
-            .update_render_object(&mut render_object.child);
+            .update_render_object(&mut render_object.child.object);
     }
+}
+
+#[derive(Debug, PartialEq)]
+struct ChildParentData {
+    size: Size,
+    offset: Offset,
 }
 
 pub struct RenderPadding<Child> {
     padding: EdgeInsets,
 
-    child: Child,
-    child_offset: Offset,
-
-    size: Size,
+    child: RenderNode<Child, Option<ChildParentData>>,
 }
 
 impl<Child> RenderObject for RenderPadding<Child>
@@ -118,18 +118,24 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        if !self.size().contains(position) {
+        let ChildParentData { size, offset } = self
+            .child
+            .parent_data
+            .as_ref()
+            .expect("child has not been laid out");
+
+        if !size.contains(position) {
             return HitTest::Pass;
         }
 
-        result.with_offset(self.child_offset, position, |result, transformed| {
+        result.with_offset(*offset, position, |result, transformed| {
             self.child.hit_test(result, transformed)
         })
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
+    fn paint(&mut self, canvas: &mut Canvas) {
         canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
-            self.child.draw(canvas);
+            self.child.paint(canvas);
         });
     }
 }
@@ -138,10 +144,6 @@ impl<Child> BoxLayout for RenderPadding<Child>
 where
     Child: RenderBox,
 {
-    fn size(&self) -> Size {
-        self.size
-    }
-
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         let inner_height = unsafe {
             Positive::<f32>::new_unchecked(
@@ -211,16 +213,19 @@ where
             .constrain(Size::new(self.padding.horizontal(), self.padding.vertical()) + child_size)
     }
 
-    fn layout(&mut self, constraints: Constraints) {
+    fn layout(&mut self, constraints: Constraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
 
-        self.child.layout(inner_constraints);
+        let child_size = self.child.layout_and_get_size(inner_constraints);
+        let child_offset = Offset::new(self.padding.left, self.padding.top);
 
-        self.child_offset = Offset::new(self.padding.left, self.padding.top);
+        self.child.parent_data = Some(ChildParentData {
+            size: child_size,
+            offset: child_offset,
+        });
 
-        self.size = constraints.constrain(
-            Size::new(self.padding.horizontal(), self.padding.vertical()) + self.child.size(),
-        )
+        constraints
+            .constrain(Size::new(self.padding.horizontal(), self.padding.vertical()) + child_size)
     }
 
     fn measure_baseline(
@@ -239,8 +244,15 @@ where
     }
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        let child_offset = self
+            .child
+            .parent_data
+            .as_ref()
+            .expect("child has not been laid out")
+            .offset;
+
         self.child.distance_to_baseline(baseline).map(|distance| {
-            PositiveFinite::try_from(distance + self.child_offset.y)
+            PositiveFinite::try_from(distance + child_offset.y)
                 .expect("distance to baseline of padding was not a positive finite number")
         })
     }
@@ -277,7 +289,13 @@ mod tests {
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
-        assert_eq!(render_object.size(), Size::new(20.0, 20.0));
+        assert_eq!(
+            render_object.child.parent_data.as_ref(),
+            Some(&ChildParentData {
+                size: Size::new(20.0, 20.0),
+                offset: Offset::new(10.0, 10.0),
+            })
+        );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
         let mut render_object = TestHarness::mount(&padding)
@@ -285,7 +303,13 @@ mod tests {
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
-        assert_eq!(render_object.size(), Size::new(100.0, 100.0));
+        assert_eq!(
+            render_object.child.parent_data.as_ref(),
+            Some(&ChildParentData {
+                size: Size::new(100.0, 100.0),
+                offset: Offset::new(50.0, 50.0),
+            })
+        );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
         let mut render_object = TestHarness::mount(&padding)
@@ -293,6 +317,12 @@ mod tests {
             .as_ref(&padding)
             .create_render_object();
         render_object.layout(Constraints::new(0, 128, 0, 128));
-        assert_eq!(render_object.size(), Size::new(128.0, 128.0));
+        assert_eq!(
+            render_object.child.parent_data.as_ref(),
+            Some(&ChildParentData {
+                size: Size::new(128.0, 128.0),
+                offset: Offset::new(50.0, 50.0),
+            })
+        );
     }
 }

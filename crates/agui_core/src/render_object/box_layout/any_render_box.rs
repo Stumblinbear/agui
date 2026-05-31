@@ -5,16 +5,14 @@ use typed_floats::{Positive, PositiveFinite};
 use crate::{
     constraints::Constraints,
     render_object::{
-        box_layout::{BoxLayout, RenderBox},
         AnyRenderObject,
+        box_layout::{BoxLayout, RenderBox},
     },
     size::Size,
     text_baseline::TextBaseline,
 };
 
 pub trait AnyRenderBox: AnyRenderObject {
-    fn dyn_size(&self) -> Size;
-
     fn dyn_min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>>;
 
     fn dyn_max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>>;
@@ -25,7 +23,7 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_measure(&self, constraints: Constraints) -> Size;
 
-    fn dyn_layout(&mut self, constraints: Constraints);
+    fn dyn_layout(&mut self, constraints: Constraints) -> Size;
 
     fn dyn_measure_baseline(
         &self,
@@ -41,10 +39,6 @@ where
     T: Any,
     T: RenderBox,
 {
-    fn dyn_size(&self) -> Size {
-        self.size()
-    }
-
     fn dyn_min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.min_intrinsic_width(height)
     }
@@ -65,8 +59,8 @@ where
         self.measure(constraints)
     }
 
-    fn dyn_layout(&mut self, constraints: Constraints) {
-        self.layout(constraints);
+    fn dyn_layout(&mut self, constraints: Constraints) -> Size {
+        self.layout(constraints)
     }
 
     fn dyn_measure_baseline(
@@ -86,10 +80,6 @@ impl<T> BoxLayout for Box<T>
 where
     T: AnyRenderBox + ?Sized + 'static,
 {
-    fn size(&self) -> Size {
-        (**self).dyn_size()
-    }
-
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         (**self).dyn_min_intrinsic_width(height)
     }
@@ -110,8 +100,8 @@ where
         (**self).dyn_measure(constraints)
     }
 
-    fn layout(&mut self, constraints: Constraints) {
-        (**self).dyn_layout(constraints);
+    fn layout(&mut self, constraints: Constraints) -> Size {
+        (**self).dyn_layout(constraints)
     }
 
     fn measure_baseline(

@@ -21,7 +21,7 @@ pub trait AnyRenderObject {
 
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
-    fn dyn_draw(&mut self, canvas: &mut Canvas);
+    fn dyn_paint(&mut self, canvas: &mut Canvas);
 }
 
 impl<T> AnyRenderObject for T
@@ -53,8 +53,8 @@ where
         self.hit_test(result, position)
     }
 
-    fn dyn_draw(&mut self, canvas: &mut Canvas) {
-        self.draw(canvas);
+    fn dyn_paint(&mut self, canvas: &mut Canvas) {
+        self.paint(canvas);
     }
 }
 
@@ -74,8 +74,8 @@ where
         (**self).dyn_hit_test(result, position)
     }
 
-    fn draw(&mut self, canvas: &mut Canvas) {
-        (**self).dyn_draw(canvas);
+    fn paint(&mut self, canvas: &mut Canvas) {
+        (**self).dyn_paint(canvas);
     }
 }
 
