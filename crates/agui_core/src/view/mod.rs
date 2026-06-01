@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::{
     context::{Dispatch, UpdateCtx},
     element::Element,
@@ -12,28 +10,29 @@ mod any_view;
 
 pub use any_view::*;
 
+/// The immutable description of a piece of the tree. A `View` materializes and reconciles its
+/// persistent [`Element`] (which holds state and children) and supplies the recipe for its render
+/// object. The render type lives here, on the description, so the [`Element`] can stay
+/// render-agnostic and be shared across views.
 pub trait View {
+    type Element: Element;
+
     type Render: RenderObject;
 
-    type State: Any
-    where
-        Self: Sized;
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element;
 
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State)
-    where
-        Self: Sized;
-
-    /// Called when the tree is updated and the `state` in the [`Element`] is of the same type as `Self::State`.
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx);
+    /// Reconcile `element` in place against this (new) view; `old` is the previous view of the same
+    /// type, for prop diffing.
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx);
 
     /// Route a [`Dispatch`] along `path` to the destination element.
-    fn dispatch(&self, _element: &mut Element, path: &[RoutingId], _action: Dispatch) {
+    fn dispatch(&self, _element: &mut Self::Element, path: &[RoutingId], _action: Dispatch) {
         debug_assert!(path.is_empty(), "view has nothing to route to");
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render;
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render;
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render);
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render);
 
     fn is_same_type(&self, other: &Self) -> bool {
         let _ = other;
@@ -47,21 +46,19 @@ pub trait View {
 }
 
 impl View for () {
+    type Element = ();
+
     type Render = RenderLeaf;
 
-    type State = ();
+    fn create_element(&self, _: &mut UpdateCtx) {}
 
-    fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        (Vec::new(), ())
-    }
+    fn update(&self, _: &mut (), _: &Self, _: &mut UpdateCtx) {}
 
-    fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
-
-    fn create_render_object(&self, _: &Element) -> Self::Render {
+    fn create_render_object(&self, _: &()) -> Self::Render {
         RenderLeaf::default()
     }
 
-    fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+    fn update_render_object(&self, _: &(), _: &mut Self::Render) {}
 }
 
 #[cfg(test)]

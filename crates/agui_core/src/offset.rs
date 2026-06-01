@@ -4,7 +4,7 @@ use std::ops::{
 
 use glam::{Vec2, Vec3};
 
-use typed_floats::{as_const, Atan2, NonNaN, NonNaNFinite, Positive, Powf};
+use typed_floats::{Atan2, NonNaN, NonNaNFinite, Positive, Powf, as_const};
 
 use crate::{edge_insets::EdgeInsets, rect::Rect, size::Size};
 

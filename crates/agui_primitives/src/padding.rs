@@ -5,13 +5,10 @@ use agui_core::{
     constraints::Constraints,
     context::{Dispatch, UpdateCtx},
     edge_insets::{EdgeInsets, EdgeInsetsGeometry},
-    element::Element,
+    element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{
-        RenderNode, RenderObject,
-        box_layout::RenderBox,
-    },
+    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
     renderer::Canvas,
     routing_id::RoutingId,
     size::Size,
@@ -47,23 +44,23 @@ where
     Child: View,
     Child::Render: RenderBox,
 {
+    type Element = SingleChildElement<Child::Element>;
+
     type Render = RenderPadding<Child::Render>;
 
-    type State = ();
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        (vec![Element::new(&self.child, ctx)], ())
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        SingleChildElement::new(&self.child, ctx)
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &old.child).update(&self.child, ctx);
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.update(&self.child, &old.child, ctx);
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        element.child_mut(0, &self.child).dispatch(path, action)
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        element.dispatch(&self.child, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
         RenderPadding {
             padding: EdgeInsets {
                 left: self.padding.left(self.text_direction),
@@ -72,24 +69,20 @@ where
                 bottom: self.padding.bottom(),
             },
 
-            child: RenderNode::new(element.child(0, &self.child).create_render_object()),
+            child: RenderNode::new(element.create_render_object(&self.child)),
         }
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
-        let padding = EdgeInsets {
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+        // TODO(trevin): mark for re-layout if padding changes
+        render_object.padding = EdgeInsets {
             left: self.padding.left(self.text_direction),
             top: self.padding.top(),
             right: self.padding.right(self.text_direction),
             bottom: self.padding.bottom(),
         };
 
-        // TODO(trevin): mark for re-layout if padding changes
-        render_object.padding = padding;
-
-        element
-            .child(0, &self.child)
-            .update_render_object(&mut render_object.child.object);
+        element.update_render_object(&self.child, &mut render_object.child.object);
     }
 }
 
@@ -269,10 +262,8 @@ mod tests {
     fn adds_correct_padding() {
         let padding = Padding::new(EdgeInsets::all(10.0)).child(());
 
-        let mut render_object = TestHarness::mount(&padding)
-            .root
-            .as_ref(&padding)
-            .create_render_object();
+        let mut render_object =
+            padding.create_render_object(&TestHarness::mount(&padding).root.element);
         let size = render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
@@ -280,16 +271,18 @@ mod tests {
             "padding inflates a zero-size child to the insets"
         );
         assert_eq!(
-            render_object.child.parent_data.as_ref().map(|data| data.offset),
+            render_object
+                .child
+                .parent_data
+                .as_ref()
+                .map(|data| data.offset),
             Some(Offset::new(10.0, 10.0)),
             "child is offset by the leading padding"
         );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
-        let mut render_object = TestHarness::mount(&padding)
-            .root
-            .as_ref(&padding)
-            .create_render_object();
+        let mut render_object =
+            padding.create_render_object(&TestHarness::mount(&padding).root.element);
         let size = render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
@@ -297,16 +290,18 @@ mod tests {
             "padding inflates a shrunk child to the insets"
         );
         assert_eq!(
-            render_object.child.parent_data.as_ref().map(|data| data.offset),
+            render_object
+                .child
+                .parent_data
+                .as_ref()
+                .map(|data| data.offset),
             Some(Offset::new(50.0, 50.0)),
             "child is offset by the leading padding"
         );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
-        let mut render_object = TestHarness::mount(&padding)
-            .root
-            .as_ref(&padding)
-            .create_render_object();
+        let mut render_object =
+            padding.create_render_object(&TestHarness::mount(&padding).root.element);
         let size = render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
@@ -314,7 +309,11 @@ mod tests {
             "padding plus an expanding child fills the constraints"
         );
         assert_eq!(
-            render_object.child.parent_data.as_ref().map(|data| data.offset),
+            render_object
+                .child
+                .parent_data
+                .as_ref()
+                .map(|data| data.offset),
             Some(Offset::new(50.0, 50.0)),
             "child is offset by the leading padding"
         );

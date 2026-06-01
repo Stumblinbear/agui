@@ -351,23 +351,28 @@ mod tests {
         extent: f32,
     }
 
+    struct SliverFixedElement;
+
+    impl Element for SliverFixedElement {}
+
     impl View for SliverFixedView {
-        type State = ();
+        type Element = SliverFixedElement;
+
         type Render = RenderSliverFixed;
 
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (vec![], ())
+        fn create_element(&self, _: &mut UpdateCtx) -> SliverFixedElement {
+            SliverFixedElement
         }
 
-        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+        fn update(&self, _: &mut SliverFixedElement, _: &Self, _: &mut UpdateCtx) {}
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn create_render_object(&self, _: &SliverFixedElement) -> Self::Render {
             RenderSliverFixed {
                 extent: self.extent,
             }
         }
 
-        fn update_render_object(&self, _: &Element, object: &mut Self::Render) {
+        fn update_render_object(&self, _: &SliverFixedElement, object: &mut Self::Render) {
             object.extent = self.extent;
         }
     }
@@ -379,7 +384,8 @@ mod tests {
         let boxed_view = SliverFixedView { extent: 100.0 }.into_boxed_render_sliver();
         let harness = TestHarness::mount(&boxed_view);
 
-        let erased: Box<dyn AnyRenderSliver> = boxed_view.create_render_object(&harness.root);
+        let erased: Box<dyn AnyRenderSliver> =
+            boxed_view.create_render_object(&harness.root.element);
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
         RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));

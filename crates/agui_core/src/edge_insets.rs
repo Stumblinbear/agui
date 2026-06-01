@@ -1,4 +1,4 @@
-use typed_floats::{as_const, PositiveFinite};
+use typed_floats::{PositiveFinite, as_const};
 
 use crate::{axis::Axis, text_direction::TextDirection};
 

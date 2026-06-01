@@ -3,7 +3,7 @@ use std::{rc::Rc, sync::mpsc};
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     driver::Driver,
-    element::Element,
+    element::ElementNode,
     provide::ProvideScope,
     routing_id::RoutingId,
     view::View,
@@ -13,29 +13,27 @@ pub struct NoopTestDriver;
 
 impl Driver for NoopTestDriver {}
 
-pub struct TestHarness {
+pub struct TestHarness<E> {
     pub driver: Rc<dyn Driver>,
     pub event_tx: mpsc::Sender<()>,
     pub path: Vec<RoutingId>,
     pub provide_scope: ProvideScope,
 
-    pub root: Element,
+    pub root: ElementNode<E>,
 }
 
-impl TestHarness {
+impl<E> TestHarness<E> {
     pub fn mount<V>(view: &V) -> Self
     where
-        V: View,
+        V: View<Element = E>,
     {
         let driver: Rc<dyn Driver> = Rc::new(NoopTestDriver);
         let (tx, _) = mpsc::channel();
         let mut path = Vec::new();
         let provide_scope = ProvideScope::new();
 
-        let root = Element::new(
-            view,
-            &mut UpdateCtx::new(&driver, &tx, &mut path, &provide_scope),
-        );
+        let root =
+            view.create_element(&mut UpdateCtx::new(&driver, &tx, &mut path, &provide_scope));
 
         Self {
             driver,
@@ -43,16 +41,17 @@ impl TestHarness {
             path,
             provide_scope,
 
-            root,
+            root: ElementNode::new(root),
         }
     }
 
     pub fn update<V>(&mut self, old_view: &V, new_view: &V)
     where
-        V: View,
+        V: View<Element = E>,
     {
-        self.root.as_mut(old_view).update(
-            new_view,
+        new_view.update(
+            &mut self.root.element,
+            old_view,
             &mut UpdateCtx::new(
                 &self.driver,
                 &self.event_tx,
@@ -71,17 +70,21 @@ impl TestHarness {
         message: Box<dyn std::any::Any>,
     ) -> MessageCtx
     where
-        V: View,
+        V: View<Element = E>,
     {
         let mut msg_ctx = MessageCtx::new(message);
-        view.dispatch(&mut self.root, path, Dispatch::Message(&mut msg_ctx));
+        view.dispatch(
+            &mut self.root.element,
+            path,
+            Dispatch::Message(&mut msg_ctx),
+        );
         msg_ctx
     }
 
     /// Dispatch a rebuild along `path` to a view in the tree.
     pub fn dispatch_rebuild<V>(&mut self, view: &V, path: &[RoutingId])
     where
-        V: View,
+        V: View<Element = E>,
     {
         let mut update_ctx = UpdateCtx::new(
             &self.driver,
@@ -89,6 +92,10 @@ impl TestHarness {
             &mut self.path,
             &self.provide_scope,
         );
-        view.dispatch(&mut self.root, path, Dispatch::Rebuild(&mut update_ctx));
+        view.dispatch(
+            &mut self.root.element,
+            path,
+            Dispatch::Rebuild(&mut update_ctx),
+        );
     }
 }

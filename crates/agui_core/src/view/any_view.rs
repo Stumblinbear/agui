@@ -2,7 +2,7 @@ use std::{any::Any, rc::Rc, sync::Arc};
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{Element, ElementState},
+    element::{AnyElement, Element, ElementNode},
     key::AnyKeyable,
     render_object::{
         RenderObject,
@@ -13,6 +13,7 @@ use crate::{
     view::View,
 };
 
+/// The object-safe, type-erased form of [`View`].
 pub trait AnyView {
     type Render: RenderObject;
 
@@ -20,33 +21,35 @@ pub trait AnyView {
 
     fn view_name(&self) -> &str;
 
-    fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState);
+    fn dyn_create_element(&self, ctx: &mut UpdateCtx) -> Box<dyn AnyElement>;
 
     fn dyn_update(
         &self,
-        element: &mut Element,
+        element: &mut Box<dyn AnyElement>,
         old: &dyn AnyView<Render = Self::Render>,
         ctx: &mut UpdateCtx,
     );
 
-    fn dyn_dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch);
+    fn dyn_dispatch(&self, element: &mut Box<dyn AnyElement>, path: &[RoutingId], action: Dispatch);
 
-    fn dyn_create_render_object(&self, element: &Element) -> Self::Render;
+    fn dyn_create_render_object(&self, element: &Box<dyn AnyElement>) -> Self::Render;
 
-    fn dyn_update_render_object(&self, element: &Element, render_object: &mut Self::Render);
+    fn dyn_update_render_object(
+        &self,
+        element: &Box<dyn AnyElement>,
+        render_object: &mut Self::Render,
+    );
 
     fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool;
 
     fn dyn_key(&self) -> Option<&dyn AnyKeyable>;
 }
 
-impl<T, Render> AnyView for T
+impl<T> AnyView for T
 where
-    T: Any,
-    T: View<Render = Render>,
-    Render: RenderObject,
+    T: Any + View,
 {
-    type Render = Render;
+    type Render = T::Render;
 
     fn as_any(&self) -> &dyn Any {
         self
@@ -56,41 +59,68 @@ where
         std::any::type_name::<T>()
     }
 
-    fn dyn_mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, ElementState) {
-        let (children, state) = self.mount(ctx);
-
-        (children, ElementState::new(state))
+    fn dyn_create_element(&self, ctx: &mut UpdateCtx) -> Box<dyn AnyElement> {
+        Box::new(self.create_element(ctx))
     }
 
     fn dyn_update(
         &self,
-        element: &mut Element,
+        element: &mut Box<dyn AnyElement>,
         old: &dyn AnyView<Render = Self::Render>,
         ctx: &mut UpdateCtx,
     ) {
-        // Since we've erased the concrete View, this view will be not be re-mounted if the old view is not of the same type,
-        // so we need to conditionally replace the element if the new view is not of the same type as the old view.
-        if let Some(old) = old.as_any().downcast_ref::<Self>() {
+        // Same concrete type -> reconcile the recovered element in place; different type -> replace
+        // it wholesale (the erased element would otherwise never be re-created).
+        if let Some(old) = old.as_any().downcast_ref::<T>() {
+            let element = (**element)
+                .as_any_mut()
+                .downcast_mut::<T::Element>()
+                .expect("element does not match its view's type");
+
             self.update(element, old, ctx);
         } else {
-            *element = Element::new(self, ctx);
+            *element = Box::new(self.create_element(ctx));
         }
     }
 
-    fn dyn_dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        self.dispatch(element, path, action)
+    fn dyn_dispatch(
+        &self,
+        element: &mut Box<dyn AnyElement>,
+        path: &[RoutingId],
+        action: Dispatch,
+    ) {
+        let element = (**element)
+            .as_any_mut()
+            .downcast_mut::<T::Element>()
+            .expect("element does not match its view's type");
+
+        self.dispatch(element, path, action);
     }
 
-    fn dyn_create_render_object(&self, element: &Element) -> Self::Render {
+    fn dyn_create_render_object(&self, element: &Box<dyn AnyElement>) -> Self::Render {
+        let element = (**element)
+            .as_any()
+            .downcast_ref::<T::Element>()
+            .expect("element does not match its view's type");
+
         self.create_render_object(element)
     }
 
-    fn dyn_update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+    fn dyn_update_render_object(
+        &self,
+        element: &Box<dyn AnyElement>,
+        render_object: &mut Self::Render,
+    ) {
+        let element = (**element)
+            .as_any()
+            .downcast_ref::<T::Element>()
+            .expect("element does not match its view's type");
+
         self.update_render_object(element, render_object);
     }
 
     fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
-        other.as_any().is::<Self>()
+        other.as_any().is::<T>()
     }
 
     fn dyn_key(&self) -> Option<&dyn AnyKeyable> {
@@ -98,10 +128,14 @@ where
     }
 }
 
-#[repr(transparent)]
-pub struct AnyViewState {
+/// The [`Element`] of a `dyn AnyView` boundary.
+pub struct ErasedElement<R: RenderObject> {
     generation: u16,
+    child: ElementNode<Box<dyn AnyElement>>,
+    _render: std::marker::PhantomData<R>,
 }
+
+impl<R: RenderObject> Element for ErasedElement<R> {}
 
 macros::impl_view!(&dyn AnyView<Render = Render>);
 
@@ -122,68 +156,63 @@ mod macros {
             where
                 Render: RenderObject,
             {
+                type Element = ErasedElement<Render>;
+
                 type Render = Render;
 
-                type State = AnyViewState;
+                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+                    let child = ctx
+                        .with_routing_id(RoutingId::new(0), |ctx| (**self).dyn_create_element(ctx));
 
-                fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-                    let (children, state) =
-                        ctx.with_routing_id(RoutingId::new(0), |ctx| (**self).dyn_mount(ctx));
-
-                    (
-                        vec![Element { state, children }],
-                        AnyViewState { generation: 0 },
-                    )
+                    ErasedElement {
+                        generation: 0,
+                        child: ElementNode::new(child),
+                        _render: ::core::marker::PhantomData,
+                    }
                 }
 
-                fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-                    let state = element.state.downcast_mut::<Self>();
-
-                    // If the type of the old view is not the same as the new view, we need to increment
-                    // the generation. This is because events may have been queued up for the old view,
-                    // and we don't want them to be erroneously sent to the new view. The generation
-                    // is the routing id, so the new view will receive a new routing id, and thus won't
-                    // receive the events that were queued up for the old view.
+                fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+                    // If the type of the old view is not the same as the new view, increment the
+                    // generation. Events may have been queued for the old view; the generation is
+                    // the routing id, so the replaced inner won't receive the old view's events.
                     if !(**self).dyn_is_same_type(&**old) {
-                        state.generation = state.generation.wrapping_add(1);
+                        element.generation = element.generation.wrapping_add(1);
                     }
 
-                    ctx.with_routing_id(RoutingId::new(state.generation), |ctx| {
-                        (**self).dyn_update(&mut element.children[0], &**old, ctx)
+                    ctx.with_routing_id(RoutingId::new(element.generation), |ctx| {
+                        (**self).dyn_update(&mut element.child.element, &**old, ctx)
                     });
                 }
 
                 fn dispatch(
                     &self,
-                    element: &mut Element,
+                    element: &mut Self::Element,
                     path: &[crate::routing_id::RoutingId],
                     action: crate::context::Dispatch,
                 ) {
-                    let generation = element.state.downcast_ref::<Self>().generation;
-
                     let Some((head, rest)) = path.split_first() else {
                         unreachable!("dispatch path cannot be empty");
                     };
 
-                    // If the routing id is not the same as the generation, we don't want to send the message
-                    // to the inner element since it has been replaced.
-                    if head.get() != generation {
+                    // If the routing id is not the same as the generation, don't deliver to the
+                    // inner element since it has been replaced.
+                    if head.get() != element.generation {
                         return;
                     }
 
-                    (**self).dyn_dispatch(&mut element.children[0], rest, action)
+                    (**self).dyn_dispatch(&mut element.child.element, rest, action)
                 }
 
-                fn create_render_object(&self, element: &Element) -> Self::Render {
-                    (**self).dyn_create_render_object(&element.children[0])
+                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+                    (**self).dyn_create_render_object(&element.child.element)
                 }
 
                 fn update_render_object(
                     &self,
-                    element: &Element,
+                    element: &Self::Element,
                     render_object: &mut Self::Render,
                 ) {
-                    (**self).dyn_update_render_object(&element.children[0], render_object);
+                    (**self).dyn_update_render_object(&element.child.element, render_object);
                 }
 
                 fn is_same_type(&self, other: &Self) -> bool {
@@ -208,37 +237,47 @@ struct BoxLayoutWrapper<T> {
     inner: T,
 }
 
+// The element of a `BoxLayoutWrapper`: holds the inner element, but reports the erased render type.
+struct BoxLayoutElement<E> {
+    inner: E,
+}
+
+impl<E> Element for BoxLayoutElement<E> where E: Element {}
+
 impl<T> View for BoxLayoutWrapper<T>
 where
     T: View + 'static,
     T::Render: RenderBox,
 {
+    type Element = BoxLayoutElement<T::Element>;
+
     type Render = Box<dyn AnyRenderBox>;
 
-    type State = T::State;
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        self.inner.mount(ctx)
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        BoxLayoutElement {
+            inner: self.inner.create_element(ctx),
+        }
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        self.inner.update(element, &old.inner, ctx);
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        self.inner.update(&mut element.inner, &old.inner, ctx);
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(element, path, action)
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        self.inner.dispatch(&mut element.inner, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
-        Box::new(self.inner.create_render_object(element))
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+        Box::new(self.inner.create_render_object(&element.inner))
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         // deref past the Box to the concrete object; same type -> reuse, else replace
         if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
-            self.inner.update_render_object(element, render_object);
+            self.inner
+                .update_render_object(&element.inner, render_object);
         } else {
-            *render_object = Box::new(self.inner.create_render_object(element));
+            *render_object = Box::new(self.inner.create_render_object(&element.inner));
         }
     }
 
@@ -255,36 +294,45 @@ struct SliverLayoutWrapper<T> {
     inner: T,
 }
 
+struct SliverLayoutElement<E> {
+    inner: E,
+}
+
+impl<E> Element for SliverLayoutElement<E> where E: Element {}
+
 impl<T> View for SliverLayoutWrapper<T>
 where
     T: View + 'static,
     T::Render: RenderSliver,
 {
+    type Element = SliverLayoutElement<T::Element>;
+
     type Render = Box<dyn AnyRenderSliver>;
 
-    type State = T::State;
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        self.inner.mount(ctx)
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        SliverLayoutElement {
+            inner: self.inner.create_element(ctx),
+        }
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        self.inner.update(element, &old.inner, ctx);
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        self.inner.update(&mut element.inner, &old.inner, ctx);
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(element, path, action)
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        self.inner.dispatch(&mut element.inner, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
-        Box::new(self.inner.create_render_object(element))
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+        Box::new(self.inner.create_render_object(&element.inner))
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
-            self.inner.update_render_object(element, render_object);
+            self.inner
+                .update_render_object(&element.inner, render_object);
         } else {
-            *render_object = Box::new(self.inner.create_render_object(element));
+            *render_object = Box::new(self.inner.create_render_object(&element.inner));
         }
     }
 
@@ -332,7 +380,9 @@ impl<T: 'static> AsAnyView for T where T: View {}
 mod tests {
     use std::{cell::Cell, rc::Rc};
 
-    use crate::{render_object::RenderLeaf, test_fixtures::Leaf, test_harness::TestHarness};
+    use crate::{
+        element::Element, render_object::RenderLeaf, test_fixtures::Leaf, test_harness::TestHarness,
+    };
 
     use super::*;
 
@@ -352,31 +402,60 @@ mod tests {
         }
     }
 
+    pub struct TestViewElement<T> {
+        value: T,
+    }
+
+    impl<T: 'static> Element for TestViewElement<T> {}
+
     impl<T> View for TestView<T>
     where
         T: Clone + 'static,
     {
+        type Element = TestViewElement<T>;
+
         type Render = RenderLeaf;
 
-        type State = T;
-
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        fn create_element(&self, _: &mut UpdateCtx) -> TestViewElement<T> {
             self.mounts.set(self.mounts.get() + 1);
 
-            (vec![], self.value.clone())
+            TestViewElement {
+                value: self.value.clone(),
+            }
         }
 
-        fn update(&self, element: &mut Element, _: &Self, _: &mut UpdateCtx) {
+        fn update(&self, element: &mut TestViewElement<T>, _: &Self, _: &mut UpdateCtx) {
             self.updates.set(self.updates.get() + 1);
 
-            *element.state.downcast_mut::<Self>() = self.value.clone();
+            element.value = self.value.clone();
         }
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn create_render_object(&self, _: &TestViewElement<T>) -> Self::Render {
             RenderLeaf::default()
         }
 
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &TestViewElement<T>, _: &mut Self::Render) {}
+    }
+
+    /// Reads the value held by the inner `TestViewElement` behind a dyn-view boundary.
+    fn dyn_value<T: Clone + 'static>(root: &ErasedElement<RenderLeaf>) -> T {
+        (*root.child.element)
+            .as_any()
+            .downcast_ref::<TestViewElement<T>>()
+            .expect("inner element type")
+            .value
+            .clone()
+    }
+
+    /// Reads the value held by the inner `TestViewElement` behind a boxed-render-box-view boundary.
+    fn boxed_value<T: Clone + 'static>(root: &ErasedElement<Box<dyn AnyRenderBox>>) -> T {
+        (*root.child.element)
+            .as_any()
+            .downcast_ref::<BoxLayoutElement<TestViewElement<T>>>()
+            .expect("inner element type")
+            .inner
+            .value
+            .clone()
     }
 
     #[test]
@@ -386,12 +465,7 @@ mod tests {
 
         assert_eq!(view.mounts.get(), 1);
         assert_eq!(view.updates.get(), 0);
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &7
-        );
+        assert_eq!(dyn_value::<usize>(&harness.root.element), 7);
     }
 
     #[test]
@@ -399,12 +473,7 @@ mod tests {
         let view = TestView::new(1_usize);
         let harness = TestHarness::mount(&view.into_boxed_render_box());
 
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &1
-        );
+        assert_eq!(boxed_value::<usize>(&harness.root.element), 1);
     }
 
     #[test]
@@ -415,24 +484,14 @@ mod tests {
 
         assert_eq!(view.mounts.get(), 1);
         assert_eq!(view.updates.get(), 0);
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &2
-        );
+        assert_eq!(dyn_value::<usize>(&harness.root.element), 2);
 
         let new_view = TestView::new(9_usize);
         harness.update(&view.as_dyn_view(), &new_view.as_dyn_view());
 
         assert_eq!(new_view.mounts.get(), 0);
         assert_eq!(new_view.updates.get(), 1);
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &9
-        );
+        assert_eq!(dyn_value::<usize>(&harness.root.element), 9);
     }
 
     #[test]
@@ -441,22 +500,12 @@ mod tests {
 
         let mut harness = TestHarness::mount(&view);
 
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &2
-        );
+        assert_eq!(boxed_value::<usize>(&harness.root.element), 2);
 
         let new_view = TestView::new(9_usize).into_boxed_render_box();
         harness.update(&view, &new_view);
 
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &9
-        );
+        assert_eq!(boxed_value::<usize>(&harness.root.element), 9);
     }
 
     #[test]
@@ -467,25 +516,15 @@ mod tests {
 
         assert_eq!(view.mounts.get(), 1);
         assert_eq!(view.updates.get(), 0);
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &2
-        );
+        assert_eq!(dyn_value::<usize>(&harness.root.element), 2);
 
         let new_view = TestView::new(7_u8);
         harness.update(&view.as_dyn_view(), &new_view.as_dyn_view());
 
-        // Type changed, so mount is called on the new view (not update)
+        // Type changed, so the inner element is recreated (create_element), not updated.
         assert_eq!(new_view.mounts.get(), 1);
         assert_eq!(new_view.updates.get(), 0);
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<u8>>(),
-            &7
-        );
+        assert_eq!(dyn_value::<u8>(&harness.root.element), 7);
     }
 
     #[test]
@@ -494,21 +533,11 @@ mod tests {
 
         let mut harness = TestHarness::mount(&view);
 
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<usize>>(),
-            &2
-        );
+        assert_eq!(boxed_value::<usize>(&harness.root.element), 2);
 
         harness.update(&view, &TestView::new(7_u8).into_boxed_render_box());
 
-        assert_eq!(
-            harness.root.children[0]
-                .state
-                .downcast_ref::<TestView<u8>>(),
-            &7
-        );
+        assert_eq!(boxed_value::<u8>(&harness.root.element), 7);
     }
 
     #[test]
@@ -598,23 +627,28 @@ mod tests {
         creates: Rc<Cell<usize>>,
     }
 
-    impl View for Counted {
-        type Render = RenderLeaf;
-        type State = ();
+    struct CountedElement;
 
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (vec![], ())
+    impl Element for CountedElement {}
+
+    impl View for Counted {
+        type Element = CountedElement;
+
+        type Render = RenderLeaf;
+
+        fn create_element(&self, _: &mut UpdateCtx) -> CountedElement {
+            CountedElement
         }
 
-        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+        fn update(&self, _: &mut CountedElement, _: &Self, _: &mut UpdateCtx) {}
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn create_render_object(&self, _: &CountedElement) -> Self::Render {
             self.creates.set(self.creates.get() + 1);
 
             RenderLeaf::default()
         }
 
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &CountedElement, _: &mut Self::Render) {}
     }
 
     #[test]
@@ -628,10 +662,10 @@ mod tests {
 
         let harness = TestHarness::mount(&view);
 
-        let mut ro = view.create_render_object(&harness.root);
+        let mut ro = view.create_render_object(&harness.root.element);
         assert_eq!(creates.get(), 1);
 
-        view.update_render_object(&harness.root, &mut ro);
+        view.update_render_object(&harness.root.element, &mut ro);
 
         assert_eq!(
             creates.get(),

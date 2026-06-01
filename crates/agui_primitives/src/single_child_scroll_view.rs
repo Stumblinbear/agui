@@ -4,13 +4,10 @@ use typed_floats::{Positive, PositiveFinite};
 use agui_core::{
     constraints::Constraints,
     context::{Dispatch, UpdateCtx},
-    element::Element,
+    element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{
-        RenderNode, RenderObject,
-        box_layout::RenderBox,
-    },
+    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
     renderer::Canvas,
     routing_id::RoutingId,
     size::Size,
@@ -44,32 +41,30 @@ where
     Child: View,
     Child::Render: RenderBox,
 {
+    type Element = SingleChildElement<Child::Element>;
+
     type Render = RenderSingleChildScrollView<Child::Render>;
 
-    type State = ();
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        (vec![Element::new(&self.child, ctx)], ())
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        SingleChildElement::new(&self.child, ctx)
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &old.child).update(&self.child, ctx);
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.update(&self.child, &old.child, ctx);
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        element.child_mut(0, &self.child).dispatch(path, action)
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        element.dispatch(&self.child, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
         RenderSingleChildScrollView {
-            child: RenderNode::new(element.child(0, &self.child).create_render_object()),
+            child: RenderNode::new(element.create_render_object(&self.child)),
         }
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
-        element
-            .child(0, &self.child)
-            .update_render_object(&mut render_object.child.object);
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+        element.update_render_object(&self.child, &mut render_object.child.object);
     }
 }
 
@@ -160,10 +155,8 @@ mod tests {
     #[test]
     fn requires_child_with_intrinsic_width() {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
-        let mut render_object = TestHarness::mount(&scroll_view)
-            .root
-            .as_ref(&scroll_view)
-            .create_render_object();
+        let mut render_object =
+            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
@@ -172,10 +165,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
-        let mut render_object = TestHarness::mount(&scroll_view)
-            .root
-            .as_ref(&scroll_view)
-            .create_render_object();
+        let mut render_object =
+            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
@@ -184,10 +175,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
-        let mut render_object = TestHarness::mount(&scroll_view)
-            .root
-            .as_ref(&scroll_view)
-            .create_render_object();
+        let mut render_object =
+            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
@@ -196,10 +185,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
-        let mut render_object = TestHarness::mount(&scroll_view)
-            .root
-            .as_ref(&scroll_view)
-            .create_render_object();
+        let mut render_object =
+            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
@@ -208,10 +195,8 @@ mod tests {
         );
 
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
-        let mut render_object = TestHarness::mount(&scroll_view)
-            .root
-            .as_ref(&scroll_view)
-            .create_render_object();
+        let mut render_object =
+            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),

@@ -118,7 +118,7 @@ mod tests {
     use super::*;
     use crate::{
         context::UpdateCtx,
-        element::Element,
+        element::{Element, ElementNode},
         render_object::{
             RenderLeaf,
             box_layout::{AnyRenderBox, RenderBox},
@@ -191,34 +191,43 @@ mod tests {
         child: Child,
     }
 
+    struct PadElement<C> {
+        child: ElementNode<C>,
+    }
+
+    impl<C: Element> Element for PadElement<C> {}
+
     impl<Child: View> View for Pad<Child>
     where
         Child::Render: RenderBox,
     {
-        type State = ();
+        type Element = PadElement<Child::Element>;
 
         type Render = RenderPad<Child::Render>;
 
-        fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (vec![Element::new(&self.child, ctx)], ())
-        }
-
-        fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-            element.child_mut(0, &old.child).update(&self.child, ctx);
-        }
-
-        fn create_render_object(&self, element: &Element) -> Self::Render {
-            RenderPad {
-                pad: self.pad,
-                child: RenderNode::new(self.child.create_render_object(&element.children[0])),
+        fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+            PadElement {
+                child: ElementNode::new(self.child.create_element(ctx)),
             }
         }
 
-        fn update_render_object(&self, element: &Element, object: &mut Self::Render) {
+        fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+            self.child
+                .update(&mut element.child.element, &old.child, ctx);
+        }
+
+        fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+            RenderPad {
+                pad: self.pad,
+                child: RenderNode::new(self.child.create_render_object(&element.child.element)),
+            }
+        }
+
+        fn update_render_object(&self, element: &Self::Element, object: &mut Self::Render) {
             object.pad = self.pad;
 
             self.child
-                .update_render_object(&element.children[0], &mut object.child.object);
+                .update_render_object(&element.child.element, &mut object.child.object);
         }
     }
 
@@ -230,7 +239,7 @@ mod tests {
         };
         let harness = TestHarness::mount(&view);
 
-        let node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root));
+        let node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root.element));
 
         assert_eq!(node.object.pad, 4);
     }
@@ -243,7 +252,7 @@ mod tests {
         };
 
         let harness = TestHarness::mount(&view);
-        let mut node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root));
+        let mut node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root.element));
 
         assert_eq!(node.object.pad, 4);
 
@@ -251,7 +260,7 @@ mod tests {
             pad: 9,
             child: Leaf::new(),
         }
-        .update_render_object(&harness.root, &mut node.object);
+        .update_render_object(&harness.root.element, &mut node.object);
 
         assert_eq!(node.object.pad, 9);
     }
@@ -275,7 +284,7 @@ mod tests {
             child: Leaf::new(),
         };
         let harness = TestHarness::mount(&view);
-        let mut node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root));
+        let mut node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root.element));
         assert_eq!(node.object.pad, 4);
 
         // update it in place
@@ -283,7 +292,7 @@ mod tests {
             pad: 9,
             child: Leaf::new(),
         }
-        .update_render_object(&harness.root, &mut node.object);
+        .update_render_object(&harness.root.element, &mut node.object);
         assert_eq!(node.object.pad, 9);
 
         // paint the whole tree; lay out the (BoxLayout) leaf child via the node helpers
@@ -333,24 +342,28 @@ mod tests {
         creates: Rc<Cell<usize>>,
     }
 
+    struct CountedElement;
+
+    impl Element for CountedElement {}
+
     impl View for Counted {
-        type State = ();
+        type Element = CountedElement;
 
         type Render = RenderLeaf;
 
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (vec![], ())
+        fn create_element(&self, _: &mut UpdateCtx) -> CountedElement {
+            CountedElement
         }
 
-        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+        fn update(&self, _: &mut CountedElement, _: &Self, _: &mut UpdateCtx) {}
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn create_render_object(&self, _: &CountedElement) -> Self::Render {
             self.creates.set(self.creates.get() + 1);
 
             RenderLeaf::default()
         }
 
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &CountedElement, _: &mut Self::Render) {}
     }
 
     #[test]
@@ -366,12 +379,12 @@ mod tests {
 
         // a fan-out slot: a boxed child wrapped in a RenderNode
         let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(view.create_render_object(&harness.root));
+            RenderNode::new(view.create_render_object(&harness.root.element));
 
         assert_eq!(creates.get(), 1);
 
         // same concrete type -> reuse the boxed render object, do not recreate
-        view.update_render_object(&harness.root, &mut slot.object);
+        view.update_render_object(&harness.root.element, &mut slot.object);
 
         assert_eq!(
             creates.get(),
@@ -433,24 +446,28 @@ mod tests {
         creates: Rc<Cell<usize>>,
     }
 
+    struct CountedOtherElement;
+
+    impl Element for CountedOtherElement {}
+
     impl View for CountedOther {
+        type Element = CountedOtherElement;
+
         type Render = RenderOther;
 
-        type State = ();
-
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (vec![], ())
+        fn create_element(&self, _: &mut UpdateCtx) -> CountedOtherElement {
+            CountedOtherElement
         }
 
-        fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+        fn update(&self, _: &mut CountedOtherElement, _: &Self, _: &mut UpdateCtx) {}
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn create_render_object(&self, _: &CountedOtherElement) -> Self::Render {
             self.creates.set(self.creates.get() + 1);
 
             RenderOther::default()
         }
 
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &CountedOtherElement, _: &mut Self::Render) {}
     }
 
     #[test]
@@ -460,10 +477,10 @@ mod tests {
             creates: Rc::clone(&creates_a),
         }
         .into_boxed_render_box();
-        let harness = TestHarness::mount(&view_a);
+        let mut harness = TestHarness::mount(&view_a);
 
         let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(view_a.create_render_object(&harness.root));
+            RenderNode::new(view_a.create_render_object(&harness.root.element));
         assert_eq!(creates_a.get(), 1);
         assert!(
             (*slot.object)
@@ -472,13 +489,15 @@ mod tests {
                 .is_some()
         );
 
-        // swap to a different concrete render type -> downcast fails -> recreate
+        // swap to a different concrete render type -> reconcile the element, then the slot's
+        // render object downcast fails -> recreate
         let creates_b = Rc::new(Cell::new(0usize));
         let view_b = CountedOther {
             creates: Rc::clone(&creates_b),
         }
         .into_boxed_render_box();
-        view_b.update_render_object(&harness.root, &mut slot.object);
+        harness.update(&view_a, &view_b);
+        view_b.update_render_object(&harness.root.element, &mut slot.object);
 
         assert_eq!(
             creates_b.get(),

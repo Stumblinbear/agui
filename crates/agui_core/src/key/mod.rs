@@ -7,7 +7,7 @@ use bon::Builder;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::Element,
+    element::SingleChildElement,
     routing_id::RoutingId,
     view::View,
 };
@@ -56,31 +56,28 @@ where
     V: Clone + Hash + PartialEq + Eq + Any,
     Child: View,
 {
+    type Element = SingleChildElement<Child::Element>;
+
     type Render = Child::Render;
 
-    type State = ();
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State)
-    where
-        Self: Sized,
-    {
-        (vec![Element::new(&self.child, ctx)], ())
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        SingleChildElement::new(&self.child, ctx)
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child_mut(0, &old.child).update(&self.child, ctx);
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.update(&self.child, &old.child, ctx);
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        element.child_mut(0, &self.child).dispatch(path, action)
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        element.dispatch(&self.child, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
-        self.child.create_render_object(element)
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+        element.create_render_object(&self.child)
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
-        self.child.update_render_object(element, render_object)
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+        element.update_render_object(&self.child, render_object)
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {

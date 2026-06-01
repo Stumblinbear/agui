@@ -1,4 +1,4 @@
-use typed_floats::{as_const, NonNaN, NonNaNFinite};
+use typed_floats::{NonNaN, NonNaNFinite, as_const};
 
 use crate::size::Size;
 

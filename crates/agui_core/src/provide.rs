@@ -66,7 +66,7 @@ mod tests {
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        element::Element,
+        element::SingleChildElement,
         provide::ProvideScope,
         render_object::RenderLeaf,
         routing_id::RoutingId,
@@ -86,34 +86,31 @@ mod tests {
         T: Any,
         Child: View,
     {
+        type Element = SingleChildElement<Child::Element>;
+
         type Render = RenderLeaf;
 
-        type State = ();
-
-        fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-            (
-                ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                    vec![Element::new(&self.child, ctx)]
-                }),
-                (),
-            )
-        }
-
-        fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
             ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                element.child_mut(0, &old.child).update(&self.child, ctx)
+                SingleChildElement::new(&self.child, ctx)
             })
         }
 
-        fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-            element.child_mut(0, &self.child).dispatch(path, action)
+        fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+            ctx.with_provided(Rc::clone(&self.value), |ctx| {
+                element.update(&self.child, &old.child, ctx)
+            })
         }
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+            element.dispatch(&self.child, path, action)
+        }
+
+        fn create_render_object(&self, _: &Self::Element) -> Self::Render {
             RenderLeaf::default()
         }
 
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
     }
 
     #[test]
@@ -129,16 +126,14 @@ mod tests {
     fn elements_can_provide_and_get_types() {
         let view_3 = TestProviderView {
             value: Rc::new(3_usize),
-            child: Leaf::new()
-                .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
+            child: Leaf::new().on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
         };
 
         let mut harness = TestHarness::mount(&view_3);
 
         let view_6 = TestProviderView {
             value: Rc::new(6_usize),
-            child: Leaf::new()
-                .on_update(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&6))),
+            child: Leaf::new().on_update(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&6))),
         };
 
         harness.update(&view_3, &view_6);

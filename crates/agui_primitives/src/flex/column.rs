@@ -3,14 +3,10 @@ use bon::Builder;
 use agui_core::{
     constraints::Constraints,
     context::{Dispatch, UpdateCtx},
-    element::Element,
+    element::MultiChildElement,
     hit_test::{HitTest, HitTestResult},
-    key::AnyKeyable,
     offset::Offset,
-    render_object::{
-        RenderObject,
-        box_layout::RenderBox,
-    },
+    render_object::{RenderObject, box_layout::RenderBox},
     renderer::Canvas,
     routing_id::RoutingId,
     size::Size,
@@ -18,7 +14,6 @@ use agui_core::{
     text_direction::TextDirection,
     view::{AsAnyView, BoxedView, View},
 };
-use fnv::FnvHashMap;
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::flex::{
@@ -84,240 +79,29 @@ where
     Children: View,
     Children::Render: RenderObject,
 {
+    type Element = MultiChildElement<Children::Element>;
+
     type Render = RenderFlex<Children::Render>;
 
-    type State = ();
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        (
-            self.children
-                .iter()
-                .enumerate()
-                .map(|(idx, flexible)| {
-                    ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
-                        Element::new(&flexible.child, ctx)
-                    })
-                })
-                .collect(),
-            (),
-        )
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        MultiChildElement::new(self.children.len(), |i| &self.children[i].child, ctx)
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
-        // If we no longer have any children, make sure we clear out the element's children
-        if self.children.is_empty() {
-            element.children.clear();
-
-            return;
-        }
-
-        // If we had no children before, we can just insert all the new children
-        if element.children.is_empty() {
-            element.children = self
-                .children
-                .iter()
-                .enumerate()
-                .map(|(idx, flexible)| {
-                    ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
-                        Element::new(&flexible.child, ctx)
-                    })
-                })
-                .collect();
-
-            return;
-        }
-
-        assert!(
-            old.children.len() == element.children.len(),
-            "column children count mismatch"
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        element.update(
+            self.children.len(),
+            |i| &self.children[i].child,
+            old.children.len(),
+            |i| &old.children[i].child,
+            ctx,
         );
-
-        let span = tracing::trace_span!("children", child_id = tracing::field::Empty);
-        let _enter = span.enter();
-
-        let mut new_children_top = 0;
-        let mut old_children_top = 0;
-        let mut new_children_bottom = self.children.len() - 1;
-        let mut old_children_bottom = old.children.len() - 1;
-
-        let mut old_child_elements = (0..self.children.len())
-            .map(|_| Element::empty())
-            .collect::<Vec<_>>();
-
-        std::mem::swap(&mut element.children, &mut old_child_elements);
-
-        // Update the top of the list.
-        while (old_children_top <= old_children_bottom) && (new_children_top <= new_children_bottom)
-        {
-            if tracing::span_enabled!(tracing::Level::TRACE) {
-                span.record("child_id", old_children_top);
-            }
-
-            let old_child = old.children.get(old_children_top);
-            let new_child = self.children.get(new_children_top);
-
-            if let Some((old_child, new_child)) = old_child.zip(new_child) {
-                if !old_child.child.is_same_type(&new_child.child) {
-                    break;
-                }
-
-                std::mem::swap(
-                    &mut element.children[new_children_top],
-                    &mut old_child_elements[old_children_top],
-                );
-
-                ctx.with_routing_id(RoutingId::new(new_children_top as u16), |ctx| {
-                    element
-                        .child_mut(new_children_top, &old.children[old_children_top].child)
-                        .update(&new_child.child, ctx)
-                });
-            } else {
-                break;
-            }
-
-            new_children_top += 1;
-            old_children_top += 1;
-        }
-
-        // Scan the bottom of the list.
-        while (old_children_top <= old_children_bottom) && (new_children_top <= new_children_bottom)
-        {
-            if tracing::span_enabled!(tracing::Level::TRACE) {
-                span.record("child_id", old_children_bottom);
-            }
-
-            let old_child = old.children.get(old_children_bottom);
-            let new_child = self.children.get(new_children_bottom);
-
-            if let Some((old_child, new_child)) = old_child.zip(new_child) {
-                if !old_child.child.is_same_type(&new_child.child) {
-                    break;
-                }
-            } else {
-                break;
-            }
-
-            old_children_bottom -= 1;
-            new_children_bottom -= 1;
-        }
-
-        // Scan the old children in the middle of the list.
-        let have_old_children = old_children_top <= old_children_bottom;
-
-        #[allow(clippy::mutable_key_type)]
-        let mut old_keyed_children = FnvHashMap::<&dyn AnyKeyable, usize>::default();
-
-        while old_children_top <= old_children_bottom {
-            // TODO(trevin): does this need to do .get(old_children_top)?
-            if let Some(old_child_key) = old.children[old_children_top].child.key() {
-                old_keyed_children.insert(old_child_key, old_children_top);
-            }
-
-            old_children_top += 1;
-        }
-
-        let children_len = self.children.len();
-        let mut children = self.children.iter().skip(new_children_top);
-
-        let initial_top = new_children_top;
-
-        // Update the middle of the list.
-        while new_children_top <= new_children_bottom {
-            if tracing::span_enabled!(tracing::Level::TRACE) {
-                span.record("child_id", new_children_top);
-            }
-
-            let new_child = match children.next() {
-                Some(new_child) => new_child,
-                None => unreachable!(
-                    "new children should never run out: {} {}-{}/{}",
-                    initial_top, new_children_top, new_children_bottom, children_len
-                ),
-            };
-
-            let mut existing_child_idx: Option<usize> = None;
-
-            if have_old_children
-                && let Some(old_child_idx) = new_child.child.key().and_then(|key| {
-                    // Remove it from the list so that we don't try to use it again.
-                    old_keyed_children.remove(&key)
-                })
-            {
-                existing_child_idx = Some(old_child_idx);
-            }
-
-            if let Some(existing_child_idx) = existing_child_idx {
-                std::mem::swap(
-                    &mut element.children[new_children_top],
-                    &mut old_child_elements[existing_child_idx],
-                );
-
-                ctx.with_routing_id(RoutingId::new(new_children_top as u16), |ctx| {
-                    element
-                        .child_mut(new_children_top, &old.children[existing_child_idx].child)
-                        .update(&new_child.child, ctx)
-                });
-            } else {
-                element.children[new_children_top] = ctx
-                    .with_routing_id(RoutingId::new(new_children_top as u16), |ctx| {
-                        Element::new(&new_child.child, ctx)
-                    })
-            }
-
-            new_children_top += 1;
-        }
-
-        if tracing::span_enabled!(tracing::Level::TRACE) {
-            span.record("child_id", tracing::field::Empty);
-        }
-
-        // We've scanned the whole list.
-        assert_eq!(old_children_top, old_children_bottom + 1);
-        assert_eq!(new_children_top, new_children_bottom + 1);
-        assert_eq!(
-            children_len - new_children_top,
-            old.children.len() - old_children_top
-        );
-
-        new_children_bottom = children_len - 1;
-        old_children_bottom = old.children.len() - 1;
-
-        // Update the bottom of the list.
-        while (old_children_top <= old_children_bottom) && (new_children_top <= new_children_bottom)
-        {
-            if tracing::span_enabled!(tracing::Level::TRACE) {
-                span.record("child_id", new_children_top);
-            }
-
-            std::mem::swap(
-                &mut element.children[new_children_top],
-                &mut old_child_elements[old_children_top],
-            );
-
-            ctx.with_routing_id(RoutingId::new(new_children_top as u16), |ctx| {
-                element
-                    .child_mut(new_children_top, &old.children[old_children_top].child)
-                    .update(&self.children[new_children_top].child, ctx)
-            });
-
-            new_children_top += 1;
-            old_children_top += 1;
-        }
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        let Some((head, rest)) = path.split_first() else {
-            unreachable!("dispatch path cannot be empty");
-        };
-
-        let child_idx = head.get() as usize;
-
-        element
-            .child_mut(child_idx, &self.children[child_idx].child)
-            .dispatch(rest, action)
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        element.dispatch(|i| &self.children[i].child, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
         RenderFlex {
             main_axis_size: self.main_axis_size,
             main_axis_alignment: self.main_axis_alignment,
@@ -329,14 +113,18 @@ where
                 .children
                 .iter()
                 .enumerate()
-                .map(|(idx, flexible)| element.child(idx, &flexible.child).create_render_object())
+                .map(|(idx, flexible)| {
+                    flexible
+                        .child
+                        .create_render_object(&element.children[idx].element)
+                })
                 .collect(),
 
             size: Size::ZERO,
         }
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         if render_object.main_axis_size != self.main_axis_size {
             render_object.main_axis_size = self.main_axis_size;
         }
@@ -363,9 +151,9 @@ where
             .zip(self.children.iter())
             .enumerate()
         {
-            element
-                .child(idx, &flexible.child)
-                .update_render_object(child);
+            flexible
+                .child
+                .update_render_object(&element.children[idx].element, child);
         }
     }
 }
@@ -455,7 +243,8 @@ mod tests {
     use std::cell::RefCell;
 
     use agui_core::{
-        key::Key, render_object::RenderLeaf, test_harness::TestHarness, view::AsAnyView,
+        element::Element, key::Key, render_object::RenderLeaf, test_harness::TestHarness,
+        view::AsAnyView,
     };
 
     use super::*;
@@ -475,31 +264,39 @@ mod tests {
         }
     }
 
+    pub struct TestViewElement<T> {
+        value: T,
+    }
+
+    impl<T: 'static> Element for TestViewElement<T> {}
+
     impl<T> View for TestView<T>
     where
         T: Clone + 'static,
     {
+        type Element = TestViewElement<T>;
+
         type Render = RenderLeaf;
 
-        type State = T;
-
-        fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        fn create_element(&self, _: &mut UpdateCtx) -> Self::Element {
             MOUNT_COUNT.with(|count| *count.borrow_mut() += 1);
 
-            (vec![], self.value.clone())
+            TestViewElement {
+                value: self.value.clone(),
+            }
         }
 
-        fn update(&self, element: &mut Element, _: &Self, _: &mut UpdateCtx) {
+        fn update(&self, element: &mut Self::Element, _: &Self, _: &mut UpdateCtx) {
             UPDATE_COUNT.with(|count| *count.borrow_mut() += 1);
 
-            *element.state.downcast_mut::<Self>() = self.value.clone();
+            element.value = self.value.clone();
         }
 
-        fn create_render_object(&self, _: &Element) -> Self::Render {
+        fn create_render_object(&self, _: &Self::Element) -> RenderLeaf {
             RenderLeaf::default()
         }
 
-        fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &Self::Element, _: &mut RenderLeaf) {}
     }
 
     #[test]
@@ -545,7 +342,7 @@ mod tests {
 
         let harness = TestHarness::mount(&column);
 
-        assert_eq!(harness.root.children.len(), 3);
+        assert_eq!(harness.root.element.children.len(), 3);
     }
 
     #[test]

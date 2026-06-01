@@ -5,13 +5,10 @@ use typed_floats::{Positive, PositiveFinite};
 use agui_core::{
     constraints::Constraints,
     context::{Dispatch, UpdateCtx},
-    element::Element,
+    element::{Element, ElementNode},
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{
-        RenderNode, RenderObject,
-        box_layout::RenderBox,
-    },
+    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
     renderer::Canvas,
     routing_id::RoutingId,
     size::Size,
@@ -38,14 +35,16 @@ where
     }
 }
 
-pub struct LayoutBuilderState<Child>
+pub struct LayoutBuilderElement<Child>
 where
     Child: View,
 {
-    child_view: Rc<RefCell<Option<(Element, Child)>>>,
+    child_view: Rc<RefCell<Option<(ElementNode<Child::Element>, Child)>>>,
 
     builder: Rc<dyn Fn(Constraints) -> Child::Render>,
 }
+
+impl<Child> Element for LayoutBuilderElement<Child> where Child: View + 'static {}
 
 impl<F, Child> View for LayoutBuilder<F, Child>
 where
@@ -53,12 +52,12 @@ where
     Child: View + 'static,
     Child::Render: RenderBox,
 {
+    type Element = LayoutBuilderElement<Child>;
+
     type Render = RenderLayoutBuilder<Child::Render>;
 
-    type State = LayoutBuilderState<Child>;
-
-    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
-        let child_view = Rc::<RefCell<Option<(Element, Child)>>>::default();
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        let child_view = Rc::<RefCell<Option<(ElementNode<Child::Element>, Child)>>>::default();
 
         let builder = {
             let builder = Rc::clone(&self.builder);
@@ -75,38 +74,35 @@ where
                 let child = (builder)(constraints);
 
                 // TODO(trevin): try to use the element of the previously created child
-                let mut element = Element::new(
-                    &child,
-                    &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
-                );
+                let element = child.create_element(&mut UpdateCtx::new(
+                    &driver,
+                    &event_tx,
+                    &mut routing_path,
+                    &provide_scope,
+                ));
 
-                let child_render = element.as_mut(&child).create_render_object();
+                let child_render = child.create_render_object(&element);
 
-                child_view.replace(Some((element, child)));
+                child_view.replace(Some((ElementNode::new(element), child)));
 
                 child_render
             })
         };
 
-        (
-            vec![],
-            LayoutBuilderState {
-                child_view,
+        LayoutBuilderElement {
+            child_view,
 
-                builder,
-            },
-        )
+            builder,
+        }
     }
 
-    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
         if !Rc::ptr_eq(&self.builder, &old.builder) {
-            let state = element.state.downcast_mut::<Self>();
+            element.child_view.replace(None);
 
-            state.child_view.replace(None);
-
-            state.builder = {
+            element.builder = {
                 let builder = Rc::clone(&self.builder);
-                let child_view = Rc::clone(&state.child_view);
+                let child_view = Rc::clone(&element.child_view);
 
                 let driver = Rc::clone(ctx.driver());
                 let event_tx = ctx.event_tx().clone();
@@ -119,14 +115,16 @@ where
                     let mut routing_path = routing_path.to_vec();
 
                     // TODO(trevin): try to use the element of the previously created child
-                    let mut element = Element::new(
-                        &child,
-                        &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
-                    );
+                    let element = child.create_element(&mut UpdateCtx::new(
+                        &driver,
+                        &event_tx,
+                        &mut routing_path,
+                        &provide_scope,
+                    ));
 
-                    let child_render = element.as_mut(&child).create_render_object();
+                    let child_render = child.create_render_object(&element);
 
-                    child_view.replace(Some((element, child)));
+                    child_view.replace(Some((ElementNode::new(element), child)));
 
                     child_render
                 })
@@ -134,19 +132,19 @@ where
         }
     }
 
-    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
-        let mut child_view = element.state.downcast_ref::<Self>().child_view.borrow_mut();
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        let mut child_view = element.child_view.borrow_mut();
 
-        let Some((child_element, child_view)) = child_view.as_mut() else {
+        let Some((child_element, child)) = child_view.as_mut() else {
             panic!("child was dispatched to before being laid out");
         };
 
-        child_element.as_mut(child_view).dispatch(path, action)
+        child.dispatch(&mut child_element.element, path, action)
     }
 
-    fn create_render_object(&self, element: &Element) -> Self::Render {
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
         RenderLayoutBuilder {
-            builder: Rc::clone(&element.state.downcast_ref::<Self>().builder),
+            builder: Rc::clone(&element.builder),
 
             old_constraints: Constraints::default(),
 
@@ -154,23 +152,19 @@ where
         }
     }
 
-    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
-        let state = element.state.downcast_ref::<Self>();
-
-        if !Rc::ptr_eq(&state.builder, &render_object.builder) {
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+        if !Rc::ptr_eq(&element.builder, &render_object.builder) {
             // TODO(trevin): mark for re-layout
-            render_object.builder = Rc::clone(&state.builder);
+            render_object.builder = Rc::clone(&element.builder);
 
             render_object.child_render.take();
         }
 
-        let child_view = state.child_view.borrow();
+        let child_view = element.child_view.borrow();
 
-        if let Some((element, child)) = child_view.as_ref() {
+        if let Some((child_element, child)) = child_view.as_ref() {
             if let Some(child_render) = &mut render_object.child_render {
-                element
-                    .child(0, child)
-                    .update_render_object(&mut child_render.object);
+                child.update_render_object(&child_element.element, &mut child_render.object);
             }
         } else if render_object.child_render.is_some() {
             // TODO(trevin): mark for re-layout
@@ -290,10 +284,8 @@ mod tests {
             }
         });
 
-        let mut render_object = TestHarness::mount(&layout_builder)
-            .root
-            .as_ref(&layout_builder)
-            .create_render_object();
+        let mut render_object =
+            layout_builder.create_render_object(&TestHarness::mount(&layout_builder).root.element);
         render_object.layout(Constraints::new(0, 50, 0, 50));
         assert_eq!(*build_count.borrow(), 1);
         assert_eq!(

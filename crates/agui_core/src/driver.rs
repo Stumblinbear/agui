@@ -2,7 +2,6 @@ use std::{any::Any, rc::Rc, sync::mpsc};
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::Element,
     provide::ProvideScope,
     routing_id::RoutingPath,
     view::View,
@@ -10,9 +9,9 @@ use crate::{
 
 pub trait Driver {}
 
-pub fn dispatch_messages(
-    root_element: &mut Element,
-    root_view: &impl View,
+pub fn dispatch_messages<V: View>(
+    root_element: &mut V::Element,
+    root_view: &V,
     messages: impl Iterator<Item = (RoutingPath, Box<dyn Any>)>,
     mut on_dirty: impl FnMut(RoutingPath),
 ) {
@@ -27,17 +26,14 @@ pub fn dispatch_messages(
     }
 }
 
-pub fn rebuild_dirty(
+pub fn rebuild_dirty<V: View>(
     driver: &Rc<dyn Driver>,
     event_tx: &mpsc::Sender<()>,
     provide_scope: &ProvideScope,
-    root_element: &mut Element,
-    root_view: &impl View,
+    root_element: &mut V::Element,
+    root_view: &V,
     dirty: impl ExactSizeIterator<Item = RoutingPath>,
 ) {
-    let n = dirty.len();
-    let mut rebuilt: Vec<RoutingPath> = Vec::with_capacity(n);
-
     for path in dirty {
         let slice = path.as_slice();
 
@@ -53,8 +49,6 @@ pub fn rebuild_dirty(
                 provide_scope,
             )),
         );
-
-        rebuilt.push(path);
     }
 }
 
@@ -65,10 +59,10 @@ mod tests {
     use crate::{
         context::UpdateCtx,
         driver::{Driver, dispatch_messages, rebuild_dirty},
-        element::Element,
         provide::ProvideScope,
         routing_id::{RoutingId, RoutingPath},
         test_fixtures::{Leaf, MultiChild, Transparent},
+        view::View,
     };
 
     struct NoopDriver;
@@ -105,10 +99,12 @@ mod tests {
         let provide_scope = ProvideScope::new();
 
         let mut routing_path = Vec::new();
-        let mut root = Element::new(
-            &view,
-            &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
-        );
+        let mut root = view.create_element(&mut UpdateCtx::new(
+            &driver,
+            &event_tx,
+            &mut routing_path,
+            &provide_scope,
+        ));
 
         let target_path: RoutingPath = vec![RoutingId::new(1)].into();
         let messages = vec![(target_path, Box::new(42_u32) as Box<dyn std::any::Any>)];
@@ -164,10 +160,12 @@ mod tests {
         let provide_scope = ProvideScope::new();
 
         let mut routing_path = Vec::new();
-        let mut root = Element::new(
-            &view,
-            &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
-        );
+        let mut root = view.create_element(&mut UpdateCtx::new(
+            &driver,
+            &event_tx,
+            &mut routing_path,
+            &provide_scope,
+        ));
 
         let path_0: RoutingPath = vec![RoutingId::new(0)].into();
         let path_2: RoutingPath = vec![RoutingId::new(2)].into();
@@ -208,10 +206,12 @@ mod tests {
         let provide_scope = ProvideScope::new();
 
         let mut routing_path = Vec::new();
-        let mut root = Element::new(
-            &view,
-            &mut UpdateCtx::new(&driver, &event_tx, &mut routing_path, &provide_scope),
-        );
+        let mut root = view.create_element(&mut UpdateCtx::new(
+            &driver,
+            &event_tx,
+            &mut routing_path,
+            &provide_scope,
+        ));
 
         let dirty: Vec<RoutingPath> = Vec::new();
         rebuild_dirty(
