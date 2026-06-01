@@ -120,7 +120,7 @@ mod tests {
         context::UpdateCtx,
         element::Element,
         render_object::{
-            AsAnyRenderObject, RenderLeaf,
+            RenderLeaf,
             box_layout::{AnyRenderBox, BoxLayout},
         },
         test_fixtures::Leaf,
@@ -255,16 +255,16 @@ mod tests {
             Size::new(12.0, 8.0),
         );
 
-        // erased boundary: a boxed (dyn) child, reconciled by recovering its real type —
+        // erased boundary: a boxed child, reconciled by recovering its real type —
         // this is what a fan-out's update_render_object does per slot.
         let mut boxed: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(RenderLeaf::default().into_boxed_render_object());
+            RenderNode::new(Box::new(RenderLeaf::default()) as Box<dyn AnyRenderBox>);
 
         // a wrong type does not match...
         assert!(
             (*boxed.object)
                 .as_any_mut()
-                .downcast_mut::<RenderPad<RenderLeaf>>()
+                .downcast_mut::<RenderOther>()
                 .is_none()
         );
 
@@ -319,7 +319,7 @@ mod tests {
         let view = Counted {
             creates: Rc::clone(&creates),
         }
-        .into_boxed_view();
+        .into_boxed_render_box();
 
         let harness = TestHarness::mount(&view);
 
@@ -394,64 +394,69 @@ mod tests {
 
     impl View for CountedOther {
         type Render = RenderOther;
+
         type State = ();
 
         fn mount(&self, _: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
             (vec![], ())
         }
+
         fn update(&self, _: &mut Element, _: &Self, _: &mut UpdateCtx) {}
+
         fn create_render_object(&self, _: &Element) -> Self::Render {
             self.creates.set(self.creates.get() + 1);
+
             RenderOther::default()
         }
+
         fn update_render_object(&self, _: &Element, _: &mut Self::Render) {}
     }
 
-    // #[test]
-    // fn type_swap_at_a_boxed_slot_recreates_the_render_object() {
-    //     let creates_a = Rc::new(Cell::new(0usize));
-    //     let view_a = Counted {
-    //         creates: Rc::clone(&creates_a),
-    //     }
-    //     .into_boxed_view();
-    //     let harness = TestHarness::mount(&view_a);
+    #[test]
+    fn type_swap_at_a_boxed_slot_recreates_the_render_object() {
+        let creates_a = Rc::new(Cell::new(0usize));
+        let view_a = Counted {
+            creates: Rc::clone(&creates_a),
+        }
+        .into_boxed_render_box();
+        let harness = TestHarness::mount(&view_a);
 
-    //     let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-    //         RenderNode::new(view_a.create_render_object(&harness.root));
-    //     assert_eq!(creates_a.get(), 1);
-    //     assert!(
-    //         (*slot.object)
-    //             .as_any_mut()
-    //             .downcast_mut::<RenderLeaf>()
-    //             .is_some()
-    //     );
+        let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
+            RenderNode::new(view_a.create_render_object(&harness.root));
+        assert_eq!(creates_a.get(), 1);
+        assert!(
+            (*slot.object)
+                .as_any_mut()
+                .downcast_mut::<RenderLeaf>()
+                .is_some()
+        );
 
-    //     // swap to a different concrete render type -> downcast fails -> recreate
-    //     let creates_b = Rc::new(Cell::new(0usize));
-    //     let view_b = CountedOther {
-    //         creates: Rc::clone(&creates_b),
-    //     }
-    //     .into_boxed_view();
-    //     view_b.update_render_object(&harness.root, &mut slot.object);
+        // swap to a different concrete render type -> downcast fails -> recreate
+        let creates_b = Rc::new(Cell::new(0usize));
+        let view_b = CountedOther {
+            creates: Rc::clone(&creates_b),
+        }
+        .into_boxed_render_box();
+        view_b.update_render_object(&harness.root, &mut slot.object);
 
-    //     assert_eq!(
-    //         creates_b.get(),
-    //         1,
-    //         "type change must recreate the render object"
-    //     );
-    //     assert!(
-    //         (*slot.object)
-    //             .as_any_mut()
-    //             .downcast_mut::<RenderOther>()
-    //             .is_some(),
-    //         "slot now holds the new type"
-    //     );
-    //     assert!(
-    //         (*slot.object)
-    //             .as_any_mut()
-    //             .downcast_mut::<RenderLeaf>()
-    //             .is_none(),
-    //         "old type is gone"
-    //     );
-    // }
+        assert_eq!(
+            creates_b.get(),
+            1,
+            "type change must recreate the render object"
+        );
+        assert!(
+            (*slot.object)
+                .as_any_mut()
+                .downcast_mut::<RenderOther>()
+                .is_some(),
+            "slot now holds the new type"
+        );
+        assert!(
+            (*slot.object)
+                .as_any_mut()
+                .downcast_mut::<RenderLeaf>()
+                .is_none(),
+            "old type is gone"
+        );
+    }
 }

@@ -9,7 +9,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderNode, RenderObject,
+        RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -255,21 +255,6 @@ where
             PositiveFinite::try_from(distance + child_offset.y)
                 .expect("distance to baseline of padding was not a positive finite number")
         })
-    }
-}
-
-impl<Child> AsAnyRenderObject for RenderPadding<Child>
-where
-    Self: RenderBox,
-{
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
-
-    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
-        self
-    }
-
-    fn into_boxed_render_object(self) -> Box<Self::Output> {
-        Box::new(self)
     }
 }
 

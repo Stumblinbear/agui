@@ -283,9 +283,9 @@ mod tests {
                 *build_count.borrow_mut() += 1;
 
                 if constraints.max_width() > 100.0 {
-                    SizedBox::expand().into_boxed_view()
+                    SizedBox::expand().into_boxed_render_box()
                 } else {
-                    SizedBox::shrink().into_boxed_view()
+                    SizedBox::shrink().into_boxed_render_box()
                 }
             }
         });

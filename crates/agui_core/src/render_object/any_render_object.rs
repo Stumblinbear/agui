@@ -78,11 +78,3 @@ where
         (**self).dyn_paint(canvas);
     }
 }
-
-pub trait AsAnyRenderObject {
-    type Output: AnyRenderObject + ?Sized;
-
-    fn as_dyn_render_object(&self) -> &dyn AnyRenderObject;
-
-    fn into_boxed_render_object(self) -> Box<Self::Output>;
-}

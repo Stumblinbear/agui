@@ -8,7 +8,7 @@ use agui_core::{
     key::AnyKeyable,
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderObject,
+        RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -48,13 +48,13 @@ pub struct Column<Children> {
 impl<Children, S: column_builder::State> ColumnBuilder<Children, S>
 where
     Children: AsAnyView,
-    Children::Render: AsAnyRenderObject,
+    Children::Render: RenderBox,
 {
     #[allow(deprecated)]
     pub fn dyn_children(
         self,
         iter: impl IntoIterator<Item = Flexible<Children>>,
-    ) -> ColumnBuilder<BoxedView<Children>, column_builder::SetChildren<S>>
+    ) -> ColumnBuilder<BoxedView, column_builder::SetChildren<S>>
     where
         S::Children: column_builder::IsUnset,
     {
@@ -68,7 +68,7 @@ where
                 self.__unsafe_private_named.4,
                 Some(FromIterator::from_iter(iter.into_iter().map(|c| {
                     Flexible {
-                        child: c.child.into_boxed_view(),
+                        child: c.child.into_boxed_render_box(),
 
                         flex: c.flex,
                         fit: c.fit,
@@ -450,21 +450,6 @@ where
     }
 }
 
-impl<Child> AsAnyRenderObject for RenderFlex<Child>
-where
-    Self: RenderBox,
-{
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
-
-    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
-        self
-    }
-
-    fn into_boxed_render_object(self) -> Box<Self::Output> {
-        Box::new(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
@@ -533,9 +518,9 @@ mod tests {
 
         let _ = Column::builder()
             .children(bon::vec![
-                TestView::new(0).into_boxed_view(),
-                TestView::new(0).into_boxed_view(),
-                Flexible::from(TestView::new(0).into_boxed_view()),
+                TestView::new(0).into_boxed_render_box(),
+                TestView::new(0).into_boxed_render_box(),
+                Flexible::from(TestView::new(0).into_boxed_render_box()),
             ])
             .build();
 
@@ -567,8 +552,8 @@ mod tests {
     fn only_remounts_children_when_children_replaced() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -579,8 +564,8 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<u16>::new(0).into_boxed_view().into(),
-                TestView::<u16>::new(0).into_boxed_view().into(),
+                TestView::<u16>::new(0).into_boxed_render_box().into(),
+                TestView::<u16>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -621,11 +606,11 @@ mod tests {
     fn retains_leading_unchanged_children() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -636,9 +621,9 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<u32>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<u32>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -652,11 +637,11 @@ mod tests {
     fn retains_following_unchanged_children() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -667,9 +652,9 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<u32>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<u32>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -683,11 +668,11 @@ mod tests {
     fn retains_leading_and_following_unchanged_children() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -698,12 +683,12 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<u32>::new(0).into_boxed_view().into(),
-                TestView::<u32>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<u32>::new(0).into_boxed_render_box().into(),
+                TestView::<u32>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -717,16 +702,16 @@ mod tests {
     fn retains_middle_keyed_child() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
                 Key::new(0, TestView::<usize>::new(0))
-                    .into_boxed_view()
+                    .into_boxed_render_box()
                     .into(),
                 Key::new(1, TestView::<usize>::new(0))
-                    .into_boxed_view()
+                    .into_boxed_render_box()
                     .into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
-                TestView::<usize>::new(0).into_boxed_view().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestView::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -737,14 +722,14 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<u32>::new(0).into_boxed_view().into(),
+                TestView::<u32>::new(0).into_boxed_render_box().into(),
                 Key::new(0, TestView::<usize>::new(0))
-                    .into_boxed_view()
+                    .into_boxed_render_box()
                     .into(),
                 Key::new(2, TestView::<usize>::new(0))
-                    .into_boxed_view()
+                    .into_boxed_render_box()
                     .into(),
-                TestView::<u32>::new(0).into_boxed_view().into(),
+                TestView::<u32>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 

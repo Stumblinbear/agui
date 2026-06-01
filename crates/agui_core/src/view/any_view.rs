@@ -4,7 +4,10 @@ use crate::{
     context::{Dispatch, UpdateCtx},
     element::{Element, ElementState},
     key::AnyKeyable,
-    render_object::{AnyRenderObject, AsAnyRenderObject, RenderObject},
+    render_object::{
+        RenderObject,
+        box_layout::{AnyRenderBox, RenderBox},
+    },
     routing_id::RoutingId,
     view::View,
 };
@@ -196,17 +199,19 @@ mod macros {
     pub(crate) use impl_view;
 }
 
-struct AnyViewWrapper<T> {
+// The view-erasure adapter is protocol-specific: this one commits to the box layout
+// protocol. A `SliverLayoutWrapper<T>` (T::Render: RenderSliver, Render = BoxedRenderSliver)
+// would slot in alongside it without overlapping the blanket impls.
+struct BoxLayoutWrapper<T> {
     inner: T,
 }
 
-impl<T> View for AnyViewWrapper<T>
+impl<T> View for BoxLayoutWrapper<T>
 where
     T: View + 'static,
-    T::Render: Any,
-    T::Render: AsAnyRenderObject,
+    T::Render: RenderBox,
 {
-    type Render = Box<<T::Render as AsAnyRenderObject>::Output>;
+    type Render = Box<dyn AnyRenderBox>;
 
     type State = T::State;
 
@@ -223,19 +228,15 @@ where
     }
 
     fn create_render_object(&self, element: &Element) -> Self::Render {
-        self.inner
-            .dyn_create_render_object(element)
-            .into_boxed_render_object()
+        Box::new(self.inner.create_render_object(element))
     }
 
     fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+        // deref past the Box to the concrete object; same type -> reuse, else replace
         if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
             self.inner.update_render_object(element, render_object);
         } else {
-            *render_object = self
-                .inner
-                .dyn_create_render_object(element)
-                .into_boxed_render_object();
+            *render_object = Box::new(self.inner.create_render_object(element));
         }
     }
 
@@ -248,9 +249,7 @@ where
     }
 }
 
-#[allow(type_alias_bounds)]
-pub type BoxedView<V: View> =
-    Box<dyn AnyView<Render = Box<<V::Render as AsAnyRenderObject>::Output>>>;
+pub type BoxedView = Box<dyn AnyView<Render = Box<dyn AnyRenderBox>>>;
 
 pub trait AsAnyView: View + 'static {
     fn as_dyn_view(&self) -> &dyn AnyView<Render = Self::Render>
@@ -260,14 +259,12 @@ pub trait AsAnyView: View + 'static {
         self
     }
 
-    fn into_boxed_view(
-        self,
-    ) -> Box<dyn AnyView<Render = Box<<Self::Render as AsAnyRenderObject>::Output>>>
+    fn into_boxed_render_box(self) -> BoxedView
     where
         Self: Sized,
-        Self::Render: AsAnyRenderObject,
+        Self::Render: RenderBox,
     {
-        Box::new(AnyViewWrapper { inner: self })
+        Box::new(BoxLayoutWrapper { inner: self })
     }
 }
 
@@ -342,7 +339,7 @@ mod tests {
     #[test]
     fn mounting_boxed_views() {
         let view = TestView::new(1_usize);
-        let harness = TestHarness::mount(&view.into_boxed_view());
+        let harness = TestHarness::mount(&view.into_boxed_render_box());
 
         assert_eq!(
             harness.root.children[0]
@@ -382,7 +379,7 @@ mod tests {
 
     #[test]
     fn updating_boxed_views() {
-        let view = TestView::new(2_usize).into_boxed_view();
+        let view = TestView::new(2_usize).into_boxed_render_box();
 
         let mut harness = TestHarness::mount(&view);
 
@@ -393,7 +390,7 @@ mod tests {
             &2
         );
 
-        let new_view = TestView::new(9_usize).into_boxed_view();
+        let new_view = TestView::new(9_usize).into_boxed_render_box();
         harness.update(&view, &new_view);
 
         assert_eq!(
@@ -435,7 +432,7 @@ mod tests {
 
     #[test]
     fn replacing_boxed_views() {
-        let view = TestView::new(2_usize).into_boxed_view();
+        let view = TestView::new(2_usize).into_boxed_render_box();
 
         let mut harness = TestHarness::mount(&view);
 
@@ -446,7 +443,7 @@ mod tests {
             &2
         );
 
-        harness.update(&view, &TestView::new(7_u8).into_boxed_view());
+        harness.update(&view, &TestView::new(7_u8).into_boxed_render_box());
 
         assert_eq!(
             harness.root.children[0]
@@ -569,7 +566,7 @@ mod tests {
         let view = Counted {
             creates: Rc::clone(&creates),
         }
-        .into_boxed_view();
+        .into_boxed_render_box();
 
         let harness = TestHarness::mount(&view);
 

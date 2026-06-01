@@ -7,7 +7,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{
-        AsAnyRenderObject, RenderNode, RenderObject,
+        RenderNode, RenderObject,
         box_layout::{BoxLayout, RenderBox},
     },
     renderer::Canvas,
@@ -298,21 +298,6 @@ where
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         self.child.distance_to_baseline(baseline)
-    }
-}
-
-impl<Child> AsAnyRenderObject for RenderSizedBox<Child>
-where
-    Self: RenderBox,
-{
-    type Output = dyn agui_core::render_object::box_layout::AnyRenderBox;
-
-    fn as_dyn_render_object(&self) -> &dyn agui_core::render_object::AnyRenderObject {
-        self
-    }
-
-    fn into_boxed_render_object(self) -> Box<Self::Output> {
-        Box::new(self)
     }
 }
 

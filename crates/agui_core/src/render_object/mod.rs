@@ -5,7 +5,7 @@ use crate::{
     context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::box_layout::{AnyRenderBox, BoxLayout, RenderBox},
+    render_object::box_layout::BoxLayout,
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -92,20 +92,5 @@ impl BoxLayout for RenderLeaf {
 
     fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
-    }
-}
-
-impl AsAnyRenderObject for RenderLeaf
-where
-    Self: RenderBox,
-{
-    type Output = dyn AnyRenderBox;
-
-    fn as_dyn_render_object(&self) -> &dyn AnyRenderObject {
-        self
-    }
-
-    fn into_boxed_render_object(self) -> Box<Self::Output> {
-        Box::new(self)
     }
 }
