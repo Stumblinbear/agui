@@ -1,7 +1,7 @@
 use typed_floats::{NonNaNFinite, Positive, PositiveFinite, as_const};
 
 use crate::{
-    axis::Axis,
+    axis::{Axis, AxisDirection},
     constraints::Constraints,
     context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
@@ -16,20 +16,56 @@ mod any_render_sliver;
 
 pub use any_render_sliver::*;
 
+/// The direction in which a sliver's contents are ordered, relative to the [`AxisDirection`].
+///
+/// [`Forward`](GrowthDirection::Forward) orders contents along the axis direction;
+/// [`Reverse`](GrowthDirection::Reverse) orders them against it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GrowthDirection {
+    Forward,
+    Reverse,
+}
+
+/// The direction the user is currently scrolling, relative to the [`AxisDirection`], or
+/// [`Idle`](ScrollDirection::Idle) when no scroll is in progress.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScrollDirection {
+    Idle,
+    Forward,
+    Reverse,
+}
+
 /// Immutable layout constraints for a [`RenderSliver`].
 ///
 /// Carries the viewport's current scroll state and the space available to the sliver when
 /// [`SliverLayout::layout`] runs.
 #[derive(Debug, Clone, Copy)]
 pub struct SliverConstraints {
-    /// The main axis the sliver is laid out along.
-    pub axis: Axis,
+    /// The direction of the sliver's main axis.
+    ///
+    /// [`scroll_offset`](Self::scroll_offset) and the paint and cache extents increase in this
+    /// direction.
+    pub axis_direction: AxisDirection,
+
+    /// The direction in which the cross axis increases, orthogonal to
+    /// [`axis_direction`](Self::axis_direction).
+    pub cross_axis_direction: AxisDirection,
+
+    /// The sliver's [`GrowthDirection`] relative to [`axis_direction`](Self::axis_direction).
+    pub growth_direction: GrowthDirection,
+
+    /// The user's current [`ScrollDirection`].
+    pub user_scroll_direction: ScrollDirection,
 
     /// How far the leading edge of this sliver has been scrolled past the viewport's leading edge.
     pub scroll_offset: PositiveFinite<f32>,
 
-    /// The total scroll extent of all slivers preceding this one.
-    pub preceding_scroll_extent: PositiveFinite<f32>,
+    /// The total scroll extent of all slivers preceding this one. Infinite when one of them has an
+    /// infinite extent.
+    pub preceding_scroll_extent: Positive<f32>,
+
+    /// The number of pixels by which preceding pinned or floating slivers overlap this one.
+    pub overlap: NonNaNFinite<f32>,
 
     /// Paintable main-axis space remaining in the viewport.
     pub remaining_paint_extent: Positive<f32>,
@@ -42,6 +78,13 @@ pub struct SliverConstraints {
 
     /// Cache space remaining beyond the visible area.
     pub remaining_cache_extent: Positive<f32>,
+}
+
+impl SliverConstraints {
+    /// The main [`Axis`] this sliver is laid out along.
+    pub fn axis(&self) -> Axis {
+        self.axis_direction.axis()
+    }
 }
 
 /// Describes the amount of space occupied by a [`RenderSliver`].
@@ -78,6 +121,13 @@ pub struct SliverGeometry {
 
     /// The main-axis extent the sliver occupies within the viewport's cache area.
     pub cache_extent: PositiveFinite<f32>,
+
+    /// The amount by which the viewport should shift its scroll offset before laying out again, or
+    /// [`None`] to request no correction.
+    ///
+    /// When set, the rest of this geometry is ignored: the viewport applies the correction and
+    /// reruns layout. A sliver returning a correction need not compute the other fields.
+    pub scroll_offset_correction: Option<NonNaNFinite<f32>>,
 }
 
 impl SliverGeometry {
@@ -100,6 +150,7 @@ impl SliverGeometry {
             visible: paint_extent.get() > 0.0,
             has_visual_overflow: false,
             cache_extent: paint_extent,
+            scroll_offset_correction: None,
         }
     }
 }
@@ -181,9 +232,13 @@ impl<S: RenderSliver> BoxLayout for RenderViewport<S> {
         let cross = size.width.get();
 
         let constraints = SliverConstraints {
-            axis: Axis::Vertical,
+            axis_direction: AxisDirection::Down,
+            cross_axis_direction: AxisDirection::Right,
+            growth_direction: GrowthDirection::Forward,
+            user_scroll_direction: ScrollDirection::Idle,
             scroll_offset: self.offset,
-            preceding_scroll_extent: as_const!(PositiveFinite, f32, 0.0),
+            preceding_scroll_extent: as_const!(Positive, f32, 0.0),
+            overlap: as_const!(NonNaNFinite, f32, 0.0),
             remaining_paint_extent: Positive::try_from(main).expect("viewport main extent >= 0"),
             cross_axis_extent: PositiveFinite::try_from(cross)
                 .expect("viewport cross extent must be finite"),
