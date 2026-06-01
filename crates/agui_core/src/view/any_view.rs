@@ -7,6 +7,7 @@ use crate::{
     render_object::{
         RenderObject,
         box_layout::{AnyRenderBox, RenderBox},
+        sliver::{AnyRenderSliver, RenderSliver},
     },
     routing_id::RoutingId,
     view::View,
@@ -199,9 +200,10 @@ mod macros {
     pub(crate) use impl_view;
 }
 
-// The view-erasure adapter is protocol-specific: this one commits to the box layout
-// protocol. A `SliverLayoutWrapper<T>` (T::Render: RenderSliver, Render = BoxedRenderSliver)
-// would slot in alongside it without overlapping the blanket impls.
+// The view-erasure adapter is protocol-specific: this one commits to the box layout protocol,
+// and `SliverLayoutWrapper` (below) commits to the sliver protocol. They coexist because each
+// targets a distinct erased render type (`Box<dyn AnyRenderBox>` vs `Box<dyn AnyRenderSliver>`),
+// so there is no blanket-impl overlap to resolve.
 struct BoxLayoutWrapper<T> {
     inner: T,
 }
@@ -249,7 +251,55 @@ where
     }
 }
 
+struct SliverLayoutWrapper<T> {
+    inner: T,
+}
+
+impl<T> View for SliverLayoutWrapper<T>
+where
+    T: View + 'static,
+    T::Render: RenderSliver,
+{
+    type Render = Box<dyn AnyRenderSliver>;
+
+    type State = T::State;
+
+    fn mount(&self, ctx: &mut UpdateCtx) -> (Vec<Element>, Self::State) {
+        self.inner.mount(ctx)
+    }
+
+    fn update(&self, element: &mut Element, old: &Self, ctx: &mut UpdateCtx) {
+        self.inner.update(element, &old.inner, ctx);
+    }
+
+    fn dispatch(&self, element: &mut Element, path: &[RoutingId], action: Dispatch) {
+        self.inner.dispatch(element, path, action)
+    }
+
+    fn create_render_object(&self, element: &Element) -> Self::Render {
+        Box::new(self.inner.create_render_object(element))
+    }
+
+    fn update_render_object(&self, element: &Element, render_object: &mut Self::Render) {
+        if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
+            self.inner.update_render_object(element, render_object);
+        } else {
+            *render_object = Box::new(self.inner.create_render_object(element));
+        }
+    }
+
+    fn is_same_type(&self, other: &Self) -> bool {
+        self.inner.is_same_type(&other.inner)
+    }
+
+    fn key(&self) -> Option<&dyn AnyKeyable> {
+        self.inner.key()
+    }
+}
+
 pub type BoxedView = Box<dyn AnyView<Render = Box<dyn AnyRenderBox>>>;
+
+pub type BoxedSliverView = Box<dyn AnyView<Render = Box<dyn AnyRenderSliver>>>;
 
 pub trait AsAnyView: View + 'static {
     fn as_dyn_view(&self) -> &dyn AnyView<Render = Self::Render>
@@ -265,6 +315,14 @@ pub trait AsAnyView: View + 'static {
         Self::Render: RenderBox,
     {
         Box::new(BoxLayoutWrapper { inner: self })
+    }
+
+    fn into_boxed_render_sliver(self) -> BoxedSliverView
+    where
+        Self: Sized,
+        Self::Render: RenderSliver,
+    {
+        Box::new(SliverLayoutWrapper { inner: self })
     }
 }
 

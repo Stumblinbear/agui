@@ -14,6 +14,7 @@ use crate::{
 mod any_render_object;
 pub mod box_layout;
 mod node;
+pub mod sliver;
 
 pub use any_render_object::*;
 pub use node::*;
