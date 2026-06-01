@@ -6,7 +6,7 @@ use crate::{
     context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderNode, RenderObject, box_layout::BoxLayout},
+    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -38,7 +38,7 @@ pub enum ScrollDirection {
 /// Immutable layout constraints for a [`RenderSliver`].
 ///
 /// Carries the viewport's current scroll state and the space available to the sliver when
-/// [`SliverLayout::layout`] runs.
+/// [`RenderSliver::layout`] runs.
 #[derive(Debug, Clone, Copy)]
 pub struct SliverConstraints {
     /// The direction of the sliver's main axis.
@@ -155,9 +155,12 @@ impl SliverGeometry {
     }
 }
 
-/// The layout protocol for slivers. A sliver is laid out from [`SliverConstraints`] and reports
-/// [`SliverGeometry`].
-pub trait SliverLayout {
+/// A render object that occupies a portion of a scrolling viewport.
+///
+/// A [`RenderViewport`] lays its slivers out one after another along the scroll axis. Each is laid
+/// out against the viewport's current scroll state ([`SliverConstraints`]) and reports the space it
+/// occupies as [`SliverGeometry`].
+pub trait RenderSliver: RenderObject {
     fn layout(&mut self, constraints: SliverConstraints) -> SliverGeometry;
 
     /// Determines the set of sliver render objects located at the given position, in the sliver's
@@ -170,22 +173,16 @@ pub trait SliverLayout {
     /// below this one.
     ///
     /// Hit testing requires layout to be up to date but not paint: an implementation may rely on
-    /// [`SliverLayout::layout`] having been called, but not on [`RenderObject::paint`].
+    /// [`RenderSliver::layout`] having been called, but not on [`RenderSliver::paint`].
     fn hit_test(
         &self,
         result: &mut HitTestResult,
         main_axis_position: PositiveFinite<f32>,
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest;
+
+    fn paint(&mut self, canvas: &mut Canvas);
 }
-
-#[diagnostic::on_unimplemented(
-    message = "Trait bound RenderSliver is not satisfied.",
-    note = "RenderObject + SliverLayout is required to implement RenderSliver."
-)]
-pub trait RenderSliver: RenderObject + SliverLayout {}
-
-impl<T> RenderSliver for T where T: RenderObject + SliverLayout {}
 
 /// A box render object that hosts a single sliver and lays it out along the vertical axis. Requires
 /// bounded main-axis constraints.
@@ -214,13 +211,9 @@ impl<S: RenderSliver> RenderObject for RenderViewport<S> {
     fn mount(&mut self, _: &mut UpdateCtx) {}
 
     fn unmount(&mut self, _: &mut UpdateCtx) {}
-
-    fn paint(&mut self, canvas: &mut Canvas) {
-        self.sliver.object.paint(canvas);
-    }
 }
 
-impl<S: RenderSliver> BoxLayout for RenderViewport<S> {
+impl<S: RenderSliver> RenderBox for RenderViewport<S> {
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
@@ -261,7 +254,7 @@ impl<S: RenderSliver> BoxLayout for RenderViewport<S> {
             remaining_cache_extent: Positive::try_from(main).expect("viewport main extent >= 0"),
         };
 
-        self.geometry = Some(SliverLayout::layout(&mut self.sliver.object, constraints));
+        self.geometry = Some(RenderSliver::layout(&mut self.sliver.object, constraints));
 
         size
     }
@@ -283,12 +276,16 @@ impl<S: RenderSliver> BoxLayout for RenderViewport<S> {
             return HitTest::Pass;
         }
 
-        SliverLayout::hit_test(
+        RenderSliver::hit_test(
             &self.sliver.object,
             result,
             PositiveFinite::try_from(main).expect("main-axis position >= 0"),
             PositiveFinite::try_from(cross).expect("cross-axis position >= 0"),
         )
+    }
+
+    fn paint(&mut self, canvas: &mut Canvas) {
+        self.sliver.object.paint(canvas);
     }
 }
 
@@ -306,11 +303,9 @@ mod tests {
         fn mount(&mut self, _: &mut UpdateCtx) {}
 
         fn unmount(&mut self, _: &mut UpdateCtx) {}
-
-        fn paint(&mut self, _: &mut Canvas) {}
     }
 
-    impl SliverLayout for RenderSliverFixed {
+    impl RenderSliver for RenderSliverFixed {
         fn layout(&mut self, constraints: SliverConstraints) -> SliverGeometry {
             let remaining = constraints.remaining_paint_extent.get();
             let visible = (self.extent - constraints.scroll_offset.get()).clamp(0.0, remaining);
@@ -325,6 +320,8 @@ mod tests {
         ) -> HitTest {
             HitTest::Pass
         }
+
+        fn paint(&mut self, _: &mut Canvas) {}
     }
 
     #[test]
@@ -333,7 +330,7 @@ mod tests {
             RenderViewport::new(RenderNode::new(RenderSliverFixed { extent: 100.0 }));
 
         // 100 wide x 50 tall viewport: the sliver is 100 long, only 50 fits.
-        let size = BoxLayout::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
+        let size = RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
         assert_eq!(size, Size::new(100.0, 50.0));
         let g = viewport.geometry().unwrap();
         assert_eq!(g.scroll_extent.get(), 100.0);
@@ -345,7 +342,7 @@ mod tests {
 
         // Scroll down 80 -> only the last 20 of the 100-long sliver remains visible.
         viewport.offset = PositiveFinite::try_from(80.0).unwrap();
-        BoxLayout::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
+        RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
     }
 
@@ -385,7 +382,7 @@ mod tests {
         let erased: Box<dyn AnyRenderSliver> = boxed_view.create_render_object(&harness.root);
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
-        BoxLayout::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
+        RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
 
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 50.0);
     }

@@ -5,7 +5,7 @@ use crate::{
     context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderObject, box_layout::BoxLayout},
+    render_object::{RenderObject, box_layout::RenderBox},
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -51,13 +51,9 @@ impl<R: RenderObject, P> RenderNode<R, P> {
     pub fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.object.unmount(ctx);
     }
-
-    pub fn paint(&mut self, canvas: &mut Canvas) {
-        self.object.paint(canvas);
-    }
 }
 
-impl<R: BoxLayout, P> RenderNode<R, P> {
+impl<R: RenderBox, P> RenderNode<R, P> {
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.object.min_intrinsic_width(height)
     }
@@ -107,6 +103,10 @@ impl<R: BoxLayout, P> RenderNode<R, P> {
     pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.object.hit_test(result, position)
     }
+
+    pub fn paint(&mut self, canvas: &mut Canvas) {
+        self.object.paint(canvas);
+    }
 }
 
 #[cfg(test)]
@@ -121,7 +121,7 @@ mod tests {
         element::Element,
         render_object::{
             RenderLeaf,
-            box_layout::{AnyRenderBox, BoxLayout},
+            box_layout::{AnyRenderBox, RenderBox},
         },
         test_fixtures::Leaf,
         test_harness::TestHarness,
@@ -129,15 +129,57 @@ mod tests {
         view::{AsAnyView, View},
     };
 
-    struct RenderPad<C: RenderObject> {
+    struct RenderPad<C: RenderBox> {
         pad: u32,
         child: RenderNode<C>,
     }
 
-    impl<C: RenderObject> RenderObject for RenderPad<C> {
+    impl<C: RenderBox> RenderObject for RenderPad<C> {
         fn mount(&mut self, _: &mut UpdateCtx) {}
 
         fn unmount(&mut self, _: &mut UpdateCtx) {}
+    }
+
+    impl<C: RenderBox> RenderBox for RenderPad<C> {
+        fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.min_intrinsic_width(height)
+        }
+
+        fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.max_intrinsic_width(height)
+        }
+
+        fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.min_intrinsic_height(width)
+        }
+
+        fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.max_intrinsic_height(width)
+        }
+
+        fn measure(&self, constraints: Constraints) -> Size {
+            self.child.measure(constraints)
+        }
+
+        fn layout(&mut self, constraints: Constraints) -> Size {
+            self.child.layout_and_get_size(constraints)
+        }
+
+        fn measure_baseline(
+            &self,
+            constraints: Constraints,
+            baseline: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            self.child.measure_baseline(constraints, baseline)
+        }
+
+        fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+            self.child.distance_to_baseline(baseline)
+        }
+
+        fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+            self.child.hit_test(result, position)
+        }
 
         fn paint(&mut self, canvas: &mut Canvas) {
             self.child.paint(canvas);
@@ -149,7 +191,10 @@ mod tests {
         child: Child,
     }
 
-    impl<Child: View> View for Pad<Child> {
+    impl<Child: View> View for Pad<Child>
+    where
+        Child::Render: RenderBox,
+    {
         type State = ();
 
         type Render = RenderPad<Child::Render>;
@@ -342,11 +387,9 @@ mod tests {
         fn mount(&mut self, _: &mut UpdateCtx) {}
 
         fn unmount(&mut self, _: &mut UpdateCtx) {}
-
-        fn paint(&mut self, _: &mut Canvas) {}
     }
 
-    impl BoxLayout for RenderOther {
+    impl RenderBox for RenderOther {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
@@ -382,6 +425,8 @@ mod tests {
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
+        fn paint(&mut self, _: &mut Canvas) {}
     }
 
     struct CountedOther {

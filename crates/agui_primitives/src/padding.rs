@@ -10,7 +10,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         RenderNode, RenderObject,
-        box_layout::{BoxLayout, RenderBox},
+        box_layout::RenderBox,
     },
     renderer::Canvas,
     routing_id::RoutingId,
@@ -116,15 +116,9 @@ where
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.child.unmount(ctx);
     }
-
-    fn paint(&mut self, canvas: &mut Canvas) {
-        canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
-            self.child.paint(canvas);
-        });
-    }
 }
 
-impl<Child> BoxLayout for RenderPadding<Child>
+impl<Child> RenderBox for RenderPadding<Child>
 where
     Child: RenderBox,
 {
@@ -255,6 +249,12 @@ where
         result.with_offset(*offset, position, |result, transformed| {
             self.child.hit_test(result, transformed)
         })
+    }
+
+    fn paint(&mut self, canvas: &mut Canvas) {
+        canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
+            self.child.paint(canvas);
+        });
     }
 }
 

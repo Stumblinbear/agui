@@ -10,7 +10,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         RenderNode, RenderObject,
-        box_layout::{BoxLayout, RenderBox},
+        box_layout::RenderBox,
     },
     renderer::Canvas,
     routing_id::RoutingId,
@@ -198,15 +198,9 @@ where
             child_render.unmount(ctx);
         }
     }
-
-    fn paint(&mut self, canvas: &mut Canvas) {
-        if let Some(child_render) = self.child_render.as_mut() {
-            child_render.paint(canvas);
-        }
-    }
 }
 
-impl<Child> BoxLayout for RenderLayoutBuilder<Child>
+impl<Child> RenderBox for RenderLayoutBuilder<Child>
 where
     Child: RenderBox,
 {
@@ -261,6 +255,12 @@ where
             child_render.hit_test(result, offset)
         } else {
             HitTest::Pass
+        }
+    }
+
+    fn paint(&mut self, canvas: &mut Canvas) {
+        if let Some(child_render) = self.child_render.as_mut() {
+            child_render.paint(canvas);
         }
     }
 }

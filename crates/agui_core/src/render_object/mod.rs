@@ -5,7 +5,7 @@ use crate::{
     context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::box_layout::BoxLayout,
+    render_object::box_layout::RenderBox,
     renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
@@ -19,12 +19,16 @@ pub mod sliver;
 pub use any_render_object::*;
 pub use node::*;
 
+/// An object in the render tree.
+///
+/// A [`RenderObject`] has a lifecycle but does not itself define a coordinate system or layout
+/// protocol. Those are introduced by the traits that extend it: [`RenderBox`], which lays out in
+/// Cartesian coordinates, and [`RenderSliver`](crate::render_object::sliver::RenderSliver), which
+/// lays out along a scroll axis.
 pub trait RenderObject: 'static {
     fn mount(&mut self, ctx: &mut UpdateCtx);
 
     fn unmount(&mut self, ctx: &mut UpdateCtx);
-
-    fn paint(&mut self, canvas: &mut Canvas);
 }
 
 #[derive(Default)]
@@ -34,11 +38,9 @@ impl RenderObject for RenderLeaf {
     fn mount(&mut self, _: &mut UpdateCtx) {}
 
     fn unmount(&mut self, _: &mut UpdateCtx) {}
-
-    fn paint(&mut self, _: &mut Canvas) {}
 }
 
-impl BoxLayout for RenderLeaf {
+impl RenderBox for RenderLeaf {
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
@@ -75,4 +77,6 @@ impl BoxLayout for RenderLeaf {
         // TODO(trevin): should this add itself to the hit test result?
         HitTest::Pass
     }
+
+    fn paint(&mut self, _: &mut Canvas) {}
 }

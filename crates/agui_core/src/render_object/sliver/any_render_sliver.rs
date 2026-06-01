@@ -6,8 +6,9 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     render_object::{
         AnyRenderObject,
-        sliver::{RenderSliver, SliverConstraints, SliverGeometry, SliverLayout},
+        sliver::{RenderSliver, SliverConstraints, SliverGeometry},
     },
+    renderer::Canvas,
 };
 
 pub trait AnyRenderSliver: AnyRenderObject {
@@ -19,6 +20,8 @@ pub trait AnyRenderSliver: AnyRenderObject {
         main_axis_position: PositiveFinite<f32>,
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest;
+
+    fn dyn_paint(&mut self, canvas: &mut Canvas);
 }
 
 impl<T> AnyRenderSliver for T
@@ -27,7 +30,7 @@ where
     T: RenderSliver,
 {
     fn dyn_layout(&mut self, constraints: SliverConstraints) -> SliverGeometry {
-        SliverLayout::layout(self, constraints)
+        RenderSliver::layout(self, constraints)
     }
 
     fn dyn_hit_test(
@@ -36,11 +39,15 @@ where
         main_axis_position: PositiveFinite<f32>,
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest {
-        SliverLayout::hit_test(self, result, main_axis_position, cross_axis_position)
+        RenderSliver::hit_test(self, result, main_axis_position, cross_axis_position)
+    }
+
+    fn dyn_paint(&mut self, canvas: &mut Canvas) {
+        RenderSliver::paint(self, canvas);
     }
 }
 
-impl<T> SliverLayout for Box<T>
+impl<T> RenderSliver for Box<T>
 where
     T: AnyRenderSliver + ?Sized + 'static,
 {
@@ -55,5 +62,9 @@ where
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest {
         (**self).dyn_hit_test(result, main_axis_position, cross_axis_position)
+    }
+
+    fn paint(&mut self, canvas: &mut Canvas) {
+        (**self).dyn_paint(canvas);
     }
 }

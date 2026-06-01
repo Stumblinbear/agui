@@ -9,7 +9,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         RenderObject,
-        box_layout::{BoxLayout, RenderBox},
+        box_layout::RenderBox,
     },
     renderer::Canvas,
     routing_id::RoutingId,
@@ -397,11 +397,9 @@ where
             child.unmount(ctx);
         }
     }
-
-    fn paint(&mut self, canvas: &mut Canvas) {}
 }
 
-impl<Child> BoxLayout for RenderFlex<Child>
+impl<Child> RenderBox for RenderFlex<Child>
 where
     Child: RenderBox,
 {
@@ -448,6 +446,8 @@ where
 
         HitTest::Pass
     }
+
+    fn paint(&mut self, canvas: &mut Canvas) {}
 }
 
 #[cfg(test)]

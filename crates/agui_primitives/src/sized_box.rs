@@ -8,7 +8,7 @@ use agui_core::{
     offset::Offset,
     render_object::{
         RenderNode, RenderObject,
-        box_layout::{BoxLayout, RenderBox},
+        box_layout::RenderBox,
     },
     renderer::Canvas,
     routing_id::RoutingId,
@@ -224,13 +224,9 @@ where
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         self.child.unmount(ctx);
     }
-
-    fn paint(&mut self, canvas: &mut Canvas) {
-        self.child.paint(canvas);
-    }
 }
 
-impl<Child> BoxLayout for RenderSizedBox<Child>
+impl<Child> RenderBox for RenderSizedBox<Child>
 where
     Child: RenderBox,
 {
@@ -298,6 +294,10 @@ where
         }
 
         self.child.hit_test(result, position)
+    }
+
+    fn paint(&mut self, canvas: &mut Canvas) {
+        self.child.paint(canvas);
     }
 }
 

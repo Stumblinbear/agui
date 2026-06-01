@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::{context::UpdateCtx, render_object::RenderObject, renderer::Canvas};
+use crate::{context::UpdateCtx, render_object::RenderObject};
 
 pub trait AnyRenderObject {
     fn as_any(&self) -> &dyn Any;
@@ -12,8 +12,6 @@ pub trait AnyRenderObject {
     fn dyn_mount(&mut self, ctx: &mut UpdateCtx);
 
     fn dyn_unmount(&mut self, ctx: &mut UpdateCtx);
-
-    fn dyn_paint(&mut self, canvas: &mut Canvas);
 }
 
 impl<T> AnyRenderObject for T
@@ -40,10 +38,6 @@ where
     fn dyn_unmount(&mut self, ctx: &mut UpdateCtx) {
         self.unmount(ctx);
     }
-
-    fn dyn_paint(&mut self, canvas: &mut Canvas) {
-        self.paint(canvas);
-    }
 }
 
 impl<T> RenderObject for Box<T>
@@ -56,9 +50,5 @@ where
 
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         (**self).dyn_unmount(ctx);
-    }
-
-    fn paint(&mut self, canvas: &mut Canvas) {
-        (**self).dyn_paint(canvas);
     }
 }

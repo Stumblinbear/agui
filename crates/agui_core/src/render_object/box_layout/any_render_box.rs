@@ -6,10 +6,8 @@ use crate::{
     constraints::Constraints,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{
-        AnyRenderObject,
-        box_layout::{BoxLayout, RenderBox},
-    },
+    render_object::{AnyRenderObject, box_layout::RenderBox},
+    renderer::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -36,6 +34,8 @@ pub trait AnyRenderBox: AnyRenderObject {
     fn dyn_distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>>;
 
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
+
+    fn dyn_paint(&mut self, canvas: &mut Canvas);
 }
 
 impl<T> AnyRenderBox for T
@@ -82,9 +82,13 @@ where
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.hit_test(result, position)
     }
+
+    fn dyn_paint(&mut self, canvas: &mut Canvas) {
+        self.paint(canvas);
+    }
 }
 
-impl<T> BoxLayout for Box<T>
+impl<T> RenderBox for Box<T>
 where
     T: AnyRenderBox + ?Sized + 'static,
 {
@@ -126,5 +130,9 @@ where
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         (**self).dyn_hit_test(result, position)
+    }
+
+    fn paint(&mut self, canvas: &mut Canvas) {
+        (**self).dyn_paint(canvas);
     }
 }
