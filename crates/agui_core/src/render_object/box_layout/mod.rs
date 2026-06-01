@@ -1,7 +1,12 @@
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
-    constraints::Constraints, render_object::RenderObject, size::Size, text_baseline::TextBaseline,
+    constraints::Constraints,
+    hit_test::{HitTest, HitTestResult},
+    offset::Offset,
+    render_object::RenderObject,
+    size::Size,
+    text_baseline::TextBaseline,
 };
 
 mod any_render_box;
@@ -116,6 +121,20 @@ pub trait BoxLayout {
     /// [`BoxLayout`]. You are only allowed to call this from the parent of this box
     /// during that parent's [`RenderObject::layout`] or [`RenderObject::paint`] functions.
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>>;
+
+    /// Determines the set of box render objects located at `position`.
+    ///
+    /// Returns [`HitTest::Absorb`], and adds any render objects that contain the point to `result`,
+    /// if this render object or one of its descendants absorbs the hit (preventing render objects
+    /// below this one from being hit). Returns [`HitTest::Pass`] if the hit can continue to render
+    /// objects below this one.
+    ///
+    /// The caller is responsible for transforming `position` into this box's local coordinate space.
+    /// This box is responsible for checking whether `position` is within its bounds.
+    ///
+    /// Hit testing requires layout to be up to date but not paint: an implementation may rely on
+    /// [`BoxLayout::layout`] having been called, but not on [`RenderObject::paint`].
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 }
 
 #[diagnostic::on_unimplemented(

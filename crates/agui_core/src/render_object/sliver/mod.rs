@@ -159,6 +159,24 @@ impl SliverGeometry {
 /// [`SliverGeometry`].
 pub trait SliverLayout {
     fn layout(&mut self, constraints: SliverConstraints) -> SliverGeometry;
+
+    /// Determines the set of sliver render objects located at the given position, in the sliver's
+    /// own axis-relative space: `main_axis_position` runs along the scroll axis from the sliver's
+    /// leading painted edge, `cross_axis_position` along the cross axis.
+    ///
+    /// Returns [`HitTest::Absorb`], and adds any render objects that contain the point to `result`,
+    /// if this sliver or one of its descendants absorbs the hit (preventing render objects below
+    /// this one from being hit). Returns [`HitTest::Pass`] if the hit can continue to render objects
+    /// below this one.
+    ///
+    /// Hit testing requires layout to be up to date but not paint: an implementation may rely on
+    /// [`SliverLayout::layout`] having been called, but not on [`RenderObject::paint`].
+    fn hit_test(
+        &self,
+        result: &mut HitTestResult,
+        main_axis_position: PositiveFinite<f32>,
+        cross_axis_position: PositiveFinite<f32>,
+    ) -> HitTest;
 }
 
 #[diagnostic::on_unimplemented(
@@ -196,10 +214,6 @@ impl<S: RenderSliver> RenderObject for RenderViewport<S> {
     fn mount(&mut self, _: &mut UpdateCtx) {}
 
     fn unmount(&mut self, _: &mut UpdateCtx) {}
-
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.sliver.object.hit_test(result, position)
-    }
 
     fn paint(&mut self, canvas: &mut Canvas) {
         self.sliver.object.paint(canvas);
@@ -259,6 +273,23 @@ impl<S: RenderSliver> BoxLayout for RenderViewport<S> {
     fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        // Vertical-forward: y maps to the main axis, x to the cross axis. The position is already
+        // viewport-local; only forward hits that land within the viewport (non-negative).
+        let (main, cross) = (position.y.get(), position.x.get());
+
+        if main < 0.0 || cross < 0.0 {
+            return HitTest::Pass;
+        }
+
+        SliverLayout::hit_test(
+            &self.sliver.object,
+            result,
+            PositiveFinite::try_from(main).expect("main-axis position >= 0"),
+            PositiveFinite::try_from(cross).expect("cross-axis position >= 0"),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -276,10 +307,6 @@ mod tests {
 
         fn unmount(&mut self, _: &mut UpdateCtx) {}
 
-        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
-            HitTest::Pass
-        }
-
         fn paint(&mut self, _: &mut Canvas) {}
     }
 
@@ -288,6 +315,15 @@ mod tests {
             let remaining = constraints.remaining_paint_extent.get();
             let visible = (self.extent - constraints.scroll_offset.get()).clamp(0.0, remaining);
             SliverGeometry::new(self.extent, visible)
+        }
+
+        fn hit_test(
+            &self,
+            _: &mut HitTestResult,
+            _: PositiveFinite<f32>,
+            _: PositiveFinite<f32>,
+        ) -> HitTest {
+            HitTest::Pass
         }
     }
 

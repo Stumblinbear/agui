@@ -225,20 +225,6 @@ where
         self.child.unmount(ctx);
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        let child_size = self
-            .child
-            .parent_data
-            .as_ref()
-            .expect("child has not been laid out");
-
-        if !child_size.contains(position) {
-            return HitTest::Pass;
-        }
-
-        self.child.hit_test(result, position)
-    }
-
     fn paint(&mut self, canvas: &mut Canvas) {
         self.child.paint(canvas);
     }
@@ -298,6 +284,20 @@ where
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         self.child.distance_to_baseline(baseline)
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        let child_size = self
+            .child
+            .parent_data
+            .as_ref()
+            .expect("child has not been laid out");
+
+        if !child_size.contains(position) {
+            return HitTest::Pass;
+        }
+
+        self.child.hit_test(result, position)
     }
 }
 

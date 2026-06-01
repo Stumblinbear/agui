@@ -1,12 +1,24 @@
 use std::any::Any;
 
-use crate::render_object::{
-    AnyRenderObject,
-    sliver::{RenderSliver, SliverConstraints, SliverGeometry, SliverLayout},
+use typed_floats::PositiveFinite;
+
+use crate::{
+    hit_test::{HitTest, HitTestResult},
+    render_object::{
+        AnyRenderObject,
+        sliver::{RenderSliver, SliverConstraints, SliverGeometry, SliverLayout},
+    },
 };
 
 pub trait AnyRenderSliver: AnyRenderObject {
     fn dyn_layout(&mut self, constraints: SliverConstraints) -> SliverGeometry;
+
+    fn dyn_hit_test(
+        &self,
+        result: &mut HitTestResult,
+        main_axis_position: PositiveFinite<f32>,
+        cross_axis_position: PositiveFinite<f32>,
+    ) -> HitTest;
 }
 
 impl<T> AnyRenderSliver for T
@@ -17,6 +29,15 @@ where
     fn dyn_layout(&mut self, constraints: SliverConstraints) -> SliverGeometry {
         SliverLayout::layout(self, constraints)
     }
+
+    fn dyn_hit_test(
+        &self,
+        result: &mut HitTestResult,
+        main_axis_position: PositiveFinite<f32>,
+        cross_axis_position: PositiveFinite<f32>,
+    ) -> HitTest {
+        SliverLayout::hit_test(self, result, main_axis_position, cross_axis_position)
+    }
 }
 
 impl<T> SliverLayout for Box<T>
@@ -25,5 +46,14 @@ where
 {
     fn layout(&mut self, constraints: SliverConstraints) -> SliverGeometry {
         (**self).dyn_layout(constraints)
+    }
+
+    fn hit_test(
+        &self,
+        result: &mut HitTestResult,
+        main_axis_position: PositiveFinite<f32>,
+        cross_axis_position: PositiveFinite<f32>,
+    ) -> HitTest {
+        (**self).dyn_hit_test(result, main_axis_position, cross_axis_position)
     }
 }

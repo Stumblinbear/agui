@@ -199,14 +199,6 @@ where
         }
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, offset: Offset) -> HitTest {
-        if let Some(child_render) = self.child_render.as_ref() {
-            child_render.hit_test(result, offset)
-        } else {
-            HitTest::Pass
-        }
-    }
-
     fn paint(&mut self, canvas: &mut Canvas) {
         if let Some(child_render) = self.child_render.as_mut() {
             child_render.paint(canvas);
@@ -262,6 +254,14 @@ where
 
     fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, offset: Offset) -> HitTest {
+        if let Some(child_render) = self.child_render.as_ref() {
+            child_render.hit_test(result, offset)
+        } else {
+            HitTest::Pass
+        }
     }
 }
 

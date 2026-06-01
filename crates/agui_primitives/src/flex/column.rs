@@ -398,14 +398,6 @@ where
         }
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        if !self.size.contains(position) {
-            return HitTest::Pass;
-        }
-
-        HitTest::Pass
-    }
-
     fn paint(&mut self, canvas: &mut Canvas) {}
 }
 
@@ -447,6 +439,14 @@ where
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        if !self.size.contains(position) {
+            return HitTest::Pass;
+        }
+
+        HitTest::Pass
     }
 }
 

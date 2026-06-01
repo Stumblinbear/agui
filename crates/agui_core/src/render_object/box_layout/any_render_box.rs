@@ -4,6 +4,8 @@ use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     constraints::Constraints,
+    hit_test::{HitTest, HitTestResult},
+    offset::Offset,
     render_object::{
         AnyRenderObject,
         box_layout::{BoxLayout, RenderBox},
@@ -32,6 +34,8 @@ pub trait AnyRenderBox: AnyRenderObject {
     ) -> Option<PositiveFinite<f32>>;
 
     fn dyn_distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>>;
+
+    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 }
 
 impl<T> AnyRenderBox for T
@@ -74,6 +78,10 @@ where
     fn dyn_distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         self.distance_to_baseline(baseline)
     }
+
+    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        self.hit_test(result, position)
+    }
 }
 
 impl<T> BoxLayout for Box<T>
@@ -114,5 +122,9 @@ where
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         (**self).dyn_distance_to_baseline(baseline)
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        (**self).dyn_hit_test(result, position)
     }
 }

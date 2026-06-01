@@ -117,22 +117,6 @@ where
         self.child.unmount(ctx);
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        let ChildParentData { size, offset } = self
-            .child
-            .parent_data
-            .as_ref()
-            .expect("child has not been laid out");
-
-        if !size.contains(position) {
-            return HitTest::Pass;
-        }
-
-        result.with_offset(*offset, position, |result, transformed| {
-            self.child.hit_test(result, transformed)
-        })
-    }
-
     fn paint(&mut self, canvas: &mut Canvas) {
         canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
             self.child.paint(canvas);
@@ -254,6 +238,22 @@ where
         self.child.distance_to_baseline(baseline).map(|distance| {
             PositiveFinite::try_from(distance + child_offset.y)
                 .expect("distance to baseline of padding was not a positive finite number")
+        })
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        let ChildParentData { size, offset } = self
+            .child
+            .parent_data
+            .as_ref()
+            .expect("child has not been laid out");
+
+        if !size.contains(position) {
+            return HitTest::Pass;
+        }
+
+        result.with_offset(*offset, position, |result, transformed| {
+            self.child.hit_test(result, transformed)
         })
     }
 }

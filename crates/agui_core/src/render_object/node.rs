@@ -55,10 +55,6 @@ impl<R: RenderObject, P> RenderNode<R, P> {
     pub fn paint(&mut self, canvas: &mut Canvas) {
         self.object.paint(canvas);
     }
-
-    pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.object.hit_test(result, position)
-    }
 }
 
 impl<R: BoxLayout, P> RenderNode<R, P> {
@@ -107,6 +103,10 @@ impl<R: BoxLayout, P> RenderNode<R, P> {
     pub fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         self.object.distance_to_baseline(baseline)
     }
+
+    pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        self.object.hit_test(result, position)
+    }
 }
 
 #[cfg(test)]
@@ -138,10 +138,6 @@ mod tests {
         fn mount(&mut self, _: &mut UpdateCtx) {}
 
         fn unmount(&mut self, _: &mut UpdateCtx) {}
-
-        fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-            self.child.hit_test(result, position)
-        }
 
         fn paint(&mut self, canvas: &mut Canvas) {
             self.child.paint(canvas);
@@ -347,10 +343,6 @@ mod tests {
 
         fn unmount(&mut self, _: &mut UpdateCtx) {}
 
-        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
-            HitTest::Pass
-        }
-
         fn paint(&mut self, _: &mut Canvas) {}
     }
 
@@ -385,6 +377,10 @@ mod tests {
 
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
+        }
+
+        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+            HitTest::Pass
         }
     }
 

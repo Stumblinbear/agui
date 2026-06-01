@@ -1,12 +1,6 @@
 use std::any::Any;
 
-use crate::{
-    context::UpdateCtx,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    render_object::RenderObject,
-    renderer::Canvas,
-};
+use crate::{context::UpdateCtx, render_object::RenderObject, renderer::Canvas};
 
 pub trait AnyRenderObject {
     fn as_any(&self) -> &dyn Any;
@@ -18,8 +12,6 @@ pub trait AnyRenderObject {
     fn dyn_mount(&mut self, ctx: &mut UpdateCtx);
 
     fn dyn_unmount(&mut self, ctx: &mut UpdateCtx);
-
-    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
     fn dyn_paint(&mut self, canvas: &mut Canvas);
 }
@@ -49,10 +41,6 @@ where
         self.unmount(ctx);
     }
 
-    fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.hit_test(result, position)
-    }
-
     fn dyn_paint(&mut self, canvas: &mut Canvas) {
         self.paint(canvas);
     }
@@ -68,10 +56,6 @@ where
 
     fn unmount(&mut self, ctx: &mut UpdateCtx) {
         (**self).dyn_unmount(ctx);
-    }
-
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        (**self).dyn_hit_test(result, position)
     }
 
     fn paint(&mut self, canvas: &mut Canvas) {
