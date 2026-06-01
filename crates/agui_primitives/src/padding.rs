@@ -273,13 +273,16 @@ mod tests {
             .root
             .as_ref(&padding)
             .create_render_object();
-        render_object.layout(Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.child.parent_data.as_ref(),
-            Some(&ChildParentData {
-                size: Size::new(20.0, 20.0),
-                offset: Offset::new(10.0, 10.0),
-            })
+            size,
+            Size::new(20.0, 20.0),
+            "padding inflates a zero-size child to the insets"
+        );
+        assert_eq!(
+            render_object.child.parent_data.as_ref().map(|data| data.offset),
+            Some(Offset::new(10.0, 10.0)),
+            "child is offset by the leading padding"
         );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
@@ -287,13 +290,16 @@ mod tests {
             .root
             .as_ref(&padding)
             .create_render_object();
-        render_object.layout(Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.child.parent_data.as_ref(),
-            Some(&ChildParentData {
-                size: Size::new(100.0, 100.0),
-                offset: Offset::new(50.0, 50.0),
-            })
+            size,
+            Size::new(100.0, 100.0),
+            "padding inflates a shrunk child to the insets"
+        );
+        assert_eq!(
+            render_object.child.parent_data.as_ref().map(|data| data.offset),
+            Some(Offset::new(50.0, 50.0)),
+            "child is offset by the leading padding"
         );
 
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
@@ -301,13 +307,16 @@ mod tests {
             .root
             .as_ref(&padding)
             .create_render_object();
-        render_object.layout(Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
-            render_object.child.parent_data.as_ref(),
-            Some(&ChildParentData {
-                size: Size::new(128.0, 128.0),
-                offset: Offset::new(50.0, 50.0),
-            })
+            size,
+            Size::new(128.0, 128.0),
+            "padding plus an expanding child fills the constraints"
+        );
+        assert_eq!(
+            render_object.child.parent_data.as_ref().map(|data| data.offset),
+            Some(Offset::new(50.0, 50.0)),
+            "child is offset by the leading padding"
         );
     }
 }

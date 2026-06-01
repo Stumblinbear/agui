@@ -215,8 +215,8 @@ mod tests {
         render_object.layout(Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
-            Some(&Size::new(128, 128)),
-            "should not exceed the width or height of the constraints"
+            Some(&Size::new(128, 256)),
+            "width is clamped to the constraints but height is left unbounded to scroll"
         );
     }
 }

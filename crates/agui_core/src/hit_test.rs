@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec4};
 
 use crate::{offset::Offset, routing_id::RoutingPath};
 
@@ -101,11 +101,16 @@ impl HitTestResult {
         position: Offset,
         func: impl FnOnce(&mut Self, Offset) -> HitTest,
     ) -> HitTest {
-        self.with_raw_transform(
-            Mat4::from_translation(Vec3::new(-offset.x.get(), -offset.y.get(), 0.0)),
-            position - offset,
-            func,
-        )
+        let current = self.current_transform();
+        let mut composed = current;
+        composed.w_axis = current * Vec4::new(-offset.x.get(), -offset.y.get(), 0.0, 1.0);
+        self.transforms.push(composed);
+
+        let result = func(self, position - offset);
+
+        self.transforms.pop();
+
+        result
     }
 
     pub fn add(&mut self, path: RoutingPath) {
