@@ -359,29 +359,31 @@ fn match_keyed_middle(
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, rc::Rc, sync::mpsc};
+    use std::{cell::Cell, rc::Rc};
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        driver::Driver,
         element::Element,
         key::AnyKeyable,
         provide::ProvideScope,
         render_object::RenderLeaf,
         routing_id::RoutingId,
-        test_harness::NoopTestDriver,
+        test_harness::TestTaskRunner,
         widget::Widget,
     };
 
     use super::{MultiChildElement, SingleChildElement};
 
     fn with_ctx<R>(f: impl FnOnce(&mut UpdateCtx) -> R) -> R {
-        let driver: Rc<dyn Driver> = Rc::new(NoopTestDriver);
-        let (tx, _rx) = mpsc::channel();
+        let mut task_runner = TestTaskRunner::new();
         let mut path = Vec::new();
         let scope = ProvideScope::new();
 
-        f(&mut UpdateCtx::new(&driver, &tx, &mut path, &scope))
+        f(&mut UpdateCtx::new(
+            &mut task_runner.scheduler(),
+            &mut path,
+            scope,
+        ))
     }
 
     struct Probe {

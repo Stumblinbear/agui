@@ -1,31 +1,28 @@
-use std::{any::Any, rc::Rc, sync::mpsc};
+use std::{any::Any, future::Future, rc::Rc};
 
 use crate::{
-    driver::Driver,
+    context::TaskCtx,
     provide::ProvideScope,
     routing_id::{RoutingId, RoutingPath},
+    task::{TaskHandle, scheduler::TaskScheduler},
 };
 
 pub struct UpdateCtx<'a> {
-    driver: &'a Rc<dyn Driver>,
-    event_tx: &'a mpsc::Sender<()>,
+    scheduler: &'a mut dyn TaskScheduler,
 
     routing_path: &'a mut Vec<RoutingId>,
 
-    provide_scope: &'a ProvideScope,
+    provide_scope: ProvideScope,
 }
 
 impl<'a> UpdateCtx<'a> {
     pub fn new(
-        driver: &'a Rc<dyn Driver>,
-        event_tx: &'a mpsc::Sender<()>,
+        scheduler: &'a mut dyn TaskScheduler,
         routing_path: &'a mut Vec<RoutingId>,
-        provide_scope: &'a ProvideScope,
+        provide_scope: ProvideScope,
     ) -> Self {
         Self {
-            driver,
-
-            event_tx,
+            scheduler,
 
             routing_path,
 
@@ -33,20 +30,12 @@ impl<'a> UpdateCtx<'a> {
         }
     }
 
-    pub fn driver(&self) -> &Rc<dyn Driver> {
-        self.driver
-    }
-
-    pub fn event_tx(&self) -> mpsc::Sender<()> {
-        self.event_tx.clone()
-    }
-
     pub fn routing_path(&self) -> RoutingPath {
         RoutingPath::from(self.routing_path.clone())
     }
 
     pub fn provide_scope(&self) -> &ProvideScope {
-        self.provide_scope
+        &self.provide_scope
     }
 
     pub fn get_provided<T>(&self) -> Option<&T>
@@ -54,6 +43,23 @@ impl<'a> UpdateCtx<'a> {
         T: Any,
     {
         self.provide_scope.get()
+    }
+
+    /// Spawn a task tied to this element. `func` receives a [`TaskCtx`] it can use to post messages
+    /// back to this element.
+    pub fn spawn<F, Fut>(&mut self, func: F) -> Result<TaskHandle, Box<dyn std::error::Error>>
+    where
+        F: FnOnce(TaskCtx) -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static,
+    {
+        let task_ctx = TaskCtx::new(self.scheduler.event_tx(), self.routing_path());
+
+        self.scheduler.spawn(Box::pin(func(task_ctx)))
+    }
+
+    /// An owned scheduler handle that outlives this build.
+    pub fn deferred_scheduler(&self) -> Box<dyn TaskScheduler> {
+        self.scheduler.deferred()
     }
 
     pub fn with_routing_id<T>(
@@ -74,16 +80,13 @@ impl<'a> UpdateCtx<'a> {
     where
         V: Any,
     {
-        let provide_scope = self.provide_scope.provide(value);
+        let new_scope = self.provide_scope.provide(value);
+        let old_scope = std::mem::replace(&mut self.provide_scope, new_scope);
 
-        func(&mut UpdateCtx {
-            driver: self.driver,
+        let ret = func(self);
 
-            event_tx: self.event_tx,
+        self.provide_scope = old_scope;
 
-            routing_path: self.routing_path,
-
-            provide_scope: &provide_scope,
-        })
+        ret
     }
 }

@@ -65,8 +65,7 @@ where
             let builder = Rc::clone(&self.builder);
             let child_widget = Rc::clone(&child_widget);
 
-            let driver = Rc::clone(ctx.driver());
-            let event_tx = ctx.event_tx().clone();
+            let scheduler = ctx.deferred_scheduler();
             let routing_path = ctx.routing_path();
             let provide_scope = ctx.provide_scope().clone();
 
@@ -75,12 +74,15 @@ where
 
                 let child = (builder)(constraints);
 
+                // Re-derive an owned scheduler per layout: layout runs outside the build frame, so
+                // the subtree built here borrows this captured handle to keep spawning tasks.
+                let mut scheduler = scheduler.deferred();
+
                 // TODO(trevin): try to use the element of the previously created child
                 let element = child.create_element(&mut UpdateCtx::new(
-                    &driver,
-                    &event_tx,
+                    &mut *scheduler,
                     &mut routing_path,
-                    &provide_scope,
+                    provide_scope.clone(),
                 ));
 
                 let child_render = child.create_render_object(&element);
@@ -106,8 +108,7 @@ where
                 let builder = Rc::clone(&self.builder);
                 let child_widget = Rc::clone(&element.child_widget);
 
-                let driver = Rc::clone(ctx.driver());
-                let event_tx = ctx.event_tx().clone();
+                let scheduler = ctx.deferred_scheduler();
                 let routing_path = ctx.routing_path();
                 let provide_scope = ctx.provide_scope().clone();
 
@@ -116,12 +117,15 @@ where
 
                     let mut routing_path = routing_path.to_vec();
 
+                    // Re-derive an owned scheduler per layout: layout runs outside the build frame,
+                    // so the subtree built here borrows this captured handle to keep spawning tasks.
+                    let mut scheduler = scheduler.deferred();
+
                     // TODO(trevin): try to use the element of the previously created child
                     let element = child.create_element(&mut UpdateCtx::new(
-                        &driver,
-                        &event_tx,
+                        &mut *scheduler,
                         &mut routing_path,
-                        &provide_scope,
+                        provide_scope.clone(),
                     ));
 
                     let child_render = child.create_render_object(&element);
@@ -263,7 +267,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{test_harness::TestHarness, widget::AsAnyWidget};
+    use agui_core::{
+        render_object::RenderLeaf, task::TaskHandle, test_harness::TestHarness, widget::AsAnyWidget,
+    };
 
     use super::*;
     use crate::sized_box::SizedBox;
@@ -300,6 +306,55 @@ mod tests {
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
             Some(Size::new(150.0, 150.0))
+        );
+    }
+
+    /// A child that spawns a task on mount and stashes its handle so the task outlives the build.
+    struct SpawnOnMount;
+
+    struct SpawnOnMountElement {
+        _handle: Option<TaskHandle>,
+    }
+
+    impl Element for SpawnOnMountElement {}
+
+    impl Widget for SpawnOnMount {
+        type Element = SpawnOnMountElement;
+
+        type Render = RenderLeaf;
+
+        fn create_element(&self, ctx: &mut UpdateCtx) -> SpawnOnMountElement {
+            let handle = ctx.spawn(|task| async move { task.send(1_u32) }).ok();
+
+            SpawnOnMountElement { _handle: handle }
+        }
+
+        fn update(&self, _: &mut SpawnOnMountElement, _: &Self, _: &mut UpdateCtx) {}
+
+        fn create_render_object(&self, _: &SpawnOnMountElement) -> RenderLeaf {
+            RenderLeaf::default()
+        }
+
+        fn update_render_object(&self, _: &SpawnOnMountElement, _: &mut RenderLeaf) {}
+    }
+
+    #[test]
+    fn subtree_can_spawn_tasks_during_layout() {
+        // The child is built during layout, not during the LayoutBuilder's own build. It still gets
+        // a working scheduler (the deferred handle captured at mount) and posts a message back.
+        let layout_builder = LayoutBuilder::new(|_| SpawnOnMount);
+
+        let mut harness = TestHarness::mount(&layout_builder);
+
+        let mut render_object = layout_builder.create_render_object(&harness.root.element);
+        render_object.layout(Constraints::new(0, 50, 0, 50));
+
+        harness.task_runner.run_to_completion();
+
+        assert_eq!(
+            harness.task_runner.messages().count(),
+            1,
+            "the subtree spawned a task during layout that posted one message"
         );
     }
 }
