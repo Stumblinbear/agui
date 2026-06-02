@@ -1,4 +1,4 @@
-#[must_use]
+#[must_use = "dropping the handle cancels the task"]
 pub struct TaskHandle {
     drop: Option<Box<dyn FnOnce()>>,
 }
