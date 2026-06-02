@@ -72,19 +72,19 @@ mod tests {
         routing_id::RoutingId,
         test_fixtures::Leaf,
         test_harness::TestHarness,
-        view::View,
+        widget::Widget,
     };
 
-    struct TestProviderView<T, Child> {
+    struct TestProviderWidget<T, Child> {
         value: Rc<T>,
 
         child: Child,
     }
 
-    impl<T, Child> View for TestProviderView<T, Child>
+    impl<T, Child> Widget for TestProviderWidget<T, Child>
     where
         T: Any,
-        Child: View,
+        Child: Widget,
     {
         type Element = SingleChildElement<Child::Element>;
 
@@ -124,26 +124,26 @@ mod tests {
 
     #[test]
     fn elements_can_provide_and_get_types() {
-        let view_3 = TestProviderView {
+        let widget_3 = TestProviderWidget {
             value: Rc::new(3_usize),
             child: Leaf::new().on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
         };
 
-        let mut harness = TestHarness::mount(&view_3);
+        let mut harness = TestHarness::mount(&widget_3);
 
-        let view_6 = TestProviderView {
+        let widget_6 = TestProviderWidget {
             value: Rc::new(6_usize),
             child: Leaf::new().on_update(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&6))),
         };
 
-        harness.update(&view_3, &view_6);
+        harness.update(&widget_3, &widget_6);
     }
 
     #[test]
     fn nested_elements_to_provide_multiple_types() {
-        let view = TestProviderView {
+        let widget = TestProviderWidget {
             value: Rc::new(3_usize),
-            child: TestProviderView {
+            child: TestProviderWidget {
                 value: Rc::new(6_i32),
                 child: Leaf::new().on_mount(|ctx| {
                     assert_eq!(ctx.get_provided::<usize>(), Some(&3));
@@ -152,20 +152,20 @@ mod tests {
             },
         };
 
-        let _ = TestHarness::mount(&view);
+        let _ = TestHarness::mount(&widget);
     }
 
     #[test]
     fn providing_same_type_twice_returns_latest() {
-        let view = TestProviderView {
+        let widget = TestProviderWidget {
             value: Rc::new(1_usize),
-            child: TestProviderView {
+            child: TestProviderWidget {
                 value: Rc::new(2_usize),
                 child: Leaf::new()
                     .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&2))),
             },
         };
 
-        let _ = TestHarness::mount(&view);
+        let _ = TestHarness::mount(&widget);
     }
 }

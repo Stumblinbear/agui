@@ -3,7 +3,7 @@ use crate::{
     element::{MultiChildElement, SingleChildElement},
     render_object::RenderLeaf,
     routing_id::RoutingId,
-    view::View,
+    widget::Widget,
 };
 
 type OnMount<'a> = Box<dyn Fn(&mut UpdateCtx<'_>) + 'a>;
@@ -11,7 +11,7 @@ type OnUpdate<'a> = Box<dyn Fn(&mut UpdateCtx<'_>) + 'a>;
 type OnMessage<'a> = Box<dyn Fn(&mut MessageCtx) + 'a>;
 type OnRebuild<'a> = Box<dyn Fn(&mut UpdateCtx<'_>) + 'a>;
 
-/// Leaf view whose lifecycle behavior is supplied by closures.
+/// Leaf widget whose lifecycle behavior is supplied by closures.
 pub struct Leaf<'a> {
     on_mount: OnMount<'a>,
     on_update: OnUpdate<'a>,
@@ -56,7 +56,7 @@ impl<'a> Default for Leaf<'a> {
     }
 }
 
-impl<'a> View for Leaf<'a> {
+impl<'a> Widget for Leaf<'a> {
     type Element = ();
 
     type Render = RenderLeaf;
@@ -91,7 +91,7 @@ pub struct Transparent<Child> {
     pub child: Child,
 }
 
-impl<Child: View> View for Transparent<Child> {
+impl<Child: Widget> Widget for Transparent<Child> {
     type Element = SingleChildElement<Child::Element>;
 
     type Render = RenderLeaf;
@@ -119,7 +119,7 @@ pub struct MultiChild<Child> {
     pub children: Vec<Child>,
 }
 
-impl<Child: View> View for MultiChild<Child> {
+impl<Child: Widget> Widget for MultiChild<Child> {
     type Element = MultiChildElement<Child::Element>;
 
     type Render = RenderLeaf;

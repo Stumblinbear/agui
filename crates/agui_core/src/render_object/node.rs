@@ -126,7 +126,7 @@ mod tests {
         test_fixtures::Leaf,
         test_harness::TestHarness,
         text_baseline::TextBaseline,
-        view::{AsAnyView, View},
+        widget::{AsAnyWidget, Widget},
     };
 
     struct RenderPad<C: RenderBox> {
@@ -197,7 +197,7 @@ mod tests {
 
     impl<C: Element> Element for PadElement<C> {}
 
-    impl<Child: View> View for Pad<Child>
+    impl<Child: Widget> Widget for Pad<Child>
     where
         Child::Render: RenderBox,
     {
@@ -233,26 +233,26 @@ mod tests {
 
     #[test]
     fn create_render_object_builds_wrapped_subtree() {
-        let view = Pad {
+        let widget = Pad {
             pad: 4,
             child: Leaf::new(),
         };
-        let harness = TestHarness::mount(&view);
+        let harness = TestHarness::mount(&widget);
 
-        let node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root.element));
+        let node = RenderNode::<_, ()>::new(widget.create_render_object(&harness.root.element));
 
         assert_eq!(node.object.pad, 4);
     }
 
     #[test]
     fn update_render_object_syncs_in_place() {
-        let view = Pad {
+        let widget = Pad {
             pad: 4,
             child: Leaf::new(),
         };
 
-        let harness = TestHarness::mount(&view);
-        let mut node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root.element));
+        let harness = TestHarness::mount(&widget);
+        let mut node = RenderNode::<_, ()>::new(widget.create_render_object(&harness.root.element));
 
         assert_eq!(node.object.pad, 4);
 
@@ -278,13 +278,13 @@ mod tests {
 
     #[test]
     fn build_update_paint_layout_and_reconcile_a_boxed_child() {
-        // construct a render tree through the real View seam
-        let view = Pad {
+        // construct a render tree through the real Widget seam
+        let widget = Pad {
             pad: 4,
             child: Leaf::new(),
         };
-        let harness = TestHarness::mount(&view);
-        let mut node = RenderNode::<_, ()>::new(view.create_render_object(&harness.root.element));
+        let harness = TestHarness::mount(&widget);
+        let mut node = RenderNode::<_, ()>::new(widget.create_render_object(&harness.root.element));
         assert_eq!(node.object.pad, 4);
 
         // update it in place
@@ -346,7 +346,7 @@ mod tests {
 
     impl Element for CountedElement {}
 
-    impl View for Counted {
+    impl Widget for Counted {
         type Element = CountedElement;
 
         type Render = RenderLeaf;
@@ -370,21 +370,21 @@ mod tests {
     fn updating_a_boxed_slot_reuses_the_render_object() {
         let creates = Rc::new(Cell::new(0usize));
 
-        let view = Counted {
+        let widget = Counted {
             creates: Rc::clone(&creates),
         }
         .into_boxed_render_box();
 
-        let harness = TestHarness::mount(&view);
+        let harness = TestHarness::mount(&widget);
 
         // a fan-out slot: a boxed child wrapped in a RenderNode
         let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(view.create_render_object(&harness.root.element));
+            RenderNode::new(widget.create_render_object(&harness.root.element));
 
         assert_eq!(creates.get(), 1);
 
         // same concrete type -> reuse the boxed render object, do not recreate
-        view.update_render_object(&harness.root.element, &mut slot.object);
+        widget.update_render_object(&harness.root.element, &mut slot.object);
 
         assert_eq!(
             creates.get(),
@@ -450,7 +450,7 @@ mod tests {
 
     impl Element for CountedOtherElement {}
 
-    impl View for CountedOther {
+    impl Widget for CountedOther {
         type Element = CountedOtherElement;
 
         type Render = RenderOther;
@@ -473,14 +473,14 @@ mod tests {
     #[test]
     fn type_swap_at_a_boxed_slot_recreates_the_render_object() {
         let creates_a = Rc::new(Cell::new(0usize));
-        let view_a = Counted {
+        let widget_a = Counted {
             creates: Rc::clone(&creates_a),
         }
         .into_boxed_render_box();
-        let mut harness = TestHarness::mount(&view_a);
+        let mut harness = TestHarness::mount(&widget_a);
 
         let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(view_a.create_render_object(&harness.root.element));
+            RenderNode::new(widget_a.create_render_object(&harness.root.element));
         assert_eq!(creates_a.get(), 1);
         assert!(
             (*slot.object)
@@ -492,12 +492,12 @@ mod tests {
         // swap to a different concrete render type -> reconcile the element, then the slot's
         // render object downcast fails -> recreate
         let creates_b = Rc::new(Cell::new(0usize));
-        let view_b = CountedOther {
+        let widget_b = CountedOther {
             creates: Rc::clone(&creates_b),
         }
         .into_boxed_render_box();
-        harness.update(&view_a, &view_b);
-        view_b.update_render_object(&harness.root.element, &mut slot.object);
+        harness.update(&widget_a, &widget_b);
+        widget_b.update_render_object(&harness.root.element, &mut slot.object);
 
         assert_eq!(
             creates_b.get(),

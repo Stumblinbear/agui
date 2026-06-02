@@ -9,7 +9,7 @@ use crate::{
     context::{Dispatch, UpdateCtx},
     element::SingleChildElement,
     routing_id::RoutingId,
-    view::View,
+    widget::Widget,
 };
 
 mod any_key;
@@ -51,10 +51,10 @@ impl Hash for dyn AnyKeyable {
     }
 }
 
-impl<V, Child> View for Key<V, Child>
+impl<V, Child> Widget for Key<V, Child>
 where
     V: Clone + Hash + PartialEq + Eq + Any,
-    Child: View,
+    Child: Widget,
 {
     type Element = SingleChildElement<Child::Element>;
 

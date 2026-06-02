@@ -14,7 +14,7 @@ use agui_core::{
     size::Size,
     text_baseline::TextBaseline,
     text_direction::TextDirection,
-    view::View,
+    widget::Widget,
 };
 
 #[derive(Builder)]
@@ -38,10 +38,10 @@ impl<EdgeGeometry, Child> Padding<EdgeGeometry, Child> {
     }
 }
 
-impl<EdgeGeometry, Child> View for Padding<EdgeGeometry, Child>
+impl<EdgeGeometry, Child> Widget for Padding<EdgeGeometry, Child>
 where
     EdgeGeometry: EdgeInsetsGeometry,
-    Child: View,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     type Element = SingleChildElement<Child::Element>;

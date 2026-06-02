@@ -12,7 +12,7 @@ use agui_core::{
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
-    view::View,
+    widget::Widget,
 };
 
 #[derive(Builder)]
@@ -22,9 +22,9 @@ pub struct IntrinsicWidth<Child> {
     child: Child,
 }
 
-impl<Child> View for IntrinsicWidth<Child>
+impl<Child> Widget for IntrinsicWidth<Child>
 where
-    Child: View,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     type Element = SingleChildElement<Child::Element>;

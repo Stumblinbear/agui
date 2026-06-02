@@ -12,7 +12,7 @@ use agui_core::{
     size::Size,
     text_baseline::TextBaseline,
     text_direction::TextDirection,
-    view::{AsAnyView, BoxedView, View},
+    widget::{AsAnyWidget, BoxedWidget, Widget},
 };
 use typed_floats::{Positive, PositiveFinite};
 
@@ -42,14 +42,14 @@ pub struct Column<Children> {
 
 impl<Children, S: column_builder::State> ColumnBuilder<Children, S>
 where
-    Children: AsAnyView,
+    Children: AsAnyWidget,
     Children::Render: RenderBox,
 {
     #[allow(deprecated)]
     pub fn dyn_children(
         self,
         iter: impl IntoIterator<Item = Flexible<Children>>,
-    ) -> ColumnBuilder<BoxedView, column_builder::SetChildren<S>>
+    ) -> ColumnBuilder<BoxedWidget, column_builder::SetChildren<S>>
     where
         S::Children: column_builder::IsUnset,
     {
@@ -74,9 +74,9 @@ where
     }
 }
 
-impl<Children> View for Column<Children>
+impl<Children> Widget for Column<Children>
 where
-    Children: View,
+    Children: Widget,
     Children::Render: RenderObject,
 {
     type Element = MultiChildElement<Children::Element>;
@@ -244,7 +244,7 @@ mod tests {
 
     use agui_core::{
         element::Element, key::Key, render_object::RenderLeaf, test_harness::TestHarness,
-        view::AsAnyView,
+        widget::AsAnyWidget,
     };
 
     use super::*;
@@ -254,34 +254,34 @@ mod tests {
         static UPDATE_COUNT: RefCell<usize> = const { RefCell::new(0) };
     }
 
-    pub struct TestView<T> {
+    pub struct TestWidget<T> {
         value: T,
     }
 
-    impl<T> TestView<T> {
+    impl<T> TestWidget<T> {
         pub fn new(value: T) -> Self {
             Self { value }
         }
     }
 
-    pub struct TestViewElement<T> {
+    pub struct TestWidgetElement<T> {
         value: T,
     }
 
-    impl<T: 'static> Element for TestViewElement<T> {}
+    impl<T: 'static> Element for TestWidgetElement<T> {}
 
-    impl<T> View for TestView<T>
+    impl<T> Widget for TestWidget<T>
     where
         T: Clone + 'static,
     {
-        type Element = TestViewElement<T>;
+        type Element = TestWidgetElement<T>;
 
         type Render = RenderLeaf;
 
         fn create_element(&self, _: &mut UpdateCtx) -> Self::Element {
             MOUNT_COUNT.with(|count| *count.borrow_mut() += 1);
 
-            TestViewElement {
+            TestWidgetElement {
                 value: self.value.clone(),
             }
         }
@@ -302,30 +302,30 @@ mod tests {
     #[test]
     fn column_builder() {
         let _ = Column::builder()
-            .children([TestView::new(0).into(), TestView::new(1).into()])
+            .children([TestWidget::new(0).into(), TestWidget::new(1).into()])
             .build();
 
         let _ = Column::builder()
             .children(bon::vec![
-                TestView::new(0),
-                TestView::new(0),
-                Flexible::from(TestView::new(0)),
+                TestWidget::new(0),
+                TestWidget::new(0),
+                Flexible::from(TestWidget::new(0)),
             ])
             .build();
 
         let _ = Column::builder()
             .children(bon::vec![
-                TestView::new(0).into_boxed_render_box(),
-                TestView::new(0).into_boxed_render_box(),
-                Flexible::from(TestView::new(0).into_boxed_render_box()),
+                TestWidget::new(0).into_boxed_render_box(),
+                TestWidget::new(0).into_boxed_render_box(),
+                Flexible::from(TestWidget::new(0).into_boxed_render_box()),
             ])
             .build();
 
         let _ = Column::builder()
             .dyn_children(bon::vec![
-                TestView::new(0),
-                TestView::new(0),
-                Flexible::from(TestView::new(0)),
+                TestWidget::new(0),
+                TestWidget::new(0),
+                Flexible::from(TestWidget::new(0)),
             ])
             .build();
     }
@@ -334,9 +334,9 @@ mod tests {
     fn adds_all_children() {
         let column = Column::builder()
             .children([
-                TestView::new(0).into(),
-                TestView::new(0).into(),
-                TestView::new(0).into(),
+                TestWidget::new(0).into(),
+                TestWidget::new(0).into(),
+                TestWidget::new(0).into(),
             ])
             .build();
 
@@ -349,8 +349,8 @@ mod tests {
     fn only_remounts_children_when_children_replaced() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -361,8 +361,8 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<u16>::new(0).into_boxed_render_box().into(),
-                TestView::<u16>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u16>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u16>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -376,8 +376,8 @@ mod tests {
     fn only_updates_children_when_children_unchanged() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into(),
-                TestView::<usize>::new(0).into(),
+                TestWidget::<usize>::new(0).into(),
+                TestWidget::<usize>::new(0).into(),
             ])
             .build();
 
@@ -388,8 +388,8 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into(),
-                TestView::<usize>::new(0).into(),
+                TestWidget::<usize>::new(0).into(),
+                TestWidget::<usize>::new(0).into(),
             ])
             .build();
 
@@ -403,11 +403,11 @@ mod tests {
     fn retains_leading_unchanged_children() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -418,9 +418,9 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<u32>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -434,11 +434,11 @@ mod tests {
     fn retains_following_unchanged_children() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -449,9 +449,9 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<u32>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -465,11 +465,11 @@ mod tests {
     fn retains_leading_and_following_unchanged_children() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -480,12 +480,12 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<u32>::new(0).into_boxed_render_box().into(),
-                TestView::<u32>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -499,16 +499,16 @@ mod tests {
     fn retains_middle_keyed_child() {
         let column_1 = Column::builder()
             .children([
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                Key::new(0, TestView::<usize>::new(0))
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                Key::new(0, TestWidget::<usize>::new(0))
                     .into_boxed_render_box()
                     .into(),
-                Key::new(1, TestView::<usize>::new(0))
+                Key::new(1, TestWidget::<usize>::new(0))
                     .into_boxed_render_box()
                     .into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
-                TestView::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 
@@ -519,14 +519,14 @@ mod tests {
 
         let column_2 = Column::builder()
             .children([
-                TestView::<u32>::new(0).into_boxed_render_box().into(),
-                Key::new(0, TestView::<usize>::new(0))
+                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
+                Key::new(0, TestWidget::<usize>::new(0))
                     .into_boxed_render_box()
                     .into(),
-                Key::new(2, TestView::<usize>::new(0))
+                Key::new(2, TestWidget::<usize>::new(0))
                     .into_boxed_render_box()
                     .into(),
-                TestView::<u32>::new(0).into_boxed_render_box().into(),
+                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
             ])
             .build();
 

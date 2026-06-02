@@ -13,7 +13,7 @@ use agui_core::{
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
-    view::View,
+    widget::Widget,
 };
 
 pub struct LayoutBuilder<F, Child> {
@@ -37,19 +37,19 @@ where
 
 pub struct LayoutBuilderElement<Child>
 where
-    Child: View,
+    Child: Widget,
 {
-    child_view: Rc<RefCell<Option<(ElementNode<Child::Element>, Child)>>>,
+    child_widget: Rc<RefCell<Option<(ElementNode<Child::Element>, Child)>>>,
 
     builder: Rc<dyn Fn(Constraints) -> Child::Render>,
 }
 
-impl<Child> Element for LayoutBuilderElement<Child> where Child: View + 'static {}
+impl<Child> Element for LayoutBuilderElement<Child> where Child: Widget + 'static {}
 
-impl<F, Child> View for LayoutBuilder<F, Child>
+impl<F, Child> Widget for LayoutBuilder<F, Child>
 where
     F: Fn(Constraints) -> Child + 'static,
-    Child: View + 'static,
+    Child: Widget + 'static,
     Child::Render: RenderBox,
 {
     type Element = LayoutBuilderElement<Child>;
@@ -57,11 +57,11 @@ where
     type Render = RenderLayoutBuilder<Child::Render>;
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        let child_view = Rc::<RefCell<Option<(ElementNode<Child::Element>, Child)>>>::default();
+        let child_widget = Rc::<RefCell<Option<(ElementNode<Child::Element>, Child)>>>::default();
 
         let builder = {
             let builder = Rc::clone(&self.builder);
-            let child_view = Rc::clone(&child_view);
+            let child_widget = Rc::clone(&child_widget);
 
             let driver = Rc::clone(ctx.driver());
             let event_tx = ctx.event_tx().clone();
@@ -83,14 +83,14 @@ where
 
                 let child_render = child.create_render_object(&element);
 
-                child_view.replace(Some((ElementNode::new(element), child)));
+                child_widget.replace(Some((ElementNode::new(element), child)));
 
                 child_render
             })
         };
 
         LayoutBuilderElement {
-            child_view,
+            child_widget,
 
             builder,
         }
@@ -98,11 +98,11 @@ where
 
     fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
         if !Rc::ptr_eq(&self.builder, &old.builder) {
-            element.child_view.replace(None);
+            element.child_widget.replace(None);
 
             element.builder = {
                 let builder = Rc::clone(&self.builder);
-                let child_view = Rc::clone(&element.child_view);
+                let child_widget = Rc::clone(&element.child_widget);
 
                 let driver = Rc::clone(ctx.driver());
                 let event_tx = ctx.event_tx().clone();
@@ -124,7 +124,7 @@ where
 
                     let child_render = child.create_render_object(&element);
 
-                    child_view.replace(Some((ElementNode::new(element), child)));
+                    child_widget.replace(Some((ElementNode::new(element), child)));
 
                     child_render
                 })
@@ -133,9 +133,9 @@ where
     }
 
     fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        let mut child_view = element.child_view.borrow_mut();
+        let mut child_widget = element.child_widget.borrow_mut();
 
-        let Some((child_element, child)) = child_view.as_mut() else {
+        let Some((child_element, child)) = child_widget.as_mut() else {
             panic!("child was dispatched to before being laid out");
         };
 
@@ -160,9 +160,9 @@ where
             render_object.child_render.take();
         }
 
-        let child_view = element.child_view.borrow();
+        let child_widget = element.child_widget.borrow();
 
-        if let Some((child_element, child)) = child_view.as_ref() {
+        if let Some((child_element, child)) = child_widget.as_ref() {
             if let Some(child_render) = &mut render_object.child_render {
                 child.update_render_object(&child_element.element, &mut child_render.object);
             }
@@ -261,7 +261,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{test_harness::TestHarness, view::AsAnyView};
+    use agui_core::{test_harness::TestHarness, widget::AsAnyWidget};
 
     use super::*;
     use crate::sized_box::SizedBox;

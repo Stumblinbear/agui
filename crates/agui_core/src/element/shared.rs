@@ -5,10 +5,10 @@ use crate::{
     element::{Element, ElementNode},
     key::AnyKeyable,
     routing_id::RoutingId,
-    view::View,
+    widget::Widget,
 };
 
-/// The [`Element`] of a view with a single child.
+/// The [`Element`] of a widget with a single child.
 pub struct SingleChildElement<C> {
     pub child: ElementNode<C>,
 }
@@ -16,17 +16,17 @@ pub struct SingleChildElement<C> {
 impl<C: Element> Element for SingleChildElement<C> {}
 
 impl<C: Element> SingleChildElement<C> {
-    pub fn new<CV: View<Element = C>>(child: &CV, ctx: &mut UpdateCtx) -> Self {
+    pub fn new<CV: Widget<Element = C>>(child: &CV, ctx: &mut UpdateCtx) -> Self {
         SingleChildElement {
             child: ElementNode::new(child.create_element(ctx)),
         }
     }
 
-    pub fn update<CV: View<Element = C>>(&mut self, new: &CV, old: &CV, ctx: &mut UpdateCtx) {
+    pub fn update<CV: Widget<Element = C>>(&mut self, new: &CV, old: &CV, ctx: &mut UpdateCtx) {
         new.update(&mut self.child.element, old, ctx);
     }
 
-    pub fn dispatch<CV: View<Element = C>>(
+    pub fn dispatch<CV: Widget<Element = C>>(
         &mut self,
         child: &CV,
         path: &[RoutingId],
@@ -35,11 +35,11 @@ impl<C: Element> SingleChildElement<C> {
         child.dispatch(&mut self.child.element, path, action);
     }
 
-    pub fn create_render_object<CV: View<Element = C>>(&self, child: &CV) -> CV::Render {
+    pub fn create_render_object<CV: Widget<Element = C>>(&self, child: &CV) -> CV::Render {
         child.create_render_object(&self.child.element)
     }
 
-    pub fn update_render_object<CV: View<Element = C>>(
+    pub fn update_render_object<CV: Widget<Element = C>>(
         &self,
         child: &CV,
         render_object: &mut CV::Render,
@@ -48,7 +48,7 @@ impl<C: Element> SingleChildElement<C> {
     }
 }
 
-/// The [`Element`] of a view with a flat, keyed list of children.
+/// The [`Element`] of a widget with a flat, keyed list of children.
 pub struct MultiChildElement<C> {
     pub children: Vec<ElementNode<C>>,
 }
@@ -58,7 +58,7 @@ impl<C: Element> Element for MultiChildElement<C> {}
 impl<C: Element> MultiChildElement<C> {
     pub fn new<'v, CV>(len: usize, child_at: impl Fn(usize) -> &'v CV, ctx: &mut UpdateCtx) -> Self
     where
-        CV: View<Element = C> + 'v,
+        CV: Widget<Element = C> + 'v,
     {
         MultiChildElement {
             children: (0..len)
@@ -77,7 +77,7 @@ impl<C: Element> MultiChildElement<C> {
         path: &[RoutingId],
         action: Dispatch,
     ) where
-        CV: View<Element = C> + 'v,
+        CV: Widget<Element = C> + 'v,
     {
         let Some((head, rest)) = path.split_first() else {
             unreachable!("dispatch path cannot be empty");
@@ -96,7 +96,7 @@ impl<C: Element> MultiChildElement<C> {
         old_at: impl Fn(usize) -> &'v CV,
         ctx: &mut UpdateCtx,
     ) where
-        CV: View<Element = C> + 'v,
+        CV: Widget<Element = C> + 'v,
     {
         // No children now: drop everything.
         if new_len == 0 {
@@ -118,7 +118,7 @@ impl<C: Element> MultiChildElement<C> {
 
         assert!(
             old_len == self.children.len(),
-            "multi-child count mismatch with the previous view"
+            "multi-child count mismatch with the previous widget"
         );
 
         let mut new_top = 0;
@@ -134,6 +134,7 @@ impl<C: Element> MultiChildElement<C> {
 
         let mut new_elements: Vec<Option<ElementNode<C>>> = (0..new_len).map(|_| None).collect();
 
+        // Reuse in place only at the same type and key; a key change falls to the keyed middle.
         let can_update = |old: &CV, new: &CV| old.is_same_type(new) && old.key() == new.key();
 
         // Update the top of the list while the leading children still line up.
@@ -246,7 +247,8 @@ mod tests {
 
     use crate::{
         context::UpdateCtx, driver::Driver, element::Element, key::AnyKeyable,
-        provide::ProvideScope, render_object::RenderLeaf, test_harness::NoopTestDriver, view::View,
+        provide::ProvideScope, render_object::RenderLeaf, test_harness::NoopTestDriver,
+        widget::Widget,
     };
 
     use super::{MultiChildElement, SingleChildElement};
@@ -260,9 +262,6 @@ mod tests {
         f(&mut UpdateCtx::new(&driver, &tx, &mut path, &scope))
     }
 
-    /// A leaf child for the reconcile tests. `id` is config, rewritten by `update`; `mounted_id` is
-    /// stamped at mount and never changes, so it tracks which element instance survived where;
-    /// `key` drives keyed matching.
     struct Probe {
         id: u32,
         key: Option<u32>,
@@ -277,7 +276,7 @@ mod tests {
 
     impl Element for ProbeElement {}
 
-    impl View for Probe {
+    impl Widget for Probe {
         type Element = ProbeElement;
 
         type Render = RenderLeaf;
@@ -350,9 +349,9 @@ mod tests {
     #[test]
     fn mount_materializes_each_child() {
         let (m, u) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
-        let views = probes(&[10, 20, 30], &m, &u);
+        let widgets = probes(&[10, 20, 30], &m, &u);
 
-        let element = with_ctx(|ctx| MultiChildElement::new(views.len(), |i| &views[i], ctx));
+        let element = with_ctx(|ctx| MultiChildElement::new(widgets.len(), |i| &widgets[i], ctx));
 
         assert_eq!(m.get(), 3);
         assert_eq!(u.get(), 0);
@@ -471,7 +470,7 @@ mod tests {
         // The element mounted as key 1 (mounted_id 20) followed its key to position 0; key 0
         // (mounted_id 10) to position 1. State moved with the key, not the position.
         assert_eq!(mounted_ids(&element), vec![20, 10]);
-        // Config (new view ids) lands in the new order.
+        // Config (new widget ids) lands in the new order.
         assert_eq!(child_ids(&element), vec![98, 99]);
     }
 }

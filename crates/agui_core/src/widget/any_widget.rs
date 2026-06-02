@@ -10,23 +10,23 @@ use crate::{
         sliver::{AnyRenderSliver, RenderSliver},
     },
     routing_id::RoutingId,
-    view::View,
+    widget::Widget,
 };
 
-/// The object-safe, type-erased form of [`View`].
-pub trait AnyView {
+/// The object-safe, type-erased form of [`Widget`].
+pub trait AnyWidget {
     type Render: RenderObject;
 
     fn as_any(&self) -> &dyn Any;
 
-    fn view_name(&self) -> &str;
+    fn widget_name(&self) -> &str;
 
     fn dyn_create_element(&self, ctx: &mut UpdateCtx) -> Box<dyn AnyElement>;
 
     fn dyn_update(
         &self,
         element: &mut Box<dyn AnyElement>,
-        old: &dyn AnyView<Render = Self::Render>,
+        old: &dyn AnyWidget<Render = Self::Render>,
         ctx: &mut UpdateCtx,
     );
 
@@ -40,14 +40,14 @@ pub trait AnyView {
         render_object: &mut Self::Render,
     );
 
-    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool;
+    fn dyn_is_same_type(&self, other: &dyn AnyWidget<Render = Self::Render>) -> bool;
 
     fn dyn_key(&self) -> Option<&dyn AnyKeyable>;
 }
 
-impl<T> AnyView for T
+impl<T> AnyWidget for T
 where
-    T: Any + View,
+    T: Any + Widget,
 {
     type Render = T::Render;
 
@@ -55,7 +55,7 @@ where
         self
     }
 
-    fn view_name(&self) -> &str {
+    fn widget_name(&self) -> &str {
         std::any::type_name::<T>()
     }
 
@@ -66,7 +66,7 @@ where
     fn dyn_update(
         &self,
         element: &mut Box<dyn AnyElement>,
-        old: &dyn AnyView<Render = Self::Render>,
+        old: &dyn AnyWidget<Render = Self::Render>,
         ctx: &mut UpdateCtx,
     ) {
         // Same concrete type -> reconcile the recovered element in place; different type -> replace
@@ -75,7 +75,7 @@ where
             let element = (**element)
                 .as_any_mut()
                 .downcast_mut::<T::Element>()
-                .expect("element does not match its view's type");
+                .expect("element does not match its widget's type");
 
             self.update(element, old, ctx);
         } else {
@@ -92,7 +92,7 @@ where
         let element = (**element)
             .as_any_mut()
             .downcast_mut::<T::Element>()
-            .expect("element does not match its view's type");
+            .expect("element does not match its widget's type");
 
         self.dispatch(element, path, action);
     }
@@ -101,7 +101,7 @@ where
         let element = (**element)
             .as_any()
             .downcast_ref::<T::Element>()
-            .expect("element does not match its view's type");
+            .expect("element does not match its widget's type");
 
         self.create_render_object(element)
     }
@@ -114,12 +114,12 @@ where
         let element = (**element)
             .as_any()
             .downcast_ref::<T::Element>()
-            .expect("element does not match its view's type");
+            .expect("element does not match its widget's type");
 
         self.update_render_object(element, render_object);
     }
 
-    fn dyn_is_same_type(&self, other: &dyn AnyView<Render = Self::Render>) -> bool {
+    fn dyn_is_same_type(&self, other: &dyn AnyWidget<Render = Self::Render>) -> bool {
         other.as_any().is::<T>()
     }
 
@@ -128,7 +128,7 @@ where
     }
 }
 
-/// The [`Element`] of a `dyn AnyView` boundary.
+/// The [`Element`] of a `dyn AnyWidget` boundary.
 pub struct ErasedElement<R: RenderObject> {
     generation: u16,
     child: ElementNode<Box<dyn AnyElement>>,
@@ -137,22 +137,22 @@ pub struct ErasedElement<R: RenderObject> {
 
 impl<R: RenderObject> Element for ErasedElement<R> {}
 
-macros::impl_view!(&dyn AnyView<Render = Render>);
+macros::impl_widget!(&dyn AnyWidget<Render = Render>);
 
-macros::impl_view!(Box<dyn AnyView<Render = Render>>);
+macros::impl_widget!(Box<dyn AnyWidget<Render = Render>>);
 
-macros::impl_view!(Rc<dyn AnyView<Render = Render>>);
+macros::impl_widget!(Rc<dyn AnyWidget<Render = Render>>);
 
-macros::impl_view!(Arc<dyn AnyView<Render = Render>>);
+macros::impl_widget!(Arc<dyn AnyWidget<Render = Render>>);
 
 mod macros {
-    // Used to implement View for the given smart pointer (e.g. Box, Rc, Arc)
-    macro_rules! impl_view {
+    // Used to implement Widget for the given smart pointer (e.g. Box, Rc, Arc)
+    macro_rules! impl_widget {
         (
             // The smart pointer type
             $ptr:ty
         ) => {
-            impl<Render> View for $ptr
+            impl<Render> Widget for $ptr
             where
                 Render: RenderObject,
             {
@@ -172,9 +172,9 @@ mod macros {
                 }
 
                 fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-                    // If the type of the old view is not the same as the new view, increment the
-                    // generation. Events may have been queued for the old view; the generation is
-                    // the routing id, so the replaced inner won't receive the old view's events.
+                    // If the type of the old widget is not the same as the new widget, increment the
+                    // generation. Events may have been queued for the old widget; the generation is
+                    // the routing id, so the replaced inner won't receive the old widget's events.
                     if !(**self).dyn_is_same_type(&**old) {
                         element.generation = element.generation.wrapping_add(1);
                     }
@@ -226,10 +226,10 @@ mod macros {
         };
     }
 
-    pub(crate) use impl_view;
+    pub(crate) use impl_widget;
 }
 
-// The view-erasure adapter is protocol-specific: this one commits to the box layout protocol,
+// The widget-erasure adapter is protocol-specific: this one commits to the box layout protocol,
 // and `SliverLayoutWrapper` (below) commits to the sliver protocol. They coexist because each
 // targets a distinct erased render type (`Box<dyn AnyRenderBox>` vs `Box<dyn AnyRenderSliver>`),
 // so there is no blanket-impl overlap to resolve.
@@ -244,9 +244,9 @@ struct BoxLayoutElement<E> {
 
 impl<E> Element for BoxLayoutElement<E> where E: Element {}
 
-impl<T> View for BoxLayoutWrapper<T>
+impl<T> Widget for BoxLayoutWrapper<T>
 where
-    T: View + 'static,
+    T: Widget + 'static,
     T::Render: RenderBox,
 {
     type Element = BoxLayoutElement<T::Element>;
@@ -300,9 +300,9 @@ struct SliverLayoutElement<E> {
 
 impl<E> Element for SliverLayoutElement<E> where E: Element {}
 
-impl<T> View for SliverLayoutWrapper<T>
+impl<T> Widget for SliverLayoutWrapper<T>
 where
-    T: View + 'static,
+    T: Widget + 'static,
     T::Render: RenderSliver,
 {
     type Element = SliverLayoutElement<T::Element>;
@@ -345,19 +345,19 @@ where
     }
 }
 
-pub type BoxedView = Box<dyn AnyView<Render = Box<dyn AnyRenderBox>>>;
+pub type BoxedWidget = Box<dyn AnyWidget<Render = Box<dyn AnyRenderBox>>>;
 
-pub type BoxedSliverView = Box<dyn AnyView<Render = Box<dyn AnyRenderSliver>>>;
+pub type BoxedSliverWidget = Box<dyn AnyWidget<Render = Box<dyn AnyRenderSliver>>>;
 
-pub trait AsAnyView: View + 'static {
-    fn as_dyn_view(&self) -> &dyn AnyView<Render = Self::Render>
+pub trait AsAnyWidget: Widget + 'static {
+    fn as_dyn_widget(&self) -> &dyn AnyWidget<Render = Self::Render>
     where
         Self: Sized,
     {
         self
     }
 
-    fn into_boxed_render_box(self) -> BoxedView
+    fn into_boxed_render_box(self) -> BoxedWidget
     where
         Self: Sized,
         Self::Render: RenderBox,
@@ -365,7 +365,7 @@ pub trait AsAnyView: View + 'static {
         Box::new(BoxLayoutWrapper { inner: self })
     }
 
-    fn into_boxed_render_sliver(self) -> BoxedSliverView
+    fn into_boxed_render_sliver(self) -> BoxedSliverWidget
     where
         Self: Sized,
         Self::Render: RenderSliver,
@@ -374,7 +374,7 @@ pub trait AsAnyView: View + 'static {
     }
 }
 
-impl<T: 'static> AsAnyView for T where T: View {}
+impl<T: 'static> AsAnyWidget for T where T: Widget {}
 
 #[cfg(test)]
 mod tests {
@@ -386,13 +386,13 @@ mod tests {
 
     use super::*;
 
-    pub struct TestView<T> {
+    pub struct TestWidget<T> {
         value: T,
         mounts: Cell<usize>,
         updates: Cell<usize>,
     }
 
-    impl<T> TestView<T> {
+    impl<T> TestWidget<T> {
         pub fn new(value: T) -> Self {
             Self {
                 value,
@@ -402,56 +402,56 @@ mod tests {
         }
     }
 
-    pub struct TestViewElement<T> {
+    pub struct TestWidgetElement<T> {
         value: T,
     }
 
-    impl<T: 'static> Element for TestViewElement<T> {}
+    impl<T: 'static> Element for TestWidgetElement<T> {}
 
-    impl<T> View for TestView<T>
+    impl<T> Widget for TestWidget<T>
     where
         T: Clone + 'static,
     {
-        type Element = TestViewElement<T>;
+        type Element = TestWidgetElement<T>;
 
         type Render = RenderLeaf;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> TestViewElement<T> {
+        fn create_element(&self, _: &mut UpdateCtx) -> TestWidgetElement<T> {
             self.mounts.set(self.mounts.get() + 1);
 
-            TestViewElement {
+            TestWidgetElement {
                 value: self.value.clone(),
             }
         }
 
-        fn update(&self, element: &mut TestViewElement<T>, _: &Self, _: &mut UpdateCtx) {
+        fn update(&self, element: &mut TestWidgetElement<T>, _: &Self, _: &mut UpdateCtx) {
             self.updates.set(self.updates.get() + 1);
 
             element.value = self.value.clone();
         }
 
-        fn create_render_object(&self, _: &TestViewElement<T>) -> Self::Render {
+        fn create_render_object(&self, _: &TestWidgetElement<T>) -> Self::Render {
             RenderLeaf::default()
         }
 
-        fn update_render_object(&self, _: &TestViewElement<T>, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &TestWidgetElement<T>, _: &mut Self::Render) {}
     }
 
-    /// Reads the value held by the inner `TestViewElement` behind a dyn-view boundary.
+    /// Reads the value held by the inner `TestWidgetElement` behind a dyn-widget boundary.
     fn dyn_value<T: Clone + 'static>(root: &ErasedElement<RenderLeaf>) -> T {
         (*root.child.element)
             .as_any()
-            .downcast_ref::<TestViewElement<T>>()
+            .downcast_ref::<TestWidgetElement<T>>()
             .expect("inner element type")
             .value
             .clone()
     }
 
-    /// Reads the value held by the inner `TestViewElement` behind a boxed-render-box-view boundary.
+    /// Reads the value held by the inner `TestWidgetElement` behind a boxed-render-box-widget boundary.
     fn boxed_value<T: Clone + 'static>(root: &ErasedElement<Box<dyn AnyRenderBox>>) -> T {
         (*root.child.element)
             .as_any()
-            .downcast_ref::<BoxLayoutElement<TestViewElement<T>>>()
+            .downcast_ref::<BoxLayoutElement<TestWidgetElement<T>>>()
             .expect("inner element type")
             .inner
             .value
@@ -459,83 +459,83 @@ mod tests {
     }
 
     #[test]
-    fn mounting_dyn_views() {
-        let view = TestView::new(7_usize);
-        let harness = TestHarness::mount(&view.as_dyn_view());
+    fn mounting_dyn_widgets() {
+        let widget = TestWidget::new(7_usize);
+        let harness = TestHarness::mount(&widget.as_dyn_widget());
 
-        assert_eq!(view.mounts.get(), 1);
-        assert_eq!(view.updates.get(), 0);
+        assert_eq!(widget.mounts.get(), 1);
+        assert_eq!(widget.updates.get(), 0);
         assert_eq!(dyn_value::<usize>(&harness.root.element), 7);
     }
 
     #[test]
-    fn mounting_boxed_views() {
-        let view = TestView::new(1_usize);
-        let harness = TestHarness::mount(&view.into_boxed_render_box());
+    fn mounting_boxed_widgets() {
+        let widget = TestWidget::new(1_usize);
+        let harness = TestHarness::mount(&widget.into_boxed_render_box());
 
         assert_eq!(boxed_value::<usize>(&harness.root.element), 1);
     }
 
     #[test]
-    fn updating_dyn_views() {
-        let view = TestView::new(2_usize);
+    fn updating_dyn_widgets() {
+        let widget = TestWidget::new(2_usize);
 
-        let mut harness = TestHarness::mount(&view.as_dyn_view());
+        let mut harness = TestHarness::mount(&widget.as_dyn_widget());
 
-        assert_eq!(view.mounts.get(), 1);
-        assert_eq!(view.updates.get(), 0);
+        assert_eq!(widget.mounts.get(), 1);
+        assert_eq!(widget.updates.get(), 0);
         assert_eq!(dyn_value::<usize>(&harness.root.element), 2);
 
-        let new_view = TestView::new(9_usize);
-        harness.update(&view.as_dyn_view(), &new_view.as_dyn_view());
+        let new_widget = TestWidget::new(9_usize);
+        harness.update(&widget.as_dyn_widget(), &new_widget.as_dyn_widget());
 
-        assert_eq!(new_view.mounts.get(), 0);
-        assert_eq!(new_view.updates.get(), 1);
+        assert_eq!(new_widget.mounts.get(), 0);
+        assert_eq!(new_widget.updates.get(), 1);
         assert_eq!(dyn_value::<usize>(&harness.root.element), 9);
     }
 
     #[test]
-    fn updating_boxed_views() {
-        let view = TestView::new(2_usize).into_boxed_render_box();
+    fn updating_boxed_widgets() {
+        let widget = TestWidget::new(2_usize).into_boxed_render_box();
 
-        let mut harness = TestHarness::mount(&view);
+        let mut harness = TestHarness::mount(&widget);
 
         assert_eq!(boxed_value::<usize>(&harness.root.element), 2);
 
-        let new_view = TestView::new(9_usize).into_boxed_render_box();
-        harness.update(&view, &new_view);
+        let new_widget = TestWidget::new(9_usize).into_boxed_render_box();
+        harness.update(&widget, &new_widget);
 
         assert_eq!(boxed_value::<usize>(&harness.root.element), 9);
     }
 
     #[test]
-    fn replacing_dyn_views() {
-        let view = TestView::new(2_usize);
+    fn replacing_dyn_widgets() {
+        let widget = TestWidget::new(2_usize);
 
-        let mut harness = TestHarness::mount(&view.as_dyn_view());
+        let mut harness = TestHarness::mount(&widget.as_dyn_widget());
 
-        assert_eq!(view.mounts.get(), 1);
-        assert_eq!(view.updates.get(), 0);
+        assert_eq!(widget.mounts.get(), 1);
+        assert_eq!(widget.updates.get(), 0);
         assert_eq!(dyn_value::<usize>(&harness.root.element), 2);
 
-        let new_view = TestView::new(7_u8);
-        harness.update(&view.as_dyn_view(), &new_view.as_dyn_view());
+        let new_widget = TestWidget::new(7_u8);
+        harness.update(&widget.as_dyn_widget(), &new_widget.as_dyn_widget());
 
         // Type changed, so the inner element is recreated (create_element), not updated.
-        assert_eq!(new_view.mounts.get(), 1);
-        assert_eq!(new_view.updates.get(), 0);
+        assert_eq!(new_widget.mounts.get(), 1);
+        assert_eq!(new_widget.updates.get(), 0);
         assert_eq!(dyn_value::<u8>(&harness.root.element), 7);
     }
 
     #[test]
-    fn replacing_boxed_views() {
-        let view = TestView::new(2_usize).into_boxed_render_box();
+    fn replacing_boxed_widgets() {
+        let widget = TestWidget::new(2_usize).into_boxed_render_box();
 
-        let mut harness = TestHarness::mount(&view);
+        let mut harness = TestHarness::mount(&widget);
 
         assert_eq!(boxed_value::<usize>(&harness.root.element), 2);
 
-        harness.update(&view, &TestView::new(7_u8).into_boxed_render_box());
+        harness.update(&widget, &TestWidget::new(7_u8).into_boxed_render_box());
 
         assert_eq!(boxed_value::<u8>(&harness.root.element), 7);
     }
@@ -544,7 +544,7 @@ mod tests {
     fn dispatch_message_through_boundary_with_matching_generation() {
         let messages = Rc::new(Cell::new(0_usize));
         let payload = Rc::new(Cell::new(None::<u32>));
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+        let widget: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             let payload = Rc::clone(&payload);
             move |ctx| {
@@ -552,10 +552,10 @@ mod tests {
                 payload.set(Some(ctx.consume::<u32>()));
             }
         }));
-        let mut harness = TestHarness::mount(&view);
+        let mut harness = TestHarness::mount(&widget);
 
-        // Initial generation is 0, so a routing id of 0 forwards to the inner view.
-        let _ = harness.dispatch_message(&view, &[RoutingId::new(0)], Box::new(123_u32));
+        // Initial generation is 0, so a routing id of 0 forwards to the inner widget.
+        let _ = harness.dispatch_message(&widget, &[RoutingId::new(0)], Box::new(123_u32));
 
         assert_eq!(messages.get(), 1);
         assert_eq!(payload.get(), Some(123));
@@ -565,7 +565,7 @@ mod tests {
     fn dispatch_rebuild_through_boundary_reaches_inner() {
         let rebuilds = Rc::new(Cell::new(0_usize));
         let messages = Rc::new(Cell::new(0_usize));
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(
+        let widget: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(
             Leaf::new()
                 .on_message({
                     let messages = Rc::clone(&messages);
@@ -576,9 +576,9 @@ mod tests {
                     move |_| rebuilds.set(rebuilds.get() + 1)
                 }),
         );
-        let mut harness = TestHarness::mount(&view);
+        let mut harness = TestHarness::mount(&widget);
 
-        harness.dispatch_rebuild(&view, &[RoutingId::new(0)]);
+        harness.dispatch_rebuild(&widget, &[RoutingId::new(0)]);
 
         assert_eq!(rebuilds.get(), 1);
         assert_eq!(messages.get(), 0);
@@ -587,14 +587,14 @@ mod tests {
     #[test]
     fn dispatch_with_stale_generation_is_silently_dropped() {
         let messages = Rc::new(Cell::new(0_usize));
-        let view: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+        let widget: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             move |_| messages.set(messages.get() + 1)
         }));
-        let mut harness = TestHarness::mount(&view);
+        let mut harness = TestHarness::mount(&widget);
 
         // Initial generation is 0, so a routing id of 1 is stale and should be dropped.
-        let _ = harness.dispatch_message(&view, &[RoutingId::new(1)], Box::new(7_u32));
+        let _ = harness.dispatch_message(&widget, &[RoutingId::new(1)], Box::new(7_u32));
 
         assert_eq!(messages.get(), 0);
     }
@@ -602,19 +602,19 @@ mod tests {
     #[test]
     fn type_swap_increments_generation_dropping_old_dispatches() {
         let messages = Rc::new(Cell::new(0_usize));
-        let view_a: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+        let widget_a: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             move |_| messages.set(messages.get() + 1)
         }));
-        let mut harness = TestHarness::mount(&view_a);
+        let mut harness = TestHarness::mount(&widget_a);
 
         // Swap to a different concrete type, which forces a generation increment.
-        let view_b: Box<dyn AnyView<Render = RenderLeaf>> = Box::new(TestView::new(0_u8));
-        harness.update(&view_a, &view_b);
+        let widget_b: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(TestWidget::new(0_u8));
+        harness.update(&widget_a, &widget_b);
 
         // The old generation (0) is stale, so the dispatch should be dropped at the boundary
         // and never reach the replaced inner.
-        let _ = harness.dispatch_message(&view_b, &[RoutingId::new(0)], Box::new(42_u32));
+        let _ = harness.dispatch_message(&widget_b, &[RoutingId::new(0)], Box::new(42_u32));
 
         assert_eq!(
             messages.get(),
@@ -631,7 +631,7 @@ mod tests {
 
     impl Element for CountedElement {}
 
-    impl View for Counted {
+    impl Widget for Counted {
         type Element = CountedElement;
 
         type Render = RenderLeaf;
@@ -652,20 +652,20 @@ mod tests {
     }
 
     #[test]
-    fn updating_boxed_view_reuses_render_object() {
+    fn updating_boxed_widget_reuses_render_object() {
         let creates = Rc::new(Cell::new(0usize));
 
-        let view = Counted {
+        let widget = Counted {
             creates: Rc::clone(&creates),
         }
         .into_boxed_render_box();
 
-        let harness = TestHarness::mount(&view);
+        let harness = TestHarness::mount(&widget);
 
-        let mut ro = view.create_render_object(&harness.root.element);
+        let mut ro = widget.create_render_object(&harness.root.element);
         assert_eq!(creates.get(), 1);
 
-        view.update_render_object(&harness.root.element, &mut ro);
+        widget.update_render_object(&harness.root.element, &mut ro);
 
         assert_eq!(
             creates.get(),

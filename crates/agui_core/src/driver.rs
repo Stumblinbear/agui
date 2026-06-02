@@ -4,21 +4,21 @@ use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     provide::ProvideScope,
     routing_id::RoutingPath,
-    view::View,
+    widget::Widget,
 };
 
 pub trait Driver {}
 
-pub fn dispatch_messages<V: View>(
+pub fn dispatch_messages<V: Widget>(
     root_element: &mut V::Element,
-    root_view: &V,
+    root_widget: &V,
     messages: impl Iterator<Item = (RoutingPath, Box<dyn Any>)>,
     mut on_dirty: impl FnMut(RoutingPath),
 ) {
     for (path, message) in messages {
         let mut ctx = MessageCtx::new(message);
 
-        root_view.dispatch(root_element, path.as_slice(), Dispatch::Message(&mut ctx));
+        root_widget.dispatch(root_element, path.as_slice(), Dispatch::Message(&mut ctx));
 
         if ctx.rebuild_requested() {
             on_dirty(path);
@@ -26,12 +26,12 @@ pub fn dispatch_messages<V: View>(
     }
 }
 
-pub fn rebuild_dirty<V: View>(
+pub fn rebuild_dirty<V: Widget>(
     driver: &Rc<dyn Driver>,
     event_tx: &mpsc::Sender<()>,
     provide_scope: &ProvideScope,
     root_element: &mut V::Element,
-    root_view: &V,
+    root_widget: &V,
     dirty: impl ExactSizeIterator<Item = RoutingPath>,
 ) {
     for path in dirty {
@@ -39,7 +39,7 @@ pub fn rebuild_dirty<V: View>(
 
         let mut routing_path = path.to_vec();
 
-        root_view.dispatch(
+        root_widget.dispatch(
             root_element,
             slice,
             Dispatch::Rebuild(&mut UpdateCtx::new(
@@ -62,7 +62,7 @@ mod tests {
         provide::ProvideScope,
         routing_id::{RoutingId, RoutingPath},
         test_fixtures::{Leaf, MultiChild, Transparent},
-        view::View,
+        widget::Widget,
     };
 
     struct NoopDriver;
@@ -78,7 +78,7 @@ mod tests {
         let r1 = Cell::new(0_usize);
         let r2 = Cell::new(0_usize);
 
-        let view = MultiChild {
+        let widget = MultiChild {
             children: vec![
                 Transparent {
                     child: Leaf::new().on_rebuild(|_| r0.set(r0.get() + 1)),
@@ -99,7 +99,7 @@ mod tests {
         let provide_scope = ProvideScope::new();
 
         let mut routing_path = Vec::new();
-        let mut root = view.create_element(&mut UpdateCtx::new(
+        let mut root = widget.create_element(&mut UpdateCtx::new(
             &driver,
             &event_tx,
             &mut routing_path,
@@ -110,7 +110,7 @@ mod tests {
         let messages = vec![(target_path, Box::new(42_u32) as Box<dyn std::any::Any>)];
 
         let mut dirty: Vec<RoutingPath> = Vec::new();
-        dispatch_messages(&mut root, &view, messages.into_iter(), |path| {
+        dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
             dirty.push(path)
         });
 
@@ -122,7 +122,7 @@ mod tests {
             &event_tx,
             &provide_scope,
             &mut root,
-            &view,
+            &widget,
             dirty.into_iter(),
         );
 
@@ -137,7 +137,7 @@ mod tests {
         let r1 = Cell::new(0_usize);
         let r2 = Cell::new(0_usize);
 
-        let view = MultiChild {
+        let widget = MultiChild {
             children: vec![
                 Transparent {
                     child: Leaf::new()
@@ -160,7 +160,7 @@ mod tests {
         let provide_scope = ProvideScope::new();
 
         let mut routing_path = Vec::new();
-        let mut root = view.create_element(&mut UpdateCtx::new(
+        let mut root = widget.create_element(&mut UpdateCtx::new(
             &driver,
             &event_tx,
             &mut routing_path,
@@ -175,7 +175,7 @@ mod tests {
         ];
 
         let mut dirty: Vec<RoutingPath> = Vec::new();
-        dispatch_messages(&mut root, &view, messages.into_iter(), |path| {
+        dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
             dirty.push(path)
         });
 
@@ -186,7 +186,7 @@ mod tests {
             &event_tx,
             &provide_scope,
             &mut root,
-            &view,
+            &widget,
             dirty.into_iter(),
         );
 
@@ -199,14 +199,14 @@ mod tests {
     fn rebuild_dirty_with_empty_set_is_noop() {
         let r0 = Cell::new(0_usize);
 
-        let view = Leaf::new().on_rebuild(|_| r0.set(r0.get() + 1));
+        let widget = Leaf::new().on_rebuild(|_| r0.set(r0.get() + 1));
 
         let driver: Rc<dyn Driver> = Rc::new(NoopDriver);
         let (event_tx, _event_rx) = mpsc::channel();
         let provide_scope = ProvideScope::new();
 
         let mut routing_path = Vec::new();
-        let mut root = view.create_element(&mut UpdateCtx::new(
+        let mut root = widget.create_element(&mut UpdateCtx::new(
             &driver,
             &event_tx,
             &mut routing_path,
@@ -219,7 +219,7 @@ mod tests {
             &event_tx,
             &provide_scope,
             &mut root,
-            &view,
+            &widget,
             dirty.into_iter(),
         );
 

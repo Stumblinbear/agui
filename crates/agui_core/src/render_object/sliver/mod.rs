@@ -292,9 +292,9 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{element::Element, test_harness::TestHarness, view::AsAnyView, view::View};
+    use crate::{element::Element, test_harness::TestHarness, widget::AsAnyWidget, widget::Widget};
 
-    /// A sliver that occupies a fixed scroll extent and paints whatever of it is currently in view.
+    /// A sliver that occupies a fixed scroll extent and paints whatever of it is currently in widget.
     struct RenderSliverFixed {
         extent: f32,
     }
@@ -346,8 +346,8 @@ mod tests {
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
     }
 
-    /// A view whose render object is a sliver — to exercise the erased boundary.
-    struct SliverFixedView {
+    /// A widget whose render object is a sliver — to exercise the erased boundary.
+    struct SliverFixedWidget {
         extent: f32,
     }
 
@@ -355,7 +355,7 @@ mod tests {
 
     impl Element for SliverFixedElement {}
 
-    impl View for SliverFixedView {
+    impl Widget for SliverFixedWidget {
         type Element = SliverFixedElement;
 
         type Render = RenderSliverFixed;
@@ -381,11 +381,11 @@ mod tests {
     fn viewport_drives_an_erased_sliver() {
         // into_boxed_render_sliver erases to Box<dyn AnyRenderSliver>, which is itself a RenderSliver,
         // so the viewport drives it identically to a concrete sliver.
-        let boxed_view = SliverFixedView { extent: 100.0 }.into_boxed_render_sliver();
-        let harness = TestHarness::mount(&boxed_view);
+        let boxed_widget = SliverFixedWidget { extent: 100.0 }.into_boxed_render_sliver();
+        let harness = TestHarness::mount(&boxed_widget);
 
         let erased: Box<dyn AnyRenderSliver> =
-            boxed_view.create_render_object(&harness.root.element);
+            boxed_widget.create_render_object(&harness.root.element);
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
         RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));

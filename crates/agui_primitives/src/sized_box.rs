@@ -11,7 +11,7 @@ use agui_core::{
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
-    view::View,
+    widget::Widget,
 };
 
 pub struct SizedBox<Child> {
@@ -146,9 +146,9 @@ impl From<Size> for SizedBox<()> {
     }
 }
 
-impl<Child> View for SizedBox<Child>
+impl<Child> Widget for SizedBox<Child>
 where
-    Child: View,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     type Element = SingleChildElement<Child::Element>;

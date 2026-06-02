@@ -12,14 +12,14 @@ use agui_core::{
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
-    view::View,
+    widget::Widget,
 };
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]
 pub struct SingleChildScrollView<Child>
 where
-    Child: View,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     #[builder(finish_fn)]
@@ -28,7 +28,7 @@ where
 
 impl<Child> SingleChildScrollView<Child>
 where
-    Child: View,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     pub fn new(child: Child) -> Self {
@@ -36,9 +36,9 @@ where
     }
 }
 
-impl<Child> View for SingleChildScrollView<Child>
+impl<Child> Widget for SingleChildScrollView<Child>
 where
-    Child: View,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     type Element = SingleChildElement<Child::Element>;

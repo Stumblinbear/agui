@@ -36,7 +36,7 @@ pub trait RenderBox: RenderObject {
 
     /// Returns the smallest width beyond which increasing the width never
     /// decreases the preferred height. The preferred height is the value that
-    /// would be returned by [`View::min_intrinsic_height`] for that width.
+    /// would be returned by [`Self::min_intrinsic_height`] for that width.
     ///
     /// The height argument may give a specific height to assume. The given height
     /// can be infinite, meaning that the intrinsic width in an unconstrained
@@ -67,7 +67,7 @@ pub trait RenderBox: RenderObject {
 
     /// Returns the smallest height beyond which increasing the height never
     /// decreases the preferred width. The preferred width is the value that
-    /// would be returned by [`View::min_intrinsic_width`] for that height.
+    /// would be returned by [`Self::min_intrinsic_width`] for that height.
     ///
     /// The width argument may give a specific width to assume. The given width
     /// can be infinite, meaning that the intrinsic height in an unconstrained

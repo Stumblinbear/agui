@@ -9,4 +9,5 @@ pub use shared::*;
 /// A persistent node in the element tree.
 pub trait Element: 'static {}
 
+// The unit type is the leaf element: no children, no state.
 impl Element for () {}
