@@ -32,6 +32,8 @@ impl HitTestEntry {
 
 #[derive(Debug)]
 pub struct HitTestResult {
+    // Recording absorbed nodes is not yet wired up; see `add`.
+    #[allow(dead_code)]
     path: Vec<HitTestEntry>,
     transforms: Vec<Mat4>,
 }
@@ -113,7 +115,9 @@ impl HitTestResult {
         result
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn add(&mut self, path: RoutingPath) {
+        let _ = path;
         // self.path.push(HitTestEntry {
         //     element_id,
         //     data: None,
@@ -132,6 +136,8 @@ impl HitTestResult {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
+
     use glam::Mat4;
 
     use crate::offset::Offset;

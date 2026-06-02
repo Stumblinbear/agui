@@ -193,21 +193,13 @@ impl Div for Size {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
-        if self.width.classify() == FpCategory::Zero && rhs.width.classify() == FpCategory::Zero {
-            panic!("cannot divide a zero width by a zero width");
-        }
+        assert!(!(self.width.classify() == FpCategory::Zero && rhs.width.classify() == FpCategory::Zero), "cannot divide a zero width by a zero width");
 
-        if self.width.is_infinite() && rhs.width.is_infinite() {
-            panic!("cannot divide an infinite width by an infinite width");
-        }
+        assert!(!(self.width.is_infinite() && rhs.width.is_infinite()), "cannot divide an infinite width by an infinite width");
 
-        if self.height.classify() == FpCategory::Zero && rhs.height.classify() == FpCategory::Zero {
-            panic!("cannot divide a zero height by a zero height");
-        }
+        assert!(!(self.height.classify() == FpCategory::Zero && rhs.height.classify() == FpCategory::Zero), "cannot divide a zero height by a zero height");
 
-        if self.height.is_infinite() && rhs.height.is_infinite() {
-            panic!("cannot divide an infinite height by an infinite height");
-        }
+        assert!(!(self.height.is_infinite() && rhs.height.is_infinite()), "cannot divide an infinite height by an infinite height");
 
         Self::new(self.width / rhs.width, self.height / rhs.height)
     }
@@ -237,21 +229,13 @@ impl Rem for Size {
     type Output = Self;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        if self.width.classify() == FpCategory::Zero && rhs.width.classify() == FpCategory::Zero {
-            panic!("cannot divide a zero width by a zero width");
-        }
+        assert!(!(self.width.classify() == FpCategory::Zero && rhs.width.classify() == FpCategory::Zero), "cannot divide a zero width by a zero width");
 
-        if self.width.is_infinite() && rhs.width.is_infinite() {
-            panic!("cannot divide an infinite width by an infinite width");
-        }
+        assert!(!(self.width.is_infinite() && rhs.width.is_infinite()), "cannot divide an infinite width by an infinite width");
 
-        if self.height.classify() == FpCategory::Zero && rhs.height.classify() == FpCategory::Zero {
-            panic!("cannot divide a zero height by a zero height");
-        }
+        assert!(!(self.height.classify() == FpCategory::Zero && rhs.height.classify() == FpCategory::Zero), "cannot divide a zero height by a zero height");
 
-        if self.height.is_infinite() && rhs.height.is_infinite() {
-            panic!("cannot divide an infinite height by an infinite height");
-        }
+        assert!(!(self.height.is_infinite() && rhs.height.is_infinite()), "cannot divide an infinite height by an infinite height");
 
         Self::new(self.width % rhs.width, self.height % rhs.height)
     }
@@ -285,6 +269,8 @@ impl From<Rect> for Size {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
+
     use super::*;
 
     #[test]

@@ -52,13 +52,13 @@ impl Widget for () {
 
     fn create_element(&self, _: &mut UpdateCtx) {}
 
-    fn update(&self, _: &mut (), _: &Self, _: &mut UpdateCtx) {}
+    fn update(&self, (): &mut (), (): &Self, _: &mut UpdateCtx) {}
 
-    fn create_render_object(&self, _: &()) -> Self::Render {
+    fn create_render_object(&self, (): &()) -> Self::Render {
         RenderLeaf::default()
     }
 
-    fn update_render_object(&self, _: &(), _: &mut Self::Render) {}
+    fn update_render_object(&self, (): &(), _: &mut Self::Render) {}
 }
 
 #[cfg(test)]
@@ -114,7 +114,7 @@ mod dispatch_tests {
 
     #[test]
     fn message_with_request_rebuild_sets_flag() {
-        let widget = Leaf::new().on_message(|ctx| ctx.request_rebuild());
+        let widget = Leaf::new().on_message(MessageCtx::request_rebuild);
         let mut harness = TestHarness::mount(&widget);
 
         let msg_ctx = harness.dispatch_message(&widget, &[], Box::new(7_u32));

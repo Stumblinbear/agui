@@ -57,7 +57,7 @@ mod tests {
     use std::{cell::Cell, rc::Rc, sync::mpsc};
 
     use crate::{
-        context::UpdateCtx,
+        context::{MessageCtx, UpdateCtx},
         driver::{Driver, dispatch_messages, rebuild_dirty},
         provide::ProvideScope,
         routing_id::{RoutingId, RoutingPath},
@@ -85,7 +85,7 @@ mod tests {
                 },
                 Transparent {
                     child: Leaf::new()
-                        .on_message(|ctx| ctx.request_rebuild())
+                        .on_message(MessageCtx::request_rebuild)
                         .on_rebuild(|_| r1.set(r1.get() + 1)),
                 },
                 Transparent {
@@ -111,7 +111,7 @@ mod tests {
 
         let mut dirty: Vec<RoutingPath> = Vec::new();
         dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
-            dirty.push(path)
+            dirty.push(path);
         });
 
         assert_eq!(dirty.len(), 1, "exactly one element should be dirtied");
@@ -141,7 +141,7 @@ mod tests {
             children: vec![
                 Transparent {
                     child: Leaf::new()
-                        .on_message(|ctx| ctx.request_rebuild())
+                        .on_message(MessageCtx::request_rebuild)
                         .on_rebuild(|_| r0.set(r0.get() + 1)),
                 },
                 Transparent {
@@ -149,7 +149,7 @@ mod tests {
                 },
                 Transparent {
                     child: Leaf::new()
-                        .on_message(|ctx| ctx.request_rebuild())
+                        .on_message(MessageCtx::request_rebuild)
                         .on_rebuild(|_| r2.set(r2.get() + 1)),
                 },
             ],
@@ -176,7 +176,7 @@ mod tests {
 
         let mut dirty: Vec<RoutingPath> = Vec::new();
         dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
-            dirty.push(path)
+            dirty.push(path);
         });
 
         assert_eq!(dirty.len(), 2);
@@ -195,6 +195,7 @@ mod tests {
         assert_eq!(r2.get(), 1);
     }
 
+    #[allow(clippy::let_unit_value)]
     #[test]
     fn rebuild_dirty_with_empty_set_is_noop() {
         let r0 = Cell::new(0_usize);

@@ -191,43 +191,43 @@ impl<Child> RenderBox for RenderFlex<Child>
 where
     Child: RenderBox,
 {
-    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn min_intrinsic_width(&self, _height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_width(&self, _height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn min_intrinsic_height(&self, _width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+    fn max_intrinsic_height(&self, _width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, _constraints: Constraints) -> Size {
         Size::ZERO
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, _constraints: Constraints) -> Size {
         Size::ZERO
     }
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
-        baseline: TextBaseline,
+        _constraints: Constraints,
+        _baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+    fn distance_to_baseline(&mut self, _baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+    fn hit_test(&self, _result: &mut HitTestResult, position: Offset) -> HitTest {
         if !self.size.contains(position) {
             return HitTest::Pass;
         }
@@ -235,7 +235,7 @@ where
         HitTest::Pass
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {}
+    fn paint(&mut self, _canvas: &mut Canvas) {}
 }
 
 #[cfg(test)]

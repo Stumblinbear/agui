@@ -572,6 +572,8 @@ impl Div<f32> for Constraints {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
+
     use crate::{axis::Axis, edge_insets::EdgeInsets, size::Size};
 
     use super::*;

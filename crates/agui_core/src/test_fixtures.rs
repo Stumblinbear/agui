@@ -12,6 +12,7 @@ type OnMessage<'a> = Box<dyn Fn(&mut MessageCtx) + 'a>;
 type OnRebuild<'a> = Box<dyn Fn(&mut UpdateCtx<'_>) + 'a>;
 
 /// Leaf widget whose lifecycle behavior is supplied by closures.
+#[allow(clippy::struct_field_names)]
 pub struct Leaf<'a> {
     on_mount: OnMount<'a>,
     on_update: OnUpdate<'a>,
@@ -50,13 +51,13 @@ impl<'a> Leaf<'a> {
     }
 }
 
-impl<'a> Default for Leaf<'a> {
+impl Default for Leaf<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a> Widget for Leaf<'a> {
+impl Widget for Leaf<'_> {
     type Element = ();
 
     type Render = RenderLeaf;
@@ -65,11 +66,11 @@ impl<'a> Widget for Leaf<'a> {
         (self.on_mount)(ctx);
     }
 
-    fn update(&self, _: &mut (), _: &Self, ctx: &mut UpdateCtx) {
+    fn update(&self, (): &mut (), _: &Self, ctx: &mut UpdateCtx) {
         (self.on_update)(ctx);
     }
 
-    fn dispatch(&self, _: &mut (), path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&self, (): &mut (), path: &[RoutingId], action: Dispatch) {
         debug_assert!(path.is_empty(), "Leaf has no children");
         if !path.is_empty() {
             return;
@@ -80,11 +81,11 @@ impl<'a> Widget for Leaf<'a> {
         }
     }
 
-    fn create_render_object(&self, _: &()) -> Self::Render {
+    fn create_render_object(&self, (): &()) -> Self::Render {
         RenderLeaf::default()
     }
 
-    fn update_render_object(&self, _: &(), _: &mut Self::Render) {}
+    fn update_render_object(&self, (): &(), _: &mut Self::Render) {}
 }
 
 pub struct Transparent<Child> {
@@ -105,7 +106,7 @@ impl<Child: Widget> Widget for Transparent<Child> {
     }
 
     fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
+        element.dispatch(&self.child, path, action);
     }
 
     fn create_render_object(&self, _: &Self::Element) -> Self::Render {
@@ -139,7 +140,7 @@ impl<Child: Widget> Widget for MultiChild<Child> {
     }
 
     fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(|i| &self.children[i], path, action)
+        element.dispatch(|i| &self.children[i], path, action);
     }
 
     fn create_render_object(&self, _: &Self::Element) -> Self::Render {

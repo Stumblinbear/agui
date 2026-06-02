@@ -1,3 +1,4 @@
+#[must_use]
 pub struct TaskHandle {
     drop: Option<Box<dyn FnOnce()>>,
 }

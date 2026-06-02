@@ -69,7 +69,7 @@ where
     }
 
     fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
+        element.dispatch(&self.child, path, action);
     }
 
     fn create_render_object(&self, element: &Self::Element) -> Self::Render {
@@ -77,7 +77,7 @@ where
     }
 
     fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, render_object)
+        element.update_render_object(&self.child, render_object);
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {

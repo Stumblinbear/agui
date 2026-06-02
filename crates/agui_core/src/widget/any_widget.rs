@@ -246,7 +246,7 @@ where
     }
 
     fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(&mut element.inner, path, action)
+        self.inner.dispatch(&mut element.inner, path, action);
     }
 
     fn create_render_object(&self, element: &Self::Element) -> Self::Render {
@@ -302,7 +302,7 @@ where
     }
 
     fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(&mut element.inner, path, action)
+        self.inner.dispatch(&mut element.inner, path, action);
     }
 
     fn create_render_object(&self, element: &Self::Element) -> Self::Render {

@@ -35,11 +35,13 @@ where
     }
 }
 
+type RetainedChild<Child> = Rc<RefCell<Option<(ElementNode<<Child as Widget>::Element>, Child)>>>;
+
 pub struct LayoutBuilderElement<Child>
 where
     Child: Widget,
 {
-    child_widget: Rc<RefCell<Option<(ElementNode<Child::Element>, Child)>>>,
+    child_widget: RetainedChild<Child>,
 
     builder: Rc<dyn Fn(Constraints) -> Child::Render>,
 }

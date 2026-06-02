@@ -291,6 +291,8 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
+
     use super::*;
     use crate::{element::Element, test_harness::TestHarness, widget::AsAnyWidget, widget::Widget};
 

@@ -1,8 +1,9 @@
-#![warn(clippy::all, clippy::cargo)]
+#![warn(clippy::all, clippy::pedantic, clippy::cargo)]
 #![allow(clippy::cargo_common_metadata)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
-#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
 #![warn(clippy::clone_on_ref_ptr)]
 
 // #![warn(missing_docs)]

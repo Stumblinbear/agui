@@ -5,7 +5,9 @@ use crate::{offset::Offset, rect::Rect};
 pub struct Canvas {}
 
 impl Canvas {
-    pub fn start_layer(&mut self, bounds: Rect) {}
+    pub fn start_layer(&mut self, bounds: Rect) {
+        let _ = bounds;
+    }
 
     pub fn end_layer(&mut self) {}
 
@@ -15,7 +17,9 @@ impl Canvas {
         self.end_layer();
     }
 
-    pub fn start_transformation(&mut self, transformation: Mat4) {}
+    pub fn start_transformation(&mut self, transformation: Mat4) {
+        let _ = transformation;
+    }
 
     pub fn end_transformation(&mut self) {}
 

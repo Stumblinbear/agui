@@ -28,6 +28,6 @@ where
     }
 
     fn dyn_hash(&self, mut state: &mut dyn Hasher) {
-        self.hash(&mut state)
+        self.hash(&mut state);
     }
 }

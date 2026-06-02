@@ -63,7 +63,7 @@ impl<C: Element> MultiChildElement<C> {
         MultiChildElement {
             children: (0..len)
                 .map(|idx| {
-                    ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
+                    ctx.with_routing_id(RoutingId::from_index(idx), |ctx| {
                         ElementNode::new(child_at(idx).create_element(ctx))
                     })
                 })
@@ -85,7 +85,7 @@ impl<C: Element> MultiChildElement<C> {
 
         let idx = head.get() as usize;
 
-        child_at(idx).dispatch(&mut self.children[idx].element, rest, action)
+        child_at(idx).dispatch(&mut self.children[idx].element, rest, action);
     }
 
     pub fn update<'v, CV>(
@@ -108,7 +108,7 @@ impl<C: Element> MultiChildElement<C> {
         if self.children.is_empty() {
             self.children = (0..new_len)
                 .map(|idx| {
-                    ctx.with_routing_id(RoutingId::new(idx as u16), |ctx| {
+                    ctx.with_routing_id(RoutingId::from_index(idx), |ctx| {
                         ElementNode::new(new_at(idx).create_element(ctx))
                     })
                 })
@@ -148,8 +148,8 @@ impl<C: Element> MultiChildElement<C> {
 
             let mut node = old_elements[old_top].take().unwrap();
 
-            ctx.with_routing_id(RoutingId::new(new_top as u16), |ctx| {
-                new_child.update(&mut node.element, old_child, ctx)
+            ctx.with_routing_id(RoutingId::from_index(new_top), |ctx| {
+                new_child.update(&mut node.element, old_child, ctx);
             });
 
             new_elements[new_top] = Some(node);
@@ -197,14 +197,14 @@ impl<C: Element> MultiChildElement<C> {
             if let Some(existing_idx) = existing {
                 let mut node = old_elements[existing_idx].take().unwrap();
 
-                ctx.with_routing_id(RoutingId::new(new_top as u16), |ctx| {
-                    new_child.update(&mut node.element, old_at(existing_idx), ctx)
+                ctx.with_routing_id(RoutingId::from_index(new_top), |ctx| {
+                    new_child.update(&mut node.element, old_at(existing_idx), ctx);
                 });
 
                 new_elements[new_top] = Some(node);
             } else {
                 new_elements[new_top] =
-                    Some(ctx.with_routing_id(RoutingId::new(new_top as u16), |ctx| {
+                    Some(ctx.with_routing_id(RoutingId::from_index(new_top), |ctx| {
                         ElementNode::new(new_child.create_element(ctx))
                     }));
             }
@@ -224,8 +224,8 @@ impl<C: Element> MultiChildElement<C> {
         while old_top <= old_bottom && new_top <= new_bottom {
             let mut node = old_elements[old_top].take().unwrap();
 
-            ctx.with_routing_id(RoutingId::new(new_top as u16), |ctx| {
-                new_at(new_top).update(&mut node.element, old_at(old_top), ctx)
+            ctx.with_routing_id(RoutingId::from_index(new_top), |ctx| {
+                new_at(new_top).update(&mut node.element, old_at(old_top), ctx);
             });
 
             new_elements[new_top] = Some(node);

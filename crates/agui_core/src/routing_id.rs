@@ -8,6 +8,11 @@ impl RoutingId {
         Self(id)
     }
 
+    /// Routing id for the child at `index`, panicking if it exceeds [`u16::MAX`].
+    pub fn from_index(index: usize) -> Self {
+        Self(u16::try_from(index).expect("a widget cannot address more than u16::MAX children"))
+    }
+
     pub const fn next(&mut self) -> Self {
         let id = self.0;
         self.0 += 1;

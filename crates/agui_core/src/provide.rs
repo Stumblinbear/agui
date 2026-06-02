@@ -98,12 +98,12 @@ mod tests {
 
         fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
             ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                element.update(&self.child, &old.child, ctx)
-            })
+                element.update(&self.child, &old.child, ctx);
+            });
         }
 
         fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-            element.dispatch(&self.child, path, action)
+            element.dispatch(&self.child, path, action);
         }
 
         fn create_render_object(&self, _: &Self::Element) -> Self::Render {
