@@ -35,7 +35,7 @@ impl Offset {
     }
 
     pub fn distance_squared(self) -> Positive<f32> {
-        // SAFETY: x and y are positive numbers, so the result is also positive.
+        // SAFETY: x^2 and y^2 are positive numbers, so the result is also positive.
         unsafe {
             Positive::<f32>::new_unchecked(
                 self.x.powf(as_const!(NonNaNFinite, f32, 2.0))

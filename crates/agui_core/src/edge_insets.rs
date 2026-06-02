@@ -1,5 +1,3 @@
-use std::ops::{Add, Sub};
-
 use typed_floats::{Max, NonNaNFinite, Positive, PositiveFinite, as_const};
 
 use crate::{axis::Axis, offset::Offset, size::Size, text_direction::TextDirection};

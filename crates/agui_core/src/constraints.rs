@@ -230,14 +230,11 @@ impl Constraints {
         let deflated_min_height = as_const!(NonNaN, f32, 0.0).max(self.min_height - vertical_size);
         let deflated_max_height = deflated_min_height.max(self.max_height - vertical_size);
 
-        // SAFETY: the deflated constraints are guaranteed to be non-negative
-        unsafe {
-            Self {
-                min_width: Positive::<f32>::new_unchecked(deflated_min_width.get()),
-                max_width: Positive::<f32>::new_unchecked(deflated_max_width.get()),
-                min_height: Positive::<f32>::new_unchecked(deflated_min_height.get()),
-                max_height: Positive::<f32>::new_unchecked(deflated_max_height.get()),
-            }
+        Self {
+            min_width: deflated_min_width.abs(),
+            max_width: deflated_max_width.abs(),
+            min_height: deflated_min_height.abs(),
+            max_height: deflated_max_height.abs(),
         }
     }
 
@@ -311,25 +308,25 @@ impl Constraints {
     pub fn tighten(self, other: impl Into<Size>) -> Self {
         let other: Size = other.into();
 
-        let width = other.width.get();
-        let height = other.height.get();
+        let width = other.width;
+        let height = other.height;
 
-        // SAFETY: since [`Size`] is guaranteed to not be NaN, clamp will always return positive numbers
-        unsafe {
-            Self {
-                min_width: Positive::<f32>::new_unchecked(
-                    width.clamp(self.min_width.get(), self.max_width.get()),
-                ),
-                max_width: Positive::<f32>::new_unchecked(
-                    width.clamp(self.min_width.get(), self.max_width.get()),
-                ),
-                min_height: Positive::<f32>::new_unchecked(
-                    height.clamp(self.min_height.get(), self.max_height.get()),
-                ),
-                max_height: Positive::<f32>::new_unchecked(
-                    height.clamp(self.min_height.get(), self.max_height.get()),
-                ),
-            }
+        // Since we carry non-negative numbers and [`Size`] is non-NaN, clamp will nearly always return positive numbers.
+        // The exception is on some architectures where -0.0 may be produced: we resolve this by calling abs().
+        Self {
+            min_width: width
+                .clamp(self.min_width.into(), self.max_width.into())
+                .abs(),
+            max_width: width
+                .clamp(self.min_width.into(), self.max_width.into())
+                .abs(),
+
+            min_height: height
+                .clamp(self.min_height.into(), self.max_height.into())
+                .abs(),
+            max_height: height
+                .clamp(self.min_height.into(), self.max_height.into())
+                .abs(),
         }
     }
 
