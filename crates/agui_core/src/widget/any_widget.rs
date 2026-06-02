@@ -30,15 +30,11 @@ pub trait AnyWidget {
         ctx: &mut UpdateCtx,
     );
 
-    fn dyn_dispatch(&self, element: &mut Box<dyn AnyElement>, path: &[RoutingId], action: Dispatch);
+    fn dyn_dispatch(&self, element: &mut dyn AnyElement, path: &[RoutingId], action: Dispatch);
 
-    fn dyn_create_render_object(&self, element: &Box<dyn AnyElement>) -> Self::Render;
+    fn dyn_create_render_object(&self, element: &dyn AnyElement) -> Self::Render;
 
-    fn dyn_update_render_object(
-        &self,
-        element: &Box<dyn AnyElement>,
-        render_object: &mut Self::Render,
-    );
+    fn dyn_update_render_object(&self, element: &dyn AnyElement, render_object: &mut Self::Render);
 
     fn dyn_is_same_type(&self, other: &dyn AnyWidget<Render = Self::Render>) -> bool;
 
@@ -83,13 +79,8 @@ where
         }
     }
 
-    fn dyn_dispatch(
-        &self,
-        element: &mut Box<dyn AnyElement>,
-        path: &[RoutingId],
-        action: Dispatch,
-    ) {
-        let element = (**element)
+    fn dyn_dispatch(&self, element: &mut dyn AnyElement, path: &[RoutingId], action: Dispatch) {
+        let element = element
             .as_any_mut()
             .downcast_mut::<T::Element>()
             .expect("element does not match its widget's type");
@@ -97,8 +88,8 @@ where
         self.dispatch(element, path, action);
     }
 
-    fn dyn_create_render_object(&self, element: &Box<dyn AnyElement>) -> Self::Render {
-        let element = (**element)
+    fn dyn_create_render_object(&self, element: &dyn AnyElement) -> Self::Render {
+        let element = element
             .as_any()
             .downcast_ref::<T::Element>()
             .expect("element does not match its widget's type");
@@ -106,12 +97,8 @@ where
         self.create_render_object(element)
     }
 
-    fn dyn_update_render_object(
-        &self,
-        element: &Box<dyn AnyElement>,
-        render_object: &mut Self::Render,
-    ) {
-        let element = (**element)
+    fn dyn_update_render_object(&self, element: &dyn AnyElement, render_object: &mut Self::Render) {
+        let element = element
             .as_any()
             .downcast_ref::<T::Element>()
             .expect("element does not match its widget's type");
@@ -200,11 +187,11 @@ mod macros {
                         return;
                     }
 
-                    (**self).dyn_dispatch(&mut element.child.element, rest, action)
+                    (**self).dyn_dispatch(&mut *element.child.element, rest, action)
                 }
 
                 fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-                    (**self).dyn_create_render_object(&element.child.element)
+                    (**self).dyn_create_render_object(&*element.child.element)
                 }
 
                 fn update_render_object(
@@ -212,7 +199,7 @@ mod macros {
                     element: &Self::Element,
                     render_object: &mut Self::Render,
                 ) {
-                    (**self).dyn_update_render_object(&element.child.element, render_object);
+                    (**self).dyn_update_render_object(&*element.child.element, render_object);
                 }
 
                 fn is_same_type(&self, other: &Self) -> bool {
