@@ -88,6 +88,9 @@ impl<C: Element> MultiChildElement<C> {
         child_at(idx).dispatch(&mut self.children[idx].element, rest, action);
     }
 
+    /// # Panics
+    ///
+    /// Panics if `old_len` does not match the number of retained children.
     pub fn update<'v, CV>(
         &mut self,
         new_len: usize,

@@ -26,6 +26,9 @@ impl Size {
         height: as_const!(NonNaN, f32, 0.0),
     };
 
+    /// # Panics
+    ///
+    /// Panics if `width` or `height` is NaN.
     #[inline]
     pub fn new<T>(width: T, height: T) -> Self
     where
@@ -193,13 +196,27 @@ impl Div for Size {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
-        assert!(!(self.width.classify() == FpCategory::Zero && rhs.width.classify() == FpCategory::Zero), "cannot divide a zero width by a zero width");
+        assert!(
+            !(self.width.classify() == FpCategory::Zero
+                && rhs.width.classify() == FpCategory::Zero),
+            "cannot divide a zero width by a zero width"
+        );
 
-        assert!(!(self.width.is_infinite() && rhs.width.is_infinite()), "cannot divide an infinite width by an infinite width");
+        assert!(
+            !(self.width.is_infinite() && rhs.width.is_infinite()),
+            "cannot divide an infinite width by an infinite width"
+        );
 
-        assert!(!(self.height.classify() == FpCategory::Zero && rhs.height.classify() == FpCategory::Zero), "cannot divide a zero height by a zero height");
+        assert!(
+            !(self.height.classify() == FpCategory::Zero
+                && rhs.height.classify() == FpCategory::Zero),
+            "cannot divide a zero height by a zero height"
+        );
 
-        assert!(!(self.height.is_infinite() && rhs.height.is_infinite()), "cannot divide an infinite height by an infinite height");
+        assert!(
+            !(self.height.is_infinite() && rhs.height.is_infinite()),
+            "cannot divide an infinite height by an infinite height"
+        );
 
         Self::new(self.width / rhs.width, self.height / rhs.height)
     }
@@ -229,13 +246,27 @@ impl Rem for Size {
     type Output = Self;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        assert!(!(self.width.classify() == FpCategory::Zero && rhs.width.classify() == FpCategory::Zero), "cannot divide a zero width by a zero width");
+        assert!(
+            !(self.width.classify() == FpCategory::Zero
+                && rhs.width.classify() == FpCategory::Zero),
+            "cannot divide a zero width by a zero width"
+        );
 
-        assert!(!(self.width.is_infinite() && rhs.width.is_infinite()), "cannot divide an infinite width by an infinite width");
+        assert!(
+            !(self.width.is_infinite() && rhs.width.is_infinite()),
+            "cannot divide an infinite width by an infinite width"
+        );
 
-        assert!(!(self.height.classify() == FpCategory::Zero && rhs.height.classify() == FpCategory::Zero), "cannot divide a zero height by a zero height");
+        assert!(
+            !(self.height.classify() == FpCategory::Zero
+                && rhs.height.classify() == FpCategory::Zero),
+            "cannot divide a zero height by a zero height"
+        );
 
-        assert!(!(self.height.is_infinite() && rhs.height.is_infinite()), "cannot divide an infinite height by an infinite height");
+        assert!(
+            !(self.height.is_infinite() && rhs.height.is_infinite()),
+            "cannot divide an infinite height by an infinite height"
+        );
 
         Self::new(self.width % rhs.width, self.height % rhs.height)
     }

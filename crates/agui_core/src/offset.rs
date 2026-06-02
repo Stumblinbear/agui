@@ -20,6 +20,9 @@ impl Offset {
         y: as_const!(NonNaNFinite, f32, 0.0),
     };
 
+    /// # Panics
+    ///
+    /// Panics if `x` or `y` is infinite or NaN.
     pub fn new<T>(x: T, y: T) -> Self
     where
         NonNaNFinite<f32>: TryFrom<T>,
@@ -49,6 +52,9 @@ impl Offset {
         self.y.atan2(self.x)
     }
 
+    /// # Panics
+    ///
+    /// Panics if either scalar is infinite or NaN.
     pub fn scale<T>(self, scale_x: T, scale_y: T) -> Self
     where
         NonNaNFinite<f32>: TryFrom<T>,
@@ -60,6 +66,9 @@ impl Offset {
         )
     }
 
+    /// # Panics
+    ///
+    /// Panics if `x` or `y` is infinite or NaN.
     pub fn translate<T>(self, x: T, y: T) -> Self
     where
         NonNaNFinite<f32>: TryFrom<T>,

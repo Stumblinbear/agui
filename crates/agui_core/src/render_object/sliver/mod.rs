@@ -133,12 +133,22 @@ pub struct SliverGeometry {
 impl SliverGeometry {
     /// Geometry for a sliver `scroll_extent` long that paints `paint_extent` of itself. The layout,
     /// hit-test, and cache extents follow `paint_extent`, and `paint_origin` is zero.
-    pub fn new(scroll_extent: f32, paint_extent: f32) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `scroll_extent` is negative, or if `paint_extent` is negative or infinite.
+    pub fn new<S, P>(scroll_extent: S, paint_extent: P) -> Self
+    where
+        Positive<f32>: TryFrom<S>,
+        <Positive<f32> as TryFrom<S>>::Error: std::fmt::Debug,
+        PositiveFinite<f32>: TryFrom<P>,
+        <PositiveFinite<f32> as TryFrom<P>>::Error: std::fmt::Debug,
+    {
         let scroll_extent = Positive::try_from(scroll_extent).expect("scroll_extent must be >= 0");
         let paint_extent =
             PositiveFinite::try_from(paint_extent).expect("paint_extent must be finite and >= 0");
-        let max_paint_extent =
-            Positive::try_from(paint_extent.get()).expect("paint_extent must be >= 0");
+        let max_paint_extent = <Positive<f32> as TryFrom<f32>>::try_from(paint_extent.get())
+            .expect("paint_extent must be >= 0");
 
         Self {
             scroll_extent,

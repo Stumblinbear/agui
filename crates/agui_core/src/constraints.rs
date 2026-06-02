@@ -24,28 +24,31 @@ impl Default for Constraints {
 }
 
 impl Constraints {
+    /// # Panics
+    ///
+    /// Panics if any bound is negative or NaN, or if a minimum exceeds its maximum.
     pub fn new<T>(min_width: T, max_width: T, min_height: T, max_height: T) -> Self
     where
         Positive<f32>: TryFrom<T>,
         <Positive<f32> as TryFrom<T>>::Error: std::fmt::Debug,
     {
         let min_width =
-            Positive::try_from(min_width).expect("mininimum width must be a non-negative number");
+            Positive::try_from(min_width).expect("minimum width must be a non-negative number");
         let max_width =
-            Positive::try_from(max_width).expect("maxinimum width must be a non-negative number");
+            Positive::try_from(max_width).expect("maximum width must be a non-negative number");
         let min_height =
-            Positive::try_from(min_height).expect("mininimum height must be a non-negative number");
+            Positive::try_from(min_height).expect("minimum height must be a non-negative number");
         let max_height =
-            Positive::try_from(max_height).expect("maxinimum height must be a non-negative number");
+            Positive::try_from(max_height).expect("maximum height must be a non-negative number");
 
         assert!(
             min_width <= max_width,
-            "mininimum width must not be greater than the maximum width"
+            "minimum width must not be greater than the maximum width"
         );
 
         assert!(
             min_height <= max_height,
-            "mininimum height must not be greater than the maximum height"
+            "minimum height must not be greater than the maximum height"
         );
 
         Self {
@@ -58,15 +61,23 @@ impl Constraints {
 
     /// Creates [`Constraints`] that require the given constraints only on the given axis, with
     /// the other axis unconstrained.
-    pub fn along_axis(axis: Axis, min: f32, max: f32) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `min` or `max` is negative or NaN, or if `min` exceeds `max`.
+    pub fn along_axis<T>(axis: Axis, min: T, max: T) -> Self
+    where
+        Positive<f32>: TryFrom<T>,
+        <Positive<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
         let min =
-            Positive::try_from(min).expect("mininimum constraint must be a non-negative number");
+            Positive::try_from(min).expect("minimum constraint must be a non-negative number");
         let max =
-            Positive::try_from(max).expect("maxinimum constraint must be a non-negative number");
+            Positive::try_from(max).expect("maximum constraint must be a non-negative number");
 
         assert!(
             min <= max,
-            "mininimum constraint must not be greater than the maximum constraint"
+            "minimum constraint must not be greater than the maximum constraint"
         );
 
         let min = min.min(max);
@@ -87,6 +98,10 @@ impl Constraints {
     }
 
     /// Creates [`Constraints`] that require the given size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` has a negative dimension.
     pub fn tight(size: Size) -> Self {
         let width =
             Positive::try_from(size.width).expect("tight width must be a non-negative number");
@@ -102,11 +117,20 @@ impl Constraints {
     }
 
     /// Creates [`Constraints`] that require the given size on the given axis.
-    pub fn tight_for(axis: Axis, size: f32) -> Self {
+    pub fn tight_for<T>(axis: Axis, size: T) -> Self
+    where
+        T: Copy,
+        Positive<f32>: TryFrom<T>,
+        <Positive<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
         Self::along_axis(axis, size, size)
     }
 
     /// Creates [`Constraints`] that forbids sizes larger than the given size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` has a negative dimension.
     pub fn loose(size: Size) -> Self {
         let max_width =
             Positive::try_from(size.width).expect("loose width must be a non-negative number");
@@ -122,8 +146,19 @@ impl Constraints {
     }
 
     /// Creates [`Constraints`] that forbids sizes larger than the given size on the given axis.
-    pub fn loose_for(axis: Axis, size: f32) -> Self {
-        Self::along_axis(axis, 0.0, size)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` is negative or NaN.
+    pub fn loose_for<T>(axis: Axis, size: T) -> Self
+    where
+        Positive<f32>: TryFrom<T>,
+        <Positive<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
+        let max: Positive<f32> =
+            Positive::try_from(size).expect("loose size must be a non-negative number");
+
+        Self::along_axis::<Positive<f32>>(axis, as_const!(Positive, f32, 0.0), max)
     }
 
     pub fn min_width(self) -> Positive<f32> {
@@ -215,6 +250,10 @@ impl Constraints {
 
     /// Returns new [`Constraints`] with a tight width as close to the given width as
     /// possible while still respecting the original constraints.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `width` is negative or NaN.
     pub fn tighten_width(self, width: f32) -> Self {
         let width = Positive::try_from(width).expect("tight width must be a non-negative number");
 
@@ -227,6 +266,10 @@ impl Constraints {
 
     /// Returns new [`Constraints`] with a tight height as close to the given height as
     /// possible while still respecting the original constraints.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `height` is negative or NaN.
     pub fn tighten_height(self, height: f32) -> Self {
         let height =
             Positive::try_from(height).expect("tight height must be a non-negative number");
@@ -307,6 +350,10 @@ impl Constraints {
 
     /// Returns the width that both satisfies the constraints and is as close as
     /// possible to the given width.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `width` is negative or NaN.
     pub fn constrain_width(self, width: f32) -> Positive<f32> {
         let width =
             Positive::try_from(width).expect("constrained width must be a non-negative number");
@@ -316,6 +363,10 @@ impl Constraints {
 
     /// Returns the height that both satisfies the constraints and is as close as
     /// possible to the given height.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `height` is negative or NaN.
     pub fn constrain_height(self, height: f32) -> Positive<f32> {
         let height =
             Positive::try_from(height).expect("constrained width must be a non-negative number");
@@ -350,6 +401,11 @@ impl Constraints {
     ///    given size.
     ///  * The returned size as big as possible while still being equal to or
     ///    smaller than the given size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the size's aspect ratio is not finite and greater than zero, such as when its
+    /// height is zero.
     pub fn constrain_preserve_aspect_ratio(self, size: impl Into<Size>) -> Size {
         let size: Size = size.into();
 
@@ -597,13 +653,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "mininimum width must not be greater than the maximum width")]
+    #[should_panic(expected = "minimum width must not be greater than the maximum width")]
     fn new_panics_when_min_width_exceeds_max() {
         Constraints::new(100.0_f32, 10.0_f32, 0.0_f32, 100.0_f32);
     }
 
     #[test]
-    #[should_panic(expected = "mininimum height must not be greater than the maximum height")]
+    #[should_panic(expected = "minimum height must not be greater than the maximum height")]
     fn new_panics_when_min_height_exceeds_max() {
         Constraints::new(0.0_f32, 100.0_f32, 100.0_f32, 10.0_f32);
     }

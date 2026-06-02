@@ -47,7 +47,14 @@ impl EdgeInsets {
         left: as_const!(PositiveFinite, f32, 0.0),
     };
 
-    pub fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
+    /// # Panics
+    ///
+    /// Panics if any inset is negative, infinite, or NaN.
+    pub fn new<T>(top: T, right: T, bottom: T, left: T) -> Self
+    where
+        PositiveFinite<f32>: TryFrom<T>,
+        <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
         Self {
             top: PositiveFinite::try_from(top).expect("top must be a positive finite number"),
             right: PositiveFinite::try_from(right).expect("right must a positive finite number"),
@@ -56,7 +63,14 @@ impl EdgeInsets {
         }
     }
 
-    pub fn all(value: f32) -> Self {
+    /// # Panics
+    ///
+    /// Panics if `value` is negative, infinite, or NaN.
+    pub fn all<T>(value: T) -> Self
+    where
+        PositiveFinite<f32>: TryFrom<T>,
+        <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
         let value =
             PositiveFinite::try_from(value).expect("value must be a positive finite number");
 
@@ -68,7 +82,14 @@ impl EdgeInsets {
         }
     }
 
-    pub fn symmetric(vertical: f32, horizontal: f32) -> Self {
+    /// # Panics
+    ///
+    /// Panics if `vertical` or `horizontal` is negative, infinite, or NaN.
+    pub fn symmetric<T>(vertical: T, horizontal: T) -> Self
+    where
+        PositiveFinite<f32>: TryFrom<T>,
+        <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
         let vertical =
             PositiveFinite::try_from(vertical).expect("vertical must be a positive finite number");
         let horizontal = PositiveFinite::try_from(horizontal)
@@ -131,7 +152,14 @@ impl DirectionalEdgeInsets {
         bottom: as_const!(PositiveFinite, f32, 0.0),
     };
 
-    pub fn new(start: f32, top: f32, end: f32, bottom: f32) -> Self {
+    /// # Panics
+    ///
+    /// Panics if any inset is negative, infinite, or NaN.
+    pub fn new<T>(start: T, top: T, end: T, bottom: T) -> Self
+    where
+        PositiveFinite<f32>: TryFrom<T>,
+        <PositiveFinite<f32> as TryFrom<T>>::Error: std::fmt::Debug,
+    {
         Self {
             start: PositiveFinite::try_from(start).expect("start must be a positive finite number"),
             top: PositiveFinite::try_from(top).expect("top must a positive finite number"),
@@ -140,11 +168,17 @@ impl DirectionalEdgeInsets {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if `start + end` overflows to infinity.
     pub fn horizontal(&self) -> PositiveFinite<f32> {
         PositiveFinite::try_from(self.start + self.end)
             .expect("total horizontal edge insets must be a positive finite number")
     }
 
+    /// # Panics
+    ///
+    /// Panics if `top + bottom` overflows to infinity.
     pub fn vertical(&self) -> PositiveFinite<f32> {
         PositiveFinite::try_from(self.top + self.bottom)
             .expect("total vertical edge insets must be a positive finite number")

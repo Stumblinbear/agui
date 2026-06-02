@@ -13,8 +13,11 @@ impl MessageCtx {
         }
     }
 
-    /// Take the message payload, downcasting to the expected type. Panics if already
-    /// consumed or if the type doesn't match.
+    /// Take the message payload, downcasting to the expected type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the payload has already been consumed or is not of type `T`.
     pub fn consume<T>(&mut self) -> T
     where
         T: Any,
