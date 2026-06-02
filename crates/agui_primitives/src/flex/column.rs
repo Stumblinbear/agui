@@ -91,7 +91,6 @@ where
         element.update(
             self.children.len(),
             |i| &self.children[i].child,
-            old.children.len(),
             |i| &old.children[i].child,
             ctx,
         );

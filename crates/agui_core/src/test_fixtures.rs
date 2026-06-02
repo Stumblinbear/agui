@@ -133,7 +133,6 @@ impl<Child: Widget> Widget for MultiChild<Child> {
         element.update(
             self.children.len(),
             |i| &self.children[i],
-            old.children.len(),
             |i| &old.children[i],
             ctx,
         );
