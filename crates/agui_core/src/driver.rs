@@ -64,7 +64,7 @@ mod tests {
         offset::Offset,
         provide::ProvideScope,
         render_object::{RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox},
-        renderer::Canvas,
+        paint::Canvas,
         routing_id::{RoutingId, RoutingPath},
         size::Size,
         task::TaskHandle,

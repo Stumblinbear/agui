@@ -24,7 +24,7 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 # agui_elements = { path = "crates/agui_elements", version = "0.3" }
 # agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
 
-# agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
+agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 # agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
 
 # agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
@@ -62,10 +62,13 @@ mockall = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 
 lyon = "1.0"
+peniko = "0.2"
+vello = "0.3"
 
-raw-window-handle = "0.5"
+raw-window-handle = "0.6"
 
-winit = { version = "0.28" }
+winit = "0.30"
+pollster = "0.3"
 
 [features]
 # default = ["primitives", "widgets", "macros"]

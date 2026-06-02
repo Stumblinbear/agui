@@ -5,7 +5,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::RenderObject,
-    renderer::Canvas,
+    paint::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };

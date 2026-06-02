@@ -8,7 +8,7 @@ use crate::{
         AnyRenderObject,
         sliver::{RenderSliver, SliverConstraints, SliverGeometry},
     },
-    renderer::Canvas,
+    paint::Canvas,
 };
 
 pub trait AnyRenderSliver: AnyRenderObject {

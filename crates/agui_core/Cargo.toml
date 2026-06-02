@@ -16,6 +16,7 @@ bon.workspace = true
 fnv.workspace = true
 glam.workspace = true
 imbl.workspace = true
+peniko.workspace = true
 smallbox.workspace = true
 typed_floats.workspace = true
 

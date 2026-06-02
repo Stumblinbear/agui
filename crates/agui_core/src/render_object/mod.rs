@@ -6,7 +6,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::box_layout::RenderBox,
-    renderer::Canvas,
+    paint::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };

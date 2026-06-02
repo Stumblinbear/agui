@@ -7,7 +7,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{RenderNode, RenderObject, box_layout::RenderBox},
-    renderer::Canvas,
+    paint::Canvas,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,

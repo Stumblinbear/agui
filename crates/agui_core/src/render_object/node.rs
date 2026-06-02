@@ -6,7 +6,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{RenderObject, box_layout::RenderBox},
-    renderer::Canvas,
+    paint::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -272,8 +272,7 @@ mod tests {
         let size = node.layout_and_get_size(Constraints::tight(Size::new(10.0, 20.0)));
         assert_eq!(size, Size::new(10.0, 20.0));
 
-        let mut canvas = Canvas {};
-        node.paint(&mut canvas);
+        Canvas::record(|canvas| node.paint(canvas));
     }
 
     #[test]
@@ -296,8 +295,7 @@ mod tests {
         assert_eq!(node.object.pad, 9);
 
         // paint the whole tree; lay out the (RenderBox) leaf child via the node helpers
-        let mut canvas = Canvas {};
-        node.paint(&mut canvas);
+        Canvas::record(|canvas| node.paint(canvas));
         assert_eq!(
             node.object
                 .child
@@ -335,7 +333,7 @@ mod tests {
             Size::new(3.0, 3.0),
         );
 
-        boxed.paint(&mut canvas);
+        Canvas::record(|canvas| boxed.paint(canvas));
     }
 
     struct Counted {
