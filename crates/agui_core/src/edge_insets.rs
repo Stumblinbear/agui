@@ -1,6 +1,8 @@
-use typed_floats::{PositiveFinite, as_const};
+use std::ops::{Add, Sub};
 
-use crate::{axis::Axis, text_direction::TextDirection};
+use typed_floats::{Max, NonNaNFinite, Positive, PositiveFinite, as_const};
+
+use crate::{axis::Axis, offset::Offset, size::Size, text_direction::TextDirection};
 
 pub trait EdgeInsetsGeometry {
     fn is_zero(&self) -> bool;
@@ -22,6 +24,35 @@ pub trait EdgeInsetsGeometry {
             Axis::Horizontal => self.horizontal(),
             Axis::Vertical => self.vertical(),
         }
+    }
+
+    /// The total inset along each axis, as a [`Size`] (horizontal as width, vertical as height).
+    fn collapsed_size(&self) -> Size {
+        Size::new(self.horizontal(), self.vertical())
+    }
+
+    /// Grows `size` by the insets on each axis.
+    fn inflate_size(&self, size: Size) -> Size {
+        size + self.collapsed_size()
+    }
+
+    /// Shrinks `size` by the insets on each axis.
+    fn deflate_size(&self, size: Size) -> Size {
+        size - self.collapsed_size()
+    }
+
+    fn inflate_axis(&self, axis: Axis, extent: Positive<f32>) -> Positive<f32> {
+        extent + self.axis(axis)
+    }
+
+    fn deflate_axis(&self, axis: Axis, extent: Positive<f32>) -> Positive<f32> {
+        let deflated = Max::max(
+            extent - self.axis(axis),
+            as_const!(PositiveFinite, f32, 0.0),
+        );
+
+        // We have to call abs() due to the possibility of -0.0 being produced.
+        deflated.abs()
     }
 }
 
@@ -100,6 +131,48 @@ impl EdgeInsets {
             right: horizontal,
             bottom: vertical,
             left: horizontal,
+        }
+    }
+
+    /// The offset from the box's top-left corner to the content's top-left corner.
+    pub fn top_left(&self) -> Offset {
+        Offset {
+            x: self.left.into(),
+            y: self.top.into(),
+        }
+    }
+
+    /// The offset from the box's top-right corner to the content's top-right corner.
+    pub fn top_right(&self) -> Offset {
+        Offset {
+            x: -NonNaNFinite::from(self.right),
+            y: self.top.into(),
+        }
+    }
+
+    /// The offset from the box's bottom-left corner to the content's bottom-left corner.
+    pub fn bottom_left(&self) -> Offset {
+        Offset {
+            x: self.left.into(),
+            y: -NonNaNFinite::from(self.bottom),
+        }
+    }
+
+    /// The offset from the box's bottom-right corner to the content's bottom-right corner.
+    pub fn bottom_right(&self) -> Offset {
+        Offset {
+            x: -NonNaNFinite::from(self.right),
+            y: -NonNaNFinite::from(self.bottom),
+        }
+    }
+
+    /// Swaps the top/bottom and left/right insets.
+    pub fn flipped(&self) -> Self {
+        Self {
+            top: self.bottom,
+            right: self.left,
+            bottom: self.top,
+            left: self.right,
         }
     }
 }

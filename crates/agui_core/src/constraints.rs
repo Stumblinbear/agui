@@ -116,8 +116,24 @@ impl Constraints {
         }
     }
 
+    /// Creates [`Constraints`] that require the given width and/or height, leaving an unset
+    /// dimension unconstrained.
+    pub fn tight_for(width: Option<Positive<f32>>, height: Option<Positive<f32>>) -> Self {
+        let mut constraints = Self::default();
+
+        if let Some(width) = width {
+            constraints = constraints.tighten_width(width.get());
+        }
+
+        if let Some(height) = height {
+            constraints = constraints.tighten_height(height.get());
+        }
+
+        constraints
+    }
+
     /// Creates [`Constraints`] that require the given size on the given axis.
-    pub fn tight_for<T>(axis: Axis, size: T) -> Self
+    pub fn tight_for_axis<T>(axis: Axis, size: T) -> Self
     where
         T: Copy,
         Positive<f32>: TryFrom<T>,
@@ -150,7 +166,7 @@ impl Constraints {
     /// # Panics
     ///
     /// Panics if `size` is negative or NaN.
-    pub fn loose_for<T>(axis: Axis, size: T) -> Self
+    pub fn loose_for_axis<T>(axis: Axis, size: T) -> Self
     where
         Positive<f32>: TryFrom<T>,
         <Positive<f32> as TryFrom<T>>::Error: std::fmt::Debug,

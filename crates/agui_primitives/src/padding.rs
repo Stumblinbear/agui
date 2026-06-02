@@ -1,7 +1,8 @@
 use bon::Builder;
-use typed_floats::{Positive, PositiveFinite, as_const};
+use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
+    axis::Axis,
     constraints::Constraints,
     context::{Dispatch, UpdateCtx},
     edge_insets::{EdgeInsets, EdgeInsetsGeometry},
@@ -116,87 +117,74 @@ where
     Child: RenderBox,
 {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        let inner_height = unsafe {
-            Positive::<f32>::new_unchecked(
-                as_const!(NonNaN, f32, 0.0)
-                    .max(height - self.padding.vertical())
-                    .get(),
-            )
-        };
+        let child_height = self.padding.deflate_axis(Axis::Vertical, height);
 
-        self.child.min_intrinsic_width(inner_height).map(|width| {
-            PositiveFinite::try_from(width + self.padding.horizontal())
-                .expect("minimum intrinsic width of padding must be finite")
-        })
+        let child_width = self.child.min_intrinsic_width(child_height)?;
+
+        Some(
+            self.padding
+                .inflate_axis(Axis::Horizontal, child_width.into())
+                .try_into()
+                .expect("minimum intrinsic width of padding must be finite"),
+        )
     }
 
     fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        let inner_height = unsafe {
-            Positive::<f32>::new_unchecked(
-                as_const!(NonNaN, f32, 0.0)
-                    .max(height - self.padding.vertical())
-                    .get(),
-            )
-        };
+        let child_height = self.padding.deflate_axis(Axis::Vertical, height);
 
-        self.child.max_intrinsic_width(inner_height).map(|width| {
-            PositiveFinite::try_from(width + self.padding.horizontal())
-                .expect("minimum intrinsic width of padding must be finite")
-        })
+        let child_width = self.child.max_intrinsic_width(child_height)?;
+
+        Some(
+            self.padding
+                .inflate_axis(Axis::Horizontal, child_width.into())
+                .try_into()
+                .expect("maximum intrinsic width of padding must be finite"),
+        )
     }
 
     fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        let inner_width = unsafe {
-            Positive::<f32>::new_unchecked(
-                as_const!(NonNaN, f32, 0.0)
-                    .max(width - self.padding.horizontal())
-                    .get(),
-            )
-        };
+        let child_width = self.padding.deflate_axis(Axis::Horizontal, width);
 
-        self.child.min_intrinsic_height(inner_width).map(|height| {
-            PositiveFinite::try_from(height + self.padding.vertical())
-                .expect("minimum intrinsic height of padding must be finite")
-        })
+        let child_height = self.child.min_intrinsic_height(child_width)?;
+
+        Some(
+            self.padding
+                .inflate_axis(Axis::Vertical, child_height.into())
+                .try_into()
+                .expect("minimum intrinsic height of padding must be finite"),
+        )
     }
 
     fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        let inner_width = unsafe {
-            Positive::<f32>::new_unchecked(
-                as_const!(NonNaN, f32, 0.0)
-                    .max(width - self.padding.horizontal())
-                    .get(),
-            )
-        };
+        let child_width = self.padding.deflate_axis(Axis::Horizontal, width);
 
-        self.child.max_intrinsic_height(inner_width).map(|height| {
-            PositiveFinite::try_from(height + self.padding.vertical())
-                .expect("minimum intrinsic height of padding must be finite")
-        })
+        let child_height = self.child.max_intrinsic_height(child_width)?;
+
+        Some(
+            self.padding
+                .inflate_axis(Axis::Vertical, child_height.into())
+                .try_into()
+                .expect("maximum intrinsic height of padding must be finite"),
+        )
     }
 
     fn measure(&self, constraints: Constraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
-
         let child_size = self.child.measure(inner_constraints);
 
-        constraints
-            .constrain(Size::new(self.padding.horizontal(), self.padding.vertical()) + child_size)
+        constraints.constrain(self.padding.inflate_size(child_size))
     }
 
     fn layout(&mut self, constraints: Constraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
-
         let child_size = self.child.layout_and_get_size(inner_constraints);
-        let child_offset = Offset::new(self.padding.left, self.padding.top);
 
         self.child.parent_data = Some(ChildParentData {
             size: child_size,
-            offset: child_offset,
+            offset: self.padding.top_left(),
         });
 
-        constraints
-            .constrain(Size::new(self.padding.horizontal(), self.padding.vertical()) + child_size)
+        constraints.constrain(self.padding.inflate_size(child_size))
     }
 
     fn measure_baseline(
@@ -205,13 +193,14 @@ where
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         let inner_constraints = constraints.deflate(&self.padding);
+        let child_baseline = self.child.measure_baseline(inner_constraints, baseline)?;
 
-        self.child
-            .measure_baseline(inner_constraints, baseline)
-            .map(|baseline| {
-                PositiveFinite::try_from(baseline + self.padding.top())
-                    .expect("baseline of padding must be finite")
-            })
+        Some(
+            self.padding
+                .inflate_axis(Axis::Vertical, child_baseline.into())
+                .try_into()
+                .expect("baseline of padding must be finite"),
+        )
     }
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {

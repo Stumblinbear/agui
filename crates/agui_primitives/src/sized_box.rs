@@ -192,22 +192,6 @@ pub struct RenderSizedBox<Child> {
     child: RenderNode<Child, Option<Size>>,
 }
 
-impl<Child> RenderSizedBox<Child> {
-    fn additional_constraints(&self) -> Constraints {
-        let mut constraints = Constraints::default();
-
-        if let Some(width) = self.width {
-            constraints = constraints.tighten_width(width.get());
-        }
-
-        if let Some(height) = self.height {
-            constraints = constraints.tighten_height(height.get());
-        }
-
-        constraints
-    }
-}
-
 impl<Child> RenderObject for RenderSizedBox<Child>
 where
     Child: RenderBox,
@@ -221,43 +205,52 @@ where
     }
 }
 
+/// Converts a `Positive` extent to `PositiveFinite`, returning `None` if infinite.
+fn finite_extent(v: Option<Positive<f32>>) -> Option<PositiveFinite<f32>> {
+    v.and_then(|x| PositiveFinite::try_from(x).ok())
+}
+
 impl<Child> RenderBox for RenderSizedBox<Child>
 where
     Child: RenderBox,
 {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.width
-            .and_then(|width| PositiveFinite::try_from(width).ok())
-            .or_else(|| self.child.min_intrinsic_width(height))
+        match finite_extent(self.width) {
+            Some(w) => Some(w),
+            None => self.child.min_intrinsic_width(height),
+        }
     }
 
     fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.width
-            .and_then(|width| PositiveFinite::try_from(width).ok())
-            .or_else(|| self.child.max_intrinsic_width(height))
+        match finite_extent(self.width) {
+            Some(w) => Some(w),
+            None => self.child.max_intrinsic_width(height),
+        }
     }
 
     fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.height
-            .and_then(|height| PositiveFinite::try_from(height).ok())
-            .or_else(|| self.child.min_intrinsic_height(width))
+        match finite_extent(self.height) {
+            Some(h) => Some(h),
+            None => self.child.min_intrinsic_height(width),
+        }
     }
 
     fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.height
-            .and_then(|height| PositiveFinite::try_from(height).ok())
-            .or_else(|| self.child.max_intrinsic_height(width))
+        match finite_extent(self.height) {
+            Some(h) => Some(h),
+            None => self.child.max_intrinsic_height(width),
+        }
     }
 
     fn measure(&self, constraints: Constraints) -> Size {
         self.child
-            .measure(self.additional_constraints().enforce(constraints))
+            .measure(Constraints::tight_for(self.width, self.height).enforce(constraints))
     }
 
     fn layout(&mut self, constraints: Constraints) -> Size {
-        let child_size = self
-            .child
-            .layout_and_get_size(self.additional_constraints().enforce(constraints));
+        let child_size = self.child.layout_and_get_size(
+            Constraints::tight_for(self.width, self.height).enforce(constraints),
+        );
 
         self.child.parent_data = Some(child_size);
 
@@ -269,8 +262,10 @@ where
         constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
-        self.child
-            .measure_baseline(self.additional_constraints().enforce(constraints), baseline)
+        self.child.measure_baseline(
+            Constraints::tight_for(self.width, self.height).enforce(constraints),
+            baseline,
+        )
     }
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
