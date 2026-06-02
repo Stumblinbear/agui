@@ -229,32 +229,27 @@ mod macros {
     pub(crate) use impl_widget;
 }
 
-// The widget-erasure adapter is protocol-specific: this one commits to the box layout protocol,
-// and `SliverLayoutWrapper` (below) commits to the sliver protocol. They coexist because each
-// targets a distinct erased render type (`Box<dyn AnyRenderBox>` vs `Box<dyn AnyRenderSliver>`),
-// so there is no blanket-impl overlap to resolve.
-struct BoxLayoutWrapper<T> {
+struct RenderBoxWrapper<T> {
     inner: T,
 }
 
-// The element of a `BoxLayoutWrapper`: holds the inner element, but reports the erased render type.
-struct BoxLayoutElement<E> {
+struct RenderBoxElement<E> {
     inner: E,
 }
 
-impl<E> Element for BoxLayoutElement<E> where E: Element {}
+impl<E> Element for RenderBoxElement<E> where E: Element {}
 
-impl<T> Widget for BoxLayoutWrapper<T>
+impl<T> Widget for RenderBoxWrapper<T>
 where
     T: Widget + 'static,
     T::Render: RenderBox,
 {
-    type Element = BoxLayoutElement<T::Element>;
+    type Element = RenderBoxElement<T::Element>;
 
     type Render = Box<dyn AnyRenderBox>;
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        BoxLayoutElement {
+        RenderBoxElement {
             inner: self.inner.create_element(ctx),
         }
     }
@@ -290,27 +285,27 @@ where
     }
 }
 
-struct SliverLayoutWrapper<T> {
+struct RenderSliverWrapper<T> {
     inner: T,
 }
 
-struct SliverLayoutElement<E> {
+struct RenderSliverElement<E> {
     inner: E,
 }
 
-impl<E> Element for SliverLayoutElement<E> where E: Element {}
+impl<E> Element for RenderSliverElement<E> where E: Element {}
 
-impl<T> Widget for SliverLayoutWrapper<T>
+impl<T> Widget for RenderSliverWrapper<T>
 where
     T: Widget + 'static,
     T::Render: RenderSliver,
 {
-    type Element = SliverLayoutElement<T::Element>;
+    type Element = RenderSliverElement<T::Element>;
 
     type Render = Box<dyn AnyRenderSliver>;
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SliverLayoutElement {
+        RenderSliverElement {
             inner: self.inner.create_element(ctx),
         }
     }
@@ -362,7 +357,7 @@ pub trait AsAnyWidget: Widget + 'static {
         Self: Sized,
         Self::Render: RenderBox,
     {
-        Box::new(BoxLayoutWrapper { inner: self })
+        Box::new(RenderBoxWrapper { inner: self })
     }
 
     fn into_boxed_render_sliver(self) -> BoxedSliverWidget
@@ -370,7 +365,7 @@ pub trait AsAnyWidget: Widget + 'static {
         Self: Sized,
         Self::Render: RenderSliver,
     {
-        Box::new(SliverLayoutWrapper { inner: self })
+        Box::new(RenderSliverWrapper { inner: self })
     }
 }
 
@@ -451,7 +446,7 @@ mod tests {
     fn boxed_value<T: Clone + 'static>(root: &ErasedElement<Box<dyn AnyRenderBox>>) -> T {
         (*root.child.element)
             .as_any()
-            .downcast_ref::<BoxLayoutElement<TestWidgetElement<T>>>()
+            .downcast_ref::<RenderBoxElement<TestWidgetElement<T>>>()
             .expect("inner element type")
             .inner
             .value

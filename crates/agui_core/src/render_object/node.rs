@@ -295,7 +295,7 @@ mod tests {
         .update_render_object(&harness.root.element, &mut node.object);
         assert_eq!(node.object.pad, 9);
 
-        // paint the whole tree; lay out the (BoxLayout) leaf child via the node helpers
+        // paint the whole tree; lay out the (RenderBox) leaf child via the node helpers
         let mut canvas = Canvas {};
         node.paint(&mut canvas);
         assert_eq!(
