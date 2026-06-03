@@ -6,7 +6,7 @@ use agui_core::{
     offset::Offset,
     paint::{ContainerLayer, LayerHandle, PaintCtx, peniko::Color},
     render_object::{
-        BoundaryContent, BoundaryHandle, MountCtx, RenderObject, RepaintOwner,
+        BoundaryContent, MountCtx, PaintScope, RenderObject, RepaintOwner,
         box_layout::{AnyRenderBox, RenderBox},
     },
     size::Size,
@@ -50,16 +50,16 @@ fn main() {
 
     let mut owner = RepaintOwner::new();
 
-    // The root boundary hands its mark handle back through this slot when it mounts.
-    let handle_slot: Rc<RefCell<Option<BoundaryHandle>>> = Rc::new(RefCell::new(None));
-    let slot = Rc::clone(&handle_slot);
-    let mut render = RootBoundary::new(child, move |handle| {
-        *slot.borrow_mut() = Some(handle);
+    // The root boundary hands its paint scope back through this slot when it mounts.
+    let scope_slot: Rc<RefCell<Option<PaintScope>>> = Rc::new(RefCell::new(None));
+    let slot = Rc::clone(&scope_slot);
+    let mut render = RootBoundary::new(child, move |scope| {
+        *slot.borrow_mut() = Some(scope);
     });
 
     tracing::info!("driving mount pass");
     render.mount(&mut MountCtx::new(&mut owner));
-    let root_handle = handle_slot
+    let root_scope = scope_slot
         .borrow()
         .clone()
         .expect("the root boundary mounted");
@@ -67,26 +67,26 @@ fn main() {
 
     let event_loop = EventLoop::new().unwrap();
     event_loop
-        .run_app(&mut App::new(owner, render, root_handle))
+        .run_app(&mut App::new(owner, render, root_scope))
         .unwrap();
 }
 
 /// Example-only root render object: registers its subtree as a repaint boundary when mounted and hands
-/// the boundary's handle to a callback, so the driver can compose the window from it and mark it dirty
-/// when the window is resized. In a real runtime this is the job of a "view" widget.
+/// the boundary's paint scope to a callback, so the driver can compose the window from it and mark it
+/// dirty when the window is resized. In a real runtime this is the job of a "view" widget.
 struct RootBoundary {
     content: BoundaryContent,
     layer: LayerHandle<ContainerLayer>,
-    handle: Option<BoundaryHandle>,
-    on_ready: Option<Box<dyn FnOnce(BoundaryHandle)>>,
+    scope: Option<PaintScope>,
+    on_ready: Option<Box<dyn FnOnce(PaintScope)>>,
 }
 
 impl RootBoundary {
-    fn new(child: impl RenderBox, on_ready: impl FnOnce(BoundaryHandle) + 'static) -> Self {
+    fn new(child: impl RenderBox, on_ready: impl FnOnce(PaintScope) + 'static) -> Self {
         Self {
             content: Rc::new(RefCell::new(Box::new(child) as Box<dyn AnyRenderBox>)),
             layer: LayerHandle::new(ContainerLayer::new()),
-            handle: None,
+            scope: None,
             on_ready: Some(Box::new(on_ready)),
         }
     }
@@ -94,21 +94,24 @@ impl RootBoundary {
 
 impl RenderObject for RootBoundary {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        let handle = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
+        let scope = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
 
         if let Some(on_ready) = self.on_ready.take() {
-            on_ready(handle.clone());
+            on_ready(scope.clone());
         }
 
-        self.handle = Some(handle);
-        self.content.borrow_mut().mount(ctx);
+        // Descendants repaint into this boundary.
+        let content = Rc::clone(&self.content);
+        ctx.with_paint_scope(scope.clone(), |ctx| content.borrow_mut().mount(ctx));
+
+        self.scope = Some(scope);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.content.borrow_mut().unmount(ctx);
 
-        if let Some(handle) = self.handle.take() {
-            ctx.unregister_boundary(handle);
+        if let Some(scope) = self.scope.take() {
+            ctx.unregister_boundary(scope);
         }
     }
 }
@@ -177,19 +180,19 @@ struct App {
     /// The root render object, laid out each frame.
     render: RootBoundary,
     /// The window's root boundary; composed each frame and marked dirty on resize.
-    root_handle: BoundaryHandle,
+    root_scope: PaintScope,
     vello_scene: vello::Scene,
 }
 
 impl App {
-    fn new(owner: RepaintOwner, render: RootBoundary, root_handle: BoundaryHandle) -> Self {
+    fn new(owner: RepaintOwner, render: RootBoundary, root_scope: PaintScope) -> Self {
         Self {
             context: RenderContext::new(),
             renderers: Vec::new(),
             active: None,
             owner,
             render,
-            root_handle,
+            root_scope,
             vello_scene: vello::Scene::new(),
         }
     }
@@ -252,7 +255,7 @@ impl ApplicationHandler for App {
                 self.context
                     .resize_surface(&mut active.surface, size.width, size.height);
                 // The layout changed, so the root boundary must repaint at the new size.
-                self.root_handle.mark();
+                self.root_scope.mark_needs_paint();
                 active.window.request_redraw();
             }
 
@@ -266,7 +269,7 @@ impl ApplicationHandler for App {
                     .layout(Constraints::new(0.0, width as f32, 0.0, height as f32));
 
                 self.owner.flush_paint();
-                let scene = self.owner.compose(&self.root_handle);
+                let scene = self.owner.compose(&self.root_scope);
 
                 self.vello_scene.reset();
                 append_scene(&scene, &mut self.vello_scene);

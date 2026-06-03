@@ -17,7 +17,7 @@ new_key_type! {
 ///
 /// Each boundary is a subtree that paints into its own retained layer. A boundary can be repainted on
 /// its own, leaving every other boundary's layer untouched, so a change confined to one boundary costs
-/// only that boundary's paint. Mark a boundary through the [`BoundaryHandle`] handed back when it is
+/// only that boundary's paint. Mark a boundary through the [`PaintScope`] handed back when it is
 /// registered.
 pub struct RepaintOwner {
     boundaries: SlotMap<BoundaryId, Boundary>,
@@ -50,7 +50,7 @@ impl RepaintOwner {
         &mut self,
         content: BoundaryContent,
         layer: LayerHandle<ContainerLayer>,
-    ) -> BoundaryHandle {
+    ) -> PaintScope {
         let id = self.boundaries.insert(Boundary { content, layer });
 
         // A fresh boundary has never been painted, so it is dirty until its first frame.
@@ -61,7 +61,7 @@ impl RepaintOwner {
 
         tracing::debug!(boundary = ?id, "registered repaint boundary");
 
-        BoundaryHandle {
+        PaintScope {
             id,
             dirty: Rc::clone(&self.dirty),
         }
@@ -72,8 +72,8 @@ impl RepaintOwner {
     /// # Panics
     ///
     /// Panics if called while a paint pass is in progress.
-    pub fn unregister(&mut self, handle: BoundaryHandle) {
-        let BoundaryHandle { id, dirty: _ } = handle;
+    pub fn unregister(&mut self, handle: PaintScope) {
+        let PaintScope { id, dirty: _ } = handle;
 
         self.boundaries.remove(id);
 
@@ -118,7 +118,7 @@ impl RepaintOwner {
 
     /// Composes the boundary `handle` refers to — and everything it embeds — into a scene for one
     /// render target. Call after [`flush_paint`](RepaintOwner::flush_paint); call once per target.
-    pub fn compose(&self, handle: &BoundaryHandle) -> Scene {
+    pub fn compose(&self, handle: &PaintScope) -> Scene {
         tracing::trace!(boundary = ?handle.id, "composing render target");
 
         Compositor::compose(&self.boundaries[handle.id].layer)
@@ -133,39 +133,59 @@ impl Default for RepaintOwner {
 
 pub struct MountCtx<'a> {
     owner: &'a mut RepaintOwner,
+    paint_scope: Option<PaintScope>,
 }
 
 impl<'a> MountCtx<'a> {
     pub fn new(owner: &'a mut RepaintOwner) -> Self {
-        Self { owner }
+        Self {
+            owner,
+            paint_scope: None,
+        }
     }
 
-    /// Adds a boundary that paints `content` into `layer`, returning a handle for marking it.
+    /// Adds a boundary that paints `content` into `layer`, returning the [`PaintScope`] the boundary
+    /// repaints into.
     pub fn register_boundary(
         &mut self,
         content: BoundaryContent,
         layer: LayerHandle<ContainerLayer>,
-    ) -> BoundaryHandle {
+    ) -> PaintScope {
         self.owner.register(content, layer)
     }
 
     /// Removes a boundary that is leaving the tree.
-    pub fn unregister_boundary(&mut self, handle: BoundaryHandle) {
-        self.owner.unregister(handle);
+    pub fn unregister_boundary(&mut self, scope: PaintScope) {
+        self.owner.unregister(scope);
+    }
+
+    /// The [`PaintScope`] of the nearest enclosing boundary, if the node being mounted is under one.
+    pub fn paint_scope(&self) -> Option<&PaintScope> {
+        self.paint_scope.as_ref()
+    }
+
+    /// Mounts a subtree with `scope` as its enclosing boundary, restoring the previous scope afterward.
+    /// A boundary calls this so its descendants repaint into it rather than into its own parent.
+    pub fn with_paint_scope(&mut self, scope: PaintScope, f: impl FnOnce(&mut Self)) {
+        let previous = self.paint_scope.replace(scope);
+        f(self);
+        self.paint_scope = previous;
     }
 }
 
-/// Marks a boundary for repaint on the next frame. Cloning shares the same target, so a driver can
-/// keep a handle and mark it from anywhere, including a per-frame callback.
+/// The boundary a render object repaints into. A node deep in a subtree holds the scope of its nearest
+/// enclosing boundary and marks it when its painting goes stale; the boundary then repaints on the next
+/// frame, leaving every other boundary untouched. Cloning shares the same target, so the scope can be
+/// marked from anywhere, including a per-frame callback.
 #[derive(Clone)]
-pub struct BoundaryHandle {
+pub struct PaintScope {
     id: BoundaryId,
     dirty: Rc<RefCell<FnvHashSet<BoundaryId>>>,
 }
 
-impl BoundaryHandle {
+impl PaintScope {
     /// Marks the boundary to be repainted on the next [`flush_paint`](RepaintOwner::flush_paint).
-    pub fn mark(&self) {
+    pub fn mark_needs_paint(&self) {
         tracing::trace!(boundary = ?self.id, "marked boundary for repaint");
 
         self.dirty.borrow_mut().insert(self.id);
@@ -343,7 +363,7 @@ mod tests {
         );
 
         // The kind of out-of-band mark a per-frame animation callback would make.
-        child.mark();
+        child.mark_needs_paint();
 
         owner.flush_paint();
         let second = Compositor::compose(&root_layer);
@@ -425,8 +445,8 @@ mod tests {
         assert_eq!(animated_paints.get(), 1);
 
         // The animation marks its own boundary each frame, exactly as a driver would from `on_frame`.
-        let handle = animated.clone();
-        let _subscription = vsync.on_frame(move |_| handle.mark());
+        let scope = animated.clone();
+        let _subscription = vsync.on_frame(move |_| scope.mark_needs_paint());
 
         for _ in 0..3 {
             vsync.tick(Duration::from_millis(16));

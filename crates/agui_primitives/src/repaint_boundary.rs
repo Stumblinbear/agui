@@ -11,9 +11,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::{ContainerLayer, LayerHandle, PaintCtx},
-    render_object::{
-        BoundaryContent, BoundaryHandle, MountCtx, RenderObject, box_layout::RenderBox,
-    },
+    render_object::{BoundaryContent, MountCtx, PaintScope, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -71,7 +69,7 @@ where
         RenderRepaintBoundary {
             content: Rc::new(RefCell::new(Box::new(child))),
             layer: LayerHandle::new(ContainerLayer::new()),
-            handle: None,
+            scope: None,
         }
     }
 
@@ -86,8 +84,8 @@ where
         }
 
         // The subtree's description changed, so the boundary must repaint.
-        if let Some(handle) = &render_object.handle {
-            handle.mark();
+        if let Some(scope) = &render_object.scope {
+            scope.mark_needs_paint();
         }
     }
 }
@@ -97,21 +95,25 @@ where
 pub struct RenderRepaintBoundary {
     content: BoundaryContent,
     layer: LayerHandle<ContainerLayer>,
-    handle: Option<BoundaryHandle>,
+    scope: Option<PaintScope>,
 }
 
 impl RenderObject for RenderRepaintBoundary {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.handle = Some(ctx.register_boundary(Rc::clone(&self.content), self.layer.clone()));
+        let scope = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
 
-        self.content.borrow_mut().mount(ctx);
+        // Descendants repaint into this boundary, not into the one above it.
+        let content = Rc::clone(&self.content);
+        ctx.with_paint_scope(scope.clone(), |ctx| content.borrow_mut().mount(ctx));
+
+        self.scope = Some(scope);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.content.borrow_mut().unmount(ctx);
 
-        if let Some(handle) = self.handle.take() {
-            ctx.unregister_boundary(handle);
+        if let Some(scope) = self.scope.take() {
+            ctx.unregister_boundary(scope);
         }
     }
 }
@@ -332,11 +334,11 @@ mod tests {
                 .expect("outer content is the counter")
                 .child
                 .object
-                .handle
+                .scope
                 .clone()
                 .expect("the inner boundary is mounted")
         };
-        inner.mark();
+        inner.mark_needs_paint();
 
         owner.flush_paint();
         let second = Compositor::compose(&root.layer);
