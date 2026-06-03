@@ -63,8 +63,8 @@ mod tests {
         hit_test::{HitTest, HitTestResult},
         offset::Offset,
         provide::ProvideScope,
-        render_object::{RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox},
-        paint::Canvas,
+        render_object::{MountCtx, RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox},
+        paint::PaintContext,
         routing_id::{RoutingId, RoutingPath},
         size::Size,
         task::TaskHandle,
@@ -273,9 +273,9 @@ mod tests {
     }
 
     impl RenderObject for RenderParent {
-        fn mount(&mut self, _: &mut UpdateCtx) {}
+        fn mount(&mut self, _: &mut MountCtx) {}
 
-        fn unmount(&mut self, _: &mut UpdateCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {}
     }
 
     impl RenderBox for RenderParent {
@@ -319,9 +319,9 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, canvas: &mut Canvas) {
+        fn paint(&mut self, ctx: &mut PaintContext) {
             for child in &mut self.children {
-                child.paint(canvas);
+                child.paint(ctx);
             }
         }
     }

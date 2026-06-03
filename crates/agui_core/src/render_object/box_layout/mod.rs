@@ -4,8 +4,8 @@ use crate::{
     constraints::Constraints,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
+    paint::PaintContext,
     render_object::RenderObject,
-    paint::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -141,5 +141,5 @@ pub trait RenderBox: RenderObject {
     /// [`RenderBox::layout`] having been called, but not on [`RenderBox::paint`].
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
-    fn paint(&mut self, canvas: &mut Canvas);
+    fn paint(&mut self, ctx: &mut PaintContext);
 }

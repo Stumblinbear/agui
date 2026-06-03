@@ -29,11 +29,11 @@ pub struct StrokeId<'b> {
 /// An interface for recording drawing operations during a paint pass.
 ///
 /// A render object registers its brushes and stroke styles to get handles, then issues fills,
-/// strokes, and clips, which accumulate into a [`Scene`] instead of drawing immediately. Obtain a
-/// canvas through [`Canvas::record`].
+/// strokes, and clips, which accumulate into a [`Scene`] instead of drawing immediately. Drawing is
+/// recorded in local coordinates; [`with_transform`](Canvas::with_transform) brackets a region under
+/// a transform. Obtain a canvas through [`Canvas::record`].
 pub struct Canvas<'b> {
     scene: &'b mut Scene,
-    transform: Affine,
 }
 
 impl Canvas<'_> {
@@ -41,12 +41,7 @@ impl Canvas<'_> {
     pub fn record(build: impl for<'b> FnOnce(&mut Canvas<'b>)) -> Scene {
         let mut scene = Scene::new();
 
-        let mut canvas = Canvas {
-            scene: &mut scene,
-            transform: Affine::IDENTITY,
-        };
-
-        build(&mut canvas);
+        build(&mut Canvas { scene: &mut scene });
 
         scene
     }
@@ -55,19 +50,14 @@ impl Canvas<'_> {
     pub fn record_into(scene: &mut Scene, build: impl for<'b> FnOnce(&mut Canvas<'b>)) {
         scene.reset();
 
-        let mut canvas = Canvas {
-            scene,
-            transform: Affine::IDENTITY,
-        };
-
-        build(&mut canvas);
+        build(&mut Canvas { scene });
     }
 }
 
 impl<'b> Canvas<'b> {
-    /// The current transform, from local coordinates to the scene's root.
-    pub fn transform(&self) -> Affine {
-        self.transform
+    /// Records into `scene` directly. The caller owns the recording boundary.
+    pub(crate) fn over(scene: &'b mut Scene) -> Self {
+        Self { scene }
     }
 
     /// Registers `brush` and returns a handle to it for use in [`Canvas::fill`] or [`Canvas::stroke`].
@@ -86,15 +76,14 @@ impl<'b> Canvas<'b> {
         }
     }
 
-    /// Concatenates `transform` onto the current transform for the enclosed drawing.
+    /// Records the enclosed drawing under `transform`, concatenated onto the transform already in
+    /// effect.
     pub fn with_transform(&mut self, transform: Affine, f: impl FnOnce(&mut Self)) {
-        let prev = self.transform;
-
-        self.transform *= transform;
+        self.scene.push(PaintCommand::PushTransform(transform));
 
         f(self);
 
-        self.transform = prev;
+        self.scene.push(PaintCommand::PopTransform);
     }
 
     /// Translates the coordinate system by `offset` for the enclosed drawing.
@@ -114,7 +103,6 @@ impl<'b> Canvas<'b> {
         self.scene.push(PaintCommand::PushLayer {
             blend: blend.into(),
             alpha,
-            transform: self.transform,
             clip: PaintShape::from_shape(clip),
         });
 
@@ -132,7 +120,6 @@ impl<'b> Canvas<'b> {
     pub fn fill(&mut self, style: Fill, brush: BrushId<'b>, shape: &impl Shape) {
         self.scene.push(PaintCommand::Fill {
             style,
-            transform: self.transform,
             brush: brush.index,
             brush_transform: None,
             shape: PaintShape::from_shape(shape),
@@ -143,7 +130,6 @@ impl<'b> Canvas<'b> {
     pub fn stroke(&mut self, style: StrokeId<'b>, brush: BrushId<'b>, shape: &impl Shape) {
         self.scene.push(PaintCommand::Stroke {
             stroke: style.index,
-            transform: self.transform,
             brush: brush.index,
             brush_transform: None,
             shape: PaintShape::from_shape(shape),
@@ -158,12 +144,15 @@ mod tests {
         kurbo::{Affine, Rect},
     };
 
-    use crate::{offset::Offset, paint::scene::PaintCommand};
+    use crate::{
+        offset::Offset,
+        paint::scene::PaintCommand,
+    };
 
     use super::Canvas;
 
     #[test]
-    fn fill_records_a_command_at_the_current_transform() {
+    fn fill_records_a_fill_command() {
         let scene = Canvas::record(|canvas| {
             let white = canvas.brush(Color::WHITE);
 
@@ -172,11 +161,7 @@ mod tests {
 
         assert_eq!(scene.len(), 1);
         match &scene.commands()[0] {
-            PaintCommand::Fill {
-                transform, brush, ..
-            } => {
-                assert_eq!(*transform, Affine::IDENTITY);
-
+            PaintCommand::Fill { brush, .. } => {
                 assert!(matches!(scene.brush(*brush), Brush::Solid(c) if *c == Color::WHITE));
             }
 
@@ -185,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn with_offset_stamps_translation_onto_drawing() {
+    fn with_offset_brackets_drawing_in_push_pop_transform() {
         let scene = Canvas::record(|canvas| {
             canvas.with_offset(Offset::new(5.0_f32, 7.0_f32), |canvas| {
                 let black = canvas.brush(Color::BLACK);
@@ -194,15 +179,16 @@ mod tests {
             });
         });
 
-        let PaintCommand::Fill { transform, .. } = &scene.commands()[0] else {
-            panic!("expected a fill");
-        };
-
-        assert_eq!(*transform, Affine::translate((5.0, 7.0)));
+        assert!(matches!(
+            scene.commands()[0],
+            PaintCommand::PushTransform(t) if t == Affine::translate((5.0, 7.0))
+        ));
+        assert!(matches!(scene.commands()[1], PaintCommand::Fill { .. }));
+        assert!(matches!(scene.commands()[2], PaintCommand::PopTransform));
     }
 
     #[test]
-    fn nested_offsets_compose_and_restore() {
+    fn nested_offsets_nest_push_transforms() {
         let scene = Canvas::record(|canvas| {
             canvas.with_offset(Offset::new(10.0_f32, 0.0_f32), |canvas| {
                 canvas.with_offset(Offset::new(0.0_f32, 4.0_f32), |canvas| {
@@ -210,27 +196,20 @@ mod tests {
 
                     canvas.fill(Fill::NonZero, white, &Rect::new(0.0, 0.0, 1.0, 1.0));
                 });
-
-                let white = canvas.brush(Color::WHITE);
-
-                canvas.fill(Fill::NonZero, white, &Rect::new(0.0, 0.0, 1.0, 1.0));
             });
         });
 
-        let PaintCommand::Fill {
-            transform: inner, ..
-        } = &scene.commands()[0]
-        else {
-            panic!("expected a fill");
-        };
-        let PaintCommand::Fill {
-            transform: outer, ..
-        } = &scene.commands()[1]
-        else {
-            panic!("expected a fill");
-        };
-        assert_eq!(*inner, Affine::translate((10.0, 4.0)));
-        assert_eq!(*outer, Affine::translate((10.0, 0.0)));
+        assert!(matches!(
+            scene.commands()[0],
+            PaintCommand::PushTransform(t) if t == Affine::translate((10.0, 0.0))
+        ));
+        assert!(matches!(
+            scene.commands()[1],
+            PaintCommand::PushTransform(t) if t == Affine::translate((0.0, 4.0))
+        ));
+        assert!(matches!(scene.commands()[2], PaintCommand::Fill { .. }));
+        assert!(matches!(scene.commands()[3], PaintCommand::PopTransform));
+        assert!(matches!(scene.commands()[4], PaintCommand::PopTransform));
     }
 
     #[test]

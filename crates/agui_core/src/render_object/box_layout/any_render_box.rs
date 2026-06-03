@@ -6,8 +6,8 @@ use crate::{
     constraints::Constraints,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
+    paint::PaintContext,
     render_object::{AnyRenderObject, box_layout::RenderBox},
-    paint::Canvas,
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -35,7 +35,7 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
-    fn dyn_paint(&mut self, canvas: &mut Canvas);
+    fn dyn_paint(&mut self, ctx: &mut PaintContext);
 }
 
 impl<T> AnyRenderBox for T
@@ -83,8 +83,8 @@ where
         self.hit_test(result, position)
     }
 
-    fn dyn_paint(&mut self, canvas: &mut Canvas) {
-        self.paint(canvas);
+    fn dyn_paint(&mut self, ctx: &mut PaintContext) {
+        self.paint(ctx);
     }
 }
 
@@ -132,7 +132,7 @@ where
         (**self).dyn_hit_test(result, position)
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
-        (**self).dyn_paint(canvas);
+    fn paint(&mut self, ctx: &mut PaintContext) {
+        (**self).dyn_paint(ctx);
     }
 }

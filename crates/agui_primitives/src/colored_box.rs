@@ -7,11 +7,11 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::{
-        Canvas,
+        PaintContext,
         peniko::{Color, Fill},
     },
     rect::Rect,
-    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -89,11 +89,11 @@ impl<Child> RenderObject for RenderColoredBox<Child>
 where
     Child: RenderBox,
 {
-    fn mount(&mut self, ctx: &mut UpdateCtx) {
+    fn mount(&mut self, ctx: &mut MountCtx) {
         self.child.mount(ctx);
     }
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
 }
@@ -156,14 +156,15 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
+    fn paint(&mut self, ctx: &mut PaintContext) {
         if let Some(size) = self.child.parent_data {
+            let mut canvas = ctx.canvas();
             let brush = canvas.brush(self.color);
 
             canvas.fill(Fill::NonZero, brush, &Rect::from(size));
         }
 
-        self.child.paint(canvas);
+        self.child.paint(ctx);
     }
 }
 
@@ -172,7 +173,7 @@ mod tests {
     use agui_core::{
         constraints::Constraints,
         paint::{
-            Canvas, PaintCommand, PaintShape,
+            Compositor, ContainerLayer, LayerHandle, PaintCommand, PaintContext, PaintShape,
             peniko::{Brush, Color, kurbo},
         },
         test_harness::TestHarness,
@@ -191,7 +192,9 @@ mod tests {
 
         render_object.layout(Constraints::new(0, 100, 0, 100));
 
-        let scene = Canvas::record(|canvas| render_object.paint(canvas));
+        let root = LayerHandle::new(ContainerLayer::new());
+        PaintContext::paint(&root, |ctx| render_object.paint(ctx));
+        let scene = Compositor::compose(&root).flatten();
 
         assert_eq!(scene.len(), 1, "fills once, child paints nothing");
 

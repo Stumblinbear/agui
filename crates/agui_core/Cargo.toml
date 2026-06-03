@@ -17,12 +17,13 @@ fnv.workspace = true
 glam.workspace = true
 imbl.workspace = true
 peniko.workspace = true
+slotmap.workspace = true
 smallbox.workspace = true
 typed_floats.workspace = true
 
 # agui_sync.workspace = true
 
-# tracing.workspace = true
+tracing.workspace = true
 
 thiserror.workspace = true
 

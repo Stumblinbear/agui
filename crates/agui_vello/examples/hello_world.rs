@@ -1,16 +1,22 @@
-//! Single window driven through the real widget pipeline: a widget tree is laid out to the window
-//! size and painted into a [`Scene`] each frame, which Vello then renders.
-
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{cell::RefCell, num::NonZeroUsize, rc::Rc, sync::Arc};
 
 use agui_core::{
     constraints::Constraints,
-    paint::{Canvas, Scene, peniko::Color},
-    render_object::box_layout::RenderBox,
+    hit_test::{HitTest, HitTestResult},
+    offset::Offset,
+    paint::{ContainerLayer, LayerHandle, PaintContext, peniko::Color},
+    render_object::{
+        BoundaryContent, BoundaryHandle, MountCtx, RenderObject, RepaintOwner,
+        box_layout::{AnyRenderBox, RenderBox},
+    },
+    size::Size,
     test_harness::TestHarness,
+    text_baseline::TextBaseline,
     widget::Widget,
 };
 use agui_primitives::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
+use agui_vello::append_scene;
+use typed_floats::{Positive, PositiveFinite};
 use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
     util::{RenderContext, RenderSurface},
@@ -24,17 +30,136 @@ use winit::{
     window::{Window, WindowId},
 };
 
+const CONTINUOUS_REDRAW: bool = false;
+
 fn main() {
-    // An orange box filling the left half of the window, via a fractionally sized box.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "hello_world=info,agui_core=debug".into()),
+        )
+        .init();
+
+    // An orange box filling the left half of the window.
     let widget = FractionallySizedBox::new()
         .width_factor(0.5_f32)
         .height_factor(1.0_f32)
         .child(ColoredBox::new(Color::rgb8(255, 138, 0)));
     let harness = TestHarness::mount(&widget);
-    let render = widget.create_render_object(&harness.root.element);
+    let child = widget.create_render_object(&harness.root.element);
+
+    let mut owner = RepaintOwner::new();
+
+    // The root boundary hands its mark handle back through this slot when it mounts.
+    let handle_slot: Rc<RefCell<Option<BoundaryHandle>>> = Rc::new(RefCell::new(None));
+    let slot = Rc::clone(&handle_slot);
+    let mut render = RootBoundary::new(child, move |handle| {
+        *slot.borrow_mut() = Some(handle);
+    });
+
+    tracing::info!("driving mount pass");
+    render.mount(&mut MountCtx::new(&mut owner));
+    let root_handle = handle_slot
+        .borrow()
+        .clone()
+        .expect("the root boundary mounted");
+    tracing::info!("root boundary mounted; starting event loop");
 
     let event_loop = EventLoop::new().unwrap();
-    event_loop.run_app(&mut App::new(render)).unwrap();
+    event_loop
+        .run_app(&mut App::new(owner, render, root_handle))
+        .unwrap();
+}
+
+/// Example-only root render object: registers its subtree as a repaint boundary when mounted and hands
+/// the boundary's handle to a callback, so the driver can compose the window from it and mark it dirty
+/// when the window is resized. In a real runtime this is the job of a "view" widget.
+struct RootBoundary {
+    content: BoundaryContent,
+    layer: LayerHandle<ContainerLayer>,
+    handle: Option<BoundaryHandle>,
+    on_ready: Option<Box<dyn FnOnce(BoundaryHandle)>>,
+}
+
+impl RootBoundary {
+    fn new(child: impl RenderBox, on_ready: impl FnOnce(BoundaryHandle) + 'static) -> Self {
+        Self {
+            content: Rc::new(RefCell::new(Box::new(child) as Box<dyn AnyRenderBox>)),
+            layer: LayerHandle::new(ContainerLayer::new()),
+            handle: None,
+            on_ready: Some(Box::new(on_ready)),
+        }
+    }
+}
+
+impl RenderObject for RootBoundary {
+    fn mount(&mut self, ctx: &mut MountCtx) {
+        let handle = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
+
+        if let Some(on_ready) = self.on_ready.take() {
+            on_ready(handle.clone());
+        }
+
+        self.handle = Some(handle);
+        self.content.borrow_mut().mount(ctx);
+    }
+
+    fn unmount(&mut self, ctx: &mut MountCtx) {
+        self.content.borrow_mut().unmount(ctx);
+
+        if let Some(handle) = self.handle.take() {
+            ctx.unregister_boundary(handle);
+        }
+    }
+}
+
+impl RenderBox for RootBoundary {
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.content.borrow().min_intrinsic_width(height)
+    }
+
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.content.borrow().max_intrinsic_width(height)
+    }
+
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.content.borrow().min_intrinsic_height(width)
+    }
+
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.content.borrow().max_intrinsic_height(width)
+    }
+
+    fn measure(&self, constraints: Constraints) -> Size {
+        self.content.borrow().measure(constraints)
+    }
+
+    fn layout(&mut self, constraints: Constraints) -> Size {
+        self.content.borrow_mut().layout(constraints)
+    }
+
+    fn measure_baseline(
+        &self,
+        constraints: Constraints,
+        baseline: TextBaseline,
+    ) -> Option<PositiveFinite<f32>> {
+        self.content
+            .borrow()
+            .measure_baseline(constraints, baseline)
+    }
+
+    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        self.content.borrow_mut().distance_to_baseline(baseline)
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        self.content.borrow().hit_test(result, position)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintContext) {
+        // Unused for the window root (nothing embeds it), but a boundary contributes its retained layer.
+        ctx.add_layer(self.layer.clone().into());
+    }
 }
 
 struct ActiveWindow {
@@ -42,32 +167,35 @@ struct ActiveWindow {
     window: Arc<Window>,
 }
 
-struct App<R> {
+struct App {
     context: RenderContext,
     /// One renderer per device; indexed by `RenderSurface::dev_id`.
     renderers: Vec<Option<Renderer>>,
     active: Option<ActiveWindow>,
-    /// The root render object, laid out and painted each frame.
-    render: R,
-    /// Reused across frames so the paint pass doesn't reallocate.
-    scene: Scene,
+    /// Repaints dirty boundaries and composes the window's root into a scene.
+    owner: RepaintOwner,
+    /// The root render object, laid out each frame.
+    render: RootBoundary,
+    /// The window's root boundary; composed each frame and marked dirty on resize.
+    root_handle: BoundaryHandle,
     vello_scene: vello::Scene,
 }
 
-impl<R> App<R> {
-    fn new(render: R) -> Self {
+impl App {
+    fn new(owner: RepaintOwner, render: RootBoundary, root_handle: BoundaryHandle) -> Self {
         Self {
             context: RenderContext::new(),
             renderers: Vec::new(),
             active: None,
+            owner,
             render,
-            scene: Scene::new(),
+            root_handle,
             vello_scene: vello::Scene::new(),
         }
     }
 }
 
-impl<R: RenderBox> ApplicationHandler for App<R> {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.active.is_some() {
             return;
@@ -104,6 +232,7 @@ impl<R: RenderBox> ApplicationHandler for App<R> {
         });
 
         self.active = Some(ActiveWindow { surface, window });
+        tracing::info!(width = size.width, height = size.height, "window created");
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -115,8 +244,15 @@ impl<R: RenderBox> ApplicationHandler for App<R> {
             WindowEvent::CloseRequested => event_loop.exit(),
 
             WindowEvent::Resized(size) => {
+                tracing::info!(
+                    width = size.width,
+                    height = size.height,
+                    "resized; marking root"
+                );
                 self.context
                     .resize_surface(&mut active.surface, size.width, size.height);
+                // The layout changed, so the root boundary must repaint at the new size.
+                self.root_handle.mark();
                 active.window.request_redraw();
             }
 
@@ -124,15 +260,16 @@ impl<R: RenderBox> ApplicationHandler for App<R> {
                 let width = active.surface.config.width;
                 let height = active.surface.config.height;
 
+                let _frame = tracing::info_span!("frame", width, height).entered();
+
                 self.render
                     .layout(Constraints::new(0.0, width as f32, 0.0, height as f32));
 
-                Canvas::record_into(&mut self.scene, |canvas| {
-                    self.render.paint(canvas);
-                });
+                self.owner.flush_paint();
+                let scene = self.owner.compose(&self.root_handle);
 
                 self.vello_scene.reset();
-                agui_vello::append_scene(&self.scene, &mut self.vello_scene);
+                append_scene(&scene, &mut self.vello_scene);
 
                 let device = &self.context.devices[active.surface.dev_id];
                 let texture = active.surface.surface.get_current_texture().unwrap();
@@ -153,6 +290,10 @@ impl<R: RenderBox> ApplicationHandler for App<R> {
                     )
                     .unwrap();
                 texture.present();
+
+                if CONTINUOUS_REDRAW {
+                    active.window.request_redraw();
+                }
             }
             _ => {}
         }

@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::{context::UpdateCtx, render_object::RenderObject};
+use crate::render_object::{MountCtx, RenderObject};
 
 pub trait AnyRenderObject {
     fn as_any(&self) -> &dyn Any;
@@ -9,9 +9,9 @@ pub trait AnyRenderObject {
 
     fn render_object_name(&self) -> &str;
 
-    fn dyn_mount(&mut self, ctx: &mut UpdateCtx);
+    fn dyn_mount(&mut self, ctx: &mut MountCtx);
 
-    fn dyn_unmount(&mut self, ctx: &mut UpdateCtx);
+    fn dyn_unmount(&mut self, ctx: &mut MountCtx);
 }
 
 impl<T> AnyRenderObject for T
@@ -31,11 +31,11 @@ where
         std::any::type_name::<T>()
     }
 
-    fn dyn_mount(&mut self, ctx: &mut UpdateCtx) {
+    fn dyn_mount(&mut self, ctx: &mut MountCtx) {
         self.mount(ctx);
     }
 
-    fn dyn_unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn dyn_unmount(&mut self, ctx: &mut MountCtx) {
         self.unmount(ctx);
     }
 }
@@ -44,11 +44,11 @@ impl<T> RenderObject for Box<T>
 where
     T: AnyRenderObject + ?Sized + 'static,
 {
-    fn mount(&mut self, ctx: &mut UpdateCtx) {
+    fn mount(&mut self, ctx: &mut MountCtx) {
         (**self).dyn_mount(ctx);
     }
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn unmount(&mut self, ctx: &mut MountCtx) {
         (**self).dyn_unmount(ctx);
     }
 }

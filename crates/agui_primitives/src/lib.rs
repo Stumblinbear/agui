@@ -1,9 +1,11 @@
+pub mod animated_transform;
 pub mod colored_box;
 pub mod flex;
 pub mod fractionally_sized_box;
 pub mod intrinsic_width;
 pub mod layout_builder;
 pub mod padding;
+pub mod repaint_boundary;
 pub mod single_child_scroll_view;
 pub mod sized_box;
 pub mod stack;

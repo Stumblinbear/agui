@@ -2,11 +2,10 @@ use typed_floats::{Positive, PositiveFinite, as_const};
 
 use crate::{
     constraints::Constraints,
-    context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::box_layout::RenderBox,
-    paint::Canvas,
+    paint::PaintContext,
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -14,10 +13,12 @@ use crate::{
 mod any_render_object;
 pub mod box_layout;
 mod node;
+mod repaint;
 pub mod sliver;
 
 pub use any_render_object::*;
 pub use node::*;
+pub use repaint::*;
 
 /// An object in the render tree.
 ///
@@ -26,18 +27,18 @@ pub use node::*;
 /// Cartesian coordinates, and [`RenderSliver`](crate::render_object::sliver::RenderSliver), which
 /// lays out along a scroll axis.
 pub trait RenderObject: 'static {
-    fn mount(&mut self, ctx: &mut UpdateCtx);
+    fn mount(&mut self, ctx: &mut MountCtx);
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx);
+    fn unmount(&mut self, ctx: &mut MountCtx);
 }
 
 #[derive(Default)]
 pub struct RenderLeaf {}
 
 impl RenderObject for RenderLeaf {
-    fn mount(&mut self, _: &mut UpdateCtx) {}
+    fn mount(&mut self, _: &mut MountCtx) {}
 
-    fn unmount(&mut self, _: &mut UpdateCtx) {}
+    fn unmount(&mut self, _: &mut MountCtx) {}
 }
 
 impl RenderBox for RenderLeaf {
@@ -78,5 +79,5 @@ impl RenderBox for RenderLeaf {
         HitTest::Pass
     }
 
-    fn paint(&mut self, _: &mut Canvas) {}
+    fn paint(&mut self, _: &mut PaintContext) {}
 }

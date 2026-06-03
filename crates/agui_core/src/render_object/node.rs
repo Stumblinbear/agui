@@ -2,11 +2,10 @@ use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     constraints::Constraints,
-    context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderObject, box_layout::RenderBox},
-    paint::Canvas,
+    paint::PaintContext,
+    render_object::{MountCtx, RenderObject, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -44,11 +43,11 @@ impl<R, P> RenderNode<R, P> {
 }
 
 impl<R: RenderObject, P> RenderNode<R, P> {
-    pub fn mount(&mut self, ctx: &mut UpdateCtx) {
+    pub fn mount(&mut self, ctx: &mut MountCtx) {
         self.object.mount(ctx);
     }
 
-    pub fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    pub fn unmount(&mut self, ctx: &mut MountCtx) {
         self.object.unmount(ctx);
     }
 }
@@ -104,8 +103,8 @@ impl<R: RenderBox, P> RenderNode<R, P> {
         self.object.hit_test(result, position)
     }
 
-    pub fn paint(&mut self, canvas: &mut Canvas) {
-        self.object.paint(canvas);
+    pub fn paint(&mut self, ctx: &mut PaintContext) {
+        self.object.paint(ctx);
     }
 }
 
@@ -119,6 +118,7 @@ mod tests {
     use crate::{
         context::UpdateCtx,
         element::{Element, ElementNode},
+        paint::{ContainerLayer, LayerHandle},
         render_object::{
             RenderLeaf,
             box_layout::{AnyRenderBox, RenderBox},
@@ -135,9 +135,9 @@ mod tests {
     }
 
     impl<C: RenderBox> RenderObject for RenderPad<C> {
-        fn mount(&mut self, _: &mut UpdateCtx) {}
+        fn mount(&mut self, _: &mut MountCtx) {}
 
-        fn unmount(&mut self, _: &mut UpdateCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {}
     }
 
     impl<C: RenderBox> RenderBox for RenderPad<C> {
@@ -181,8 +181,8 @@ mod tests {
             self.child.hit_test(result, position)
         }
 
-        fn paint(&mut self, canvas: &mut Canvas) {
-            self.child.paint(canvas);
+        fn paint(&mut self, ctx: &mut PaintContext) {
+            self.child.paint(ctx);
         }
     }
 
@@ -272,7 +272,9 @@ mod tests {
         let size = node.layout_and_get_size(Constraints::tight(Size::new(10.0, 20.0)));
         assert_eq!(size, Size::new(10.0, 20.0));
 
-        Canvas::record(|canvas| node.paint(canvas));
+        PaintContext::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
+            node.paint(ctx);
+        });
     }
 
     #[test]
@@ -295,7 +297,9 @@ mod tests {
         assert_eq!(node.object.pad, 9);
 
         // paint the whole tree; lay out the (RenderBox) leaf child via the node helpers
-        Canvas::record(|canvas| node.paint(canvas));
+        PaintContext::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
+            node.paint(ctx);
+        });
         assert_eq!(
             node.object
                 .child
@@ -333,7 +337,9 @@ mod tests {
             Size::new(3.0, 3.0),
         );
 
-        Canvas::record(|canvas| boxed.paint(canvas));
+        PaintContext::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
+            boxed.paint(ctx);
+        });
     }
 
     struct Counted {
@@ -395,9 +401,9 @@ mod tests {
     struct RenderOther {}
 
     impl RenderObject for RenderOther {
-        fn mount(&mut self, _: &mut UpdateCtx) {}
+        fn mount(&mut self, _: &mut MountCtx) {}
 
-        fn unmount(&mut self, _: &mut UpdateCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {}
     }
 
     impl RenderBox for RenderOther {
@@ -437,7 +443,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, _: &mut Canvas) {}
+        fn paint(&mut self, _: &mut PaintContext) {}
     }
 
     struct CountedOther {

@@ -4,11 +4,11 @@ use typed_floats::PositiveFinite;
 
 use crate::{
     hit_test::{HitTest, HitTestResult},
+    paint::PaintContext,
     render_object::{
         AnyRenderObject,
         sliver::{RenderSliver, SliverConstraints, SliverGeometry},
     },
-    paint::Canvas,
 };
 
 pub trait AnyRenderSliver: AnyRenderObject {
@@ -21,7 +21,7 @@ pub trait AnyRenderSliver: AnyRenderObject {
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest;
 
-    fn dyn_paint(&mut self, canvas: &mut Canvas);
+    fn dyn_paint(&mut self, ctx: &mut PaintContext);
 }
 
 impl<T> AnyRenderSliver for T
@@ -42,8 +42,8 @@ where
         RenderSliver::hit_test(self, result, main_axis_position, cross_axis_position)
     }
 
-    fn dyn_paint(&mut self, canvas: &mut Canvas) {
-        RenderSliver::paint(self, canvas);
+    fn dyn_paint(&mut self, ctx: &mut PaintContext) {
+        RenderSliver::paint(self, ctx);
     }
 }
 
@@ -64,7 +64,7 @@ where
         (**self).dyn_hit_test(result, main_axis_position, cross_axis_position)
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
-        (**self).dyn_paint(canvas);
+    fn paint(&mut self, ctx: &mut PaintContext) {
+        (**self).dyn_paint(ctx);
     }
 }

@@ -3,11 +3,10 @@ use typed_floats::{NonNaNFinite, Positive, PositiveFinite, as_const};
 use crate::{
     axis::{Axis, AxisDirection},
     constraints::Constraints,
-    context::UpdateCtx,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
-    paint::Canvas,
+    paint::PaintContext,
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -191,7 +190,7 @@ pub trait RenderSliver: RenderObject {
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest;
 
-    fn paint(&mut self, canvas: &mut Canvas);
+    fn paint(&mut self, ctx: &mut PaintContext);
 }
 
 /// A box render object that hosts a single sliver and lays it out along the vertical axis. Requires
@@ -218,9 +217,9 @@ impl<S: RenderSliver> RenderViewport<S> {
 }
 
 impl<S: RenderSliver> RenderObject for RenderViewport<S> {
-    fn mount(&mut self, _: &mut UpdateCtx) {}
+    fn mount(&mut self, _: &mut MountCtx) {}
 
-    fn unmount(&mut self, _: &mut UpdateCtx) {}
+    fn unmount(&mut self, _: &mut MountCtx) {}
 }
 
 impl<S: RenderSliver> RenderBox for RenderViewport<S> {
@@ -294,8 +293,8 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         )
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
-        self.sliver.object.paint(canvas);
+    fn paint(&mut self, ctx: &mut PaintContext) {
+        self.sliver.object.paint(ctx);
     }
 }
 
@@ -304,7 +303,10 @@ mod tests {
     #![allow(clippy::float_cmp)]
 
     use super::*;
-    use crate::{element::Element, test_harness::TestHarness, widget::AsAnyWidget, widget::Widget};
+    use crate::{
+        context::UpdateCtx, element::Element, test_harness::TestHarness, widget::AsAnyWidget,
+        widget::Widget,
+    };
 
     /// A sliver that occupies a fixed scroll extent and paints whatever of it is currently in widget.
     struct RenderSliverFixed {
@@ -312,9 +314,9 @@ mod tests {
     }
 
     impl RenderObject for RenderSliverFixed {
-        fn mount(&mut self, _: &mut UpdateCtx) {}
+        fn mount(&mut self, _: &mut MountCtx) {}
 
-        fn unmount(&mut self, _: &mut UpdateCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {}
     }
 
     impl RenderSliver for RenderSliverFixed {
@@ -333,7 +335,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, _: &mut Canvas) {}
+        fn paint(&mut self, _: &mut PaintContext) {}
     }
 
     #[test]

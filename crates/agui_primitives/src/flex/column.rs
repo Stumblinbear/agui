@@ -6,8 +6,8 @@ use agui_core::{
     element::MultiChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderObject, box_layout::RenderBox},
-    paint::Canvas,
+    render_object::{MountCtx, RenderObject, box_layout::RenderBox},
+    paint::PaintContext,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -173,13 +173,13 @@ impl<Child> RenderObject for RenderFlex<Child>
 where
     Child: RenderObject,
 {
-    fn mount(&mut self, ctx: &mut UpdateCtx) {
+    fn mount(&mut self, ctx: &mut MountCtx) {
         for child in &mut self.children {
             child.mount(ctx);
         }
     }
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn unmount(&mut self, ctx: &mut MountCtx) {
         for child in &mut self.children {
             child.unmount(ctx);
         }
@@ -234,7 +234,7 @@ where
         HitTest::Pass
     }
 
-    fn paint(&mut self, _canvas: &mut Canvas) {}
+    fn paint(&mut self, _ctx: &mut PaintContext) {}
 }
 
 #[cfg(test)]

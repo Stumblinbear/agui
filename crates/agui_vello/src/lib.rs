@@ -1,19 +1,48 @@
 pub use vello;
 
+pub mod headless;
+
 use agui_core::paint::{PaintCommand, PaintShape, Scene};
 
+use vello::kurbo::Affine;
+
 pub fn append_scene(scene: &Scene, target: &mut vello::Scene) {
+    render_into(scene, target, Affine::IDENTITY);
+}
+
+pub fn to_vello_scene(scene: &Scene) -> vello::Scene {
+    let mut target = vello::Scene::new();
+    append_scene(scene, &mut target);
+    target
+}
+
+fn render_into(scene: &Scene, target: &mut vello::Scene, base: Affine) {
+    let mut transform = base;
+    let mut stack: Vec<Affine> = Vec::new();
+
     for command in scene.commands() {
         match command {
+            PaintCommand::PushTransform(local) => {
+                stack.push(transform);
+                transform *= *local;
+            }
+            PaintCommand::PopTransform => {
+                transform = stack.pop().unwrap_or(base);
+            }
+
+            PaintCommand::PushLayer { blend, alpha, clip } => {
+                with_shape!(clip, |s| target.push_layer(*blend, *alpha, transform, s));
+            }
+            PaintCommand::PopLayer => target.pop_layer(),
+
             PaintCommand::Fill {
                 style,
-                transform,
                 brush,
                 brush_transform,
                 shape,
             } => with_shape!(shape, |s| target.fill(
                 *style,
-                *transform,
+                transform,
                 scene.brush(*brush),
                 brush_transform.as_deref().copied(),
                 s
@@ -21,34 +50,24 @@ pub fn append_scene(scene: &Scene, target: &mut vello::Scene) {
 
             PaintCommand::Stroke {
                 stroke,
-                transform,
                 brush,
                 brush_transform,
                 shape,
             } => with_shape!(shape, |s| target.stroke(
                 scene.stroke(*stroke),
-                *transform,
+                transform,
                 scene.brush(*brush),
                 brush_transform.as_deref().copied(),
                 s
             )),
 
-            PaintCommand::PushLayer {
-                blend,
-                alpha,
-                transform,
-                clip,
-            } => with_shape!(clip, |s| target.push_layer(*blend, *alpha, *transform, s)),
-
-            PaintCommand::PopLayer => target.pop_layer(),
+            PaintCommand::Embed { scene: sub } => {
+                let mut child = vello::Scene::new();
+                render_into(sub, &mut child, Affine::IDENTITY);
+                target.append(&child, Some(transform));
+            }
         }
     }
-}
-
-pub fn to_vello_scene(scene: &Scene) -> vello::Scene {
-    let mut target = vello::Scene::new();
-    append_scene(scene, &mut target);
-    target
 }
 
 mod macros {

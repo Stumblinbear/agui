@@ -7,8 +7,8 @@ use agui_core::{
     element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
-    paint::Canvas,
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    paint::PaintContext,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -62,11 +62,11 @@ impl<Child> RenderObject for RenderIntrinsicWidth<Child>
 where
     Child: RenderBox,
 {
-    fn mount(&mut self, ctx: &mut UpdateCtx) {
+    fn mount(&mut self, ctx: &mut MountCtx) {
         self.child.mount(ctx);
     }
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
 }
@@ -181,7 +181,7 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
-        self.child.paint(canvas);
+    fn paint(&mut self, ctx: &mut PaintContext) {
+        self.child.paint(ctx);
     }
 }

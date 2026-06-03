@@ -12,12 +12,17 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 agui_core.workspace = true
+png.workspace = true
+pollster.workspace = true
+slotmap.workspace = true
 vello.workspace = true
 
 [dev-dependencies]
 agui_primitives.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+typed_floats.workspace = true
 winit.workspace = true
-pollster.workspace = true
 
 [[example]]
 name = "hello_world"

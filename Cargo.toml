@@ -38,6 +38,7 @@ smallbox = "0.8"
 smallvec = "1.14.0"
 thiserror = "1.0"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 typed_floats = "1.0.2"
 
 rand = "0.8"
@@ -64,6 +65,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 lyon = "1.0"
 peniko = "0.2"
 vello = "0.3"
+png = "0.17"
 
 raw-window-handle = "0.6"
 

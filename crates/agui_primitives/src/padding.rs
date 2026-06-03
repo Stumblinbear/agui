@@ -9,8 +9,8 @@ use agui_core::{
     element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
-    paint::Canvas,
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    paint::PaintContext,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -103,11 +103,11 @@ impl<Child> RenderObject for RenderPadding<Child>
 where
     Child: RenderBox,
 {
-    fn mount(&mut self, ctx: &mut UpdateCtx) {
+    fn mount(&mut self, ctx: &mut MountCtx) {
         self.child.mount(ctx);
     }
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
 }
@@ -233,9 +233,9 @@ where
         })
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
-        canvas.with_offset(Offset::new(self.padding.left, self.padding.top), |canvas| {
-            self.child.paint(canvas);
+    fn paint(&mut self, ctx: &mut PaintContext) {
+        ctx.with_offset(Offset::new(self.padding.left, self.padding.top), |ctx| {
+            self.child.paint(ctx);
         });
     }
 }

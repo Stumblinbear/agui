@@ -8,8 +8,8 @@ use agui_core::{
     element::{Element, ElementNode},
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{RenderNode, RenderObject, box_layout::RenderBox},
-    paint::Canvas,
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    paint::PaintContext,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -191,9 +191,9 @@ impl<Child> RenderObject for RenderLayoutBuilder<Child>
 where
     Child: RenderBox,
 {
-    fn mount(&mut self, _: &mut UpdateCtx) {}
+    fn mount(&mut self, _: &mut MountCtx) {}
 
-    fn unmount(&mut self, ctx: &mut UpdateCtx) {
+    fn unmount(&mut self, ctx: &mut MountCtx) {
         if let Some(mut child_render) = self.child_render.take() {
             child_render.unmount(ctx);
         }
@@ -258,9 +258,9 @@ where
         }
     }
 
-    fn paint(&mut self, canvas: &mut Canvas) {
+    fn paint(&mut self, ctx: &mut PaintContext) {
         if let Some(child_render) = self.child_render.as_mut() {
-            child_render.paint(canvas);
+            child_render.paint(ctx);
         }
     }
 }
