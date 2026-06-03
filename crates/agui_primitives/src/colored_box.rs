@@ -7,7 +7,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::{
-        PaintContext,
+        PaintCtx,
         peniko::{Color, Fill},
     },
     rect::Rect,
@@ -156,7 +156,7 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         if let Some(size) = self.child.parent_data {
             let mut canvas = ctx.canvas();
             let brush = canvas.brush(self.color);
@@ -173,7 +173,7 @@ mod tests {
     use agui_core::{
         constraints::Constraints,
         paint::{
-            Compositor, ContainerLayer, LayerHandle, PaintCommand, PaintContext, PaintShape,
+            Compositor, ContainerLayer, LayerHandle, PaintCommand, PaintCtx, PaintShape,
             peniko::{Brush, Color, kurbo},
         },
         test_harness::TestHarness,
@@ -193,7 +193,7 @@ mod tests {
         render_object.layout(Constraints::new(0, 100, 0, 100));
 
         let root = LayerHandle::new(ContainerLayer::new());
-        PaintContext::paint(&root, |ctx| render_object.paint(ctx));
+        PaintCtx::paint(&root, |ctx| render_object.paint(ctx));
         let scene = Compositor::compose(&root).flatten();
 
         assert_eq!(scene.len(), 1, "fills once, child paints nothing");

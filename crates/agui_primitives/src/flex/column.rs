@@ -7,7 +7,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{MountCtx, RenderObject, box_layout::RenderBox},
-    paint::PaintContext,
+    paint::PaintCtx,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -234,7 +234,7 @@ where
         HitTest::Pass
     }
 
-    fn paint(&mut self, _ctx: &mut PaintContext) {}
+    fn paint(&mut self, _ctx: &mut PaintCtx) {}
 }
 
 #[cfg(test)]

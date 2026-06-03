@@ -10,7 +10,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
-    paint::PaintContext,
+    paint::PaintCtx,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -233,7 +233,7 @@ where
         })
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         ctx.with_offset(Offset::new(self.padding.left, self.padding.top), |ctx| {
             self.child.paint(ctx);
         });

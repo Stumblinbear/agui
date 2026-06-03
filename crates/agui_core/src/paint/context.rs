@@ -16,7 +16,7 @@ use crate::{
 /// order they are issued in. Drawing is in local coordinates;
 /// [`with_offset`](PaintContext::with_offset) and [`with_transform`](PaintContext::with_transform)
 /// place the enclosed drawing — and any layer contributed within — under a transform.
-pub struct PaintContext<'a> {
+pub struct PaintCtx<'a> {
     /// Where sealed pictures and contributed layers are appended.
     container: &'a mut dyn Container,
     /// The picture currently accumulating flat drawing.
@@ -26,12 +26,12 @@ pub struct PaintContext<'a> {
     transforms: Vec<Affine>,
 }
 
-impl PaintContext<'_> {
+impl PaintCtx<'_> {
     /// Paints `build` into `root`.
-    pub fn paint(root: &LayerHandle<impl Container>, build: impl FnOnce(&mut PaintContext)) {
+    pub fn paint(root: &LayerHandle<impl Container>, build: impl FnOnce(&mut PaintCtx)) {
         let mut root = root.borrow_mut();
 
-        let mut ctx = PaintContext {
+        let mut ctx = PaintCtx {
             container: &mut *root,
             picture: Scene::new(),
             transforms: Vec::new(),
@@ -67,13 +67,13 @@ impl PaintContext<'_> {
     pub fn push_layer<L: Container + 'static>(
         &mut self,
         layer: LayerHandle<L>,
-        paint_into: impl FnOnce(&mut PaintContext),
+        paint_into: impl FnOnce(&mut PaintCtx),
     ) {
         self.flush();
 
         {
             let mut guard = layer.borrow_mut();
-            let mut ctx = PaintContext {
+            let mut ctx = PaintCtx {
                 container: &mut *guard,
                 picture: Scene::new(),
                 transforms: Vec::new(),
@@ -151,7 +151,7 @@ mod tests {
         LayerHandle::new(ContainerLayer::new())
     }
 
-    fn fill(ctx: &mut PaintContext) {
+    fn fill(ctx: &mut PaintCtx) {
         let mut canvas = ctx.canvas();
         let brush = canvas.brush(Color::BLACK);
         canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(1.0, 1.0)));
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn flat_drawing_seals_into_one_picture() {
         let root = root();
-        PaintContext::paint(&root, fill);
+        PaintCtx::paint(&root, fill);
 
         assert_eq!(fill_transforms(&root), vec![Affine::IDENTITY]);
     }
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn an_offset_places_flat_drawing_under_it() {
         let root = root();
-        PaintContext::paint(&root, |ctx| {
+        PaintCtx::paint(&root, |ctx| {
             ctx.with_offset(Offset::new(5.0_f32, 7.0_f32), fill);
         });
 
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn a_pushed_layer_carries_its_content() {
         let root = root();
-        PaintContext::paint(&root, |ctx| {
+        PaintCtx::paint(&root, |ctx| {
             ctx.push_layer(LayerHandle::new(ContainerLayer::new()), fill);
         });
 
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn a_layer_inside_a_bracket_is_placed_under_it() {
         let root = root();
-        PaintContext::paint(&root, |ctx| {
+        PaintCtx::paint(&root, |ctx| {
             ctx.with_offset(Offset::new(3.0_f32, 0.0_f32), |ctx| {
                 ctx.add_layer(fill_layer());
             });
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn drawing_resumes_under_the_same_bracket_after_a_layer() {
         let root = root();
-        PaintContext::paint(&root, |ctx| {
+        PaintCtx::paint(&root, |ctx| {
             ctx.with_offset(Offset::new(2.0_f32, 0.0_f32), |ctx| {
                 fill(ctx);
                 ctx.add_layer(fill_layer());

@@ -10,7 +10,7 @@ use agui_core::{
     element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    paint::{LayerHandle, PaintContext, TransformLayer, peniko::kurbo::Affine},
+    paint::{LayerHandle, PaintCtx, TransformLayer, peniko::kurbo::Affine},
     render_object::{MountCtx, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
@@ -111,7 +111,7 @@ where
         }
 
         let layer = LayerHandle::new(TransformLayer::new((self.transform)(Duration::ZERO)));
-        PaintContext::paint(&layer, |ctx| self.child.paint(ctx));
+        PaintCtx::paint(&layer, |ctx| self.child.paint(ctx));
 
         self.layer = Some(layer.clone());
 
@@ -193,7 +193,7 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         let layer = self.build_layer();
         ctx.add_layer(layer.into());
     }
@@ -209,7 +209,7 @@ mod tests {
         hit_test::{HitTest, HitTestResult},
         offset::Offset,
         paint::{
-            Compositor, PaintCommand, PaintContext,
+            Compositor, PaintCommand, PaintCtx,
             peniko::{Color, Fill, kurbo::Affine},
         },
         rect::Rect,
@@ -302,7 +302,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, ctx: &mut PaintContext) {
+        fn paint(&mut self, ctx: &mut PaintCtx) {
             self.paints.set(self.paints.get() + 1);
             let mut canvas = ctx.canvas();
             let brush = canvas.brush(Color::BLACK);
@@ -347,7 +347,11 @@ mod tests {
         render.layout(Constraints::new(0, 100, 0, 100));
 
         render.build_layer();
-        assert_eq!(paints.get(), 1, "building the layer paints the subtree once");
+        assert_eq!(
+            paints.get(),
+            1,
+            "building the layer paints the subtree once"
+        );
 
         render.animate(&vsync);
 

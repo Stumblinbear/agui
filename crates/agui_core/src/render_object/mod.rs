@@ -5,7 +5,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::box_layout::RenderBox,
-    paint::PaintContext,
+    paint::PaintCtx,
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -79,5 +79,5 @@ impl RenderBox for RenderLeaf {
         HitTest::Pass
     }
 
-    fn paint(&mut self, _: &mut PaintContext) {}
+    fn paint(&mut self, _: &mut PaintCtx) {}
 }

@@ -6,7 +6,7 @@ use agui_core::{
     element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    paint::PaintContext,
+    paint::PaintCtx,
     render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
@@ -232,7 +232,7 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         self.child.paint(ctx);
     }
 }

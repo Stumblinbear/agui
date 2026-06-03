@@ -5,7 +5,7 @@ use crate::{
     constraints::Constraints,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    paint::PaintContext,
+    paint::PaintCtx,
     render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
@@ -190,7 +190,7 @@ pub trait RenderSliver: RenderObject {
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest;
 
-    fn paint(&mut self, ctx: &mut PaintContext);
+    fn paint(&mut self, ctx: &mut PaintCtx);
 }
 
 /// A box render object that hosts a single sliver and lays it out along the vertical axis. Requires
@@ -293,7 +293,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         )
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         self.sliver.object.paint(ctx);
     }
 }
@@ -335,7 +335,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, _: &mut PaintContext) {}
+        fn paint(&mut self, _: &mut PaintCtx) {}
     }
 
     #[test]

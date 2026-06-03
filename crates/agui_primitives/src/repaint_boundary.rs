@@ -10,7 +10,7 @@ use agui_core::{
     element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    paint::{ContainerLayer, LayerHandle, PaintContext},
+    paint::{ContainerLayer, LayerHandle, PaintCtx},
     render_object::{
         BoundaryContent, BoundaryHandle, MountCtx, RenderObject, box_layout::RenderBox,
     },
@@ -159,7 +159,7 @@ impl RenderBox for RenderRepaintBoundary {
         self.content.borrow().hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         ctx.add_layer(self.layer.clone().into());
     }
 }
@@ -276,7 +276,7 @@ mod tests {
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
-        fn paint(&mut self, ctx: &mut PaintContext) {
+        fn paint(&mut self, ctx: &mut PaintCtx) {
             self.paints.set(self.paints.get() + 1);
 
             {

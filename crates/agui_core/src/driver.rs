@@ -62,9 +62,9 @@ mod tests {
         element::MultiChildElement,
         hit_test::{HitTest, HitTestResult},
         offset::Offset,
+        paint::PaintCtx,
         provide::ProvideScope,
         render_object::{MountCtx, RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox},
-        paint::PaintContext,
         routing_id::{RoutingId, RoutingPath},
         size::Size,
         task::TaskHandle,
@@ -319,7 +319,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, ctx: &mut PaintContext) {
+        fn paint(&mut self, ctx: &mut PaintCtx) {
             for child in &mut self.children {
                 child.paint(ctx);
             }

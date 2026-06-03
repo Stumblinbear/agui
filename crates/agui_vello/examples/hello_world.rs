@@ -4,7 +4,7 @@ use agui_core::{
     constraints::Constraints,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    paint::{ContainerLayer, LayerHandle, PaintContext, peniko::Color},
+    paint::{ContainerLayer, LayerHandle, PaintCtx, peniko::Color},
     render_object::{
         BoundaryContent, BoundaryHandle, MountCtx, RenderObject, RepaintOwner,
         box_layout::{AnyRenderBox, RenderBox},
@@ -156,7 +156,7 @@ impl RenderBox for RootBoundary {
         self.content.borrow().hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         // Unused for the window root (nothing embeds it), but a boundary contributes its retained layer.
         ctx.add_layer(self.layer.clone().into());
     }

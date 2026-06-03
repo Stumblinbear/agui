@@ -8,7 +8,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
-    paint::PaintContext,
+    paint::PaintCtx,
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -181,7 +181,7 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintContext) {
+    fn paint(&mut self, ctx: &mut PaintCtx) {
         self.child.paint(ctx);
     }
 }

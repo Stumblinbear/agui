@@ -4,7 +4,7 @@ use fnv::FnvHashSet;
 use slotmap::{SlotMap, new_key_type};
 
 use crate::{
-    paint::{Compositor, ContainerLayer, LayerHandle, PaintContext, Scene},
+    paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, Scene},
     render_object::box_layout::{AnyRenderBox, RenderBox},
 };
 
@@ -113,7 +113,7 @@ impl RepaintOwner {
         let layer = boundary.layer.clone();
 
         layer.borrow_mut().clear();
-        PaintContext::paint(&layer, |ctx| content.borrow_mut().paint(ctx));
+        PaintCtx::paint(&layer, |ctx| content.borrow_mut().paint(ctx));
     }
 
     /// Composes the boundary `handle` refers to — and everything it embeds — into a scene for one
@@ -256,7 +256,7 @@ mod tests {
     impl RenderBox for Counter {
         trivial_box_layout!();
 
-        fn paint(&mut self, ctx: &mut PaintContext) {
+        fn paint(&mut self, ctx: &mut PaintCtx) {
             self.paints.set(self.paints.get() + 1);
 
             let mut canvas = ctx.canvas();
@@ -273,7 +273,7 @@ mod tests {
     impl RenderBox for Embedder {
         trivial_box_layout!();
 
-        fn paint(&mut self, ctx: &mut PaintContext) {
+        fn paint(&mut self, ctx: &mut PaintCtx) {
             self.paints.set(self.paints.get() + 1);
 
             {
