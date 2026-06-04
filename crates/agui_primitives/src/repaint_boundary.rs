@@ -11,7 +11,9 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::{ContainerLayer, LayerHandle, PaintCtx},
-    render_object::{BoundaryContent, MountCtx, PaintScope, RenderObject, box_layout::RenderBox},
+    render_object::{
+        BoundaryContent, MountCtx, PaintBoundaryHandle, RenderObject, box_layout::RenderBox,
+    },
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -69,7 +71,7 @@ where
         RenderRepaintBoundary {
             content: Rc::new(RefCell::new(Box::new(child))),
             layer: LayerHandle::new(ContainerLayer::new()),
-            scope: None,
+            handle: None,
         }
     }
 
@@ -84,8 +86,8 @@ where
         }
 
         // The subtree's description changed, so the boundary must repaint.
-        if let Some(scope) = &render_object.scope {
-            scope.mark_needs_paint();
+        if let Some(handle) = &render_object.handle {
+            handle.mark_needs_paint();
         }
     }
 }
@@ -95,25 +97,25 @@ where
 pub struct RenderRepaintBoundary {
     content: BoundaryContent,
     layer: LayerHandle<ContainerLayer>,
-    scope: Option<PaintScope>,
+    handle: Option<PaintBoundaryHandle>,
 }
 
 impl RenderObject for RenderRepaintBoundary {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        let scope = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
+        let handle = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
 
         // Descendants repaint into this boundary, not into the one above it.
         let content = Rc::clone(&self.content);
-        ctx.with_paint_scope(scope.clone(), |ctx| content.borrow_mut().mount(ctx));
+        ctx.with_paint_scope(handle.scope(), |ctx| content.borrow_mut().mount(ctx));
 
-        self.scope = Some(scope);
+        self.handle = Some(handle);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.content.borrow_mut().unmount(ctx);
 
-        if let Some(scope) = self.scope.take() {
-            ctx.unregister_boundary(scope);
+        if let Some(handle) = self.handle.take() {
+            ctx.unregister_boundary(handle);
         }
     }
 }
@@ -168,16 +170,16 @@ impl RenderBox for RenderRepaintBoundary {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     use agui_core::{
         element::SingleChildElement,
         paint::{
-            Compositor, PaintCommand, Scene,
+            PaintCommand, Scene,
             peniko::{Color, Fill},
         },
         rect::Rect,
-        render_object::{RenderNode, RepaintOwner},
+        render_object::{PaintScope, RenderNode, RenderOwner},
         test_harness::TestHarness,
     };
     use typed_floats::{PositiveFinite, as_const};
@@ -187,19 +189,33 @@ mod tests {
     /// A widget that counts its paints, so a test can see which boundaries repaint.
     struct Counter<Child> {
         paints: Rc<Cell<usize>>,
+        capture: Option<Rc<RefCell<Option<PaintScope>>>>,
         child: Child,
     }
 
     impl Counter<()> {
         fn new(paints: Rc<Cell<usize>>) -> Self {
-            Self { paints, child: () }
+            Self {
+                paints,
+                capture: None,
+                child: (),
+            }
         }
+    }
 
-        fn child<Child>(self, child: Child) -> Counter<Child> {
+    impl<Child> Counter<Child> {
+        fn child<C>(self, child: C) -> Counter<C> {
             Counter {
                 paints: self.paints,
+                capture: self.capture,
                 child,
             }
+        }
+
+        /// Records this node's enclosing paint scope at mount, so a test can mark that boundary.
+        fn capture(mut self, slot: Rc<RefCell<Option<PaintScope>>>) -> Self {
+            self.capture = Some(slot);
+            self
         }
     }
 
@@ -226,6 +242,7 @@ mod tests {
         fn create_render_object(&self, element: &Self::Element) -> Self::Render {
             RenderCounter {
                 paints: Rc::clone(&self.paints),
+                capture: self.capture.clone(),
                 child: RenderNode::new(element.create_render_object(&self.child)),
             }
         }
@@ -237,11 +254,15 @@ mod tests {
 
     struct RenderCounter<C> {
         paints: Rc<Cell<usize>>,
+        capture: Option<Rc<RefCell<Option<PaintScope>>>>,
         child: RenderNode<C>,
     }
 
     impl<C: RenderBox> RenderObject for RenderCounter<C> {
         fn mount(&mut self, ctx: &mut MountCtx) {
+            if let Some(slot) = &self.capture {
+                *slot.borrow_mut() = Some(ctx.paint_scope().clone());
+            }
             self.child.mount(ctx);
         }
         fn unmount(&mut self, ctx: &mut MountCtx) {
@@ -305,43 +326,36 @@ mod tests {
     /// is not repainted, yet the composed scene still contains both.
     #[test]
     fn marking_an_inner_boundary_leaves_the_outer_one_alone() {
-        let mut owner = RepaintOwner::new();
+        let mut owner = RenderOwner::new();
         let outer_paints = Rc::new(Cell::new(0));
         let inner_paints = Rc::new(Cell::new(0));
+        let inner_scope = Rc::new(RefCell::new(None));
 
-        let widget = RepaintBoundary::new().child(
-            Counter::new(Rc::clone(&outer_paints))
-                .child(RepaintBoundary::new().child(Counter::new(Rc::clone(&inner_paints)))),
+        let widget = Counter::new(Rc::clone(&outer_paints)).child(
+            RepaintBoundary::new().child(
+                Counter::new(Rc::clone(&inner_paints)).capture(Rc::clone(&inner_scope)),
+            ),
         );
 
-        let mut root = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-
-        root.mount(&mut MountCtx::new(&mut owner));
-        root.layout(Constraints::new(0, 100, 0, 100));
+        let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        owner.mount_view(Box::new(render));
+        owner.layout(Constraints::new(0, 100, 0, 100));
 
         owner.flush_paint();
-        let first = Compositor::compose(&root.layer);
+        let first = owner.composite();
         assert_eq!(outer_paints.get(), 1);
         assert_eq!(inner_paints.get(), 1);
         assert_eq!(fills(&first), 2, "both boundaries contributed a fill");
 
-        // Mark the inner boundary the way a rebuild or animation would.
-        let inner = {
-            let content = root.content.borrow();
-            content
-                .as_any()
-                .downcast_ref::<RenderCounter<RenderRepaintBoundary>>()
-                .expect("outer content is the counter")
-                .child
-                .object
-                .scope
-                .clone()
-                .expect("the inner boundary is mounted")
-        };
+        // Reach the inner boundary the way a widget under it does: through the scope handed to it at mount.
+        let inner = inner_scope
+            .borrow()
+            .clone()
+            .expect("the inner boundary is mounted");
         inner.mark_needs_paint();
 
         owner.flush_paint();
-        let second = Compositor::compose(&root.layer);
+        let second = owner.composite();
         assert_eq!(inner_paints.get(), 2, "the marked inner boundary repainted");
         assert_eq!(
             outer_paints.get(),

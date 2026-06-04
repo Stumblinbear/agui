@@ -4,12 +4,17 @@ use fnv::FnvHashSet;
 use slotmap::{SlotMap, new_key_type};
 
 use crate::{
+    constraints::Constraints,
     paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, Scene},
-    render_object::box_layout::{AnyRenderBox, RenderBox},
+    render_object::{
+        RenderObject,
+        box_layout::{AnyRenderBox, RenderBox},
+    },
+    size::Size,
 };
 
 new_key_type! {
-    /// Identifies one repaint boundary within a [`RepaintOwner`].
+    /// Identifies one repaint boundary within a [`RenderOwner`].
     pub struct BoundaryId;
 }
 
@@ -19,9 +24,13 @@ new_key_type! {
 /// its own, leaving every other boundary's layer untouched, so a change confined to one boundary costs
 /// only that boundary's paint. Mark a boundary through the [`PaintScope`] handed back when it is
 /// registered.
-pub struct RepaintOwner {
+pub struct RenderOwner {
     boundaries: SlotMap<BoundaryId, Boundary>,
-    dirty: Rc<RefCell<FnvHashSet<BoundaryId>>>,
+    pending: Rc<RefCell<Pending>>,
+    /// The layer the root view paints into and the creator composites to present.
+    root_layer: LayerHandle<ContainerLayer>,
+    /// The root view's boundary, once one is registered.
+    root_boundary: Option<PaintBoundaryHandle>,
 }
 
 /// The drawable content of a boundary, shared between its render object and the owner.
@@ -32,16 +41,33 @@ struct Boundary {
     layer: LayerHandle<ContainerLayer>,
 }
 
-impl RepaintOwner {
+/// The boundaries awaiting repaint, plus the hook that asks the driver to schedule a frame when the
+/// first one becomes dirty on an otherwise clean owner.
+#[derive(Default)]
+struct Pending {
+    dirty: FnvHashSet<BoundaryId>,
+    notify: Option<Box<dyn Fn()>>,
+}
+
+impl RenderOwner {
     pub fn new() -> Self {
         Self {
             boundaries: SlotMap::with_key(),
-            dirty: Rc::new(RefCell::new(FnvHashSet::default())),
+            pending: Rc::new(RefCell::new(Pending::default())),
+            root_layer: LayerHandle::new(ContainerLayer::new()),
+            root_boundary: None,
         }
     }
 
-    /// Adds a boundary that paints `content` into `layer`, returning a handle for marking it for
-    /// repaint.
+    /// Sets the hook called when the first boundary becomes dirty on an otherwise clean owner, so the
+    /// driver can schedule a frame. It does not fire for further marks until the next
+    /// [`flush_paint`](RenderOwner::flush_paint) clears the dirty set. Replacing it drops the previous.
+    pub fn on_needs_visual_update(&mut self, callback: impl Fn() + 'static) {
+        self.pending.borrow_mut().notify = Some(Box::new(callback));
+    }
+
+    /// Adds a boundary that paints `content` into `layer`, returning a [`PaintBoundaryHandle`] that owns
+    /// the boundary and hands out [`PaintScope`]s for marking it.
     ///
     /// # Panics
     ///
@@ -50,20 +76,23 @@ impl RepaintOwner {
         &mut self,
         content: BoundaryContent,
         layer: LayerHandle<ContainerLayer>,
-    ) -> PaintScope {
+    ) -> PaintBoundaryHandle {
         let id = self.boundaries.insert(Boundary { content, layer });
 
         // A fresh boundary has never been painted, so it is dirty until its first frame.
-        self.dirty
+        self.pending
             .try_borrow_mut()
             .expect("boundaries cannot be registered during paint")
+            .dirty
             .insert(id);
 
         tracing::debug!(boundary = ?id, "registered repaint boundary");
 
-        PaintScope {
-            id,
-            dirty: Rc::clone(&self.dirty),
+        PaintBoundaryHandle {
+            scope: PaintScope {
+                id,
+                pending: Rc::clone(&self.pending),
+            },
         }
     }
 
@@ -72,14 +101,17 @@ impl RepaintOwner {
     /// # Panics
     ///
     /// Panics if called while a paint pass is in progress.
-    pub fn unregister(&mut self, handle: PaintScope) {
-        let PaintScope { id, dirty: _ } = handle;
+    pub fn unregister(&mut self, handle: PaintBoundaryHandle) {
+        let PaintBoundaryHandle {
+            scope: PaintScope { id, pending: _ },
+        } = handle;
 
         self.boundaries.remove(id);
 
-        self.dirty
+        self.pending
             .try_borrow_mut()
             .expect("boundaries cannot be unregistered during paint")
+            .dirty
             .remove(&id);
 
         tracing::debug!(boundary = ?id, "unregistered repaint boundary");
@@ -93,14 +125,14 @@ impl RepaintOwner {
     ///
     /// Panics if called while another paint pass is already in progress.
     pub fn flush_paint(&mut self) {
-        let dirty = Rc::clone(&self.dirty);
-        let mut dirty_set = dirty
+        let pending = Rc::clone(&self.pending);
+        let mut pending = pending
             .try_borrow_mut()
             .expect("cannot flush paint during paint");
 
-        tracing::debug!(count = dirty_set.len(), "flushing paint");
+        tracing::debug!(count = pending.dirty.len(), "flushing paint");
 
-        for id in dirty_set.drain() {
+        for id in pending.dirty.drain() {
             self.repaint(id);
         }
     }
@@ -116,58 +148,101 @@ impl RepaintOwner {
         PaintCtx::paint(&layer, |ctx| content.borrow_mut().paint(ctx));
     }
 
-    /// Composes the boundary `handle` refers to — and everything it embeds — into a scene for one
-    /// render target. Call after [`flush_paint`](RepaintOwner::flush_paint); call once per target.
-    pub fn compose(&self, handle: &PaintScope) -> Scene {
-        tracing::trace!(boundary = ?handle.id, "composing render target");
+    /// Mounts `content` as the root view: registers it as the root boundary painting into the root
+    /// layer, then mounts its subtree under that boundary's scope.
+    pub fn mount_view(&mut self, content: Box<dyn AnyRenderBox>) {
+        let content: BoundaryContent = Rc::new(RefCell::new(content));
+        let handle = self.register(Rc::clone(&content), self.root_layer.clone());
+        let scope = handle.scope();
+        self.root_boundary = Some(handle);
 
-        Compositor::compose(&self.boundaries[handle.id].layer)
+        let mut ctx = MountCtx::new(self, scope);
+        content.borrow_mut().mount(&mut ctx);
+    }
+
+    /// Unmounts the root view and unregisters its boundary.
+    pub fn unmount_view(&mut self) {
+        let Some(handle) = self.root_boundary.take() else {
+            return;
+        };
+
+        let content = Rc::clone(&self.boundaries[handle.scope.id].content);
+        {
+            let mut ctx = MountCtx::new(self, handle.scope());
+            content.borrow_mut().unmount(&mut ctx);
+        }
+
+        self.unregister(handle);
+    }
+
+    /// Lays the root view's subtree out against `constraints`, the target's current size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no view has been registered.
+    pub fn layout(&mut self, constraints: Constraints) -> Size {
+        let id = self
+            .root_boundary
+            .as_ref()
+            .expect("a view must be registered before layout")
+            .scope
+            .id;
+        self.boundaries[id].content.borrow_mut().layout(constraints)
+    }
+
+    /// Marks the root view for repaint on the next [`flush_paint`](RenderOwner::flush_paint).
+    pub fn mark_needs_paint(&self) {
+        if let Some(boundary) = &self.root_boundary {
+            boundary.mark_needs_paint();
+        }
+    }
+
+    /// Composites the root view's retained layers into a scene to present.
+    pub fn composite(&self) -> Scene {
+        Compositor::compose(&self.root_layer)
     }
 }
 
-impl Default for RepaintOwner {
+impl Default for RenderOwner {
     fn default() -> Self {
         Self::new()
     }
 }
 
 pub struct MountCtx<'a> {
-    owner: &'a mut RepaintOwner,
-    paint_scope: Option<PaintScope>,
+    owner: &'a mut RenderOwner,
+    paint_scope: PaintScope,
 }
 
 impl<'a> MountCtx<'a> {
-    pub fn new(owner: &'a mut RepaintOwner) -> Self {
-        Self {
-            owner,
-            paint_scope: None,
-        }
+    pub fn new(owner: &'a mut RenderOwner, paint_scope: PaintScope) -> Self {
+        Self { owner, paint_scope }
     }
 
-    /// Adds a boundary that paints `content` into `layer`, returning the [`PaintScope`] the boundary
-    /// repaints into.
+    /// Adds a boundary that paints `content` into `layer`, returning the [`PaintBoundaryHandle`] that
+    /// owns it.
     pub fn register_boundary(
         &mut self,
         content: BoundaryContent,
         layer: LayerHandle<ContainerLayer>,
-    ) -> PaintScope {
+    ) -> PaintBoundaryHandle {
         self.owner.register(content, layer)
     }
 
     /// Removes a boundary that is leaving the tree.
-    pub fn unregister_boundary(&mut self, scope: PaintScope) {
-        self.owner.unregister(scope);
+    pub fn unregister_boundary(&mut self, handle: PaintBoundaryHandle) {
+        self.owner.unregister(handle);
     }
 
-    /// The [`PaintScope`] of the nearest enclosing boundary, if the node being mounted is under one.
-    pub fn paint_scope(&self) -> Option<&PaintScope> {
-        self.paint_scope.as_ref()
+    /// The [`PaintScope`] of the nearest enclosing boundary.
+    pub fn paint_scope(&self) -> &PaintScope {
+        &self.paint_scope
     }
 
     /// Mounts a subtree with `scope` as its enclosing boundary, restoring the previous scope afterward.
     /// A boundary calls this so its descendants repaint into it rather than into its own parent.
     pub fn with_paint_scope(&mut self, scope: PaintScope, f: impl FnOnce(&mut Self)) {
-        let previous = self.paint_scope.replace(scope);
+        let previous = std::mem::replace(&mut self.paint_scope, scope);
         f(self);
         self.paint_scope = previous;
     }
@@ -176,19 +251,48 @@ impl<'a> MountCtx<'a> {
 /// The boundary a render object repaints into. A node deep in a subtree holds the scope of its nearest
 /// enclosing boundary and marks it when its painting goes stale; the boundary then repaints on the next
 /// frame, leaving every other boundary untouched. Cloning shares the same target, so the scope can be
-/// marked from anywhere, including a per-frame callback.
+/// marked from anywhere, including a per-frame callback. A scope can only mark its boundary, never
+/// remove it, so it is safe to hand down a subtree.
 #[derive(Clone)]
 pub struct PaintScope {
     id: BoundaryId,
-    dirty: Rc<RefCell<FnvHashSet<BoundaryId>>>,
+    pending: Rc<RefCell<Pending>>,
 }
 
 impl PaintScope {
-    /// Marks the boundary to be repainted on the next [`flush_paint`](RepaintOwner::flush_paint).
+    /// Marks the boundary to be repainted on the next [`flush_paint`](RenderOwner::flush_paint). If
+    /// this is the first mark on an otherwise clean owner, the owner's visual-update hook fires so the
+    /// driver schedules a frame.
     pub fn mark_needs_paint(&self) {
         tracing::trace!(boundary = ?self.id, "marked boundary for repaint");
 
-        self.dirty.borrow_mut().insert(self.id);
+        let mut pending = self.pending.borrow_mut();
+        let was_clean = pending.dirty.is_empty();
+        pending.dirty.insert(self.id);
+
+        if was_clean && let Some(notify) = &pending.notify {
+            notify();
+        }
+    }
+}
+
+/// A registered boundary, returned to the render object that registered it. It owns the boundary's
+/// place in the owner and is the only thing [`unregister`](RenderOwner::unregister) accepts; it hands
+/// out mark-only [`PaintScope`]s for the subtree. Keeping removal here, off the scope, stops a
+/// descendant that was handed a scope to mark with from unregistering the boundary it lives under.
+pub struct PaintBoundaryHandle {
+    scope: PaintScope,
+}
+
+impl PaintBoundaryHandle {
+    /// A mark-only handle to this boundary, for descendants to repaint into it.
+    pub fn scope(&self) -> PaintScope {
+        self.scope.clone()
+    }
+
+    /// Marks this boundary to be repainted on the next [`flush_paint`](RenderOwner::flush_paint).
+    pub fn mark_needs_paint(&self) {
+        self.scope.mark_needs_paint();
     }
 }
 
@@ -206,7 +310,7 @@ mod tests {
         hit_test::{HitTest, HitTestResult},
         offset::Offset,
         paint::{
-            PaintCommand,
+            Compositor, PaintCommand, Scene,
             peniko::{Color, Fill},
         },
         rect::Rect,
@@ -332,7 +436,7 @@ mod tests {
         let root_paints = Rc::new(Cell::new(0));
         let child_paints = Rc::new(Cell::new(0));
 
-        let mut owner = RepaintOwner::new();
+        let mut owner = RenderOwner::new();
 
         let root_layer = layer();
         let child_layer = layer();
@@ -385,7 +489,7 @@ mod tests {
     fn a_clean_frame_repaints_nothing() {
         let paints = Rc::new(Cell::new(0));
 
-        let mut owner = RepaintOwner::new();
+        let mut owner = RenderOwner::new();
         owner.register(
             content(Counter {
                 paints: Rc::clone(&paints),
@@ -404,6 +508,44 @@ mod tests {
         );
     }
 
+    /// The visual-update hook fires on the clean-to-dirty edge so the driver schedules a frame, and not
+    /// again until a flush clears the dirty set.
+    #[test]
+    fn marking_schedules_a_frame_on_the_clean_to_dirty_edge() {
+        let mut owner = RenderOwner::new();
+        let scope = owner.register(
+            content(Counter {
+                paints: Rc::new(Cell::new(0)),
+                color: Color::BLACK,
+            }),
+            layer(),
+        );
+
+        let frames = Rc::new(Cell::new(0));
+        let scheduled = Rc::clone(&frames);
+        owner.on_needs_visual_update(move || scheduled.set(scheduled.get() + 1));
+
+        // Registration left the owner dirty; the first frame clears it without involving the hook.
+        owner.flush_paint();
+        assert_eq!(frames.get(), 0, "registration alone schedules no frame");
+
+        scope.mark_needs_paint();
+        scope.mark_needs_paint();
+        assert_eq!(
+            frames.get(),
+            1,
+            "only the clean-to-dirty edge schedules a frame"
+        );
+
+        owner.flush_paint();
+        scope.mark_needs_paint();
+        assert_eq!(
+            frames.get(),
+            2,
+            "a mark after the flush schedules another frame"
+        );
+    }
+
     /// The whole loop: an animation marks its boundary from a per-frame callback, and each frame
     /// repaints only that boundary while a static sibling is painted once and then reused.
     #[test]
@@ -413,7 +555,7 @@ mod tests {
         let static_paints = Rc::new(Cell::new(0));
         let animated_paints = Rc::new(Cell::new(0));
 
-        let mut owner = RepaintOwner::new();
+        let mut owner = RenderOwner::new();
 
         let static_layer = layer();
         let animated_layer = layer();
@@ -445,7 +587,7 @@ mod tests {
         assert_eq!(animated_paints.get(), 1);
 
         // The animation marks its own boundary each frame, exactly as a driver would from `on_frame`.
-        let scope = animated.clone();
+        let scope = animated.scope();
         let _subscription = vsync.on_frame(move |_| scope.mark_needs_paint());
 
         for _ in 0..3 {

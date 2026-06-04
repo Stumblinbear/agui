@@ -1,22 +1,11 @@
-use std::{cell::RefCell, num::NonZeroUsize, rc::Rc, sync::Arc};
+use std::{cell::Cell, num::NonZeroUsize, rc::Rc, sync::Arc};
 
 use agui_core::{
-    constraints::Constraints,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::{ContainerLayer, LayerHandle, PaintCtx, peniko::Color},
-    render_object::{
-        BoundaryContent, MountCtx, PaintScope, RenderObject, RepaintOwner,
-        box_layout::{AnyRenderBox, RenderBox},
-    },
-    size::Size,
-    test_harness::TestHarness,
-    text_baseline::TextBaseline,
-    widget::Widget,
+    constraints::Constraints, paint::peniko::Color, render_object::RenderOwner,
+    test_harness::TestHarness, widget::Widget,
 };
 use agui_primitives::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
 use agui_vello::append_scene;
-use typed_floats::{Positive, PositiveFinite};
 use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
     util::{RenderContext, RenderSurface},
@@ -48,121 +37,23 @@ fn main() {
     let harness = TestHarness::mount(&widget);
     let child = widget.create_render_object(&harness.root.element);
 
-    let mut owner = RepaintOwner::new();
+    let mut owner = RenderOwner::new();
 
-    // The root boundary hands its paint scope back through this slot when it mounts.
-    let scope_slot: Rc<RefCell<Option<PaintScope>>> = Rc::new(RefCell::new(None));
-    let slot = Rc::clone(&scope_slot);
-    let mut render = RootBoundary::new(child, move |scope| {
-        *slot.borrow_mut() = Some(scope);
-    });
+    // A dirty boundary sets this flag through the owner's hook; the driver turns it into a redraw
+    // request once the event batch settles.
+    let needs_redraw = Rc::new(Cell::new(false));
+    let flag = Rc::clone(&needs_redraw);
+    owner.on_needs_visual_update(move || flag.set(true));
 
+    // The owner mounts the body as its root view; the driver then drives rendering through the owner.
     tracing::info!("driving mount pass");
-    render.mount(&mut MountCtx::new(&mut owner));
-    let root_scope = scope_slot
-        .borrow()
-        .clone()
-        .expect("the root boundary mounted");
-    tracing::info!("root boundary mounted; starting event loop");
+    owner.mount_view(Box::new(child));
+    tracing::info!("view mounted; starting event loop");
 
     let event_loop = EventLoop::new().unwrap();
     event_loop
-        .run_app(&mut App::new(owner, render, root_scope))
+        .run_app(&mut App::new(owner, needs_redraw))
         .unwrap();
-}
-
-/// Example-only root render object: registers its subtree as a repaint boundary when mounted and hands
-/// the boundary's paint scope to a callback, so the driver can compose the window from it and mark it
-/// dirty when the window is resized. In a real runtime this is the job of a "view" widget.
-struct RootBoundary {
-    content: BoundaryContent,
-    layer: LayerHandle<ContainerLayer>,
-    scope: Option<PaintScope>,
-    on_ready: Option<Box<dyn FnOnce(PaintScope)>>,
-}
-
-impl RootBoundary {
-    fn new(child: impl RenderBox, on_ready: impl FnOnce(PaintScope) + 'static) -> Self {
-        Self {
-            content: Rc::new(RefCell::new(Box::new(child) as Box<dyn AnyRenderBox>)),
-            layer: LayerHandle::new(ContainerLayer::new()),
-            scope: None,
-            on_ready: Some(Box::new(on_ready)),
-        }
-    }
-}
-
-impl RenderObject for RootBoundary {
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        let scope = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
-
-        if let Some(on_ready) = self.on_ready.take() {
-            on_ready(scope.clone());
-        }
-
-        // Descendants repaint into this boundary.
-        let content = Rc::clone(&self.content);
-        ctx.with_paint_scope(scope.clone(), |ctx| content.borrow_mut().mount(ctx));
-
-        self.scope = Some(scope);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.content.borrow_mut().unmount(ctx);
-
-        if let Some(scope) = self.scope.take() {
-            ctx.unregister_boundary(scope);
-        }
-    }
-}
-
-impl RenderBox for RootBoundary {
-    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().min_intrinsic_width(height)
-    }
-
-    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().max_intrinsic_width(height)
-    }
-
-    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().min_intrinsic_height(width)
-    }
-
-    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().max_intrinsic_height(width)
-    }
-
-    fn measure(&self, constraints: Constraints) -> Size {
-        self.content.borrow().measure(constraints)
-    }
-
-    fn layout(&mut self, constraints: Constraints) -> Size {
-        self.content.borrow_mut().layout(constraints)
-    }
-
-    fn measure_baseline(
-        &self,
-        constraints: Constraints,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        self.content
-            .borrow()
-            .measure_baseline(constraints, baseline)
-    }
-
-    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
-        self.content.borrow_mut().distance_to_baseline(baseline)
-    }
-
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.content.borrow().hit_test(result, position)
-    }
-
-    fn paint(&mut self, ctx: &mut PaintCtx) {
-        // Unused for the window root (nothing embeds it), but a boundary contributes its retained layer.
-        ctx.add_layer(self.layer.clone().into());
-    }
 }
 
 struct ActiveWindow {
@@ -175,24 +66,21 @@ struct App {
     /// One renderer per device; indexed by `RenderSurface::dev_id`.
     renderers: Vec<Option<Renderer>>,
     active: Option<ActiveWindow>,
-    /// Repaints dirty boundaries and composes the window's root into a scene.
-    owner: RepaintOwner,
-    /// The root render object, laid out each frame.
-    render: RootBoundary,
-    /// The window's root boundary; composed each frame and marked dirty on resize.
-    root_scope: PaintScope,
+    /// This window's render owner: drives layout, paint, and compositing of the view's subtree.
+    owner: RenderOwner,
+    /// Set by the owner's visual-update hook; drained into a redraw request in `about_to_wait`.
+    needs_redraw: Rc<Cell<bool>>,
     vello_scene: vello::Scene,
 }
 
 impl App {
-    fn new(owner: RepaintOwner, render: RootBoundary, root_scope: PaintScope) -> Self {
+    fn new(owner: RenderOwner, needs_redraw: Rc<Cell<bool>>) -> Self {
         Self {
             context: RenderContext::new(),
             renderers: Vec::new(),
             active: None,
             owner,
-            render,
-            root_scope,
+            needs_redraw,
             vello_scene: vello::Scene::new(),
         }
     }
@@ -234,6 +122,7 @@ impl ApplicationHandler for App {
             .unwrap()
         });
 
+        window.request_redraw();
         self.active = Some(ActiveWindow { surface, window });
         tracing::info!(width = size.width, height = size.height, "window created");
     }
@@ -250,13 +139,13 @@ impl ApplicationHandler for App {
                 tracing::info!(
                     width = size.width,
                     height = size.height,
-                    "resized; marking root"
+                    "resized; marking view"
                 );
                 self.context
                     .resize_surface(&mut active.surface, size.width, size.height);
-                // The layout changed, so the root boundary must repaint at the new size.
-                self.root_scope.mark_needs_paint();
-                active.window.request_redraw();
+                // The layout changed, so the view must repaint at the new size. Marking it schedules
+                // a frame through the owner's hook; no explicit redraw request here.
+                self.owner.mark_needs_paint();
             }
 
             WindowEvent::RedrawRequested => {
@@ -265,11 +154,11 @@ impl ApplicationHandler for App {
 
                 let _frame = tracing::info_span!("frame", width, height).entered();
 
-                self.render
+                self.owner
                     .layout(Constraints::new(0.0, width as f32, 0.0, height as f32));
 
                 self.owner.flush_paint();
-                let scene = self.owner.compose(&self.root_scope);
+                let scene = self.owner.composite();
 
                 self.vello_scene.reset();
                 append_scene(&scene, &mut self.vello_scene);
@@ -299,6 +188,15 @@ impl ApplicationHandler for App {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        // A boundary went dirty since the last settle; ask the window to redraw.
+        if self.needs_redraw.replace(false)
+            && let Some(active) = &self.active
+        {
+            active.window.request_redraw();
         }
     }
 }
