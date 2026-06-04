@@ -207,8 +207,15 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        // TODO(trevin): apply the inverse transform once hit-testing is sound.
-        self.child.hit_test(result, position)
+        let size = self
+            .child
+            .parent_data
+            .expect("transform has not been laid out");
+        let effective = self.effective_transform(size);
+
+        result.with_transform(effective, position, |result, local| {
+            self.child.hit_test(result, local)
+        })
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -241,14 +248,17 @@ where
 mod tests {
     use agui_core::{
         constraints::Constraints,
+        hit_test::HitTestBehavior,
         paint::{
             Compositor, ContainerLayer, LayerHandle, PaintCommand, PaintCtx, PaintShape,
-            peniko::{Color, kurbo::Affine},
+            peniko::{Color, kurbo::Affine, kurbo::Point},
         },
         test_harness::TestHarness,
     };
 
-    use crate::{colored_box::ColoredBox, opacity::Opacity, sized_box::SizedBox};
+    use crate::{
+        colored_box::ColoredBox, listener::Listener, opacity::Opacity, sized_box::SizedBox,
+    };
 
     use super::*;
 
@@ -360,6 +370,47 @@ mod tests {
             "the transform should wrap the opacity layer, got {:?}",
             scene.commands()
         );
+    }
+
+    /// A hit is localized through the inverse transform: a translation of (10, 0) maps a root-space
+    /// (15, 5) onto the child's (5, 5).
+    #[test]
+    fn a_hit_is_localized_through_the_inverse_transform() {
+        let widget = Transform::translate(Offset::new(10.0, 0.0)).child(
+            Listener::builder()
+                .behavior(HitTestBehavior::Opaque)
+                .child(SizedBox::new().width(50).height(50)),
+        );
+        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        render.layout(Constraints::new(0, 100, 0, 100));
+
+        let mut result = HitTestResult::new();
+        let hit = render.hit_test(&mut result, Offset::new(15.0, 5.0));
+
+        assert_eq!(hit, HitTest::Absorb);
+
+        let transform = result.path()[0].global_transform();
+        let local = Offset::from(transform * Point::from(Offset::new(15.0, 5.0)));
+        assert_eq!(local.x.get(), 5.0);
+        assert_eq!(local.y.get(), 5.0);
+    }
+
+    /// A non-invertible transform can't be hit: the child is never entered and nothing is recorded.
+    #[test]
+    fn a_degenerate_transform_is_not_hit() {
+        let widget = Transform::scale(0.0).child(
+            Listener::builder()
+                .behavior(HitTestBehavior::Opaque)
+                .child(SizedBox::new().width(50).height(50)),
+        );
+        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        render.layout(Constraints::new(0, 100, 0, 100));
+
+        let mut result = HitTestResult::new();
+        let hit = render.hit_test(&mut result, Offset::new(10.0, 10.0));
+
+        assert_eq!(hit, HitTest::Pass);
+        assert!(result.path().is_empty());
     }
 
     /// A non-invertible transform paints nothing.
