@@ -110,6 +110,10 @@ where
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
+    }
 }
 
 impl<Child> RenderBox for RenderPadding<Child>
@@ -234,9 +238,13 @@ where
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx) {
-        ctx.with_offset(Offset::new(self.padding.left, self.padding.top), |ctx| {
-            self.child.paint(ctx);
-        });
+        ctx.with_offset(
+            self.child.needs_compositing(),
+            Offset::new(self.padding.left, self.padding.top),
+            |ctx| {
+                self.child.paint(ctx);
+            },
+        );
     }
 }
 

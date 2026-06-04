@@ -8,8 +8,8 @@ use agui_core::{
     element::{Element, ElementNode},
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     paint::PaintCtx,
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -196,6 +196,14 @@ where
     fn unmount(&mut self, ctx: &mut MountCtx) {
         if let Some(mut child_render) = self.child_render.take() {
             child_render.unmount(ctx);
+        }
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        if let Some(child_render) = self.child_render.as_mut() {
+            child_render.update_compositing_bits()
+        } else {
+            false
         }
     }
 }

@@ -203,6 +203,10 @@ where
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
+    }
 }
 
 /// Converts a `Positive` extent to `PositiveFinite`, returning `None` if infinite.

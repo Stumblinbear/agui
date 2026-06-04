@@ -30,6 +30,11 @@ pub trait RenderObject: 'static {
     fn mount(&mut self, ctx: &mut MountCtx);
 
     fn unmount(&mut self, ctx: &mut MountCtx);
+
+    /// Recomputes whether this subtree contributes a compositing layer, and returns it. An
+    /// implementation must fold in every child's bit; a node that reads its own bit while painting
+    /// caches it here.
+    fn update_compositing_bits(&mut self) -> bool;
 }
 
 #[derive(Default)]
@@ -39,6 +44,10 @@ impl RenderObject for RenderLeaf {
     fn mount(&mut self, _: &mut MountCtx) {}
 
     fn unmount(&mut self, _: &mut MountCtx) {}
+
+    fn update_compositing_bits(&mut self) -> bool {
+        false
+    }
 }
 
 impl RenderBox for RenderLeaf {

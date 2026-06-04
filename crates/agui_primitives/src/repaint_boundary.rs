@@ -118,6 +118,11 @@ impl RenderObject for RenderRepaintBoundary {
             ctx.unregister_boundary(handle);
         }
     }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        // A boundary always composites into its own layer; its subtree recomputes on its own repaint.
+        true
+    }
 }
 
 impl RenderBox for RenderRepaintBoundary {
@@ -265,8 +270,13 @@ mod tests {
             }
             self.child.mount(ctx);
         }
+
         fn unmount(&mut self, ctx: &mut MountCtx) {
             self.child.unmount(ctx);
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
         }
     }
 
@@ -331,11 +341,11 @@ mod tests {
         let inner_paints = Rc::new(Cell::new(0));
         let inner_scope = Rc::new(RefCell::new(None));
 
-        let widget = Counter::new(Rc::clone(&outer_paints)).child(
-            RepaintBoundary::new().child(
-                Counter::new(Rc::clone(&inner_paints)).capture(Rc::clone(&inner_scope)),
-            ),
-        );
+        let widget =
+            Counter::new(Rc::clone(&outer_paints))
+                .child(RepaintBoundary::new().child(
+                    Counter::new(Rc::clone(&inner_paints)).capture(Rc::clone(&inner_scope)),
+                ));
 
         let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
         owner.mount_view(Box::new(render));

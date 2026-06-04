@@ -12,6 +12,8 @@ pub trait AnyRenderObject {
     fn dyn_mount(&mut self, ctx: &mut MountCtx);
 
     fn dyn_unmount(&mut self, ctx: &mut MountCtx);
+
+    fn dyn_update_compositing_bits(&mut self) -> bool;
 }
 
 impl<T> AnyRenderObject for T
@@ -38,6 +40,10 @@ where
     fn dyn_unmount(&mut self, ctx: &mut MountCtx) {
         self.unmount(ctx);
     }
+
+    fn dyn_update_compositing_bits(&mut self) -> bool {
+        self.update_compositing_bits()
+    }
 }
 
 impl<T> RenderObject for Box<T>
@@ -50,5 +56,9 @@ where
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         (**self).dyn_unmount(ctx);
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        (**self).dyn_update_compositing_bits()
     }
 }

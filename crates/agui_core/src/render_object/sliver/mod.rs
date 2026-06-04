@@ -220,6 +220,10 @@ impl<S: RenderSliver> RenderObject for RenderViewport<S> {
     fn mount(&mut self, _: &mut MountCtx) {}
 
     fn unmount(&mut self, _: &mut MountCtx) {}
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.sliver.update_compositing_bits()
+    }
 }
 
 impl<S: RenderSliver> RenderBox for RenderViewport<S> {
@@ -317,6 +321,10 @@ mod tests {
         fn mount(&mut self, _: &mut MountCtx) {}
 
         fn unmount(&mut self, _: &mut MountCtx) {}
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
     }
 
     impl RenderSliver for RenderSliverFixed {

@@ -6,8 +6,8 @@ use agui_core::{
     element::MultiChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{MountCtx, RenderObject, box_layout::RenderBox},
     paint::PaintCtx,
+    render_object::{MountCtx, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -183,6 +183,16 @@ where
         for child in &mut self.children {
             child.unmount(ctx);
         }
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        let mut needs = false;
+
+        for child in &mut self.children {
+            needs |= child.update_compositing_bits();
+        }
+
+        needs
     }
 }
 

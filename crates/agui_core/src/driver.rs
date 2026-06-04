@@ -273,9 +273,27 @@ mod tests {
     }
 
     impl RenderObject for RenderParent {
-        fn mount(&mut self, _: &mut MountCtx) {}
+        fn mount(&mut self, ctx: &mut MountCtx) {
+            for child in &mut self.children {
+                child.mount(ctx);
+            }
+        }
 
-        fn unmount(&mut self, _: &mut MountCtx) {}
+        fn unmount(&mut self, ctx: &mut MountCtx) {
+            for child in &mut self.children {
+                child.unmount(ctx);
+            }
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            let mut needs = false;
+
+            for child in &mut self.children {
+                needs |= child.update_compositing_bits();
+            }
+
+            needs
+        }
     }
 
     impl RenderBox for RenderParent {

@@ -4,7 +4,9 @@ use agui_core::{
     constraints::Constraints, paint::peniko::Color, render_object::RenderOwner,
     test_harness::TestHarness, widget::Widget,
 };
-use agui_primitives::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
+use agui_primitives::{
+    colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox, opacity::Opacity,
+};
 use agui_vello::append_scene;
 use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
@@ -33,7 +35,7 @@ fn main() {
     let widget = FractionallySizedBox::new()
         .width_factor(0.5_f32)
         .height_factor(1.0_f32)
-        .child(ColoredBox::new(Color::rgb8(255, 138, 0)));
+        .child(Opacity::new(0.5).child(ColoredBox::new(Color::rgb8(255, 138, 0))));
     let harness = TestHarness::mount(&widget);
     let child = widget.create_render_object(&harness.root.element);
 

@@ -83,6 +83,10 @@ where
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
+    }
 }
 
 impl<Child> RenderBox for RenderSingleChildScrollView<Child>

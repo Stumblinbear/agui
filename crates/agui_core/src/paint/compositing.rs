@@ -3,12 +3,11 @@ use std::{
     rc::Rc,
 };
 
-use peniko::kurbo::Affine;
+use peniko::{BlendMode, Compose, Mix, kurbo::Affine};
 
-use crate::paint::scene::{PaintCommand, Scene};
+use crate::paint::scene::{PaintCommand, PaintShape, Scene};
 
-/// A shared, mutable handle to a layer. Cloning yields another handle to the same layer, reached
-/// through [`borrow`](LayerHandle::borrow) and [`borrow_mut`](LayerHandle::borrow_mut).
+/// A shared, mutable handle to a layer.
 pub struct LayerHandle<L: ?Sized = dyn Layer>(Rc<RefCell<L>>);
 
 impl<L: Layer + 'static> LayerHandle<L> {
@@ -140,7 +139,7 @@ impl Compositor<'_> {
     pub fn compose_into<L: Layer + ?Sized>(scene: &mut Scene, root: &LayerHandle<L>) {
         let mut root = root.borrow_mut();
 
-        // One bubble pass settles every layer's dirty flags so the compose pass reads them in O(1).
+        // Settle every dirty flag before composing; compose reads them to decide cache reuse.
         root.update_dirty();
         root.compose(&mut Compositor { scene });
     }
@@ -160,12 +159,21 @@ impl Compositor<'_> {
     pub fn pop_transform(&mut self) {
         self.scene.push(PaintCommand::PopTransform);
     }
+
+    /// Begins a composited group; everything emitted until [`pop_layer`](Compositor::pop_layer) is
+    /// composited as one and blended into the scene.
+    pub fn push_layer(&mut self, blend: BlendMode, alpha: f32, clip: PaintShape) {
+        self.scene
+            .push(PaintCommand::PushLayer { blend, alpha, clip });
+    }
+
+    /// Ends the most recent [`push_layer`](Compositor::push_layer).
+    pub fn pop_layer(&mut self) {
+        self.scene.push(PaintCommand::PopLayer);
+    }
 }
 
 /// A layer that applies a transform to its children.
-///
-/// The transform can change every frame — through [`set_transform`](TransformLayer::set_transform) on
-/// a held [`LayerHandle`] — without repainting the children.
 pub struct TransformLayer {
     transform: Affine,
     dirty: bool,
@@ -209,6 +217,57 @@ impl Layer for TransformLayer {
 }
 
 impl Container for TransformLayer {
+    fn append(&mut self, child: LayerHandle) {
+        self.children.append(child);
+    }
+}
+
+/// A layer that applies a reduced opacity to its children.
+pub struct OpacityLayer {
+    alpha: f32,
+    clip: PaintShape,
+    dirty: bool,
+    children: ChildLayers,
+}
+
+impl OpacityLayer {
+    pub fn new(alpha: f32, clip: PaintShape) -> Self {
+        Self {
+            alpha,
+            clip,
+            dirty: false,
+            children: ChildLayers::new(),
+        }
+    }
+
+    /// Replaces the opacity applied to the children.
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.alpha = alpha;
+        self.dirty = true;
+    }
+}
+
+impl Layer for OpacityLayer {
+    fn compose(&mut self, compositor: &mut Compositor) {
+        compositor.push_layer(
+            BlendMode::new(Mix::Normal, Compose::SrcOver),
+            self.alpha,
+            self.clip.clone(),
+        );
+        {
+            self.children.embed(compositor);
+        }
+        compositor.pop_layer();
+
+        self.dirty = false;
+    }
+
+    fn update_dirty(&mut self) -> bool {
+        self.children.update_dirty() || self.dirty
+    }
+}
+
+impl Container for OpacityLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
     }

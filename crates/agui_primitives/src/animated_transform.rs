@@ -147,6 +147,11 @@ where
         self.handle = None;
         self.child.unmount(ctx);
     }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        // The subtree is painted into a retained transform layer, so this node always composites.
+        true
+    }
 }
 
 impl<Child> RenderBox for RenderAnimatedTransform<Child>
@@ -263,6 +268,9 @@ mod tests {
     impl RenderObject for RenderCounter {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
     }
 
     impl RenderBox for RenderCounter {

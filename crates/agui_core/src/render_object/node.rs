@@ -16,6 +16,7 @@ pub struct RenderNode<R, P = ()> {
 
     size: Option<Size>,
     parent_uses_size: bool,
+    needs_compositing: bool,
 }
 
 impl<R, P: Default> RenderNode<R, P> {
@@ -26,6 +27,7 @@ impl<R, P: Default> RenderNode<R, P> {
 
             size: None,
             parent_uses_size: false,
+            needs_compositing: false,
         }
     }
 }
@@ -38,6 +40,7 @@ impl<R, P> RenderNode<R, P> {
 
             size: None,
             parent_uses_size: false,
+            needs_compositing: false,
         }
     }
 }
@@ -49,6 +52,16 @@ impl<R: RenderObject, P> RenderNode<R, P> {
 
     pub fn unmount(&mut self, ctx: &mut MountCtx) {
         self.object.unmount(ctx);
+    }
+
+    pub fn update_compositing_bits(&mut self) -> bool {
+        self.needs_compositing = self.object.update_compositing_bits();
+        self.needs_compositing
+    }
+
+    /// Whether this child's subtree contributes a compositing layer, as of the last recompute.
+    pub fn needs_compositing(&self) -> bool {
+        self.needs_compositing
     }
 }
 
@@ -138,6 +151,10 @@ mod tests {
         fn mount(&mut self, _: &mut MountCtx) {}
 
         fn unmount(&mut self, _: &mut MountCtx) {}
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
+        }
     }
 
     impl<C: RenderBox> RenderBox for RenderPad<C> {
@@ -404,6 +421,10 @@ mod tests {
         fn mount(&mut self, _: &mut MountCtx) {}
 
         fn unmount(&mut self, _: &mut MountCtx) {}
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
     }
 
     impl RenderBox for RenderOther {

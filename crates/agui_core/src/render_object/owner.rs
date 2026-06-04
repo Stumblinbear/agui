@@ -41,11 +41,11 @@ struct Boundary {
     layer: LayerHandle<ContainerLayer>,
 }
 
-/// The boundaries awaiting repaint, plus the hook that asks the driver to schedule a frame when the
-/// first one becomes dirty on an otherwise clean owner.
+/// The boundaries awaiting repaint or a bit recompute, and the hook that schedules a frame.
 #[derive(Default)]
 struct Pending {
     dirty: FnvHashSet<BoundaryId>,
+    needs_compositing: FnvHashSet<BoundaryId>,
     notify: Option<Box<dyn Fn()>>,
 }
 
@@ -59,9 +59,8 @@ impl RenderOwner {
         }
     }
 
-    /// Sets the hook called when the first boundary becomes dirty on an otherwise clean owner, so the
-    /// driver can schedule a frame. It does not fire for further marks until the next
-    /// [`flush_paint`](RenderOwner::flush_paint) clears the dirty set. Replacing it drops the previous.
+    /// Sets the hook the owner calls to have the driver schedule a frame, fired when a mark first
+    /// dirties an otherwise clean owner. Replacing it drops the previous.
     pub fn on_needs_visual_update(&mut self, callback: impl Fn() + 'static) {
         self.pending.borrow_mut().notify = Some(Box::new(callback));
     }
@@ -79,12 +78,15 @@ impl RenderOwner {
     ) -> PaintBoundaryHandle {
         let id = self.boundaries.insert(Boundary { content, layer });
 
-        // A fresh boundary has never been painted, so it is dirty until its first frame.
-        self.pending
-            .try_borrow_mut()
-            .expect("boundaries cannot be registered during paint")
-            .dirty
-            .insert(id);
+        // A fresh boundary has never been painted and its bits have never been computed.
+        {
+            let mut pending = self
+                .pending
+                .try_borrow_mut()
+                .expect("boundaries cannot be registered during paint");
+            pending.dirty.insert(id);
+            pending.needs_compositing.insert(id);
+        }
 
         tracing::debug!(boundary = ?id, "registered repaint boundary");
 
@@ -108,11 +110,14 @@ impl RenderOwner {
 
         self.boundaries.remove(id);
 
-        self.pending
-            .try_borrow_mut()
-            .expect("boundaries cannot be unregistered during paint")
-            .dirty
-            .remove(&id);
+        {
+            let mut pending = self
+                .pending
+                .try_borrow_mut()
+                .expect("boundaries cannot be unregistered during paint");
+            pending.dirty.remove(&id);
+            pending.needs_compositing.remove(&id);
+        }
 
         tracing::debug!(boundary = ?id, "unregistered repaint boundary");
 
@@ -130,6 +135,16 @@ impl RenderOwner {
             .try_borrow_mut()
             .expect("cannot flush paint during paint");
 
+        tracing::debug!(
+            count = pending.needs_compositing.len(),
+            "recomputing compositing bits"
+        );
+
+        // Paint reads the bits, so settle them before repainting anything.
+        for id in pending.needs_compositing.drain() {
+            self.recompute_compositing_bits(id);
+        }
+
         tracing::debug!(count = pending.dirty.len(), "flushing paint");
 
         for id in pending.dirty.drain() {
@@ -137,15 +152,21 @@ impl RenderOwner {
         }
     }
 
+    fn recompute_compositing_bits(&mut self, id: BoundaryId) {
+        self.boundaries[id]
+            .content
+            .borrow_mut()
+            .update_compositing_bits();
+    }
+
     fn repaint(&mut self, id: BoundaryId) {
         tracing::debug!(boundary = ?id, "repainting boundary");
 
         let boundary = &self.boundaries[id];
-        let content = Rc::clone(&boundary.content);
         let layer = boundary.layer.clone();
 
         layer.borrow_mut().clear();
-        PaintCtx::paint(&layer, |ctx| content.borrow_mut().paint(ctx));
+        PaintCtx::paint(&layer, |ctx| boundary.content.borrow_mut().paint(ctx));
     }
 
     /// Mounts `content` as the root view: registers it as the root boundary painting into the root
@@ -274,6 +295,13 @@ impl PaintScope {
             notify();
         }
     }
+
+    /// Marks the boundary's compositing bits for recomputation before its next repaint, and the
+    /// boundary for repaint.
+    pub fn mark_needs_compositing_update(&self) {
+        self.pending.borrow_mut().needs_compositing.insert(self.id);
+        self.mark_needs_paint();
+    }
 }
 
 /// A registered boundary, returned to the render object that registered it. It owns the boundary's
@@ -293,6 +321,11 @@ impl PaintBoundaryHandle {
     /// Marks this boundary to be repainted on the next [`flush_paint`](RenderOwner::flush_paint).
     pub fn mark_needs_paint(&self) {
         self.scope.mark_needs_paint();
+    }
+
+    /// Marks this boundary's compositing bits for recomputation before its next repaint.
+    pub fn mark_needs_compositing_update(&self) {
+        self.scope.mark_needs_compositing_update();
     }
 }
 
@@ -375,6 +408,9 @@ mod tests {
     impl RenderObject for Counter {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
     }
 
     impl RenderBox for Counter {
@@ -392,6 +428,9 @@ mod tests {
     impl RenderObject for Embedder {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
     }
 
     impl RenderBox for Embedder {
@@ -412,6 +451,28 @@ mod tests {
         }
     }
 
+    struct Probe {
+        paints: Rc<Cell<usize>>,
+        bits: Rc<Cell<usize>>,
+    }
+
+    impl RenderObject for Probe {
+        fn mount(&mut self, _: &mut MountCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {}
+        fn update_compositing_bits(&mut self) -> bool {
+            self.bits.set(self.bits.get() + 1);
+            false
+        }
+    }
+
+    impl RenderBox for Probe {
+        trivial_box_layout!();
+
+        fn paint(&mut self, _: &mut PaintCtx) {
+            self.paints.set(self.paints.get() + 1);
+        }
+    }
+
     fn content(render: impl AnyRenderBox + 'static) -> BoundaryContent {
         Rc::new(RefCell::new(Box::new(render) as Box<dyn AnyRenderBox>))
     }
@@ -429,8 +490,6 @@ mod tests {
             .count()
     }
 
-    /// Marking one boundary repaints only it; the clean parent boundary is not repainted, yet the
-    /// composed scene still contains the child because the parent embeds it by its retained layer.
     #[test]
     fn marking_a_boundary_repaints_only_it() {
         let root_paints = Rc::new(Cell::new(0));
@@ -484,7 +543,6 @@ mod tests {
         );
     }
 
-    /// A second frame with nothing marked repaints nothing.
     #[test]
     fn a_clean_frame_repaints_nothing() {
         let paints = Rc::new(Cell::new(0));
@@ -508,8 +566,6 @@ mod tests {
         );
     }
 
-    /// The visual-update hook fires on the clean-to-dirty edge so the driver schedules a frame, and not
-    /// again until a flush clears the dirty set.
     #[test]
     fn marking_schedules_a_frame_on_the_clean_to_dirty_edge() {
         let mut owner = RenderOwner::new();
@@ -546,8 +602,39 @@ mod tests {
         );
     }
 
-    /// The whole loop: an animation marks its boundary from a per-frame callback, and each frame
-    /// repaints only that boundary while a static sibling is painted once and then reused.
+    #[test]
+    fn compositing_update_is_a_separate_channel_from_paint() {
+        let paints = Rc::new(Cell::new(0));
+        let bits = Rc::new(Cell::new(0));
+
+        let mut owner = RenderOwner::new();
+        let boundary = owner.register(
+            content(Probe {
+                paints: Rc::clone(&paints),
+                bits: Rc::clone(&bits),
+            }),
+            layer(),
+        );
+
+        owner.flush_paint();
+        assert_eq!(paints.get(), 1);
+        assert_eq!(
+            bits.get(),
+            1,
+            "registration computes the bits for the first frame"
+        );
+
+        boundary.mark_needs_paint();
+        owner.flush_paint();
+        assert_eq!(paints.get(), 2, "the boundary repainted");
+        assert_eq!(bits.get(), 1, "a paint mark does not recompute bits");
+
+        boundary.mark_needs_compositing_update();
+        owner.flush_paint();
+        assert_eq!(paints.get(), 3, "the boundary repainted");
+        assert_eq!(bits.get(), 2, "a compositing mark recomputes bits");
+    }
+
     #[test]
     fn an_animation_repaints_only_its_own_boundary() {
         let vsync = Vsync::new();

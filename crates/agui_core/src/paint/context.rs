@@ -21,9 +21,6 @@ pub struct PaintCtx<'a> {
     container: &'a mut dyn Container,
     /// The picture currently accumulating flat drawing.
     picture: Scene,
-    /// The transform brackets open right now, outermost first; their product is the transform a
-    /// contributed layer is placed under.
-    transforms: Vec<Affine>,
 }
 
 impl PaintCtx<'_> {
@@ -34,7 +31,6 @@ impl PaintCtx<'_> {
         let mut ctx = PaintCtx {
             container: &mut *root,
             picture: Scene::new(),
-            transforms: Vec::new(),
         };
         build(&mut ctx);
         ctx.flush();
@@ -46,20 +42,54 @@ impl PaintCtx<'_> {
     }
 
     /// Records the enclosed painting under `transform`, concatenated onto the transform already in
-    /// effect. A layer contributed inside is placed under the same transform.
-    pub fn with_transform(&mut self, transform: Affine, f: impl FnOnce(&mut Self)) {
+    /// effect.
+    ///
+    /// `needs_compositing` determines whether the enclosed subtree contributes a retained layer: when
+    /// it does, the transform is applied at the layer level so a composited child is transformed
+    /// correctly. Otherwise, it is a flat transform over the drawing.
+    pub fn with_transform(
+        &mut self,
+        needs_compositing: bool,
+        transform: Affine,
+        f: impl FnOnce(&mut PaintCtx),
+    ) {
+        if needs_compositing {
+            self.flush();
+
+            let layer = LayerHandle::new(TransformLayer::new(transform));
+            {
+                let mut guard = layer.borrow_mut();
+
+                let mut ctx = PaintCtx {
+                    container: &mut *guard,
+                    picture: Scene::new(),
+                };
+
+                f(&mut ctx);
+
+                ctx.flush();
+            }
+            self.container.append(layer.into());
+
+            return;
+        }
+
         self.picture.push(PaintCommand::PushTransform(transform));
-        self.transforms.push(transform);
-
-        f(self);
-
-        self.transforms.pop();
+        {
+            f(self);
+        }
         self.picture.push(PaintCommand::PopTransform);
     }
 
-    /// Translates the coordinate system by `offset` for the enclosed painting.
-    pub fn with_offset(&mut self, offset: Offset, f: impl FnOnce(&mut Self)) {
-        self.with_transform(Affine::translate(offset), f);
+    /// Translates the coordinate system by `offset` for the enclosed painting. See
+    /// [`with_transform`](PaintCtx::with_transform) for `needs_compositing`.
+    pub fn with_offset(
+        &mut self,
+        needs_compositing: bool,
+        offset: Offset,
+        f: impl FnOnce(&mut PaintCtx),
+    ) {
+        self.with_transform(needs_compositing, Affine::translate(offset), f);
     }
 
     /// Contributes a retained layer and paints `paint_into` as its content. Use it for a subtree worth
@@ -76,36 +106,19 @@ impl PaintCtx<'_> {
             let mut ctx = PaintCtx {
                 container: &mut *guard,
                 picture: Scene::new(),
-                transforms: Vec::new(),
             };
             paint_into(&mut ctx);
             ctx.flush();
         }
 
-        self.place(layer.into());
+        self.container.append(layer.into());
     }
 
     /// Contributes an already-built retained layer, painting nothing into it. Use it to reuse a layer
     /// whose content is unchanged.
     pub fn add_layer(&mut self, layer: LayerHandle) {
         self.flush();
-        self.place(layer);
-    }
-
-    /// Appends `layer` to the container, under the transform in effect.
-    fn place(&mut self, layer: LayerHandle) {
-        let transform = self
-            .transforms
-            .iter()
-            .fold(Affine::IDENTITY, |acc, t| acc * *t);
-
-        if transform == Affine::IDENTITY {
-            self.container.append(layer);
-        } else {
-            let mut wrapper = TransformLayer::new(transform);
-            wrapper.append(layer);
-            self.container.append(LayerHandle::new(wrapper).into());
-        }
+        self.container.append(layer);
     }
 
     /// Appends the flat drawing accumulated so far as a [`PictureLayer`], then starts a fresh picture.
@@ -116,22 +129,15 @@ impl PaintCtx<'_> {
                 PaintCommand::PushTransform(_) | PaintCommand::PopTransform
             )
         });
+
         if !has_drawing {
             return;
         }
 
-        // Balance the open brackets so the sealed picture stands on its own.
-        for _ in &self.transforms {
-            self.picture.push(PaintCommand::PopTransform);
-        }
         let picture = std::mem::take(&mut self.picture);
+
         self.container
             .append(LayerHandle::new(PictureLayer::new(picture)).into());
-
-        // Re-open them so drawing after the layer keeps the same transform.
-        for &transform in &self.transforms {
-            self.picture.push(PaintCommand::PushTransform(transform));
-        }
     }
 }
 
@@ -200,7 +206,7 @@ mod tests {
     fn an_offset_places_flat_drawing_under_it() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.with_offset(Offset::new(5.0_f32, 7.0_f32), fill);
+            ctx.with_offset(false, Offset::new(5.0_f32, 7.0_f32), fill);
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::translate((5.0, 7.0))]);
@@ -222,7 +228,7 @@ mod tests {
     fn a_layer_inside_a_bracket_is_placed_under_it() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.with_offset(Offset::new(3.0_f32, 0.0_f32), |ctx| {
+            ctx.with_offset(true, Offset::new(3.0_f32, 0.0_f32), |ctx| {
                 ctx.add_layer(fill_layer());
             });
         });
@@ -236,7 +242,7 @@ mod tests {
     fn drawing_resumes_under_the_same_bracket_after_a_layer() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.with_offset(Offset::new(2.0_f32, 0.0_f32), |ctx| {
+            ctx.with_offset(true, Offset::new(2.0_f32, 0.0_f32), |ctx| {
                 fill(ctx);
                 ctx.add_layer(fill_layer());
                 fill(ctx);
