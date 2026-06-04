@@ -1,6 +1,7 @@
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
+    alignment::Alignment,
     constraints::Constraints,
     context::{Dispatch, UpdateCtx},
     element::SingleChildElement,
@@ -14,14 +15,16 @@ use agui_core::{
     widget::Widget,
 };
 
-/// A widget that sizes its child to a fraction of the space it is given.
+/// A widget that sizes its child to a fraction of the space it is given, then positions it within.
 ///
 /// On each axis that has a factor, the child is sized tightly to that fraction of the incoming
-/// maximum; an axis with no factor passes the incoming constraints through. The box then takes its
-/// child's size. The child is painted at the top-left.
+/// maximum; an axis with no factor passes the incoming constraints through. The box takes its child's
+/// size, constrained to what it was given. When that leaves the box larger than the child, `alignment`
+/// places the child within it, centered by default.
 pub struct FractionallySizedBox<Child> {
     width_factor: Option<PositiveFinite<f32>>,
     height_factor: Option<PositiveFinite<f32>>,
+    alignment: Alignment,
 
     child: Child,
 }
@@ -31,6 +34,7 @@ impl Default for FractionallySizedBox<()> {
         Self {
             width_factor: None,
             height_factor: None,
+            alignment: Alignment::CENTER,
 
             child: (),
         }
@@ -52,7 +56,6 @@ impl FractionallySizedBox<()> {
                 PositiveFinite::try_from(factor)
                     .expect("width factor must be a non-negative finite number"),
             ),
-
             ..self
         }
     }
@@ -67,15 +70,21 @@ impl FractionallySizedBox<()> {
                 PositiveFinite::try_from(factor)
                     .expect("height factor must be a non-negative finite number"),
             ),
-
             ..self
         }
+    }
+
+    /// Where to place the child when the box ends up larger than it. Defaults to
+    /// [`Alignment::CENTER`].
+    pub fn alignment(self, alignment: Alignment) -> Self {
+        Self { alignment, ..self }
     }
 
     pub fn child<Child>(self, child: Child) -> FractionallySizedBox<Child> {
         FractionallySizedBox {
             width_factor: self.width_factor,
             height_factor: self.height_factor,
+            alignment: self.alignment,
 
             child,
         }
@@ -107,25 +116,34 @@ where
         RenderFractionallySizedBox {
             width_factor: self.width_factor,
             height_factor: self.height_factor,
+            alignment: self.alignment,
 
             child: RenderNode::new(element.create_render_object(&self.child)),
         }
     }
 
     fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        // TODO(trevin): mark it for re-layout if the factors have changed
+        // TODO(trevin): mark it for re-layout if the factors or alignment have changed
         render_object.width_factor = self.width_factor;
         render_object.height_factor = self.height_factor;
+        render_object.alignment = self.alignment;
 
         element.update_render_object(&self.child, &mut render_object.child.object);
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ChildParentData {
+    size: Size,
+    offset: Offset,
+}
+
 pub struct RenderFractionallySizedBox<Child> {
     width_factor: Option<PositiveFinite<f32>>,
     height_factor: Option<PositiveFinite<f32>>,
+    alignment: Alignment,
 
-    child: RenderNode<Child, Option<Size>>,
+    child: RenderNode<Child, Option<ChildParentData>>,
 }
 
 impl<Child> RenderFractionallySizedBox<Child> {
@@ -203,10 +221,16 @@ where
         let child_size = self
             .child
             .layout_and_get_size(self.inner_constraints(constraints));
+        let size = constraints.constrain(child_size);
 
-        self.child.parent_data = Some(child_size);
+        let offset = self.alignment.along_offset(Offset::new(
+            size.width.get() - child_size.width.get(),
+            size.height.get() - child_size.height.get(),
+        ));
 
-        constraints.constrain(child_size)
+        self.child.parent_data = Some(ChildParentData { size, offset });
+
+        size
     }
 
     fn measure_baseline(
@@ -223,21 +247,26 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        let child_size = self
-            .child
-            .parent_data
-            .as_ref()
-            .expect("child has not been laid out");
+        let ChildParentData { size, offset } =
+            self.child.parent_data.expect("child has not been laid out");
 
-        if !child_size.contains(position) {
+        if !size.contains(position) {
             return HitTest::Pass;
         }
 
-        self.child.hit_test(result, position)
+        result.with_offset(offset, position, |result, transformed| {
+            self.child.hit_test(result, transformed)
+        })
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        self.child.paint(ctx, offset);
+        let child_offset = self
+            .child
+            .parent_data
+            .expect("child has not been laid out")
+            .offset;
+
+        self.child.paint(ctx, offset + child_offset);
     }
 }
 
@@ -250,15 +279,63 @@ mod tests {
     #[test]
     fn sizes_child_to_a_fraction_of_the_constraints() {
         let widget = FractionallySizedBox::new()
-            .width_factor(0.5)
-            .height_factor(1.0);
+            .width_factor(0.5_f32)
+            .height_factor(1.0_f32);
 
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
         let size = render_object.layout(Constraints::new(0, 200, 0, 100));
 
-        assert_eq!(render_object.child.parent_data, Some(Size::new(100, 100)));
         assert_eq!(size, Size::new(100, 100));
+        assert_eq!(
+            render_object.child.parent_data,
+            Some(ChildParentData {
+                size: Size::new(100, 100),
+                offset: Offset::ZERO,
+            }),
+            "loose constraints leave the box at the child's size, so there is nothing to align"
+        );
+    }
+
+    #[test]
+    fn alignment_centers_the_child_when_the_box_is_forced_larger() {
+        // A tight 200x200 forces the box to 200 while the factor sizes the child to 100; the default
+        // center alignment then places the child at (50, 50).
+        let widget = FractionallySizedBox::new()
+            .width_factor(0.5_f32)
+            .height_factor(0.5_f32);
+
+        let mut render_object =
+            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+
+        let size = render_object.layout(Constraints::new(200, 200, 200, 200));
+
+        assert_eq!(size, Size::new(200, 200));
+        assert_eq!(
+            render_object.child.parent_data,
+            Some(ChildParentData {
+                size: Size::new(200, 200),
+                offset: Offset::new(50.0_f32, 50.0),
+            })
+        );
+    }
+
+    #[test]
+    fn top_left_alignment_pins_the_child_to_the_origin() {
+        let widget = FractionallySizedBox::new()
+            .width_factor(0.5_f32)
+            .height_factor(0.5_f32)
+            .alignment(Alignment::TOP_LEFT);
+
+        let mut render_object =
+            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+
+        render_object.layout(Constraints::new(200, 200, 200, 200));
+
+        assert_eq!(
+            render_object.child.parent_data.unwrap().offset,
+            Offset::ZERO
+        );
     }
 }
