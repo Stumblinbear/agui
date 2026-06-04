@@ -230,7 +230,7 @@ mod tests {
         dispatcher.handle(
             &PointerEvent {
                 pointer: PointerId(1),
-                position: Offset::new(35.0_f32, 40.0),
+                position: Offset::new(35.0, 40.0),
                 kind: PointerEventKind::Down,
             },
             |position| owner.hit_test(position),

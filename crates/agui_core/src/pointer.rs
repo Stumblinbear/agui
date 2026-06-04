@@ -139,7 +139,7 @@ mod tests {
             });
 
             let mut result = HitTestResult::new();
-            result.with_offset(Offset::new(10.0_f32, 20.0), Offset::ZERO, |inner, _| {
+            result.with_offset(Offset::new(10.0, 20.0), Offset::ZERO, |inner, _| {
                 inner.add(Rc::clone(&handler));
                 HitTest::Absorb
             });

@@ -29,8 +29,8 @@ fn orange_half_pane_matches_golden() {
 
     // An orange box filling the left half, painted straight into a scene.
     let widget = FractionallySizedBox::new()
-        .width_factor(0.5_f32)
-        .height_factor(1.0_f32)
+        .width_factor(0.5)
+        .height_factor(1.0)
         .child(ColoredBox::new(Color::rgb8(255, 138, 0)));
 
     let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);

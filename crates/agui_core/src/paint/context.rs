@@ -232,7 +232,7 @@ mod tests {
     fn a_layer_added_at_an_offset_is_positioned_there() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.add_layer(fill_layer(), Offset::new(3.0_f32, 0.0_f32));
+            ctx.add_layer(fill_layer(), Offset::new(3.0, 0.0));
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::translate((3.0, 0.0))]);

@@ -250,8 +250,8 @@ mod tests {
     #[test]
     fn sizes_child_to_a_fraction_of_the_constraints() {
         let widget = FractionallySizedBox::new()
-            .width_factor(0.5_f32)
-            .height_factor(1.0_f32);
+            .width_factor(0.5)
+            .height_factor(1.0);
 
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);

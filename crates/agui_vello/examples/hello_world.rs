@@ -48,8 +48,8 @@ fn main() {
 
     // An orange box filling the left half of the window, listening for pointer events.
     let widget = FractionallySizedBox::new()
-        .width_factor(0.5_f32)
-        .height_factor(1.0_f32)
+        .width_factor(0.5)
+        .height_factor(1.0)
         .child(
             Listener::builder()
                 .on_pointer_down(on_down)

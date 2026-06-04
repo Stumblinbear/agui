@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn with_offset_brackets_drawing_in_push_pop_transform() {
         let scene = Canvas::record(|canvas| {
-            canvas.with_offset(Offset::new(5.0_f32, 7.0_f32), |canvas| {
+            canvas.with_offset(Offset::new(5.0, 7.0), |canvas| {
                 let black = canvas.brush(Color::BLACK);
 
                 canvas.fill(Fill::NonZero, black, &Rect::new(0.0, 0.0, 1.0, 1.0));
@@ -187,8 +187,8 @@ mod tests {
     #[test]
     fn nested_offsets_nest_push_transforms() {
         let scene = Canvas::record(|canvas| {
-            canvas.with_offset(Offset::new(10.0_f32, 0.0_f32), |canvas| {
-                canvas.with_offset(Offset::new(0.0_f32, 4.0_f32), |canvas| {
+            canvas.with_offset(Offset::new(10.0, 0.0), |canvas| {
+                canvas.with_offset(Offset::new(0.0, 4.0), |canvas| {
                     let white = canvas.brush(Color::WHITE);
 
                     canvas.fill(Fill::NonZero, white, &Rect::new(0.0, 0.0, 1.0, 1.0));

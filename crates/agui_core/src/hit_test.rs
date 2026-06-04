@@ -191,8 +191,8 @@ mod tests {
         let mut result = HitTestResult::new();
 
         let hit = result.with_offset(
-            Offset::new(10.0_f32, 20.0),
-            Offset::new(15.0_f32, 25.0),
+            Offset::new(10.0, 20.0),
+            Offset::new(15.0, 25.0),
             |_, local| {
                 assert_eq!(local.x.get(), 5.0);
                 assert_eq!(local.y.get(), 5.0);
@@ -209,15 +209,11 @@ mod tests {
         let mut result = HitTestResult::new();
 
         // The paint transform scales by two, so a hit at (10, 20) localizes to (5, 10).
-        let hit = result.with_transform(
-            Affine::scale(2.0),
-            Offset::new(10.0_f32, 20.0),
-            |_, local| {
-                assert_eq!(local.x.get(), 5.0);
-                assert_eq!(local.y.get(), 10.0);
-                HitTest::Absorb
-            },
-        );
+        let hit = result.with_transform(Affine::scale(2.0), Offset::new(10.0, 20.0), |_, local| {
+            assert_eq!(local.x.get(), 5.0);
+            assert_eq!(local.y.get(), 10.0);
+            HitTest::Absorb
+        });
 
         assert_eq!(hit, HitTest::Absorb);
     }
@@ -238,7 +234,7 @@ mod tests {
         let mut result = HitTestResult::new();
         let raw = Affine::scale(2.0);
 
-        result.with_raw_transform(raw, Offset::new(5.0_f32, 10.0), |inner, local| {
+        result.with_raw_transform(raw, Offset::new(5.0, 10.0), |inner, local| {
             assert_eq!(local.x.get(), 10.0);
             assert_eq!(local.y.get(), 20.0);
             assert_eq!(inner.current_transform(), raw);
@@ -260,7 +256,7 @@ mod tests {
         };
 
         let mut result = HitTestResult::new();
-        result.with_offset(Offset::new(10.0_f32, 20.0), Offset::ZERO, |inner, _| {
+        result.with_offset(Offset::new(10.0, 20.0), Offset::ZERO, |inner, _| {
             inner.add(Rc::clone(&handler));
             HitTest::Absorb
         });
@@ -269,7 +265,7 @@ mod tests {
 
         // Localizing a root-space (10, 20) through the captured transform lands at the child's origin.
         let transform = result.path()[0].global_transform();
-        let local = Offset::from(transform * Point::from(Offset::new(10.0_f32, 20.0)));
+        let local = Offset::from(transform * Point::from(Offset::new(10.0, 20.0)));
         result.path()[0].handler()(&PointerEvent {
             pointer: PointerId(0),
             position: local,

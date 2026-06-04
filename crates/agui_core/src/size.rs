@@ -306,8 +306,8 @@ mod tests {
 
     #[test]
     fn add_finite_sizes() {
-        let a = Size::new(10.0_f32, 20.0_f32);
-        let b = Size::new(5.0_f32, 3.0_f32);
+        let a = Size::new(10.0, 20.0);
+        let b = Size::new(5.0, 3.0);
         let c = a + b;
         assert_eq!(c.width.get(), 15.0);
         assert_eq!(c.height.get(), 23.0);
@@ -316,23 +316,23 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot add two opposite infinite widths")]
     fn add_opposite_infinite_widths_panics() {
-        let a = Size::new(f32::INFINITY, 0.0_f32);
-        let b = Size::new(f32::NEG_INFINITY, 0.0_f32);
+        let a = Size::new(f32::INFINITY, 0.0);
+        let b = Size::new(f32::NEG_INFINITY, 0.0);
         let _ = a + b;
     }
 
     #[test]
     #[should_panic(expected = "cannot add two opposite infinite heights")]
     fn add_opposite_infinite_heights_panics() {
-        let a = Size::new(0.0_f32, f32::INFINITY);
-        let b = Size::new(0.0_f32, f32::NEG_INFINITY);
+        let a = Size::new(0.0, f32::INFINITY);
+        let b = Size::new(0.0, f32::NEG_INFINITY);
         let _ = a + b;
     }
 
     #[test]
     fn sub_finite_sizes() {
-        let a = Size::new(10.0_f32, 20.0_f32);
-        let b = Size::new(3.0_f32, 5.0_f32);
+        let a = Size::new(10.0, 20.0);
+        let b = Size::new(3.0, 5.0);
         let c = a - b;
         assert_eq!(c.width.get(), 7.0);
         assert_eq!(c.height.get(), 15.0);
@@ -341,23 +341,23 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot subtract two infinite widths of the same sign")]
     fn sub_same_sign_infinite_widths_panics() {
-        let a = Size::new(f32::INFINITY, 0.0_f32);
-        let b = Size::new(f32::INFINITY, 0.0_f32);
+        let a = Size::new(f32::INFINITY, 0.0);
+        let b = Size::new(f32::INFINITY, 0.0);
         let _ = a - b;
     }
 
     #[test]
     #[should_panic(expected = "cannot subtract two infinite heights of the same sign")]
     fn sub_same_sign_infinite_heights_panics() {
-        let a = Size::new(0.0_f32, f32::NEG_INFINITY);
-        let b = Size::new(0.0_f32, f32::NEG_INFINITY);
+        let a = Size::new(0.0, f32::NEG_INFINITY);
+        let b = Size::new(0.0, f32::NEG_INFINITY);
         let _ = a - b;
     }
 
     #[test]
     fn mul_finite_sizes() {
-        let a = Size::new(3.0_f32, 4.0_f32);
-        let b = Size::new(2.0_f32, 5.0_f32);
+        let a = Size::new(3.0, 4.0);
+        let b = Size::new(2.0, 5.0);
         let c = a * b;
         assert_eq!(c.width.get(), 6.0);
         assert_eq!(c.height.get(), 20.0);
@@ -366,22 +366,22 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot multiply zero and zero width")]
     fn mul_zero_times_infinite_width_panics() {
-        let a = Size::new(0.0_f32, 1.0_f32);
-        let b = Size::new(f32::INFINITY, 1.0_f32);
+        let a = Size::new(0.0, 1.0);
+        let b = Size::new(f32::INFINITY, 1.0);
         let _ = a * b;
     }
 
     #[test]
     #[should_panic(expected = "cannot multiply zero and zero height")]
     fn mul_zero_times_infinite_height_panics() {
-        let a = Size::new(1.0_f32, 0.0_f32);
-        let b = Size::new(1.0_f32, f32::INFINITY);
+        let a = Size::new(1.0, 0.0);
+        let b = Size::new(1.0, f32::INFINITY);
         let _ = a * b;
     }
 
     #[test]
     fn mul_by_scalar() {
-        let a = Size::new(10.0_f32, 20.0_f32);
+        let a = Size::new(10.0, 20.0);
         let b = a * 3.0;
         assert_eq!(b.width.get(), 30.0);
         assert_eq!(b.height.get(), 60.0);
@@ -389,8 +389,8 @@ mod tests {
 
     #[test]
     fn div_finite_sizes() {
-        let a = Size::new(10.0_f32, 20.0_f32);
-        let b = Size::new(2.0_f32, 5.0_f32);
+        let a = Size::new(10.0, 20.0);
+        let b = Size::new(2.0, 5.0);
         let c = a / b;
         assert_eq!(c.width.get(), 5.0);
         assert_eq!(c.height.get(), 4.0);
@@ -399,39 +399,39 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot divide a zero width by a zero width")]
     fn div_zero_by_zero_width_panics() {
-        let a = Size::new(0.0_f32, 1.0_f32);
-        let b = Size::new(0.0_f32, 1.0_f32);
+        let a = Size::new(0.0, 1.0);
+        let b = Size::new(0.0, 1.0);
         let _ = a / b;
     }
 
     #[test]
     #[should_panic(expected = "cannot divide an infinite width by an infinite width")]
     fn div_infinite_by_infinite_width_panics() {
-        let a = Size::new(f32::INFINITY, 1.0_f32);
-        let b = Size::new(f32::INFINITY, 1.0_f32);
+        let a = Size::new(f32::INFINITY, 1.0);
+        let b = Size::new(f32::INFINITY, 1.0);
         let _ = a / b;
     }
 
     #[test]
     #[should_panic(expected = "cannot divide a zero height by a zero height")]
     fn div_zero_by_zero_height_panics() {
-        let a = Size::new(1.0_f32, 0.0_f32);
-        let b = Size::new(1.0_f32, 0.0_f32);
+        let a = Size::new(1.0, 0.0);
+        let b = Size::new(1.0, 0.0);
         let _ = a / b;
     }
 
     #[test]
     #[should_panic(expected = "cannot divide an infinite height by an infinite height")]
     fn div_infinite_by_infinite_height_panics() {
-        let a = Size::new(1.0_f32, f32::INFINITY);
-        let b = Size::new(1.0_f32, f32::INFINITY);
+        let a = Size::new(1.0, f32::INFINITY);
+        let b = Size::new(1.0, f32::INFINITY);
         let _ = a / b;
     }
 
     #[test]
     fn rem_finite_sizes() {
-        let a = Size::new(10.0_f32, 7.0_f32);
-        let b = Size::new(3.0_f32, 4.0_f32);
+        let a = Size::new(10.0, 7.0);
+        let b = Size::new(3.0, 4.0);
         let c = a % b;
         assert_eq!(c.width.get(), 1.0);
         assert_eq!(c.height.get(), 3.0);
@@ -440,14 +440,14 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot divide a zero width by a zero width")]
     fn rem_zero_by_zero_width_panics() {
-        let a = Size::new(0.0_f32, 1.0_f32);
-        let b = Size::new(0.0_f32, 1.0_f32);
+        let a = Size::new(0.0, 1.0);
+        let b = Size::new(0.0, 1.0);
         let _ = a % b;
     }
 
     #[test]
     fn neg_flips_sign() {
-        let a = Size::new(10.0_f32, -5.0_f32);
+        let a = Size::new(10.0, -5.0);
         let b = -a;
         assert_eq!(b.width.get(), -10.0);
         assert_eq!(b.height.get(), 5.0);
@@ -456,18 +456,18 @@ mod tests {
     #[test]
     fn is_zero_and_predicates() {
         assert!(Size::ZERO.is_zero());
-        assert!(!Size::new(1.0_f32, 1.0_f32).is_zero());
+        assert!(!Size::new(1.0, 1.0).is_zero());
 
-        assert!(Size::new(1.0_f32, 1.0_f32).is_positive());
-        assert!(!Size::new(-1.0_f32, 1.0_f32).is_positive());
+        assert!(Size::new(1.0, 1.0).is_positive());
+        assert!(!Size::new(-1.0, 1.0).is_positive());
 
-        assert!(Size::new(-1.0_f32, -1.0_f32).is_negative());
-        assert!(!Size::new(1.0_f32, -1.0_f32).is_negative());
+        assert!(Size::new(-1.0, -1.0).is_negative());
+        assert!(!Size::new(1.0, -1.0).is_negative());
 
         assert!(Size::new(f32::INFINITY, f32::INFINITY).is_infinite());
-        assert!(!Size::new(1.0_f32, f32::INFINITY).is_infinite());
+        assert!(!Size::new(1.0, f32::INFINITY).is_infinite());
 
-        assert!(Size::new(1.0_f32, 1.0_f32).is_finite());
-        assert!(!Size::new(f32::INFINITY, 1.0_f32).is_finite());
+        assert!(Size::new(1.0, 1.0).is_finite());
+        assert!(!Size::new(f32::INFINITY, 1.0).is_finite());
     }
 }

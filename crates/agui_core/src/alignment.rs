@@ -119,66 +119,57 @@ mod tests {
 
     #[test]
     fn along_size_names_a_point_in_the_box() {
-        let size = Size::new(100.0_f32, 40.0);
+        let size = Size::new(100.0, 40.0);
 
-        assert_eq!(
-            Alignment::TOP_LEFT.along_size(size),
-            Offset::new(0.0_f32, 0.0)
-        );
-        assert_eq!(
-            Alignment::CENTER.along_size(size),
-            Offset::new(50.0_f32, 20.0)
-        );
+        assert_eq!(Alignment::TOP_LEFT.along_size(size), Offset::new(0.0, 0.0));
+        assert_eq!(Alignment::CENTER.along_size(size), Offset::new(50.0, 20.0));
         assert_eq!(
             Alignment::BOTTOM_RIGHT.along_size(size),
-            Offset::new(100.0_f32, 40.0)
+            Offset::new(100.0, 40.0)
         );
         assert_eq!(
             Alignment::TOP_CENTER.along_size(size),
-            Offset::new(50.0_f32, 0.0)
+            Offset::new(50.0, 0.0)
         );
     }
 
     #[test]
     fn a_fraction_outside_the_unit_range_lands_outside_the_box() {
-        let size = Size::new(100.0_f32, 100.0);
+        let size = Size::new(100.0, 100.0);
 
         assert_eq!(
-            Alignment::new(2.0_f32, -2.0).along_size(size),
-            Offset::new(150.0_f32, -50.0)
+            Alignment::new(2.0, -2.0).along_size(size),
+            Offset::new(150.0, -50.0)
         );
     }
 
     #[test]
     fn within_rect_is_relative_to_the_rect_origin() {
-        let rect = Rect::new(10.0_f32, 20.0, 100.0, 40.0);
+        let rect = Rect::new(10.0, 20.0, 100.0, 40.0);
 
-        assert_eq!(
-            Alignment::CENTER.within_rect(rect),
-            Offset::new(60.0_f32, 40.0)
-        );
+        assert_eq!(Alignment::CENTER.within_rect(rect), Offset::new(60.0, 40.0));
         assert_eq!(
             Alignment::TOP_LEFT.within_rect(rect),
-            Offset::new(10.0_f32, 20.0)
+            Offset::new(10.0, 20.0)
         );
     }
 
     #[test]
     fn inscribe_places_a_smaller_box_by_its_alignment() {
-        let rect = Rect::new(0.0_f32, 0.0, 100.0, 100.0);
-        let size = Size::new(20.0_f32, 20.0);
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let size = Size::new(20.0, 20.0);
 
         assert_eq!(
             Alignment::CENTER.inscribe(size, rect),
-            Rect::new(40.0_f32, 40.0, 20.0, 20.0)
+            Rect::new(40.0, 40.0, 20.0, 20.0)
         );
         assert_eq!(
             Alignment::TOP_LEFT.inscribe(size, rect),
-            Rect::new(0.0_f32, 0.0, 20.0, 20.0)
+            Rect::new(0.0, 0.0, 20.0, 20.0)
         );
         assert_eq!(
             Alignment::BOTTOM_RIGHT.inscribe(size, rect),
-            Rect::new(80.0_f32, 80.0, 20.0, 20.0)
+            Rect::new(80.0, 80.0, 20.0, 20.0)
         );
     }
 }

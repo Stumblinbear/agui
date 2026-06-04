@@ -283,7 +283,7 @@ mod tests {
     /// A pure translation is folded into the paint offset, emitting no transform command.
     #[test]
     fn a_translation_folds_into_the_offset() {
-        let widget = Transform::translate(Offset::new(5.0_f32, 7.0)).child(boxed());
+        let widget = Transform::translate(Offset::new(5.0, 7.0)).child(boxed());
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
         render.layout(Constraints::new(0, 100, 0, 100));
         render.update_compositing_bits();
