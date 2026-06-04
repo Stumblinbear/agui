@@ -244,7 +244,7 @@ where
         HitTest::Pass
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx) {}
+    fn paint(&mut self, _ctx: &mut PaintCtx, _offset: Offset) {}
 }
 
 #[cfg(test)]

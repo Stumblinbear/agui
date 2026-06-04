@@ -11,11 +11,12 @@ use crate::{
 
 /// The surface a render object paints onto.
 ///
-/// It accepts flat drawing through [`canvas`](PaintContext::canvas) and retained layers through
-/// [`push_layer`](PaintContext::push_layer) or [`add_layer`](PaintContext::add_layer), preserving the
-/// order they are issued in. Drawing is in local coordinates;
-/// [`with_offset`](PaintContext::with_offset) and [`with_transform`](PaintContext::with_transform)
-/// place the enclosed drawing — and any layer contributed within — under a transform.
+/// It accepts flat drawing through [`canvas`](PaintCtx::canvas) and retained layers through
+/// [`push_layer`](PaintCtx::push_layer) or [`add_layer`](PaintCtx::add_layer), preserving the order
+/// they are issued in. A render object positions itself by the `offset` passed to its paint and draws
+/// at that offset, so a translation costs nothing here. For a genuine transform like a rotation, use
+/// [`with_transform`](PaintCtx::with_transform), which brackets the enclosed drawing and any layer
+/// contributed within it.
 pub struct PaintCtx<'a> {
     /// Where sealed pictures and contributed layers are appended.
     container: &'a mut dyn Container,
@@ -81,22 +82,13 @@ impl PaintCtx<'_> {
         self.picture.push(PaintCommand::PopTransform);
     }
 
-    /// Translates the coordinate system by `offset` for the enclosed painting. See
-    /// [`with_transform`](PaintCtx::with_transform) for `needs_compositing`.
-    pub fn with_offset(
-        &mut self,
-        needs_compositing: bool,
-        offset: Offset,
-        f: impl FnOnce(&mut PaintCtx),
-    ) {
-        self.with_transform(needs_compositing, Affine::translate(offset), f);
-    }
-
-    /// Contributes a retained layer and paints `paint_into` as its content. Use it for a subtree worth
-    /// keeping across frames, so it can be reused without repainting.
+    /// Contributes a retained layer at `offset` and paints `paint_into` as its content. Use it for a
+    /// subtree worth keeping across frames, so it can be reused without repainting. The content is
+    /// painted in the layer's own coordinates, so `paint_into` should paint at [`Offset::ZERO`].
     pub fn push_layer<L: Container + 'static>(
         &mut self,
         layer: LayerHandle<L>,
+        offset: Offset,
         paint_into: impl FnOnce(&mut PaintCtx),
     ) {
         self.flush();
@@ -111,14 +103,26 @@ impl PaintCtx<'_> {
             ctx.flush();
         }
 
-        self.container.append(layer.into());
+        self.place(layer.into(), offset);
     }
 
-    /// Contributes an already-built retained layer, painting nothing into it. Use it to reuse a layer
-    /// whose content is unchanged.
-    pub fn add_layer(&mut self, layer: LayerHandle) {
+    /// Contributes an already-built retained layer at `offset`, painting nothing into it. Use it to
+    /// reuse a layer whose content is unchanged.
+    pub fn add_layer(&mut self, layer: LayerHandle, offset: Offset) {
         self.flush();
-        self.container.append(layer);
+        self.place(layer, offset);
+    }
+
+    /// Appends `layer`, positioned at `offset`.
+    fn place(&mut self, layer: LayerHandle, offset: Offset) {
+        if offset == Offset::ZERO {
+            self.container.append(layer);
+            return;
+        }
+
+        let positioned = LayerHandle::new(TransformLayer::new(Affine::translate(offset)));
+        positioned.borrow_mut().append(layer);
+        self.container.append(positioned.into());
     }
 
     /// Appends the flat drawing accumulated so far as a [`PictureLayer`], then starts a fresh picture.
@@ -203,10 +207,10 @@ mod tests {
     }
 
     #[test]
-    fn an_offset_places_flat_drawing_under_it() {
+    fn a_flat_transform_places_drawing_under_it() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.with_offset(false, Offset::new(5.0_f32, 7.0_f32), fill);
+            ctx.with_transform(false, Affine::translate((5.0, 7.0)), fill);
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::translate((5.0, 7.0))]);
@@ -216,35 +220,33 @@ mod tests {
     fn a_pushed_layer_carries_its_content() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.push_layer(LayerHandle::new(ContainerLayer::new()), fill);
+            ctx.push_layer(LayerHandle::new(ContainerLayer::new()), Offset::ZERO, fill);
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::IDENTITY]);
     }
 
-    /// A layer contributed inside a transform bracket is placed under that transform, even though it
-    /// escapes the current picture into the container.
+    /// A layer added at an offset is positioned there, even though it escapes the current picture into
+    /// the container.
     #[test]
-    fn a_layer_inside_a_bracket_is_placed_under_it() {
+    fn a_layer_added_at_an_offset_is_positioned_there() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.with_offset(true, Offset::new(3.0_f32, 0.0_f32), |ctx| {
-                ctx.add_layer(fill_layer());
-            });
+            ctx.add_layer(fill_layer(), Offset::new(3.0_f32, 0.0_f32));
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::translate((3.0, 0.0))]);
     }
 
-    /// Drawing, then a layer, then drawing, inside one bracket: both pictures stay under the
+    /// Drawing, then a layer, then drawing, inside one transform bracket: both pictures stay under the
     /// transform and the layer lands between them.
     #[test]
     fn drawing_resumes_under_the_same_bracket_after_a_layer() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.with_offset(true, Offset::new(2.0_f32, 0.0_f32), |ctx| {
+            ctx.with_transform(true, Affine::translate((2.0, 0.0)), |ctx| {
                 fill(ctx);
-                ctx.add_layer(fill_layer());
+                ctx.add_layer(fill_layer(), Offset::ZERO);
                 fill(ctx);
             });
         });

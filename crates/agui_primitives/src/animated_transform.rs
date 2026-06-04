@@ -111,7 +111,7 @@ where
         }
 
         let layer = LayerHandle::new(TransformLayer::new((self.transform)(Duration::ZERO)));
-        PaintCtx::paint(&layer, |ctx| self.child.paint(ctx));
+        PaintCtx::paint(&layer, |ctx| self.child.paint(ctx, Offset::ZERO));
 
         self.layer = Some(layer.clone());
 
@@ -198,9 +198,9 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         let layer = self.build_layer();
-        ctx.add_layer(layer.into());
+        ctx.add_layer(layer.into(), offset);
     }
 }
 
@@ -217,7 +217,6 @@ mod tests {
             Compositor, PaintCommand, PaintCtx,
             peniko::{Color, Fill, kurbo::Affine},
         },
-        rect::Rect,
         render_object::{MountCtx, RenderObject, box_layout::RenderBox},
         routing_id::RoutingId,
         size::Size,
@@ -310,11 +309,11 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, ctx: &mut PaintCtx) {
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
             let mut canvas = ctx.canvas();
             let brush = canvas.brush(Color::BLACK);
-            canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(10.0, 10.0)));
+            canvas.fill(Fill::NonZero, brush, &(offset & Size::new(10.0, 10.0)));
         }
     }
 

@@ -337,9 +337,9 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, ctx: &mut PaintCtx) {
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             for child in &mut self.children {
-                child.paint(ctx);
+                child.paint(ctx, offset);
             }
         }
     }

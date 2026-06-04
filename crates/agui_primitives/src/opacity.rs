@@ -164,13 +164,13 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         if self.opacity <= 0.0 {
             return;
         }
 
         if self.opacity >= 1.0 {
-            self.child.paint(ctx);
+            self.child.paint(ctx, offset);
 
             return;
         }
@@ -179,6 +179,7 @@ where
             .child
             .parent_data
             .expect("opacity has not been laid out");
+        // The clip is in the layer's own coordinates, since `push_layer` positions the layer at `offset`.
         let clip = PaintShape::Rect(kurbo::Rect::new(
             0.0,
             0.0,
@@ -188,7 +189,8 @@ where
 
         ctx.push_layer(
             LayerHandle::new(OpacityLayer::new(self.opacity, clip)),
-            |ctx| self.child.paint(ctx),
+            offset,
+            |ctx| self.child.paint(ctx, Offset::ZERO),
         );
     }
 }

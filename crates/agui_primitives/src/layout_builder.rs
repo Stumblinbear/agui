@@ -266,9 +266,9 @@ where
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         if let Some(child_render) = self.child_render.as_mut() {
-            child_render.paint(ctx);
+            child_render.paint(ctx, offset);
         }
     }
 }

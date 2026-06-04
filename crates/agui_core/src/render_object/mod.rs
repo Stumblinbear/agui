@@ -88,5 +88,5 @@ impl RenderBox for RenderLeaf {
         HitTest::Pass
     }
 
-    fn paint(&mut self, _: &mut PaintCtx) {}
+    fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
 }

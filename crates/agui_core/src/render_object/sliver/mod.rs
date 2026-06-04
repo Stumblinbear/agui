@@ -190,7 +190,9 @@ pub trait RenderSliver: RenderObject {
         cross_axis_position: PositiveFinite<f32>,
     ) -> HitTest;
 
-    fn paint(&mut self, ctx: &mut PaintCtx);
+    /// Paints this sliver and its descendants. `offset` is the sliver's paint origin in the enclosing
+    /// boundary's layer coordinate space.
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
 }
 
 /// A box render object that hosts a single sliver and lays it out along the vertical axis. Requires
@@ -297,8 +299,8 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         )
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
-        self.sliver.object.paint(ctx);
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.sliver.object.paint(ctx, offset);
     }
 }
 
@@ -343,7 +345,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, _: &mut PaintCtx) {}
+        fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
     }
 
     #[test]

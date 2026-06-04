@@ -168,8 +168,8 @@ impl RenderBox for RenderRepaintBoundary {
         self.content.borrow().hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
-        ctx.add_layer(self.layer.clone().into());
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        ctx.add_layer(self.layer.clone().into(), offset);
     }
 }
 
@@ -183,7 +183,6 @@ mod tests {
             PaintCommand, Scene,
             peniko::{Color, Fill},
         },
-        rect::Rect,
         render_object::{PaintScope, RenderNode, RenderOwner},
         test_harness::TestHarness,
     };
@@ -309,16 +308,16 @@ mod tests {
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
-        fn paint(&mut self, ctx: &mut PaintCtx) {
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
 
             {
                 let mut canvas = ctx.canvas();
                 let brush = canvas.brush(Color::BLACK);
-                canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(10.0, 10.0)));
+                canvas.fill(Fill::NonZero, brush, &(offset & Size::new(10.0, 10.0)));
             }
 
-            self.child.paint(ctx);
+            self.child.paint(ctx, offset);
         }
     }
 

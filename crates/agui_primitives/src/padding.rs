@@ -237,14 +237,9 @@ where
         })
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
-        ctx.with_offset(
-            self.child.needs_compositing(),
-            Offset::new(self.padding.left, self.padding.top),
-            |ctx| {
-                self.child.paint(ctx);
-            },
-        );
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.child
+            .paint(ctx, offset + Offset::new(self.padding.left, self.padding.top));
     }
 }
 

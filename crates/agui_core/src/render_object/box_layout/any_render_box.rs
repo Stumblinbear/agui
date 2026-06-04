@@ -35,7 +35,7 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
-    fn dyn_paint(&mut self, ctx: &mut PaintCtx);
+    fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
 }
 
 impl<T> AnyRenderBox for T
@@ -83,8 +83,8 @@ where
         self.hit_test(result, position)
     }
 
-    fn dyn_paint(&mut self, ctx: &mut PaintCtx) {
-        self.paint(ctx);
+    fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.paint(ctx, offset);
     }
 }
 
@@ -132,7 +132,7 @@ where
         (**self).dyn_hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
-        (**self).dyn_paint(ctx);
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        (**self).dyn_paint(ctx, offset);
     }
 }

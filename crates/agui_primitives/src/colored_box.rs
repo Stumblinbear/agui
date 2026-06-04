@@ -10,7 +10,6 @@ use agui_core::{
         PaintCtx,
         peniko::{Color, Fill},
     },
-    rect::Rect,
     render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
@@ -160,15 +159,15 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         if let Some(size) = self.child.parent_data {
             let mut canvas = ctx.canvas();
             let brush = canvas.brush(self.color);
 
-            canvas.fill(Fill::NonZero, brush, &Rect::from(size));
+            canvas.fill(Fill::NonZero, brush, &(offset & size));
         }
 
-        self.child.paint(ctx);
+        self.child.paint(ctx, offset);
     }
 }
 
@@ -197,7 +196,7 @@ mod tests {
         render_object.layout(Constraints::new(0, 100, 0, 100));
 
         let root = LayerHandle::new(ContainerLayer::new());
-        PaintCtx::paint(&root, |ctx| render_object.paint(ctx));
+        PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
         assert_eq!(scene.len(), 1, "fills once, child paints nothing");

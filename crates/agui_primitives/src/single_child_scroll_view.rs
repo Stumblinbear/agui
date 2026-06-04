@@ -143,8 +143,8 @@ where
         self.child.hit_test(result, position)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx) {
-        self.child.paint(ctx);
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.child.paint(ctx, offset);
     }
 }
 

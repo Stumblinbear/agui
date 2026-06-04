@@ -141,5 +141,8 @@ pub trait RenderBox: RenderObject {
     /// [`RenderBox::layout`] having been called, but not on [`RenderBox::paint`].
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
-    fn paint(&mut self, ctx: &mut PaintCtx);
+    /// Paints this box and its descendants. `offset` is this box's top-left in the coordinate space of
+    /// the enclosing boundary's layer. A box draws its own geometry at `offset` and paints each child at
+    /// `offset` plus that child's layout position.
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
 }

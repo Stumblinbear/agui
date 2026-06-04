@@ -5,6 +5,7 @@ use slotmap::{SlotMap, new_key_type};
 
 use crate::{
     constraints::Constraints,
+    offset::Offset,
     paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, Scene},
     render_object::{
         RenderObject,
@@ -166,7 +167,9 @@ impl RenderOwner {
         let layer = boundary.layer.clone();
 
         layer.borrow_mut().clear();
-        PaintCtx::paint(&layer, |ctx| boundary.content.borrow_mut().paint(ctx));
+        PaintCtx::paint(&layer, |ctx| {
+            boundary.content.borrow_mut().paint(ctx, Offset::ZERO);
+        });
     }
 
     /// Mounts `content` as the root view: registers it as the root boundary painting into the root
@@ -346,7 +349,6 @@ mod tests {
             Compositor, PaintCommand, Scene,
             peniko::{Color, Fill},
         },
-        rect::Rect,
         render_object::RenderObject,
         size::Size,
         text_baseline::TextBaseline,
@@ -416,12 +418,12 @@ mod tests {
     impl RenderBox for Counter {
         trivial_box_layout!();
 
-        fn paint(&mut self, ctx: &mut PaintCtx) {
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
 
             let mut canvas = ctx.canvas();
             let brush = canvas.brush(self.color);
-            canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(1.0, 1.0)));
+            canvas.fill(Fill::NonZero, brush, &(offset & Size::new(1.0, 1.0)));
         }
     }
 
@@ -436,17 +438,17 @@ mod tests {
     impl RenderBox for Embedder {
         trivial_box_layout!();
 
-        fn paint(&mut self, ctx: &mut PaintCtx) {
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
 
             {
                 let mut canvas = ctx.canvas();
                 let brush = canvas.brush(self.color);
-                canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(1.0, 1.0)));
+                canvas.fill(Fill::NonZero, brush, &(offset & Size::new(1.0, 1.0)));
             }
 
             for child in &self.children {
-                ctx.add_layer(child.clone().into());
+                ctx.add_layer(child.clone().into(), offset);
             }
         }
     }
@@ -468,7 +470,7 @@ mod tests {
     impl RenderBox for Probe {
         trivial_box_layout!();
 
-        fn paint(&mut self, _: &mut PaintCtx) {
+        fn paint(&mut self, _: &mut PaintCtx, _: Offset) {
             self.paints.set(self.paints.get() + 1);
         }
     }

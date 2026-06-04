@@ -116,8 +116,8 @@ impl<R: RenderBox, P> RenderNode<R, P> {
         self.object.hit_test(result, position)
     }
 
-    pub fn paint(&mut self, ctx: &mut PaintCtx) {
-        self.object.paint(ctx);
+    pub fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.object.paint(ctx, offset);
     }
 }
 
@@ -198,8 +198,8 @@ mod tests {
             self.child.hit_test(result, position)
         }
 
-        fn paint(&mut self, ctx: &mut PaintCtx) {
-            self.child.paint(ctx);
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+            self.child.paint(ctx, offset);
         }
     }
 
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(size, Size::new(10.0, 20.0));
 
         PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
-            node.paint(ctx);
+            node.paint(ctx, Offset::ZERO);
         });
     }
 
@@ -315,7 +315,7 @@ mod tests {
 
         // paint the whole tree; lay out the (RenderBox) leaf child via the node helpers
         PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
-            node.paint(ctx);
+            node.paint(ctx, Offset::ZERO);
         });
         assert_eq!(
             node.object
@@ -355,7 +355,7 @@ mod tests {
         );
 
         PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
-            boxed.paint(ctx);
+            boxed.paint(ctx, Offset::ZERO);
         });
     }
 
@@ -464,7 +464,7 @@ mod tests {
             HitTest::Pass
         }
 
-        fn paint(&mut self, _: &mut PaintCtx) {}
+        fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
     }
 
     struct CountedOther {
