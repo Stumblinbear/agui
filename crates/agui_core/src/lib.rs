@@ -8,6 +8,7 @@
 
 // #![warn(missing_docs)]
 
+pub mod alignment;
 pub mod axis;
 pub mod constraints;
 pub mod context;
