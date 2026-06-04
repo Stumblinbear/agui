@@ -144,10 +144,7 @@ mod tests {
         kurbo::{Affine, Rect},
     };
 
-    use crate::{
-        offset::Offset,
-        paint::scene::PaintCommand,
-    };
+    use crate::{offset::Offset, paint::scene::PaintCommand};
 
     use super::Canvas;
 

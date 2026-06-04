@@ -29,8 +29,9 @@ impl HeadlessRenderer {
     pub fn new() -> Option<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
 
-        let adapter =
-            pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(&instance, None))?;
+        let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
+            &instance, None,
+        ))?;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -207,7 +208,11 @@ impl Image {
         self.rgba
             .chunks_exact(4)
             .zip(other.rgba.chunks_exact(4))
-            .filter(|(a, b)| a.iter().zip(b.iter()).any(|(x, y)| x.abs_diff(*y) > tolerance))
+            .filter(|(a, b)| {
+                a.iter()
+                    .zip(b.iter())
+                    .any(|(x, y)| x.abs_diff(*y) > tolerance)
+            })
             .count()
     }
 }
@@ -231,5 +236,10 @@ pub fn assert_golden(actual: &Image, path: impl AsRef<Path>) {
     let expected = Image::load_png(path).expect("read golden");
     let diff = actual.diff_pixels(&expected, 0);
 
-    assert_eq!(diff, 0, "{diff} pixels differ from golden {}", path.display());
+    assert_eq!(
+        diff,
+        0,
+        "{diff} pixels differ from golden {}",
+        path.display()
+    );
 }

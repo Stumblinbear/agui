@@ -45,6 +45,9 @@ fn orange_half_pane_matches_golden() {
 
     assert_golden(
         &image,
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens/orange_half_pane.png"),
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/goldens/orange_half_pane.png"
+        ),
     );
 }

@@ -324,8 +324,8 @@ mod tests {
             "a transform over a flat child does not composite"
         );
 
-        let layered =
-            Transform::rotate(0.5).child(Opacity::new(0.5).child(SizedBox::new().width(10).height(10)));
+        let layered = Transform::rotate(0.5)
+            .child(Opacity::new(0.5).child(SizedBox::new().width(10).height(10)));
         let mut layered = layered.create_render_object(&TestHarness::mount(&layered).root.element);
         assert!(
             layered.update_compositing_bits(),
@@ -374,6 +374,9 @@ mod tests {
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
-        assert!(scene.is_empty(), "a zero-determinant transform paints nothing");
+        assert!(
+            scene.is_empty(),
+            "a zero-determinant transform paints nothing"
+        );
     }
 }

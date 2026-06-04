@@ -9,8 +9,8 @@ use agui_core::{
     element::SingleChildElement,
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     paint::PaintCtx,
+    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -238,8 +238,10 @@ where
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        self.child
-            .paint(ctx, offset + Offset::new(self.padding.left, self.padding.top));
+        self.child.paint(
+            ctx,
+            offset + Offset::new(self.padding.left, self.padding.top),
+        );
     }
 }
 

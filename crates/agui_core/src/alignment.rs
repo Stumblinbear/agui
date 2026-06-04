@@ -121,8 +121,14 @@ mod tests {
     fn along_size_names_a_point_in_the_box() {
         let size = Size::new(100.0_f32, 40.0);
 
-        assert_eq!(Alignment::TOP_LEFT.along_size(size), Offset::new(0.0_f32, 0.0));
-        assert_eq!(Alignment::CENTER.along_size(size), Offset::new(50.0_f32, 20.0));
+        assert_eq!(
+            Alignment::TOP_LEFT.along_size(size),
+            Offset::new(0.0_f32, 0.0)
+        );
+        assert_eq!(
+            Alignment::CENTER.along_size(size),
+            Offset::new(50.0_f32, 20.0)
+        );
         assert_eq!(
             Alignment::BOTTOM_RIGHT.along_size(size),
             Offset::new(100.0_f32, 40.0)
