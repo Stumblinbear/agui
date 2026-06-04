@@ -5,6 +5,7 @@ use slotmap::{SlotMap, new_key_type};
 
 use crate::{
     constraints::Constraints,
+    hit_test::HitTestResult,
     offset::Offset,
     paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, Scene},
     render_object::{
@@ -125,6 +126,70 @@ impl RenderOwner {
         drop(handle);
     }
 
+    /// Mounts `content` as the root view: registers it as the root boundary painting into the root
+    /// layer, then mounts its subtree under that boundary's scope.
+    pub fn mount_view(&mut self, content: Box<dyn AnyRenderBox>) {
+        let content: BoundaryContent = Rc::new(RefCell::new(content));
+        let handle = self.register(Rc::clone(&content), self.root_layer.clone());
+        let scope = handle.scope();
+        self.root_boundary = Some(handle);
+
+        let mut ctx = MountCtx::new(self, scope);
+        content.borrow_mut().mount(&mut ctx);
+    }
+
+    /// Unmounts the root view and unregisters its boundary.
+    pub fn unmount_view(&mut self) {
+        let Some(handle) = self.root_boundary.take() else {
+            return;
+        };
+
+        let content = Rc::clone(&self.boundaries[handle.scope.id].content);
+        {
+            let mut ctx = MountCtx::new(self, handle.scope());
+            content.borrow_mut().unmount(&mut ctx);
+        }
+
+        self.unregister(handle);
+    }
+
+    /// Lays the root view's subtree out against `constraints`, the target's current size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no view has been registered.
+    pub fn layout(&mut self, constraints: Constraints) -> Size {
+        let id = self
+            .root_boundary
+            .as_ref()
+            .expect("a view must be registered before layout")
+            .scope
+            .id;
+        self.boundaries[id].content.borrow_mut().layout(constraints)
+    }
+
+    /// Hit-tests the root view at `position`, in the root coordinate space, returning the handlers
+    /// under it ordered most-specific first. Returns an empty result if no view is registered.
+    pub fn hit_test(&self, position: Offset) -> HitTestResult {
+        let mut result = HitTestResult::new();
+
+        if let Some(boundary) = &self.root_boundary {
+            self.boundaries[boundary.scope.id]
+                .content
+                .borrow()
+                .hit_test(&mut result, position);
+        }
+
+        result
+    }
+
+    /// Marks the root view for repaint on the next [`flush_paint`](RenderOwner::flush_paint).
+    pub fn mark_needs_paint(&self) {
+        if let Some(boundary) = &self.root_boundary {
+            boundary.mark_needs_paint();
+        }
+    }
+
     /// Repaints every boundary that is unpainted or marked, leaving the rest as they are.
     ///
     /// # Panics
@@ -170,55 +235,6 @@ impl RenderOwner {
         PaintCtx::paint(&layer, |ctx| {
             boundary.content.borrow_mut().paint(ctx, Offset::ZERO);
         });
-    }
-
-    /// Mounts `content` as the root view: registers it as the root boundary painting into the root
-    /// layer, then mounts its subtree under that boundary's scope.
-    pub fn mount_view(&mut self, content: Box<dyn AnyRenderBox>) {
-        let content: BoundaryContent = Rc::new(RefCell::new(content));
-        let handle = self.register(Rc::clone(&content), self.root_layer.clone());
-        let scope = handle.scope();
-        self.root_boundary = Some(handle);
-
-        let mut ctx = MountCtx::new(self, scope);
-        content.borrow_mut().mount(&mut ctx);
-    }
-
-    /// Unmounts the root view and unregisters its boundary.
-    pub fn unmount_view(&mut self) {
-        let Some(handle) = self.root_boundary.take() else {
-            return;
-        };
-
-        let content = Rc::clone(&self.boundaries[handle.scope.id].content);
-        {
-            let mut ctx = MountCtx::new(self, handle.scope());
-            content.borrow_mut().unmount(&mut ctx);
-        }
-
-        self.unregister(handle);
-    }
-
-    /// Lays the root view's subtree out against `constraints`, the target's current size.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no view has been registered.
-    pub fn layout(&mut self, constraints: Constraints) -> Size {
-        let id = self
-            .root_boundary
-            .as_ref()
-            .expect("a view must be registered before layout")
-            .scope
-            .id;
-        self.boundaries[id].content.borrow_mut().layout(constraints)
-    }
-
-    /// Marks the root view for repaint on the next [`flush_paint`](RenderOwner::flush_paint).
-    pub fn mark_needs_paint(&self) {
-        if let Some(boundary) = &self.root_boundary {
-            boundary.mark_needs_paint();
-        }
     }
 
     /// Composites the root view's retained layers into a scene to present.

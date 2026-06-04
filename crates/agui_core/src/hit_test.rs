@@ -1,8 +1,8 @@
-use std::any::Any;
+use std::fmt;
 
-use glam::{Mat4, Vec4};
+use peniko::kurbo::{Affine, Point};
 
-use crate::{offset::Offset, routing_id::RoutingPath};
+use crate::{offset::Offset, pointer::PointerHandler};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HitTest {
@@ -17,218 +17,267 @@ pub enum HitTest {
     Pass,
 }
 
-#[derive(Debug)]
+/// How a render object answers a hit within its own bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum HitTestBehavior {
+    /// Counts as hit only when a descendant is hit.
+    #[default]
+    DeferToChild,
+
+    /// Always hit within its bounds, and prevent anything behind it from being hit.
+    Opaque,
+
+    /// Always hit within its bounds, while still letting things behind it be hit too.
+    Translucent,
+}
+
+/// A handler recorded during a hit test, with the transform that localizes a root-space position into
+/// the handler's own coordinate space.
 pub struct HitTestEntry {
-    // pub element_id: ElementId,
-    pub data: Option<Box<dyn Any>>,
-    transform: Mat4,
+    handler: PointerHandler,
+    transform: Affine,
 }
 
 impl HitTestEntry {
-    pub fn global_transform(&self) -> Mat4 {
+    pub fn handler(&self) -> &PointerHandler {
+        &self.handler
+    }
+
+    /// The transform that maps a position in the root coordinate space into this entry's local space.
+    pub fn global_transform(&self) -> Affine {
         self.transform
     }
 }
 
-#[derive(Debug)]
+impl fmt::Debug for HitTestEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HitTestEntry")
+            .field("transform", &self.transform)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct HitTestResult {
-    // Recording absorbed nodes is not yet wired up; see `add`.
-    #[allow(dead_code)]
     path: Vec<HitTestEntry>,
-    transforms: Vec<Mat4>,
+    /// The accumulated root-to-local transform at each depth of the walk.
+    transforms: Vec<Affine>,
 }
 
 impl HitTestResult {
-    fn current_transform(&self) -> Mat4 {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The hit targets, ordered most-specific first: the topmost leaf under the pointer is first, and
+    /// event dispatch proceeds from there outward.
+    pub fn path(&self) -> &[HitTestEntry] {
+        &self.path
+    }
+
+    /// The transform mapping the root coordinate space into the space currently being tested.
+    fn current_transform(&self) -> Affine {
         self.transforms.last().copied().unwrap_or_default()
     }
 
-    pub fn push_transform(&mut self, transform: Mat4) {
-        self.transforms.push(self.current_transform() * transform);
+    /// Enters a coordinate space reached from the current one by `transform`, where `transform` maps
+    /// the current space into the entered one.
+    pub fn push_transform(&mut self, transform: Affine) {
+        self.transforms.push(transform * self.current_transform());
     }
 
     pub fn pop_transform(&mut self) {
         self.transforms.pop();
     }
 
+    /// Hit-tests under a paint `transform` (one that maps the child's space into the current one),
+    /// localizing `position` into the child's space. Returns [`HitTest::Pass`] without testing when
+    /// the transform is not invertible, since the child then occupies no visible area.
     pub fn with_transform(
         &mut self,
-        mut transform: Mat4,
+        transform: Affine,
         position: Offset,
         func: impl FnOnce(&mut Self, Offset) -> HitTest,
     ) -> HitTest {
-        // Remove the perspective transform from the matrix
-        transform.z_axis[0] = 0.0;
-        transform.z_axis[1] = 0.0;
-        transform.z_axis[2] = 1.0;
-        transform.z_axis[3] = 0.0;
+        let inverse = transform.inverse();
 
-        transform.x_axis[2] = 0.0;
-        transform.y_axis[2] = 0.0;
-        transform.z_axis[2] = 1.0;
-        transform.w_axis[2] = 0.0;
-
-        if transform.determinant() == 0.0 {
-            // Elements are not visible on screen and cannot be hit-tested.
+        if !inverse
+            .as_coeffs()
+            .iter()
+            .all(|coefficient| coefficient.is_finite())
+        {
             return HitTest::Pass;
         }
 
-        self.with_raw_transform(transform, position, func)
+        self.with_raw_transform(inverse, position, func)
     }
 
+    /// Hit-tests under a `transform` that already maps the current space into the child's, localizing
+    /// `position` by it directly.
     pub fn with_raw_transform(
         &mut self,
-        transform: Mat4,
+        transform: Affine,
         position: Offset,
         func: impl FnOnce(&mut Self, Offset) -> HitTest,
     ) -> HitTest {
-        // Transform the given position by the current transform
-        let transformed_position = transform.transform_point3(position.into());
+        let local = Offset::from(transform * Point::from(position));
 
-        self.transforms.push(self.current_transform() * transform);
-
-        let result = func(
-            self,
-            Offset::new(transformed_position.x, transformed_position.y),
-        );
-
+        self.transforms.push(transform * self.current_transform());
+        let result = func(self, local);
         self.transforms.pop();
 
         result
     }
 
+    /// Hit-tests a child painted at `offset`, localizing `position` into the child's space.
     pub fn with_offset(
         &mut self,
         offset: Offset,
         position: Offset,
         func: impl FnOnce(&mut Self, Offset) -> HitTest,
     ) -> HitTest {
-        let current = self.current_transform();
-        let mut composed = current;
-        composed.w_axis = current * Vec4::new(-offset.x.get(), -offset.y.get(), 0.0, 1.0);
-        self.transforms.push(composed);
-
-        let result = func(self, position - offset);
-
-        self.transforms.pop();
-
-        result
+        self.with_raw_transform(Affine::translate(-offset), position, func)
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn add(&mut self, path: RoutingPath) {
-        let _ = path;
-        // self.path.push(HitTestEntry {
-        //     element_id,
-        //     data: None,
-        //     transform: self.current_transform(),
-        // });
+    /// Records `handler` as hit at the current depth, capturing the transform that localizes a
+    /// root-space position into its space. Children record themselves before their ancestors, so the
+    /// path stays most-specific first.
+    pub fn add(&mut self, handler: PointerHandler) {
+        self.path.push(HitTestEntry {
+            handler,
+            transform: self.current_transform(),
+        });
     }
-
-    //     pub fn add_with_data(&mut self, element_id: ElementId, data: impl Any) {
-    //         self.path.push(HitTestEntry {
-    //             element_id,
-    //             data: Some(Box::new(data)),
-    //             transform: self.current_transform(),
-    //         });
-    //     }
 }
 
 #[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
 
-    use glam::Mat4;
+    use std::{cell::Cell, rc::Rc};
 
-    use crate::offset::Offset;
+    use peniko::kurbo::{Affine, Point};
+
+    use crate::{
+        offset::Offset,
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, PointerId},
+    };
 
     use super::*;
 
-    fn empty_result() -> HitTestResult {
-        HitTestResult {
-            path: Vec::new(),
-            transforms: Vec::new(),
-        }
-    }
-
     #[test]
     fn default_transform_is_identity() {
-        let result = empty_result();
-        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+        assert_eq!(HitTestResult::new().current_transform(), Affine::IDENTITY);
     }
 
     #[test]
-    fn push_and_pop_transform() {
-        let mut result = empty_result();
-        let t = Mat4::from_translation(glam::Vec3::new(10.0, 20.0, 0.0));
+    fn push_composes_the_child_onto_the_parent() {
+        let mut result = HitTestResult::new();
+        let parent = Affine::translate((10.0, 0.0));
+        let child = Affine::scale(2.0);
 
-        result.push_transform(t);
-        assert_eq!(result.current_transform(), t);
+        result.push_transform(parent);
+        result.push_transform(child);
+
+        // Root-to-local applies the parent first, then the child.
+        assert_eq!(result.current_transform(), child * parent);
 
         result.pop_transform();
-        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+        assert_eq!(result.current_transform(), parent);
     }
 
     #[test]
-    fn nested_transforms_compose() {
-        let mut result = empty_result();
-        let t1 = Mat4::from_translation(glam::Vec3::new(10.0, 0.0, 0.0));
-        let t2 = Mat4::from_translation(glam::Vec3::new(0.0, 20.0, 0.0));
+    fn with_offset_localizes_position() {
+        let mut result = HitTestResult::new();
 
-        result.push_transform(t1);
-        result.push_transform(t2);
-
-        let expected = t1 * t2;
-        assert_eq!(result.current_transform(), expected);
-
-        result.pop_transform();
-        assert_eq!(result.current_transform(), t1);
-    }
-
-    #[test]
-    fn with_offset_translates_position() {
-        let mut result = empty_result();
-        let offset = Offset::new(10.0_f32, 20.0_f32);
-        let position = Offset::new(15.0_f32, 25.0_f32);
-
-        let hit = result.with_offset(offset, position, |_, local_pos| {
-            assert_eq!(local_pos.x.get(), 5.0);
-            assert_eq!(local_pos.y.get(), 5.0);
-            HitTest::Absorb
-        });
+        let hit = result.with_offset(
+            Offset::new(10.0_f32, 20.0),
+            Offset::new(15.0_f32, 25.0),
+            |_, local| {
+                assert_eq!(local.x.get(), 5.0);
+                assert_eq!(local.y.get(), 5.0);
+                HitTest::Absorb
+            },
+        );
 
         assert_eq!(hit, HitTest::Absorb);
-        // Transform stack restored after callback
-        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+        assert_eq!(result.current_transform(), Affine::IDENTITY);
     }
 
     #[test]
-    fn with_transform_strips_perspective_and_bails_on_singular() {
-        let mut result = empty_result();
+    fn with_transform_inverts_the_paint_transform() {
+        let mut result = HitTestResult::new();
 
-        // A zero matrix has determinant 0 after perspective stripping
-        let singular = Mat4::ZERO;
-        let hit = result.with_transform(singular, Offset::ZERO, |_, _| {
-            panic!("should not be called for singular matrix");
+        // The paint transform scales by two, so a hit at (10, 20) localizes to (5, 10).
+        let hit = result.with_transform(
+            Affine::scale(2.0),
+            Offset::new(10.0_f32, 20.0),
+            |_, local| {
+                assert_eq!(local.x.get(), 5.0);
+                assert_eq!(local.y.get(), 10.0);
+                HitTest::Absorb
+            },
+        );
+
+        assert_eq!(hit, HitTest::Absorb);
+    }
+
+    #[test]
+    fn with_transform_bails_on_a_singular_matrix() {
+        let mut result = HitTestResult::new();
+
+        let hit = result.with_transform(Affine::scale(0.0), Offset::ZERO, |_, _| {
+            panic!("a singular transform should not be entered");
         });
 
         assert_eq!(hit, HitTest::Pass);
     }
 
     #[test]
-    fn with_raw_transform_restores_stack() {
-        let mut result = empty_result();
-        let t = Mat4::from_scale(glam::Vec3::new(2.0, 2.0, 1.0));
+    fn with_raw_transform_applies_directly_and_restores_the_stack() {
+        let mut result = HitTestResult::new();
+        let raw = Affine::scale(2.0);
 
-        result.with_raw_transform(t, Offset::new(5.0_f32, 10.0_f32), |inner, pos| {
-            // Position is transformed by the scale matrix
-            assert_eq!(pos.x.get(), 10.0);
-            assert_eq!(pos.y.get(), 20.0);
-            // Inner transform stack should have the transform
-            assert_eq!(inner.current_transform(), t);
+        result.with_raw_transform(raw, Offset::new(5.0_f32, 10.0), |inner, local| {
+            assert_eq!(local.x.get(), 10.0);
+            assert_eq!(local.y.get(), 20.0);
+            assert_eq!(inner.current_transform(), raw);
             HitTest::Pass
         });
 
-        assert_eq!(result.current_transform(), Mat4::IDENTITY);
+        assert_eq!(result.current_transform(), Affine::IDENTITY);
+    }
+
+    /// `add` records a handler and captures the transform that localizes a root-space position into
+    /// its own space.
+    #[test]
+    fn add_captures_the_localizing_transform() {
+        let recorded = Rc::new(Cell::new(None));
+
+        let handler: PointerHandler = {
+            let recorded = Rc::clone(&recorded);
+            Rc::new(move |event: &PointerEvent| recorded.set(Some(event.position)))
+        };
+
+        let mut result = HitTestResult::new();
+        result.with_offset(Offset::new(10.0_f32, 20.0), Offset::ZERO, |inner, _| {
+            inner.add(Rc::clone(&handler));
+            HitTest::Absorb
+        });
+
+        assert_eq!(result.path().len(), 1);
+
+        // Localizing a root-space (10, 20) through the captured transform lands at the child's origin.
+        let transform = result.path()[0].global_transform();
+        let local = Offset::from(transform * Point::from(Offset::new(10.0_f32, 20.0)));
+        result.path()[0].handler()(&PointerEvent {
+            pointer: PointerId(0),
+            position: local,
+            kind: PointerEventKind::Down,
+        });
+
+        let recorded = recorded.get().expect("the handler ran");
+        assert_eq!(recorded.x.get(), 0.0);
+        assert_eq!(recorded.y.get(), 0.0);
     }
 }

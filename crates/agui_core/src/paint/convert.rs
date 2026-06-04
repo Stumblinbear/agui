@@ -17,6 +17,13 @@ impl From<Offset> for kurbo::Point {
     }
 }
 
+impl From<kurbo::Point> for Offset {
+    #[allow(clippy::cast_possible_truncation)]
+    fn from(point: kurbo::Point) -> Self {
+        Offset::new(point.x as f32, point.y as f32)
+    }
+}
+
 impl From<Size> for kurbo::Size {
     fn from(size: Size) -> Self {
         kurbo::Size::new(f64::from(size.width.get()), f64::from(size.height.get()))

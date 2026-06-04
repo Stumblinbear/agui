@@ -1,11 +1,18 @@
 use std::{cell::Cell, num::NonZeroUsize, rc::Rc, sync::Arc};
 
 use agui_core::{
-    constraints::Constraints, paint::peniko::Color, render_object::RenderOwner,
-    test_harness::TestHarness, widget::Widget,
+    constraints::Constraints,
+    hit_test::HitTestBehavior,
+    offset::Offset,
+    paint::peniko::Color,
+    pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerHandler, PointerId},
+    render_object::RenderOwner,
+    test_harness::TestHarness,
+    widget::Widget,
 };
 use agui_primitives::{
-    colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox, opacity::Opacity,
+    colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox, listener::Listener,
+    opacity::Opacity,
 };
 use agui_vello::append_scene;
 use vello::{
@@ -16,7 +23,7 @@ use vello::{
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
-    event::WindowEvent,
+    event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
 };
@@ -31,11 +38,26 @@ fn main() {
         )
         .init();
 
-    // An orange box filling the left half of the window.
+    // Pointer handlers that only log, to exercise hit testing and dispatch.
+    let on_down: PointerHandler =
+        Rc::new(|event: &PointerEvent| tracing::info!(position = ?event.position, "pointer down"));
+    let on_move: PointerHandler =
+        Rc::new(|event: &PointerEvent| tracing::info!(position = ?event.position, "pointer move"));
+    let on_up: PointerHandler =
+        Rc::new(|event: &PointerEvent| tracing::info!(position = ?event.position, "pointer up"));
+
+    // An orange box filling the left half of the window, listening for pointer events.
     let widget = FractionallySizedBox::new()
         .width_factor(0.5_f32)
         .height_factor(1.0_f32)
-        .child(Opacity::new(0.5).child(ColoredBox::new(Color::rgb8(255, 138, 0))));
+        .child(
+            Listener::builder()
+                .on_pointer_down(on_down)
+                .on_pointer_move(on_move)
+                .on_pointer_up(on_up)
+                .behavior(HitTestBehavior::Opaque)
+                .child(Opacity::new(0.5).child(ColoredBox::new(Color::rgb8(255, 138, 0)))),
+        );
     let harness = TestHarness::mount(&widget);
     let child = widget.create_render_object(&harness.root.element);
 
@@ -70,6 +92,10 @@ struct App {
     active: Option<ActiveWindow>,
     /// This window's render owner: drives layout, paint, and compositing of the view's subtree.
     owner: RenderOwner,
+    /// Routes pointer events to the handlers under them, per pointer.
+    dispatcher: PointerDispatcher,
+    /// The most recent cursor position; `MouseInput` events carry no position of their own.
+    cursor: Offset,
     /// Set by the owner's visual-update hook; drained into a redraw request in `about_to_wait`.
     needs_redraw: Rc<Cell<bool>>,
     vello_scene: vello::Scene,
@@ -82,6 +108,8 @@ impl App {
             renderers: Vec::new(),
             active: None,
             owner,
+            dispatcher: PointerDispatcher::new(),
+            cursor: Offset::ZERO,
             needs_redraw,
             vello_scene: vello::Scene::new(),
         }
@@ -136,6 +164,38 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+
+            WindowEvent::CursorMoved { position, .. } => {
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    self.cursor = Offset::new(position.x as f32, position.y as f32);
+                }
+
+                let event = PointerEvent {
+                    pointer: PointerId(0),
+                    position: self.cursor,
+                    kind: PointerEventKind::Move,
+                };
+                let owner = &self.owner;
+                self.dispatcher
+                    .handle(&event, |position| owner.hit_test(position));
+            }
+
+            WindowEvent::MouseInput { state, .. } => {
+                let kind = match state {
+                    ElementState::Pressed => PointerEventKind::Down,
+                    ElementState::Released => PointerEventKind::Up,
+                };
+
+                let event = PointerEvent {
+                    pointer: PointerId(0),
+                    position: self.cursor,
+                    kind,
+                };
+                let owner = &self.owner;
+                self.dispatcher
+                    .handle(&event, |position| owner.hit_test(position));
+            }
 
             WindowEvent::Resized(size) => {
                 tracing::info!(

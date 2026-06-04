@@ -33,7 +33,6 @@ agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 
 bon = "3.3.2"
 fnv = "1.0"
-glam = "0.29"
 smallbox = "0.8"
 smallvec = "1.14.0"
 thiserror = "1.0"

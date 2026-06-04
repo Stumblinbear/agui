@@ -2,8 +2,6 @@ use std::ops::{
     Add, AddAssign, BitAnd, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
 };
 
-use glam::{Vec2, Vec3};
-
 use typed_floats::{Atan2, NonNaN, NonNaNFinite, Positive, Powf, as_const};
 
 use crate::{edge_insets::EdgeInsets, rect::Rect, size::Size};
@@ -233,23 +231,5 @@ impl From<EdgeInsets> for Offset {
 impl From<(f32, f32)> for Offset {
     fn from((x, y): (f32, f32)) -> Self {
         Self::new(x, y)
-    }
-}
-
-impl From<Vec2> for Offset {
-    fn from(value: Vec2) -> Self {
-        Self::new(value.x, value.y)
-    }
-}
-
-impl From<Offset> for Vec2 {
-    fn from(val: Offset) -> Self {
-        Vec2::new(val.x.get(), val.y.get())
-    }
-}
-
-impl From<Offset> for Vec3 {
-    fn from(val: Offset) -> Self {
-        Vec3::new(val.x.get(), val.y.get(), 0.0)
     }
 }

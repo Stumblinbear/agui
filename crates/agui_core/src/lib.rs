@@ -19,6 +19,7 @@ pub mod hit_test;
 pub mod key;
 pub mod offset;
 pub mod paint;
+pub mod pointer;
 pub mod provide;
 pub mod rect;
 pub mod render_object;

@@ -14,7 +14,6 @@ readme = "README.md"
 [dependencies]
 bon.workspace = true
 fnv.workspace = true
-glam.workspace = true
 imbl.workspace = true
 peniko.workspace = true
 slotmap.workspace = true
@@ -38,7 +37,6 @@ thiserror.workspace = true
 
 # futures-util = { workspace = true, features = ["std", "channel"] }
 
-# glam.workspace = true
 # lyon.workspace = true
 
 # mockall = { workspace = true, optional = true }
