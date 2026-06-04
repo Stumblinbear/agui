@@ -6,6 +6,7 @@
 
 use agui_core::{
     constraints::Constraints,
+    offset::Offset,
     paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, peniko::Color},
     render_object::box_layout::RenderBox,
     test_harness::TestHarness,
@@ -36,7 +37,7 @@ fn orange_half_pane_matches_golden() {
     render.layout(Constraints::new(0.0, width as f32, 0.0, height as f32));
 
     let root = LayerHandle::new(ContainerLayer::new());
-    PaintCtx::paint(&root, |ctx| render.paint(ctx));
+    PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
     let scene = Compositor::compose(&root);
     let vello_scene = to_vello_scene(&scene);
 
