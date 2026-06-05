@@ -6,8 +6,11 @@ use peniko::{
 };
 
 use crate::{
-    offset::Offset,
-    paint::scene::{PaintCommand, PaintShape, Scene},
+    geometry::Offset,
+    paint::{
+        command::{PaintCommand, PaintShape},
+        scene::Scene,
+    },
 };
 
 /// A handle to a brush registered on a [`Canvas`]. Valid only within the paint pass that produced it.
@@ -144,7 +147,7 @@ mod tests {
         kurbo::{Affine, Rect},
     };
 
-    use crate::{offset::Offset, paint::scene::PaintCommand};
+    use crate::{geometry::Offset, paint::command::PaintCommand};
 
     use super::Canvas;
 

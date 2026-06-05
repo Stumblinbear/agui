@@ -1,7 +1,6 @@
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::{MultiChildElement, SingleChildElement},
-    routing_id::RoutingId,
+    element::{MultiChildElement, RoutingId, SingleChildElement},
     widget::Widget,
 };
 

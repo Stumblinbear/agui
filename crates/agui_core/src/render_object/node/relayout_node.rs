@@ -3,16 +3,18 @@ use std::{cell::RefCell, hint::unreachable_unchecked, rc::Rc};
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
-    constraints::Constraints,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    render_object::{
-        BoundaryContent, LayoutCtx, LayoutScope, MountCtx, PaintScope, RenderObject,
-        box_layout::RenderBox,
+    context::PaintCtx,
+    geometry::{Offset, Size},
+    input::hit_test::{HitTest, HitTestResult},
+    pipeline::{
+        layout::{BoundaryContent, LayoutScope},
+        paint::PaintScope,
     },
-    size::Size,
-    text_baseline::TextBaseline,
+    render_object::{
+        LayoutCtx, MountCtx, RenderObject,
+        box_layout::{Constraints, RenderBox},
+    },
+    text::TextBaseline,
 };
 
 /// A child holder whose child becomes a relayout boundary while it is constrained tightly.
@@ -179,7 +181,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                 Some(boundary) => {
                     boundary.update_constraints(constraints);
 
-                    ctx.with_scope(boundary.clone(), |ctx| content.layout(ctx, constraints))
+                    ctx.with_layout_scope(boundary.clone(), |ctx| content.layout(ctx, constraints))
                 }
 
                 None => content.layout(ctx, constraints),
@@ -324,16 +326,16 @@ mod tests {
     use typed_floats::{Positive, PositiveFinite, as_const};
 
     use crate::{
-        constraints::Constraints,
-        hit_test::{HitTest, HitTestResult},
-        offset::Offset,
-        paint::{ContainerLayer, LayerHandle, PaintCtx},
+        context::PaintCtx,
+        geometry::{Offset, Size},
+        input::hit_test::{HitTest, HitTestResult},
+        paint::compositing::{ContainerLayer, LayerHandle},
+        pipeline::PipelineOwner,
         render_object::{
-            BoundaryContent, LayoutScope, MountCtx, PipelineOwner, RenderObject,
-            box_layout::RenderBox,
+            MountCtx, RenderObject,
+            box_layout::{Constraints, RenderBox},
         },
-        size::Size,
-        text_baseline::TextBaseline,
+        text::TextBaseline,
     };
 
     use super::*;

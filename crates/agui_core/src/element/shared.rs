@@ -4,9 +4,8 @@ use fnv::FnvHashMap;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{Element, ElementNode},
+    element::{Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
-    routing_id::RoutingId,
     widget::Widget,
 };
 
@@ -363,10 +362,9 @@ mod tests {
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        element::Element,
+        element::{Element, RoutingId},
         key::AnyKeyable,
         provide::ProvideScope,
-        routing_id::RoutingId,
         test_harness::TestTaskRunner,
         widget::Widget,
     };

@@ -1,7 +1,6 @@
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::Element,
-    routing_id::RoutingId,
+    element::{Element, RoutingId},
     widget::Widget,
 };
 

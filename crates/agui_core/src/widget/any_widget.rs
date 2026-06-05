@@ -2,14 +2,13 @@ use std::{any::Any, rc::Rc, sync::Arc};
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{AnyElement, Element, ElementNode},
+    element::{AnyElement, Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
     render_object::{
         RenderObject,
         box_layout::{AnyRenderBox, RenderBox},
         sliver::{AnyRenderSliver, RenderSliver},
     },
-    routing_id::RoutingId,
     widget::Widget,
 };
 
@@ -174,7 +173,7 @@ mod macros {
                 fn dispatch(
                     &self,
                     element: &mut Self::Element,
-                    path: &[crate::routing_id::RoutingId],
+                    path: &[RoutingId],
                     action: crate::context::Dispatch,
                 ) {
                     let Some((head, rest)) = path.split_first() else {
@@ -219,12 +218,6 @@ mod macros {
 struct RenderBoxWrapper<T> {
     inner: T,
 }
-
-struct RenderBoxElement<E> {
-    inner: E,
-}
-
-impl<E> Element for RenderBoxElement<E> where E: Element {}
 
 impl<T> Widget for RenderBoxWrapper<T>
 where
@@ -272,15 +265,15 @@ where
     }
 }
 
-struct RenderSliverWrapper<T> {
-    inner: T,
-}
-
-struct RenderSliverElement<E> {
+struct RenderBoxElement<E> {
     inner: E,
 }
 
-impl<E> Element for RenderSliverElement<E> where E: Element {}
+impl<E> Element for RenderBoxElement<E> where E: Element {}
+
+struct RenderSliverWrapper<T> {
+    inner: T,
+}
 
 impl<T> Widget for RenderSliverWrapper<T>
 where
@@ -326,6 +319,12 @@ where
         self.inner.key()
     }
 }
+
+struct RenderSliverElement<E> {
+    inner: E,
+}
+
+impl<E> Element for RenderSliverElement<E> where E: Element {}
 
 pub type BoxedWidget = Box<dyn AnyWidget<Render = Box<dyn AnyRenderBox>>>;
 

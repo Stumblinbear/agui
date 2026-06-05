@@ -2,7 +2,7 @@ use std::ops::{Div, Mul, MulAssign};
 
 use typed_floats::{Positive, StrictlyPositiveFinite, as_const};
 
-use crate::{axis::Axis, edge_insets::EdgeInsetsGeometry, size::Size};
+use crate::geometry::{Axis, EdgeInsetsGeometry, Size};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Constraints {
@@ -643,7 +643,7 @@ impl Div<f32> for Constraints {
 mod tests {
     #![allow(clippy::float_cmp)]
 
-    use crate::{axis::Axis, edge_insets::EdgeInsets, size::Size};
+    use crate::geometry::{Axis, EdgeInsets, Size};
 
     use super::*;
 

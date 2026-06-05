@@ -1,22 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
-    axis::Axis,
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    edge_insets::{EdgeInsets, EdgeInsetsGeometry},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    text_direction::TextDirection,
-    widget::Widget,
-};
+use agui_core::prelude::{element::*, render_object::*};
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]
@@ -247,7 +232,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{edge_insets::EdgeInsets, test_harness::TestHarness};
+    use agui_core::{geometry::EdgeInsets, test_harness::TestHarness};
 
     use super::*;
     use crate::sized_box::SizedBox;

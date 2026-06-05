@@ -1,6 +1,6 @@
 use std::{any::Any, future::Future, pin::Pin, sync::mpsc};
 
-use crate::{routing_id::RoutingPath, task::TaskHandle};
+use crate::element::RoutingPath;
 
 /// A message addressed to an element, queued on the event channel and routed to that element on the
 /// next drain.
@@ -21,4 +21,23 @@ pub trait TaskScheduler {
 
     /// An owned scheduler handle that outlives the current build frame.
     fn deferred(&self) -> Box<dyn TaskScheduler>;
+}
+
+#[must_use = "dropping the handle cancels the task"]
+pub struct TaskHandle {
+    drop: Option<Box<dyn FnOnce()>>,
+}
+
+impl TaskHandle {
+    pub fn new(drop: Box<dyn FnOnce()>) -> Self {
+        Self { drop: Some(drop) }
+    }
+}
+
+impl Drop for TaskHandle {
+    fn drop(&mut self) {
+        unsafe {
+            self.drop.take().unwrap_unchecked()();
+        }
+    }
 }

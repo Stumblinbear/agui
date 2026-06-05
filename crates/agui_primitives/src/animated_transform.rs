@@ -1,22 +1,14 @@
-//! A subtree whose transform changes every frame, recomposited rather than repainted.
-
 use std::{rc::Rc, time::Duration};
 
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::{LayerHandle, PaintCtx, TransformLayer, peniko::kurbo::Affine},
-    render_object::{LayoutCtx, MountCtx, RenderObject, box_layout::RenderBox},
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    vsync::{Vsync, VsyncHandle},
-    widget::Widget,
+    paint::{
+        compositing::{LayerHandle, TransformLayer},
+        peniko::kurbo::Affine,
+    },
+    prelude::{element::*, render_object::*},
+    scheduling::{Vsync, VsyncHandle},
 };
 
 /// A function from the current frame's time to the transform the subtree should have on it.
@@ -209,22 +201,17 @@ mod tests {
     use std::{cell::Cell, rc::Rc, time::Duration};
 
     use agui_core::{
-        constraints::Constraints,
-        context::{Dispatch, UpdateCtx},
-        hit_test::{HitTest, HitTestResult},
-        offset::Offset,
         paint::{
-            Compositor, PaintCommand, PaintCtx,
+            command::PaintCommand,
+            compositing::Compositor,
             peniko::{Color, Fill, kurbo::Affine},
+            scene::Scene,
         },
-        render_object::{LayoutCtx, MountCtx, RenderObject, box_layout::RenderBox},
-        routing_id::RoutingId,
-        size::Size,
+        prelude::{element::*, render_object::*},
+        scheduling::Vsync,
         test_harness::TestHarness,
-        text_baseline::TextBaseline,
-        vsync::Vsync,
-        widget::Widget,
     };
+
     use typed_floats::{Positive, PositiveFinite, as_const};
 
     use super::AnimatedTransform;
@@ -318,7 +305,7 @@ mod tests {
     }
 
     /// The transform in effect at the single fill of a composed scene.
-    fn only_fill_transform(scene: &agui_core::paint::Scene) -> Affine {
+    fn only_fill_transform(scene: &Scene) -> Affine {
         let flat = scene.flatten();
 
         let mut current = Affine::IDENTITY;

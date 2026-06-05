@@ -2,20 +2,8 @@ use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    alignment::Alignment,
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::{PaintCtx, peniko::kurbo::Affine},
-    render_object::{
-        LayoutCtx, MountCtx, PaintScope, RenderNode, RenderObject, box_layout::RenderBox,
-    },
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
+    paint::peniko::kurbo::Affine,
+    prelude::{element::*, render_object::*},
 };
 
 /// A widget that applies a 2D transform to its child while painting, without affecting layout.
@@ -249,12 +237,15 @@ where
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        constraints::Constraints,
-        hit_test::HitTestBehavior,
         paint::{
-            Compositor, ContainerLayer, LayerHandle, PaintCommand, PaintCtx, PaintShape,
-            peniko::{Color, kurbo::Affine, kurbo::Point},
+            command::{PaintCommand, PaintShape},
+            compositing::{Compositor, ContainerLayer, LayerHandle},
+            peniko::{
+                Color,
+                kurbo::{Affine, Point},
+            },
         },
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
     };
 

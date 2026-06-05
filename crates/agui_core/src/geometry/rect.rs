@@ -1,6 +1,6 @@
 use typed_floats::{NonNaN, NonNaNFinite, as_const};
 
-use crate::size::Size;
+use crate::geometry::Size;
 
 /// Holds exact position and size values.
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]

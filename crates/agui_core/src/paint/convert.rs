@@ -1,6 +1,6 @@
 use peniko::kurbo::{self, Shape};
 
-use crate::{offset::Offset, rect::Rect, size::Size};
+use crate::geometry::{Offset, Rect, Size};
 
 /// Maximum error, in paint-space units, allowed when approximating a curved shape as a path.
 pub(crate) const DEFAULT_TOLERANCE: f64 = 0.1;

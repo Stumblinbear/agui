@@ -7,13 +7,9 @@ use std::{
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::ElementNode,
+    element::{RoutingId, node::ElementNode},
     provide::ProvideScope,
-    routing_id::RoutingId,
-    task::{
-        TaskHandle,
-        scheduler::{EventSender, TaskEventMessage, TaskFuture, TaskScheduler},
-    },
+    scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
     widget::Widget,
 };
 

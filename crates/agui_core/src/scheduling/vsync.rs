@@ -1,11 +1,3 @@
-//! Callbacks run once per frame, in step with the display refresh.
-//!
-//! A [`Vsync`] holds work that recurs every frame for as long as it is registered: advancing an
-//! animation, sampling input, anything that must keep pace with the display rather than wait on a
-//! message. It is the synchronous counterpart to the asynchronous task scheduler — a callback runs
-//! inline on the frame, free to mutate shared state in place, where a task instead posts a message
-//! back to be handled later.
-
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},

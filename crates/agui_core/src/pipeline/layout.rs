@@ -7,74 +7,10 @@ use fnv::FnvHashSet;
 use slotmap::{SlotMap, new_key_type};
 
 use crate::{
-    constraints::Constraints,
-    render_object::{
-        MountCtx, PaintPipeline, PaintScope,
-        box_layout::{AnyRenderBox, RenderBox},
-    },
+    context::LayoutCtx,
+    pipeline::paint::{PaintPipeline, PaintScope},
+    render_object::box_layout::{AnyRenderBox, Constraints, RenderBox},
 };
-
-new_key_type! {
-    /// Identifies one inner relayout boundary within a [`LayoutPipeline`].
-    pub struct LayoutBoundaryId;
-}
-
-/// A render object shared between the layout and paint registries, so a node that is both a relayout
-/// and a repaint boundary is held in one place.
-pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
-
-/// A registered relayout boundary and its depth in the boundary nesting, so the pipeline can re-enter
-/// the marked boundaries rootmost-first.
-struct RegisteredBoundary {
-    content: BoundaryContent,
-    depth: usize,
-
-    /// The constraints this boundary was last laid out under, replayed to re-lay it on its own. A
-    /// boundary constrained from outside the tree has them written by the owner.
-    constraints: Option<Constraints>,
-
-    /// The repaint boundary enclosing this one, marked when this boundary re-lays so the re-laid
-    /// subtree repaints.
-    paint: PaintScope,
-}
-
-/// The layout dirty state, shared so a [`LayoutScope`] can mark or register a boundary out of band.
-struct LayoutPipelineState {
-    dirty: FnvHashSet<LayoutBoundaryId>,
-    boundaries: SlotMap<LayoutBoundaryId, RegisteredBoundary>,
-
-    notify: Box<dyn Fn()>,
-
-    in_layout: bool,
-}
-
-impl LayoutPipelineState {
-    /// Whether nothing, root or inner, is awaiting re-layout.
-    fn is_clean(&self) -> bool {
-        self.dirty.is_empty()
-    }
-
-    /// Marks `boundary` for re-layout, firing the schedule hook on the clean-to-dirty edge.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called during a layout pass, since the dirty set is being flushed.
-    fn mark_needs_layout(&mut self, boundary: LayoutBoundaryId) {
-        assert!(
-            !self.in_layout,
-            "a relayout cannot be requested during layout"
-        );
-
-        tracing::trace!(boundary = ?boundary, "marked boundary for re-layout");
-
-        let was_clean = self.is_clean();
-        self.dirty.insert(boundary);
-
-        if was_clean {
-            (self.notify)();
-        }
-    }
-}
 
 /// Lays out the relayout boundaries of one subtree, re-laying only the ones that changed.
 ///
@@ -183,10 +119,7 @@ impl LayoutPipeline {
                 depth,
             });
 
-            let mut ctx = LayoutCtx {
-                scope,
-                paint: Some(&mut *paint_pipeline),
-            };
+            let mut ctx = LayoutCtx::new(scope, &mut *paint_pipeline);
 
             content.layout(&mut ctx, constraints);
 
@@ -195,6 +128,68 @@ impl LayoutPipeline {
         }
 
         self.state.borrow_mut().in_layout = false;
+    }
+}
+
+new_key_type! {
+    /// Identifies one inner relayout boundary within a [`LayoutPipeline`].
+    pub struct LayoutBoundaryId;
+}
+
+/// A render object shared between the layout and paint registries, so a node that is both a relayout
+/// and a repaint boundary is held in one place.
+pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
+
+/// A registered relayout boundary and its depth in the boundary nesting, so the pipeline can re-enter
+/// the marked boundaries rootmost-first.
+struct RegisteredBoundary {
+    content: BoundaryContent,
+    depth: usize,
+
+    /// The constraints this boundary was last laid out under, replayed to re-lay it on its own. A
+    /// boundary constrained from outside the tree has them written by the owner.
+    constraints: Option<Constraints>,
+
+    /// The repaint boundary enclosing this one, marked when this boundary re-lays so the re-laid
+    /// subtree repaints.
+    paint: PaintScope,
+}
+
+/// The layout dirty state, shared so a [`LayoutScope`] can mark or register a boundary out of band.
+struct LayoutPipelineState {
+    dirty: FnvHashSet<LayoutBoundaryId>,
+    boundaries: SlotMap<LayoutBoundaryId, RegisteredBoundary>,
+
+    notify: Box<dyn Fn()>,
+
+    in_layout: bool,
+}
+
+impl LayoutPipelineState {
+    /// Whether nothing, root or inner, is awaiting re-layout.
+    fn is_clean(&self) -> bool {
+        self.dirty.is_empty()
+    }
+
+    /// Marks `boundary` for re-layout, firing the schedule hook on the clean-to-dirty edge.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called during a layout pass, since the dirty set is being flushed.
+    fn mark_needs_layout(&mut self, boundary: LayoutBoundaryId) {
+        assert!(
+            !self.in_layout,
+            "cannot request layout while layout is in progress"
+        );
+
+        tracing::trace!(boundary = ?boundary, "marked boundary for re-layout");
+
+        let was_clean = self.is_clean();
+        self.dirty.insert(boundary);
+
+        if was_clean {
+            (self.notify)();
+        }
     }
 }
 
@@ -316,49 +311,6 @@ impl LayoutScope {
     }
 }
 
-/// The context threaded through a layout pass.
-pub struct LayoutCtx<'a> {
-    scope: LayoutScope,
-    paint: Option<&'a mut PaintPipeline>,
-}
-
-impl LayoutCtx<'_> {
-    /// A context that reaches no pipeline, for laying a render object out in isolation. Its scope
-    /// marks nothing and it mounts nothing.
-    pub fn detached() -> LayoutCtx<'static> {
-        LayoutCtx {
-            scope: LayoutScope::detached(),
-            paint: None,
-        }
-    }
-
-    /// The relayout boundary in force. A node forwards this to children and stores it to request a
-    /// relayout later.
-    pub fn scope(&self) -> &LayoutScope {
-        &self.scope
-    }
-
-    /// Lays a child out under `scope` as its relayout boundary, against the same paint registry. A
-    /// node that establishes a nested relayout boundary lays its child out through this.
-    pub fn with_scope<R>(&mut self, scope: LayoutScope, f: impl FnOnce(&mut LayoutCtx) -> R) -> R {
-        let mut child = LayoutCtx {
-            scope,
-            paint: self.paint.as_deref_mut(),
-        };
-
-        f(&mut child)
-    }
-
-    /// Mounts a subtree built during this layout, painting into `paint_scope`, the boundary the
-    /// building node captured at its own mount. Runs `f` with a [`MountCtx`] for that boundary, and
-    /// does nothing when detached, since there is no registry to mount into.
-    pub fn mount(&mut self, paint_scope: &PaintScope, f: impl FnOnce(&mut MountCtx)) {
-        if let Some(paint) = self.paint.as_deref_mut() {
-            f(&mut MountCtx::new(paint, paint_scope.clone()));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{
@@ -369,13 +321,13 @@ mod tests {
     use typed_floats::{Positive, PositiveFinite};
 
     use crate::{
-        constraints::Constraints,
-        hit_test::{HitTest, HitTestResult},
-        offset::Offset,
-        paint::{ContainerLayer, LayerHandle, PaintCtx},
-        render_object::{MountCtx, PipelineOwner, RenderObject, box_layout::RenderBox},
-        size::Size,
-        text_baseline::TextBaseline,
+        context::{MountCtx, PaintCtx},
+        geometry::{Offset, Size},
+        input::hit_test::{HitTest, HitTestResult},
+        paint::compositing::{ContainerLayer, LayerHandle},
+        pipeline::PipelineOwner,
+        render_object::{RenderObject, box_layout::RenderBox},
+        text::TextBaseline,
     };
 
     use super::*;
@@ -514,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "a relayout cannot be requested during layout")]
+    #[should_panic(expected = "cannot request layout while layout is in progress")]
     fn requesting_a_relayout_during_layout_panics() {
         let (_layouts, _captured, render) = probe(true);
 

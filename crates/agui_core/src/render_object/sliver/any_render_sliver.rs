@@ -3,9 +3,9 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use typed_floats::PositiveFinite;
 
 use crate::{
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
+    context::PaintCtx,
+    geometry::Offset,
+    input::hit_test::{HitTest, HitTestResult},
     render_object::{
         AnyRenderObject,
         sliver::{RenderSliver, SliverConstraints, SliverGeometry},

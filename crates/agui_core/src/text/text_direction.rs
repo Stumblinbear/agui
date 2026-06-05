@@ -2,5 +2,6 @@
 pub enum TextDirection {
     #[default]
     LeftToRight,
+
     RightToLeft,
 }

@@ -5,7 +5,7 @@ use std::{
 
 use typed_floats::{NonNaN, as_const};
 
-use crate::{axis::Axis, offset::Offset, rect::Rect};
+use crate::geometry::{Axis, Offset, Rect};
 
 /// Holds width and height values.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]

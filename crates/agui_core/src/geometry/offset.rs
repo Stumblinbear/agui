@@ -4,7 +4,7 @@ use std::ops::{
 
 use typed_floats::{Atan2, NonNaN, NonNaNFinite, Positive, Powf, as_const};
 
-use crate::{edge_insets::EdgeInsets, rect::Rect, size::Size};
+use crate::geometry::{EdgeInsets, Rect, Size};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Offset {

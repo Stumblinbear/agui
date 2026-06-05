@@ -1,21 +1,12 @@
-//! A widget that composites its subtree at a reduced opacity.
-
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::{LayerHandle, OpacityLayer, PaintCtx, PaintShape, peniko::kurbo},
-    render_object::{
-        LayoutCtx, MountCtx, PaintScope, RenderNode, RenderObject, box_layout::RenderBox,
+    paint::{
+        command::PaintShape,
+        compositing::{LayerHandle, OpacityLayer},
+        peniko::kurbo,
     },
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
+    prelude::{element::*, render_object::*},
 };
 
 /// A widget that composites its subtree at a reduced `opacity` — `0.0` fully transparent, `1.0` fully
@@ -202,9 +193,9 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use agui_core::{
-        constraints::Constraints,
-        paint::{ContainerLayer, LayerHandle, PaintCommand, peniko::Color},
-        render_object::PipelineOwner,
+        paint::{command::PaintCommand, compositing::ContainerLayer, peniko::Color},
+        pipeline::PipelineOwner,
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
     };
 

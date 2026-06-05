@@ -8,28 +8,68 @@
 
 // #![warn(missing_docs)]
 
-pub mod alignment;
-pub mod axis;
-pub mod constraints;
 pub mod context;
 pub mod driver;
-pub mod edge_insets;
 pub mod element;
-pub mod hit_test;
+pub mod geometry;
+pub mod input;
 pub mod key;
-pub mod offset;
 pub mod paint;
-pub mod pointer;
+pub mod pipeline;
 pub mod provide;
-pub mod rect;
 pub mod render_object;
-pub mod routing_id;
-pub mod size;
-pub mod task;
+pub mod scheduling;
 #[cfg(test)]
 pub mod test_fixtures;
 pub mod test_harness;
-pub mod text_baseline;
-pub mod text_direction;
-pub mod vsync;
+pub mod text;
 pub mod widget;
+
+pub mod prelude {
+    mod shared {
+        pub use crate::{render_object::AnyRenderObject, widget::AsAnyWidget};
+    }
+
+    mod unit {
+        pub use crate::{
+            geometry::{
+                Alignment, Axis, AxisDirection, EdgeInsets, EdgeInsetsGeometry, Offset, Rect, Size,
+            },
+            input::{
+                hit_test::HitTestBehavior,
+                pointer::{PointerEvent, PointerEventKind, PointerId},
+            },
+            text::{TextBaseline, TextDirection},
+        };
+    }
+
+    pub mod element {
+        pub use crate::{
+            context::{Dispatch, MessageCtx, UpdateCtx},
+            element::{
+                AnyElement, Element, MultiChildElement, RoutingId, RoutingPath, SingleChildElement,
+                node::ElementNode,
+            },
+            scheduling::TaskHandle,
+            widget::{BoxedSliverWidget, BoxedWidget, Widget},
+        };
+
+        pub use super::{shared::*, unit::*};
+    }
+
+    pub mod render_object {
+        pub use crate::{
+            context::{LayoutCtx, MountCtx, PaintCtx},
+            input::hit_test::{HitTest, HitTestResult},
+            pipeline::{layout::LayoutScope, paint::PaintScope},
+            render_object::{
+                AnyRenderObject, RenderObject,
+                box_layout::{AnyRenderBox, Constraints, RenderBox},
+                node::{RelayoutRenderNode, RenderNode},
+                sliver::{AnyRenderSliver, RenderSliver},
+            },
+        };
+
+        pub use super::{shared::*, unit::*};
+    }
+}

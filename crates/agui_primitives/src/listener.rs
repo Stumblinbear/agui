@@ -4,18 +4,8 @@ use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestBehavior, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    pointer::{PointerEvent, PointerEventKind, PointerHandler},
-    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
+    input::pointer::PointerHandler,
+    prelude::{element::*, render_object::*},
 };
 
 /// A widget that receives pointer events landing on its child, without affecting layout or painting.
@@ -192,10 +182,10 @@ mod tests {
     use std::cell::{Cell, RefCell};
 
     use agui_core::{
-        edge_insets::EdgeInsets,
-        paint::{ContainerLayer, LayerHandle},
-        pointer::{PointerDispatcher, PointerId},
-        render_object::PipelineOwner,
+        input::pointer::PointerDispatcher,
+        paint::compositing::{ContainerLayer, LayerHandle},
+        pipeline::PipelineOwner,
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
     };
 

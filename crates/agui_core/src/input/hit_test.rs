@@ -2,7 +2,7 @@ use std::fmt;
 
 use peniko::kurbo::{Affine, Point};
 
-use crate::{offset::Offset, pointer::PointerHandler};
+use crate::{geometry::Offset, input::pointer::PointerHandler};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HitTest {
@@ -159,8 +159,8 @@ mod tests {
     use peniko::kurbo::{Affine, Point};
 
     use crate::{
-        offset::Offset,
-        pointer::{PointerEvent, PointerEventKind, PointerHandler, PointerId},
+        geometry::Offset,
+        input::pointer::{PointerEvent, PointerEventKind, PointerHandler, PointerId},
     };
 
     use super::*;

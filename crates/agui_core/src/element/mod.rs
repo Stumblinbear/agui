@@ -1,13 +1,13 @@
 mod any_element;
-mod node;
+pub mod node;
+mod routing_id;
 mod shared;
 
 pub use any_element::*;
-pub use node::*;
+pub use routing_id::*;
 pub use shared::*;
 
 /// A persistent node in the element tree.
 pub trait Element {}
 
-// The unit type is the leaf element: no children, no state.
 impl Element for () {}

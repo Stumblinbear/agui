@@ -1,11 +1,12 @@
 use peniko::kurbo::Affine;
 
 use crate::{
-    offset::Offset,
+    geometry::Offset,
     paint::{
-        canvas::Canvas,
+        Canvas,
+        command::PaintCommand,
         compositing::{Container, LayerHandle, PictureLayer, TransformLayer},
-        scene::{PaintCommand, Scene},
+        scene::Scene,
     },
 };
 
@@ -152,9 +153,12 @@ mod tests {
     use peniko::{Color, Fill, kurbo::Affine};
 
     use crate::{
-        paint::{Compositor, ContainerLayer, PaintCommand, compositing::Layer},
-        rect::Rect,
-        size::Size,
+        geometry::{Rect, Size},
+        paint::{
+            Canvas,
+            command::PaintCommand,
+            compositing::{Compositor, ContainerLayer, Layer},
+        },
     };
 
     use super::*;

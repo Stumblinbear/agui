@@ -1,6 +1,9 @@
 use typed_floats::{Max, NonNaNFinite, Positive, PositiveFinite, as_const};
 
-use crate::{axis::Axis, offset::Offset, size::Size, text_direction::TextDirection};
+use crate::{
+    geometry::{Axis, Offset, Size},
+    text::TextDirection,
+};
 
 pub trait EdgeInsetsGeometry {
     fn is_zero(&self) -> bool;

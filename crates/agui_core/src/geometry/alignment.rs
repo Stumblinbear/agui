@@ -1,6 +1,6 @@
 use typed_floats::{NonNaNFinite, as_const};
 
-use crate::{offset::Offset, rect::Rect, size::Size};
+use crate::geometry::{Offset, Rect, Size};
 
 /// A point within a box, named as a fraction of its size.
 ///

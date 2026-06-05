@@ -1,28 +1,11 @@
-use typed_floats::{Positive, PositiveFinite, as_const};
-
-use crate::{
-    constraints::Constraints,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    render_object::box_layout::RenderBox,
-    size::Size,
-    text_baseline::TextBaseline,
-};
+use crate::context::{LayoutCtx, MountCtx};
 
 mod any_render_object;
 pub mod box_layout;
-mod layout;
-mod node;
-mod owner;
-mod relayout_node;
+pub mod node;
 pub mod sliver;
 
 pub use any_render_object::*;
-pub use layout::*;
-pub use node::*;
-pub use owner::*;
-pub use relayout_node::*;
 
 /// An object in the render tree.
 ///
@@ -49,44 +32,4 @@ impl RenderObject for () {
     fn update_compositing_bits(&mut self) -> bool {
         false
     }
-}
-
-impl RenderBox for () {
-    fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        Some(as_const!(PositiveFinite, f32, 0.0))
-    }
-
-    fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        Some(as_const!(PositiveFinite, f32, 0.0))
-    }
-
-    fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        Some(as_const!(PositiveFinite, f32, 0.0))
-    }
-
-    fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        Some(as_const!(PositiveFinite, f32, 0.0))
-    }
-
-    fn measure(&self, constraints: Constraints) -> Size {
-        constraints.smallest()
-    }
-
-    fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
-        constraints.smallest()
-    }
-
-    fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
-        None
-    }
-
-    fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
-        None
-    }
-
-    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
-        HitTest::Pass
-    }
-
-    fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
 }

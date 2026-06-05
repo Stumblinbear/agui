@@ -1,4 +1,4 @@
-use agui_core::text_baseline::TextBaseline;
+use agui_core::text::TextBaseline;
 
 mod column;
 mod flexible;

@@ -1,4 +1,4 @@
-use agui_core::routing_id::{RoutingId, RoutingPath};
+use agui_core::element::{RoutingId, RoutingPath};
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use fnv::FnvHashSet;
 

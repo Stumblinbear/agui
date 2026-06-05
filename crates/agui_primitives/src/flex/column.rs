@@ -1,19 +1,7 @@
 use bon::Builder;
 
-use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::MultiChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    render_object::{LayoutCtx, MountCtx, RenderObject, box_layout::RenderBox},
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    text_direction::TextDirection,
-    widget::{AsAnyWidget, BoxedWidget, Widget},
-};
+use agui_core::prelude::{element::*, render_object::*};
+
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::flex::{

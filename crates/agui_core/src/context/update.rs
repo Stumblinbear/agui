@@ -2,9 +2,9 @@ use std::{any::Any, future::Future, rc::Rc};
 
 use crate::{
     context::TaskCtx,
+    element::{RoutingId, RoutingPath},
     provide::ProvideScope,
-    routing_id::{RoutingId, RoutingPath},
-    task::{TaskHandle, scheduler::TaskScheduler},
+    scheduling::{TaskHandle, TaskScheduler},
 };
 
 pub struct UpdateCtx<'a> {

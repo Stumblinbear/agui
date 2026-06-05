@@ -1,20 +1,6 @@
 use typed_floats::{Positive, PositiveFinite, as_const};
 
-use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    render_object::{
-        LayoutCtx, LayoutScope, MountCtx, RelayoutRenderNode, RenderObject, box_layout::RenderBox,
-    },
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
-};
+use agui_core::prelude::{element::*, render_object::*};
 
 pub struct SizedBox<Child> {
     width: Option<Positive<f32>>,
@@ -315,8 +301,9 @@ mod tests {
     };
 
     use agui_core::{
-        paint::{ContainerLayer, LayerHandle},
-        render_object::{BoundaryContent, PipelineOwner, RenderNode},
+        paint::compositing::{ContainerLayer, LayerHandle},
+        pipeline::{PipelineOwner, layout::BoundaryContent},
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
     };
 

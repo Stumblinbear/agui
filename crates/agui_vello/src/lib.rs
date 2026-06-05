@@ -1,10 +1,11 @@
-pub use vello;
-
-pub mod headless;
-
-use agui_core::paint::{PaintCommand, PaintShape, Scene};
-
+use agui_core::paint::{
+    command::{PaintCommand, PaintShape},
+    scene::Scene,
+};
 use vello::kurbo::Affine;
+
+pub use vello;
+pub mod headless;
 
 pub fn append_scene(scene: &Scene, target: &mut vello::Scene) {
     render_into(scene, target, Affine::IDENTITY);

@@ -2,22 +2,7 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::{Element, ElementNode},
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::PaintCtx,
-    render_object::{
-        LayoutCtx, LayoutScope, MountCtx, PaintScope, RenderNode, RenderObject,
-        box_layout::RenderBox,
-    },
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
-};
+use agui_core::prelude::{element::*, render_object::*};
 
 /// A widget that builds its child from the constraints handed to it.
 ///
@@ -332,11 +317,10 @@ mod tests {
     use std::cell::Cell;
 
     use agui_core::{
-        paint::{ContainerLayer, LayerHandle},
-        render_object::{BoundaryContent, PipelineOwner, box_layout::AnyRenderBox},
-        task::TaskHandle,
+        paint::compositing::{ContainerLayer, LayerHandle},
+        pipeline::{PipelineOwner, layout::BoundaryContent},
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
-        widget::AsAnyWidget,
     };
 
     use super::*;

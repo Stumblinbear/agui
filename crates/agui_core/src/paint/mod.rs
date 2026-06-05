@@ -1,12 +1,9 @@
 mod canvas;
-mod compositing;
-mod context;
+pub mod command;
+pub mod compositing;
 mod convert;
-mod scene;
+pub mod scene;
 
-pub use canvas::*;
-pub use compositing::*;
-pub use context::*;
-pub use scene::*;
+pub use canvas::Canvas;
 
 pub use peniko;

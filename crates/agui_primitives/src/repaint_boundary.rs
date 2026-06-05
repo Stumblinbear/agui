@@ -1,24 +1,11 @@
-//! A subtree that paints into its own retained layer, repainted independently of its surroundings.
-
 use std::{cell::RefCell, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::{ContainerLayer, LayerHandle, PaintCtx},
-    render_object::{
-        BoundaryContent, LayoutCtx, MountCtx, PaintBoundaryHandle, RenderObject,
-        box_layout::RenderBox,
-    },
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
+    paint::compositing::{ContainerLayer, LayerHandle},
+    pipeline::{layout::BoundaryContent, paint::PaintBoundaryHandle},
+    prelude::{element::*, render_object::*},
 };
 
 /// A widget whose subtree paints into its own retained layer.
@@ -177,14 +164,16 @@ mod tests {
     use std::cell::{Cell, RefCell};
 
     use agui_core::{
-        element::SingleChildElement,
         paint::{
-            ContainerLayer, LayerHandle, PaintCommand, Scene,
+            command::PaintCommand,
             peniko::{Color, Fill},
+            scene::Scene,
         },
-        render_object::{PaintScope, PipelineOwner, RenderNode},
+        pipeline::PipelineOwner,
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
     };
+
     use typed_floats::{PositiveFinite, as_const};
 
     use super::*;

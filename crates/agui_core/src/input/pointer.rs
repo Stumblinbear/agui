@@ -3,7 +3,7 @@ use std::rc::Rc;
 use fnv::FnvHashMap;
 use peniko::kurbo::Point;
 
-use crate::{hit_test::HitTestResult, offset::Offset};
+use crate::{geometry::Offset, input::hit_test::HitTestResult};
 
 /// Identifies one pointer (a finger, mouse, or stylus) across the events of a single interaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,10 +24,13 @@ pub struct PointerEvent {
 pub enum PointerEventKind {
     /// The pointer made contact.
     Down,
+
     /// The pointer moved while in contact.
     Move,
+
     /// The pointer broke contact.
     Up,
+
     /// The interaction was cancelled without a clean release.
     Cancel,
 }
@@ -102,7 +105,7 @@ impl PointerDispatcher {
 mod tests {
     use std::cell::{Cell, RefCell};
 
-    use crate::hit_test::{HitTest, HitTestResult};
+    use crate::input::hit_test::{HitTest, HitTestResult};
 
     use super::*;
 

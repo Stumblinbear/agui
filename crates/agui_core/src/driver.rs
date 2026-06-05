@@ -2,9 +2,9 @@ use std::any::Any;
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
+    element::RoutingPath,
     provide::ProvideScope,
-    routing_id::RoutingPath,
-    task::scheduler::TaskScheduler,
+    scheduling::TaskScheduler,
     widget::Widget,
 };
 
@@ -56,22 +56,11 @@ mod tests {
     use typed_floats::{Positive, PositiveFinite};
 
     use crate::{
-        constraints::Constraints,
-        context::{Dispatch, MessageCtx, UpdateCtx},
         driver::{dispatch_messages, rebuild_dirty},
-        element::MultiChildElement,
-        hit_test::{HitTest, HitTestResult},
-        offset::Offset,
-        paint::PaintCtx,
+        prelude::{element::*, render_object::*},
         provide::ProvideScope,
-        render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
-        routing_id::{RoutingId, RoutingPath},
-        size::Size,
-        task::TaskHandle,
-        test_fixtures::{Leaf, MultiChild, Transparent},
-        test_harness::TestTaskRunner,
-        text_baseline::TextBaseline,
-        widget::Widget,
+        test_fixtures::*,
+        test_harness::*,
     };
 
     #[test]

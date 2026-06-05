@@ -1,5 +1,3 @@
-//! Off-screen rendering for golden image tests: render a scene to an RGBA8 buffer with no window.
-
 use std::{
     fs::File,
     io::{BufReader, BufWriter},

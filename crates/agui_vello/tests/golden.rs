@@ -1,22 +1,14 @@
-//! Golden image test: render a widget tree off-screen and compare it to a reference PNG.
-//!
-//! The golden is generated on first run (or with `AGUI_UPDATE_GOLDEN=1`) and must be regenerated on
-//! the machine the tests run on, since GPU output varies between drivers. The test skips, rather than
-//! fails, when no GPU adapter is available.
-
 use agui_core::{
-    constraints::Constraints,
-    offset::Offset,
-    paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, peniko::Color},
-    render_object::{LayoutCtx, box_layout::RenderBox},
+    paint::compositing::{Compositor, ContainerLayer, LayerHandle},
+    prelude::{element::*, render_object::*},
     test_harness::TestHarness,
-    widget::Widget,
 };
 use agui_primitives::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
 use agui_vello::{
     headless::{HeadlessRenderer, assert_golden},
     to_vello_scene,
 };
+use vello::peniko::Color;
 
 #[test]
 fn orange_half_pane_matches_golden() {

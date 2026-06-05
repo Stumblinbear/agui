@@ -5,7 +5,10 @@ use std::{
 
 use peniko::{BlendMode, Compose, Mix, kurbo::Affine};
 
-use crate::paint::scene::{PaintCommand, PaintShape, Scene};
+use crate::paint::{
+    command::{PaintCommand, PaintShape},
+    scene::Scene,
+};
 
 /// A shared, mutable handle to a layer.
 pub struct LayerHandle<L: ?Sized = dyn Layer>(Rc<RefCell<L>>);
@@ -345,7 +348,10 @@ mod tests {
         kurbo::{Affine, Stroke},
     };
 
-    use crate::{paint::Canvas, rect::Rect, size::Size};
+    use crate::{
+        geometry::{Rect, Size},
+        paint::canvas::Canvas,
+    };
 
     use super::*;
 

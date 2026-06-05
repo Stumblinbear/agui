@@ -66,9 +66,8 @@ mod tests {
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        element::SingleChildElement,
+        element::{RoutingId, SingleChildElement},
         provide::ProvideScope,
-        routing_id::RoutingId,
         test_fixtures::Leaf,
         test_harness::TestHarness,
         widget::Widget,

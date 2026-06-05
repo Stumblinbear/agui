@@ -1,20 +1,8 @@
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    constraints::Constraints,
-    context::{Dispatch, UpdateCtx},
-    element::SingleChildElement,
-    hit_test::{HitTest, HitTestResult},
-    offset::Offset,
-    paint::{
-        PaintCtx,
-        peniko::{Color, Fill},
-    },
-    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
-    routing_id::RoutingId,
-    size::Size,
-    text_baseline::TextBaseline,
-    widget::Widget,
+    paint::peniko::{Color, Fill},
+    prelude::{element::*, render_object::*},
 };
 
 /// A widget that fills its bounds with a color, then paints its child over it.
@@ -176,11 +164,12 @@ where
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        constraints::Constraints,
         paint::{
-            Compositor, ContainerLayer, LayerHandle, PaintCommand, PaintCtx, PaintShape,
-            peniko::{Brush, Color, kurbo},
+            command::{PaintCommand, PaintShape},
+            compositing::{Compositor, ContainerLayer, LayerHandle},
+            peniko::{Brush, kurbo},
         },
+        prelude::{element::*, render_object::*},
         test_harness::TestHarness,
     };
 

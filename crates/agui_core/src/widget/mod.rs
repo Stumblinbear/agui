@@ -1,8 +1,7 @@
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::Element,
+    element::{Element, RoutingId},
     key::AnyKeyable,
-    routing_id::RoutingId,
 };
 
 mod any_widget;
@@ -59,12 +58,12 @@ impl Widget for () {
 }
 
 #[cfg(test)]
-mod dispatch_tests {
+mod tests {
     use std::cell::Cell;
 
     use crate::{
         context::MessageCtx,
-        routing_id::RoutingId,
+        element::RoutingId,
         test_fixtures::{Leaf, MultiChild, Transparent},
         test_harness::TestHarness,
     };

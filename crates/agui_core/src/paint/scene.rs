@@ -1,11 +1,6 @@
-use std::rc::Rc;
+use peniko::{Brush, kurbo::Stroke};
 
-use peniko::{
-    BlendMode, Brush, Fill,
-    kurbo::{self, Affine, BezPath, Shape, Stroke},
-};
-
-use crate::paint::convert::DEFAULT_TOLERANCE;
+use crate::paint::command::PaintCommand;
 
 /// A complete, backend-independent description of what to draw.
 ///
@@ -138,75 +133,4 @@ impl Scene {
             }
         }
     }
-}
-
-/// The geometry of a fill, stroke, or clip.
-#[derive(Clone, Debug)]
-pub enum PaintShape {
-    Rect(kurbo::Rect),
-    RoundedRect(kurbo::RoundedRect),
-    Circle(kurbo::Circle),
-    Path(BezPath),
-}
-
-impl PaintShape {
-    pub(crate) fn from_shape(shape: &impl Shape) -> Self {
-        if let Some(rect) = shape.as_rect() {
-            Self::Rect(rect)
-        } else if let Some(rounded) = shape.as_rounded_rect() {
-            Self::RoundedRect(rounded)
-        } else if let Some(circle) = shape.as_circle() {
-            Self::Circle(circle)
-        } else {
-            Self::Path(shape.to_path(DEFAULT_TOLERANCE))
-        }
-    }
-}
-
-/// A single operation within a [`Scene`].
-#[derive(Clone, Debug)]
-pub enum PaintCommand {
-    /// Concatenates a transform onto the stack: every operation up to the matching [`PopTransform`]
-    /// is placed under it.
-    ///
-    /// [`PopTransform`]: PaintCommand::PopTransform
-    PushTransform(Affine),
-
-    /// Restores the transform in effect before the most recent [`PushTransform`].
-    ///
-    /// [`PushTransform`]: PaintCommand::PushTransform
-    PopTransform,
-
-    /// Begins a layer: every operation up to the matching [`PopLayer`] is clipped to `clip` and
-    /// composited as one group, using `blend` and `alpha`.
-    ///
-    /// [`PopLayer`]: PaintCommand::PopLayer
-    PushLayer {
-        blend: BlendMode,
-        alpha: f32,
-        clip: PaintShape,
-    },
-
-    /// Closes the most recently opened layer.
-    PopLayer,
-
-    /// Fills a shape's interior.
-    Fill {
-        style: Fill,
-        brush: u32,
-        brush_transform: Option<Box<Affine>>,
-        shape: PaintShape,
-    },
-
-    /// Strokes a shape's outline.
-    Stroke {
-        stroke: u32,
-        brush: u32,
-        brush_transform: Option<Box<Affine>>,
-        shape: PaintShape,
-    },
-
-    /// Splices a sub-scene under the transform in effect, by reference. The sub-scene keeps its own
-    /// brush and stroke tables; a backend transforms it as a unit.
-    Embed { scene: Rc<Scene> },
 }
