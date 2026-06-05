@@ -82,7 +82,7 @@ impl Widget for Leaf<'_> {
 
     fn create_render_object(&self, (): &()) -> Self::Render {}
 
-    fn update_render_object(&self, (): &(), _: &mut Self::Render) {}
+    fn update_render_object(&self, (): &(), (): &mut Self::Render) {}
 }
 
 pub struct Transparent<Child> {
@@ -108,7 +108,7 @@ impl<Child: Widget> Widget for Transparent<Child> {
 
     fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
-    fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
+    fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
 }
 
 pub struct MultiChild<Child> {
@@ -139,5 +139,5 @@ impl<Child: Widget> Widget for MultiChild<Child> {
 
     fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
-    fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
+    fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
 }

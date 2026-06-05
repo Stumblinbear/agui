@@ -367,6 +367,7 @@ mod tests {
         }
 
         fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+            #[allow(clippy::unit_arg)]
             RenderParent {
                 children: self
                     .children

@@ -385,7 +385,7 @@ mod tests {
             self.creates.set(self.creates.get() + 1);
         }
 
-        fn update_render_object(&self, _: &CountedElement, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &CountedElement, (): &mut Self::Render) {}
     }
 
     #[test]

@@ -412,7 +412,7 @@ mod tests {
 
         fn create_render_object(&self, _: &TestWidgetElement<T>) -> Self::Render {}
 
-        fn update_render_object(&self, _: &TestWidgetElement<T>, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &TestWidgetElement<T>, (): &mut Self::Render) {}
     }
 
     /// Reads the value held by the inner `TestWidgetElement` behind a dyn-widget boundary.
@@ -624,7 +624,7 @@ mod tests {
             self.creates.set(self.creates.get() + 1);
         }
 
-        fn update_render_object(&self, _: &CountedElement, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &CountedElement, (): &mut Self::Render) {}
     }
 
     #[test]

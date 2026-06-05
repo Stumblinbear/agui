@@ -417,11 +417,9 @@ mod tests {
             element.id = self.id;
         }
 
-        fn create_render_object(&self, _: &ProbeElement) -> Self::Render {
-            Self::Render::default()
-        }
+        fn create_render_object(&self, _: &ProbeElement) -> Self::Render {}
 
-        fn update_render_object(&self, _: &ProbeElement, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &ProbeElement, (): &mut Self::Render) {}
 
         fn key(&self) -> Option<&dyn AnyKeyable> {
             self.key.as_ref().map(|k| k as &dyn AnyKeyable)
@@ -651,11 +649,9 @@ mod tests {
             element.dispatch(|i| &self.children[i], path, action);
         }
 
-        fn create_render_object(&self, _: &Self::Element) -> Self::Render {
-            Self::Render::default()
-        }
+        fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
-        fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
 
         fn key(&self) -> Option<&dyn AnyKeyable> {
             Some(&self.key)

@@ -55,7 +55,7 @@ impl Widget for () {
 
     fn create_render_object(&self, (): &()) -> Self::Render {}
 
-    fn update_render_object(&self, (): &(), _: &mut Self::Render) {}
+    fn update_render_object(&self, (): &(), (): &mut Self::Render) {}
 }
 
 #[cfg(test)]
