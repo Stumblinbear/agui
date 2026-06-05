@@ -164,21 +164,19 @@ where
     let routing_path = ctx.routing_path();
     let provide_scope = ctx.provide_scope().clone();
 
-    // Layout runs outside the build frame, so each element built or reconciled here borrows the
-    // captured owned scheduler handle to keep spawning tasks.
-    let update_ctx = move || {
-        let routing_path = routing_path.to_vec();
-        let scheduler = scheduler.deferred();
-
-        (scheduler, routing_path, provide_scope.clone())
-    };
-
     Rc::new(
         move |ctx: &mut LayoutCtx,
               constraints: Constraints,
               paint_scope: Option<&PaintScope>,
               slot: &mut Option<RenderNode<Child::Render, Option<Size>>>| {
             let new_child = (builder)(constraints);
+
+            // Layout runs outside the build frame, so the element built or reconciled here borrows an
+            // owned scheduler handle, derived from the one captured at build, to keep spawning tasks.
+            let mut scheduler = scheduler.deferred();
+            let mut routing_path = routing_path.to_vec();
+            let mut update =
+                UpdateCtx::new(&mut *scheduler, &mut routing_path, provide_scope.clone());
 
             let mut retained = child_widget.borrow_mut();
 
@@ -188,14 +186,7 @@ where
                 && new_child.is_same_type(old_child)
                 && new_child.key() == old_child.key()
             {
-                let (mut scheduler, mut routing_path, provide_scope) = update_ctx();
-
-                new_child.update(
-                    &mut node.element,
-                    old_child,
-                    &mut UpdateCtx::new(&mut *scheduler, &mut routing_path, provide_scope),
-                );
-
+                new_child.update(&mut node.element, old_child, &mut update);
                 new_child.update_render_object(&node.element, &mut child_render.object);
 
                 *old_child = new_child;
@@ -203,21 +194,13 @@ where
                 return;
             }
 
-            // Otherwise discard the retained subtree, unmounting it first, and build a fresh one.
-            if let Some(mut old) = slot.take()
-                && let Some(paint_scope) = paint_scope
-            {
+            // Otherwise discard the retained subtree, unmounting it first when it was mounted, and
+            // build a fresh one.
+            if let (Some(mut old), Some(paint_scope)) = (slot.take(), paint_scope) {
                 ctx.mount(paint_scope, |mount| old.unmount(mount));
             }
 
-            let (mut scheduler, mut routing_path, provide_scope) = update_ctx();
-
-            let element = new_child.create_element(&mut UpdateCtx::new(
-                &mut *scheduler,
-                &mut routing_path,
-                provide_scope,
-            ));
-
+            let element = new_child.create_element(&mut update);
             let mut child_render = RenderNode::new(new_child.create_render_object(&element));
 
             if let Some(paint_scope) = paint_scope {
@@ -303,12 +286,11 @@ where
             self.needs_build = false;
 
             let builder = Rc::clone(&self.builder);
-            let paint_scope = self.paint_scope.clone();
 
             builder(
                 ctx,
                 constraints,
-                paint_scope.as_ref(),
+                self.paint_scope.as_ref(),
                 &mut self.child_render,
             );
         }
