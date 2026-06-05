@@ -65,7 +65,7 @@ mod tests {
         paint::PaintCtx,
         provide::ProvideScope,
         render_object::{
-            LayoutScope, MountCtx, RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox,
+            LayoutCtx, MountCtx, RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox,
         },
         routing_id::{RoutingId, RoutingPath},
         size::Size,
@@ -319,9 +319,9 @@ mod tests {
             constraints.smallest()
         }
 
-        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
             for child in &mut self.children {
-                child.layout(scope, constraints);
+                child.layout(ctx, constraints);
             }
 
             constraints.smallest()

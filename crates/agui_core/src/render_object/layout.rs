@@ -9,7 +9,7 @@ use slotmap::{SlotMap, new_key_type};
 use crate::{
     constraints::Constraints,
     render_object::{
-        PaintScope,
+        MountCtx, PaintPipeline, PaintScope,
         box_layout::{AnyRenderBox, RenderBox},
     },
 };
@@ -138,7 +138,7 @@ impl LayoutPipeline {
     }
 
     /// Re-lays every marked boundary from the constraints it last took, leaving the rest untouched.
-    pub fn flush(&self) {
+    pub fn flush(&self, paint_pipeline: &mut PaintPipeline) {
         // Re-enter the marked boundaries rootmost-first: re-laying an outer boundary re-lays the
         // boundaries nested in it, so doing the outer one first lets the inner ones be skipped here
         // rather than laid out a second time.
@@ -183,7 +183,12 @@ impl LayoutPipeline {
                 depth,
             });
 
-            content.layout(&scope, constraints);
+            let mut ctx = LayoutCtx {
+                scope,
+                paint: Some(&mut *paint_pipeline),
+            };
+
+            content.layout(&mut ctx, constraints);
 
             // The boundary's painting is now stale; repaint the boundary that encloses it.
             paint.mark_needs_paint();
@@ -311,6 +316,49 @@ impl LayoutScope {
     }
 }
 
+/// The context threaded through a layout pass.
+pub struct LayoutCtx<'a> {
+    scope: LayoutScope,
+    paint: Option<&'a mut PaintPipeline>,
+}
+
+impl LayoutCtx<'_> {
+    /// A context that reaches no pipeline, for laying a render object out in isolation. Its scope
+    /// marks nothing and it mounts nothing.
+    pub fn detached() -> LayoutCtx<'static> {
+        LayoutCtx {
+            scope: LayoutScope::detached(),
+            paint: None,
+        }
+    }
+
+    /// The relayout boundary in force. A node forwards this to children and stores it to request a
+    /// relayout later.
+    pub fn scope(&self) -> &LayoutScope {
+        &self.scope
+    }
+
+    /// Lays a child out under `scope` as its relayout boundary, against the same paint registry. A
+    /// node that establishes a nested relayout boundary lays its child out through this.
+    pub fn with_scope<R>(&mut self, scope: LayoutScope, f: impl FnOnce(&mut LayoutCtx) -> R) -> R {
+        let mut child = LayoutCtx {
+            scope,
+            paint: self.paint.as_deref_mut(),
+        };
+
+        f(&mut child)
+    }
+
+    /// Mounts a subtree built during this layout, painting into `paint_scope`, the boundary the
+    /// building node captured at its own mount. Runs `f` with a [`MountCtx`] for that boundary, and
+    /// does nothing when detached, since there is no registry to mount into.
+    pub fn mount(&mut self, paint_scope: &PaintScope, f: impl FnOnce(&mut MountCtx)) {
+        if let Some(paint) = self.paint.as_deref_mut() {
+            f(&mut MountCtx::new(paint, paint_scope.clone()));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -367,12 +415,12 @@ mod tests {
         fn measure(&self, constraints: Constraints) -> Size {
             constraints.smallest()
         }
-        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            *self.captured.borrow_mut() = Some(scope.clone());
+            *self.captured.borrow_mut() = Some(ctx.scope().clone());
 
             if self.marks_during_layout {
-                scope.mark_needs_layout();
+                ctx.scope().mark_needs_layout();
             }
 
             constraints.smallest()

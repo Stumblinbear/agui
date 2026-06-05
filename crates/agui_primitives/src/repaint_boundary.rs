@@ -12,7 +12,7 @@ use agui_core::{
     offset::Offset,
     paint::{ContainerLayer, LayerHandle, PaintCtx},
     render_object::{
-        BoundaryContent, LayoutScope, MountCtx, PaintBoundaryHandle, RenderObject,
+        BoundaryContent, LayoutCtx, MountCtx, PaintBoundaryHandle, RenderObject,
         box_layout::RenderBox,
     },
     routing_id::RoutingId,
@@ -147,8 +147,8 @@ impl RenderBox for RenderRepaintBoundary {
         self.content.measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        self.content.layout(scope, constraints)
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.content.layout(ctx, constraints)
     }
 
     fn measure_baseline(
@@ -294,8 +294,8 @@ mod tests {
         fn measure(&self, _: Constraints) -> Size {
             Size::new(10.0, 10.0)
         }
-        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-            self.child.layout(scope, constraints);
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+            self.child.layout(ctx, constraints);
             Size::new(10.0, 10.0)
         }
         fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {

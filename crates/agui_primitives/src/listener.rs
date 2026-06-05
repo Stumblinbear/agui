@@ -11,7 +11,7 @@ use agui_core::{
     offset::Offset,
     paint::PaintCtx,
     pointer::{PointerEvent, PointerEventKind, PointerHandler},
-    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -144,8 +144,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        let size = self.child.layout_and_get_size(scope, constraints);
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        let size = self.child.layout_and_get_size(ctx, constraints);
         self.child.parent_data = Some(size);
         size
     }

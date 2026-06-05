@@ -373,7 +373,7 @@ impl PipelineOwner {
 
     /// Lays out any boundary that has been marked for layout since the last flush.
     pub fn flush_layout(&mut self) {
-        self.layout.flush();
+        self.layout.flush(&mut self.paint);
     }
 
     /// Repaints any boundary that has been marked for paint since the last flush.
@@ -534,7 +534,7 @@ mod tests {
             Compositor, PaintCommand, Scene,
             peniko::{Color, Fill},
         },
-        render_object::{LayoutScope, RenderObject, box_layout::RenderBox},
+        render_object::{LayoutCtx, RenderObject, box_layout::RenderBox},
         size::Size,
         text_baseline::TextBaseline,
         vsync::Vsync,
@@ -573,7 +573,7 @@ mod tests {
             fn measure(&self, _: Constraints) -> Size {
                 Size::new(1.0, 1.0)
             }
-            fn layout(&mut self, _: &LayoutScope, _: Constraints) -> Size {
+            fn layout(&mut self, _: &mut LayoutCtx, _: Constraints) -> Size {
                 Size::new(1.0, 1.0)
             }
             fn measure_baseline(

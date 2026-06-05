@@ -11,7 +11,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::{LayerHandle, PaintCtx, TransformLayer, peniko::kurbo::Affine},
-    render_object::{LayoutScope, MountCtx, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -178,8 +178,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        self.child.layout(scope, constraints)
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.child.layout(ctx, constraints)
     }
 
     fn measure_baseline(
@@ -217,7 +217,7 @@ mod tests {
             Compositor, PaintCommand, PaintCtx,
             peniko::{Color, Fill, kurbo::Affine},
         },
-        render_object::{LayoutScope, MountCtx, RenderObject, box_layout::RenderBox},
+        render_object::{LayoutCtx, MountCtx, RenderObject, box_layout::RenderBox},
         routing_id::RoutingId,
         size::Size,
         test_harness::TestHarness,
@@ -293,7 +293,7 @@ mod tests {
             Size::new(10.0, 10.0)
         }
 
-        fn layout(&mut self, _: &LayoutScope, _: Constraints) -> Size {
+        fn layout(&mut self, _: &mut LayoutCtx, _: Constraints) -> Size {
             Size::new(10.0, 10.0)
         }
 
@@ -351,7 +351,7 @@ mod tests {
             });
 
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&LayoutScope::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
 
         render.build_layer();
         assert_eq!(

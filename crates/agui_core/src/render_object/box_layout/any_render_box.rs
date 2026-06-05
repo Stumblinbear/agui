@@ -7,7 +7,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{AnyRenderObject, LayoutScope, box_layout::RenderBox},
+    render_object::{AnyRenderObject, LayoutCtx, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -23,7 +23,7 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_measure(&self, constraints: Constraints) -> Size;
 
-    fn dyn_layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size;
+    fn dyn_layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size;
 
     fn dyn_measure_baseline(
         &self,
@@ -63,8 +63,8 @@ where
         self.measure(constraints)
     }
 
-    fn dyn_layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        self.layout(scope, constraints)
+    fn dyn_layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.layout(ctx, constraints)
     }
 
     fn dyn_measure_baseline(
@@ -112,8 +112,8 @@ where
         (**self).dyn_measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        (**self).dyn_layout(scope, constraints)
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        (**self).dyn_layout(ctx, constraints)
     }
 
     fn measure_baseline(
@@ -161,8 +161,8 @@ where
         self.borrow().dyn_measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        self.borrow_mut().dyn_layout(scope, constraints)
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.borrow_mut().dyn_layout(ctx, constraints)
     }
 
     fn measure_baseline(

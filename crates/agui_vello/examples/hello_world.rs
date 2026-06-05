@@ -10,12 +10,13 @@ use agui_core::{
     pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerHandler, PointerId},
     render_object::{BoundaryContent, PipelineOwner, box_layout::RenderBox},
     routing_id::RoutingId,
+    size::Size,
     test_harness::TestHarness,
-    widget::Widget,
+    widget::{AsAnyWidget, Widget},
 };
 use agui_primitives::{
-    colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox, listener::Listener,
-    opacity::Opacity,
+    colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox,
+    layout_builder::LayoutBuilder, listener::Listener, opacity::Opacity,
 };
 use agui_vello::append_scene;
 use vello::{
@@ -39,26 +40,36 @@ fn main() {
         )
         .init();
 
-    // Pointer handlers that only log, to exercise hit testing and dispatch.
-    let on_down: PointerHandler =
-        Rc::new(|event: &PointerEvent| tracing::info!(position = ?event.position, "pointer down"));
-    let on_move: PointerHandler =
-        Rc::new(|event: &PointerEvent| tracing::info!(position = ?event.position, "pointer move"));
-    let on_up: PointerHandler =
-        Rc::new(|event: &PointerEvent| tracing::info!(position = ?event.position, "pointer up"));
-
     // An orange box filling the left half of the window, listening for pointer events.
-    let content = FractionallySizedBox::new()
-        .width_factor(0.5)
-        .height_factor(1.0)
-        .child(
-            Listener::builder()
-                .on_pointer_down(on_down)
-                .on_pointer_move(on_move)
-                .on_pointer_up(on_up)
-                .behavior(HitTestBehavior::Opaque)
-                .child(Opacity::new(0.5).child(ColoredBox::new(Color::rgb8(255, 138, 0)))),
+    let content = LayoutBuilder::new(|constraints| {
+        if constraints.max_width().get() < 400.0 {
+            return ColoredBox::new(Color::rgb8(255, 138, 0)).into_boxed_render_box();
+        }
+
+        // Pointer handlers that only log, to exercise hit testing and dispatch.
+        let on_down: PointerHandler = Rc::new(
+            |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer down"),
         );
+        let on_move: PointerHandler = Rc::new(
+            |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer move"),
+        );
+        let on_up: PointerHandler = Rc::new(
+            |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer up"),
+        );
+
+        FractionallySizedBox::new()
+            .width_factor(0.5)
+            .height_factor(1.0)
+            .child(
+                Listener::builder()
+                    .on_pointer_down(on_down)
+                    .on_pointer_move(on_move)
+                    .on_pointer_up(on_up)
+                    .behavior(HitTestBehavior::Opaque)
+                    .child(Opacity::new(0.5).child(ColoredBox::new(Color::rgb8(255, 138, 0)))),
+            )
+            .into_boxed_render_box()
+    });
 
     // The window owns the pipeline for its subtree and hands its presentation layer back out here. The
     // OS surface would normally take that layer; this example presents it by compositing each frame.
@@ -79,7 +90,7 @@ fn main() {
 /// The loose constraints a window of `width` by `height` lays its subtree out under.
 #[allow(clippy::cast_precision_loss)]
 fn viewport(width: u32, height: u32) -> Constraints {
-    Constraints::new(0.0, width as f32, 0.0, height as f32)
+    Constraints::tight(Size::new(width, height))
 }
 
 struct ActiveWindow {

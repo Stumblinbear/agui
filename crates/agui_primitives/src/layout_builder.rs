@@ -9,13 +9,27 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{
+        LayoutCtx, LayoutScope, MountCtx, PaintScope, RenderNode, RenderObject,
+        box_layout::RenderBox,
+    },
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
     widget::Widget,
 };
 
+/// A widget that builds its child from the constraints handed to it.
+///
+/// The closure is called with the [`Constraints`] this widget is laid out under and returns the child
+/// widget to show for them. It runs during layout, after the constraints are known, so the child can
+/// depend on the space available. The closure is re-run whenever the incoming constraints change. The
+/// child it returns is laid out within those same constraints, and this widget takes the size the child
+/// reports.
+///
+/// The closure may return a different child for different constraints, including a different concrete
+/// widget type, so the return type is typically a boxed widget such as the one produced by
+/// [`into_boxed_render_box`](agui_core::widget::AsAnyWidget::into_boxed_render_box).
 pub struct LayoutBuilder<F, Child> {
     builder: Rc<F>,
 
@@ -35,7 +49,21 @@ where
     }
 }
 
+/// The child built during layout, shared so the element can dispatch into it while the render object
+/// owns its rebuilding. The child is absent until the first layout has run the builder.
 type RetainedChild<Child> = Rc<RefCell<Option<(ElementNode<<Child as Widget>::Element>, Child)>>>;
+
+/// The reconcile the render object runs during layout. It builds the child for the current
+/// constraints and reconciles the retained subtree, `R` being the child's render type, in place when
+/// the new child matches the old in type and key, replacing and remounting it otherwise.
+type BuildClosure<R> = Rc<
+    dyn Fn(
+        &mut LayoutCtx,
+        Constraints,
+        Option<&PaintScope>,
+        &mut Option<RenderNode<R, Option<Size>>>,
+    ),
+>;
 
 pub struct LayoutBuilderElement<Child>
 where
@@ -43,7 +71,7 @@ where
 {
     child_widget: RetainedChild<Child>,
 
-    builder: Rc<dyn Fn(Constraints) -> Child::Render>,
+    builder: BuildClosure<Child::Render>,
 }
 
 impl<Child> Element for LayoutBuilderElement<Child> where Child: Widget + 'static {}
@@ -59,39 +87,9 @@ where
     type Render = RenderLayoutBuilder<Child::Render>;
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        let child_widget = Rc::<RefCell<Option<(ElementNode<Child::Element>, Child)>>>::default();
+        let child_widget = RetainedChild::<Child>::default();
 
-        let builder = {
-            let builder = Rc::clone(&self.builder);
-            let child_widget = Rc::clone(&child_widget);
-
-            let scheduler = ctx.deferred_scheduler();
-            let routing_path = ctx.routing_path();
-            let provide_scope = ctx.provide_scope().clone();
-
-            Rc::new(move |constraints| {
-                let mut routing_path = routing_path.to_vec();
-
-                let child = (builder)(constraints);
-
-                // Re-derive an owned scheduler per layout: layout runs outside the build frame, so
-                // the subtree built here borrows this captured handle to keep spawning tasks.
-                let mut scheduler = scheduler.deferred();
-
-                // TODO(trevin): try to use the element of the previously created child
-                let element = child.create_element(&mut UpdateCtx::new(
-                    &mut *scheduler,
-                    &mut routing_path,
-                    provide_scope.clone(),
-                ));
-
-                let child_render = child.create_render_object(&element);
-
-                child_widget.replace(Some((ElementNode::new(element), child)));
-
-                child_render
-            })
-        };
+        let builder = build_closure(&self.builder, &child_widget, ctx);
 
         LayoutBuilderElement {
             child_widget,
@@ -102,39 +100,9 @@ where
 
     fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
         if !Rc::ptr_eq(&self.builder, &old.builder) {
-            element.child_widget.replace(None);
-
-            element.builder = {
-                let builder = Rc::clone(&self.builder);
-                let child_widget = Rc::clone(&element.child_widget);
-
-                let scheduler = ctx.deferred_scheduler();
-                let routing_path = ctx.routing_path();
-                let provide_scope = ctx.provide_scope().clone();
-
-                Rc::new(move |constraints| {
-                    let child = (builder)(constraints);
-
-                    let mut routing_path = routing_path.to_vec();
-
-                    // Re-derive an owned scheduler per layout: layout runs outside the build frame,
-                    // so the subtree built here borrows this captured handle to keep spawning tasks.
-                    let mut scheduler = scheduler.deferred();
-
-                    // TODO(trevin): try to use the element of the previously created child
-                    let element = child.create_element(&mut UpdateCtx::new(
-                        &mut *scheduler,
-                        &mut routing_path,
-                        provide_scope.clone(),
-                    ));
-
-                    let child_render = child.create_render_object(&element);
-
-                    child_widget.replace(Some((ElementNode::new(element), child)));
-
-                    child_render
-                })
-            };
+            // Keep the retained child: the next layout reconciles it in place against the new closure
+            // rather than discarding it.
+            element.builder = build_closure(&self.builder, &element.child_widget, ctx);
         }
     }
 
@@ -145,7 +113,7 @@ where
             panic!("child was dispatched to before being laid out");
         };
 
-        child.dispatch(&mut child_element.element, path, action)
+        child.dispatch(&mut child_element.element, path, action);
     }
 
     fn create_render_object(&self, element: &Self::Element) -> Self::Render {
@@ -154,49 +122,144 @@ where
 
             old_constraints: Constraints::default(),
 
+            needs_build: false,
+
+            layout_scope: LayoutScope::detached(),
+
             child_render: None,
+
+            paint_scope: None,
         }
     }
 
     fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         if !Rc::ptr_eq(&element.builder, &render_object.builder) {
-            // TODO(trevin): mark for re-layout
+            // The build logic changed, so the child must be rebuilt even if the constraints are
+            // unchanged. `needs_build` forces the re-run, and marking the enclosing boundary
+            // schedules the layout that performs it; the retained subtree is reconciled there.
             render_object.builder = Rc::clone(&element.builder);
 
-            render_object.child_render.take();
-        }
-
-        let child_widget = element.child_widget.borrow();
-
-        if let Some((child_element, child)) = child_widget.as_ref() {
-            if let Some(child_render) = &mut render_object.child_render {
-                child.update_render_object(&child_element.element, &mut child_render.object);
-            }
-        } else if render_object.child_render.is_some() {
-            // TODO(trevin): mark for re-layout
-            render_object.child_render = None;
+            render_object.needs_build = true;
+            render_object.layout_scope.mark_needs_layout();
         }
     }
 }
 
+/// Builds the closure the render object runs during layout to bring the child up to date for a set of
+/// constraints, reusing the retained subtree where it can and replacing it where it cannot.
+fn build_closure<F, Child>(
+    builder: &Rc<F>,
+    child_widget: &RetainedChild<Child>,
+    ctx: &mut UpdateCtx,
+) -> BuildClosure<Child::Render>
+where
+    F: Fn(Constraints) -> Child + 'static,
+    Child: Widget + 'static,
+    Child::Render: RenderBox,
+{
+    let builder = Rc::clone(builder);
+    let child_widget = Rc::clone(child_widget);
+
+    let scheduler = ctx.deferred_scheduler();
+    let routing_path = ctx.routing_path();
+    let provide_scope = ctx.provide_scope().clone();
+
+    // Layout runs outside the build frame, so each element built or reconciled here borrows the
+    // captured owned scheduler handle to keep spawning tasks.
+    let update_ctx = move || {
+        let routing_path = routing_path.to_vec();
+        let scheduler = scheduler.deferred();
+
+        (scheduler, routing_path, provide_scope.clone())
+    };
+
+    Rc::new(
+        move |ctx: &mut LayoutCtx,
+              constraints: Constraints,
+              paint_scope: Option<&PaintScope>,
+              slot: &mut Option<RenderNode<Child::Render, Option<Size>>>| {
+            let new_child = (builder)(constraints);
+
+            let mut retained = child_widget.borrow_mut();
+
+            // Reuse the retained subtree when the new child can update it in place.
+            if let (Some((node, old_child)), Some(child_render)) =
+                (retained.as_mut(), slot.as_mut())
+                && new_child.is_same_type(old_child)
+                && new_child.key() == old_child.key()
+            {
+                let (mut scheduler, mut routing_path, provide_scope) = update_ctx();
+
+                new_child.update(
+                    &mut node.element,
+                    old_child,
+                    &mut UpdateCtx::new(&mut *scheduler, &mut routing_path, provide_scope),
+                );
+
+                new_child.update_render_object(&node.element, &mut child_render.object);
+
+                *old_child = new_child;
+
+                return;
+            }
+
+            // Otherwise discard the retained subtree, unmounting it first, and build a fresh one.
+            if let Some(mut old) = slot.take()
+                && let Some(paint_scope) = paint_scope
+            {
+                ctx.mount(paint_scope, |mount| old.unmount(mount));
+            }
+
+            let (mut scheduler, mut routing_path, provide_scope) = update_ctx();
+
+            let element = new_child.create_element(&mut UpdateCtx::new(
+                &mut *scheduler,
+                &mut routing_path,
+                provide_scope,
+            ));
+
+            let mut child_render = RenderNode::new(new_child.create_render_object(&element));
+
+            if let Some(paint_scope) = paint_scope {
+                ctx.mount(paint_scope, |mount| child_render.mount(mount));
+            }
+
+            *slot = Some(child_render);
+            *retained = Some((ElementNode::new(element), new_child));
+        },
+    )
+}
+
 pub struct RenderLayoutBuilder<Child> {
-    builder: Rc<dyn Fn(Constraints) -> Child>,
+    builder: BuildClosure<Child>,
 
     old_constraints: Constraints,
 
+    needs_build: bool,
+
+    /// The relayout boundary this widget was last laid out under, marked when the builder changes to
+    /// schedule the layout that reruns it. Detached until the first layout.
+    layout_scope: LayoutScope,
+
     child_render: Option<RenderNode<Child, Option<Size>>>,
+
+    paint_scope: Option<PaintScope>,
 }
 
 impl<Child> RenderObject for RenderLayoutBuilder<Child>
 where
     Child: RenderBox,
 {
-    fn mount(&mut self, _: &mut MountCtx) {}
+    fn mount(&mut self, ctx: &mut MountCtx) {
+        self.paint_scope = Some(ctx.paint_scope().clone());
+    }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         if let Some(mut child_render) = self.child_render.take() {
             child_render.unmount(ctx);
         }
+
+        self.paint_scope.take();
     }
 
     fn update_compositing_bits(&mut self) -> bool {
@@ -232,17 +295,26 @@ where
         Size::ZERO
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        if self.child_render.is_none() || self.old_constraints != constraints {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.layout_scope = ctx.scope().clone();
+
+        if self.child_render.is_none() || self.needs_build || self.old_constraints != constraints {
             self.old_constraints = constraints;
+            self.needs_build = false;
 
-            let child = (self.builder)(constraints);
+            let builder = Rc::clone(&self.builder);
+            let paint_scope = self.paint_scope.clone();
 
-            self.child_render.replace(RenderNode::new(child));
+            builder(
+                ctx,
+                constraints,
+                paint_scope.as_ref(),
+                &mut self.child_render,
+            );
         }
 
         if let Some(child_render) = self.child_render.as_mut() {
-            let size = child_render.layout_and_get_size(scope, constraints);
+            let size = child_render.layout_and_get_size(ctx, constraints);
             child_render.parent_data = Some(size);
             size
         } else {
@@ -275,8 +347,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use agui_core::{
-        render_object::RenderLeaf, task::TaskHandle, test_harness::TestHarness, widget::AsAnyWidget,
+        paint::{ContainerLayer, LayerHandle},
+        render_object::{BoundaryContent, PipelineOwner, RenderLeaf, box_layout::AnyRenderBox},
+        task::TaskHandle,
+        test_harness::TestHarness,
+        widget::AsAnyWidget,
     };
 
     use super::*;
@@ -302,14 +380,14 @@ mod tests {
 
         let mut render_object =
             layout_builder.create_render_object(&TestHarness::mount(&layout_builder).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 50, 0, 50));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 50, 0, 50));
         assert_eq!(*build_count.borrow(), 1);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
             Some(Size::new(0.0, 0.0))
         );
 
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 150, 0, 150));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 150, 0, 150));
         assert_eq!(*build_count.borrow(), 2);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
@@ -355,7 +433,7 @@ mod tests {
         let mut harness = TestHarness::mount(&layout_builder);
 
         let mut render_object = layout_builder.create_render_object(&harness.root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 50, 0, 50));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 50, 0, 50));
 
         harness.task_runner.run_to_completion();
 
@@ -363,6 +441,245 @@ mod tests {
             harness.task_runner.messages().count(),
             1,
             "the subtree spawned a task during layout that posted one message"
+        );
+    }
+
+    /// Shared tallies of a [`MountProbe`]'s render-object lifecycle, so a test can tell a reused
+    /// subtree (reconciled in place) from a replaced one (unmounted and remounted).
+    #[derive(Clone, Default)]
+    struct Counts {
+        mounts: Rc<Cell<usize>>,
+        unmounts: Rc<Cell<usize>>,
+        updates: Rc<Cell<usize>>,
+    }
+
+    /// A leaf that records its render object's mounts, unmounts, and in-place reconciles.
+    struct MountProbe {
+        counts: Counts,
+    }
+
+    struct MountProbeElement;
+
+    impl Element for MountProbeElement {}
+
+    impl Widget for MountProbe {
+        type Element = MountProbeElement;
+
+        type Render = MountProbeRender;
+
+        fn create_element(&self, _: &mut UpdateCtx) -> MountProbeElement {
+            MountProbeElement
+        }
+
+        fn update(&self, _: &mut MountProbeElement, _: &Self, _: &mut UpdateCtx) {}
+
+        fn create_render_object(&self, _: &MountProbeElement) -> MountProbeRender {
+            MountProbeRender {
+                counts: self.counts.clone(),
+            }
+        }
+
+        fn update_render_object(&self, _: &MountProbeElement, render: &mut MountProbeRender) {
+            render.counts.updates.set(render.counts.updates.get() + 1);
+        }
+    }
+
+    struct MountProbeRender {
+        counts: Counts,
+    }
+
+    impl RenderObject for MountProbeRender {
+        fn mount(&mut self, _: &mut MountCtx) {
+            self.counts.mounts.set(self.counts.mounts.get() + 1);
+        }
+
+        fn unmount(&mut self, _: &mut MountCtx) {
+            self.counts.unmounts.set(self.counts.unmounts.get() + 1);
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl RenderBox for MountProbeRender {
+        fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn measure(&self, constraints: Constraints) -> Size {
+            constraints.smallest()
+        }
+
+        fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
+            constraints.smallest()
+        }
+
+        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+            HitTest::Pass
+        }
+
+        fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+    }
+
+    /// Drives `layout_builder` as the root of a real pipeline, so layout reaches the paint registry
+    /// and the subtree built during layout is mounted.
+    fn owner_for<W>(layout_builder: &W) -> PipelineOwner
+    where
+        W: Widget,
+        W::Render: RenderBox,
+    {
+        let harness = TestHarness::mount(layout_builder);
+        let render = layout_builder.create_render_object(&harness.root.element);
+        let content: BoundaryContent = Rc::new(RefCell::new(render));
+
+        PipelineOwner::new(content, LayerHandle::new(ContainerLayer::new()))
+    }
+
+    #[test]
+    fn reuses_its_subtree_across_a_constraint_change() {
+        let counts = Counts::default();
+
+        let layout_builder = LayoutBuilder::new({
+            let counts = counts.clone();
+
+            move |_| {
+                MountProbe {
+                    counts: counts.clone(),
+                }
+                .into_boxed_render_box()
+            }
+        });
+
+        let mut owner = owner_for(&layout_builder);
+
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
+        assert_eq!(counts.mounts.get(), 1, "the subtree was mounted once");
+        assert_eq!(counts.updates.get(), 0);
+
+        // The constraints change but the child keeps its type, so the subtree is reconciled in place
+        // rather than discarded and remounted.
+        owner.resize(Constraints::new(0, 50, 0, 50));
+        owner.flush_layout();
+        assert_eq!(counts.mounts.get(), 1, "the same-type child was reused");
+        assert_eq!(counts.unmounts.get(), 0);
+        assert_eq!(
+            counts.updates.get(),
+            1,
+            "the reused child was reconciled in place"
+        );
+    }
+
+    #[test]
+    fn replaces_its_subtree_when_the_child_type_changes() {
+        let counts = Counts::default();
+
+        // A probe above the threshold, a plain box below it, so crossing the threshold changes the
+        // child's type.
+        let layout_builder = LayoutBuilder::new({
+            let counts = counts.clone();
+
+            move |constraints| {
+                if constraints.max_width() > 75.0 {
+                    MountProbe {
+                        counts: counts.clone(),
+                    }
+                    .into_boxed_render_box()
+                } else {
+                    SizedBox::shrink().into_boxed_render_box()
+                }
+            }
+        });
+
+        let mut owner = owner_for(&layout_builder);
+
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
+        assert_eq!(counts.mounts.get(), 1);
+        assert_eq!(counts.unmounts.get(), 0);
+
+        // Cross the threshold: the probe's type no longer matches, so its subtree is unmounted.
+        owner.resize(Constraints::new(0, 50, 0, 50));
+        owner.flush_layout();
+        assert_eq!(counts.mounts.get(), 1, "the replacement was not the probe");
+        assert_eq!(
+            counts.unmounts.get(),
+            1,
+            "the probe's subtree was unmounted"
+        );
+
+        // Cross back: a fresh probe is built and mounted.
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
+        assert_eq!(counts.mounts.get(), 2, "a fresh probe was mounted");
+    }
+
+    #[test]
+    fn rebuilds_when_the_callback_changes_without_a_resize() {
+        let builds = Rc::new(Cell::new(0));
+
+        let widget_for = |builds: &Rc<Cell<usize>>| {
+            let builds = Rc::clone(builds);
+
+            LayoutBuilder::new(move |_| {
+                builds.set(builds.get() + 1);
+                SizedBox::shrink().into_boxed_render_box()
+            })
+        };
+
+        let widget_a = widget_for(&builds);
+        let mut harness = TestHarness::mount(&widget_a);
+        let render = widget_a.create_render_object(&harness.root.element);
+        let content: BoundaryContent = Rc::new(RefCell::new(render));
+        let mut owner =
+            PipelineOwner::new(Rc::clone(&content), LayerHandle::new(ContainerLayer::new()));
+
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
+        assert_eq!(builds.get(), 1);
+
+        owner.flush_layout();
+        assert_eq!(builds.get(), 1, "an unmarked frame reuses the layout");
+
+        // The widget rebuilds with a new callback at the same constraints. This must schedule a
+        // relayout that reruns the builder, the way Flutter's markNeedsLayout does.
+        let widget_b = widget_for(&builds);
+        harness.update(&widget_a, &widget_b);
+        owner.update(|root| {
+            let render = root
+                .as_any_mut()
+                .downcast_mut::<RenderLayoutBuilder<Box<dyn AnyRenderBox>>>()
+                .expect("the root is the layout builder");
+
+            widget_b.update_render_object(&harness.root.element, render);
+        });
+
+        owner.flush_layout();
+        assert_eq!(
+            builds.get(),
+            2,
+            "the callback change scheduled a relayout that reran the builder"
         );
     }
 }

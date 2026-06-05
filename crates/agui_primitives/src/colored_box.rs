@@ -10,7 +10,7 @@ use agui_core::{
         PaintCtx,
         peniko::{Color, Fill},
     },
-    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -125,8 +125,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        let child_size = self.child.layout_and_get_size(scope, constraints);
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        let child_size = self.child.layout_and_get_size(ctx, constraints);
 
         self.child.parent_data = Some(child_size);
 
@@ -160,14 +160,16 @@ where
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        if let Some(size) = self.child.parent_data {
-            let mut canvas = ctx.canvas();
-            let brush = canvas.brush(self.color);
+        let size = self.child.parent_data.expect("child has not been laid out");
 
-            canvas.fill(Fill::NonZero, brush, &(offset & size));
+        if size.is_zero() {
+            return;
         }
 
-        self.child.paint(ctx, offset);
+        let mut canvas = ctx.canvas();
+        let brush = canvas.brush(self.color);
+
+        canvas.fill(Fill::NonZero, brush, &(offset & size));
     }
 }
 
@@ -193,7 +195,7 @@ mod tests {
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 100, 0, 100));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
 
         let root = LayerHandle::new(ContainerLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));

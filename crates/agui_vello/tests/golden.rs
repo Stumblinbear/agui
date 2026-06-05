@@ -8,7 +8,7 @@ use agui_core::{
     constraints::Constraints,
     offset::Offset,
     paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, peniko::Color},
-    render_object::{LayoutScope, box_layout::RenderBox},
+    render_object::{LayoutCtx, box_layout::RenderBox},
     test_harness::TestHarness,
     widget::Widget,
 };
@@ -35,7 +35,7 @@ fn orange_half_pane_matches_golden() {
 
     let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
     render.layout(
-        &LayoutScope::detached(),
+        &mut LayoutCtx::detached(),
         Constraints::new(0.0, width as f32, 0.0, height as f32),
     );
 

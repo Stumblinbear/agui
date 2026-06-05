@@ -10,7 +10,7 @@ use agui_core::{
     offset::Offset,
     paint::{LayerHandle, OpacityLayer, PaintCtx, PaintShape, peniko::kurbo},
     render_object::{
-        LayoutScope, MountCtx, PaintScope, RenderNode, RenderObject, box_layout::RenderBox,
+        LayoutCtx, MountCtx, PaintScope, RenderNode, RenderObject, box_layout::RenderBox,
     },
     routing_id::RoutingId,
     size::Size,
@@ -144,8 +144,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        let size = self.child.layout_and_get_size(scope, constraints);
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        let size = self.child.layout_and_get_size(ctx, constraints);
         self.child.parent_data = Some(size);
         size
     }

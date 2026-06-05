@@ -75,7 +75,7 @@ impl RenderBox for RenderLeaf {
         constraints.smallest()
     }
 
-    fn layout(&mut self, _: &LayoutScope, constraints: Constraints) -> Size {
+    fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
         constraints.smallest()
     }
 

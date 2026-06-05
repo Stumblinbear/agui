@@ -8,7 +8,8 @@ use crate::{
     offset::Offset,
     paint::PaintCtx,
     render_object::{
-        BoundaryContent, LayoutScope, MountCtx, PaintScope, RenderObject, box_layout::RenderBox,
+        BoundaryContent, LayoutCtx, LayoutScope, MountCtx, PaintScope, RenderObject,
+        box_layout::RenderBox,
     },
     size::Size,
     text_baseline::TextBaseline,
@@ -156,32 +157,32 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
 
     /// Lays this child out under `constraints`. If you need the resulting size, use
     /// `layout_and_get_size` instead.
-    pub fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) {
-        self.layout_inner(scope, constraints);
+    pub fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) {
+        self.layout_inner(ctx, constraints);
     }
 
     /// Lays this child out under `constraints` and returns the size it took. This couples the holder with
     /// the child, so a change to the child's size re-lays the holder too.
-    pub fn layout_and_get_size(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+    pub fn layout_and_get_size(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
         self.parent_uses_size = true;
 
-        self.layout_inner(scope, constraints)
+        self.layout_inner(ctx, constraints)
     }
 
-    fn layout_inner(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        self.reshape(constraints.is_tight(), scope);
+    fn layout_inner(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.reshape(constraints.is_tight(), ctx.scope());
 
         match &mut self.child {
-            RelayoutChild::Inline(child) => child.layout(scope, constraints),
+            RelayoutChild::Inline(child) => child.layout(ctx, constraints),
 
             RelayoutChild::Boxed { content, boundary } => match boundary {
                 Some(boundary) => {
                     boundary.update_constraints(constraints);
 
-                    content.layout(boundary, constraints)
+                    ctx.with_scope(boundary.clone(), |ctx| content.layout(ctx, constraints))
                 }
 
-                None => content.layout(scope, constraints),
+                None => content.layout(ctx, constraints),
             },
         }
     }
@@ -375,9 +376,9 @@ mod tests {
         fn measure(&self, constraints: Constraints) -> Size {
             constraints.smallest()
         }
-        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            *self.captured.borrow_mut() = Some(scope.clone());
+            *self.captured.borrow_mut() = Some(ctx.scope().clone());
 
             constraints.smallest()
         }
@@ -430,11 +431,11 @@ mod tests {
         fn measure(&self, _: Constraints) -> Size {
             Size::new(10.0, 10.0)
         }
-        fn layout(&mut self, scope: &LayoutScope, _: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, _: Constraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
 
             let size = Size::new(10.0, 10.0);
-            self.child.layout(scope, Constraints::tight(size));
+            self.child.layout(ctx, Constraints::tight(size));
 
             size
         }

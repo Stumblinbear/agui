@@ -8,7 +8,7 @@ use agui_core::{
     offset::Offset,
     paint::PaintCtx,
     render_object::{
-        LayoutScope, MountCtx, RelayoutRenderNode, RenderObject, box_layout::RenderBox,
+        LayoutCtx, LayoutScope, MountCtx, RelayoutRenderNode, RenderObject, box_layout::RenderBox,
     },
     routing_id::RoutingId,
     size::Size,
@@ -260,11 +260,11 @@ where
             .measure(Constraints::tight_for(self.width, self.height).enforce(constraints))
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        self.layout_scope = scope.clone();
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        self.layout_scope = ctx.scope().clone();
 
         let child_size = self.child.layout_and_get_size(
-            scope,
+            ctx,
             Constraints::tight_for(self.width, self.height).enforce(constraints),
         );
 
@@ -394,9 +394,9 @@ mod tests {
         fn measure(&self, constraints: Constraints) -> Size {
             self.child.measure(constraints)
         }
-        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            self.child.layout_and_get_size(scope, constraints)
+            self.child.layout_and_get_size(ctx, constraints)
         }
         fn measure_baseline(
             &self,
@@ -468,9 +468,9 @@ mod tests {
         fn measure(&self, constraints: Constraints) -> Size {
             constraints.smallest()
         }
-        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            *self.captured.borrow_mut() = Some(scope.clone());
+            *self.captured.borrow_mut() = Some(ctx.scope().clone());
 
             constraints.smallest()
         }
@@ -491,7 +491,7 @@ mod tests {
         let sized_box = SizedBox::new().width(16).height(48);
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 48)),
@@ -501,7 +501,10 @@ mod tests {
         let sized_box = SizedBox::new().width(0).height(16);
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(16, 128, 32, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            Constraints::new(16, 128, 32, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 32)),
@@ -511,7 +514,7 @@ mod tests {
         let sized_box = SizedBox::shrink();
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(0, 0)),
@@ -521,7 +524,10 @@ mod tests {
         let sized_box = SizedBox::shrink();
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(10, 128, 20, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            Constraints::new(10, 128, 20, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(10, 20)),
@@ -531,7 +537,7 @@ mod tests {
         let sized_box = SizedBox::expand();
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 128)),

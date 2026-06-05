@@ -8,7 +8,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -113,10 +113,10 @@ where
         self.child.measure(constraints.only_width())
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
         let child_size = self
             .child
-            .layout_and_get_size(scope, constraints.only_width());
+            .layout_and_get_size(ctx, constraints.only_width());
 
         self.child.parent_data = Some(child_size);
 
@@ -163,7 +163,7 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(10, 0)),
@@ -173,7 +173,7 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 0)),
@@ -183,7 +183,7 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(10, 16)),
@@ -193,7 +193,7 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 16)),
@@ -203,7 +203,7 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 256)),

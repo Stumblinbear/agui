@@ -5,7 +5,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{LayoutScope, RenderObject},
+    render_object::{LayoutCtx, RenderObject},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -96,10 +96,7 @@ pub trait RenderBox: RenderObject {
     fn measure(&self, constraints: Constraints) -> Size;
 
     /// Chooses this box's [`Size`] within `constraints`, laying out its children to do so.
-    ///
-    /// `scope` is the relayout boundary in force. A box forwards it to each child it lays out, and a
-    /// box that can change its own layout out of band stores it so that it can request a relayout later.
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size;
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size;
 
     /// Returns the distance from the top of the box to the first baseline of the
     /// box's contents for the given `constraints`, or [`None`] if this [`RenderBox`]

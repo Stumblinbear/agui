@@ -8,7 +8,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -146,8 +146,8 @@ where
         Self::size_for(constraints, child_size)
     }
 
-    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
-        let child_size = self.child.layout_and_get_size(scope, constraints.loosen());
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        let child_size = self.child.layout_and_get_size(ctx, constraints.loosen());
         let size = Self::size_for(constraints, child_size);
 
         let offset = Alignment::CENTER.along_offset(Offset::new(
@@ -212,7 +212,8 @@ mod tests {
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        let size = render_object.layout(&LayoutScope::detached(), Constraints::new(0, 200, 0, 100));
+        let size =
+            render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 200, 0, 100));
 
         assert_eq!(
             size,

@@ -7,7 +7,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{LayoutScope, MountCtx, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -220,7 +220,7 @@ where
         Size::ZERO
     }
 
-    fn layout(&mut self, _: &LayoutScope, _: Constraints) -> Size {
+    fn layout(&mut self, _: &mut LayoutCtx, _: Constraints) -> Size {
         Size::ZERO
     }
 

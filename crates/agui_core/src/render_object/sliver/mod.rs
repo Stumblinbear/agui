@@ -6,7 +6,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -247,7 +247,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
     }
 
     // TODO(trevin): hook up slivers to layout
-    fn layout(&mut self, _: &LayoutScope, constraints: Constraints) -> Size {
+    fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
         let size = constraints.biggest();
 
         // Vertical main axis: main extent is height, cross extent is width.
@@ -357,7 +357,7 @@ mod tests {
         // 100 wide x 50 tall viewport: the sliver is 100 long, only 50 fits.
         let size = RenderBox::layout(
             &mut viewport,
-            &LayoutScope::detached(),
+            &mut LayoutCtx::detached(),
             Constraints::tight(Size::new(100.0, 50.0)),
         );
         assert_eq!(size, Size::new(100.0, 50.0));
@@ -373,7 +373,7 @@ mod tests {
         viewport.offset = PositiveFinite::try_from(80.0).unwrap();
         RenderBox::layout(
             &mut viewport,
-            &LayoutScope::detached(),
+            &mut LayoutCtx::detached(),
             Constraints::tight(Size::new(100.0, 50.0)),
         );
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
@@ -423,7 +423,7 @@ mod tests {
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
         RenderBox::layout(
             &mut viewport,
-            &LayoutScope::detached(),
+            &mut LayoutCtx::detached(),
             Constraints::tight(Size::new(100.0, 50.0)),
         );
 
