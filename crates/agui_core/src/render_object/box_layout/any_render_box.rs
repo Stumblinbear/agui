@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -7,7 +7,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{AnyRenderObject, box_layout::RenderBox},
+    render_object::{AnyRenderObject, LayoutScope, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -23,7 +23,7 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_measure(&self, constraints: Constraints) -> Size;
 
-    fn dyn_layout(&mut self, constraints: Constraints) -> Size;
+    fn dyn_layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size;
 
     fn dyn_measure_baseline(
         &self,
@@ -63,8 +63,8 @@ where
         self.measure(constraints)
     }
 
-    fn dyn_layout(&mut self, constraints: Constraints) -> Size {
-        self.layout(constraints)
+    fn dyn_layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        self.layout(scope, constraints)
     }
 
     fn dyn_measure_baseline(
@@ -112,8 +112,8 @@ where
         (**self).dyn_measure(constraints)
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
-        (**self).dyn_layout(constraints)
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        (**self).dyn_layout(scope, constraints)
     }
 
     fn measure_baseline(
@@ -134,5 +134,54 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         (**self).dyn_paint(ctx, offset);
+    }
+}
+
+impl<T> RenderBox for Rc<RefCell<T>>
+where
+    T: AnyRenderBox + ?Sized + 'static,
+{
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.borrow().dyn_min_intrinsic_width(height)
+    }
+
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.borrow().dyn_max_intrinsic_width(height)
+    }
+
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.borrow().dyn_min_intrinsic_height(width)
+    }
+
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.borrow().dyn_max_intrinsic_height(width)
+    }
+
+    fn measure(&self, constraints: Constraints) -> Size {
+        self.borrow().dyn_measure(constraints)
+    }
+
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        self.borrow_mut().dyn_layout(scope, constraints)
+    }
+
+    fn measure_baseline(
+        &self,
+        constraints: Constraints,
+        baseline: TextBaseline,
+    ) -> Option<PositiveFinite<f32>> {
+        self.borrow().dyn_measure_baseline(constraints, baseline)
+    }
+
+    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        self.borrow_mut().dyn_distance_to_baseline(baseline)
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        self.borrow().dyn_hit_test(result, position)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.borrow_mut().dyn_paint(ctx, offset);
     }
 }

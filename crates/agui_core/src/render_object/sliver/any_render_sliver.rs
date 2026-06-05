@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use typed_floats::PositiveFinite;
 
@@ -67,5 +67,28 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         (**self).dyn_paint(ctx, offset);
+    }
+}
+
+impl<T> RenderSliver for Rc<RefCell<T>>
+where
+    T: AnyRenderSliver + ?Sized + 'static,
+{
+    fn layout(&mut self, constraints: SliverConstraints) -> SliverGeometry {
+        self.borrow_mut().dyn_layout(constraints)
+    }
+
+    fn hit_test(
+        &self,
+        result: &mut HitTestResult,
+        main_axis_position: PositiveFinite<f32>,
+        cross_axis_position: PositiveFinite<f32>,
+    ) -> HitTest {
+        self.borrow()
+            .dyn_hit_test(result, main_axis_position, cross_axis_position)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.borrow_mut().dyn_paint(ctx, offset);
     }
 }

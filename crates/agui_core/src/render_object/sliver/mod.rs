@@ -6,7 +6,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -246,7 +246,8 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         constraints.biggest()
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    // TODO(trevin): hook up slivers to layout
+    fn layout(&mut self, _: &LayoutScope, constraints: Constraints) -> Size {
         let size = constraints.biggest();
 
         // Vertical main axis: main extent is height, cross extent is width.
@@ -354,7 +355,11 @@ mod tests {
             RenderViewport::new(RenderNode::new(RenderSliverFixed { extent: 100.0 }));
 
         // 100 wide x 50 tall viewport: the sliver is 100 long, only 50 fits.
-        let size = RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
+        let size = RenderBox::layout(
+            &mut viewport,
+            &LayoutScope::detached(),
+            Constraints::tight(Size::new(100.0, 50.0)),
+        );
         assert_eq!(size, Size::new(100.0, 50.0));
         let g = viewport.geometry().unwrap();
         assert_eq!(g.scroll_extent.get(), 100.0);
@@ -366,7 +371,11 @@ mod tests {
 
         // Scroll down 80 -> only the last 20 of the 100-long sliver remains visible.
         viewport.offset = PositiveFinite::try_from(80.0).unwrap();
-        RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
+        RenderBox::layout(
+            &mut viewport,
+            &LayoutScope::detached(),
+            Constraints::tight(Size::new(100.0, 50.0)),
+        );
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
     }
 
@@ -412,7 +421,11 @@ mod tests {
             boxed_widget.create_render_object(&harness.root.element);
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
-        RenderBox::layout(&mut viewport, Constraints::tight(Size::new(100.0, 50.0)));
+        RenderBox::layout(
+            &mut viewport,
+            &LayoutScope::detached(),
+            Constraints::tight(Size::new(100.0, 50.0)),
+        );
 
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 50.0);
     }

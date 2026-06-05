@@ -15,7 +15,7 @@ use crate::{
 
 /// The object-safe, type-erased form of [`Widget`].
 pub trait AnyWidget {
-    type Render: RenderObject;
+    type Render;
 
     fn as_any(&self) -> &dyn Any;
 

@@ -10,7 +10,7 @@ use agui_core::{
         PaintCtx,
         peniko::{Color, Fill},
     },
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -125,8 +125,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
-        let child_size = self.child.layout_and_get_size(constraints);
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        let child_size = self.child.layout_and_get_size(scope, constraints);
 
         self.child.parent_data = Some(child_size);
 
@@ -193,7 +193,7 @@ mod tests {
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        render_object.layout(Constraints::new(0, 100, 0, 100));
+        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 100, 0, 100));
 
         let root = LayerHandle::new(ContainerLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));

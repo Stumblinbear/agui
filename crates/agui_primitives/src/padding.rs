@@ -10,7 +10,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -179,9 +179,9 @@ where
         constraints.constrain(self.padding.inflate_size(child_size))
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
-        let child_size = self.child.layout_and_get_size(inner_constraints);
+        let child_size = self.child.layout_and_get_size(scope, inner_constraints);
 
         self.child.parent_data = Some(ChildParentData {
             size: child_size,
@@ -258,7 +258,7 @@ mod tests {
 
         let mut render_object =
             padding.create_render_object(&TestHarness::mount(&padding).root.element);
-        let size = render_object.layout(Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
             Size::new(20.0, 20.0),
@@ -277,7 +277,7 @@ mod tests {
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
         let mut render_object =
             padding.create_render_object(&TestHarness::mount(&padding).root.element);
-        let size = render_object.layout(Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
             Size::new(100.0, 100.0),
@@ -296,7 +296,7 @@ mod tests {
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
         let mut render_object =
             padding.create_render_object(&TestHarness::mount(&padding).root.element);
-        let size = render_object.layout(Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(&LayoutScope::detached(), Constraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
             Size::new(128.0, 128.0),

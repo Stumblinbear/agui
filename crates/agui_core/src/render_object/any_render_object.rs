@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::render_object::{MountCtx, RenderObject};
 
@@ -60,5 +60,22 @@ where
 
     fn update_compositing_bits(&mut self) -> bool {
         (**self).dyn_update_compositing_bits()
+    }
+}
+
+impl<T> RenderObject for Rc<RefCell<T>>
+where
+    T: AnyRenderObject + ?Sized + 'static,
+{
+    fn mount(&mut self, ctx: &mut MountCtx) {
+        self.borrow_mut().dyn_mount(ctx);
+    }
+
+    fn unmount(&mut self, ctx: &mut MountCtx) {
+        self.borrow_mut().dyn_unmount(ctx);
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.borrow_mut().dyn_update_compositing_bits()
     }
 }

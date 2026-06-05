@@ -68,7 +68,6 @@ mod tests {
         context::{Dispatch, UpdateCtx},
         element::SingleChildElement,
         provide::ProvideScope,
-        render_object::RenderLeaf,
         routing_id::RoutingId,
         test_fixtures::Leaf,
         test_harness::TestHarness,
@@ -88,7 +87,7 @@ mod tests {
     {
         type Element = SingleChildElement<Child::Element>;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
             ctx.with_provided(Rc::clone(&self.value), |ctx| {
@@ -106,11 +105,9 @@ mod tests {
             element.dispatch(&self.child, path, action);
         }
 
-        fn create_render_object(&self, _: &Self::Element) -> Self::Render {
-            RenderLeaf::default()
-        }
+        fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
-        fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
+        fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
     }
 
     #[test]

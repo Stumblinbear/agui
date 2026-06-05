@@ -9,7 +9,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -232,7 +232,7 @@ where
         Size::ZERO
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
         if self.child_render.is_none() || self.old_constraints != constraints {
             self.old_constraints = constraints;
 
@@ -242,7 +242,7 @@ where
         }
 
         if let Some(child_render) = self.child_render.as_mut() {
-            let size = child_render.layout_and_get_size(constraints);
+            let size = child_render.layout_and_get_size(scope, constraints);
             child_render.parent_data = Some(size);
             size
         } else {
@@ -302,14 +302,14 @@ mod tests {
 
         let mut render_object =
             layout_builder.create_render_object(&TestHarness::mount(&layout_builder).root.element);
-        render_object.layout(Constraints::new(0, 50, 0, 50));
+        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 50, 0, 50));
         assert_eq!(*build_count.borrow(), 1);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
             Some(Size::new(0.0, 0.0))
         );
 
-        render_object.layout(Constraints::new(0, 150, 0, 150));
+        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 150, 0, 150));
         assert_eq!(*build_count.borrow(), 2);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
@@ -355,7 +355,7 @@ mod tests {
         let mut harness = TestHarness::mount(&layout_builder);
 
         let mut render_object = layout_builder.create_render_object(&harness.root.element);
-        render_object.layout(Constraints::new(0, 50, 0, 50));
+        render_object.layout(&LayoutScope::detached(), Constraints::new(0, 50, 0, 50));
 
         harness.task_runner.run_to_completion();
 

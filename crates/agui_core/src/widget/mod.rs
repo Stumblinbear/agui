@@ -2,7 +2,7 @@ use crate::{
     context::{Dispatch, UpdateCtx},
     element::Element,
     key::AnyKeyable,
-    render_object::{RenderLeaf, RenderObject},
+    render_object::RenderLeaf,
     routing_id::RoutingId,
 };
 
@@ -17,7 +17,7 @@ pub use any_widget::*;
 pub trait Widget {
     type Element: Element;
 
-    type Render: RenderObject;
+    type Render;
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element;
 

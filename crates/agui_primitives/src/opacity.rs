@@ -9,7 +9,9 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::{LayerHandle, OpacityLayer, PaintCtx, PaintShape, peniko::kurbo},
-    render_object::{MountCtx, PaintScope, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{
+        LayoutScope, MountCtx, PaintScope, RenderNode, RenderObject, box_layout::RenderBox,
+    },
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -142,8 +144,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
-        let size = self.child.layout_and_get_size(constraints);
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        let size = self.child.layout_and_get_size(scope, constraints);
         self.child.parent_data = Some(size);
         size
     }
@@ -197,10 +199,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
     use agui_core::{
         constraints::Constraints,
-        paint::{PaintCommand, peniko::Color},
-        render_object::RenderOwner,
+        paint::{ContainerLayer, LayerHandle, PaintCommand, peniko::Color},
+        render_object::PipelineOwner,
         test_harness::TestHarness,
     };
 
@@ -231,9 +235,12 @@ mod tests {
             .child(ColoredBox::new(Color::BLACK).child(SizedBox::new().width(10).height(10)));
         let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        let mut owner = RenderOwner::new();
-        owner.mount_view(Box::new(render));
-        owner.layout(Constraints::new(0, 100, 0, 100));
+        let mut owner = PipelineOwner::new(
+            Rc::new(RefCell::new(render)),
+            LayerHandle::new(ContainerLayer::new()),
+        );
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
         owner.flush_paint();
 
         let scene = owner.composite().flatten();

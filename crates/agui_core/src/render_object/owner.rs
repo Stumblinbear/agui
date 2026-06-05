@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 use fnv::FnvHashSet;
 use slotmap::{SlotMap, new_key_type};
@@ -9,62 +12,140 @@ use crate::{
     offset::Offset,
     paint::{Compositor, ContainerLayer, LayerHandle, PaintCtx, Scene},
     render_object::{
-        RenderObject,
+        BoundaryContent, LayoutPipeline, LayoutScope, RenderObject,
         box_layout::{AnyRenderBox, RenderBox},
     },
-    size::Size,
 };
 
 new_key_type! {
-    /// Identifies one repaint boundary within a [`RenderOwner`].
-    pub struct BoundaryId;
+    /// Identifies one inner repaint boundary within a [`PaintPipeline`].
+    pub struct PaintBoundaryId;
 }
 
-/// Owns the repaint boundaries of a render forest and repaints the ones that have changed.
-///
-/// Each boundary is a subtree that paints into its own retained layer. A boundary can be repainted on
-/// its own, leaving every other boundary's layer untouched, so a change confined to one boundary costs
-/// only that boundary's paint. Mark a boundary through the [`PaintScope`] handed back when it is
-/// registered.
-pub struct RenderOwner {
-    boundaries: SlotMap<BoundaryId, Boundary>,
-    pending: Rc<RefCell<Pending>>,
-    /// The layer the root view paints into and the creator composites to present.
-    root_layer: LayerHandle<ContainerLayer>,
-    /// The root view's boundary, once one is registered.
-    root_boundary: Option<PaintBoundaryHandle>,
+enum PaintPipelinePhase {
+    Idle,
+    UpdateCompositingBits,
+    Paint,
 }
 
-/// The drawable content of a boundary, shared between its render object and the owner.
-pub type BoundaryContent = Rc<RefCell<Box<dyn AnyRenderBox>>>;
-
-struct Boundary {
+struct PaintBoundaryState {
     content: BoundaryContent,
     layer: LayerHandle<ContainerLayer>,
 }
 
 /// The boundaries awaiting repaint or a bit recompute, and the hook that schedules a frame.
-#[derive(Default)]
-struct Pending {
-    dirty: FnvHashSet<BoundaryId>,
-    needs_compositing: FnvHashSet<BoundaryId>,
-    notify: Option<Box<dyn Fn()>>,
+struct PaintPipelineState {
+    needs_compositing: FnvHashSet<PaintBoundaryId>,
+    needs_paint: FnvHashSet<PaintBoundaryId>,
+
+    notify: Box<dyn Fn()>,
+
+    phase: PaintPipelinePhase,
 }
 
-impl RenderOwner {
-    pub fn new() -> Self {
-        Self {
-            boundaries: SlotMap::with_key(),
-            pending: Rc::new(RefCell::new(Pending::default())),
-            root_layer: LayerHandle::new(ContainerLayer::new()),
-            root_boundary: None,
+impl PaintPipelineState {
+    /// Returns `true` if nothing is awaiting repaint or compositing update.
+    fn is_clean(&self) -> bool {
+        self.needs_paint.is_empty() && self.needs_compositing.is_empty()
+    }
+
+    fn mark_needs_paint(&mut self, id: PaintBoundaryId) {
+        match self.phase {
+            PaintPipelinePhase::Idle => {}
+
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!("cannot mark a render object for paint while updating compositing bits");
+            }
+
+            PaintPipelinePhase::Paint => {
+                panic!("cannot mark a render object for paint while painting is in progress");
+            }
+        }
+
+        tracing::trace!(boundary = ?id, "marked boundary for repaint");
+
+        let was_clean = self.is_clean();
+
+        self.needs_paint.insert(id);
+
+        if was_clean {
+            (self.notify)();
         }
     }
 
-    /// Sets the hook the owner calls to have the driver schedule a frame, fired when a mark first
-    /// dirties an otherwise clean owner. Replacing it drops the previous.
-    pub fn on_needs_visual_update(&mut self, callback: impl Fn() + 'static) {
-        self.pending.borrow_mut().notify = Some(Box::new(callback));
+    fn mark_needs_compositing_update(&mut self, id: PaintBoundaryId) {
+        match self.phase {
+            PaintPipelinePhase::Idle => {}
+
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!(
+                    "cannot mark a render object for compositing update while updating compositing bits"
+                );
+            }
+
+            PaintPipelinePhase::Paint => {
+                panic!(
+                    "cannot mark a render object for compositing update while painting is in progress"
+                );
+            }
+        }
+
+        tracing::trace!(boundary = ?id, "marked boundary for compositing update");
+
+        let was_clean = self.is_clean();
+
+        self.needs_compositing.insert(id);
+        self.needs_paint.insert(id);
+
+        if was_clean {
+            (self.notify)();
+        }
+    }
+}
+
+/// Owns the repaint boundaries of one subtree and repaints the ones that have changed.
+///
+/// The subtree's root paints into the layer composited for presentation; every boundary nested inside
+/// paints into its own retained layer and can be repainted on its own, leaving every other boundary's
+/// layer untouched. Mark the root through [`root_scope`](Self::root_scope), and an inner boundary
+/// through the [`PaintScope`] handed back when it is registered.
+pub struct PaintPipeline {
+    boundaries: SlotMap<PaintBoundaryId, PaintBoundaryState>,
+    pending: Rc<RefCell<PaintPipelineState>>,
+}
+
+fn noop() {}
+
+impl Default for PaintPipeline {
+    fn default() -> Self {
+        Self {
+            boundaries: SlotMap::with_key(),
+            pending: Rc::new(RefCell::new(PaintPipelineState {
+                needs_paint: FnvHashSet::default(),
+                needs_compositing: FnvHashSet::default(),
+                notify: Box::new(noop),
+
+                phase: PaintPipelinePhase::Idle,
+            })),
+        }
+    }
+}
+
+impl PaintPipeline {
+    /// Registers `root` as a boundary painting into `layer` and returns the pipeline together with the
+    /// handle that owns it.
+    pub fn new(
+        root: BoundaryContent,
+        layer: LayerHandle<ContainerLayer>,
+    ) -> (Self, PaintBoundaryHandle) {
+        let mut pipeline = Self::default();
+        let handle = pipeline.register(root, layer);
+
+        (pipeline, handle)
+    }
+
+    pub fn on_needs_paint(&mut self, f: Box<dyn Fn()>) {
+        self.pending.borrow_mut().notify = f;
     }
 
     /// Adds a boundary that paints `content` into `layer`, returning a [`PaintBoundaryHandle`] that owns
@@ -78,25 +159,36 @@ impl RenderOwner {
         content: BoundaryContent,
         layer: LayerHandle<ContainerLayer>,
     ) -> PaintBoundaryHandle {
-        let id = self.boundaries.insert(Boundary { content, layer });
+        match self.pending.borrow().phase {
+            PaintPipelinePhase::Idle => {}
+
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!("a boundary cannot be registered while updating compositing bits");
+            }
+
+            PaintPipelinePhase::Paint => {
+                panic!("a boundary cannot be registered while painting is in progress");
+            }
+        }
+
+        let id = self
+            .boundaries
+            .insert(PaintBoundaryState { content, layer });
 
         // A fresh boundary has never been painted and its bits have never been computed.
         {
-            let mut pending = self
-                .pending
-                .try_borrow_mut()
-                .expect("boundaries cannot be registered during paint");
-            pending.dirty.insert(id);
+            let mut pending = self.pending.borrow_mut();
+            pending.needs_paint.insert(id);
             pending.needs_compositing.insert(id);
         }
 
         tracing::debug!(boundary = ?id, "registered repaint boundary");
 
         PaintBoundaryHandle {
-            scope: PaintScope {
+            scope: PaintScope(PaintScopeInner::Boundary {
                 id,
-                pending: Rc::clone(&self.pending),
-            },
+                pending: Rc::downgrade(&self.pending),
+            }),
         }
     }
 
@@ -105,158 +197,217 @@ impl RenderOwner {
     /// # Panics
     ///
     /// Panics if called while a paint pass is in progress.
+    // Taking the handle by value spends it, so it cannot mark a boundary that no longer exists.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn unregister(&mut self, handle: PaintBoundaryHandle) {
-        let PaintBoundaryHandle {
-            scope: PaintScope { id, pending: _ },
-        } = handle;
+        match self.pending.borrow().phase {
+            PaintPipelinePhase::Idle => {}
 
-        self.boundaries.remove(id);
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!("a boundary cannot be unregistered while updating compositing bits");
+            }
+
+            PaintPipelinePhase::Paint => {
+                panic!("a boundary cannot be unregistered while painting is in progress");
+            }
+        }
+
+        let PaintScopeInner::Boundary { id, .. } = handle.scope.0 else {
+            return;
+        };
+
+        self.boundaries
+            .remove(id)
+            .expect("cannot unregister a boundary that is not registered");
 
         {
-            let mut pending = self
-                .pending
-                .try_borrow_mut()
-                .expect("boundaries cannot be unregistered during paint");
-            pending.dirty.remove(&id);
+            let mut pending = self.pending.borrow_mut();
+            pending.needs_paint.remove(&id);
             pending.needs_compositing.remove(&id);
         }
 
         tracing::debug!(boundary = ?id, "unregistered repaint boundary");
-
-        drop(handle);
     }
 
-    /// Mounts `content` as the root view: registers it as the root boundary painting into the root
-    /// layer, then mounts its subtree under that boundary's scope.
-    pub fn mount_view(&mut self, content: Box<dyn AnyRenderBox>) {
-        let content: BoundaryContent = Rc::new(RefCell::new(content));
-        let handle = self.register(Rc::clone(&content), self.root_layer.clone());
-        let scope = handle.scope();
-        self.root_boundary = Some(handle);
+    /// Recomputes the compositing bits of every marked inner boundary, settling them before any repaint
+    /// reads them.
+    fn flush_compositing_bits(&mut self) {
+        let mut pending = self.pending.borrow_mut();
 
-        let mut ctx = MountCtx::new(self, scope);
-        content.borrow_mut().mount(&mut ctx);
-    }
+        match pending.phase {
+            PaintPipelinePhase::Idle => {}
 
-    /// Unmounts the root view and unregisters its boundary.
-    pub fn unmount_view(&mut self) {
-        let Some(handle) = self.root_boundary.take() else {
-            return;
-        };
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!("compositing bits cannot be recomputed while updating compositing bits");
+            }
 
-        let content = Rc::clone(&self.boundaries[handle.scope.id].content);
-        {
-            let mut ctx = MountCtx::new(self, handle.scope());
-            content.borrow_mut().unmount(&mut ctx);
+            PaintPipelinePhase::Paint => {
+                panic!("compositing bits cannot be recomputed while painting is in progress");
+            }
         }
 
-        self.unregister(handle);
+        if pending.needs_compositing.is_empty() {
+            return;
+        }
+
+        pending.phase = PaintPipelinePhase::UpdateCompositingBits;
+
+        let ids: Vec<PaintBoundaryId> = pending.needs_compositing.drain().collect();
+
+        tracing::debug!(count = ids.len(), "recomputing compositing bits");
+
+        for id in ids {
+            self.boundaries[id].content.update_compositing_bits();
+        }
+
+        pending.phase = PaintPipelinePhase::Idle;
     }
 
-    /// Lays the root view's subtree out against `constraints`, the target's current size.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no view has been registered.
-    pub fn layout(&mut self, constraints: Constraints) -> Size {
-        let id = self
-            .root_boundary
-            .as_ref()
-            .expect("a view must be registered before layout")
-            .scope
-            .id;
-        self.boundaries[id].content.borrow_mut().layout(constraints)
+    /// Repaints every marked inner boundary into its own layer, leaving the rest as they are.
+    fn flush_paint(&mut self) {
+        let mut pending = self.pending.borrow_mut();
+
+        match pending.phase {
+            PaintPipelinePhase::Idle => {}
+
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!("paint cannot be flushed while updating compositing bits");
+            }
+
+            PaintPipelinePhase::Paint => {
+                panic!("paint cannot be flushed while painting is in progress");
+            }
+        }
+
+        if pending.needs_paint.is_empty() {
+            return;
+        }
+
+        pending.phase = PaintPipelinePhase::Paint;
+
+        let ids = pending.needs_paint.drain();
+
+        tracing::debug!(count = ids.len(), "flushing paint");
+
+        for id in ids {
+            tracing::debug!(boundary = ?id, "repainting boundary");
+
+            let boundary = &mut self.boundaries[id];
+            let layer = &boundary.layer;
+
+            layer.borrow_mut().clear();
+
+            PaintCtx::paint(layer, |ctx| {
+                boundary.content.paint(ctx, Offset::ZERO);
+            });
+        }
+
+        pending.phase = PaintPipelinePhase::Idle;
+    }
+}
+
+/// Drives one subtree's whole pipeline: it registers the subtree root as a boundary, lays it out, paints
+/// it, composites it for presentation, and hit-tests it.
+///
+/// The root is the outermost relayout and repaint boundary. Its constraints come from the caller through
+/// [`resize`], and every boundary nested inside is re-laid or repainted on its own when only it has
+/// changed. The root is mounted when the owner is built and lives for the owner's whole life; [`update`]
+/// reconciles it in place.
+///
+/// [`resize`]: Self::resize
+/// [`update`]: Self::update
+pub struct PipelineOwner {
+    root: BoundaryContent,
+
+    layout: LayoutPipeline,
+    paint: PaintPipeline,
+
+    root_layout: LayoutScope,
+    root_paint: PaintBoundaryHandle,
+
+    layer: LayerHandle<ContainerLayer>,
+}
+
+impl PipelineOwner {
+    /// Builds the owner around `root`, registering it as the outermost boundary and mounting its
+    /// subtree. The root paints into `layer`, which is composited for presentation.
+    pub fn new(mut root: BoundaryContent, layer: LayerHandle<ContainerLayer>) -> Self {
+        let (mut paint, root_paint) = PaintPipeline::new(Rc::clone(&root), layer.clone());
+        let (layout, root_layout) = LayoutPipeline::new(Rc::clone(&root), root_paint.scope());
+
+        let mut ctx = MountCtx::new(&mut paint, root_paint.scope());
+        root.mount(&mut ctx);
+
+        Self {
+            root,
+
+            layout,
+            paint,
+
+            root_layout,
+            root_paint,
+
+            layer,
+        }
     }
 
-    /// Hit-tests the root view at `position`, in the root coordinate space, returning the handlers
-    /// under it ordered most-specific first. Returns an empty result if no view is registered.
+    pub fn on_needs_layout(&mut self, f: Box<dyn Fn()>) {
+        self.layout.on_needs_layout(f);
+    }
+
+    pub fn on_needs_paint(&mut self, f: Box<dyn Fn()>) {
+        self.paint.on_needs_paint(f);
+    }
+
+    /// Reconciles the root render object in place.
+    pub fn update(&self, f: impl FnOnce(&mut dyn AnyRenderBox)) {
+        f(&mut *self.root.borrow_mut());
+    }
+
+    /// Lays the root out under `constraints` and repaints it. The caller drives this on the first frame
+    /// and whenever the subtree's outer constraints change.
+    pub fn resize(&self, constraints: Constraints) {
+        self.root_layout.set_constraints(constraints);
+        self.root_paint.mark_needs_paint();
+    }
+
+    /// Lays out any boundary that has been marked for layout since the last flush.
+    pub fn flush_layout(&mut self) {
+        self.layout.flush();
+    }
+
+    /// Repaints any boundary that has been marked for paint since the last flush.
+    pub fn flush_paint(&mut self) {
+        self.paint.flush_compositing_bits();
+
+        self.paint.flush_paint();
+    }
+
+    /// Composites the subtree's retained layers into a scene to present.
+    pub fn composite(&self) -> Scene {
+        Compositor::compose(&self.layer)
+    }
+
+    /// Hit-tests the subtree at `position`, in the root coordinate space, returning the handlers under
+    /// it ordered most-specific first.
     pub fn hit_test(&self, position: Offset) -> HitTestResult {
         let mut result = HitTestResult::new();
-
-        if let Some(boundary) = &self.root_boundary {
-            self.boundaries[boundary.scope.id]
-                .content
-                .borrow()
-                .hit_test(&mut result, position);
-        }
+        self.root.hit_test(&mut result, position);
 
         result
     }
-
-    /// Marks the root view for repaint on the next [`flush_paint`](RenderOwner::flush_paint).
-    pub fn mark_needs_paint(&self) {
-        if let Some(boundary) = &self.root_boundary {
-            boundary.mark_needs_paint();
-        }
-    }
-
-    /// Repaints every boundary that is unpainted or marked, leaving the rest as they are.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called while another paint pass is already in progress.
-    pub fn flush_paint(&mut self) {
-        let pending = Rc::clone(&self.pending);
-        let mut pending = pending
-            .try_borrow_mut()
-            .expect("cannot flush paint during paint");
-
-        tracing::debug!(
-            count = pending.needs_compositing.len(),
-            "recomputing compositing bits"
-        );
-
-        // Paint reads the bits, so settle them before repainting anything.
-        for id in pending.needs_compositing.drain() {
-            self.recompute_compositing_bits(id);
-        }
-
-        tracing::debug!(count = pending.dirty.len(), "flushing paint");
-
-        for id in pending.dirty.drain() {
-            self.repaint(id);
-        }
-    }
-
-    fn recompute_compositing_bits(&mut self, id: BoundaryId) {
-        self.boundaries[id]
-            .content
-            .borrow_mut()
-            .update_compositing_bits();
-    }
-
-    fn repaint(&mut self, id: BoundaryId) {
-        tracing::debug!(boundary = ?id, "repainting boundary");
-
-        let boundary = &self.boundaries[id];
-        let layer = boundary.layer.clone();
-
-        layer.borrow_mut().clear();
-        PaintCtx::paint(&layer, |ctx| {
-            boundary.content.borrow_mut().paint(ctx, Offset::ZERO);
-        });
-    }
-
-    /// Composites the root view's retained layers into a scene to present.
-    pub fn composite(&self) -> Scene {
-        Compositor::compose(&self.root_layer)
-    }
 }
 
-impl Default for RenderOwner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
+/// The boundary registry handed to a render object while it mounts, for it to register the repaint
+/// boundary it establishes and to read the boundary enclosing it.
 pub struct MountCtx<'a> {
-    owner: &'a mut RenderOwner,
+    paint: &'a mut PaintPipeline,
     paint_scope: PaintScope,
 }
 
 impl<'a> MountCtx<'a> {
-    pub fn new(owner: &'a mut RenderOwner, paint_scope: PaintScope) -> Self {
-        Self { owner, paint_scope }
+    pub fn new(paint: &'a mut PaintPipeline, paint_scope: PaintScope) -> Self {
+        Self { paint, paint_scope }
     }
 
     /// Adds a boundary that paints `content` into `layer`, returning the [`PaintBoundaryHandle`] that
@@ -266,12 +417,12 @@ impl<'a> MountCtx<'a> {
         content: BoundaryContent,
         layer: LayerHandle<ContainerLayer>,
     ) -> PaintBoundaryHandle {
-        self.owner.register(content, layer)
+        self.paint.register(content, layer)
     }
 
     /// Removes a boundary that is leaving the tree.
     pub fn unregister_boundary(&mut self, handle: PaintBoundaryHandle) {
-        self.owner.unregister(handle);
+        self.paint.unregister(handle);
     }
 
     /// The [`PaintScope`] of the nearest enclosing boundary.
@@ -294,38 +445,56 @@ impl<'a> MountCtx<'a> {
 /// marked from anywhere, including a per-frame callback. A scope can only mark its boundary, never
 /// remove it, so it is safe to hand down a subtree.
 #[derive(Clone)]
-pub struct PaintScope {
-    id: BoundaryId,
-    pending: Rc<RefCell<Pending>>,
+pub struct PaintScope(PaintScopeInner);
+
+#[derive(Clone)]
+enum PaintScopeInner {
+    Detached,
+
+    Boundary {
+        id: PaintBoundaryId,
+        pending: Weak<RefCell<PaintPipelineState>>,
+    },
 }
 
 impl PaintScope {
-    /// Marks the boundary to be repainted on the next [`flush_paint`](RenderOwner::flush_paint). If
-    /// this is the first mark on an otherwise clean owner, the owner's visual-update hook fires so the
-    /// driver schedules a frame.
+    /// A scope detached from any pipeline, whose marks reach nothing.
+    pub fn detached() -> Self {
+        Self(PaintScopeInner::Detached)
+    }
+
+    /// Marks the boundary to be repainted on the next frame. If this is the first mark on an otherwise
+    /// clean pipeline, the schedule hook fires so the driver schedules a frame.
     pub fn mark_needs_paint(&self) {
-        tracing::trace!(boundary = ?self.id, "marked boundary for repaint");
+        let PaintScopeInner::Boundary { pending, id, .. } = &self.0 else {
+            return;
+        };
 
-        let mut pending = self.pending.borrow_mut();
-        let was_clean = pending.dirty.is_empty();
-        pending.dirty.insert(self.id);
+        let Some(pending) = pending.upgrade() else {
+            return;
+        };
 
-        if was_clean && let Some(notify) = &pending.notify {
-            notify();
-        }
+        pending.borrow_mut().mark_needs_paint(*id);
     }
 
     /// Marks the boundary's compositing bits for recomputation before its next repaint, and the
-    /// boundary for repaint.
+    /// boundary for repaint. Only an inner boundary tracks its bits this way.
     pub fn mark_needs_compositing_update(&self) {
-        self.pending.borrow_mut().needs_compositing.insert(self.id);
-        self.mark_needs_paint();
+        let PaintScopeInner::Boundary { pending, id, .. } = &self.0 else {
+            return;
+        };
+
+        let Some(pending) = pending.upgrade() else {
+            return;
+        };
+
+        pending.borrow_mut().mark_needs_compositing_update(*id);
     }
 }
 
 /// A registered boundary, returned to the render object that registered it. It owns the boundary's
-/// place in the owner and is the only thing [`unregister`](RenderOwner::unregister) accepts; it hands
-/// out mark-only [`PaintScope`]s for the subtree. Keeping removal here, off the scope, stops a
+/// place in the pipeline and is the only thing [`unregister`](PaintPipeline::unregister) accepts; it
+/// hands out mark-only [`PaintScope`]s for the subtree. Keeping removal here, off the scope, stops a
 /// descendant that was handed a scope to mark with from unregistering the boundary it lives under.
 pub struct PaintBoundaryHandle {
     scope: PaintScope,
@@ -337,7 +506,7 @@ impl PaintBoundaryHandle {
         self.scope.clone()
     }
 
-    /// Marks this boundary to be repainted on the next [`flush_paint`](RenderOwner::flush_paint).
+    /// Marks this boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self) {
         self.scope.mark_needs_paint();
     }
@@ -365,7 +534,7 @@ mod tests {
             Compositor, PaintCommand, Scene,
             peniko::{Color, Fill},
         },
-        render_object::RenderObject,
+        render_object::{LayoutScope, RenderObject, box_layout::RenderBox},
         size::Size,
         text_baseline::TextBaseline,
         vsync::Vsync,
@@ -379,7 +548,7 @@ mod tests {
         color: Color,
     }
 
-    /// A boundary content that fills, then embeds the layers of nested boundaries — the stand-in for a
+    /// A boundary content that fills, then embeds the layers of nested boundaries, standing in for a
     /// render object that hosts child repaint boundaries.
     struct Embedder {
         paints: Rc<Cell<usize>>,
@@ -404,7 +573,7 @@ mod tests {
             fn measure(&self, _: Constraints) -> Size {
                 Size::new(1.0, 1.0)
             }
-            fn layout(&mut self, _: Constraints) -> Size {
+            fn layout(&mut self, _: &LayoutScope, _: Constraints) -> Size {
                 Size::new(1.0, 1.0)
             }
             fn measure_baseline(
@@ -492,7 +661,7 @@ mod tests {
     }
 
     fn content(render: impl AnyRenderBox + 'static) -> BoundaryContent {
-        Rc::new(RefCell::new(Box::new(render) as Box<dyn AnyRenderBox>))
+        Rc::new(RefCell::new(render))
     }
 
     fn layer() -> LayerHandle<ContainerLayer> {
@@ -508,16 +677,21 @@ mod tests {
             .count()
     }
 
+    /// Flushes the inner channels and clears the root, as a frame with a painted root does, against a
+    /// freestanding pipeline.
+    fn flush_paint(pipeline: &mut PaintPipeline) {
+        pipeline.flush_compositing_bits();
+        pipeline.flush_paint();
+    }
+
     #[test]
     fn marking_a_boundary_repaints_only_it() {
         let root_paints = Rc::new(Cell::new(0));
         let child_paints = Rc::new(Cell::new(0));
 
-        let mut owner = RenderOwner::new();
-
         let root_layer = layer();
         let child_layer = layer();
-        owner.register(
+        let (mut pipeline, _root) = PaintPipeline::new(
             content(Embedder {
                 paints: Rc::clone(&root_paints),
                 color: Color::BLACK,
@@ -525,7 +699,7 @@ mod tests {
             }),
             root_layer.clone(),
         );
-        let child = owner.register(
+        let child = pipeline.register(
             content(Counter {
                 paints: Rc::clone(&child_paints),
                 color: Color::rgb8(255, 0, 0),
@@ -533,7 +707,7 @@ mod tests {
             child_layer,
         );
 
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         let first = Compositor::compose(&root_layer);
         assert_eq!(root_paints.get(), 1);
         assert_eq!(child_paints.get(), 1);
@@ -546,7 +720,7 @@ mod tests {
         // The kind of out-of-band mark a per-frame animation callback would make.
         child.mark_needs_paint();
 
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         let second = Compositor::compose(&root_layer);
         assert_eq!(child_paints.get(), 2, "the marked boundary repainted");
         assert_eq!(
@@ -565,8 +739,7 @@ mod tests {
     fn a_clean_frame_repaints_nothing() {
         let paints = Rc::new(Cell::new(0));
 
-        let mut owner = RenderOwner::new();
-        owner.register(
+        let (mut pipeline, _root) = PaintPipeline::new(
             content(Counter {
                 paints: Rc::clone(&paints),
                 color: Color::BLACK,
@@ -574,8 +747,8 @@ mod tests {
             layer(),
         );
 
-        owner.flush_paint();
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
+        flush_paint(&mut pipeline);
 
         assert_eq!(
             paints.get(),
@@ -586,21 +759,19 @@ mod tests {
 
     #[test]
     fn marking_schedules_a_frame_on_the_clean_to_dirty_edge() {
-        let mut owner = RenderOwner::new();
-        let scope = owner.register(
+        let frames = Rc::new(Cell::new(0));
+        let scheduled = Rc::clone(&frames);
+        let (mut pipeline, scope) = PaintPipeline::new(
             content(Counter {
                 paints: Rc::new(Cell::new(0)),
                 color: Color::BLACK,
             }),
             layer(),
         );
+        pipeline.on_needs_paint(Box::new(move || scheduled.set(scheduled.get() + 1)));
 
-        let frames = Rc::new(Cell::new(0));
-        let scheduled = Rc::clone(&frames);
-        owner.on_needs_visual_update(move || scheduled.set(scheduled.get() + 1));
-
-        // Registration left the owner dirty; the first frame clears it without involving the hook.
-        owner.flush_paint();
+        // Registration left the boundary dirty; the first frame clears it without involving the hook.
+        flush_paint(&mut pipeline);
         assert_eq!(frames.get(), 0, "registration alone schedules no frame");
 
         scope.mark_needs_paint();
@@ -611,7 +782,7 @@ mod tests {
             "only the clean-to-dirty edge schedules a frame"
         );
 
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         scope.mark_needs_paint();
         assert_eq!(
             frames.get(),
@@ -625,8 +796,7 @@ mod tests {
         let paints = Rc::new(Cell::new(0));
         let bits = Rc::new(Cell::new(0));
 
-        let mut owner = RenderOwner::new();
-        let boundary = owner.register(
+        let (mut pipeline, boundary) = PaintPipeline::new(
             content(Probe {
                 paints: Rc::clone(&paints),
                 bits: Rc::clone(&bits),
@@ -634,7 +804,7 @@ mod tests {
             layer(),
         );
 
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         assert_eq!(paints.get(), 1);
         assert_eq!(
             bits.get(),
@@ -643,12 +813,12 @@ mod tests {
         );
 
         boundary.mark_needs_paint();
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         assert_eq!(paints.get(), 2, "the boundary repainted");
         assert_eq!(bits.get(), 1, "a paint mark does not recompute bits");
 
         boundary.mark_needs_compositing_update();
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         assert_eq!(paints.get(), 3, "the boundary repainted");
         assert_eq!(bits.get(), 2, "a compositing mark recomputes bits");
     }
@@ -660,11 +830,9 @@ mod tests {
         let static_paints = Rc::new(Cell::new(0));
         let animated_paints = Rc::new(Cell::new(0));
 
-        let mut owner = RenderOwner::new();
-
         let static_layer = layer();
         let animated_layer = layer();
-        owner.register(
+        let (mut pipeline, _root) = PaintPipeline::new(
             content(Embedder {
                 paints: Rc::new(Cell::new(0)),
                 color: Color::WHITE,
@@ -672,14 +840,14 @@ mod tests {
             }),
             layer(),
         );
-        owner.register(
+        pipeline.register(
             content(Counter {
                 paints: Rc::clone(&static_paints),
                 color: Color::BLACK,
             }),
             static_layer,
         );
-        let animated = owner.register(
+        let animated = pipeline.register(
             content(Counter {
                 paints: Rc::clone(&animated_paints),
                 color: Color::rgb8(255, 0, 0),
@@ -687,7 +855,7 @@ mod tests {
             animated_layer,
         );
 
-        owner.flush_paint();
+        flush_paint(&mut pipeline);
         assert_eq!(static_paints.get(), 1);
         assert_eq!(animated_paints.get(), 1);
 
@@ -697,7 +865,7 @@ mod tests {
 
         for _ in 0..3 {
             vsync.tick(Duration::from_millis(16));
-            owner.flush_paint();
+            flush_paint(&mut pipeline);
         }
 
         assert_eq!(

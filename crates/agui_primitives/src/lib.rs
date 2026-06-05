@@ -1,4 +1,5 @@
 pub mod animated_transform;
+pub mod center;
 pub mod colored_box;
 pub mod flex;
 pub mod fractionally_sized_box;

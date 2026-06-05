@@ -8,7 +8,7 @@ use agui_core::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -130,7 +130,7 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, mut constraints: Constraints) -> Size {
+    fn layout(&mut self, scope: &LayoutScope, mut constraints: Constraints) -> Size {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(self
                 .max_intrinsic_width(constraints.max_height())
@@ -143,7 +143,7 @@ where
             // to know if this is happening.
         }
 
-        let size = self.child.layout_and_get_size(constraints);
+        let size = self.child.layout_and_get_size(scope, constraints);
         self.child.parent_data = Some(size);
         size
     }

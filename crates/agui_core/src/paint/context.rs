@@ -33,7 +33,9 @@ impl PaintCtx<'_> {
             container: &mut *root,
             picture: Scene::new(),
         };
+
         build(&mut ctx);
+
         ctx.flush();
     }
 

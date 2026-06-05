@@ -12,7 +12,8 @@ use agui_core::{
     offset::Offset,
     paint::{ContainerLayer, LayerHandle, PaintCtx},
     render_object::{
-        BoundaryContent, MountCtx, PaintBoundaryHandle, RenderObject, box_layout::RenderBox,
+        BoundaryContent, LayoutScope, MountCtx, PaintBoundaryHandle, RenderObject,
+        box_layout::RenderBox,
     },
     routing_id::RoutingId,
     size::Size,
@@ -69,7 +70,7 @@ where
         let child = element.create_render_object(&self.child);
 
         RenderRepaintBoundary {
-            content: Rc::new(RefCell::new(Box::new(child))),
+            content: Rc::new(RefCell::new(child)),
             layer: LayerHandle::new(ContainerLayer::new()),
             handle: None,
         }
@@ -105,14 +106,14 @@ impl RenderObject for RenderRepaintBoundary {
         let handle = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
 
         // Descendants repaint into this boundary, not into the one above it.
-        let content = Rc::clone(&self.content);
-        ctx.with_paint_scope(handle.scope(), |ctx| content.borrow_mut().mount(ctx));
+        let mut content = Rc::clone(&self.content);
+        ctx.with_paint_scope(handle.scope(), |ctx| content.mount(ctx));
 
         self.handle = Some(handle);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.content.borrow_mut().unmount(ctx);
+        self.content.unmount(ctx);
 
         if let Some(handle) = self.handle.take() {
             ctx.unregister_boundary(handle);
@@ -127,27 +128,27 @@ impl RenderObject for RenderRepaintBoundary {
 
 impl RenderBox for RenderRepaintBoundary {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().min_intrinsic_width(height)
+        self.content.min_intrinsic_width(height)
     }
 
     fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().max_intrinsic_width(height)
+        self.content.max_intrinsic_width(height)
     }
 
     fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().min_intrinsic_height(width)
+        self.content.min_intrinsic_height(width)
     }
 
     fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.content.borrow().max_intrinsic_height(width)
+        self.content.max_intrinsic_height(width)
     }
 
     fn measure(&self, constraints: Constraints) -> Size {
-        self.content.borrow().measure(constraints)
+        self.content.measure(constraints)
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
-        self.content.borrow_mut().layout(constraints)
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        self.content.layout(scope, constraints)
     }
 
     fn measure_baseline(
@@ -155,17 +156,15 @@ impl RenderBox for RenderRepaintBoundary {
         constraints: Constraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
-        self.content
-            .borrow()
-            .measure_baseline(constraints, baseline)
+        self.content.measure_baseline(constraints, baseline)
     }
 
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
-        self.content.borrow_mut().distance_to_baseline(baseline)
+        self.content.distance_to_baseline(baseline)
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.content.borrow().hit_test(result, position)
+        self.content.hit_test(result, position)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -180,10 +179,10 @@ mod tests {
     use agui_core::{
         element::SingleChildElement,
         paint::{
-            PaintCommand, Scene,
+            ContainerLayer, LayerHandle, PaintCommand, Scene,
             peniko::{Color, Fill},
         },
-        render_object::{PaintScope, RenderNode, RenderOwner},
+        render_object::{PaintScope, PipelineOwner, RenderNode},
         test_harness::TestHarness,
     };
     use typed_floats::{PositiveFinite, as_const};
@@ -295,8 +294,8 @@ mod tests {
         fn measure(&self, _: Constraints) -> Size {
             Size::new(10.0, 10.0)
         }
-        fn layout(&mut self, constraints: Constraints) -> Size {
-            self.child.layout(constraints);
+        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+            self.child.layout(scope, constraints);
             Size::new(10.0, 10.0)
         }
         fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -335,7 +334,6 @@ mod tests {
     /// is not repainted, yet the composed scene still contains both.
     #[test]
     fn marking_an_inner_boundary_leaves_the_outer_one_alone() {
-        let mut owner = RenderOwner::new();
         let outer_paints = Rc::new(Cell::new(0));
         let inner_paints = Rc::new(Cell::new(0));
         let inner_scope = Rc::new(RefCell::new(None));
@@ -347,8 +345,12 @@ mod tests {
                 ));
 
         let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        owner.mount_view(Box::new(render));
-        owner.layout(Constraints::new(0, 100, 0, 100));
+        let mut owner = PipelineOwner::new(
+            Rc::new(RefCell::new(render)),
+            LayerHandle::new(ContainerLayer::new()),
+        );
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
 
         owner.flush_paint();
         let first = owner.composite();

@@ -5,7 +5,7 @@ use crate::{
     hit_test::{HitTest, HitTestResult},
     offset::Offset,
     paint::PaintCtx,
-    render_object::{MountCtx, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderObject, box_layout::RenderBox},
     size::Size,
     text_baseline::TextBaseline,
 };
@@ -14,7 +14,6 @@ pub struct RenderNode<R, P = ()> {
     pub object: R,
     pub parent_data: P,
 
-    size: Option<Size>,
     parent_uses_size: bool,
     needs_compositing: bool,
 }
@@ -25,7 +24,6 @@ impl<R, P: Default> RenderNode<R, P> {
             object,
             parent_data: P::default(),
 
-            size: None,
             parent_uses_size: false,
             needs_compositing: false,
         }
@@ -38,7 +36,6 @@ impl<R, P> RenderNode<R, P> {
             object,
             parent_data,
 
-            size: None,
             parent_uses_size: false,
             needs_compositing: false,
         }
@@ -87,15 +84,14 @@ impl<R: RenderBox, P> RenderNode<R, P> {
     }
 
     /// Lay this child out under `constraints`. If you need the resulting size of the child, use `layout_and_get_size` instead.
-    pub fn layout(&mut self, constraints: Constraints) {
-        self.size = Some(self.object.layout(constraints));
+    pub fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) {
+        self.object.layout(scope, constraints);
     }
 
     /// Lay this child out under `constraints` and return the size it took. This couples the child with the parent so that when
     /// the child's layout changes, the parent is also laid out.
-    pub fn layout_and_get_size(&mut self, constraints: Constraints) -> Size {
-        let size = self.object.layout(constraints);
-        self.size = Some(size);
+    pub fn layout_and_get_size(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        let size = self.object.layout(scope, constraints);
         self.parent_uses_size = true;
         size
     }
@@ -178,8 +174,8 @@ mod tests {
             self.child.measure(constraints)
         }
 
-        fn layout(&mut self, constraints: Constraints) -> Size {
-            self.child.layout_and_get_size(constraints)
+        fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+            self.child.layout_and_get_size(scope, constraints)
         }
 
         fn measure_baseline(
@@ -286,7 +282,10 @@ mod tests {
     fn node_layout_and_paint_helpers() {
         let mut node = RenderNode::<RenderLeaf, ()>::new(RenderLeaf::default());
 
-        let size = node.layout_and_get_size(Constraints::tight(Size::new(10.0, 20.0)));
+        let size = node.layout_and_get_size(
+            &LayoutScope::detached(),
+            Constraints::tight(Size::new(10.0, 20.0)),
+        );
         assert_eq!(size, Size::new(10.0, 20.0));
 
         PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
@@ -318,9 +317,10 @@ mod tests {
             node.paint(ctx, Offset::ZERO);
         });
         assert_eq!(
-            node.object
-                .child
-                .layout_and_get_size(Constraints::tight(Size::new(12.0, 8.0))),
+            node.object.child.layout_and_get_size(
+                &LayoutScope::detached(),
+                Constraints::tight(Size::new(12.0, 8.0))
+            ),
             Size::new(12.0, 8.0),
         );
 
@@ -344,13 +344,19 @@ mod tests {
             .expect("boxed child downcasts to its real type");
 
         assert_eq!(
-            boxed.layout_and_get_size(Constraints::tight(Size::new(7.0, 7.0))),
+            boxed.layout_and_get_size(
+                &LayoutScope::detached(),
+                Constraints::tight(Size::new(7.0, 7.0))
+            ),
             Size::new(7.0, 7.0)
         );
 
         // the boxed node still drives layout/paint through dyn dispatch
         assert_eq!(
-            boxed.layout_and_get_size(Constraints::tight(Size::new(3.0, 3.0))),
+            boxed.layout_and_get_size(
+                &LayoutScope::detached(),
+                Constraints::tight(Size::new(3.0, 3.0))
+            ),
             Size::new(3.0, 3.0),
         );
 
@@ -448,7 +454,7 @@ mod tests {
             constraints.smallest()
         }
 
-        fn layout(&mut self, constraints: Constraints) -> Size {
+        fn layout(&mut self, _: &LayoutScope, constraints: Constraints) -> Size {
             constraints.smallest()
         }
 

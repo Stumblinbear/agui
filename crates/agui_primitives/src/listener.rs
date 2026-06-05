@@ -11,7 +11,7 @@ use agui_core::{
     offset::Offset,
     paint::PaintCtx,
     pointer::{PointerEvent, PointerEventKind, PointerHandler},
-    render_object::{MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
+    render_object::{LayoutScope, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
     routing_id::RoutingId,
     size::Size,
     text_baseline::TextBaseline,
@@ -144,8 +144,8 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, constraints: Constraints) -> Size {
-        let size = self.child.layout_and_get_size(constraints);
+    fn layout(&mut self, scope: &LayoutScope, constraints: Constraints) -> Size {
+        let size = self.child.layout_and_get_size(scope, constraints);
         self.child.parent_data = Some(size);
         size
     }
@@ -189,12 +189,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     use agui_core::{
         edge_insets::EdgeInsets,
+        paint::{ContainerLayer, LayerHandle},
         pointer::{PointerDispatcher, PointerId},
-        render_object::RenderOwner,
+        render_object::PipelineOwner,
         test_harness::TestHarness,
     };
 
@@ -222,9 +223,12 @@ mod tests {
 
         let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        let mut owner = RenderOwner::new();
-        owner.mount_view(Box::new(render));
-        owner.layout(Constraints::new(0, 100, 0, 100));
+        let mut owner = PipelineOwner::new(
+            Rc::new(RefCell::new(render)),
+            LayerHandle::new(ContainerLayer::new()),
+        );
+        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.flush_layout();
 
         let mut dispatcher = PointerDispatcher::new();
         dispatcher.handle(
