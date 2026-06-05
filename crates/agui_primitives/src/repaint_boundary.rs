@@ -130,17 +130,17 @@ impl RenderBox for RenderRepaintBoundary {
         self.content.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.content.measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.content.layout(ctx, constraints)
     }
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.content.measure_baseline(constraints, baseline)
@@ -280,14 +280,18 @@ mod tests {
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 10.0))
         }
-        fn measure(&self, _: Constraints) -> Size {
+        fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.child.layout(ctx, constraints);
             Size::new(10.0, 10.0)
         }
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -338,7 +342,7 @@ mod tests {
             Rc::new(RefCell::new(render)),
             LayerHandle::new(ContainerLayer::new()),
         );
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
 
         owner.flush_paint();

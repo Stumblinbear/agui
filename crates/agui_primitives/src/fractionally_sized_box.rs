@@ -134,7 +134,7 @@ pub struct RenderFractionallySizedBox<Child> {
 }
 
 impl<Child> RenderFractionallySizedBox<Child> {
-    fn inner_constraints(&self, constraints: Constraints) -> Constraints {
+    fn inner_constraints(&self, constraints: BoxConstraints) -> BoxConstraints {
         let (min_width, max_width) = match self.width_factor {
             Some(factor) => {
                 let width = PositiveFinite::try_from(constraints.max_width())
@@ -159,7 +159,7 @@ impl<Child> RenderFractionallySizedBox<Child> {
             None => (constraints.min_height(), constraints.max_height()),
         };
 
-        Constraints::new(min_width, max_width, min_height, max_height)
+        BoxConstraints::new(min_width, max_width, min_height, max_height)
     }
 }
 
@@ -200,11 +200,11 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         constraints.constrain(self.child.measure(self.inner_constraints(constraints)))
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let child_size = self
             .child
             .layout_and_get_size(ctx, self.inner_constraints(constraints));
@@ -222,7 +222,7 @@ where
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.child
@@ -272,8 +272,10 @@ mod tests {
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        let size =
-            render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 200, 0, 100));
+        let size = render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 200, 0, 100),
+        );
 
         assert_eq!(size, Size::new(100, 100));
         assert_eq!(
@@ -299,7 +301,7 @@ mod tests {
 
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
-            Constraints::new(200, 200, 200, 200),
+            BoxConstraints::new(200, 200, 200, 200),
         );
 
         assert_eq!(size, Size::new(200, 200));
@@ -324,7 +326,7 @@ mod tests {
 
         render_object.layout(
             &mut LayoutCtx::detached(),
-            Constraints::new(200, 200, 200, 200),
+            BoxConstraints::new(200, 200, 200, 200),
         );
 
         assert_eq!(

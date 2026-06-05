@@ -101,7 +101,7 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, mut constraints: Constraints) -> Size {
+    fn measure(&self, mut constraints: BoxConstraints) -> Size {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(
                 self
@@ -118,7 +118,7 @@ where
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, mut constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, mut constraints: BoxConstraints) -> Size {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(self
                 .max_intrinsic_width(constraints.max_height())
@@ -138,7 +138,7 @@ where
 
     fn measure_baseline(
         &self,
-        mut constraints: Constraints,
+        mut constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         if !constraints.has_tight_width() {

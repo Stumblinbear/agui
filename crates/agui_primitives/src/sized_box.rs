@@ -241,17 +241,17 @@ where
         }
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.child
-            .measure(Constraints::tight_for(self.width, self.height).enforce(constraints))
+            .measure(BoxConstraints::tight_for(self.width, self.height).enforce(constraints))
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.layout_scope = ctx.scope().clone();
 
         let child_size = self.child.layout_and_get_size(
             ctx,
-            Constraints::tight_for(self.width, self.height).enforce(constraints),
+            BoxConstraints::tight_for(self.width, self.height).enforce(constraints),
         );
 
         self.child.parent_data = Some(child_size);
@@ -261,11 +261,11 @@ where
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.child.measure_baseline(
-            Constraints::tight_for(self.width, self.height).enforce(constraints),
+            BoxConstraints::tight_for(self.width, self.height).enforce(constraints),
             baseline,
         )
     }
@@ -378,16 +378,16 @@ mod tests {
         fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
             self.child.max_intrinsic_height(width)
         }
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             self.child.measure(constraints)
         }
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             self.child.layout_and_get_size(ctx, constraints)
         }
         fn measure_baseline(
             &self,
-            constraints: Constraints,
+            constraints: BoxConstraints,
             baseline: TextBaseline,
         ) -> Option<PositiveFinite<f32>> {
             self.child.measure_baseline(constraints, baseline)
@@ -452,16 +452,20 @@ mod tests {
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.scope().clone());
 
             constraints.smallest()
         }
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -478,7 +482,10 @@ mod tests {
         let sized_box = SizedBox::new().width(16).height(48);
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 48)),
@@ -490,7 +497,7 @@ mod tests {
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
         render_object.layout(
             &mut LayoutCtx::detached(),
-            Constraints::new(16, 128, 32, 128),
+            BoxConstraints::new(16, 128, 32, 128),
         );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
@@ -501,7 +508,10 @@ mod tests {
         let sized_box = SizedBox::shrink();
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(0, 0)),
@@ -513,7 +523,7 @@ mod tests {
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
         render_object.layout(
             &mut LayoutCtx::detached(),
-            Constraints::new(10, 128, 20, 128),
+            BoxConstraints::new(10, 128, 20, 128),
         );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
@@ -524,7 +534,10 @@ mod tests {
         let sized_box = SizedBox::expand();
         let mut render_object =
             sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 128)),
@@ -554,7 +567,7 @@ mod tests {
         let mut owner =
             PipelineOwner::new(Rc::clone(&content), LayerHandle::new(ContainerLayer::new()));
 
-        owner.resize(Constraints::new(0, 200, 0, 200));
+        owner.resize(BoxConstraints::new(0, 200, 0, 200));
         owner.flush_layout();
         assert_eq!(outer.get(), 1);
         assert_eq!(probe_layouts.get(), 1);

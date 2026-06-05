@@ -12,7 +12,7 @@ mod any_render_box;
 mod constraints;
 
 pub use any_render_box::*;
-pub use constraints::Constraints;
+pub use constraints::BoxConstraints;
 
 /// A render object in a 2D Cartesian coordinate system.
 ///
@@ -93,10 +93,10 @@ pub trait RenderBox: RenderObject {
     /// changes, the parent is also laid out.
     ///
     /// Calling this function is expensive as it can result in O(N^2) behavior.
-    fn measure(&self, constraints: Constraints) -> Size;
+    fn measure(&self, constraints: BoxConstraints) -> Size;
 
     /// Chooses this box's [`Size`] within `constraints`, laying out its children to do so.
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size;
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size;
 
     /// Returns the distance from the top of the box to the first baseline of the
     /// box's contents for the given `constraints`, or [`None`] if this [`RenderBox`]
@@ -111,7 +111,7 @@ pub trait RenderBox: RenderObject {
     /// performance, where N is the number of render objects in the render subtree.
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -165,15 +165,15 @@ impl RenderBox for () {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         constraints.smallest()
     }
 
-    fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, _: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         constraints.smallest()
     }
 
-    fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+    fn measure_baseline(&self, _: BoxConstraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 

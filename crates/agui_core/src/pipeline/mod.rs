@@ -14,7 +14,7 @@ use crate::{
     },
     render_object::{
         RenderObject,
-        box_layout::{AnyRenderBox, Constraints, RenderBox},
+        box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
     },
 };
 
@@ -81,7 +81,7 @@ impl PipelineOwner {
 
     /// Lays the root out under `constraints` and repaints it. The caller drives this on the first frame
     /// and whenever the subtree's outer constraints change.
-    pub fn resize(&self, constraints: Constraints) {
+    pub fn resize(&self, constraints: BoxConstraints) {
         self.root_layout.set_constraints(constraints);
         self.root_paint.mark_needs_paint();
     }

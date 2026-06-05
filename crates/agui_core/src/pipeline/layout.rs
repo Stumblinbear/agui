@@ -9,7 +9,7 @@ use slotmap::{SlotMap, new_key_type};
 use crate::{
     context::LayoutCtx,
     pipeline::paint::{PaintPipeline, PaintScope},
-    render_object::box_layout::{AnyRenderBox, Constraints, RenderBox},
+    render_object::box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
 };
 
 /// Lays out the relayout boundaries of one subtree, re-laying only the ones that changed.
@@ -148,7 +148,7 @@ struct RegisteredBoundary {
 
     /// The constraints this boundary was last laid out under, replayed to re-lay it on its own. A
     /// boundary constrained from outside the tree has them written by the owner.
-    constraints: Option<Constraints>,
+    constraints: Option<BoxConstraints>,
 
     /// The repaint boundary enclosing this one, marked when this boundary re-lays so the re-laid
     /// subtree repaints.
@@ -254,7 +254,7 @@ impl LayoutScope {
 
     /// Records the constraints this boundary is re-laid under, without marking it. A boundary re-laid in
     /// place by its parent keeps its cached constraints current this way.
-    pub fn update_constraints(&self, constraints: Constraints) {
+    pub fn update_constraints(&self, constraints: BoxConstraints) {
         let LayoutScopeInner::Boundary { state, id, .. } = &self.0 else {
             return;
         };
@@ -270,7 +270,7 @@ impl LayoutScope {
 
     /// Records the constraints this boundary is re-laid under and marks it. A boundary constrained from
     /// outside the tree is sized this way, on mount and whenever those constraints change.
-    pub fn set_constraints(&self, constraints: Constraints) {
+    pub fn set_constraints(&self, constraints: BoxConstraints) {
         self.update_constraints(constraints);
         self.mark_needs_layout();
     }
@@ -364,10 +364,10 @@ mod tests {
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.scope().clone());
 
@@ -377,7 +377,11 @@ mod tests {
 
             constraints.smallest()
         }
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -409,7 +413,7 @@ mod tests {
             Rc::new(RefCell::new(render)),
             LayerHandle::new(ContainerLayer::new()),
         );
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
 
         owner.flush_layout();
         assert_eq!(layouts.get(), 1, "the first frame lays the root out");
@@ -439,7 +443,7 @@ mod tests {
             Rc::new(RefCell::new(render)),
             LayerHandle::new(ContainerLayer::new()),
         );
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         let captured = captured.borrow().clone().expect("laid out once");
 
@@ -474,7 +478,7 @@ mod tests {
             Rc::new(RefCell::new(render)),
             LayerHandle::new(ContainerLayer::new()),
         );
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
     }
 }

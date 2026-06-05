@@ -166,17 +166,17 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.child.layout(ctx, constraints)
     }
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.child.measure_baseline(constraints, baseline)
@@ -276,15 +276,19 @@ mod tests {
             Some(as_const!(PositiveFinite, f32, 10.0))
         }
 
-        fn measure(&self, _: Constraints) -> Size {
+        fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
 
-        fn layout(&mut self, _: &mut LayoutCtx, _: Constraints) -> Size {
+        fn layout(&mut self, _: &mut LayoutCtx, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
 
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
 
@@ -338,7 +342,10 @@ mod tests {
             });
 
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
 
         render.build_layer();
         assert_eq!(

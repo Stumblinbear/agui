@@ -71,7 +71,7 @@ pub struct RenderCenter<Child> {
 
 impl<Child> RenderCenter<Child> {
     /// The box's size: it fills each bounded axis and shrinks to the child on an unbounded one.
-    fn size_for(constraints: Constraints, child_size: Size) -> Size {
+    fn size_for(constraints: BoxConstraints, child_size: Size) -> Size {
         let max_width = constraints.max_width().get();
         let max_height = constraints.max_height().get();
 
@@ -127,13 +127,13 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         let child_size = self.child.measure(constraints.loosen());
 
         Self::size_for(constraints, child_size)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let child_size = self.child.layout_and_get_size(ctx, constraints.loosen());
         let size = Self::size_for(constraints, child_size);
 
@@ -149,7 +149,7 @@ where
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.child.measure_baseline(constraints.loosen(), baseline)
@@ -199,8 +199,10 @@ mod tests {
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
-        let size =
-            render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 200, 0, 100));
+        let size = render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 200, 0, 100),
+        );
 
         assert_eq!(
             size,

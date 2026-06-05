@@ -64,7 +64,7 @@ pub mod prelude {
             pipeline::{layout::LayoutScope, paint::PaintScope},
             render_object::{
                 AnyRenderObject, RenderObject,
-                box_layout::{AnyRenderBox, Constraints, RenderBox},
+                box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
                 node::{RelayoutRenderNode, RenderNode},
                 sliver::{AnyRenderSliver, RenderSliver},
             },

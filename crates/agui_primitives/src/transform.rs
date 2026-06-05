@@ -174,11 +174,11 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let size = self.child.layout_and_get_size(ctx, constraints);
         self.child.parent_data = Some(size);
         size
@@ -186,7 +186,7 @@ where
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.child.measure_baseline(constraints, baseline)
@@ -264,7 +264,10 @@ mod tests {
     fn a_rotation_over_a_flat_child_paints_under_a_transform() {
         let widget = Transform::rotate(0.5).child(boxed());
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
         render.update_compositing_bits();
 
         let root = LayerHandle::new(ContainerLayer::new());
@@ -288,7 +291,10 @@ mod tests {
     fn a_translation_folds_into_the_offset() {
         let widget = Transform::translate(Offset::new(5.0, 7.0)).child(boxed());
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
         render.update_compositing_bits();
 
         let root = LayerHandle::new(ContainerLayer::new());
@@ -342,7 +348,10 @@ mod tests {
     fn a_transform_over_a_compositing_child_wraps_its_layer() {
         let widget = Transform::rotate(0.5).child(Opacity::new(0.5).child(boxed()));
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
         render.update_compositing_bits();
 
         let root = LayerHandle::new(ContainerLayer::new());
@@ -375,7 +384,10 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
 
         let mut result = HitTestResult::new();
         let hit = render.hit_test(&mut result, Offset::new(15.0, 5.0));
@@ -397,7 +409,10 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
 
         let mut result = HitTestResult::new();
         let hit = render.hit_test(&mut result, Offset::new(10.0, 10.0));
@@ -411,7 +426,10 @@ mod tests {
     fn a_degenerate_transform_paints_nothing() {
         let widget = Transform::scale(0.0).child(boxed());
         let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
-        render.layout(&mut LayoutCtx::detached(), Constraints::new(0, 100, 0, 100));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
         render.update_compositing_bits();
 
         let root = LayerHandle::new(ContainerLayer::new());

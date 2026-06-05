@@ -5,14 +5,14 @@ use typed_floats::{Positive, StrictlyPositiveFinite, as_const};
 use crate::geometry::{Axis, EdgeInsetsGeometry, Size};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Constraints {
+pub struct BoxConstraints {
     min_width: Positive<f32>,
     max_width: Positive<f32>,
     min_height: Positive<f32>,
     max_height: Positive<f32>,
 }
 
-impl Default for Constraints {
+impl Default for BoxConstraints {
     fn default() -> Self {
         Self {
             min_width: as_const!(Positive, f32, 0.0),
@@ -23,7 +23,7 @@ impl Default for Constraints {
     }
 }
 
-impl Constraints {
+impl BoxConstraints {
     /// # Panics
     ///
     /// Panics if any bound is negative or NaN, or if a minimum exceeds its maximum.
@@ -250,7 +250,7 @@ impl Constraints {
 
     /// Returns new [`Constraints`] that respect the given constraints while being as
     /// close as possible to the original constraints.
-    pub fn enforce(self, other: impl Into<Constraints>) -> Self {
+    pub fn enforce(self, other: impl Into<BoxConstraints>) -> Self {
         let other = other.into();
 
         Self {
@@ -607,11 +607,11 @@ impl Constraints {
     // }
 }
 
-impl Mul<f32> for Constraints {
-    type Output = Constraints;
+impl Mul<f32> for BoxConstraints {
+    type Output = BoxConstraints;
 
     fn mul(self, rhs: f32) -> Self::Output {
-        Constraints::new(
+        BoxConstraints::new(
             self.min_width.get() * rhs,
             self.max_width.get() * rhs,
             self.min_height.get() * rhs,
@@ -620,17 +620,17 @@ impl Mul<f32> for Constraints {
     }
 }
 
-impl MulAssign<f32> for Constraints {
+impl MulAssign<f32> for BoxConstraints {
     fn mul_assign(&mut self, rhs: f32) {
         *self = *self * rhs;
     }
 }
 
-impl Div<f32> for Constraints {
-    type Output = Constraints;
+impl Div<f32> for BoxConstraints {
+    type Output = BoxConstraints;
 
     fn div(self, rhs: f32) -> Self::Output {
-        Constraints::new(
+        BoxConstraints::new(
             self.min_width.get() / rhs,
             self.max_width.get() / rhs,
             self.min_height.get() / rhs,
@@ -649,7 +649,7 @@ mod tests {
 
     #[test]
     fn default_is_unconstrained() {
-        let c = Constraints::default();
+        let c = BoxConstraints::default();
         assert_eq!(c.min_width().get(), 0.0);
         assert_eq!(c.min_height().get(), 0.0);
         assert!(c.max_width().is_infinite());
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn new_stores_bounds() {
-        let c = Constraints::new(10.0, 100.0, 20.0, 200.0);
+        let c = BoxConstraints::new(10.0, 100.0, 20.0, 200.0);
         assert_eq!(c.min_width().get(), 10.0);
         assert_eq!(c.max_width().get(), 100.0);
         assert_eq!(c.min_height().get(), 20.0);
@@ -668,18 +668,18 @@ mod tests {
     #[test]
     #[should_panic(expected = "minimum width must not be greater than the maximum width")]
     fn new_panics_when_min_width_exceeds_max() {
-        Constraints::new(100.0, 10.0, 0.0, 100.0);
+        BoxConstraints::new(100.0, 10.0, 0.0, 100.0);
     }
 
     #[test]
     #[should_panic(expected = "minimum height must not be greater than the maximum height")]
     fn new_panics_when_min_height_exceeds_max() {
-        Constraints::new(0.0, 100.0, 100.0, 10.0);
+        BoxConstraints::new(0.0, 100.0, 100.0, 10.0);
     }
 
     #[test]
     fn tight_sets_min_eq_max() {
-        let c = Constraints::tight(Size::new(50.0, 30.0));
+        let c = BoxConstraints::tight(Size::new(50.0, 30.0));
         assert!(c.is_tight());
         assert_eq!(c.min_width().get(), 50.0);
         assert_eq!(c.max_width().get(), 50.0);
@@ -689,7 +689,7 @@ mod tests {
 
     #[test]
     fn loose_sets_zero_min() {
-        let c = Constraints::loose(Size::new(80.0, 60.0));
+        let c = BoxConstraints::loose(Size::new(80.0, 60.0));
         assert_eq!(c.min_width().get(), 0.0);
         assert_eq!(c.max_width().get(), 80.0);
         assert_eq!(c.min_height().get(), 0.0);
@@ -698,7 +698,7 @@ mod tests {
 
     #[test]
     fn along_axis_horizontal() {
-        let c = Constraints::along_axis(Axis::Horizontal, 10.0, 50.0);
+        let c = BoxConstraints::along_axis(Axis::Horizontal, 10.0, 50.0);
         assert_eq!(c.min_width().get(), 10.0);
         assert_eq!(c.max_width().get(), 50.0);
         assert_eq!(c.min_height().get(), 0.0);
@@ -707,7 +707,7 @@ mod tests {
 
     #[test]
     fn along_axis_vertical() {
-        let c = Constraints::along_axis(Axis::Vertical, 10.0, 50.0);
+        let c = BoxConstraints::along_axis(Axis::Vertical, 10.0, 50.0);
         assert_eq!(c.min_width().get(), 0.0);
         assert!(c.max_width().is_infinite());
         assert_eq!(c.min_height().get(), 10.0);
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn loosen_removes_minimums() {
-        let c = Constraints::new(10.0, 100.0, 20.0, 200.0).loosen();
+        let c = BoxConstraints::new(10.0, 100.0, 20.0, 200.0).loosen();
         assert_eq!(c.min_width().get(), 0.0);
         assert_eq!(c.max_width().get(), 100.0);
         assert_eq!(c.min_height().get(), 0.0);
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn deflate_shrinks_by_insets() {
-        let c = Constraints::new(40.0, 100.0, 40.0, 100.0);
+        let c = BoxConstraints::new(40.0, 100.0, 40.0, 100.0);
         let insets = EdgeInsets::all(10.0);
         let d = c.deflate(&insets);
         // horizontal = 20, vertical = 20
@@ -737,7 +737,7 @@ mod tests {
 
     #[test]
     fn deflate_clamps_to_zero() {
-        let c = Constraints::new(5.0, 10.0, 5.0, 10.0);
+        let c = BoxConstraints::new(5.0, 10.0, 5.0, 10.0);
         let insets = EdgeInsets::all(20.0);
         let d = c.deflate(&insets);
         assert_eq!(d.min_width().get(), 0.0);
@@ -746,8 +746,8 @@ mod tests {
 
     #[test]
     fn enforce_clamps_to_other() {
-        let c = Constraints::new(0.0, 200.0, 0.0, 200.0);
-        let bounds = Constraints::new(10.0, 50.0, 20.0, 60.0);
+        let c = BoxConstraints::new(0.0, 200.0, 0.0, 200.0);
+        let bounds = BoxConstraints::new(10.0, 50.0, 20.0, 60.0);
         let e = c.enforce(bounds);
         assert_eq!(e.min_width().get(), 10.0);
         assert_eq!(e.max_width().get(), 50.0);
@@ -757,7 +757,7 @@ mod tests {
 
     #[test]
     fn tighten_width_clamps_within_bounds() {
-        let c = Constraints::new(10.0, 100.0, 0.0, 100.0);
+        let c = BoxConstraints::new(10.0, 100.0, 0.0, 100.0);
         let t = c.tighten_width(50.0);
         assert_eq!(t.min_width().get(), 50.0);
         assert_eq!(t.max_width().get(), 50.0);
@@ -775,7 +775,7 @@ mod tests {
 
     #[test]
     fn tighten_height_clamps_within_bounds() {
-        let c = Constraints::new(0.0, 100.0, 10.0, 100.0);
+        let c = BoxConstraints::new(0.0, 100.0, 10.0, 100.0);
         let t = c.tighten_height(50.0);
         assert_eq!(t.min_height().get(), 50.0);
         assert_eq!(t.max_height().get(), 50.0);
@@ -783,7 +783,7 @@ mod tests {
 
     #[test]
     fn tighten_clamps_both_axes() {
-        let c = Constraints::new(0.0, 100.0, 0.0, 100.0);
+        let c = BoxConstraints::new(0.0, 100.0, 0.0, 100.0);
         let t = c.tighten(Size::new(40.0, 60.0));
         assert!(t.is_tight());
         assert_eq!(t.min_width().get(), 40.0);
@@ -792,7 +792,7 @@ mod tests {
 
     #[test]
     fn constrain_clamps_size() {
-        let c = Constraints::new(10.0, 50.0, 10.0, 50.0);
+        let c = BoxConstraints::new(10.0, 50.0, 10.0, 50.0);
 
         let s = c.constrain(Size::new(30.0, 30.0));
         assert_eq!(s.width.get(), 30.0);
@@ -805,7 +805,7 @@ mod tests {
 
     #[test]
     fn constrain_preserve_aspect_ratio_scales_down() {
-        let c = Constraints::new(0.0, 100.0, 0.0, 50.0);
+        let c = BoxConstraints::new(0.0, 100.0, 0.0, 50.0);
         let s = c.constrain_preserve_aspect_ratio(Size::new(200.0, 100.0));
         assert_eq!(s.width.get(), 100.0);
         assert_eq!(s.height.get(), 50.0);
@@ -813,7 +813,7 @@ mod tests {
 
     #[test]
     fn constrain_preserve_aspect_ratio_scales_up_to_min() {
-        let c = Constraints::new(100.0, 200.0, 50.0, 100.0);
+        let c = BoxConstraints::new(100.0, 200.0, 50.0, 100.0);
         let s = c.constrain_preserve_aspect_ratio(Size::new(20.0, 10.0));
         assert_eq!(s.width.get(), 100.0);
         assert_eq!(s.height.get(), 50.0);
@@ -821,7 +821,7 @@ mod tests {
 
     #[test]
     fn flip_swaps_axes() {
-        let c = Constraints::new(10.0, 100.0, 20.0, 200.0);
+        let c = BoxConstraints::new(10.0, 100.0, 20.0, 200.0);
         let f = c.flip();
         assert_eq!(f.min_width().get(), 20.0);
         assert_eq!(f.max_width().get(), 200.0);
@@ -831,7 +831,7 @@ mod tests {
 
     #[test]
     fn smallest_and_biggest() {
-        let c = Constraints::new(10.0, 100.0, 20.0, 200.0);
+        let c = BoxConstraints::new(10.0, 100.0, 20.0, 200.0);
         let s = c.smallest();
         assert_eq!(s.width.get(), 10.0);
         assert_eq!(s.height.get(), 20.0);
@@ -842,7 +842,7 @@ mod tests {
 
     #[test]
     fn has_tight_and_bounded_queries() {
-        let tight = Constraints::tight(Size::new(10.0, 20.0));
+        let tight = BoxConstraints::tight(Size::new(10.0, 20.0));
         assert!(tight.has_tight_width());
         assert!(tight.has_tight_height());
         assert!(tight.is_tight());
@@ -851,7 +851,7 @@ mod tests {
         assert!(!tight.has_infinite_width());
         assert!(!tight.has_infinite_height());
 
-        let expand = Constraints::expand();
+        let expand = BoxConstraints::expand();
         assert!(!expand.has_tight_width());
         assert!(!expand.has_tight_height());
         assert!(!expand.has_bounded_width());
@@ -861,7 +861,7 @@ mod tests {
 
     #[test]
     fn is_satisfied_by() {
-        let c = Constraints::new(10.0, 50.0, 10.0, 50.0);
+        let c = BoxConstraints::new(10.0, 50.0, 10.0, 50.0);
         assert!(c.is_satisfied_by(Size::new(30.0, 30.0)));
         assert!(c.is_satisfied_by(Size::new(10.0, 50.0)));
         assert!(!c.is_satisfied_by(Size::new(5.0, 30.0)));
@@ -870,7 +870,7 @@ mod tests {
 
     #[test]
     fn only_width_and_only_height() {
-        let c = Constraints::new(10.0, 50.0, 20.0, 60.0);
+        let c = BoxConstraints::new(10.0, 50.0, 20.0, 60.0);
 
         let w = c.only_width();
         assert_eq!(w.min_width().get(), 10.0);
@@ -887,7 +887,7 @@ mod tests {
 
     #[test]
     fn mul_scales_all_bounds() {
-        let c = Constraints::new(10.0, 100.0, 20.0, 200.0);
+        let c = BoxConstraints::new(10.0, 100.0, 20.0, 200.0);
         let scaled = c * 2.0;
         assert_eq!(scaled.min_width().get(), 20.0);
         assert_eq!(scaled.max_width().get(), 200.0);
@@ -897,7 +897,7 @@ mod tests {
 
     #[test]
     fn div_scales_all_bounds() {
-        let c = Constraints::new(10.0, 100.0, 20.0, 200.0);
+        let c = BoxConstraints::new(10.0, 100.0, 20.0, 200.0);
         let scaled = c / 2.0;
         assert_eq!(scaled.min_width().get(), 5.0);
         assert_eq!(scaled.max_width().get(), 50.0);

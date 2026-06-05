@@ -157,14 +157,14 @@ where
         )
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
         let child_size = self.child.measure(inner_constraints);
 
         constraints.constrain(self.padding.inflate_size(child_size))
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let inner_constraints = constraints.deflate(&self.padding);
         let child_size = self.child.layout_and_get_size(ctx, inner_constraints);
 
@@ -178,7 +178,7 @@ where
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         let inner_constraints = constraints.deflate(&self.padding);
@@ -243,8 +243,10 @@ mod tests {
 
         let mut render_object =
             padding.create_render_object(&TestHarness::mount(&padding).root.element);
-        let size =
-            render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             size,
             Size::new(20.0, 20.0),
@@ -263,8 +265,10 @@ mod tests {
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
         let mut render_object =
             padding.create_render_object(&TestHarness::mount(&padding).root.element);
-        let size =
-            render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             size,
             Size::new(100.0, 100.0),
@@ -283,8 +287,10 @@ mod tests {
         let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
         let mut render_object =
             padding.create_render_object(&TestHarness::mount(&padding).root.element);
-        let size =
-            render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        let size = render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             size,
             Size::new(128.0, 128.0),

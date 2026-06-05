@@ -28,7 +28,7 @@ fn orange_half_pane_matches_golden() {
     let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
     render.layout(
         &mut LayoutCtx::detached(),
-        Constraints::new(0.0, width as f32, 0.0, height as f32),
+        BoxConstraints::new(0.0, width as f32, 0.0, height as f32),
     );
 
     let root = LayerHandle::new(ContainerLayer::new());

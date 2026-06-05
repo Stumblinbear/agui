@@ -23,7 +23,7 @@ pub struct LayoutBuilder<F, Child> {
 
 impl<F, Child> LayoutBuilder<F, Child>
 where
-    F: Fn(Constraints) -> Child,
+    F: Fn(BoxConstraints) -> Child,
 {
     pub fn new(builder: F) -> Self {
         Self {
@@ -44,7 +44,7 @@ type RetainedChild<Child> = Rc<RefCell<Option<(ElementNode<<Child as Widget>::El
 type BuildClosure<R> = Rc<
     dyn Fn(
         &mut LayoutCtx,
-        Constraints,
+        BoxConstraints,
         Option<&PaintScope>,
         &mut Option<RenderNode<R, Option<Size>>>,
     ),
@@ -63,7 +63,7 @@ impl<Child> Element for LayoutBuilderElement<Child> where Child: Widget + 'stati
 
 impl<F, Child> Widget for LayoutBuilder<F, Child>
 where
-    F: Fn(Constraints) -> Child + 'static,
+    F: Fn(BoxConstraints) -> Child + 'static,
     Child: Widget + 'static,
     Child::Render: RenderBox,
 {
@@ -105,7 +105,7 @@ where
         RenderLayoutBuilder {
             builder: Rc::clone(&element.builder),
 
-            old_constraints: Constraints::default(),
+            old_constraints: BoxConstraints::default(),
 
             needs_build: false,
 
@@ -138,7 +138,7 @@ fn build_closure<F, Child>(
     ctx: &mut UpdateCtx,
 ) -> BuildClosure<Child::Render>
 where
-    F: Fn(Constraints) -> Child + 'static,
+    F: Fn(BoxConstraints) -> Child + 'static,
     Child: Widget + 'static,
     Child::Render: RenderBox,
 {
@@ -151,7 +151,7 @@ where
 
     Rc::new(
         move |ctx: &mut LayoutCtx,
-              constraints: Constraints,
+              constraints: BoxConstraints,
               paint_scope: Option<&PaintScope>,
               slot: &mut Option<RenderNode<Child::Render, Option<Size>>>| {
             let new_child = (builder)(constraints);
@@ -201,7 +201,7 @@ where
 pub struct RenderLayoutBuilder<Child> {
     builder: BuildClosure<Child>,
 
-    old_constraints: Constraints,
+    old_constraints: BoxConstraints,
 
     needs_build: bool,
 
@@ -259,11 +259,11 @@ where
         None
     }
 
-    fn measure(&self, _: Constraints) -> Size {
+    fn measure(&self, _: BoxConstraints) -> Size {
         Size::ZERO
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.layout_scope = ctx.scope().clone();
 
         if self.child_render.is_none() || self.needs_build || self.old_constraints != constraints {
@@ -289,7 +289,7 @@ where
         }
     }
 
-    fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+    fn measure_baseline(&self, _: BoxConstraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 
@@ -346,14 +346,20 @@ mod tests {
 
         let mut render_object =
             layout_builder.create_render_object(&TestHarness::mount(&layout_builder).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 50, 0, 50));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 50, 0, 50),
+        );
         assert_eq!(*build_count.borrow(), 1);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
             Some(Size::new(0.0, 0.0))
         );
 
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 150, 0, 150));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 150, 0, 150),
+        );
         assert_eq!(*build_count.borrow(), 2);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
@@ -397,7 +403,10 @@ mod tests {
         let mut harness = TestHarness::mount(&layout_builder);
 
         let mut render_object = layout_builder.create_render_object(&harness.root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 50, 0, 50));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 50, 0, 50),
+        );
 
         harness.task_runner.run_to_completion();
 
@@ -483,15 +492,19 @@ mod tests {
             None
         }
 
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
 
-        fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, _: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
 
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
 
@@ -537,14 +550,14 @@ mod tests {
 
         let mut owner = owner_for(&layout_builder);
 
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         assert_eq!(counts.mounts.get(), 1, "the subtree was mounted once");
         assert_eq!(counts.updates.get(), 0);
 
         // The constraints change but the child keeps its type, so the subtree is reconciled in place
         // rather than discarded and remounted.
-        owner.resize(Constraints::new(0, 50, 0, 50));
+        owner.resize(BoxConstraints::new(0, 50, 0, 50));
         owner.flush_layout();
         assert_eq!(counts.mounts.get(), 1, "the same-type child was reused");
         assert_eq!(counts.unmounts.get(), 0);
@@ -578,13 +591,13 @@ mod tests {
 
         let mut owner = owner_for(&layout_builder);
 
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         assert_eq!(counts.mounts.get(), 1);
         assert_eq!(counts.unmounts.get(), 0);
 
         // Cross the threshold: the probe's type no longer matches, so its subtree is unmounted.
-        owner.resize(Constraints::new(0, 50, 0, 50));
+        owner.resize(BoxConstraints::new(0, 50, 0, 50));
         owner.flush_layout();
         assert_eq!(counts.mounts.get(), 1, "the replacement was not the probe");
         assert_eq!(
@@ -594,7 +607,7 @@ mod tests {
         );
 
         // Cross back: a fresh probe is built and mounted.
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         assert_eq!(counts.mounts.get(), 2, "a fresh probe was mounted");
     }
@@ -619,7 +632,7 @@ mod tests {
         let mut owner =
             PipelineOwner::new(Rc::clone(&content), LayerHandle::new(ContainerLayer::new()));
 
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         assert_eq!(builds.get(), 1);
 

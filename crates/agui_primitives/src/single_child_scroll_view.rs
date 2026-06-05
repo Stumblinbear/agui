@@ -97,11 +97,11 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.child.measure(constraints.only_width())
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let child_size = self
             .child
             .layout_and_get_size(ctx, constraints.only_width());
@@ -111,7 +111,7 @@ where
         constraints.constrain(child_size)
     }
 
-    fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+    fn measure_baseline(&self, _: BoxConstraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 
@@ -151,7 +151,10 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(10, 0)),
@@ -161,7 +164,10 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 0)),
@@ -171,7 +177,10 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(10, 16)),
@@ -181,7 +190,10 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 16)),
@@ -191,7 +203,10 @@ mod tests {
         let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
         let mut render_object =
             scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
-        render_object.layout(&mut LayoutCtx::detached(), Constraints::new(0, 128, 0, 128));
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 256)),

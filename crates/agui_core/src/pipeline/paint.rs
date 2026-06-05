@@ -410,7 +410,7 @@ mod tests {
         },
         render_object::{
             RenderObject,
-            box_layout::{AnyRenderBox, Constraints, RenderBox},
+            box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
         },
         scheduling::Vsync,
         text::TextBaseline,
@@ -450,17 +450,17 @@ mod tests {
                 Some(as_const!(PositiveFinite, f32, 0.0))
             }
 
-            fn measure(&self, _: Constraints) -> Size {
+            fn measure(&self, _: BoxConstraints) -> Size {
                 Size::new(1.0, 1.0)
             }
 
-            fn layout(&mut self, _: &mut LayoutCtx, _: Constraints) -> Size {
+            fn layout(&mut self, _: &mut LayoutCtx, _: BoxConstraints) -> Size {
                 Size::new(1.0, 1.0)
             }
 
             fn measure_baseline(
                 &self,
-                _: Constraints,
+                _: BoxConstraints,
                 _: TextBaseline,
             ) -> Option<PositiveFinite<f32>> {
                 None

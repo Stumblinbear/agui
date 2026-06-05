@@ -302,11 +302,11 @@ mod tests {
             None
         }
 
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
 
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             for child in &mut self.children {
                 child.layout(ctx, constraints);
             }
@@ -314,7 +314,11 @@ mod tests {
             constraints.smallest()
         }
 
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
 

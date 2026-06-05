@@ -131,11 +131,11 @@ where
         self.child.max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.child.measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let size = self.child.layout_and_get_size(ctx, constraints);
         self.child.parent_data = Some(size);
         size
@@ -143,7 +143,7 @@ where
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.child.measure_baseline(constraints, baseline)
@@ -230,7 +230,7 @@ mod tests {
             Rc::new(RefCell::new(render)),
             LayerHandle::new(ContainerLayer::new()),
         );
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         owner.flush_paint();
 

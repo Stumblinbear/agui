@@ -6,7 +6,7 @@ use crate::{
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
         LayoutCtx, MountCtx, RenderObject,
-        box_layout::{Constraints, RenderBox},
+        box_layout::{BoxConstraints, RenderBox},
     },
     text::TextBaseline,
 };
@@ -84,18 +84,22 @@ impl<R: RenderBox, P> RenderNode<R, P> {
         self.object.max_intrinsic_height(width)
     }
 
-    pub fn measure(&self, constraints: Constraints) -> Size {
+    pub fn measure(&self, constraints: BoxConstraints) -> Size {
         self.object.measure(constraints)
     }
 
     /// Lay this child out under `constraints`. If you need the resulting size of the child, use `layout_and_get_size` instead.
-    pub fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) {
+    pub fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) {
         self.object.layout(ctx, constraints);
     }
 
     /// Lay this child out under `constraints` and return the size it took. This couples the child with the parent so that when
     /// the child's layout changes, the parent is also laid out.
-    pub fn layout_and_get_size(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    pub fn layout_and_get_size(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        constraints: BoxConstraints,
+    ) -> Size {
         let size = self.object.layout(ctx, constraints);
         self.parent_uses_size = true;
         size
@@ -103,7 +107,7 @@ impl<R: RenderBox, P> RenderNode<R, P> {
 
     pub fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.object.measure_baseline(constraints, baseline)
@@ -172,17 +176,17 @@ mod tests {
             self.child.max_intrinsic_height(width)
         }
 
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             self.child.measure(constraints)
         }
 
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.child.layout_and_get_size(ctx, constraints)
         }
 
         fn measure_baseline(
             &self,
-            constraints: Constraints,
+            constraints: BoxConstraints,
             baseline: TextBaseline,
         ) -> Option<PositiveFinite<f32>> {
             self.child.measure_baseline(constraints, baseline)
@@ -286,7 +290,7 @@ mod tests {
 
         let size = node.layout_and_get_size(
             &mut LayoutCtx::detached(),
-            Constraints::tight(Size::new(10.0, 20.0)),
+            BoxConstraints::tight(Size::new(10.0, 20.0)),
         );
         assert_eq!(size, Size::new(10.0, 20.0));
 
@@ -321,7 +325,7 @@ mod tests {
         assert_eq!(
             node.object.child.layout_and_get_size(
                 &mut LayoutCtx::detached(),
-                Constraints::tight(Size::new(12.0, 8.0))
+                BoxConstraints::tight(Size::new(12.0, 8.0))
             ),
             Size::new(12.0, 8.0),
         );
@@ -348,7 +352,7 @@ mod tests {
         assert_eq!(
             boxed.layout_and_get_size(
                 &mut LayoutCtx::detached(),
-                Constraints::tight(Size::new(7.0, 7.0))
+                BoxConstraints::tight(Size::new(7.0, 7.0))
             ),
             Size::new(7.0, 7.0)
         );
@@ -357,7 +361,7 @@ mod tests {
         assert_eq!(
             boxed.layout_and_get_size(
                 &mut LayoutCtx::detached(),
-                Constraints::tight(Size::new(3.0, 3.0))
+                BoxConstraints::tight(Size::new(3.0, 3.0))
             ),
             Size::new(3.0, 3.0),
         );
@@ -450,15 +454,19 @@ mod tests {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
 
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
 
-        fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, _: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
 
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
 

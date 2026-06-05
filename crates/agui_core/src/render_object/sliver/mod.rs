@@ -6,7 +6,7 @@ use crate::{
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
         LayoutCtx, MountCtx, RenderObject,
-        box_layout::{Constraints, RenderBox},
+        box_layout::{BoxConstraints, RenderBox},
         node::RenderNode,
     },
     text::TextBaseline,
@@ -243,12 +243,12 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         None
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         constraints.biggest()
     }
 
     // TODO(trevin): hook up slivers to layout
-    fn layout(&mut self, _: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, _: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let size = constraints.biggest();
 
         // Vertical main axis: main extent is height, cross extent is width.
@@ -276,7 +276,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         size
     }
 
-    fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+    fn measure_baseline(&self, _: BoxConstraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
         None
     }
 
@@ -359,7 +359,7 @@ mod tests {
         let size = RenderBox::layout(
             &mut viewport,
             &mut LayoutCtx::detached(),
-            Constraints::tight(Size::new(100.0, 50.0)),
+            BoxConstraints::tight(Size::new(100.0, 50.0)),
         );
         assert_eq!(size, Size::new(100.0, 50.0));
         let g = viewport.geometry().unwrap();
@@ -375,7 +375,7 @@ mod tests {
         RenderBox::layout(
             &mut viewport,
             &mut LayoutCtx::detached(),
-            Constraints::tight(Size::new(100.0, 50.0)),
+            BoxConstraints::tight(Size::new(100.0, 50.0)),
         );
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
     }
@@ -425,7 +425,7 @@ mod tests {
         RenderBox::layout(
             &mut viewport,
             &mut LayoutCtx::detached(),
-            Constraints::tight(Size::new(100.0, 50.0)),
+            BoxConstraints::tight(Size::new(100.0, 50.0)),
         );
 
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 50.0);

@@ -12,7 +12,7 @@ use crate::{
     },
     render_object::{
         LayoutCtx, MountCtx, RenderObject,
-        box_layout::{Constraints, RenderBox},
+        box_layout::{BoxConstraints, RenderBox},
     },
     text::TextBaseline,
 };
@@ -150,7 +150,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
         }
     }
 
-    pub fn measure(&self, constraints: Constraints) -> Size {
+    pub fn measure(&self, constraints: BoxConstraints) -> Size {
         match &self.child {
             RelayoutChild::Inline(child) => child.measure(constraints),
             RelayoutChild::Boxed { content, .. } => content.measure(constraints),
@@ -159,19 +159,23 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
 
     /// Lays this child out under `constraints`. If you need the resulting size, use
     /// `layout_and_get_size` instead.
-    pub fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) {
+    pub fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) {
         self.layout_inner(ctx, constraints);
     }
 
     /// Lays this child out under `constraints` and returns the size it took. This couples the holder with
     /// the child, so a change to the child's size re-lays the holder too.
-    pub fn layout_and_get_size(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    pub fn layout_and_get_size(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        constraints: BoxConstraints,
+    ) -> Size {
         self.parent_uses_size = true;
 
         self.layout_inner(ctx, constraints)
     }
 
-    fn layout_inner(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout_inner(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.reshape(constraints.is_tight(), ctx.scope());
 
         match &mut self.child {
@@ -259,7 +263,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
 
     pub fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         match &self.child {
@@ -333,7 +337,7 @@ mod tests {
         pipeline::PipelineOwner,
         render_object::{
             MountCtx, RenderObject,
-            box_layout::{Constraints, RenderBox},
+            box_layout::{BoxConstraints, RenderBox},
         },
         text::TextBaseline,
     };
@@ -375,16 +379,20 @@ mod tests {
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
-        fn measure(&self, constraints: Constraints) -> Size {
+        fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
-        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.scope().clone());
 
             constraints.smallest()
         }
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -430,18 +438,22 @@ mod tests {
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
-        fn measure(&self, _: Constraints) -> Size {
+        fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
-        fn layout(&mut self, ctx: &mut LayoutCtx, _: Constraints) -> Size {
+        fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
 
             let size = Size::new(10.0, 10.0);
-            self.child.layout(ctx, Constraints::tight(size));
+            self.child.layout(ctx, BoxConstraints::tight(size));
 
             size
         }
-        fn measure_baseline(&self, _: Constraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
             None
         }
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
@@ -474,7 +486,7 @@ mod tests {
         let content: BoundaryContent = Rc::new(RefCell::new(tighten));
         let mut owner = PipelineOwner::new(Rc::clone(&content), layer());
 
-        owner.resize(Constraints::new(0, 100, 0, 100));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         owner.flush_paint();
         assert_eq!(probe_layouts.get(), 1);

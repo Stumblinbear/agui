@@ -8,7 +8,7 @@ use crate::{
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
         AnyRenderObject, LayoutCtx,
-        box_layout::{Constraints, RenderBox},
+        box_layout::{BoxConstraints, RenderBox},
     },
     text::TextBaseline,
 };
@@ -22,13 +22,13 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>>;
 
-    fn dyn_measure(&self, constraints: Constraints) -> Size;
+    fn dyn_measure(&self, constraints: BoxConstraints) -> Size;
 
-    fn dyn_layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size;
+    fn dyn_layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size;
 
     fn dyn_measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>>;
 
@@ -60,17 +60,17 @@ where
         self.max_intrinsic_height(width)
     }
 
-    fn dyn_measure(&self, constraints: Constraints) -> Size {
+    fn dyn_measure(&self, constraints: BoxConstraints) -> Size {
         self.measure(constraints)
     }
 
-    fn dyn_layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn dyn_layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.layout(ctx, constraints)
     }
 
     fn dyn_measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.measure_baseline(constraints, baseline)
@@ -109,17 +109,17 @@ where
         (**self).dyn_max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         (**self).dyn_measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         (**self).dyn_layout(ctx, constraints)
     }
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         (**self).dyn_measure_baseline(constraints, baseline)
@@ -158,17 +158,17 @@ where
         self.borrow().dyn_max_intrinsic_height(width)
     }
 
-    fn measure(&self, constraints: Constraints) -> Size {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
         self.borrow().dyn_measure(constraints)
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: Constraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.borrow_mut().dyn_layout(ctx, constraints)
     }
 
     fn measure_baseline(
         &self,
-        constraints: Constraints,
+        constraints: BoxConstraints,
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         self.borrow().dyn_measure_baseline(constraints, baseline)

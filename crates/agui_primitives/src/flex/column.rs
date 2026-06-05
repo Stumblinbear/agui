@@ -204,17 +204,17 @@ where
         None
     }
 
-    fn measure(&self, _constraints: Constraints) -> Size {
+    fn measure(&self, _constraints: BoxConstraints) -> Size {
         Size::ZERO
     }
 
-    fn layout(&mut self, _: &mut LayoutCtx, _: Constraints) -> Size {
+    fn layout(&mut self, _: &mut LayoutCtx, _: BoxConstraints) -> Size {
         Size::ZERO
     }
 
     fn measure_baseline(
         &self,
-        _constraints: Constraints,
+        _constraints: BoxConstraints,
         _baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         None

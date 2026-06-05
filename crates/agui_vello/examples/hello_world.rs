@@ -86,8 +86,8 @@ fn main() {
 
 /// The loose constraints a window of `width` by `height` lays its subtree out under.
 #[allow(clippy::cast_precision_loss)]
-fn viewport(width: u32, height: u32) -> Constraints {
-    Constraints::tight(Size::new(width, height))
+fn viewport(width: u32, height: u32) -> BoxConstraints {
+    BoxConstraints::tight(Size::new(width, height))
 }
 
 struct ActiveWindow {
@@ -353,13 +353,13 @@ impl<ChildElement: Element> Element for WindowRootElement<ChildElement> {}
 
 /// Drives one window's pipeline from the event loop.
 trait View {
-    fn resize(&mut self, constraints: Constraints);
+    fn resize(&mut self, constraints: BoxConstraints);
     fn frame(&mut self) -> Scene;
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
 impl<ChildElement: Element> View for WindowRootElement<ChildElement> {
-    fn resize(&mut self, constraints: Constraints) {
+    fn resize(&mut self, constraints: BoxConstraints) {
         self.owner.resize(constraints);
     }
 
