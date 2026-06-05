@@ -251,10 +251,7 @@ where
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{
-        element::Element, key::Key, render_object::RenderLeaf, test_harness::TestHarness,
-        widget::AsAnyWidget,
-    };
+    use agui_core::{element::Element, key::Key, test_harness::TestHarness, widget::AsAnyWidget};
 
     use super::*;
 
@@ -285,7 +282,7 @@ mod tests {
     {
         type Element = TestWidgetElement<T>;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, _: &mut UpdateCtx) -> Self::Element {
             MOUNT_COUNT.with(|count| *count.borrow_mut() += 1);
@@ -301,11 +298,9 @@ mod tests {
             element.value = self.value.clone();
         }
 
-        fn create_render_object(&self, _: &Self::Element) -> RenderLeaf {
-            RenderLeaf::default()
-        }
+        fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
-        fn update_render_object(&self, _: &Self::Element, _: &mut RenderLeaf) {}
+        fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
     }
 
     #[test]

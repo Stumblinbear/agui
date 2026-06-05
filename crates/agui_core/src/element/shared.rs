@@ -366,7 +366,6 @@ mod tests {
         element::Element,
         key::AnyKeyable,
         provide::ProvideScope,
-        render_object::RenderLeaf,
         routing_id::RoutingId,
         test_harness::TestTaskRunner,
         widget::Widget,
@@ -403,7 +402,7 @@ mod tests {
     impl Widget for Probe {
         type Element = ProbeElement;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, _: &mut UpdateCtx) -> ProbeElement {
             self.mounts.set(self.mounts.get() + 1);
@@ -633,7 +632,7 @@ mod tests {
     impl Widget for Group {
         type Element = MultiChildElement<ProbeElement>;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
             MultiChildElement::new(self.children.len(), |i| &self.children[i], ctx)

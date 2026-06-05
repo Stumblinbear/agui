@@ -128,10 +128,7 @@ mod tests {
         context::UpdateCtx,
         element::{Element, ElementNode},
         paint::{ContainerLayer, LayerHandle},
-        render_object::{
-            RenderLeaf,
-            box_layout::{AnyRenderBox, RenderBox},
-        },
+        render_object::box_layout::{AnyRenderBox, RenderBox},
         test_fixtures::Leaf,
         test_harness::TestHarness,
         text_baseline::TextBaseline,
@@ -280,7 +277,7 @@ mod tests {
 
     #[test]
     fn node_layout_and_paint_helpers() {
-        let mut node = RenderNode::<RenderLeaf, ()>::new(RenderLeaf::default());
+        let mut node = RenderNode::<(), ()>::new(());
 
         let size = node.layout_and_get_size(
             &mut LayoutCtx::detached(),
@@ -327,7 +324,7 @@ mod tests {
         // erased boundary: a boxed child, reconciled by recovering its real type —
         // this is what a fan-out's update_render_object does per slot.
         let mut boxed: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(Box::new(RenderLeaf::default()) as Box<dyn AnyRenderBox>);
+            RenderNode::new(Box::new(()) as Box<dyn AnyRenderBox>);
 
         // a wrong type does not match...
         assert!(
@@ -340,7 +337,7 @@ mod tests {
         // ...the correct type does, and we update it in place through the recovered object
         (*boxed.object)
             .as_any_mut()
-            .downcast_mut::<RenderLeaf>()
+            .downcast_mut::<()>()
             .expect("boxed child downcasts to its real type");
 
         assert_eq!(
@@ -376,7 +373,7 @@ mod tests {
     impl Widget for Counted {
         type Element = CountedElement;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, _: &mut UpdateCtx) -> CountedElement {
             CountedElement
@@ -386,8 +383,6 @@ mod tests {
 
         fn create_render_object(&self, _: &CountedElement) -> Self::Render {
             self.creates.set(self.creates.get() + 1);
-
-            RenderLeaf::default()
         }
 
         fn update_render_object(&self, _: &CountedElement, _: &mut Self::Render) {}
@@ -513,12 +508,7 @@ mod tests {
         let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
             RenderNode::new(widget_a.create_render_object(&harness.root.element));
         assert_eq!(creates_a.get(), 1);
-        assert!(
-            (*slot.object)
-                .as_any_mut()
-                .downcast_mut::<RenderLeaf>()
-                .is_some()
-        );
+        assert!((*slot.object).as_any_mut().downcast_mut::<()>().is_some());
 
         // swap to a different concrete render type -> reconcile the element, then the slot's
         // render object downcast fails -> recreate
@@ -543,10 +533,7 @@ mod tests {
             "slot now holds the new type"
         );
         assert!(
-            (*slot.object)
-                .as_any_mut()
-                .downcast_mut::<RenderLeaf>()
-                .is_none(),
+            (*slot.object).as_any_mut().downcast_mut::<()>().is_none(),
             "old type is gone"
         );
     }

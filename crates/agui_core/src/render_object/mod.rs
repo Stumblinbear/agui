@@ -41,10 +41,7 @@ pub trait RenderObject: 'static {
     fn update_compositing_bits(&mut self) -> bool;
 }
 
-#[derive(Default)]
-pub struct RenderLeaf {}
-
-impl RenderObject for RenderLeaf {
+impl RenderObject for () {
     fn mount(&mut self, _: &mut MountCtx) {}
 
     fn unmount(&mut self, _: &mut MountCtx) {}
@@ -54,7 +51,7 @@ impl RenderObject for RenderLeaf {
     }
 }
 
-impl RenderBox for RenderLeaf {
+impl RenderBox for () {
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
         Some(as_const!(PositiveFinite, f32, 0.0))
     }
@@ -88,7 +85,6 @@ impl RenderBox for RenderLeaf {
     }
 
     fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
-        // TODO(trevin): should this add itself to the hit test result?
         HitTest::Pass
     }
 

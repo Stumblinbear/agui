@@ -1,7 +1,6 @@
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     element::{MultiChildElement, SingleChildElement},
-    render_object::RenderLeaf,
     routing_id::RoutingId,
     widget::Widget,
 };
@@ -60,7 +59,7 @@ impl Default for Leaf<'_> {
 impl Widget for Leaf<'_> {
     type Element = ();
 
-    type Render = RenderLeaf;
+    type Render = ();
 
     fn create_element(&self, ctx: &mut UpdateCtx) {
         (self.on_mount)(ctx);
@@ -81,9 +80,7 @@ impl Widget for Leaf<'_> {
         }
     }
 
-    fn create_render_object(&self, (): &()) -> Self::Render {
-        RenderLeaf::default()
-    }
+    fn create_render_object(&self, (): &()) -> Self::Render {}
 
     fn update_render_object(&self, (): &(), _: &mut Self::Render) {}
 }
@@ -95,7 +92,7 @@ pub struct Transparent<Child> {
 impl<Child: Widget> Widget for Transparent<Child> {
     type Element = SingleChildElement<Child::Element>;
 
-    type Render = RenderLeaf;
+    type Render = ();
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
         SingleChildElement::new(&self.child, ctx)
@@ -109,9 +106,7 @@ impl<Child: Widget> Widget for Transparent<Child> {
         element.dispatch(&self.child, path, action);
     }
 
-    fn create_render_object(&self, _: &Self::Element) -> Self::Render {
-        RenderLeaf::default()
-    }
+    fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
     fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
 }
@@ -123,7 +118,7 @@ pub struct MultiChild<Child> {
 impl<Child: Widget> Widget for MultiChild<Child> {
     type Element = MultiChildElement<Child::Element>;
 
-    type Render = RenderLeaf;
+    type Render = ();
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
         MultiChildElement::new(self.children.len(), |i| &self.children[i], ctx)
@@ -142,9 +137,7 @@ impl<Child: Widget> Widget for MultiChild<Child> {
         element.dispatch(|i| &self.children[i], path, action);
     }
 
-    fn create_render_object(&self, _: &Self::Element) -> Self::Render {
-        RenderLeaf::default()
-    }
+    fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
 
     fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
 }

@@ -362,9 +362,7 @@ impl<T: 'static> AsAnyWidget for T where T: Widget {}
 mod tests {
     use std::{cell::Cell, rc::Rc};
 
-    use crate::{
-        element::Element, render_object::RenderLeaf, test_fixtures::Leaf, test_harness::TestHarness,
-    };
+    use crate::{element::Element, test_fixtures::Leaf, test_harness::TestHarness};
 
     use super::*;
 
@@ -396,7 +394,7 @@ mod tests {
     {
         type Element = TestWidgetElement<T>;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, _: &mut UpdateCtx) -> TestWidgetElement<T> {
             self.mounts.set(self.mounts.get() + 1);
@@ -412,15 +410,13 @@ mod tests {
             element.value = self.value.clone();
         }
 
-        fn create_render_object(&self, _: &TestWidgetElement<T>) -> Self::Render {
-            RenderLeaf::default()
-        }
+        fn create_render_object(&self, _: &TestWidgetElement<T>) -> Self::Render {}
 
         fn update_render_object(&self, _: &TestWidgetElement<T>, _: &mut Self::Render) {}
     }
 
     /// Reads the value held by the inner `TestWidgetElement` behind a dyn-widget boundary.
-    fn dyn_value<T: Clone + 'static>(root: &ErasedElement<RenderLeaf>) -> T {
+    fn dyn_value<T: Clone + 'static>(root: &ErasedElement<()>) -> T {
         (*root.child.element)
             .as_any()
             .downcast_ref::<TestWidgetElement<T>>()
@@ -526,7 +522,7 @@ mod tests {
     fn dispatch_message_through_boundary_with_matching_generation() {
         let messages = Rc::new(Cell::new(0_usize));
         let payload = Rc::new(Cell::new(None::<u32>));
-        let widget: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+        let widget: Box<dyn AnyWidget<Render = ()>> = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             let payload = Rc::clone(&payload);
             move |ctx| {
@@ -547,7 +543,7 @@ mod tests {
     fn dispatch_rebuild_through_boundary_reaches_inner() {
         let rebuilds = Rc::new(Cell::new(0_usize));
         let messages = Rc::new(Cell::new(0_usize));
-        let widget: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(
+        let widget: Box<dyn AnyWidget<Render = ()>> = Box::new(
             Leaf::new()
                 .on_message({
                     let messages = Rc::clone(&messages);
@@ -569,7 +565,7 @@ mod tests {
     #[test]
     fn dispatch_with_stale_generation_is_silently_dropped() {
         let messages = Rc::new(Cell::new(0_usize));
-        let widget: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+        let widget: Box<dyn AnyWidget<Render = ()>> = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             move |_| messages.set(messages.get() + 1)
         }));
@@ -584,14 +580,14 @@ mod tests {
     #[test]
     fn type_swap_increments_generation_dropping_old_dispatches() {
         let messages = Rc::new(Cell::new(0_usize));
-        let widget_a: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(Leaf::new().on_message({
+        let widget_a: Box<dyn AnyWidget<Render = ()>> = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             move |_| messages.set(messages.get() + 1)
         }));
         let mut harness = TestHarness::mount(&widget_a);
 
         // Swap to a different concrete type, which forces a generation increment.
-        let widget_b: Box<dyn AnyWidget<Render = RenderLeaf>> = Box::new(TestWidget::new(0_u8));
+        let widget_b: Box<dyn AnyWidget<Render = ()>> = Box::new(TestWidget::new(0_u8));
         harness.update(&widget_a, &widget_b);
 
         // The old generation (0) is stale, so the dispatch should be dropped at the boundary
@@ -616,7 +612,7 @@ mod tests {
     impl Widget for Counted {
         type Element = CountedElement;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, _: &mut UpdateCtx) -> CountedElement {
             CountedElement
@@ -626,8 +622,6 @@ mod tests {
 
         fn create_render_object(&self, _: &CountedElement) -> Self::Render {
             self.creates.set(self.creates.get() + 1);
-
-            RenderLeaf::default()
         }
 
         fn update_render_object(&self, _: &CountedElement, _: &mut Self::Render) {}

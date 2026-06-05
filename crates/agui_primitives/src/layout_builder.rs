@@ -333,7 +333,7 @@ mod tests {
 
     use agui_core::{
         paint::{ContainerLayer, LayerHandle},
-        render_object::{BoundaryContent, PipelineOwner, RenderLeaf, box_layout::AnyRenderBox},
+        render_object::{BoundaryContent, PipelineOwner, box_layout::AnyRenderBox},
         task::TaskHandle,
         test_harness::TestHarness,
         widget::AsAnyWidget,
@@ -389,7 +389,7 @@ mod tests {
     impl Widget for SpawnOnMount {
         type Element = SpawnOnMountElement;
 
-        type Render = RenderLeaf;
+        type Render = ();
 
         fn create_element(&self, ctx: &mut UpdateCtx) -> SpawnOnMountElement {
             let handle = ctx.spawn(|task| async move { task.send(1_u32) }).ok();
@@ -399,11 +399,9 @@ mod tests {
 
         fn update(&self, _: &mut SpawnOnMountElement, _: &Self, _: &mut UpdateCtx) {}
 
-        fn create_render_object(&self, _: &SpawnOnMountElement) -> RenderLeaf {
-            RenderLeaf::default()
-        }
+        fn create_render_object(&self, _: &SpawnOnMountElement) -> Self::Render {}
 
-        fn update_render_object(&self, _: &SpawnOnMountElement, _: &mut RenderLeaf) {}
+        fn update_render_object(&self, _: &SpawnOnMountElement, _: &mut Self::Render) {}
     }
 
     #[test]

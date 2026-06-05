@@ -64,9 +64,7 @@ mod tests {
         offset::Offset,
         paint::PaintCtx,
         provide::ProvideScope,
-        render_object::{
-            LayoutCtx, MountCtx, RenderLeaf, RenderNode, RenderObject, box_layout::RenderBox,
-        },
+        render_object::{LayoutCtx, MountCtx, RenderNode, RenderObject, box_layout::RenderBox},
         routing_id::{RoutingId, RoutingPath},
         size::Size,
         task::TaskHandle,
@@ -271,7 +269,7 @@ mod tests {
     }
 
     struct RenderParent {
-        children: Vec<RenderNode<RenderLeaf>>,
+        children: Vec<RenderNode<()>>,
     }
 
     impl RenderObject for RenderParent {
