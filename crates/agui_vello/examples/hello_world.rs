@@ -1,4 +1,10 @@
-use std::{cell::RefCell, num::NonZeroUsize, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    num::NonZeroUsize,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use agui_core::{
     input::pointer::{PointerDispatcher, PointerHandler},
@@ -8,7 +14,7 @@ use agui_core::{
     },
     pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
     prelude::{element::*, render_object::*},
-    test_harness::TestTaskRunner,
+    scheduling::{LocalReactor, Vsync},
 };
 use agui_primitives::{
     colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox,
@@ -69,15 +75,27 @@ fn main() {
     });
 
     tracing::info!("mounting window");
+
+    let event_loop = EventLoop::<WakeUp>::with_user_event().build().unwrap();
+
+    // The reactor drives spawned tasks; when one becomes ready it posts a WakeUp through the proxy so
+    // this loop, otherwise asleep, comes back to advance it.
+    let proxy = event_loop.create_proxy();
+    let reactor = LocalReactor::new(move || {
+        let _ = proxy.send_event(WakeUp);
+    });
+
     // The driver owns the pipeline for the subtree and hands its presentation layer back out here. The
     // OS surface would normally take that layer; this example presents it by compositing each frame.
-    let driver = WindowDriver::new(content, |_layer: LayerHandle<ContainerLayer>| {});
+    let driver = WindowDriver::new(content, reactor, |_layer: LayerHandle<ContainerLayer>| {});
     let view: Box<dyn View> = Box::new(driver);
-    tracing::info!("window mounted; starting event loop");
 
-    let event_loop = EventLoop::new().unwrap();
+    tracing::info!("window mounted; starting event loop");
     event_loop.run_app(&mut App::new(view)).unwrap();
 }
+
+/// Posted by the reactor through the event-loop proxy to wake the loop when a spawned task is ready.
+struct WakeUp;
 
 /// The loose constraints a window of `width` by `height` lays its subtree out under.
 #[allow(clippy::cast_precision_loss)]
@@ -104,6 +122,8 @@ struct App {
     /// Whether a frame has been laid out and painted yet. Hit testing reads layout, so it waits for
     /// the first frame.
     painted: bool,
+    /// The instant the app started, the origin for the frame time handed to each [`View::frame`].
+    start: Instant,
     vello_scene: vello::Scene,
 }
 
@@ -117,6 +137,7 @@ impl App {
             dispatcher: PointerDispatcher::new(),
             cursor: Offset::ZERO,
             painted: false,
+            start: Instant::now(),
             vello_scene: vello::Scene::new(),
         }
     }
@@ -132,7 +153,7 @@ impl App {
 
         let _frame = tracing::info_span!("frame", width, height).entered();
 
-        let scene = self.view.frame();
+        let scene = self.view.frame(self.start.elapsed());
 
         self.vello_scene.reset();
         append_scene(&scene, &mut self.vello_scene);
@@ -163,10 +184,38 @@ impl App {
 
             self.painted = true;
         }
+
+        // While frame callbacks are registered, request the next frame so animations keep advancing.
+        // AutoVsync paces these to the display.
+        if self.view.is_animating() {
+            active.window.request_redraw();
+        }
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<WakeUp> for App {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: WakeUp) {
+        // A task became ready. Delivering this event has woken the loop; `about_to_wait` drains the
+        // reactor and decides whether a frame is needed, so there is nothing to do here.
+    }
+
+    /// Drains tasks before the loop sleeps. Polling runs independently of painting, so a burst of
+    /// task wakeups settles in one pass; a frame is requested only if that left the tree dirty or an
+    /// animation running.
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if self.active.is_none() {
+            return;
+        }
+
+        self.view.poll_tasks();
+
+        if self.view.needs_frame()
+            && let Some(active) = self.active.as_ref()
+        {
+            active.window.request_redraw();
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.active.is_some() {
             return;
@@ -290,7 +339,8 @@ struct WindowDriver<V: Widget>
 where
     V::Render: RenderBox + 'static,
 {
-    tasks: TestTaskRunner,
+    reactor: LocalReactor,
+    vsync: Vsync,
     build: BuildOwner<V>,
     content: BoundaryContent,
     owner: PipelineOwner,
@@ -300,10 +350,12 @@ impl<V: Widget> WindowDriver<V>
 where
     V::Render: RenderBox + 'static,
 {
-    fn new(widget: V, on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>)) -> Self {
-        let mut tasks = TestTaskRunner::new();
-
-        let mut build = BuildOwner::mount(widget, &mut tasks.scheduler());
+    fn new(
+        widget: V,
+        reactor: LocalReactor,
+        on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>),
+    ) -> Self {
+        let mut build = BuildOwner::mount(widget, &mut reactor.scheduler());
 
         // Seed the render tree from the element tree and register its root as the pipeline's outermost
         // boundary.
@@ -315,7 +367,8 @@ where
         on_layer_created(layer);
 
         Self {
-            tasks,
+            reactor,
+            vsync: Vsync::new(),
             build,
             content,
             owner,
@@ -336,7 +389,13 @@ where
 /// Drives one window's pipeline from the event loop.
 trait View {
     fn resize(&mut self, constraints: BoxConstraints);
-    fn frame(&mut self) -> Scene;
+    /// Advances spawned tasks as far as they will go and applies the messages they post.
+    fn poll_tasks(&mut self);
+    /// Whether a frame is owed: the tree was dirtied or an animation is running.
+    fn needs_frame(&self) -> bool;
+    fn frame(&mut self, now: Duration) -> Scene;
+    /// Whether a frame callback is registered, so the loop should keep requesting frames.
+    fn is_animating(&self) -> bool;
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
@@ -348,23 +407,45 @@ where
         self.owner.resize(constraints);
     }
 
-    fn frame(&mut self) -> Scene {
-        // Run spawned tasks one step, deliver the messages they posted, and rebuild whatever they
-        // dirtied, bringing the render tree back in step before laying out and painting.
-        self.tasks.poll();
+    fn poll_tasks(&mut self) {
+        // Keep polling while tasks make progress or post messages, so a chain of wakeups settles in
+        // one pass rather than one per frame. Dispatching a message may ready a task, so both are
+        // drained together.
+        loop {
+            let ran = self.reactor.poll();
 
-        let messages = self.tasks.messages().collect::<Vec<_>>();
-        for (path, message) in messages {
-            self.build.dispatch_message(path, message);
+            let messages = self.reactor.messages().collect::<Vec<_>>();
+            let delivered = !messages.is_empty();
+            for (path, message) in messages {
+                self.build.dispatch_message(path, message);
+            }
+
+            if !ran && !delivered {
+                break;
+            }
         }
+    }
 
-        if self.build.flush(&mut self.tasks.scheduler()) {
+    fn needs_frame(&self) -> bool {
+        self.build.is_dirty() || !self.vsync.is_idle()
+    }
+
+    fn frame(&mut self, now: Duration) -> Scene {
+        // Tasks have already been drained, so apply any rebuild they queued, run frame callbacks for
+        // this frame's time, then lay out and paint what changed.
+        if self.build.flush(&mut self.reactor.scheduler()) {
             self.sync_render();
         }
+
+        self.vsync.tick(now);
 
         self.owner.flush_layout();
         self.owner.flush_paint();
         self.owner.composite()
+    }
+
+    fn is_animating(&self) -> bool {
+        !self.vsync.is_idle()
     }
 
     fn hit_test(&self, position: Offset) -> HitTestResult {
