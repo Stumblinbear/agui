@@ -22,12 +22,16 @@ use crate::{
 /// A render object holds a child here instead of in a [`RenderNode`](super::RenderNode) when the child
 /// can be laid out on its own: while the constraints handed down are tight, the child's size is fixed by
 /// them, so a change confined to its subtree re-lays only the child, not the holder or anything above.
-/// The child is monomorphized and free of overhead until the first tight layout; only then is it boxed
-/// and registered, and it stays inline if it is never constrained tightly.
+/// The child is monomorphized and free of overhead until the first tight layout, when it is shared and
+/// registered as a boundary; it returns to that free-of-overhead form once it has been loosely
+/// constrained for a sustained run.
 pub struct RelayoutRenderNode<R, P = ()> {
     pub parent_data: P,
 
     child: RelayoutChild<R>,
+
+    /// Consecutive layouts under loose constraints, reset to zero by any tight layout.
+    loose_streak: u8,
 
     paint: Option<PaintScope>,
     parent_uses_size: bool,
@@ -35,12 +39,13 @@ pub struct RelayoutRenderNode<R, P = ()> {
 }
 
 enum RelayoutChild<R> {
-    /// The child held by value, while it has never been constrained tightly.
+    /// The child held by value, while it is not currently a relayout boundary.
     Inline(R),
 
     /// The child shared behind an `Rc<RefCell>`, once it has been a relayout boundary. `boundary` is
     /// the scope that marks it while it is registered, dropped while loose constraints make it unsound
-    /// to re-lay alone.
+    /// to re-lay alone. The child returns to [`Inline`](Self::Inline) once it has been loosely
+    /// constrained for long enough.
     Boxed {
         content: Rc<RefCell<R>>,
         boundary: Option<LayoutScope>,
@@ -51,6 +56,7 @@ enum Form {
     BoxAndRegister,
     Register,
     Unregister,
+    Unbox,
     Keep,
 }
 
@@ -60,6 +66,8 @@ impl<R, P: Default> RelayoutRenderNode<R, P> {
             parent_data: P::default(),
 
             child: RelayoutChild::Inline(child),
+
+            loose_streak: 0,
 
             paint: None,
             parent_uses_size: false,
@@ -111,6 +119,22 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
             RelayoutChild::Inline(child) => f(child),
             RelayoutChild::Boxed { content, .. } => f(&mut content.borrow_mut()),
         }
+    }
+
+    #[cfg(test)]
+    fn is_inline(&self) -> bool {
+        matches!(self.child, RelayoutChild::Inline(_))
+    }
+
+    #[cfg(test)]
+    fn is_registered(&self) -> bool {
+        matches!(
+            self.child,
+            RelayoutChild::Boxed {
+                boundary: Some(_),
+                ..
+            }
+        )
     }
 
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
@@ -186,13 +210,28 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
         }
     }
 
+    /// Loose layouts a registered boundary must survive in a row before it is recovered to the inline
+    /// form.
+    // An unbox costs ~75 ns and a re-box ~83 ns, while a boxed-but-unregistered child costs only a few
+    // ns more per layout and paint call than an inline one, so recovery only pays off after many loose
+    // layouts. The threshold is set high so a node that merely flickers loose for a frame never pays the
+    // round trip; only a node that has genuinely settled loose recovers. Any value >= 1 is correct,
+    // since the boundary is unregistered before the unbox either way; this is purely a perf heuristic.
+    const UNBOX_AFTER_LOOSE_LAYOUTS: u8 = 32;
+
     /// Moves the child between its inline and boundary forms to match whether it is now constrained
-    /// tightly. Boxing is one-way, since the erased child cannot be recovered by value; only the boundary
-    /// registration toggles afterward.
+    /// tightly, recovering it to the inline form only after it has stayed loosely constrained for
+    /// [`UNBOX_AFTER_LOOSE_LAYOUTS`](Self::UNBOX_AFTER_LOOSE_LAYOUTS) layouts in a row.
     fn reshape(&mut self, tight: bool, scope: &LayoutScope) {
         // A detached scope cannot register a boundary, so the child stays inline; this also keeps an
         // unmounted layout (a measurement or a test) from needing a paint scope it has not captured.
         let registrable = tight && !scope.is_detached();
+
+        if tight {
+            self.loose_streak = 0;
+        } else {
+            self.loose_streak = self.loose_streak.saturating_add(1);
+        }
 
         let form = match &self.child {
             RelayoutChild::Inline(_) if registrable => Form::BoxAndRegister,
@@ -202,6 +241,12 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
             RelayoutChild::Boxed {
                 boundary: Some(_), ..
             } if !tight => Form::Unregister,
+
+            RelayoutChild::Boxed { boundary: None, .. }
+                if self.loose_streak >= Self::UNBOX_AFTER_LOOSE_LAYOUTS =>
+            {
+                Form::Unbox
+            }
 
             _ => Form::Keep,
         };
@@ -250,8 +295,37 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                 }
             }
 
+            Form::Unbox => self.unbox(),
+
             Form::Keep => {}
         }
+    }
+
+    /// Returns a settled-loose child from its boundary form to the inline, statically dispatched one. If
+    /// something other than this holder still shares the child, it stays boxed but no longer registered
+    /// and is retried on the next loose layout.
+    fn unbox(&mut self) {
+        if let RelayoutChild::Boxed { boundary, .. } = &mut self.child
+            && let Some(boundary) = boundary.take()
+        {
+            boundary.unregister();
+        }
+
+        take(&mut self.child, |child| {
+            let RelayoutChild::Boxed { content, boundary } = child else {
+                // SAFETY: The boxed form was just observed, so it must be Boxed.
+                unsafe {
+                    unreachable_unchecked();
+                }
+            };
+
+            // The boundary was just unregistered, so the registry holds no clone and this holder is the
+            // sole owner; try_unwrap fails only if a reconcile borrow still outlives this layout.
+            match Rc::try_unwrap(content) {
+                Ok(cell) => RelayoutChild::Inline(cell.into_inner()),
+                Err(content) => RelayoutChild::Boxed { content, boundary },
+            }
+        });
     }
 
     pub fn measure_baseline(
@@ -516,5 +590,199 @@ mod tests {
             2,
             "the relayout repainted the boundary enclosing the child"
         );
+    }
+
+    /// A holder that lays its child out tightly or loosely depending on a flag, and reports the child's
+    /// form after each layout, so a test can watch it box, unregister, and recover as the flag changes.
+    struct Toggle {
+        tight: Rc<Cell<bool>>,
+        inline_after: Rc<Cell<bool>>,
+        registered_after: Rc<Cell<bool>>,
+        child: RelayoutRenderNode<Probe, Option<Size>>,
+    }
+
+    impl RenderObject for Toggle {
+        fn mount(&mut self, ctx: &mut MountCtx) {
+            self.child.mount(ctx);
+        }
+        fn unmount(&mut self, ctx: &mut MountCtx) {
+            self.child.unmount(ctx);
+        }
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
+        }
+    }
+
+    impl RenderBox for Toggle {
+        fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn measure(&self, _: BoxConstraints) -> Size {
+            Size::new(10.0, 10.0)
+        }
+        fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
+            let size = Size::new(10.0, 10.0);
+
+            let constraints = if self.tight.get() {
+                BoxConstraints::tight(size)
+            } else {
+                BoxConstraints::new(0, 10, 0, 10)
+            };
+            self.child.layout(ctx, constraints);
+
+            self.inline_after.set(self.child.is_inline());
+            self.registered_after.set(self.child.is_registered());
+
+            size
+        }
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+            HitTest::Pass
+        }
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+            self.child.paint(ctx, offset);
+        }
+    }
+
+    /// A mounted [`Toggle`] root and the handles a test uses to flip its constraints and read the child's
+    /// form after each layout.
+    struct Driver {
+        tight: Rc<Cell<bool>>,
+        inline_after: Rc<Cell<bool>>,
+        registered_after: Rc<Cell<bool>>,
+        owner: PipelineOwner,
+    }
+
+    impl Driver {
+        fn new() -> Self {
+            let tight = Rc::new(Cell::new(true));
+            let inline_after = Rc::new(Cell::new(false));
+            let registered_after = Rc::new(Cell::new(false));
+
+            let toggle = Toggle {
+                tight: Rc::clone(&tight),
+                inline_after: Rc::clone(&inline_after),
+                registered_after: Rc::clone(&registered_after),
+                child: RelayoutRenderNode::new(Probe {
+                    layouts: Rc::new(Cell::new(0)),
+                    paints: Rc::new(Cell::new(0)),
+                    captured: Rc::new(RefCell::new(None)),
+                }),
+            };
+
+            let root: BoundaryContent = Rc::new(RefCell::new(toggle));
+            let owner = PipelineOwner::new(root, layer());
+
+            Self {
+                tight,
+                inline_after,
+                registered_after,
+                owner,
+            }
+        }
+
+        /// Re-lays the root, so the toggle re-lays its child under the constraints its flag selects.
+        fn relay(&mut self) {
+            self.owner.resize(BoxConstraints::new(0, 100, 0, 100));
+            self.owner.flush_layout();
+        }
+    }
+
+    #[test]
+    fn a_settled_loose_child_recovers_to_the_inline_form() {
+        let k = u32::from(RelayoutRenderNode::<Probe, Option<Size>>::UNBOX_AFTER_LOOSE_LAYOUTS);
+
+        let mut d = Driver::new();
+
+        // One tight layout boxes and registers the child as a boundary.
+        d.relay();
+        assert!(
+            !d.inline_after.get() && d.registered_after.get(),
+            "a tight child is boxed and registered"
+        );
+
+        // The first loose layout unregisters it but keeps it boxed, well short of the threshold.
+        d.tight.set(false);
+        d.relay();
+        assert!(
+            !d.inline_after.get() && !d.registered_after.get(),
+            "the first loose layout unregisters but stays boxed"
+        );
+
+        // Loose layouts up to the threshold leave it boxed; the one at the threshold recovers it.
+        for layout in 2..k {
+            d.relay();
+            assert!(
+                !d.inline_after.get(),
+                "still boxed after {layout} loose layouts, below the threshold"
+            );
+        }
+
+        d.relay();
+        assert!(
+            d.inline_after.get(),
+            "a child loose for the threshold run of layouts recovers to the inline form"
+        );
+    }
+
+    #[test]
+    fn a_fast_oscillating_child_never_recovers() {
+        let k = u32::from(RelayoutRenderNode::<Probe, Option<Size>>::UNBOX_AFTER_LOOSE_LAYOUTS);
+
+        let mut d = Driver::new();
+
+        // Flip tight and loose every layout for far more iterations than the threshold.
+        for i in 0..(k * 8) {
+            d.tight.set(i % 2 == 0);
+            d.relay();
+
+            assert!(
+                !d.inline_after.get(),
+                "a child flipping tight and loose every layout never reaches the unbox threshold"
+            );
+
+            if i % 2 == 0 {
+                assert!(
+                    d.registered_after.get(),
+                    "a tight layout registers the boundary"
+                );
+            } else {
+                assert!(
+                    !d.registered_after.get(),
+                    "a loose layout drops the registration but stays boxed"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_child_that_stays_tight_stays_a_registered_boundary() {
+        let mut d = Driver::new();
+
+        for _ in 0..16 {
+            d.relay();
+            assert!(
+                !d.inline_after.get() && d.registered_after.get(),
+                "a child constrained tightly every layout stays a registered boundary"
+            );
+        }
     }
 }
