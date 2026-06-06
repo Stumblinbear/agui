@@ -10,6 +10,7 @@ use agui_core::{
     input::pointer::{PointerDispatcher, PointerHandler},
     paint::{
         compositing::{ContainerLayer, LayerHandle},
+        peniko::kurbo::Affine,
         scene::Scene,
     },
     pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
@@ -17,8 +18,9 @@ use agui_core::{
     scheduling::{LocalReactor, Vsync},
 };
 use agui_primitives::{
-    colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox,
-    layout_builder::LayoutBuilder, listener::Listener, opacity::Opacity,
+    animated_transform::AnimatedTransform, colored_box::ColoredBox,
+    fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
+    listener::Listener, opacity::Opacity,
 };
 use agui_vello::append_scene;
 use vello::{
@@ -44,7 +46,7 @@ fn main() {
         .init();
 
     // An orange box filling the left half of the window, listening for pointer events.
-    let content = LayoutBuilder::new(|constraints| {
+    let ui = LayoutBuilder::new(|constraints| {
         if constraints.max_width().get() < 400.0 {
             return ColoredBox::new(Color::rgb8(255, 138, 0)).into_boxed_render_box();
         }
@@ -74,6 +76,14 @@ fn main() {
             .into_boxed_render_box()
     });
 
+    let vsync = Vsync::new();
+    let content = AnimatedTransform::new(|now| {
+        let pivot = Affine::translate((400.0, 300.0));
+        pivot * Affine::rotate(now.as_secs_f64()) * pivot.inverse()
+    })
+    .vsync(vsync.clone())
+    .child(ui);
+
     tracing::info!("mounting window");
 
     let event_loop = EventLoop::<WakeUp>::with_user_event().build().unwrap();
@@ -87,7 +97,12 @@ fn main() {
 
     // The driver owns the pipeline for the subtree and hands its presentation layer back out here. The
     // OS surface would normally take that layer; this example presents it by compositing each frame.
-    let driver = WindowDriver::new(content, reactor, |_layer: LayerHandle<ContainerLayer>| {});
+    let driver = WindowDriver::new(
+        content,
+        reactor,
+        vsync,
+        |_layer: LayerHandle<ContainerLayer>| {},
+    );
     let view: Box<dyn View> = Box::new(driver);
 
     tracing::info!("window mounted; starting event loop");
@@ -353,6 +368,7 @@ where
     fn new(
         widget: V,
         reactor: LocalReactor,
+        vsync: Vsync,
         on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>),
     ) -> Self {
         let mut build = BuildOwner::mount(widget, &mut reactor.scheduler());
@@ -368,7 +384,7 @@ where
 
         Self {
             reactor,
-            vsync: Vsync::new(),
+            vsync,
             build,
             content,
             owner,

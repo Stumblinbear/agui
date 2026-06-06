@@ -21,6 +21,7 @@ pub type TransformFn = Rc<dyn Fn(Duration) -> Affine>;
 pub struct AnimatedTransform<Child> {
     child: Child,
     transform: TransformFn,
+    vsync: Option<Vsync>,
 }
 
 impl AnimatedTransform<()> {
@@ -29,13 +30,22 @@ impl AnimatedTransform<()> {
         Self {
             child: (),
             transform: Rc::new(transform),
+            vsync: None,
         }
+    }
+
+    /// Drives the animation from `vsync`: the transform is resampled and reapplied each frame the
+    /// registry ticks. Without one, the subtree keeps the transform sampled at the first frame.
+    pub fn vsync(mut self, vsync: Vsync) -> Self {
+        self.vsync = Some(vsync);
+        self
     }
 
     pub fn child<Child>(self, child: Child) -> AnimatedTransform<Child> {
         AnimatedTransform {
             child,
             transform: self.transform,
+            vsync: self.vsync,
         }
     }
 }
@@ -62,10 +72,12 @@ where
     }
 
     fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderAnimatedTransform::new(
+        let mut render = RenderAnimatedTransform::new(
             element.create_render_object(&self.child),
             Rc::clone(&self.transform),
-        )
+        );
+        render.vsync = self.vsync.clone();
+        render
     }
 
     fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
@@ -80,6 +92,7 @@ pub struct RenderAnimatedTransform<Child> {
     transform: TransformFn,
     layer: Option<LayerHandle<TransformLayer>>,
     handle: Option<VsyncHandle>,
+    vsync: Option<Vsync>,
 }
 
 impl<Child> RenderAnimatedTransform<Child>
@@ -92,6 +105,7 @@ where
             transform,
             layer: None,
             handle: None,
+            vsync: None,
         }
     }
 
@@ -192,6 +206,14 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         let layer = self.build_layer();
+
+        // Begin animating on the first paint, once the layer exists and the subtree has been laid out.
+        if self.handle.is_none()
+            && let Some(vsync) = self.vsync.clone()
+        {
+            self.animate(&vsync);
+        }
+
         ctx.add_layer(layer.into(), offset);
     }
 }
