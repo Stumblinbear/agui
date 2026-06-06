@@ -7,7 +7,7 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     pipeline::{
-        layout::{BoundaryContent, LayoutScope},
+        layout::{BoundaryContent, LayoutScope, RegisteredLayoutBoundary},
         paint::PaintScope,
     },
     render_object::{
@@ -42,13 +42,13 @@ enum RelayoutChild<R> {
     /// The child held by value, while it is not currently a relayout boundary.
     Inline(R),
 
-    /// The child shared behind an `Rc<RefCell>`, once it has been a relayout boundary. `boundary` is
-    /// the scope that marks it while it is registered, dropped while loose constraints make it unsound
-    /// to re-lay alone. The child returns to [`Inline`](Self::Inline) once it has been loosely
-    /// constrained for long enough.
+    /// The child shared behind an `Rc<RefCell>`, once it has been a relayout boundary. `boundary` owns
+    /// the registration while it is registered, dropped while loose constraints make it unsound to
+    /// re-lay alone. The child returns to [`Inline`](Self::Inline) once it has been loosely constrained
+    /// for long enough.
     Boxed {
         content: Rc<RefCell<R>>,
-        boundary: Option<LayoutScope>,
+        boundary: Option<RegisteredLayoutBoundary>,
     },
 }
 
@@ -92,9 +92,8 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
             RelayoutChild::Boxed { content, boundary } => {
                 content.borrow_mut().unmount(ctx);
 
-                if let Some(boundary) = boundary.take() {
-                    boundary.unregister();
-                }
+                // Dropping the handle unregisters the boundary and unlinks it from the dirty list.
+                boundary.take();
             }
         }
     }
@@ -197,10 +196,10 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
             RelayoutChild::Inline(child) => child.layout(ctx, constraints),
 
             RelayoutChild::Boxed { content, boundary } => match boundary {
-                Some(boundary) => {
-                    boundary.update_constraints(constraints);
+                Some(reg) => {
+                    reg.update_constraints(constraints);
 
-                    ctx.with_layout_scope(boundary.clone(), |ctx| {
+                    ctx.with_layout_scope(reg.scope(), |ctx| {
                         content.borrow_mut().layout(ctx, constraints)
                     })
                 }
@@ -288,10 +287,9 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
             }
 
             Form::Unregister => {
-                if let RelayoutChild::Boxed { boundary, .. } = &mut self.child
-                    && let Some(boundary) = boundary.take()
-                {
-                    boundary.unregister();
+                if let RelayoutChild::Boxed { boundary, .. } = &mut self.child {
+                    // Dropping the handle unregisters the boundary and unlinks it from the dirty list.
+                    boundary.take();
                 }
             }
 
@@ -305,10 +303,9 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     /// something other than this holder still shares the child, it stays boxed but no longer registered
     /// and is retried on the next loose layout.
     fn unbox(&mut self) {
-        if let RelayoutChild::Boxed { boundary, .. } = &mut self.child
-            && let Some(boundary) = boundary.take()
-        {
-            boundary.unregister();
+        if let RelayoutChild::Boxed { boundary, .. } = &mut self.child {
+            // Dropping the handle unregisters the boundary and unlinks it from the dirty list.
+            boundary.take();
         }
 
         take(&mut self.child, |child| {
@@ -319,8 +316,8 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                 }
             };
 
-            // The boundary was just unregistered, so the registry holds no clone and this holder is the
-            // sole owner; try_unwrap fails only if a reconcile borrow still outlives this layout.
+            // The boundary handle and its content clone were just dropped, so this holder is the sole
+            // owner; try_unwrap fails only if a reconcile borrow still outlives this layout.
             match Rc::try_unwrap(content) {
                 Ok(cell) => RelayoutChild::Inline(cell.into_inner()),
                 Err(content) => RelayoutChild::Boxed { content, boundary },

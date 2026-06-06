@@ -9,7 +9,7 @@ use crate::{
         scene::Scene,
     },
     pipeline::{
-        layout::{BoundaryContent, LayoutPipeline, LayoutScope},
+        layout::{BoundaryContent, LayoutPipeline, RegisteredLayoutBoundary},
         paint::{PaintBoundaryHandle, PaintPipeline},
     },
     render_object::{
@@ -38,7 +38,7 @@ pub struct PipelineOwner {
     layout: LayoutPipeline,
     paint: PaintPipeline,
 
-    root_layout: LayoutScope,
+    root_layout: RegisteredLayoutBoundary,
     root_paint: PaintBoundaryHandle,
 
     layer: LayerHandle<ContainerLayer>,

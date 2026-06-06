@@ -1,10 +1,12 @@
+// The intrusive-collections adapter macro emits a manual `Clone` on a zero-sized `Copy` adapter.
+#![allow(clippy::expl_impl_clone_on_copy)]
+
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::{Rc, Weak},
 };
 
-use fnv::FnvHashSet;
-use slotmap::{SlotMap, new_key_type};
+use intrusive_collections::{LinkedList, LinkedListLink, UnsafeRef, intrusive_adapter};
 
 use crate::{
     context::LayoutCtx,
@@ -23,12 +25,19 @@ pub struct LayoutPipeline {
 
 fn noop() {}
 
+impl Drop for LayoutPipeline {
+    fn drop(&mut self) {
+        // The dirty list holds non-owning references into cells the registry is about to free; empty it
+        // first so no link outlives its cell.
+        self.state.borrow_mut().dirty.fast_clear();
+    }
+}
+
 impl Default for LayoutPipeline {
     fn default() -> Self {
         Self {
             state: Rc::new(RefCell::new(LayoutPipelineState {
-                dirty: FnvHashSet::default(),
-                boundaries: SlotMap::with_key(),
+                dirty: LinkedList::new(LayoutCellAdapter::new()),
 
                 notify: Box::new(noop),
 
@@ -40,125 +49,151 @@ impl Default for LayoutPipeline {
 
 impl LayoutPipeline {
     /// Registers `root` as the outermost boundary, painting into `paint`, and returns the pipeline
-    /// together with the scope that marks it.
-    pub fn new(root: BoundaryContent, paint: PaintScope) -> (Self, LayoutScope) {
+    /// together with the handle that owns and marks it.
+    pub fn new(root: BoundaryContent, paint: PaintScope) -> (Self, RegisteredLayoutBoundary) {
         let pipeline = Self::default();
-        let scope = pipeline.insert(root, 0, paint);
+        let boundary = pipeline.insert(root, 0, paint);
 
-        (pipeline, scope)
+        (pipeline, boundary)
     }
 
     pub fn on_needs_layout(&mut self, f: Box<dyn Fn()>) {
         self.state.borrow_mut().notify = f;
     }
 
-    /// Registers `content` as a boundary at `depth`, enclosed by `paint`, and returns the scope that
-    /// marks it.
-    fn insert(&self, content: BoundaryContent, depth: usize, paint: PaintScope) -> LayoutScope {
-        let id = self
-            .state
-            .borrow_mut()
-            .boundaries
-            .insert(RegisteredBoundary {
-                content,
-                depth,
-                constraints: None,
-                paint,
-            });
-
-        LayoutScope(LayoutScopeInner::Boundary {
-            state: Rc::downgrade(&self.state),
-            id,
+    /// Registers `content` as a boundary at `depth`, enclosed by `paint`, and returns the handle that
+    /// owns and marks it.
+    fn insert(
+        &self,
+        content: BoundaryContent,
+        depth: usize,
+        paint: PaintScope,
+    ) -> RegisteredLayoutBoundary {
+        let cell = Rc::new(LayoutCell {
+            link: LinkedListLink::new(),
             depth,
-        })
+            content,
+            constraints: Cell::new(None),
+            paint,
+            is_dirty: Cell::new(false),
+        });
+
+        RegisteredLayoutBoundary {
+            cell,
+            state: Rc::downgrade(&self.state),
+        }
     }
 
     /// Re-lays every marked boundary from the constraints it last took, leaving the rest untouched.
     pub fn flush(&self, paint_pipeline: &mut PaintPipeline) {
-        // Re-enter the marked boundaries rootmost-first: re-laying an outer boundary re-lays the
-        // boundaries nested in it, so doing the outer one first lets the inner ones be skipped here
-        // rather than laid out a second time.
-        let mut pending: Vec<LayoutBoundaryId> =
-            self.state.borrow().dirty.iter().copied().collect();
-        pending.sort_by_key(|id| {
-            self.state
-                .borrow()
-                .boundaries
-                .get(*id)
-                .map_or(0, |boundary| boundary.depth)
-        });
-
         self.state.borrow_mut().in_layout = true;
 
-        for id in pending {
-            let entry = {
-                let mut state = self.state.borrow_mut();
+        // Rootmost-first so that re-laying an outer boundary, which re-lays the boundaries nested in it,
+        // lets the inner ones be skipped here rather than laid out a second time.
+        let ordered = self.drain_rootmost_first();
 
-                // An enclosing boundary's relayout may have already covered this one.
-                if !state.dirty.remove(&id) {
-                    continue;
-                }
-
-                state.boundaries.get(id).map(|boundary| {
-                    (
-                        Rc::clone(&boundary.content),
-                        boundary.depth,
-                        boundary.constraints,
-                        boundary.paint.clone(),
-                    )
-                })
-            };
-
-            let Some((mut content, depth, Some(constraints), paint)) = entry else {
+        for cell in ordered {
+            // An enclosing boundary's relayout may have already covered this one; its constraints are
+            // unchanged and it was unmarked when that pass re-laid it.
+            let Some(constraints) = cell.constraints.get() else {
                 continue;
             };
 
             let scope = LayoutScope(LayoutScopeInner::Boundary {
                 state: Rc::downgrade(&self.state),
-                id,
-                depth,
+                cell: Rc::downgrade(&cell),
+                depth: cell.depth,
             });
 
             let mut ctx = LayoutCtx::new(scope, &mut *paint_pipeline);
 
+            let mut content = Rc::clone(&cell.content);
             content.layout(&mut ctx, constraints);
 
             // The boundary's painting is now stale; repaint the boundary that encloses it.
-            paint.mark_needs_paint();
+            cell.paint.mark_needs_paint();
         }
 
         self.state.borrow_mut().in_layout = false;
     }
+
+    /// Drains the dirty list into the owning `Rc`s, ordered shallowest-depth first.
+    ///
+    /// The single-cell frame returns one cell directly, with no allocation or sort. The owning `Rc`s
+    /// are held for the rest of the flush so a boundary that goes loose mid-pass, dropping its owner
+    /// handle, cannot free a cell the flush still needs.
+    fn drain_rootmost_first(&self) -> Vec<Rc<LayoutCell>> {
+        let mut state = self.state.borrow_mut();
+
+        let Some(first) = state.dirty.pop_front() else {
+            return Vec::new();
+        };
+
+        first.is_dirty.set(false);
+        let first = recover_owner(first);
+
+        if state.dirty.is_empty() {
+            return vec![first];
+        }
+
+        let mut ordered = vec![first];
+        while let Some(unlinked) = state.dirty.pop_front() {
+            unlinked.is_dirty.set(false);
+            ordered.push(recover_owner(unlinked));
+        }
+
+        ordered.sort_unstable_by_key(|cell| cell.depth);
+
+        ordered
+    }
 }
 
-new_key_type! {
-    /// Identifies one inner relayout boundary within a [`LayoutPipeline`].
-    pub struct LayoutBoundaryId;
+/// Recovers a counted owning `Rc` from a non-owning ref popped off the dirty list.
+fn recover_owner(popped: UnsafeRef<LayoutCell>) -> Rc<LayoutCell> {
+    let ptr = UnsafeRef::into_raw(popped);
+
+    // SAFETY: the ref was created with `UnsafeRef::from_raw(Rc::as_ptr(&cell))`, so `ptr` carries the
+    // whole-allocation provenance of a live `Rc<LayoutCell>` whose owner outlives this call. Bumping the
+    // strong count before reconstructing balances the `Rc` this produces against that still-live owner.
+    unsafe {
+        Rc::increment_strong_count(ptr);
+        Rc::from_raw(ptr)
+    }
 }
 
 /// A render object shared between the layout and paint registries, so a node that is both a relayout
 /// and a repaint boundary is held in one place.
 pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
 
-/// A registered relayout boundary and its depth in the boundary nesting, so the pipeline can re-enter
-/// the marked boundaries rootmost-first.
-struct RegisteredBoundary {
-    content: BoundaryContent,
+/// A registered relayout boundary, owned by its [`RegisteredLayoutBoundary`] handle and linked into the
+/// dirty list while it awaits re-layout.
+struct LayoutCell {
+    link: LinkedListLink,
+
+    /// The depth in the boundary nesting, sorted at flush so the pipeline re-enters marked boundaries
+    /// rootmost-first.
     depth: usize,
+
+    content: BoundaryContent,
 
     /// The constraints this boundary was last laid out under, replayed to re-lay it on its own. A
     /// boundary constrained from outside the tree has them written by the owner.
-    constraints: Option<BoxConstraints>,
+    constraints: Cell<Option<BoxConstraints>>,
 
     /// The repaint boundary enclosing this one, marked when this boundary re-lays so the re-laid
     /// subtree repaints.
     paint: PaintScope,
+
+    /// Whether this cell is currently linked into the dirty list, guarding a double-mark from linking it
+    /// twice.
+    is_dirty: Cell<bool>,
 }
 
-/// The layout dirty state, shared so a [`LayoutScope`] can mark or register a boundary out of band.
+intrusive_adapter!(LayoutCellAdapter = UnsafeRef<LayoutCell>: LayoutCell { link: LinkedListLink });
+
+/// The layout dirty state, shared so a [`LayoutScope`] can mark a boundary out of band.
 struct LayoutPipelineState {
-    dirty: FnvHashSet<LayoutBoundaryId>,
-    boundaries: SlotMap<LayoutBoundaryId, RegisteredBoundary>,
+    dirty: LinkedList<LayoutCellAdapter>,
 
     notify: Box<dyn Fn()>,
 
@@ -171,25 +206,106 @@ impl LayoutPipelineState {
         self.dirty.is_empty()
     }
 
-    /// Marks `boundary` for re-layout, firing the schedule hook on the clean-to-dirty edge.
+    /// Marks `cell` for re-layout, firing the schedule hook on the clean-to-dirty edge.
     ///
     /// # Panics
     ///
-    /// Panics if called during a layout pass, since the dirty set is being flushed.
-    fn mark_needs_layout(&mut self, boundary: LayoutBoundaryId) {
+    /// Panics if called during a layout pass, since the dirty list is being flushed.
+    fn mark_needs_layout(&mut self, cell: &Rc<LayoutCell>) {
         assert!(
             !self.in_layout,
             "cannot request layout while layout is in progress"
         );
 
-        tracing::trace!(boundary = ?boundary, "marked boundary for re-layout");
+        if cell.is_dirty.get() {
+            return;
+        }
+
+        tracing::trace!(boundary = ?Rc::as_ptr(cell), "marked boundary for re-layout");
 
         let was_clean = self.is_clean();
-        self.dirty.insert(boundary);
+
+        cell.is_dirty.set(true);
+        // SAFETY: the cell is owned by its `RegisteredLayoutBoundary` handle for as long as it is
+        // registered, and that handle unlinks it before the `Rc` is dropped; the dirty flag guards it
+        // against being linked into the list more than once.
+        self.dirty
+            .push_back(unsafe { UnsafeRef::from_raw(Rc::as_ptr(cell)) });
 
         if was_clean {
             (self.notify)();
         }
+    }
+}
+
+/// The sole owner of a registered relayout boundary, held by the render object that established it.
+///
+/// While this handle is alive the boundary is registered and can be re-laid on its own; dropping it
+/// unregisters the boundary and clears any pending re-layout of it. Hand descendants the [`scope`] to
+/// mark, record the constraints the boundary takes with [`update_constraints`], and request a re-layout
+/// with [`mark_needs_layout`].
+///
+/// [`scope`]: Self::scope
+/// [`update_constraints`]: Self::update_constraints
+/// [`mark_needs_layout`]: Self::mark_needs_layout
+pub struct RegisteredLayoutBoundary {
+    cell: Rc<LayoutCell>,
+    state: Weak<RefCell<LayoutPipelineState>>,
+}
+
+impl RegisteredLayoutBoundary {
+    /// A clone-able scope that marks this boundary and registers descendants under it.
+    pub fn scope(&self) -> LayoutScope {
+        LayoutScope(LayoutScopeInner::Boundary {
+            state: Weak::clone(&self.state),
+            cell: Rc::downgrade(&self.cell),
+            depth: self.cell.depth,
+        })
+    }
+
+    /// Records the constraints this boundary is re-laid under, without marking it. A boundary re-laid in
+    /// place by its parent keeps its cached constraints current this way.
+    pub fn update_constraints(&self, constraints: BoxConstraints) {
+        self.cell.constraints.set(Some(constraints));
+    }
+
+    /// Records the constraints this boundary is re-laid under and marks it. A boundary constrained from
+    /// outside the tree is sized this way, on mount and whenever those constraints change.
+    pub fn set_constraints(&self, constraints: BoxConstraints) {
+        self.update_constraints(constraints);
+        self.mark_needs_layout();
+    }
+
+    /// Requests that this boundary be re-laid-out before the next frame. On the clean-to-dirty edge of
+    /// the layout channel, the schedule hook fires so the driver schedules a frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called during a layout pass, since the dirty list is being flushed.
+    pub fn mark_needs_layout(&self) {
+        if let Some(state) = self.state.upgrade() {
+            state.borrow_mut().mark_needs_layout(&self.cell);
+        }
+    }
+}
+
+impl Drop for RegisteredLayoutBoundary {
+    fn drop(&mut self) {
+        if !self.cell.is_dirty.get() {
+            return;
+        }
+
+        let Some(state) = self.state.upgrade() else {
+            return;
+        };
+
+        let mut state = state.borrow_mut();
+
+        // SAFETY: the cell is linked into this list and stays live behind its `Rc` until this handle's
+        // `Rc` frees it after this method returns, so the pointer the cursor recovers is valid.
+        let mut cursor = unsafe { state.dirty.cursor_mut_from_ptr(Rc::as_ptr(&self.cell)) };
+        cursor.remove();
+        self.cell.is_dirty.set(false);
     }
 }
 
@@ -208,7 +324,7 @@ enum LayoutScopeInner {
 
     Boundary {
         state: Weak<RefCell<LayoutPipelineState>>,
-        id: LayoutBoundaryId,
+        cell: Weak<LayoutCell>,
         depth: usize,
     },
 }
@@ -224,71 +340,31 @@ impl LayoutScope {
         matches!(self.0, LayoutScopeInner::Detached)
     }
 
-    /// Registers `content` as a relayout boundary nested under this one and returns the scope that
-    /// marks it. A boundary established during layout calls this so its descendants mark it rather than
-    /// the boundary above. A detached scope registers nothing and hands back another detached scope.
-    pub fn register(&self, content: BoundaryContent, paint: PaintScope) -> LayoutScope {
-        let LayoutScopeInner::Boundary { state, depth, .. } = &self.0 else {
-            return LayoutScope::detached();
+    /// Registers `content` as a relayout boundary nested under this one and returns the handle that owns
+    /// and marks it. A boundary established during layout calls this so its descendants mark it rather
+    /// than the boundary above. A detached scope registers nothing and hands back a handle whose marks
+    /// reach nothing.
+    pub fn register(
+        &self,
+        content: BoundaryContent,
+        paint: PaintScope,
+    ) -> RegisteredLayoutBoundary {
+        let (state, depth) = match &self.0 {
+            LayoutScopeInner::Boundary { state, depth, .. } => (Weak::clone(state), depth + 1),
+            // A detached handle reaches no pipeline, so its cell is never marked or linked.
+            LayoutScopeInner::Detached => (Weak::new(), 0),
         };
 
-        let Some(strong) = state.upgrade() else {
-            return LayoutScope::detached();
-        };
-
-        let depth = depth + 1;
-
-        let id = strong.borrow_mut().boundaries.insert(RegisteredBoundary {
-            content,
+        let cell = Rc::new(LayoutCell {
+            link: LinkedListLink::new(),
             depth,
-            constraints: None,
+            content,
+            constraints: Cell::new(None),
             paint,
+            is_dirty: Cell::new(false),
         });
 
-        LayoutScope(LayoutScopeInner::Boundary {
-            state: Weak::clone(state),
-            id,
-            depth,
-        })
-    }
-
-    /// Records the constraints this boundary is re-laid under, without marking it. A boundary re-laid in
-    /// place by its parent keeps its cached constraints current this way.
-    pub fn update_constraints(&self, constraints: BoxConstraints) {
-        let LayoutScopeInner::Boundary { state, id, .. } = &self.0 else {
-            return;
-        };
-
-        let Some(state) = state.upgrade() else {
-            return;
-        };
-
-        if let Some(boundary) = state.borrow_mut().boundaries.get_mut(*id) {
-            boundary.constraints = Some(constraints);
-        }
-    }
-
-    /// Records the constraints this boundary is re-laid under and marks it. A boundary constrained from
-    /// outside the tree is sized this way, on mount and whenever those constraints change.
-    pub fn set_constraints(&self, constraints: BoxConstraints) {
-        self.update_constraints(constraints);
-        self.mark_needs_layout();
-    }
-
-    /// Removes the relayout boundary this scope marks, clearing any pending re-layout of it. A root or
-    /// detached scope removes nothing.
-    pub fn unregister(&self) {
-        let LayoutScopeInner::Boundary { state, id, .. } = &self.0 else {
-            return;
-        };
-
-        let Some(state) = state.upgrade() else {
-            return;
-        };
-
-        let mut state = state.borrow_mut();
-        state.boundaries.remove(*id);
-        state.dirty.remove(id);
+        RegisteredLayoutBoundary { cell, state }
     }
 
     /// Requests that this boundary be re-laid-out before the next frame. On the clean-to-dirty edge of
@@ -297,9 +373,9 @@ impl LayoutScope {
     ///
     /// # Panics
     ///
-    /// Panics if called during a layout pass, since the dirty set is being flushed.
+    /// Panics if called during a layout pass, since the dirty list is being flushed.
     pub fn mark_needs_layout(&self) {
-        let LayoutScopeInner::Boundary { state, id, .. } = &self.0 else {
+        let LayoutScopeInner::Boundary { state, cell, .. } = &self.0 else {
             return;
         };
 
@@ -307,7 +383,11 @@ impl LayoutScope {
             return;
         };
 
-        state.borrow_mut().mark_needs_layout(*id);
+        let Some(cell) = cell.upgrade() else {
+            return;
+        };
+
+        state.borrow_mut().mark_needs_layout(&cell);
     }
 }
 

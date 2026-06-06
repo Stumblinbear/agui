@@ -27,7 +27,7 @@ use agui_core::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     pipeline::{
-        layout::{BoundaryContent, LayoutPipeline, LayoutScope},
+        layout::{BoundaryContent, LayoutPipeline, LayoutScope, RegisteredLayoutBoundary},
         paint::PaintScope,
     },
     render_object::{
@@ -136,7 +136,7 @@ enum Form {
     /// `Some` while it is registered as a relayout boundary and `None` while it is loosely constrained.
     Boxed {
         content: Rc<RefCell<Payload>>,
-        boundary: Option<LayoutScope>,
+        boundary: Option<RegisteredLayoutBoundary>,
     },
 }
 
@@ -196,10 +196,8 @@ impl Level {
 
     /// Drops the boundary registration of a boxed level, leaving it boxed but unregistered.
     fn unregister(&mut self) {
-        if let Form::Boxed { boundary, .. } = &mut self.form
-            && let Some(boundary) = boundary.take()
-        {
-            boundary.unregister();
+        if let Form::Boxed { boundary, .. } = &mut self.form {
+            boundary.take();
         }
     }
 
@@ -271,6 +269,7 @@ fn erase(content: Rc<RefCell<Payload>>) -> BoundaryContent {
 /// A pipeline and the root scope its levels register under, kept alive for the run.
 struct Harness {
     _pipeline: LayoutPipeline,
+    _root: RegisteredLayoutBoundary,
     scope: LayoutScope,
     paint: PaintScope,
 }
@@ -279,10 +278,12 @@ fn harness(counter: &Rc<Cell<u64>>) -> Harness {
     let root: BoundaryContent = Rc::new(RefCell::new(Payload {
         counter: Rc::clone(counter),
     }));
-    let (pipeline, scope) = LayoutPipeline::new(root, PaintScope::detached());
+    let (pipeline, root) = LayoutPipeline::new(root, PaintScope::detached());
+    let scope = root.scope();
 
     Harness {
         _pipeline: pipeline,
+        _root: root,
         scope,
         paint: PaintScope::detached(),
     }
