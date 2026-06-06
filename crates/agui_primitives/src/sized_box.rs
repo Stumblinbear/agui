@@ -588,3 +588,46 @@ mod tests {
         assert_eq!(outer.get(), 1, "nothing above the boundary was re-laid");
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use agui_test::prelude::*;
+
+    use super::SizedBox;
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default().run(&SizedBox::new().width(16).height(48));
+    }
+
+    #[test]
+    fn shrink_wraps_and_is_extent_independent() {
+        BoxSizingCheck::new()
+            .shrink_wraps_width()
+            .shrink_wraps_height()
+            .width_independent_of_height()
+            .height_independent_of_width()
+            .run(&SizedBox::new().width(16).height(48));
+    }
+
+    #[test]
+    fn expand_fills_its_constraints() {
+        BoxSizingCheck::new()
+            .fills_width()
+            .fills_height()
+            .run(&SizedBox::expand());
+    }
+
+    #[test]
+    fn lays_a_probed_box_out_to_its_given_size() {
+        let probe = Probe::new();
+        let mut tester = WidgetTester::mount(probe.wrap(SizedBox::new().width(16).height(48)));
+
+        // Loose constraints let the box take its own size; a tight surface would force it to fill.
+        tester.resize_with(BoxConstraints::loose(Size::new(128, 128)));
+        tester.pump(Duration::ZERO);
+
+        assert_eq!(probe.size(), Size::new(16, 48));
+        assert_eq!(probe.layouts(), 1);
+    }
+}

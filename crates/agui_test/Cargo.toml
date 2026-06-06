@@ -1,9 +1,9 @@
 [package]
-name = "agui_primitives"
-version = "0.3.0"
+name = "agui_test"
+version = "0.1.0"
 edition = "2024"
 resolver = "2"
-description = "Provides basic widgets for Agui"
+description = "Testing harness for Agui"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
 keywords = ["gui"]
@@ -14,10 +14,4 @@ readme = "README.md"
 [dependencies]
 agui_core.workspace = true
 
-bon.workspace = true
-fnv.workspace = true
-tracing.workspace = true
 typed_floats.workspace = true
-
-[dev-dependencies]
-agui_test.workspace = true

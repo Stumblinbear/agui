@@ -235,3 +235,43 @@ mod tests {
         assert_eq!(got.y.get(), 30.0);
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use std::{cell::Cell, rc::Rc};
+
+    use agui_test::prelude::*;
+
+    use super::Listener;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn a_tap_reaches_a_listener_under_the_pointer() {
+        let taps = Rc::new(Cell::new(0));
+
+        let handler: PointerHandler = {
+            let taps = Rc::clone(&taps);
+            Rc::new(move |_: &PointerEvent| taps.set(taps.get() + 1))
+        };
+
+        let mut tester = WidgetTester::mount(
+            Listener::builder()
+                .on_pointer_down(handler)
+                .behavior(HitTestBehavior::Opaque)
+                .child(TestBox::new(Size::new(50, 50))),
+        );
+
+        tester.resize(Size::new(50, 50));
+        tester.pump(Duration::ZERO);
+
+        tester.tap_at(Offset::new(25, 25));
+
+        assert_eq!(taps.get(), 1);
+    }
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default()
+            .run(&Listener::builder().child(SizedBox::new().width(20).height(10)));
+    }
+}

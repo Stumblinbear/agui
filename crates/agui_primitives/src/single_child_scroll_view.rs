@@ -98,7 +98,7 @@ where
     }
 
     fn measure(&self, constraints: BoxConstraints) -> Size {
-        self.child.measure(constraints.only_width())
+        constraints.constrain(self.child.measure(constraints.only_width()))
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
@@ -212,5 +212,20 @@ mod tests {
             Some(&Size::new(128, 256)),
             "width is clamped to the constraints but height is left unbounded to scroll"
         );
+    }
+}
+
+#[cfg(test)]
+mod harness {
+    use agui_test::prelude::*;
+
+    use super::SingleChildScrollView;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default().run(&SingleChildScrollView::new(
+            SizedBox::new().width(10).height(256),
+        ));
     }
 }

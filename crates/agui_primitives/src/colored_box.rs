@@ -208,3 +208,17 @@ mod tests {
         assert_eq!(*rect, kurbo::Rect::new(0.0, 0.0, 20.0, 10.0));
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use agui_test::prelude::*;
+
+    use super::ColoredBox;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn paints_within_its_bounds() {
+        BoxSizingCheck::default()
+            .run(&ColoredBox::new(Color::BLACK).child(SizedBox::new().width(20).height(10)));
+    }
+}

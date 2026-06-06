@@ -218,3 +218,31 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use agui_test::prelude::*;
+
+    use super::Center;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn centers_a_box_within_the_surface() {
+        let probe = Probe::new();
+        let mut tester = WidgetTester::mount(
+            Center::new().child(probe.wrap(TestBox::new(Size::new(20, 20)).color(Color::BLACK))),
+        );
+
+        tester.resize(Size::new(100, 100));
+        tester.pump(Duration::ZERO);
+
+        assert_eq!(probe.size(), Size::new(20, 20));
+        assert_eq!(probe.offset(), Offset::new(40, 40));
+        assert_eq!(probe.paints(), 1);
+    }
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default().run(&Center::new().child(SizedBox::new().width(20).height(10)));
+    }
+}

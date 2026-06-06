@@ -27,6 +27,8 @@ agui_core = { path = "crates/agui_core", version = "0.3" }
 agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 # agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
 
+agui_test = { path = "crates/agui_test", version = "0.1" }
+
 # agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
 # agui_winit = { path = "crates/agui_winit", version = "0.1" }
 # agui_vello = { path = "crates/agui_vello", version = "0.1" }

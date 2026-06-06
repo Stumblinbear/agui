@@ -246,3 +246,17 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use agui_test::prelude::*;
+
+    use super::Opacity;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default()
+            .run(&Opacity::new(0.5).child(SizedBox::new().width(20).height(10)));
+    }
+}

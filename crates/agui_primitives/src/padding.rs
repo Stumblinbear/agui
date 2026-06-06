@@ -307,3 +307,40 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use agui_core::geometry::EdgeInsets;
+    use agui_test::prelude::*;
+
+    use super::Padding;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default()
+            .run(&Padding::new(EdgeInsets::all(8)).child(SizedBox::new().width(16).height(48)));
+    }
+
+    #[test]
+    fn shrink_wraps_and_is_extent_independent() {
+        BoxSizingCheck::new()
+            .shrink_wraps_width()
+            .shrink_wraps_height()
+            .width_independent_of_height()
+            .height_independent_of_width()
+            .run(&Padding::new(EdgeInsets::all(8)).child(SizedBox::new().width(16).height(48)));
+    }
+
+    #[test]
+    fn combines_a_child_with_known_intrinsics() {
+        // A child whose minimum and maximum intrinsics differ, so the parent's combination is
+        // exercised with metrics the test controls.
+        let child = IntrinsicBox::new(Size::new(40, 20)).min_intrinsic(Size::new(10, 8));
+
+        BoxSizingCheck::new()
+            .shrink_wraps_width()
+            .shrink_wraps_height()
+            .run(&Padding::new(EdgeInsets::all(8)).child(child));
+    }
+}

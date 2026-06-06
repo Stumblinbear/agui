@@ -442,3 +442,18 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod harness {
+    use agui_core::paint::peniko::kurbo::Affine;
+    use agui_test::prelude::*;
+
+    use super::Transform;
+    use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_box_sizing_contracts() {
+        BoxSizingCheck::default()
+            .run(&Transform::new(Affine::IDENTITY).child(SizedBox::new().width(20).height(10)));
+    }
+}
