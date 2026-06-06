@@ -52,39 +52,3 @@ criterion.workspace = true
 
 # fnv = "1.0"
 # concurrent-queue = "2.4"
-
-# [[bench]]
-# name = "element_tree"
-# path = "benches/element_tree.rs"
-# harness = false
-# required-features = ["mocks"]
-
-# [[bench]]
-# name = "hashers"
-# path = "benches/hashers.rs"
-# harness = false
-
-# [[bench]]
-# name = "reference_patterns"
-# path = "benches/reference_patterns.rs"
-# harness = false
-
-# [[bench]]
-# name = "dirty_queue"
-# path = "benches/dirty_queue.rs"
-# harness = false
-
-# [[bench]]
-# name = "tree"
-# path = "benches/tree.rs"
-# harness = false
-
-[[bench]]
-name = "rebuild_pruning"
-path = "benches/rebuild_pruning.rs"
-harness = false
-
-[[bench]]
-name = "relayout_oscillation"
-path = "benches/relayout_oscillation.rs"
-harness = false

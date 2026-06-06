@@ -346,6 +346,7 @@ impl ApplicationHandler<WakeUp> for App {
 /// presents.
 struct WindowDriver<V: Widget>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     reactor: LocalReactor,
@@ -357,6 +358,7 @@ where
 
 impl<V: Widget> WindowDriver<V>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     fn new(
@@ -409,6 +411,7 @@ trait View {
 
 impl<V: Widget> View for WindowDriver<V>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     fn resize(&mut self, constraints: BoxConstraints) {
@@ -425,7 +428,7 @@ where
             let messages = self.reactor.messages().collect::<Vec<_>>();
             let delivered = !messages.is_empty();
             for (path, message) in messages {
-                self.build.dispatch_message(path, message);
+                self.build.dispatch_message(&path, message);
             }
 
             if !ran && !delivered {

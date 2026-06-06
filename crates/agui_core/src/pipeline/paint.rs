@@ -358,7 +358,7 @@ impl PaintPipelineState {
             }
 
             PaintPipelinePhase::Paint => {
-                panic!("cannot mark a render object for paint while painting is in progress");
+                panic!("cannot mark a render object for paint while painting");
             }
         }
 

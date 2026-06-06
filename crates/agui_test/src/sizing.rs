@@ -1,6 +1,7 @@
 //! Conformance checks for the box-sizing contracts every [`RenderBox`] must satisfy.
 
 use agui_core::{
+    element::BuildScope,
     paint::{
         command::{PaintCommand, PaintShape},
         compositing::{Compositor, ContainerLayer, LayerHandle},
@@ -214,7 +215,8 @@ impl BoxSizingCheck {
 
         let element = {
             let mut scheduler = tasks.scheduler();
-            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, &provide);
+            let scope = BuildScope::detached();
+            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, &provide, &scope);
 
             widget.create_element(&mut ctx)
         };

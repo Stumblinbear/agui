@@ -2,7 +2,7 @@ use std::{any::Any, future::Future, rc::Rc};
 
 use crate::{
     context::TaskCtx,
-    element::{RoutingId, RoutingPath},
+    element::{BuildScope, RoutingId, RoutingPath},
     provide::ProvideScope,
     scheduling::{TaskHandle, TaskScheduler},
 };
@@ -13,6 +13,8 @@ pub struct UpdateCtx<'a> {
     routing_path: &'a mut Vec<RoutingId>,
 
     provide_scope: &'a ProvideScope,
+
+    build_scope: &'a BuildScope,
 }
 
 impl<'a> UpdateCtx<'a> {
@@ -20,6 +22,7 @@ impl<'a> UpdateCtx<'a> {
         scheduler: &'a mut dyn TaskScheduler,
         routing_path: &'a mut Vec<RoutingId>,
         provide_scope: &'a ProvideScope,
+        build_scope: &'a BuildScope,
     ) -> Self {
         Self {
             scheduler,
@@ -27,11 +30,17 @@ impl<'a> UpdateCtx<'a> {
             routing_path,
 
             provide_scope,
+
+            build_scope,
         }
     }
 
+    /// The path that addresses the current point in the build walk: its boundary and the ids within it.
     pub fn routing_path(&self) -> RoutingPath {
-        RoutingPath::from(self.routing_path.clone())
+        RoutingPath::new(
+            self.build_scope.boundary().unwrap_or_default(),
+            self.routing_path.clone(),
+        )
     }
 
     pub fn provide_scope(&self) -> &ProvideScope {
@@ -76,27 +85,43 @@ impl<'a> UpdateCtx<'a> {
         ret
     }
 
-    /// Runs `func` with a context whose provided values are exactly those of `scope`.
-    pub fn with_scope<T>(
-        &mut self,
-        scope: &ProvideScope,
-        func: impl FnOnce(&mut UpdateCtx) -> T,
-    ) -> T {
-        let mut update_ctx = UpdateCtx {
-            scheduler: self.scheduler,
-            routing_path: self.routing_path,
-            provide_scope: scope,
-        };
-
-        func(&mut update_ctx)
-    }
-
     pub fn with_provided<V, T>(&mut self, value: Rc<V>, func: impl FnOnce(&mut UpdateCtx) -> T) -> T
     where
         V: Any,
     {
         let scope = self.provide_scope.provide(value);
 
-        self.with_scope(&scope, func)
+        let mut update_ctx = UpdateCtx {
+            scheduler: self.scheduler,
+            routing_path: self.routing_path,
+            provide_scope: &scope,
+            build_scope: self.build_scope,
+        };
+
+        func(&mut update_ctx)
+    }
+
+    /// The build boundary the current subtree is reconciled under.
+    pub fn build_scope(&self) -> &BuildScope {
+        self.build_scope
+    }
+
+    /// Runs `func` under `scope`, with the within-boundary routing path reset, so ids pushed inside address
+    /// relative to the entered boundary rather than to the parent.
+    pub fn with_build_scope<T>(
+        &mut self,
+        scope: &BuildScope,
+        func: impl FnOnce(&mut UpdateCtx) -> T,
+    ) -> T {
+        let mut routing_path = Vec::new();
+
+        let mut update_ctx = UpdateCtx {
+            scheduler: self.scheduler,
+            routing_path: &mut routing_path,
+            provide_scope: self.provide_scope,
+            build_scope: scope,
+        };
+
+        func(&mut update_ctx)
     }
 }

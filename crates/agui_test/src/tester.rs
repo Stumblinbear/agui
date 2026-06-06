@@ -25,6 +25,7 @@ use crate::gesture::{PointerDispatcher, PointerEvent, PointerEventKind, PointerI
 /// [`start_gesture`](Self::start_gesture).
 pub struct WidgetTester<V: Widget>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     build: BuildOwner<V>,
@@ -43,6 +44,7 @@ where
 
 impl<V: Widget> WidgetTester<V>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     /// Mounts `widget` as the root of a fresh tree, ready to be sized and pumped.
@@ -92,7 +94,7 @@ where
 
         let messages = self.tasks.messages().collect::<Vec<_>>();
         for (path, message) in messages {
-            self.build.dispatch_message(path, message);
+            self.build.dispatch_message(&path, message);
         }
 
         if self.build.flush(&mut self.tasks.scheduler()) {
@@ -172,8 +174,8 @@ where
     /// Dispatches `message` to the element at `path`, marking it to rebuild on the next pump if it asks
     /// to.
     pub fn send<M: 'static>(&mut self, path: &[RoutingId], message: M) {
-        self.build
-            .dispatch_message(RoutingPath::from(path.to_vec()), Box::new(message));
+        let path = RoutingPath::new(self.build.root_id(), path.to_vec());
+        self.build.dispatch_message(&path, Box::new(message));
     }
 
     /// A clone of the frame-callback registry the tester ticks each pump, for handing to a render

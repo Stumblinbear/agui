@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::{RoutingId, node::ElementNode},
+    element::{BuildScope, RoutingId, node::ElementNode},
     provide::ProvideScope,
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
     widget::Widget,
@@ -220,6 +220,7 @@ impl<E> TestHarness<E> {
             &mut task_runner.scheduler(),
             &mut path,
             &provide_scope,
+            &BuildScope::detached(),
         ));
 
         Self {
@@ -243,6 +244,7 @@ impl<E> TestHarness<E> {
                 &mut self.task_runner.scheduler(),
                 &mut self.path,
                 &self.provide_scope,
+                &BuildScope::detached(),
             ),
         );
     }
@@ -259,11 +261,13 @@ impl<E> TestHarness<E> {
         V: Widget<Element = E>,
     {
         let mut msg_ctx = MessageCtx::new(message);
+
         widget.dispatch(
             &mut self.root.element,
             path,
             Dispatch::Message(&mut msg_ctx),
         );
+
         msg_ctx
     }
 
@@ -274,7 +278,10 @@ impl<E> TestHarness<E> {
     {
         let mut binding = self.task_runner.scheduler();
 
-        let mut update_ctx = UpdateCtx::new(&mut binding, &mut self.path, &self.provide_scope);
+        let scope = BuildScope::detached();
+
+        let mut update_ctx =
+            UpdateCtx::new(&mut binding, &mut self.path, &self.provide_scope, &scope);
 
         widget.dispatch(
             &mut self.root.element,

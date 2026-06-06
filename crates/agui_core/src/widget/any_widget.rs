@@ -2,7 +2,7 @@ use std::{any::Any, rc::Rc, sync::Arc};
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{AnyElement, Element, RoutingId, node::ElementNode},
+    element::{AnyElement, BuildBoundaryElement, Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
     render_object::{
         RenderObject,
@@ -127,9 +127,16 @@ macros::impl_widget!(&dyn AnyWidget<Render = Render>);
 
 macros::impl_widget!(Box<dyn AnyWidget<Render = Render>>);
 
-macros::impl_widget!(Rc<dyn AnyWidget<Render = Render>>);
+macros::impl_widget_concrete!(Box);
 
-macros::impl_widget!(Arc<dyn AnyWidget<Render = Render>>);
+// Rc and Arc seams are build boundaries: they retain the inner widget so a rebuild reaches it directly.
+macros::impl_boundary_dyn!(Rc, create_rc, update_rc);
+
+macros::impl_boundary_dyn!(Arc, create_arc, update_arc);
+
+macros::impl_boundary_concrete!(Rc, create_rc, update_rc);
+
+macros::impl_boundary_concrete!(Arc, create_arc, update_arc);
 
 mod macros {
     // Used to implement Widget for the given smart pointer (e.g. Box, Rc, Arc)
@@ -212,7 +219,175 @@ mod macros {
         };
     }
 
+    // Implements Widget for a smart pointer over a concrete widget (e.g. Box<W>, Rc<W>) by delegating
+    // to the pointee. Stays disjoint from `impl_widget!` because its pointee, `dyn AnyWidget`, is unsized
+    // and so never satisfies the `W: Widget` bound here.
+    macro_rules! impl_widget_concrete {
+        (
+            // The smart pointer constructor (e.g. Box, Rc, Arc)
+            $ptr:ident
+        ) => {
+            impl<W> Widget for $ptr<W>
+            where
+                W: Widget,
+            {
+                type Element = W::Element;
+
+                type Render = W::Render;
+
+                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+                    (**self).create_element(ctx)
+                }
+
+                fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+                    (**self).update(element, &**old, ctx)
+                }
+
+                fn dispatch(
+                    &self,
+                    element: &mut Self::Element,
+                    path: &[RoutingId],
+                    action: crate::context::Dispatch,
+                ) {
+                    (**self).dispatch(element, path, action)
+                }
+
+                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+                    (**self).create_render_object(element)
+                }
+
+                fn update_render_object(
+                    &self,
+                    element: &Self::Element,
+                    render_object: &mut Self::Render,
+                ) {
+                    (**self).update_render_object(element, render_object)
+                }
+
+                fn is_same_type(&self, other: &Self) -> bool {
+                    (**self).is_same_type(&**other)
+                }
+
+                fn key(&self) -> Option<&dyn AnyKeyable> {
+                    (**self).key()
+                }
+            }
+        };
+    }
+
+    // Implements Widget for a shared pointer over `dyn AnyWidget` as a build boundary that retains its
+    // inner widget. `$create`/`$update` pick the constructors matching the pointer's strong-count kind.
+    macro_rules! impl_boundary_dyn {
+        ($ptr:ident, $create:ident, $update:ident) => {
+            impl<Render> Widget for $ptr<dyn AnyWidget<Render = Render>>
+            where
+                Render: RenderObject,
+            {
+                type Element = BuildBoundaryElement<Render>;
+
+                type Render = Render;
+
+                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+                    BuildBoundaryElement::$create($ptr::clone(self), ctx)
+                }
+
+                fn update(&self, element: &mut Self::Element, _old: &Self, ctx: &mut UpdateCtx) {
+                    element.$update($ptr::clone(self), ctx);
+                }
+
+                fn dispatch(
+                    &self,
+                    element: &mut Self::Element,
+                    path: &[RoutingId],
+                    action: crate::context::Dispatch,
+                ) {
+                    element.dispatch(path, action);
+                }
+
+                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+                    element.create_render_object()
+                }
+
+                fn update_render_object(
+                    &self,
+                    element: &Self::Element,
+                    render_object: &mut Self::Render,
+                ) {
+                    element.update_render_object(render_object);
+                }
+
+                fn is_same_type(&self, other: &Self) -> bool {
+                    (**self).dyn_is_same_type(&**other)
+                }
+
+                fn key(&self) -> Option<&dyn AnyKeyable> {
+                    (**self).dyn_key()
+                }
+            }
+        };
+    }
+
+    // Implements Widget for a shared pointer over a concrete widget as a build boundary. Coerces the
+    // pointer to the erased recipe the boundary retains; otherwise mirrors `impl_boundary_dyn!`.
+    macro_rules! impl_boundary_concrete {
+        ($ptr:ident, $create:ident, $update:ident) => {
+            impl<W> Widget for $ptr<W>
+            where
+                W: Widget + 'static,
+                W::Render: RenderObject,
+            {
+                type Element = BuildBoundaryElement<W::Render>;
+
+                type Render = W::Render;
+
+                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+                    let strong = $ptr::clone(self);
+                    let recipe: $ptr<dyn AnyWidget<Render = W::Render>> = strong;
+                    BuildBoundaryElement::$create(recipe, ctx)
+                }
+
+                fn update(&self, element: &mut Self::Element, _old: &Self, ctx: &mut UpdateCtx) {
+                    let strong = $ptr::clone(self);
+                    let recipe: $ptr<dyn AnyWidget<Render = W::Render>> = strong;
+                    element.$update(recipe, ctx);
+                }
+
+                fn dispatch(
+                    &self,
+                    element: &mut Self::Element,
+                    path: &[RoutingId],
+                    action: crate::context::Dispatch,
+                ) {
+                    element.dispatch(path, action);
+                }
+
+                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+                    element.create_render_object()
+                }
+
+                fn update_render_object(
+                    &self,
+                    element: &Self::Element,
+                    render_object: &mut Self::Render,
+                ) {
+                    element.update_render_object(render_object);
+                }
+
+                fn is_same_type(&self, other: &Self) -> bool {
+                    (**self).dyn_is_same_type((**other).as_dyn_widget())
+                }
+
+                fn key(&self) -> Option<&dyn AnyKeyable> {
+                    (**self).dyn_key()
+                }
+            }
+        };
+    }
+
+    pub(crate) use impl_boundary_concrete;
+    pub(crate) use impl_boundary_dyn;
     pub(crate) use impl_widget;
+    pub(crate) use impl_widget_concrete;
 }
 
 struct RenderBoxWrapper<T> {

@@ -148,6 +148,7 @@ where
     let scheduler = ctx.deferred_scheduler();
     let routing_path = ctx.routing_path();
     let provide_scope = ctx.provide_scope().clone();
+    let build_scope = ctx.build_scope().clone();
 
     Rc::new(
         move |ctx: &mut LayoutCtx,
@@ -159,8 +160,13 @@ where
             // Layout runs outside the build frame, so the element built or reconciled here borrows an
             // owned scheduler handle, derived from the one captured at build, to keep spawning tasks.
             let mut scheduler = scheduler.deferred();
-            let mut routing_path = routing_path.to_vec();
-            let mut update = UpdateCtx::new(&mut *scheduler, &mut routing_path, &provide_scope);
+            let mut routing_path = routing_path.within().to_vec();
+            let mut update = UpdateCtx::new(
+                &mut *scheduler,
+                &mut routing_path,
+                &provide_scope,
+                &build_scope,
+            );
 
             let mut retained = child_widget.borrow_mut();
 

@@ -362,7 +362,7 @@ mod tests {
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        element::{Element, RoutingId},
+        element::{BuildScope, Element, RoutingId},
         key::AnyKeyable,
         provide::ProvideScope,
         test_harness::TestTaskRunner,
@@ -380,6 +380,7 @@ mod tests {
             &mut task_runner.scheduler(),
             &mut path,
             &scope,
+            &BuildScope::detached(),
         ))
     }
 

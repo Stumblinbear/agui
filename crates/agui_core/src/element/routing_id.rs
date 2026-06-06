@@ -1,4 +1,6 @@
-use std::{borrow::Borrow, sync::Arc};
+use std::sync::Arc;
+
+use crate::element::BoundaryId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoutingId(u16);
@@ -28,39 +30,40 @@ impl RoutingId {
     }
 }
 
+/// Addresses one element for dispatch: the build boundary it lives under, and the routing ids from that
+/// boundary's inner element down to it.
+///
+/// A path is resolved by looking its boundary up in the registry and walking the ids within, so dispatch
+/// reaches the element without descending from the root.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RoutingPath(Arc<[RoutingId]>);
+pub struct RoutingPath {
+    boundary: BoundaryId,
+    within: Arc<[RoutingId]>,
+}
 
 impl RoutingPath {
+    pub fn new(boundary: BoundaryId, within: impl Into<Arc<[RoutingId]>>) -> Self {
+        Self {
+            boundary,
+            within: within.into(),
+        }
+    }
+
+    /// The boundary this path is relative to.
+    pub fn boundary(&self) -> BoundaryId {
+        self.boundary
+    }
+
+    /// The routing ids from the boundary's inner element down to the addressed element.
+    pub fn within(&self) -> &[RoutingId] {
+        &self.within
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.within.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_descendant_of(&self, other: &Self) -> bool {
-        self.0.starts_with(&other.0)
-    }
-
-    pub fn as_slice(&self) -> &[RoutingId] {
-        &self.0
-    }
-
-    pub fn to_vec(&self) -> Vec<RoutingId> {
-        self.0.to_vec()
-    }
-}
-
-impl From<Vec<RoutingId>> for RoutingPath {
-    fn from(path: Vec<RoutingId>) -> Self {
-        Self(path.into())
-    }
-}
-
-impl Borrow<[RoutingId]> for RoutingPath {
-    fn borrow(&self) -> &[RoutingId] {
-        &self.0
+        self.within.len()
     }
 }

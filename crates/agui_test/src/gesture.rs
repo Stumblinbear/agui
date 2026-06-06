@@ -12,6 +12,7 @@ use crate::{prelude::RenderBox, tester::WidgetTester};
 /// pressed on, even as it moves off them.
 pub struct TestGesture<'a, V: agui_core::widget::Widget>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     tester: &'a mut WidgetTester<V>,
@@ -21,6 +22,7 @@ where
 
 impl<'a, V: agui_core::widget::Widget> TestGesture<'a, V>
 where
+    V: 'static,
     V::Render: RenderBox + 'static,
 {
     pub(crate) fn new(
