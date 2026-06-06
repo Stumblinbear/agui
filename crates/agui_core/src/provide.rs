@@ -4,7 +4,14 @@ use std::{
     rc::Rc,
 };
 
+use bon::Builder;
 use imbl::shared_ptr::RcK;
+
+use crate::{
+    context::{Dispatch, UpdateCtx},
+    element::{RoutingId, SingleChildElement},
+    widget::Widget,
+};
 
 #[derive(Default, Clone)]
 pub struct ProvideScope {
@@ -35,6 +42,64 @@ impl ProvideScope {
     }
 }
 
+/// A widget that makes one value available to its subtree.
+///
+/// # Examples
+///
+/// ```ignore
+/// Provide::new(Rc::new(theme)).child(page)
+/// ```
+#[derive(Builder)]
+#[builder(start_fn = new)]
+#[builder(finish_fn = child)]
+pub struct Provide<V, Child> {
+    #[builder(start_fn)]
+    value: Rc<V>,
+
+    #[builder(finish_fn)]
+    child: Child,
+}
+
+impl<V, Child> Widget for Provide<V, Child>
+where
+    V: Any,
+    Child: Widget,
+{
+    type Element = SingleChildElement<Child::Element>;
+
+    type Render = Child::Render;
+
+    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+        ctx.with_provided(Rc::clone(&self.value), |ctx| {
+            SingleChildElement::new(&self.child, ctx)
+        })
+    }
+
+    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
+        ctx.with_provided(Rc::clone(&self.value), |ctx| {
+            element.update(&self.child, &old.child, ctx);
+        });
+    }
+
+    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+        match action {
+            Dispatch::Rebuild(ctx) => ctx.with_provided(Rc::clone(&self.value), |ctx| {
+                element.dispatch(&self.child, path, Dispatch::Rebuild(ctx));
+            }),
+
+            action @ Dispatch::Message(_) => element.dispatch(&self.child, path, action),
+        }
+    }
+
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+        element.create_render_object(&self.child)
+    }
+
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+        element.update_render_object(&self.child, render_object);
+    }
+}
+
 #[derive(Default)]
 pub struct TypeIdHasher {
     value: u64,
@@ -62,16 +127,18 @@ impl Hasher for TypeIdHasher {
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, rc::Rc};
+    use std::{any::Any, cell::Cell, rc::Rc};
 
     use crate::{
         context::{Dispatch, UpdateCtx},
         element::{RoutingId, SingleChildElement},
         provide::ProvideScope,
-        test_fixtures::Leaf,
+        test_fixtures::{Leaf, Transparent},
         test_harness::TestHarness,
         widget::Widget,
     };
+
+    use super::Provide;
 
     struct TestProviderWidget<T, Child> {
         value: Rc<T>,
@@ -163,5 +230,57 @@ mod tests {
         };
 
         let _ = TestHarness::mount(&widget);
+    }
+
+    #[test]
+    fn provide_widget_exposes_value_to_subtree_on_mount() {
+        let widget = Provide::new(Rc::new(42_usize))
+            .child(Leaf::new().on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&42))));
+
+        let _ = TestHarness::mount(&widget);
+    }
+
+    #[test]
+    fn provided_value_survives_a_targeted_rebuild_below_it() {
+        let seen = Rc::new(Cell::new(None::<usize>));
+
+        let recorder = Rc::clone(&seen);
+        let widget = Provide::new(Rc::new(42_usize)).child(Transparent {
+            child: Leaf::new()
+                .on_rebuild(move |ctx| recorder.set(ctx.get_provided::<usize>().copied())),
+        });
+
+        let mut harness = TestHarness::mount(&widget);
+
+        // The transparent single child pushes no routing id, so the leaf sits at the empty path.
+        harness.dispatch_rebuild(&widget, &[]);
+
+        assert_eq!(
+            seen.get(),
+            Some(42),
+            "an ancestor's provided value is still visible when only the descendant rebuilds"
+        );
+    }
+
+    #[test]
+    fn root_provided_value_survives_a_targeted_rebuild() {
+        let seen = Rc::new(Cell::new(None::<usize>));
+
+        let recorder = Rc::clone(&seen);
+        let widget = Transparent {
+            child: Leaf::new()
+                .on_rebuild(move |ctx| recorder.set(ctx.get_provided::<usize>().copied())),
+        };
+
+        let mut harness = TestHarness::mount(&widget);
+        harness.provide_scope = harness.provide_scope.provide::<usize>(Rc::new(7));
+
+        harness.dispatch_rebuild(&widget, &[]);
+
+        assert_eq!(
+            seen.get(),
+            Some(7),
+            "a value provided at the root scope reaches a targeted rebuild"
+        );
     }
 }

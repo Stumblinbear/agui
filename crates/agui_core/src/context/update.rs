@@ -76,18 +76,27 @@ impl<'a> UpdateCtx<'a> {
         ret
     }
 
+    /// Runs `func` with a context whose provided values are exactly those of `scope`.
+    pub fn with_scope<T>(
+        &mut self,
+        scope: &ProvideScope,
+        func: impl FnOnce(&mut UpdateCtx) -> T,
+    ) -> T {
+        let mut update_ctx = UpdateCtx {
+            scheduler: self.scheduler,
+            routing_path: self.routing_path,
+            provide_scope: scope,
+        };
+
+        func(&mut update_ctx)
+    }
+
     pub fn with_provided<V, T>(&mut self, value: Rc<V>, func: impl FnOnce(&mut UpdateCtx) -> T) -> T
     where
         V: Any,
     {
-        let new_scope = self.provide_scope.provide(value);
+        let scope = self.provide_scope.provide(value);
 
-        let mut update_ctx = UpdateCtx {
-            scheduler: self.scheduler,
-            routing_path: self.routing_path,
-            provide_scope: &new_scope,
-        };
-
-        func(&mut update_ctx)
+        self.with_scope(&scope, func)
     }
 }
