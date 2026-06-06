@@ -6,9 +6,9 @@ use agui_core::{
         compositing::{ContainerLayer, LayerHandle},
         scene::Scene,
     },
-    pipeline::{PipelineOwner, layout::BoundaryContent},
+    pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
     prelude::{element::*, render_object::*},
-    test_harness::TestHarness,
+    test_harness::TestTaskRunner,
 };
 use agui_primitives::{
     colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox,
@@ -68,16 +68,11 @@ fn main() {
             .into_boxed_render_box()
     });
 
-    // The window owns the pipeline for its subtree and hands its presentation layer back out here. The
-    // OS surface would normally take that layer; this example presents it by compositing each frame.
-    let widget = WindowRoot {
-        on_layer_created: |_layer: LayerHandle<ContainerLayer>| {},
-        child: content,
-    };
-
     tracing::info!("mounting window");
-    let harness = TestHarness::mount(&widget);
-    let view: Box<dyn View> = Box::new(harness.root.element);
+    // The driver owns the pipeline for the subtree and hands its presentation layer back out here. The
+    // OS surface would normally take that layer; this example presents it by compositing each frame.
+    let driver = WindowDriver::new(content, |_layer: LayerHandle<ContainerLayer>| {});
+    let view: Box<dyn View> = Box::new(driver);
     tracing::info!("window mounted; starting event loop");
 
     let event_loop = EventLoop::new().unwrap();
@@ -284,72 +279,59 @@ impl ApplicationHandler for App {
     }
 }
 
-/// A widget that owns a window's render pipeline and presents its child filling the window.
+/// Pairs a [`BuildOwner`], which holds the element tree the widget describes, with a [`PipelineOwner`],
+/// which lays out and paints the matching render tree, to drive one window from the event loop.
 ///
-/// Its child becomes the root of a render tree detached from the surrounding element tree, driven by a
-/// [`PipelineOwner`] the element holds. `on_layer_created` receives the layer the window presents.
-struct WindowRoot<OnLayerCreated, Child> {
-    on_layer_created: OnLayerCreated,
-    child: Child,
+/// This is the shape a real window binding takes: the build owner rebuilds the element tree when
+/// something asks it to, the pipeline owner brings layout and paint up to date, and each frame keeps the
+/// two in step before compositing for presentation. `on_layer_created` receives the layer the window
+/// presents.
+struct WindowDriver<V: Widget>
+where
+    V::Render: RenderBox + 'static,
+{
+    tasks: TestTaskRunner,
+    build: BuildOwner<V>,
+    content: BoundaryContent,
+    owner: PipelineOwner,
 }
 
-impl<OnLayerCreated, Child> Widget for WindowRoot<OnLayerCreated, Child>
+impl<V: Widget> WindowDriver<V>
 where
-    OnLayerCreated: Fn(LayerHandle<ContainerLayer>),
-    Child: Widget,
-    Child::Render: RenderBox,
+    V::Render: RenderBox + 'static,
 {
-    type Element = WindowRootElement<Child::Element>;
-    type Render = ();
+    fn new(widget: V, on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>)) -> Self {
+        let mut tasks = TestTaskRunner::new();
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        let mut child = ElementNode::new(self.child.create_element(ctx));
+        let mut build = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        // Erase the child render object into the shared boundary cell the owner registers as the root.
-        let content: BoundaryContent =
-            Rc::new(RefCell::new(child.create_render_object(&self.child)));
+        // Seed the render tree from the element tree and register its root as the pipeline's outermost
+        // boundary.
+        let content: BoundaryContent = Rc::new(RefCell::new(build.create_render_object()));
         let layer = LayerHandle::new(ContainerLayer::new());
 
         let owner = PipelineOwner::new(Rc::clone(&content), layer.clone());
 
-        (self.on_layer_created)(layer);
+        on_layer_created(layer);
 
-        WindowRootElement {
-            child,
+        Self {
+            tasks,
+            build,
             content,
             owner,
         }
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.child.update(&self.child, &old.child, ctx);
-
-        // The render tree is detached under the owner, so reconcile it here, recovering the child's
-        // concrete type from the shared boundary cell.
-        let mut content = element.content.borrow_mut();
-        let child = content
+    fn sync_render(&mut self) {
+        let mut content = self.content.borrow_mut();
+        let render = content
             .as_any_mut()
-            .downcast_mut::<Child::Render>()
-            .expect("the window child keeps its type across reconcile");
-        element.child.update_render_object(&self.child, child);
-    }
+            .downcast_mut::<V::Render>()
+            .expect("the root render object keeps its type");
 
-    fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
-
-    fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.child.dispatch(&self.child, path, action);
+        self.build.update_render_object(render);
     }
 }
-
-struct WindowRootElement<ChildElement> {
-    child: ElementNode<ChildElement>,
-    content: BoundaryContent,
-    owner: PipelineOwner,
-}
-
-impl<ChildElement: Element> Element for WindowRootElement<ChildElement> {}
 
 /// Drives one window's pipeline from the event loop.
 trait View {
@@ -358,12 +340,28 @@ trait View {
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
-impl<ChildElement: Element> View for WindowRootElement<ChildElement> {
+impl<V: Widget> View for WindowDriver<V>
+where
+    V::Render: RenderBox + 'static,
+{
     fn resize(&mut self, constraints: BoxConstraints) {
         self.owner.resize(constraints);
     }
 
     fn frame(&mut self) -> Scene {
+        // Run spawned tasks one step, deliver the messages they posted, and rebuild whatever they
+        // dirtied, bringing the render tree back in step before laying out and painting.
+        self.tasks.poll();
+
+        let messages = self.tasks.messages().collect::<Vec<_>>();
+        for (path, message) in messages {
+            self.build.dispatch_message(path, message);
+        }
+
+        if self.build.flush(&mut self.tasks.scheduler()) {
+            self.sync_render();
+        }
+
         self.owner.flush_layout();
         self.owner.flush_paint();
         self.owner.composite()

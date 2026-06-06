@@ -379,7 +379,7 @@ mod tests {
         f(&mut UpdateCtx::new(
             &mut task_runner.scheduler(),
             &mut path,
-            scope,
+            &scope,
         ))
     }
 

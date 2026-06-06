@@ -9,7 +9,6 @@
 // #![warn(missing_docs)]
 
 pub mod context;
-pub mod driver;
 pub mod element;
 pub mod geometry;
 pub mod input;

@@ -5,12 +5,11 @@ use agui_core::{
         compositing::{ContainerLayer, LayerHandle},
         scene::Scene,
     },
-    pipeline::{PipelineOwner, layout::BoundaryContent},
+    pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
     prelude::{
         element::*,
         render_object::{BoxConstraints, HitTestResult, RenderBox},
     },
-    provide::ProvideScope,
     scheduling::Vsync,
     test_harness::TestTaskRunner,
 };
@@ -28,22 +27,18 @@ pub struct WidgetTester<V: Widget>
 where
     V::Render: RenderBox + 'static,
 {
-    widget: V,
-    element: ElementNode<V::Element>,
+    build: BuildOwner<V>,
 
     content: BoundaryContent,
     owner: PipelineOwner,
 
     tasks: TestTaskRunner,
-    provide: ProvideScope,
 
     vsync: Vsync,
     now: Duration,
 
     dispatcher: PointerDispatcher,
     next_pointer: u64,
-
-    pending: Vec<RoutingPath>,
 }
 
 impl<V: Widget> WidgetTester<V>
@@ -53,38 +48,26 @@ where
     /// Mounts `widget` as the root of a fresh tree, ready to be sized and pumped.
     pub fn mount(widget: V) -> Self {
         let mut tasks = TestTaskRunner::new();
-        let provide = ProvideScope::new();
 
-        let element = {
-            let mut scheduler = tasks.scheduler();
-            let mut path = Vec::new();
-            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, provide.clone());
+        let mut build = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-            ElementNode::new(widget.create_element(&mut ctx))
-        };
-
-        let content: BoundaryContent =
-            Rc::new(RefCell::new(widget.create_render_object(&element.element)));
+        let content: BoundaryContent = Rc::new(RefCell::new(build.create_render_object()));
         let layer = LayerHandle::new(ContainerLayer::new());
         let owner = PipelineOwner::new(Rc::clone(&content), layer);
 
         Self {
-            widget,
-            element,
+            build,
 
             content,
             owner,
 
             tasks,
-            provide,
 
             vsync: Vsync::new(),
             now: Duration::ZERO,
 
             dispatcher: PointerDispatcher::new(),
             next_pointer: 0,
-
-            pending: Vec::new(),
         }
     }
 
@@ -107,24 +90,12 @@ where
 
         self.tasks.poll();
 
-        let mut dirty = std::mem::take(&mut self.pending);
-
         let messages = self.tasks.messages().collect::<Vec<_>>();
         for (path, message) in messages {
-            let mut ctx = MessageCtx::new(message);
-            self.widget.dispatch(
-                &mut self.element.element,
-                path.as_slice(),
-                Dispatch::Message(&mut ctx),
-            );
-
-            if ctx.rebuild_requested() {
-                dirty.push(path);
-            }
+            self.build.dispatch_message(path, message);
         }
 
-        if !dirty.is_empty() {
-            self.rebuild(&dirty);
+        if self.build.flush(&mut self.tasks.scheduler()) {
             self.sync_render();
         }
 
@@ -143,7 +114,7 @@ where
         for _ in 0..max_frames {
             self.pump(Duration::from_millis(16));
 
-            if self.vsync.is_idle() && self.pending.is_empty() {
+            if self.vsync.is_idle() && !self.build.is_dirty() {
                 return;
             }
         }
@@ -201,18 +172,8 @@ where
     /// Dispatches `message` to the element at `path`, marking it to rebuild on the next pump if it asks
     /// to.
     pub fn send<M: 'static>(&mut self, path: &[RoutingId], message: M) {
-        let mut ctx = MessageCtx::new(Box::new(message));
-        self.widget
-            .dispatch(&mut self.element.element, path, Dispatch::Message(&mut ctx));
-
-        if ctx.rebuild_requested() {
-            self.pending.push(RoutingPath::from(path.to_vec()));
-        }
-    }
-
-    /// Marks the element at `path` to rebuild on the next pump.
-    pub fn request_rebuild(&mut self, path: &[RoutingId]) {
-        self.pending.push(RoutingPath::from(path.to_vec()));
+        self.build
+            .dispatch_message(RoutingPath::from(path.to_vec()), Box::new(message));
     }
 
     /// A clone of the frame-callback registry the tester ticks each pump, for handing to a render
@@ -221,37 +182,15 @@ where
         self.vsync.clone()
     }
 
-    fn rebuild(&mut self, dirty: &[RoutingPath]) {
-        let Self {
-            tasks,
-            widget,
-            element,
-            provide,
-            ..
-        } = self;
-
-        let mut scheduler = tasks.scheduler();
-        for path in dirty {
-            let mut routing = path.to_vec();
-            let mut ctx = UpdateCtx::new(&mut scheduler, &mut routing, provide.clone());
-
-            widget.dispatch(
-                &mut element.element,
-                path.as_slice(),
-                Dispatch::Rebuild(&mut ctx),
-            );
-        }
-    }
-
     fn sync_render(&mut self) {
         let mut content = self.content.borrow_mut();
+
         let render = content
             .as_any_mut()
             .downcast_mut::<V::Render>()
             .expect("the root render object keeps its type");
 
-        self.widget
-            .update_render_object(&self.element.element, render);
+        self.build.update_render_object(render);
     }
 
     fn allocate_pointer(&mut self) -> PointerId {

@@ -219,7 +219,7 @@ impl<E> TestHarness<E> {
         let root = widget.create_element(&mut UpdateCtx::new(
             &mut task_runner.scheduler(),
             &mut path,
-            provide_scope.clone(),
+            &provide_scope,
         ));
 
         Self {
@@ -242,7 +242,7 @@ impl<E> TestHarness<E> {
             &mut UpdateCtx::new(
                 &mut self.task_runner.scheduler(),
                 &mut self.path,
-                self.provide_scope.clone(),
+                &self.provide_scope,
             ),
         );
     }
@@ -274,8 +274,7 @@ impl<E> TestHarness<E> {
     {
         let mut binding = self.task_runner.scheduler();
 
-        let mut update_ctx =
-            UpdateCtx::new(&mut binding, &mut self.path, self.provide_scope.clone());
+        let mut update_ctx = UpdateCtx::new(&mut binding, &mut self.path, &self.provide_scope);
 
         widget.dispatch(
             &mut self.root.element,

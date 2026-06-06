@@ -2,50 +2,114 @@ use std::any::Any;
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::RoutingPath,
+    element::{RoutingPath, node::ElementNode},
+    prelude::element::RoutingId,
     provide::ProvideScope,
     scheduling::TaskScheduler,
     widget::Widget,
 };
 
-pub fn dispatch_messages<V: Widget>(
-    root_element: &mut V::Element,
-    root_widget: &V,
-    messages: impl Iterator<Item = (RoutingPath, Box<dyn Any>)>,
-    mut on_dirty: impl FnMut(RoutingPath),
-) {
-    for (path, message) in messages {
-        let mut ctx = MessageCtx::new(message);
+/// Owns the element tree built from one root widget, and the elements waiting to rebuild.
+pub struct BuildOwner<V: Widget> {
+    widget: V,
+    element: ElementNode<V::Element>,
+    provide: ProvideScope,
 
-        root_widget.dispatch(root_element, path.as_slice(), Dispatch::Message(&mut ctx));
+    dirty: Vec<RoutingPath>,
 
-        if ctx.rebuild_requested() {
-            on_dirty(path);
-        }
-    }
+    path: Vec<RoutingId>,
 }
 
-pub fn rebuild_dirty<V: Widget>(
-    scheduler: &mut dyn TaskScheduler,
-    provide_scope: &ProvideScope,
-    root_element: &mut V::Element,
-    root_widget: &V,
-    dirty: impl ExactSizeIterator<Item = RoutingPath>,
-) {
-    for path in dirty {
-        let slice = path.as_slice();
+impl<V: Widget> BuildOwner<V> {
+    pub fn mount(widget: V, scheduler: &mut dyn TaskScheduler) -> Self {
+        let provide = ProvideScope::new();
 
-        let mut routing_path = path.to_vec();
+        let element = {
+            let mut path = Vec::new();
+            let mut ctx = UpdateCtx::new(scheduler, &mut path, &provide);
 
-        root_widget.dispatch(
-            root_element,
-            slice,
-            Dispatch::Rebuild(&mut UpdateCtx::new(
-                &mut *scheduler,
-                &mut routing_path,
-                provide_scope.clone(),
-            )),
+            ElementNode::new(widget.create_element(&mut ctx))
+        };
+
+        Self {
+            widget,
+
+            element,
+            provide,
+            dirty: Vec::new(),
+
+            path: Vec::new(),
+        }
+    }
+
+    pub fn update_element(&mut self, widget: V, scheduler: &mut dyn TaskScheduler) {
+        self.element.update(
+            &widget,
+            &self.widget,
+            &mut UpdateCtx::new(scheduler, &mut self.path, &self.provide),
         );
+
+        self.path.clear();
+
+        self.widget = widget;
+    }
+
+    pub fn create_render_object(&mut self) -> V::Render {
+        self.element.create_render_object(&self.widget)
+    }
+
+    pub fn update_render_object(&mut self, render_object: &mut V::Render) {
+        self.element
+            .update_render_object(&self.widget, render_object);
+    }
+
+    /// Delivers `message` to the element at `path` in the tree built from `widget`. If that element
+    /// asks to rebuild, it is marked for the next [`flush`](Self::flush).
+    pub fn dispatch_message(&mut self, path: RoutingPath, message: Box<dyn Any>) {
+        let mut ctx = MessageCtx::new(message);
+
+        self.element
+            .dispatch(&self.widget, path.as_slice(), Dispatch::Message(&mut ctx));
+
+        if ctx.rebuild_requested() {
+            self.dirty.push(path);
+        }
+    }
+
+    /// Marks the element at `path` to rebuild on the next [`flush`](Self::flush).
+    pub fn request_rebuild(&mut self, path: RoutingPath) {
+        self.dirty.push(path);
+    }
+
+    /// Whether any element is waiting to rebuild.
+    pub fn is_dirty(&self) -> bool {
+        !self.dirty.is_empty()
+    }
+
+    /// Rebuilds every element marked since the last flush. Returns whether anything rebuilt,
+    /// so the caller can skip reconciling the render tree when nothing changed.
+    pub fn flush(&mut self, scheduler: &mut dyn TaskScheduler) -> bool {
+        if self.dirty.is_empty() {
+            return false;
+        }
+
+        for path in self.dirty.drain(..) {
+            let slice = path.as_slice();
+
+            let mut routing_path = path.to_vec();
+
+            self.element.dispatch(
+                &self.widget,
+                slice,
+                Dispatch::Rebuild(&mut UpdateCtx::new(
+                    &mut *scheduler,
+                    &mut routing_path,
+                    &self.provide,
+                )),
+            );
+        }
+
+        true
     }
 }
 
@@ -56,12 +120,12 @@ mod tests {
     use typed_floats::{Positive, PositiveFinite};
 
     use crate::{
-        driver::{dispatch_messages, rebuild_dirty},
         prelude::{element::*, render_object::*},
-        provide::ProvideScope,
         test_fixtures::*,
         test_harness::*,
     };
+
+    use super::BuildOwner;
 
     #[test]
     fn message_dirties_target_and_rebuild_only_reaches_that_target() {
@@ -89,34 +153,16 @@ mod tests {
             ],
         };
 
-        let mut task_runner = TestTaskRunner::new();
-        let provide_scope = ProvideScope::new();
+        let mut tasks = TestTaskRunner::new();
+        let mut owner = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        let mut routing_path = Vec::new();
-        let mut root = widget.create_element(&mut UpdateCtx::new(
-            &mut task_runner.scheduler(),
-            &mut routing_path,
-            provide_scope.clone(),
-        ));
-
-        let target_path: RoutingPath = vec![RoutingId::new(1)].into();
-        let messages = vec![(target_path, Box::new(42_u32) as Box<dyn std::any::Any>)];
-
-        let mut dirty: Vec<RoutingPath> = Vec::new();
-        dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
-            dirty.push(path);
-        });
-
-        assert_eq!(dirty.len(), 1, "exactly one element should be dirtied");
-        assert_eq!(dirty[0].as_slice(), &[RoutingId::new(1)]);
-
-        rebuild_dirty(
-            &mut task_runner.scheduler(),
-            &provide_scope,
-            &mut root,
-            &widget,
-            dirty.into_iter(),
+        owner.dispatch_message(vec![RoutingId::new(1)].into(), Box::new(42_u32));
+        assert!(
+            owner.is_dirty(),
+            "the addressed element requested a rebuild"
         );
+
+        assert!(owner.flush(&mut tasks.scheduler()));
 
         assert_eq!(r0.get(), 0);
         assert_eq!(r1.get(), 1);
@@ -124,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn rebuild_dirty_with_multiple_paths() {
+    fn rebuild_reaches_every_dirtied_target() {
         let r0 = Cell::new(0_usize);
         let r1 = Cell::new(0_usize);
         let r2 = Cell::new(0_usize);
@@ -147,80 +193,40 @@ mod tests {
             ],
         };
 
-        let mut task_runner = TestTaskRunner::new();
-        let provide_scope = ProvideScope::new();
+        let mut tasks = TestTaskRunner::new();
+        let mut owner = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        let mut routing_path = Vec::new();
-        let mut root = widget.create_element(&mut UpdateCtx::new(
-            &mut task_runner.scheduler(),
-            &mut routing_path,
-            provide_scope.clone(),
-        ));
+        owner.dispatch_message(vec![RoutingId::new(0)].into(), Box::new(1_u32));
+        owner.dispatch_message(vec![RoutingId::new(2)].into(), Box::new(2_u32));
 
-        let path_0: RoutingPath = vec![RoutingId::new(0)].into();
-        let path_2: RoutingPath = vec![RoutingId::new(2)].into();
-        let messages = vec![
-            (path_0, Box::new(1_u32) as Box<dyn std::any::Any>),
-            (path_2, Box::new(2_u32) as Box<dyn std::any::Any>),
-        ];
-
-        let mut dirty: Vec<RoutingPath> = Vec::new();
-        dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
-            dirty.push(path);
-        });
-
-        assert_eq!(dirty.len(), 2);
-
-        rebuild_dirty(
-            &mut task_runner.scheduler(),
-            &provide_scope,
-            &mut root,
-            &widget,
-            dirty.into_iter(),
-        );
+        assert!(owner.flush(&mut tasks.scheduler()));
 
         assert_eq!(r0.get(), 1);
         assert_eq!(r1.get(), 0);
         assert_eq!(r2.get(), 1);
     }
 
-    #[allow(clippy::let_unit_value)]
     #[test]
-    fn rebuild_dirty_with_empty_set_is_noop() {
+    fn flush_with_empty_set_is_noop() {
         let r0 = Cell::new(0_usize);
 
         let widget = Leaf::new().on_rebuild(|_| r0.set(r0.get() + 1));
 
-        let mut task_runner = TestTaskRunner::new();
-        let provide_scope = ProvideScope::new();
+        let mut tasks = TestTaskRunner::new();
+        let mut owner = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        let mut routing_path = Vec::new();
-        let mut root = widget.create_element(&mut UpdateCtx::new(
-            &mut task_runner.scheduler(),
-            &mut routing_path,
-            provide_scope.clone(),
-        ));
-
-        let dirty: Vec<RoutingPath> = Vec::new();
-        rebuild_dirty(
-            &mut task_runner.scheduler(),
-            &provide_scope,
-            &mut root,
-            &widget,
-            dirty.into_iter(),
-        );
+        assert!(!owner.is_dirty());
+        assert!(!owner.flush(&mut tasks.scheduler()));
 
         assert_eq!(r0.get(), 0);
     }
 
-    #[allow(clippy::let_unit_value)]
     #[test]
     fn spawned_task_posts_message_back_to_its_element() {
         // A leaf spawns a task on mount and stashes its handle (as a real element would) so the
         // task outlives the build. The runner drives it to completion; the task posts a message
         // back to its own routing path, which dispatching then delivers to the same leaf.
-        let mut task_runner = TestTaskRunner::new();
-        let provide_scope = ProvideScope::new();
+        let mut tasks = TestTaskRunner::new();
 
         let received = Cell::new(None::<u32>);
         let handle = RefCell::new(None::<TaskHandle>);
@@ -236,19 +242,16 @@ mod tests {
             })
             .on_message(|ctx| received.set(Some(ctx.consume::<u32>())));
 
-        let mut routing_path = Vec::new();
-        let mut root = widget.create_element(&mut UpdateCtx::new(
-            &mut task_runner.scheduler(),
-            &mut routing_path,
-            provide_scope.clone(),
-        ));
+        let mut owner = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        task_runner.run_to_completion();
+        tasks.run_to_completion();
 
-        let messages: Vec<_> = task_runner.messages().collect();
+        let messages: Vec<_> = tasks.messages().collect();
         assert_eq!(messages.len(), 1, "the task posted exactly one message");
 
-        dispatch_messages(&mut root, &widget, messages.into_iter(), |_| {});
+        for (path, message) in messages {
+            owner.dispatch_message(path, message);
+        }
 
         assert_eq!(received.get(), Some(7));
     }
@@ -385,8 +388,7 @@ mod tests {
 
     #[test]
     fn task_message_rebuilds_only_its_subtree() {
-        let mut task_runner = TestTaskRunner::new();
-        let provide_scope = ProvideScope::new();
+        let mut tasks = TestTaskRunner::new();
 
         let a_messages = Cell::new(0_usize);
         let a_rebuilds = Cell::new(0_usize);
@@ -414,34 +416,21 @@ mod tests {
             ],
         };
 
-        let mut routing_path = Vec::new();
-        let mut root = widget.create_element(&mut UpdateCtx::new(
-            &mut task_runner.scheduler(),
-            &mut routing_path,
-            provide_scope.clone(),
-        ));
+        let mut owner = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        task_runner.run_to_completion();
+        tasks.run_to_completion();
 
-        let messages: Vec<_> = task_runner.messages().collect();
+        let messages: Vec<_> = tasks.messages().collect();
         assert_eq!(messages.len(), 1, "the task posted exactly one message");
 
-        let mut dirty: Vec<RoutingPath> = Vec::new();
-        dispatch_messages(&mut root, &widget, messages.into_iter(), |path| {
-            dirty.push(path);
-        });
+        for (path, message) in messages {
+            owner.dispatch_message(path, message);
+        }
 
         assert_eq!(a_messages.get(), 1);
-        assert_eq!(dirty.len(), 1, "only child 0 was dirtied");
-        assert_eq!(dirty[0].as_slice(), &[RoutingId::from_index(0)]);
+        assert!(owner.is_dirty(), "only the messaged child was dirtied");
 
-        rebuild_dirty(
-            &mut task_runner.scheduler(),
-            &provide_scope,
-            &mut root,
-            &widget,
-            dirty.into_iter(),
-        );
+        assert!(owner.flush(&mut tasks.scheduler()));
 
         assert_eq!(a_rebuilds.get(), 1, "child 0 rebuilt");
         assert_eq!(b_rebuilds.get(), 0, "sibling subtree was not rebuilt");

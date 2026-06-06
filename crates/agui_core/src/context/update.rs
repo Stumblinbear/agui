@@ -12,14 +12,14 @@ pub struct UpdateCtx<'a> {
 
     routing_path: &'a mut Vec<RoutingId>,
 
-    provide_scope: ProvideScope,
+    provide_scope: &'a ProvideScope,
 }
 
 impl<'a> UpdateCtx<'a> {
     pub fn new(
         scheduler: &'a mut dyn TaskScheduler,
         routing_path: &'a mut Vec<RoutingId>,
-        provide_scope: ProvideScope,
+        provide_scope: &'a ProvideScope,
     ) -> Self {
         Self {
             scheduler,
@@ -35,7 +35,7 @@ impl<'a> UpdateCtx<'a> {
     }
 
     pub fn provide_scope(&self) -> &ProvideScope {
-        &self.provide_scope
+        self.provide_scope
     }
 
     pub fn get_provided<T>(&self) -> Option<&T>
@@ -81,12 +81,13 @@ impl<'a> UpdateCtx<'a> {
         V: Any,
     {
         let new_scope = self.provide_scope.provide(value);
-        let old_scope = std::mem::replace(&mut self.provide_scope, new_scope);
 
-        let ret = func(self);
+        let mut update_ctx = UpdateCtx {
+            scheduler: self.scheduler,
+            routing_path: self.routing_path,
+            provide_scope: &new_scope,
+        };
 
-        self.provide_scope = old_scope;
-
-        ret
+        func(&mut update_ctx)
     }
 }

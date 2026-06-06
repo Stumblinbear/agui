@@ -160,8 +160,7 @@ where
             // owned scheduler handle, derived from the one captured at build, to keep spawning tasks.
             let mut scheduler = scheduler.deferred();
             let mut routing_path = routing_path.to_vec();
-            let mut update =
-                UpdateCtx::new(&mut *scheduler, &mut routing_path, provide_scope.clone());
+            let mut update = UpdateCtx::new(&mut *scheduler, &mut routing_path, &provide_scope);
 
             let mut retained = child_widget.borrow_mut();
 

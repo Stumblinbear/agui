@@ -214,7 +214,7 @@ impl BoxSizingCheck {
 
         let element = {
             let mut scheduler = tasks.scheduler();
-            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, provide.clone());
+            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, &provide);
 
             widget.create_element(&mut ctx)
         };
