@@ -82,3 +82,8 @@ criterion.workspace = true
 name = "rebuild_pruning"
 path = "benches/rebuild_pruning.rs"
 harness = false
+
+[[bench]]
+name = "relayout_oscillation"
+path = "benches/relayout_oscillation.rs"
+harness = false

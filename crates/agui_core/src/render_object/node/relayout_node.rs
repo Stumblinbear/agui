@@ -11,7 +11,7 @@ use crate::{
         paint::PaintScope,
     },
     render_object::{
-        LayoutCtx, MountCtx, RenderObject,
+        LayoutCtx, MountCtx,
         box_layout::{BoxConstraints, RenderBox},
     },
     text::TextBaseline,
@@ -38,10 +38,11 @@ enum RelayoutChild<R> {
     /// The child held by value, while it has never been constrained tightly.
     Inline(R),
 
-    /// The child erased and shared, once it has been a relayout boundary. `boundary` is the scope that
-    /// marks it while it is registered, dropped while loose constraints make it unsound to re-lay alone.
+    /// The child shared behind an `Rc<RefCell>`, once it has been a relayout boundary. `boundary` is
+    /// the scope that marks it while it is registered, dropped while loose constraints make it unsound
+    /// to re-lay alone.
     Boxed {
-        content: BoundaryContent,
+        content: Rc<RefCell<R>>,
         boundary: Option<LayoutScope>,
     },
 }
@@ -73,7 +74,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
 
         match &mut self.child {
             RelayoutChild::Inline(child) => child.mount(ctx),
-            RelayoutChild::Boxed { content, .. } => content.mount(ctx),
+            RelayoutChild::Boxed { content, .. } => content.borrow_mut().mount(ctx),
         }
     }
 
@@ -81,7 +82,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
         match &mut self.child {
             RelayoutChild::Inline(child) => child.unmount(ctx),
             RelayoutChild::Boxed { content, boundary } => {
-                content.unmount(ctx);
+                content.borrow_mut().unmount(ctx);
 
                 if let Some(boundary) = boundary.take() {
                     boundary.unregister();
@@ -93,7 +94,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     pub fn update_compositing_bits(&mut self) -> bool {
         self.needs_compositing = match &mut self.child {
             RelayoutChild::Inline(child) => child.update_compositing_bits(),
-            RelayoutChild::Boxed { content, .. } => content.update_compositing_bits(),
+            RelayoutChild::Boxed { content, .. } => content.borrow_mut().update_compositing_bits(),
         };
 
         self.needs_compositing
@@ -104,56 +105,46 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
         self.needs_compositing
     }
 
-    /// Reconciles the child, recovering its concrete type through the boxed form when it is a boundary.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the child's render type has changed since it was created, which a correct reconcile
-    /// never does.
+    /// Reconciles the child, reaching it through the shared cell while it is a boundary.
     pub fn with_object_mut<T>(&mut self, f: impl FnOnce(&mut R) -> T) -> T {
         match &mut self.child {
             RelayoutChild::Inline(child) => f(child),
-            RelayoutChild::Boxed { content, .. } => {
-                let mut content = content.borrow_mut();
-                let child = content.as_any_mut().downcast_mut::<R>().unwrap();
-
-                f(child)
-            }
+            RelayoutChild::Boxed { content, .. } => f(&mut content.borrow_mut()),
         }
     }
 
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         match &self.child {
             RelayoutChild::Inline(child) => child.min_intrinsic_width(height),
-            RelayoutChild::Boxed { content, .. } => content.min_intrinsic_width(height),
+            RelayoutChild::Boxed { content, .. } => content.borrow().min_intrinsic_width(height),
         }
     }
 
     pub fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         match &self.child {
             RelayoutChild::Inline(child) => child.max_intrinsic_width(height),
-            RelayoutChild::Boxed { content, .. } => content.max_intrinsic_width(height),
+            RelayoutChild::Boxed { content, .. } => content.borrow().max_intrinsic_width(height),
         }
     }
 
     pub fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         match &self.child {
             RelayoutChild::Inline(child) => child.min_intrinsic_height(width),
-            RelayoutChild::Boxed { content, .. } => content.min_intrinsic_height(width),
+            RelayoutChild::Boxed { content, .. } => content.borrow().min_intrinsic_height(width),
         }
     }
 
     pub fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
         match &self.child {
             RelayoutChild::Inline(child) => child.max_intrinsic_height(width),
-            RelayoutChild::Boxed { content, .. } => content.max_intrinsic_height(width),
+            RelayoutChild::Boxed { content, .. } => content.borrow().max_intrinsic_height(width),
         }
     }
 
     pub fn measure(&self, constraints: BoxConstraints) -> Size {
         match &self.child {
             RelayoutChild::Inline(child) => child.measure(constraints),
-            RelayoutChild::Boxed { content, .. } => content.measure(constraints),
+            RelayoutChild::Boxed { content, .. } => content.borrow().measure(constraints),
         }
     }
 
@@ -185,10 +176,12 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                 Some(boundary) => {
                     boundary.update_constraints(constraints);
 
-                    ctx.with_layout_scope(boundary.clone(), |ctx| content.layout(ctx, constraints))
+                    ctx.with_layout_scope(boundary.clone(), |ctx| {
+                        content.borrow_mut().layout(ctx, constraints)
+                    })
                 }
 
-                None => content.layout(ctx, constraints),
+                None => content.borrow_mut().layout(ctx, constraints),
             },
         }
     }
@@ -228,8 +221,8 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                         }
                     };
 
-                    let content: BoundaryContent = Rc::new(RefCell::new(child));
-                    let boundary = scope.register(Rc::clone(&content), paint);
+                    let content = Rc::new(RefCell::new(child));
+                    let boundary = scope.register(erase(Rc::clone(&content)), paint);
 
                     RelayoutChild::Boxed {
                         content,
@@ -245,7 +238,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                     .expect("child must be mounted before it is laid out");
 
                 if let RelayoutChild::Boxed { content, boundary } = &mut self.child {
-                    *boundary = Some(scope.register(Rc::clone(content), paint));
+                    *boundary = Some(scope.register(erase(Rc::clone(content)), paint));
                 }
             }
 
@@ -268,30 +261,39 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     ) -> Option<PositiveFinite<f32>> {
         match &self.child {
             RelayoutChild::Inline(child) => child.measure_baseline(constraints, baseline),
-            RelayoutChild::Boxed { content, .. } => content.measure_baseline(constraints, baseline),
+            RelayoutChild::Boxed { content, .. } => {
+                content.borrow().measure_baseline(constraints, baseline)
+            }
         }
     }
 
     pub fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         match &mut self.child {
             RelayoutChild::Inline(child) => child.distance_to_baseline(baseline),
-            RelayoutChild::Boxed { content, .. } => content.distance_to_baseline(baseline),
+            RelayoutChild::Boxed { content, .. } => {
+                content.borrow_mut().distance_to_baseline(baseline)
+            }
         }
     }
 
     pub fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         match &self.child {
             RelayoutChild::Inline(child) => child.hit_test(result, position),
-            RelayoutChild::Boxed { content, .. } => content.hit_test(result, position),
+            RelayoutChild::Boxed { content, .. } => content.borrow().hit_test(result, position),
         }
     }
 
     pub fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         match &mut self.child {
             RelayoutChild::Inline(child) => child.paint(ctx, offset),
-            RelayoutChild::Boxed { content, .. } => content.paint(ctx, offset),
+            RelayoutChild::Boxed { content, .. } => content.borrow_mut().paint(ctx, offset),
         }
     }
+}
+
+/// Erases a shared child into the form the boundary registries hold.
+fn erase<R: RenderBox>(content: Rc<RefCell<R>>) -> BoundaryContent {
+    content
 }
 
 /// Replaces the value behind `slot` with `f` applied to it, passing the old value through by value.
