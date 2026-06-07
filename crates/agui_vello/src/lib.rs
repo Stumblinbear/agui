@@ -62,6 +62,27 @@ fn render_into(scene: &Scene, target: &mut vello::Scene, base: Affine) {
                 s
             )),
 
+            PaintCommand::DrawGlyphs {
+                font,
+                font_size,
+                brush,
+                glyphs,
+            } => {
+                target
+                    .draw_glyphs(font)
+                    .font_size(*font_size)
+                    .brush(scene.brush(*brush))
+                    .transform(transform)
+                    .draw(
+                        vello::peniko::Fill::NonZero,
+                        glyphs.iter().map(|g| vello::Glyph {
+                            id: g.id,
+                            x: g.x,
+                            y: g.y,
+                        }),
+                    );
+            }
+
             PaintCommand::Embed { scene: sub } => {
                 let mut child = vello::Scene::new();
                 render_into(sub, &mut child, Affine::IDENTITY);

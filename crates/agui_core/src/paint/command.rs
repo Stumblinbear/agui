@@ -27,6 +27,16 @@ impl PaintShape {
     }
 }
 
+/// A glyph positioned within a [`PaintCommand::DrawGlyphs`] run, in the run's local coordinates.
+///
+/// Raw f32: a shaped text metric at the parley/vello seam, not a geometry value.
+#[derive(Clone, Copy, Debug)]
+pub struct GlyphInstance {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+}
+
 /// A single operation within a [`Scene`].
 #[derive(Clone, Debug)]
 pub enum PaintCommand {
@@ -68,6 +78,15 @@ pub enum PaintCommand {
         brush: u32,
         brush_transform: Option<Box<kurbo::Affine>>,
         shape: PaintShape,
+    },
+
+    /// Draws a run of positioned glyphs from one font at one size, filled with `brush`. Positions are
+    /// baked into each glyph's coordinates; the transform in effect places the run.
+    DrawGlyphs {
+        font: peniko::Font,
+        font_size: f32,
+        brush: u32,
+        glyphs: Vec<GlyphInstance>,
     },
 
     /// Splices a sub-scene under the transform in effect, by reference. The sub-scene keeps its own

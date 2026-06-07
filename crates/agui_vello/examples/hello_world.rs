@@ -15,12 +15,13 @@ use agui_core::{
     },
     pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
     prelude::{element::*, render_object::*},
+    provide::Provide,
     scheduling::{LocalReactor, Vsync},
 };
 use agui_primitives::{
     animated_transform::AnimatedTransform, colored_box::ColoredBox,
     fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
-    listener::Listener, opacity::Opacity,
+    listener::Listener, opacity::Opacity, text::Text,
 };
 use agui_vello::append_scene;
 use vello::{
@@ -45,44 +46,52 @@ fn main() {
         )
         .init();
 
-    // An orange box filling the left half of the window, listening for pointer events.
-    let ui = LayoutBuilder::new(|constraints| {
-        if constraints.max_width().get() < 400.0 {
-            return ColoredBox::new(Color::rgb8(255, 138, 0)).into_boxed_render_box();
-        }
-
-        // Pointer handlers that only log, to exercise hit testing and dispatch.
-        let on_down: PointerHandler = Rc::new(
-            |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer down"),
-        );
-        let on_move: PointerHandler = Rc::new(
-            |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer move"),
-        );
-        let on_up: PointerHandler = Rc::new(
-            |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer up"),
-        );
-
-        FractionallySizedBox::new()
-            .width_factor(0.5)
-            .height_factor(1.0)
-            .child(
-                Listener::builder()
-                    .on_pointer_down(on_down)
-                    .on_pointer_move(on_move)
-                    .on_pointer_up(on_up)
-                    .behavior(HitTestBehavior::Opaque)
-                    .child(Opacity::new(0.5).child(ColoredBox::new(Color::rgb8(255, 138, 0)))),
-            )
-            .into_boxed_render_box()
-    });
-
     let vsync = Vsync::new();
-    let content = AnimatedTransform::new(|now| {
-        let pivot = Affine::translate((400.0, 300.0));
-        pivot * Affine::rotate(now.as_secs_f64()) * pivot.inverse()
-    })
-    .vsync(vsync.clone())
-    .child(ui);
+
+    let ui = {
+        let vsync = vsync.clone();
+
+        Provide::new(Rc::new(Fonts::new())).child(LayoutBuilder::new(move |constraints| {
+            if constraints.max_width().get() < 900.0 {
+                return ColoredBox::new(Color::rgb8(255, 138, 0))
+                    .child(Text::new("Hello, world!").family("Arial"))
+                    .into_boxed_render_box();
+            }
+
+            // Pointer handlers that only log, to exercise hit testing and dispatch.
+            let on_down: PointerHandler = Rc::new(
+                |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer down"),
+            );
+            let on_move: PointerHandler = Rc::new(
+                |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer move"),
+            );
+            let on_up: PointerHandler = Rc::new(
+                |event: &PointerEvent| tracing::info!(position = ?event.position, "pointer up"),
+            );
+
+            FractionallySizedBox::new()
+                .width_factor(0.5)
+                .height_factor(1.0)
+                .child(
+                    Listener::builder()
+                        .on_pointer_down(on_down)
+                        .on_pointer_move(on_move)
+                        .on_pointer_up(on_up)
+                        .behavior(HitTestBehavior::Opaque)
+                        .child(
+                            AnimatedTransform::new(|now| Affine::rotate(now.as_secs_f64()))
+                                .vsync(vsync.clone())
+                                .child(
+                                    Opacity::new(0.5).child(
+                                        ColoredBox::new(Color::rgb8(255, 138, 0))
+                                            .child(Text::new("Hello, world!").family("Arial")),
+                                    ),
+                                ),
+                        ),
+                )
+                .into_boxed_render_box()
+        }))
+    };
 
     tracing::info!("mounting window");
 
@@ -97,12 +106,7 @@ fn main() {
 
     // The driver owns the pipeline for the subtree and hands its presentation layer back out here. The
     // OS surface would normally take that layer; this example presents it by compositing each frame.
-    let driver = WindowDriver::new(
-        content,
-        reactor,
-        vsync,
-        |_layer: LayerHandle<ContainerLayer>| {},
-    );
+    let driver = WindowDriver::new(ui, reactor, vsync, |_layer: LayerHandle<ContainerLayer>| {});
     let view: Box<dyn View> = Box::new(driver);
 
     tracing::info!("window mounted; starting event loop");

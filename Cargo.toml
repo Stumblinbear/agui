@@ -65,6 +65,7 @@ mockall = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 
 lyon = "1.0"
+parley = "0.2"
 peniko = "0.2"
 vello = "0.3"
 png = "0.17"

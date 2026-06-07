@@ -154,10 +154,14 @@ where
             return;
         }
 
-        let mut canvas = ctx.canvas();
-        let brush = canvas.brush(self.color);
+        {
+            let mut canvas = ctx.canvas();
+            let brush = canvas.brush(self.color);
 
-        canvas.fill(Fill::NonZero, brush, &(offset & size));
+            canvas.fill(Fill::NonZero, brush, &(offset & size));
+        }
+
+        self.child.paint(ctx, offset);
     }
 }
 
@@ -193,7 +197,7 @@ mod tests {
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
-        assert_eq!(scene.len(), 1, "fills once, child paints nothing");
+        assert_eq!(scene.len(), 1, "fills once; the empty child paints nothing");
 
         let PaintCommand::Fill { brush, shape, .. } = &scene.commands()[0] else {
             panic!("expected a fill");
@@ -206,6 +210,43 @@ mod tests {
         };
 
         assert_eq!(*rect, kurbo::Rect::new(0.0, 0.0, 20.0, 10.0));
+    }
+
+    #[test]
+    fn paints_the_child_over_its_color() {
+        // A painting child nested inside, so the outer fill must be followed by the child's own.
+        let widget = ColoredBox::new(Color::rgb8(255, 0, 0)).child(
+            ColoredBox::new(Color::rgb8(0, 0, 255)).child(SizedBox::new().width(20).height(10)),
+        );
+        let mut render_object =
+            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+
+        render_object.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
+
+        let root = LayerHandle::new(ContainerLayer::new());
+        PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
+        let scene = Compositor::compose(&root).flatten();
+
+        let colors: Vec<_> = scene
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Fill { brush, .. } => match scene.brush(*brush) {
+                    Brush::Solid(color) => Some(*color),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            colors,
+            vec![Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255)],
+            "the color fills first, then the child paints over it"
+        );
     }
 }
 

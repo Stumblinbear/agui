@@ -47,7 +47,7 @@ impl<'a> UpdateCtx<'a> {
         self.provide_scope
     }
 
-    pub fn get_provided<T>(&self) -> Option<&T>
+    pub fn get_provided<T>(&self) -> Option<Rc<T>>
     where
         T: Any,
     {

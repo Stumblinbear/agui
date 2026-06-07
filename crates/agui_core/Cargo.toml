@@ -16,6 +16,7 @@ bon.workspace = true
 fnv.workspace = true
 imbl.workspace = true
 intrusive-collections.workspace = true
+parley.workspace = true
 peniko.workspace = true
 slotmap.workspace = true
 smallbox.workspace = true

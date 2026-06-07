@@ -8,7 +8,7 @@ use peniko::{
 use crate::{
     geometry::Offset,
     paint::{
-        command::{PaintCommand, PaintShape},
+        command::{GlyphInstance, PaintCommand, PaintShape},
         scene::Scene,
     },
 };
@@ -129,6 +129,23 @@ impl<'b> Canvas<'b> {
         });
     }
 
+    /// Draws `glyphs` from `font` at `font_size`, filled with `brush`. Glyph positions are in the
+    /// coordinate system in effect.
+    pub fn draw_glyphs(
+        &mut self,
+        font: &peniko::Font,
+        font_size: f32,
+        brush: BrushId<'b>,
+        glyphs: Vec<GlyphInstance>,
+    ) {
+        self.scene.push(PaintCommand::DrawGlyphs {
+            font: font.clone(),
+            font_size,
+            brush: brush.index,
+            glyphs,
+        });
+    }
+
     /// Strokes the outline of `shape` with `brush`, using the registered `style`.
     pub fn stroke(&mut self, style: StrokeId<'b>, brush: BrushId<'b>, shape: &impl Shape) {
         self.scene.push(PaintCommand::Stroke {
@@ -147,9 +164,42 @@ mod tests {
         kurbo::{Affine, Rect},
     };
 
-    use crate::{geometry::Offset, paint::command::PaintCommand};
+    use crate::{
+        geometry::Offset,
+        paint::command::{GlyphInstance, PaintCommand},
+    };
 
     use super::Canvas;
+
+    #[test]
+    fn draw_glyphs_records_a_draw_glyphs_command() {
+        let scene = Canvas::record(|canvas| {
+            let black = canvas.brush(Color::BLACK);
+            let font = peniko::Font::new(peniko::Blob::new(std::sync::Arc::new(Vec::new())), 0);
+
+            canvas.draw_glyphs(
+                &font,
+                20.0,
+                black,
+                vec![GlyphInstance {
+                    id: 7,
+                    x: 1.0,
+                    y: 2.0,
+                }],
+            );
+        });
+
+        assert_eq!(scene.len(), 1);
+        match &scene.commands()[0] {
+            PaintCommand::DrawGlyphs { glyphs, brush, .. } => {
+                assert_eq!(glyphs.len(), 1);
+                assert_eq!(glyphs[0].id, 7);
+                assert!(matches!(scene.brush(*brush), Brush::Solid(c) if *c == Color::BLACK));
+            }
+
+            other => panic!("expected draw glyphs, got {other:?}"),
+        }
+    }
 
     #[test]
     fn fill_records_a_fill_command() {

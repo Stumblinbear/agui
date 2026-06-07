@@ -115,6 +115,22 @@ impl Scene {
                     });
                 }
 
+                PaintCommand::DrawGlyphs {
+                    font,
+                    font_size,
+                    brush,
+                    glyphs,
+                } => {
+                    let brush = out.intern_brush(self.brush(*brush).clone());
+
+                    out.push(PaintCommand::DrawGlyphs {
+                        font: font.clone(),
+                        font_size: *font_size,
+                        brush,
+                        glyphs: glyphs.clone(),
+                    });
+                }
+
                 PaintCommand::PushTransform(transform) => {
                     out.push(PaintCommand::PushTransform(*transform));
                 }

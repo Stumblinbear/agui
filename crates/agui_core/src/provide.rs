@@ -23,13 +23,13 @@ impl ProvideScope {
         Self::default()
     }
 
-    pub fn get<T>(&self) -> Option<&T>
+    pub fn get<T>(&self) -> Option<Rc<T>>
     where
         T: Any,
     {
         self.map
             .get(&TypeId::of::<T>())
-            .and_then(|value| value.downcast_ref())
+            .and_then(|rc| Rc::clone(rc).downcast::<T>().ok())
     }
 
     pub fn provide<T>(&self, value: Rc<T>) -> ProvideScope
@@ -182,21 +182,23 @@ mod tests {
 
         let scope = scope.provide::<usize>(Rc::new(1));
 
-        assert_eq!(scope.get::<usize>(), Some(&1));
+        assert_eq!(scope.get::<usize>(), Some(Rc::new(1)));
     }
 
     #[test]
     fn elements_can_provide_and_get_types() {
         let widget_3 = TestProviderWidget {
             value: Rc::new(3_usize),
-            child: Leaf::new().on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&3))),
+            child: Leaf::new()
+                .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&3))),
         };
 
         let mut harness = TestHarness::mount(&widget_3);
 
         let widget_6 = TestProviderWidget {
             value: Rc::new(6_usize),
-            child: Leaf::new().on_update(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&6))),
+            child: Leaf::new()
+                .on_update(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&6))),
         };
 
         harness.update(&widget_3, &widget_6);
@@ -209,8 +211,8 @@ mod tests {
             child: TestProviderWidget {
                 value: Rc::new(6_i32),
                 child: Leaf::new().on_mount(|ctx| {
-                    assert_eq!(ctx.get_provided::<usize>(), Some(&3));
-                    assert_eq!(ctx.get_provided::<i32>(), Some(&6));
+                    assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&3));
+                    assert_eq!(ctx.get_provided::<i32>().as_deref(), Some(&6));
                 }),
             },
         };
@@ -225,7 +227,7 @@ mod tests {
             child: TestProviderWidget {
                 value: Rc::new(2_usize),
                 child: Leaf::new()
-                    .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&2))),
+                    .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&2))),
             },
         };
 
@@ -234,8 +236,10 @@ mod tests {
 
     #[test]
     fn provide_widget_exposes_value_to_subtree_on_mount() {
-        let widget = Provide::new(Rc::new(42_usize))
-            .child(Leaf::new().on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>(), Some(&42))));
+        let widget = Provide::new(Rc::new(42_usize)).child(
+            Leaf::new()
+                .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&42))),
+        );
 
         let _ = TestHarness::mount(&widget);
     }
@@ -246,8 +250,9 @@ mod tests {
 
         let recorder = Rc::clone(&seen);
         let widget = Provide::new(Rc::new(42_usize)).child(Transparent {
-            child: Leaf::new()
-                .on_rebuild(move |ctx| recorder.set(ctx.get_provided::<usize>().copied())),
+            child: Leaf::new().on_rebuild(move |ctx| {
+                recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+            }),
         });
 
         let mut harness = TestHarness::mount(&widget);
@@ -268,8 +273,9 @@ mod tests {
 
         let recorder = Rc::clone(&seen);
         let widget = Transparent {
-            child: Leaf::new()
-                .on_rebuild(move |ctx| recorder.set(ctx.get_provided::<usize>().copied())),
+            child: Leaf::new().on_rebuild(move |ctx| {
+                recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+            }),
         };
 
         let mut harness = TestHarness::mount(&widget);

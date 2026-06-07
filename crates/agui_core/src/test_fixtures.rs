@@ -70,9 +70,11 @@ impl Widget for Leaf<'_> {
 
     fn dispatch(&self, (): &mut (), path: &[RoutingId], action: Dispatch) {
         debug_assert!(path.is_empty(), "Leaf has no children");
+
         if !path.is_empty() {
             return;
         }
+
         match action {
             Dispatch::Message(ctx) => (self.on_message)(ctx),
             Dispatch::Rebuild(ctx) => (self.on_rebuild)(ctx),
@@ -91,7 +93,7 @@ pub struct Transparent<Child> {
 impl<Child: Widget> Widget for Transparent<Child> {
     type Element = SingleChildElement<Child::Element>;
 
-    type Render = ();
+    type Render = Child::Render;
 
     fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
         SingleChildElement::new(&self.child, ctx)
@@ -105,9 +107,13 @@ impl<Child: Widget> Widget for Transparent<Child> {
         element.dispatch(&self.child, path, action);
     }
 
-    fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
+    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
+        element.create_render_object(&self.child)
+    }
 
-    fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
+    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+        element.update_render_object(&self.child, render_object);
+    }
 }
 
 pub struct MultiChild<Child> {

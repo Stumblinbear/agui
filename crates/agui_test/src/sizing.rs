@@ -617,6 +617,9 @@ fn painted_bounds(scene: &Scene) -> Option<kurbo::Rect> {
                 }
             }
 
+            // Glyph extents need font metrics this helper does not resolve; no sizing fixture paints text.
+            PaintCommand::DrawGlyphs { .. } => {}
+
             PaintCommand::Embed { .. } => {
                 unreachable!("flatten inlines every embed, so none remain")
             }
