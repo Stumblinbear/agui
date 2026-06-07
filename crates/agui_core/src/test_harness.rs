@@ -6,11 +6,10 @@ use std::{
 };
 
 use crate::{
-    context::{Dispatch, MessageCtx, UpdateCtx},
-    element::{BuildScope, RoutingId, node::ElementNode},
+    context::UpdateCtx,
+    element::BuildScope,
     provide::ProvideScope,
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
-    widget::Widget,
 };
 
 enum TaskRunnerEvent {
@@ -199,94 +198,53 @@ fn noop_waker() -> Waker {
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
 }
 
-pub struct TestHarness<E> {
-    pub task_runner: TestTaskRunner,
-    pub path: Vec<RoutingId>,
-    pub provide_scope: ProvideScope,
-
-    pub root: ElementNode<E>,
+/// A [`TaskScheduler`] that drops spawned work, for the tests that never poll tasks.
+pub struct NoopScheduler {
+    event_tx: EventSender,
 }
 
-impl<E> TestHarness<E> {
-    pub fn mount<V>(widget: &V) -> Self
-    where
-        V: Widget<Element = E>,
-    {
-        let mut task_runner = TestTaskRunner::new();
-        let mut path = Vec::new();
-        let provide_scope = ProvideScope::new();
+impl NoopScheduler {
+    pub fn new() -> Self {
+        let (event_tx, _rx) = mpsc::channel();
+        Self { event_tx }
+    }
+}
 
-        let root = widget.create_element(&mut UpdateCtx::new(
-            &mut task_runner.scheduler(),
-            &mut path,
-            &provide_scope,
-            &BuildScope::detached(),
-        ));
+impl Default for NoopScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-        Self {
-            task_runner,
-
-            path,
-            provide_scope,
-
-            root: ElementNode::new(root),
-        }
+impl TaskScheduler for NoopScheduler {
+    fn event_tx(&self) -> EventSender {
+        self.event_tx.clone()
     }
 
-    pub fn update<V>(&mut self, old_widget: &V, new_widget: &V)
-    where
-        V: Widget<Element = E>,
-    {
-        new_widget.update(
-            &mut self.root.element,
-            old_widget,
-            &mut UpdateCtx::new(
-                &mut self.task_runner.scheduler(),
-                &mut self.path,
-                &self.provide_scope,
-                &BuildScope::detached(),
-            ),
-        );
+    fn spawn(&mut self, _func: TaskFuture) -> Result<TaskHandle, Box<dyn std::error::Error>> {
+        Ok(TaskHandle::new(Box::new(|| {})))
     }
 
-    /// Dispatch a message along `path` to a widget in the tree. Returns the
-    /// [`MessageCtx`] so the caller can inspect [`MessageCtx::rebuild_requested`].
-    pub fn dispatch_message<V>(
-        &mut self,
-        widget: &V,
-        path: &[RoutingId],
-        message: Box<dyn std::any::Any>,
-    ) -> MessageCtx
-    where
-        V: Widget<Element = E>,
-    {
-        let mut msg_ctx = MessageCtx::new(message);
-
-        widget.dispatch(
-            &mut self.root.element,
-            path,
-            Dispatch::Message(&mut msg_ctx),
-        );
-
-        msg_ctx
+    fn deferred(&self) -> Box<dyn TaskScheduler> {
+        Box::new(NoopScheduler::new())
     }
+}
 
-    /// Dispatch a rebuild along `path` to a widget in the tree.
-    pub fn dispatch_rebuild<V>(&mut self, widget: &V, path: &[RoutingId])
-    where
-        V: Widget<Element = E>,
-    {
-        let mut binding = self.task_runner.scheduler();
+/// Builds an [`UpdateCtx`] over a [`NoopScheduler`] and a detached scope, for driving a widget's
+/// `create`/`update` (or a rebuild dispatch) directly in a test that does not poll tasks.
+pub fn with_ctx<R>(f: impl FnOnce(&mut UpdateCtx) -> R) -> R {
+    with_ctx_in(&ProvideScope::new(), f)
+}
 
-        let scope = BuildScope::detached();
+/// Like [`with_ctx`], but over `provide_scope`, for tests that read a provided value.
+pub fn with_ctx_in<R>(provide_scope: &ProvideScope, f: impl FnOnce(&mut UpdateCtx) -> R) -> R {
+    let mut scheduler = NoopScheduler::new();
+    let mut path = Vec::new();
 
-        let mut update_ctx =
-            UpdateCtx::new(&mut binding, &mut self.path, &self.provide_scope, &scope);
-
-        widget.dispatch(
-            &mut self.root.element,
-            path,
-            Dispatch::Rebuild(&mut update_ctx),
-        );
-    }
+    f(&mut UpdateCtx::new(
+        &mut scheduler,
+        &mut path,
+        provide_scope,
+        &BuildScope::detached(),
+    ))
 }

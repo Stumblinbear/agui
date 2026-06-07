@@ -2,10 +2,12 @@ use crate::context::{LayoutCtx, MountCtx};
 
 mod any_render_object;
 pub mod box_layout;
+mod children;
 pub mod node;
 pub mod sliver;
 
 pub use any_render_object::*;
+pub use children::*;
 
 /// An object in the render tree.
 ///

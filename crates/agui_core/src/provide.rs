@@ -9,7 +9,7 @@ use imbl::shared_ptr::RcK;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{RoutingId, SingleChildElement},
+    element::{Element, RoutingId, node::ElementNode},
     widget::Widget,
 };
 
@@ -65,38 +65,60 @@ where
     V: Any,
     Child: Widget,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = ProvideElement<V, Child::Element>;
 
     type Render = Child::Render;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        ctx.with_provided(Rc::clone(&self.value), |ctx| {
-            SingleChildElement::new(&self.child, ctx)
-        })
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { value, child } = self;
+
+        let (element, render_object) =
+            ctx.with_provided(Rc::clone(&value), |ctx| child.create(ctx));
+
+        (
+            ProvideElement {
+                child: ElementNode::new(element),
+                value,
+            },
+            render_object,
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        ctx.with_provided(Rc::clone(&self.value), |ctx| {
-            element.update(&self.child, &old.child, ctx);
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { value, child } = self;
+
+        element.value = Rc::clone(&value);
+
+        ctx.with_provided(value, |ctx| {
+            child.update(&mut element.child.element, render_object, ctx);
         });
     }
+}
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
+/// The [`Element`] of a [`Provide`], re-applying the provided value when a rebuild reaches its subtree.
+pub struct ProvideElement<V, C> {
+    child: ElementNode<C>,
+    value: Rc<V>,
+}
+
+impl<V, C> Element for ProvideElement<V, C>
+where
+    V: Any,
+    C: Element,
+{
+    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
         match action {
             Dispatch::Rebuild(ctx) => ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                element.dispatch(&self.child, path, Dispatch::Rebuild(ctx));
+                self.child.element.dispatch(path, Dispatch::Rebuild(ctx));
             }),
 
-            action @ Dispatch::Message(_) => element.dispatch(&self.child, path, action),
+            action @ Dispatch::Message(_) => self.child.element.dispatch(path, action),
         }
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        element.create_render_object(&self.child)
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, render_object);
     }
 }
 
@@ -127,121 +149,111 @@ impl Hasher for TypeIdHasher {
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, cell::Cell, rc::Rc};
+    use std::{cell::Cell, rc::Rc};
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        element::{RoutingId, SingleChildElement},
+        element::Element,
         provide::ProvideScope,
         test_fixtures::{Leaf, Transparent},
-        test_harness::TestHarness,
+        test_harness::{with_ctx, with_ctx_in},
         widget::Widget,
     };
 
     use super::Provide;
 
-    struct TestProviderWidget<T, Child> {
-        value: Rc<T>,
-
-        child: Child,
-    }
-
-    impl<T, Child> Widget for TestProviderWidget<T, Child>
-    where
-        T: Any,
-        Child: Widget,
-    {
-        type Element = SingleChildElement<Child::Element>;
-
-        type Render = ();
-
-        fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-            ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                SingleChildElement::new(&self.child, ctx)
-            })
-        }
-
-        fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-            ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                element.update(&self.child, &old.child, ctx);
-            });
-        }
-
-        fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-            element.dispatch(&self.child, path, action);
-        }
-
-        fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
-
-        fn update_render_object(&self, _: &Self::Element, (): &mut Self::Render) {}
-    }
-
     #[test]
     fn scope_can_provide_and_get_types() {
-        let scope = ProvideScope::new();
-
-        let scope = scope.provide::<usize>(Rc::new(1));
+        let scope = ProvideScope::new().provide::<usize>(Rc::new(1));
 
         assert_eq!(scope.get::<usize>(), Some(Rc::new(1)));
     }
 
-    #[test]
-    fn elements_can_provide_and_get_types() {
-        let widget_3 = TestProviderWidget {
-            value: Rc::new(3_usize),
-            child: Leaf::new()
-                .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&3))),
-        };
-
-        let mut harness = TestHarness::mount(&widget_3);
-
-        let widget_6 = TestProviderWidget {
-            value: Rc::new(6_usize),
-            child: Leaf::new()
-                .on_update(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&6))),
-        };
-
-        harness.update(&widget_3, &widget_6);
+    /// A cell that records the `usize` a hook saw, plus a recorder closure to install on a leaf.
+    fn recorder() -> (Rc<Cell<Option<usize>>>, impl Fn(&mut UpdateCtx) + 'static) {
+        let seen = Rc::new(Cell::new(None));
+        let recorder = Rc::clone(&seen);
+        (seen, move |ctx: &mut UpdateCtx| {
+            recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+        })
     }
 
     #[test]
-    fn nested_elements_to_provide_multiple_types() {
-        let widget = TestProviderWidget {
-            value: Rc::new(3_usize),
-            child: TestProviderWidget {
-                value: Rc::new(6_i32),
-                child: Leaf::new().on_mount(|ctx| {
-                    assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&3));
-                    assert_eq!(ctx.get_provided::<i32>().as_deref(), Some(&6));
-                }),
-            },
-        };
+    fn provide_exposes_value_to_subtree_on_mount() {
+        let (seen, record) = recorder();
 
-        let _ = TestHarness::mount(&widget);
+        with_ctx(|ctx| {
+            Provide::new(Rc::new(42_usize))
+                .child(Leaf::new().on_mount(record))
+                .create(ctx);
+        });
+
+        assert_eq!(
+            seen.get(),
+            Some(42),
+            "the leaf's on_mount must run and see the value"
+        );
+    }
+
+    #[test]
+    fn nested_provides_expose_multiple_types() {
+        let seen_usize = Rc::new(Cell::new(None));
+        let seen_i32 = Rc::new(Cell::new(None));
+
+        let (ru, ri) = (Rc::clone(&seen_usize), Rc::clone(&seen_i32));
+        with_ctx(|ctx| {
+            Provide::new(Rc::new(3_usize))
+                .child(
+                    Provide::new(Rc::new(6_i32)).child(Leaf::new().on_mount(move |ctx| {
+                        ru.set(ctx.get_provided::<usize>().as_deref().copied());
+                        ri.set(ctx.get_provided::<i32>().as_deref().copied());
+                    })),
+                )
+                .create(ctx);
+        });
+
+        assert_eq!(seen_usize.get(), Some(3));
+        assert_eq!(seen_i32.get(), Some(6));
     }
 
     #[test]
     fn providing_same_type_twice_returns_latest() {
-        let widget = TestProviderWidget {
-            value: Rc::new(1_usize),
-            child: TestProviderWidget {
-                value: Rc::new(2_usize),
-                child: Leaf::new()
-                    .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&2))),
-            },
-        };
+        let (seen, record) = recorder();
 
-        let _ = TestHarness::mount(&widget);
+        with_ctx(|ctx| {
+            Provide::new(Rc::new(1_usize))
+                .child(Provide::new(Rc::new(2_usize)).child(Leaf::new().on_mount(record)))
+                .create(ctx);
+        });
+
+        assert_eq!(seen.get(), Some(2));
     }
 
     #[test]
-    fn provide_widget_exposes_value_to_subtree_on_mount() {
-        let widget = Provide::new(Rc::new(42_usize)).child(
-            Leaf::new()
-                .on_mount(|ctx| assert_eq!(ctx.get_provided::<usize>().as_deref(), Some(&42))),
+    fn update_reprovides_the_new_value() {
+        let (mounted, record_mount) = recorder();
+        let (mut element, mut render) = with_ctx(|ctx| {
+            Provide::new(Rc::new(3_usize))
+                .child(Leaf::new().on_mount(record_mount))
+                .create(ctx)
+        });
+        assert_eq!(
+            mounted.get(),
+            Some(3),
+            "the leaf's on_mount must run and see the value"
         );
 
-        let _ = TestHarness::mount(&widget);
+        let (updated, record_update) = recorder();
+        with_ctx(|ctx| {
+            Provide::new(Rc::new(6_usize))
+                .child(Leaf::new().on_update(record_update))
+                .update(&mut element, &mut render, ctx);
+        });
+        assert_eq!(
+            updated.get(),
+            Some(6),
+            "the leaf's on_update must run and see the new value"
+        );
     }
 
     #[test]
@@ -249,16 +261,18 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let widget = Provide::new(Rc::new(42_usize)).child(Transparent {
-            child: Leaf::new().on_rebuild(move |ctx| {
-                recorder.set(ctx.get_provided::<usize>().as_deref().copied());
-            }),
+        let (mut element, ()) = with_ctx(|ctx| {
+            Provide::new(Rc::new(42_usize))
+                .child(Transparent {
+                    child: Leaf::new().on_rebuild(move |ctx| {
+                        recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                    }),
+                })
+                .create(ctx)
         });
 
-        let mut harness = TestHarness::mount(&widget);
-
         // The transparent single child pushes no routing id, so the leaf sits at the empty path.
-        harness.dispatch_rebuild(&widget, &[]);
+        with_ctx(|ctx| element.dispatch(&[], Dispatch::Rebuild(ctx)));
 
         assert_eq!(
             seen.get(),
@@ -272,16 +286,17 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let widget = Transparent {
-            child: Leaf::new().on_rebuild(move |ctx| {
-                recorder.set(ctx.get_provided::<usize>().as_deref().copied());
-            }),
-        };
+        let (mut element, ()) = with_ctx(|ctx| {
+            Transparent {
+                child: Leaf::new().on_rebuild(move |ctx| {
+                    recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                }),
+            }
+            .create(ctx)
+        });
 
-        let mut harness = TestHarness::mount(&widget);
-        harness.provide_scope = harness.provide_scope.provide::<usize>(Rc::new(7));
-
-        harness.dispatch_rebuild(&widget, &[]);
+        let scope = ProvideScope::new().provide::<usize>(Rc::new(7_usize));
+        with_ctx_in(&scope, |ctx| element.dispatch(&[], Dispatch::Rebuild(ctx)));
 
         assert_eq!(
             seen.get(),

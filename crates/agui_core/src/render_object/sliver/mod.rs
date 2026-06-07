@@ -312,7 +312,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        context::UpdateCtx, element::Element, test_harness::TestHarness, widget::AsAnyWidget,
+        context::UpdateCtx, element::Element, test_harness::with_ctx, widget::AsAnyWidget,
         widget::Widget,
     };
 
@@ -394,19 +394,16 @@ mod tests {
 
         type Render = RenderSliverFixed;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> SliverFixedElement {
-            SliverFixedElement
+        fn create(self, _: &mut UpdateCtx) -> (SliverFixedElement, Self::Render) {
+            (
+                SliverFixedElement,
+                RenderSliverFixed {
+                    extent: self.extent,
+                },
+            )
         }
 
-        fn update(&self, _: &mut SliverFixedElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, _: &SliverFixedElement) -> Self::Render {
-            RenderSliverFixed {
-                extent: self.extent,
-            }
-        }
-
-        fn update_render_object(&self, _: &SliverFixedElement, object: &mut Self::Render) {
+        fn update(self, _: &mut SliverFixedElement, object: &mut Self::Render, _: &mut UpdateCtx) {
             object.extent = self.extent;
         }
     }
@@ -416,10 +413,7 @@ mod tests {
         // into_boxed_render_sliver erases to Box<dyn AnyRenderSliver>, which is itself a RenderSliver,
         // so the viewport drives it identically to a concrete sliver.
         let boxed_widget = SliverFixedWidget { extent: 100.0 }.into_boxed_render_sliver();
-        let harness = TestHarness::mount(&boxed_widget);
-
-        let erased: Box<dyn AnyRenderSliver> =
-            boxed_widget.create_render_object(&harness.root.element);
+        let (_element, erased) = with_ctx(|ctx| boxed_widget.create(ctx));
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
         RenderBox::layout(

@@ -252,7 +252,7 @@ impl RenderBox for RenderParagraph {
                     let glyphs = glyph_run
                         .positioned_glyphs()
                         .map(|glyph| GlyphInstance {
-                            id: u32::from(glyph.id),
+                            id: glyph.id,
                             x: glyph.x,
                             y: glyph.y,
                         })

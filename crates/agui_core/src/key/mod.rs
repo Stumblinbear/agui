@@ -5,11 +5,7 @@ use std::{
 
 use bon::Builder;
 
-use crate::{
-    context::{Dispatch, UpdateCtx},
-    element::{RoutingId, SingleChildElement},
-    widget::Widget,
-};
+use crate::{context::UpdateCtx, element::SingleChildElement, widget::Widget};
 
 mod any_key;
 
@@ -59,24 +55,17 @@ where
 
     type Render = Child::Render;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        SingleChildElement::new(self.child, ctx)
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action);
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        element.create_render_object(&self.child)
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, render_object);
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        element.update(self.child, render_object, ctx);
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {

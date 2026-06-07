@@ -135,11 +135,11 @@ mod tests {
     use super::*;
     use crate::{
         context::UpdateCtx,
-        element::{Element, node::ElementNode},
+        element::{Element, SingleChildElement},
         paint::compositing::{ContainerLayer, LayerHandle},
-        render_object::box_layout::{AnyRenderBox, RenderBox},
+        render_object::box_layout::RenderBox,
         test_fixtures::Leaf,
-        test_harness::TestHarness,
+        test_harness::with_ctx,
         text::TextBaseline,
         widget::{AsAnyWidget, Widget},
     };
@@ -210,78 +210,57 @@ mod tests {
         child: Child,
     }
 
-    struct PadElement<C> {
-        child: ElementNode<C>,
-    }
-
-    impl<C: Element> Element for PadElement<C> {}
-
     impl<Child: Widget> Widget for Pad<Child>
     where
         Child::Render: RenderBox,
     {
-        type Element = PadElement<Child::Element>;
+        type Element = SingleChildElement<Child::Element>;
 
         type Render = RenderPad<Child::Render>;
 
-        fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-            PadElement {
-                child: ElementNode::new(self.child.create_element(ctx)),
-            }
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let (element, child_render) = SingleChildElement::new(self.child, ctx);
+
+            (
+                element,
+                RenderPad {
+                    pad: self.pad,
+                    child: RenderNode::new(child_render),
+                },
+            )
         }
 
-        fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-            self.child
-                .update(&mut element.child.element, &old.child, ctx);
-        }
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            render.pad = self.pad;
 
-        fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-            RenderPad {
-                pad: self.pad,
-                child: RenderNode::new(self.child.create_render_object(&element.child.element)),
-            }
-        }
-
-        fn update_render_object(&self, element: &Self::Element, object: &mut Self::Render) {
-            object.pad = self.pad;
-
-            self.child
-                .update_render_object(&element.child.element, &mut object.child.object);
+            element.update(self.child, &mut render.child.object, ctx);
         }
     }
 
     #[test]
-    fn create_render_object_builds_wrapped_subtree() {
-        let widget = Pad {
-            pad: 4,
-            child: Leaf::new(),
-        };
-        let harness = TestHarness::mount(&widget);
+    fn pad_builds_and_updates_its_render() {
+        let (mut element, mut render) = with_ctx(|ctx| {
+            Pad {
+                pad: 4,
+                child: Leaf::new(),
+            }
+            .create(ctx)
+        });
+        assert_eq!(render.pad, 4);
 
-        let node = RenderNode::<_, ()>::new(widget.create_render_object(&harness.root.element));
-
-        assert_eq!(node.object.pad, 4);
-    }
-
-    #[test]
-    fn update_render_object_syncs_in_place() {
-        let widget = Pad {
-            pad: 4,
-            child: Leaf::new(),
-        };
-
-        let harness = TestHarness::mount(&widget);
-        let mut node = RenderNode::<_, ()>::new(widget.create_render_object(&harness.root.element));
-
-        assert_eq!(node.object.pad, 4);
-
-        Pad {
-            pad: 9,
-            child: Leaf::new(),
-        }
-        .update_render_object(&harness.root.element, &mut node.object);
-
-        assert_eq!(node.object.pad, 9);
+        with_ctx(|ctx| {
+            Pad {
+                pad: 9,
+                child: Leaf::new(),
+            }
+            .update(&mut element, &mut render, ctx);
+        });
+        assert_eq!(render.pad, 9);
     }
 
     #[test]
@@ -299,78 +278,6 @@ mod tests {
         });
     }
 
-    #[test]
-    fn build_update_paint_layout_and_reconcile_a_boxed_child() {
-        // construct a render tree through the real Widget seam
-        let widget = Pad {
-            pad: 4,
-            child: Leaf::new(),
-        };
-        let harness = TestHarness::mount(&widget);
-        let mut node = RenderNode::<_, ()>::new(widget.create_render_object(&harness.root.element));
-        assert_eq!(node.object.pad, 4);
-
-        // update it in place
-        Pad {
-            pad: 9,
-            child: Leaf::new(),
-        }
-        .update_render_object(&harness.root.element, &mut node.object);
-        assert_eq!(node.object.pad, 9);
-
-        // paint the whole tree; lay out the (RenderBox) leaf child via the node helpers
-        PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
-            node.paint(ctx, Offset::ZERO);
-        });
-        assert_eq!(
-            node.object.child.layout_and_get_size(
-                &mut LayoutCtx::detached(),
-                BoxConstraints::tight(Size::new(12.0, 8.0))
-            ),
-            Size::new(12.0, 8.0),
-        );
-
-        // erased boundary: a boxed child, reconciled by recovering its real type —
-        // this is what a fan-out's update_render_object does per slot.
-        let mut boxed: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(Box::new(()) as Box<dyn AnyRenderBox>);
-
-        // a wrong type does not match...
-        assert!(
-            (*boxed.object)
-                .as_any_mut()
-                .downcast_mut::<RenderOther>()
-                .is_none()
-        );
-
-        // ...the correct type does, and we update it in place through the recovered object
-        (*boxed.object)
-            .as_any_mut()
-            .downcast_mut::<()>()
-            .expect("boxed child downcasts to its real type");
-
-        assert_eq!(
-            boxed.layout_and_get_size(
-                &mut LayoutCtx::detached(),
-                BoxConstraints::tight(Size::new(7.0, 7.0))
-            ),
-            Size::new(7.0, 7.0)
-        );
-
-        // the boxed node still drives layout/paint through dyn dispatch
-        assert_eq!(
-            boxed.layout_and_get_size(
-                &mut LayoutCtx::detached(),
-                BoxConstraints::tight(Size::new(3.0, 3.0))
-            ),
-            Size::new(3.0, 3.0),
-        );
-
-        PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
-            boxed.paint(ctx, Offset::ZERO);
-        });
-    }
-
     struct Counted {
         creates: Rc<Cell<usize>>,
     }
@@ -384,43 +291,40 @@ mod tests {
 
         type Render = ();
 
-        fn create_element(&self, _: &mut UpdateCtx) -> CountedElement {
-            CountedElement
-        }
-
-        fn update(&self, _: &mut CountedElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, _: &CountedElement) -> Self::Render {
+        fn create(self, _: &mut UpdateCtx) -> (CountedElement, ()) {
             self.creates.set(self.creates.get() + 1);
+
+            (CountedElement, ())
         }
 
-        fn update_render_object(&self, _: &CountedElement, (): &mut Self::Render) {}
+        fn update(self, _: &mut CountedElement, (): &mut Self::Render, _: &mut UpdateCtx) {}
     }
 
     #[test]
-    fn updating_a_boxed_slot_reuses_the_render_object() {
+    fn boxed_slot_reuses_render_on_same_type() {
         let creates = Rc::new(Cell::new(0usize));
 
-        let widget = Counted {
-            creates: Rc::clone(&creates),
-        }
-        .into_boxed_render_box();
-
-        let harness = TestHarness::mount(&widget);
-
-        // a fan-out slot: a boxed child wrapped in a RenderNode
-        let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(widget.create_render_object(&harness.root.element));
-
+        let (mut element, mut render) = with_ctx(|ctx| {
+            Counted {
+                creates: Rc::clone(&creates),
+            }
+            .into_boxed_render_box()
+            .create(ctx)
+        });
         assert_eq!(creates.get(), 1);
 
-        // same concrete type -> reuse the boxed render object, do not recreate
-        widget.update_render_object(&harness.root.element, &mut slot.object);
-
+        // Same concrete type: the boxed render object is reused, not recreated.
+        with_ctx(|ctx| {
+            Counted {
+                creates: Rc::clone(&creates),
+            }
+            .into_boxed_render_box()
+            .update(&mut element, &mut render, ctx);
+        });
         assert_eq!(
             creates.get(),
             1,
-            "same-type update must reuse the boxed render object, not recreate it"
+            "same-type update reuses the boxed render object"
         );
     }
 
@@ -494,59 +398,52 @@ mod tests {
 
         type Render = RenderOther;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> CountedOtherElement {
-            CountedOtherElement
-        }
-
-        fn update(&self, _: &mut CountedOtherElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, _: &CountedOtherElement) -> Self::Render {
+        fn create(self, _: &mut UpdateCtx) -> (CountedOtherElement, RenderOther) {
             self.creates.set(self.creates.get() + 1);
 
-            RenderOther::default()
+            (CountedOtherElement, RenderOther::default())
         }
 
-        fn update_render_object(&self, _: &CountedOtherElement, _: &mut Self::Render) {}
+        fn update(self, _: &mut CountedOtherElement, _: &mut RenderOther, _: &mut UpdateCtx) {}
     }
 
     #[test]
-    fn type_swap_at_a_boxed_slot_recreates_the_render_object() {
+    fn boxed_slot_recreates_render_on_type_swap() {
         let creates_a = Rc::new(Cell::new(0usize));
-        let widget_a = Counted {
-            creates: Rc::clone(&creates_a),
-        }
-        .into_boxed_render_box();
-        let mut harness = TestHarness::mount(&widget_a);
-
-        let mut slot: RenderNode<Box<dyn AnyRenderBox>, ()> =
-            RenderNode::new(widget_a.create_render_object(&harness.root.element));
+        let (mut element, mut render) = with_ctx(|ctx| {
+            Counted {
+                creates: Rc::clone(&creates_a),
+            }
+            .into_boxed_render_box()
+            .create(ctx)
+        });
         assert_eq!(creates_a.get(), 1);
-        assert!((*slot.object).as_any_mut().downcast_mut::<()>().is_some());
+        assert!((*render).as_any_mut().downcast_mut::<()>().is_some());
 
-        // swap to a different concrete render type -> reconcile the element, then the slot's
-        // render object downcast fails -> recreate
+        // Swap to a different concrete render type: the inner is recreated, not reused.
         let creates_b = Rc::new(Cell::new(0usize));
-        let widget_b = CountedOther {
-            creates: Rc::clone(&creates_b),
-        }
-        .into_boxed_render_box();
-        harness.update(&widget_a, &widget_b);
-        widget_b.update_render_object(&harness.root.element, &mut slot.object);
+        with_ctx(|ctx| {
+            CountedOther {
+                creates: Rc::clone(&creates_b),
+            }
+            .into_boxed_render_box()
+            .update(&mut element, &mut render, ctx);
+        });
 
         assert_eq!(
             creates_b.get(),
             1,
-            "type change must recreate the render object"
+            "type change recreates the render object"
         );
         assert!(
-            (*slot.object)
+            (*render)
                 .as_any_mut()
                 .downcast_mut::<RenderOther>()
                 .is_some(),
             "slot now holds the new type"
         );
         assert!(
-            (*slot.object).as_any_mut().downcast_mut::<()>().is_none(),
+            (*render).as_any_mut().downcast_mut::<()>().is_none(),
             "old type is gone"
         );
     }

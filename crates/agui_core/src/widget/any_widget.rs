@@ -1,14 +1,14 @@
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{
+    any::{Any, TypeId},
+    marker::PhantomData,
+};
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    element::{AnyElement, BuildBoundaryElement, Element, RoutingId, node::ElementNode},
+    element::{AnyElement, Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
-    render_object::{
-        RenderObject,
-        box_layout::{AnyRenderBox, RenderBox},
-        sliver::{AnyRenderSliver, RenderSliver},
-    },
+    render_object::box_layout::{AnyRenderBox, RenderBox},
+    render_object::sliver::{AnyRenderSliver, RenderSliver},
     widget::Widget,
 };
 
@@ -20,24 +20,18 @@ pub trait AnyWidget {
 
     fn widget_name(&self) -> &str;
 
-    fn dyn_create_element(&self, ctx: &mut UpdateCtx) -> Box<dyn AnyElement>;
-
-    fn dyn_update(
-        &self,
-        element: &mut Box<dyn AnyElement>,
-        old: &dyn AnyWidget<Render = Self::Render>,
-        ctx: &mut UpdateCtx,
-    );
-
-    fn dyn_dispatch(&self, element: &mut dyn AnyElement, path: &[RoutingId], action: Dispatch);
-
-    fn dyn_create_render_object(&self, element: &dyn AnyElement) -> Self::Render;
-
-    fn dyn_update_render_object(&self, element: &dyn AnyElement, render_object: &mut Self::Render);
-
-    fn dyn_is_same_type(&self, other: &dyn AnyWidget<Render = Self::Render>) -> bool;
+    fn dyn_widget_type_id(&self) -> TypeId;
 
     fn dyn_key(&self) -> Option<&dyn AnyKeyable>;
+
+    fn dyn_create(self: Box<Self>, ctx: &mut UpdateCtx) -> (Box<dyn AnyElement>, Self::Render);
+
+    fn dyn_update(
+        self: Box<Self>,
+        element: &mut Box<dyn AnyElement>,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    );
 }
 
 impl<T> AnyWidget for T
@@ -54,340 +48,157 @@ where
         std::any::type_name::<T>()
     }
 
-    fn dyn_create_element(&self, ctx: &mut UpdateCtx) -> Box<dyn AnyElement> {
-        Box::new(self.create_element(ctx))
-    }
-
-    fn dyn_update(
-        &self,
-        element: &mut Box<dyn AnyElement>,
-        old: &dyn AnyWidget<Render = Self::Render>,
-        ctx: &mut UpdateCtx,
-    ) {
-        // Same concrete type -> reconcile the recovered element in place; different type -> replace
-        // it wholesale (the erased element would otherwise never be re-created).
-        if let Some(old) = old.as_any().downcast_ref::<T>() {
-            let element = (**element)
-                .as_any_mut()
-                .downcast_mut::<T::Element>()
-                .expect("element does not match its widget's type");
-
-            self.update(element, old, ctx);
-        } else {
-            *element = Box::new(self.create_element(ctx));
-        }
-    }
-
-    fn dyn_dispatch(&self, element: &mut dyn AnyElement, path: &[RoutingId], action: Dispatch) {
-        let element = element
-            .as_any_mut()
-            .downcast_mut::<T::Element>()
-            .expect("element does not match its widget's type");
-
-        self.dispatch(element, path, action);
-    }
-
-    fn dyn_create_render_object(&self, element: &dyn AnyElement) -> Self::Render {
-        let element = element
-            .as_any()
-            .downcast_ref::<T::Element>()
-            .expect("element does not match its widget's type");
-
-        self.create_render_object(element)
-    }
-
-    fn dyn_update_render_object(&self, element: &dyn AnyElement, render_object: &mut Self::Render) {
-        let element = element
-            .as_any()
-            .downcast_ref::<T::Element>()
-            .expect("element does not match its widget's type");
-
-        self.update_render_object(element, render_object);
-    }
-
-    fn dyn_is_same_type(&self, other: &dyn AnyWidget<Render = Self::Render>) -> bool {
-        other.as_any().is::<T>()
+    fn dyn_widget_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 
     fn dyn_key(&self) -> Option<&dyn AnyKeyable> {
         self.key()
     }
+
+    fn dyn_create(self: Box<Self>, ctx: &mut UpdateCtx) -> (Box<dyn AnyElement>, Self::Render) {
+        let (element, render_object) = (*self).create(ctx);
+
+        (Box::new(element), render_object)
+    }
+
+    fn dyn_update(
+        self: Box<Self>,
+        element: &mut Box<dyn AnyElement>,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        // The caller reconciles only same-type widgets, so the erased element is the one this
+        // widget's type builds.
+        let element = (**element)
+            .as_any_mut()
+            .downcast_mut::<T::Element>()
+            .expect("element does not match its widget's type");
+
+        (*self).update(element, render_object, ctx);
+    }
 }
 
-/// The [`Element`] of a `dyn AnyWidget` boundary.
-pub struct ErasedElement<R: RenderObject> {
+/// The [`Element`] of a [`Box<dyn AnyWidget>`] erasure seam, holding the boxed child element and a
+/// generation. A dispatch carries the generation as its leading [`RoutingId`]; one that no longer
+/// matches addressed an inner that has since been replaced and is dropped.
+pub struct ErasedElement<R> {
     generation: u16,
+    type_id: TypeId,
     child: ElementNode<Box<dyn AnyElement>>,
-    _render: std::marker::PhantomData<R>,
+    _render: PhantomData<R>,
 }
 
-impl<R: RenderObject> Element for ErasedElement<R> {}
+impl<R: 'static> Element for ErasedElement<R> {
+    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+        let Some((head, rest)) = path.split_first() else {
+            unreachable!("dispatch path cannot be empty");
+        };
 
-macros::impl_widget!(&dyn AnyWidget<Render = Render>);
+        if head.get() != self.generation {
+            return;
+        }
 
-macros::impl_widget!(Box<dyn AnyWidget<Render = Render>>);
+        self.child.element.dispatch(rest, action);
+    }
+}
 
-macros::impl_widget_concrete!(Box);
+impl<R> Widget for Box<dyn AnyWidget<Render = R>>
+where
+    R: 'static,
+{
+    type Element = ErasedElement<R>;
 
-// Rc and Arc seams are build boundaries: they retain the inner widget so a rebuild reaches it directly.
-macros::impl_boundary_dyn!(Rc, create_rc, update_rc);
+    type Render = R;
 
-macros::impl_boundary_dyn!(Arc, create_arc, update_arc);
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let type_id = (*self).dyn_widget_type_id();
 
-macros::impl_boundary_concrete!(Rc, create_rc, update_rc);
+        let (child, render_object) =
+            ctx.with_routing_id(RoutingId::new(0), |ctx| self.dyn_create(ctx));
 
-macros::impl_boundary_concrete!(Arc, create_arc, update_arc);
-
-mod macros {
-    // Used to implement Widget for the given smart pointer (e.g. Box, Rc, Arc)
-    macro_rules! impl_widget {
         (
-            // The smart pointer type
-            $ptr:ty
-        ) => {
-            impl<Render> Widget for $ptr
-            where
-                Render: RenderObject,
-            {
-                type Element = ErasedElement<Render>;
-
-                type Render = Render;
-
-                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-                    let child = ctx
-                        .with_routing_id(RoutingId::new(0), |ctx| (**self).dyn_create_element(ctx));
-
-                    ErasedElement {
-                        generation: 0,
-                        child: ElementNode::new(child),
-                        _render: ::core::marker::PhantomData,
-                    }
-                }
-
-                fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-                    // If the type of the old widget is not the same as the new widget, increment the
-                    // generation. Events may have been queued for the old widget; the generation is
-                    // the routing id, so the replaced inner won't receive the old widget's events.
-                    if !(**self).dyn_is_same_type(&**old) {
-                        element.generation = element.generation.wrapping_add(1);
-                    }
-
-                    ctx.with_routing_id(RoutingId::new(element.generation), |ctx| {
-                        (**self).dyn_update(&mut element.child.element, &**old, ctx)
-                    });
-                }
-
-                fn dispatch(
-                    &self,
-                    element: &mut Self::Element,
-                    path: &[RoutingId],
-                    action: crate::context::Dispatch,
-                ) {
-                    let Some((head, rest)) = path.split_first() else {
-                        unreachable!("dispatch path cannot be empty");
-                    };
-
-                    // If the routing id is not the same as the generation, don't deliver to the
-                    // inner element since it has been replaced.
-                    if head.get() != element.generation {
-                        return;
-                    }
-
-                    (**self).dyn_dispatch(&mut *element.child.element, rest, action)
-                }
-
-                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-                    (**self).dyn_create_render_object(&*element.child.element)
-                }
-
-                fn update_render_object(
-                    &self,
-                    element: &Self::Element,
-                    render_object: &mut Self::Render,
-                ) {
-                    (**self).dyn_update_render_object(&*element.child.element, render_object);
-                }
-
-                fn is_same_type(&self, other: &Self) -> bool {
-                    (**self).dyn_is_same_type(&**other)
-                }
-
-                fn key(&self) -> Option<&dyn AnyKeyable> {
-                    (**self).dyn_key()
-                }
-            }
-        };
+            ErasedElement {
+                generation: 0,
+                type_id,
+                child: ElementNode::new(child),
+                _render: PhantomData,
+            },
+            render_object,
+        )
     }
 
-    // Implements Widget for a smart pointer over a concrete widget (e.g. Box<W>, Rc<W>) by delegating
-    // to the pointee. Stays disjoint from `impl_widget!` because its pointee, `dyn AnyWidget`, is unsized
-    // and so never satisfies the `W: Widget` bound here.
-    macro_rules! impl_widget_concrete {
-        (
-            // The smart pointer constructor (e.g. Box, Rc, Arc)
-            $ptr:ident
-        ) => {
-            impl<W> Widget for $ptr<W>
-            where
-                W: Widget,
-            {
-                type Element = W::Element;
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let new_type = (*self).dyn_widget_type_id();
 
-                type Render = W::Render;
+        if new_type == element.type_id {
+            ctx.with_routing_id(RoutingId::new(element.generation), |ctx| {
+                self.dyn_update(&mut element.child.element, render_object, ctx);
+            });
+        } else {
+            // Type swap: bump the generation so events queued for the old inner are dropped, then
+            // rebuild the inner element and its render object.
+            element.generation = element.generation.wrapping_add(1);
+            element.type_id = new_type;
 
-                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-                    (**self).create_element(ctx)
-                }
+            let (child, new_render) = ctx
+                .with_routing_id(RoutingId::new(element.generation), |ctx| {
+                    self.dyn_create(ctx)
+                });
 
-                fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-                    (**self).update(element, &**old, ctx)
-                }
-
-                fn dispatch(
-                    &self,
-                    element: &mut Self::Element,
-                    path: &[RoutingId],
-                    action: crate::context::Dispatch,
-                ) {
-                    (**self).dispatch(element, path, action)
-                }
-
-                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-                    (**self).create_render_object(element)
-                }
-
-                fn update_render_object(
-                    &self,
-                    element: &Self::Element,
-                    render_object: &mut Self::Render,
-                ) {
-                    (**self).update_render_object(element, render_object)
-                }
-
-                fn is_same_type(&self, other: &Self) -> bool {
-                    (**self).is_same_type(&**other)
-                }
-
-                fn key(&self) -> Option<&dyn AnyKeyable> {
-                    (**self).key()
-                }
-            }
-        };
+            element.child = ElementNode::new(child);
+            *render_object = new_render;
+        }
     }
 
-    // Implements Widget for a shared pointer over `dyn AnyWidget` as a build boundary that retains its
-    // inner widget. `$create`/`$update` pick the constructors matching the pointer's strong-count kind.
-    macro_rules! impl_boundary_dyn {
-        ($ptr:ident, $create:ident, $update:ident) => {
-            impl<Render> Widget for $ptr<dyn AnyWidget<Render = Render>>
-            where
-                Render: RenderObject,
-            {
-                type Element = BuildBoundaryElement<Render>;
-
-                type Render = Render;
-
-                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-                    BuildBoundaryElement::$create($ptr::clone(self), ctx)
-                }
-
-                fn update(&self, element: &mut Self::Element, _old: &Self, ctx: &mut UpdateCtx) {
-                    element.$update($ptr::clone(self), ctx);
-                }
-
-                fn dispatch(
-                    &self,
-                    element: &mut Self::Element,
-                    path: &[RoutingId],
-                    action: crate::context::Dispatch,
-                ) {
-                    element.dispatch(path, action);
-                }
-
-                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-                    element.create_render_object()
-                }
-
-                fn update_render_object(
-                    &self,
-                    element: &Self::Element,
-                    render_object: &mut Self::Render,
-                ) {
-                    element.update_render_object(render_object);
-                }
-
-                fn is_same_type(&self, other: &Self) -> bool {
-                    (**self).dyn_is_same_type(&**other)
-                }
-
-                fn key(&self) -> Option<&dyn AnyKeyable> {
-                    (**self).dyn_key()
-                }
-            }
-        };
+    fn widget_type_id(&self) -> TypeId
+    where
+        Self: 'static,
+    {
+        (**self).dyn_widget_type_id()
     }
 
-    // Implements Widget for a shared pointer over a concrete widget as a build boundary. Coerces the
-    // pointer to the erased recipe the boundary retains; otherwise mirrors `impl_boundary_dyn!`.
-    macro_rules! impl_boundary_concrete {
-        ($ptr:ident, $create:ident, $update:ident) => {
-            impl<W> Widget for $ptr<W>
-            where
-                W: Widget + 'static,
-                W::Render: RenderObject,
-            {
-                type Element = BuildBoundaryElement<W::Render>;
+    fn key(&self) -> Option<&dyn AnyKeyable> {
+        (**self).dyn_key()
+    }
+}
 
-                type Render = W::Render;
+impl<W> Widget for Box<W>
+where
+    W: Widget,
+{
+    type Element = W::Element;
 
-                fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-                    let strong = $ptr::clone(self);
-                    let recipe: $ptr<dyn AnyWidget<Render = W::Render>> = strong;
-                    BuildBoundaryElement::$create(recipe, ctx)
-                }
+    type Render = W::Render;
 
-                fn update(&self, element: &mut Self::Element, _old: &Self, ctx: &mut UpdateCtx) {
-                    let strong = $ptr::clone(self);
-                    let recipe: $ptr<dyn AnyWidget<Render = W::Render>> = strong;
-                    element.$update(recipe, ctx);
-                }
-
-                fn dispatch(
-                    &self,
-                    element: &mut Self::Element,
-                    path: &[RoutingId],
-                    action: crate::context::Dispatch,
-                ) {
-                    element.dispatch(path, action);
-                }
-
-                fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-                    element.create_render_object()
-                }
-
-                fn update_render_object(
-                    &self,
-                    element: &Self::Element,
-                    render_object: &mut Self::Render,
-                ) {
-                    element.update_render_object(render_object);
-                }
-
-                fn is_same_type(&self, other: &Self) -> bool {
-                    (**self).dyn_is_same_type((**other).as_dyn_widget())
-                }
-
-                fn key(&self) -> Option<&dyn AnyKeyable> {
-                    (**self).dyn_key()
-                }
-            }
-        };
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        (*self).create(ctx)
     }
 
-    pub(crate) use impl_boundary_concrete;
-    pub(crate) use impl_boundary_dyn;
-    pub(crate) use impl_widget;
-    pub(crate) use impl_widget_concrete;
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        (*self).update(element, render_object, ctx);
+    }
+
+    fn widget_type_id(&self) -> TypeId
+    where
+        Self: 'static,
+    {
+        (**self).widget_type_id()
+    }
+
+    fn key(&self) -> Option<&dyn AnyKeyable> {
+        (**self).key()
+    }
 }
 
 struct RenderBoxWrapper<T> {
@@ -403,36 +214,33 @@ where
 
     type Render = Box<dyn AnyRenderBox>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        RenderBoxElement {
-            inner: self.inner.create_element(ctx),
-        }
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let (inner, render_object) = self.inner.create(ctx);
+
+        (RenderBoxElement { inner }, Box::new(render_object))
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        self.inner.update(&mut element.inner, &old.inner, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(&mut element.inner, path, action);
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        Box::new(self.inner.create_render_object(&element.inner))
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
         // deref past the Box to the concrete object; same type -> reuse, else replace
         if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
-            self.inner
-                .update_render_object(&element.inner, render_object);
+            self.inner.update(&mut element.inner, render_object, ctx);
         } else {
-            *render_object = Box::new(self.inner.create_render_object(&element.inner));
+            let (inner, render) = self.inner.create(ctx);
+            element.inner = inner;
+            *render_object = Box::new(render);
         }
     }
 
-    fn is_same_type(&self, other: &Self) -> bool {
-        self.inner.is_same_type(&other.inner)
+    fn widget_type_id(&self) -> TypeId
+    where
+        Self: 'static,
+    {
+        self.inner.widget_type_id()
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {
@@ -444,7 +252,14 @@ struct RenderBoxElement<E> {
     inner: E,
 }
 
-impl<E> Element for RenderBoxElement<E> where E: Element {}
+impl<E> Element for RenderBoxElement<E>
+where
+    E: Element,
+{
+    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+        self.inner.dispatch(path, action);
+    }
+}
 
 struct RenderSliverWrapper<T> {
     inner: T,
@@ -459,35 +274,32 @@ where
 
     type Render = Box<dyn AnyRenderSliver>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        RenderSliverElement {
-            inner: self.inner.create_element(ctx),
-        }
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let (inner, render_object) = self.inner.create(ctx);
+
+        (RenderSliverElement { inner }, Box::new(render_object))
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        self.inner.update(&mut element.inner, &old.inner, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(&mut element.inner, path, action);
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        Box::new(self.inner.create_render_object(&element.inner))
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
         if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
-            self.inner
-                .update_render_object(&element.inner, render_object);
+            self.inner.update(&mut element.inner, render_object, ctx);
         } else {
-            *render_object = Box::new(self.inner.create_render_object(&element.inner));
+            let (inner, render) = self.inner.create(ctx);
+            element.inner = inner;
+            *render_object = Box::new(render);
         }
     }
 
-    fn is_same_type(&self, other: &Self) -> bool {
-        self.inner.is_same_type(&other.inner)
+    fn widget_type_id(&self) -> TypeId
+    where
+        Self: 'static,
+    {
+        self.inner.widget_type_id()
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {
@@ -499,7 +311,14 @@ struct RenderSliverElement<E> {
     inner: E,
 }
 
-impl<E> Element for RenderSliverElement<E> where E: Element {}
+impl<E> Element for RenderSliverElement<E>
+where
+    E: Element,
+{
+    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+        self.inner.dispatch(path, action);
+    }
+}
 
 pub type BoxedWidget = Box<dyn AnyWidget<Render = Box<dyn AnyRenderBox>>>;
 
@@ -534,62 +353,66 @@ impl<T: 'static> AsAnyWidget for T where T: Widget {}
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, rc::Rc};
+    use std::{any::Any, cell::Cell, rc::Rc};
 
-    use crate::{element::Element, test_fixtures::Leaf, test_harness::TestHarness};
+    use crate::{
+        context::{Dispatch, MessageCtx, UpdateCtx},
+        element::{Element, RoutingId},
+        test_fixtures::Leaf,
+        test_harness::with_ctx,
+    };
 
-    use super::*;
+    use super::{AnyRenderBox, AnyWidget, AsAnyWidget, ErasedElement, RenderBoxElement, Widget};
 
-    pub struct TestWidget<T> {
+    struct TestWidget<T> {
         value: T,
-        mounts: Cell<usize>,
-        updates: Cell<usize>,
+        mounts: Rc<Cell<usize>>,
+        updates: Rc<Cell<usize>>,
     }
 
-    impl<T> TestWidget<T> {
-        pub fn new(value: T) -> Self {
-            Self {
-                value,
-                mounts: Cell::new(0),
-                updates: Cell::new(0),
-            }
-        }
-    }
-
-    pub struct TestWidgetElement<T> {
+    struct TestWidgetElement<T> {
         value: T,
     }
 
     impl<T: 'static> Element for TestWidgetElement<T> {}
 
-    impl<T> Widget for TestWidget<T>
-    where
-        T: Clone + 'static,
-    {
+    impl<T: 'static> Widget for TestWidget<T> {
         type Element = TestWidgetElement<T>;
 
         type Render = ();
 
-        fn create_element(&self, _: &mut UpdateCtx) -> TestWidgetElement<T> {
+        fn create(self, _: &mut UpdateCtx) -> (Self::Element, Self::Render) {
             self.mounts.set(self.mounts.get() + 1);
 
-            TestWidgetElement {
-                value: self.value.clone(),
-            }
+            (TestWidgetElement { value: self.value }, ())
         }
 
-        fn update(&self, element: &mut TestWidgetElement<T>, _: &Self, _: &mut UpdateCtx) {
+        fn update(self, element: &mut Self::Element, (): &mut Self::Render, _: &mut UpdateCtx) {
             self.updates.set(self.updates.get() + 1);
 
-            element.value = self.value.clone();
+            element.value = self.value;
         }
-
-        fn create_render_object(&self, _: &TestWidgetElement<T>) -> Self::Render {}
-
-        fn update_render_object(&self, _: &TestWidgetElement<T>, (): &mut Self::Render) {}
     }
 
-    /// Reads the value held by the inner `TestWidgetElement` behind a dyn-widget boundary.
+    /// A `TestWidget` plus the shared cells tracking its mount and update counts.
+    fn test_widget<T>(value: T) -> (TestWidget<T>, Rc<Cell<usize>>, Rc<Cell<usize>>) {
+        let mounts = Rc::new(Cell::new(0));
+        let updates = Rc::new(Cell::new(0));
+
+        let widget = TestWidget {
+            value,
+            mounts: Rc::clone(&mounts),
+            updates: Rc::clone(&updates),
+        };
+
+        (widget, mounts, updates)
+    }
+
+    fn boxed_dyn<T: 'static>(widget: TestWidget<T>) -> Box<dyn AnyWidget<Render = ()>> {
+        Box::new(widget)
+    }
+
+    /// The value held by the inner element behind a [`Box<dyn AnyWidget>`] boundary.
     fn dyn_value<T: Clone + 'static>(root: &ErasedElement<()>) -> T {
         (*root.child.element)
             .as_any()
@@ -599,7 +422,7 @@ mod tests {
             .clone()
     }
 
-    /// Reads the value held by the inner `TestWidgetElement` behind a boxed-render-box-widget boundary.
+    /// The value held by the inner element behind a boxed-render-box boundary.
     fn boxed_value<T: Clone + 'static>(root: &ErasedElement<Box<dyn AnyRenderBox>>) -> T {
         (*root.child.element)
             .as_any()
@@ -612,91 +435,92 @@ mod tests {
 
     #[test]
     fn mounting_dyn_widgets() {
-        let widget = TestWidget::new(7_usize);
-        let harness = TestHarness::mount(&widget.as_dyn_widget());
+        let (widget, mounts, updates) = test_widget(7_usize);
+        let (element, ()) = with_ctx(|ctx| boxed_dyn(widget).create(ctx));
 
-        assert_eq!(widget.mounts.get(), 1);
-        assert_eq!(widget.updates.get(), 0);
-        assert_eq!(dyn_value::<usize>(&harness.root.element), 7);
+        assert_eq!((mounts.get(), updates.get()), (1, 0));
+        assert_eq!(dyn_value::<usize>(&element), 7);
     }
 
     #[test]
     fn mounting_boxed_widgets() {
-        let widget = TestWidget::new(1_usize);
-        let harness = TestHarness::mount(&widget.into_boxed_render_box());
+        let (widget, _, _) = test_widget(1_usize);
+        let (element, _) = with_ctx(|ctx| widget.into_boxed_render_box().create(ctx));
 
-        assert_eq!(boxed_value::<usize>(&harness.root.element), 1);
+        assert_eq!(boxed_value::<usize>(&element), 1);
     }
 
     #[test]
-    fn updating_dyn_widgets() {
-        let widget = TestWidget::new(2_usize);
+    fn updating_dyn_widgets_reuses_the_inner() {
+        let (widget, _, _) = test_widget(2_usize);
+        let (mut element, mut render) = with_ctx(|ctx| boxed_dyn(widget).create(ctx));
+        assert_eq!(dyn_value::<usize>(&element), 2);
 
-        let mut harness = TestHarness::mount(&widget.as_dyn_widget());
+        let (new_widget, new_mounts, new_updates) = test_widget(9_usize);
+        with_ctx(|ctx| boxed_dyn(new_widget).update(&mut element, &mut render, ctx));
 
-        assert_eq!(widget.mounts.get(), 1);
-        assert_eq!(widget.updates.get(), 0);
-        assert_eq!(dyn_value::<usize>(&harness.root.element), 2);
-
-        let new_widget = TestWidget::new(9_usize);
-        harness.update(&widget.as_dyn_widget(), &new_widget.as_dyn_widget());
-
-        assert_eq!(new_widget.mounts.get(), 0);
-        assert_eq!(new_widget.updates.get(), 1);
-        assert_eq!(dyn_value::<usize>(&harness.root.element), 9);
+        // Same concrete type: the inner element is reconciled, not remounted.
+        assert_eq!((new_mounts.get(), new_updates.get()), (0, 1));
+        assert_eq!(dyn_value::<usize>(&element), 9);
     }
 
     #[test]
     fn updating_boxed_widgets() {
-        let widget = TestWidget::new(2_usize).into_boxed_render_box();
+        let (widget, _, _) = test_widget(2_usize);
+        let (mut element, mut render) = with_ctx(|ctx| widget.into_boxed_render_box().create(ctx));
+        assert_eq!(boxed_value::<usize>(&element), 2);
 
-        let mut harness = TestHarness::mount(&widget);
+        let (new_widget, _, _) = test_widget(9_usize);
+        with_ctx(|ctx| {
+            new_widget
+                .into_boxed_render_box()
+                .update(&mut element, &mut render, ctx);
+        });
 
-        assert_eq!(boxed_value::<usize>(&harness.root.element), 2);
-
-        let new_widget = TestWidget::new(9_usize).into_boxed_render_box();
-        harness.update(&widget, &new_widget);
-
-        assert_eq!(boxed_value::<usize>(&harness.root.element), 9);
+        assert_eq!(boxed_value::<usize>(&element), 9);
     }
 
     #[test]
-    fn replacing_dyn_widgets() {
-        let widget = TestWidget::new(2_usize);
+    fn replacing_dyn_widgets_recreates_the_inner() {
+        let (widget, _, _) = test_widget(2_usize);
+        let (mut element, mut render) = with_ctx(|ctx| boxed_dyn(widget).create(ctx));
 
-        let mut harness = TestHarness::mount(&widget.as_dyn_widget());
+        let (new_widget, new_mounts, new_updates) = test_widget(7_u8);
+        with_ctx(|ctx| boxed_dyn(new_widget).update(&mut element, &mut render, ctx));
 
-        assert_eq!(widget.mounts.get(), 1);
-        assert_eq!(widget.updates.get(), 0);
-        assert_eq!(dyn_value::<usize>(&harness.root.element), 2);
-
-        let new_widget = TestWidget::new(7_u8);
-        harness.update(&widget.as_dyn_widget(), &new_widget.as_dyn_widget());
-
-        // Type changed, so the inner element is recreated (create_element), not updated.
-        assert_eq!(new_widget.mounts.get(), 1);
-        assert_eq!(new_widget.updates.get(), 0);
-        assert_eq!(dyn_value::<u8>(&harness.root.element), 7);
+        // Type changed, so the inner element is recreated, not updated.
+        assert_eq!((new_mounts.get(), new_updates.get()), (1, 0));
+        assert_eq!(dyn_value::<u8>(&element), 7);
     }
 
     #[test]
     fn replacing_boxed_widgets() {
-        let widget = TestWidget::new(2_usize).into_boxed_render_box();
+        let (widget, _, _) = test_widget(2_usize);
+        let (mut element, mut render) = with_ctx(|ctx| widget.into_boxed_render_box().create(ctx));
+        assert_eq!(boxed_value::<usize>(&element), 2);
 
-        let mut harness = TestHarness::mount(&widget);
+        let (new_widget, _, _) = test_widget(7_u8);
+        with_ctx(|ctx| {
+            new_widget
+                .into_boxed_render_box()
+                .update(&mut element, &mut render, ctx);
+        });
 
-        assert_eq!(boxed_value::<usize>(&harness.root.element), 2);
-
-        harness.update(&widget, &TestWidget::new(7_u8).into_boxed_render_box());
-
-        assert_eq!(boxed_value::<u8>(&harness.root.element), 7);
+        assert_eq!(boxed_value::<u8>(&element), 7);
     }
 
+    fn leaf_widget(messages: &Rc<Cell<usize>>) -> BoxedDyn {
+        let messages = Rc::clone(messages);
+        Box::new(Leaf::new().on_message(move |_| messages.set(messages.get() + 1)))
+    }
+
+    type BoxedDyn = Box<dyn AnyWidget<Render = ()>>;
+
     #[test]
-    fn dispatch_message_through_boundary_with_matching_generation() {
+    fn dispatch_through_boundary_with_matching_generation_reaches_inner() {
         let messages = Rc::new(Cell::new(0_usize));
         let payload = Rc::new(Cell::new(None::<u32>));
-        let widget: Box<dyn AnyWidget<Render = ()>> = Box::new(Leaf::new().on_message({
+        let widget: BoxedDyn = Box::new(Leaf::new().on_message({
             let messages = Rc::clone(&messages);
             let payload = Rc::clone(&payload);
             move |ctx| {
@@ -704,123 +528,45 @@ mod tests {
                 payload.set(Some(ctx.consume::<u32>()));
             }
         }));
-        let mut harness = TestHarness::mount(&widget);
+        let (mut element, ()) = with_ctx(|ctx| widget.create(ctx));
 
-        // Initial generation is 0, so a routing id of 0 forwards to the inner widget.
-        let _ = harness.dispatch_message(&widget, &[RoutingId::new(0)], Box::new(123_u32));
+        // Initial generation is 0, so routing id 0 forwards to the inner.
+        let mut msg = MessageCtx::new(Box::new(123_u32) as Box<dyn Any>);
+        element.dispatch(&[RoutingId::new(0)], Dispatch::Message(&mut msg));
 
         assert_eq!(messages.get(), 1);
         assert_eq!(payload.get(), Some(123));
     }
 
     #[test]
-    fn dispatch_rebuild_through_boundary_reaches_inner() {
-        let rebuilds = Rc::new(Cell::new(0_usize));
+    fn dispatch_with_stale_generation_is_dropped() {
         let messages = Rc::new(Cell::new(0_usize));
-        let widget: Box<dyn AnyWidget<Render = ()>> = Box::new(
-            Leaf::new()
-                .on_message({
-                    let messages = Rc::clone(&messages);
-                    move |_| messages.set(messages.get() + 1)
-                })
-                .on_rebuild({
-                    let rebuilds = Rc::clone(&rebuilds);
-                    move |_| rebuilds.set(rebuilds.get() + 1)
-                }),
-        );
-        let mut harness = TestHarness::mount(&widget);
+        let (mut element, ()) = with_ctx(|ctx| leaf_widget(&messages).create(ctx));
 
-        harness.dispatch_rebuild(&widget, &[RoutingId::new(0)]);
-
-        assert_eq!(rebuilds.get(), 1);
-        assert_eq!(messages.get(), 0);
-    }
-
-    #[test]
-    fn dispatch_with_stale_generation_is_silently_dropped() {
-        let messages = Rc::new(Cell::new(0_usize));
-        let widget: Box<dyn AnyWidget<Render = ()>> = Box::new(Leaf::new().on_message({
-            let messages = Rc::clone(&messages);
-            move |_| messages.set(messages.get() + 1)
-        }));
-        let mut harness = TestHarness::mount(&widget);
-
-        // Initial generation is 0, so a routing id of 1 is stale and should be dropped.
-        let _ = harness.dispatch_message(&widget, &[RoutingId::new(1)], Box::new(7_u32));
+        // Generation is 0, so routing id 1 is stale and dropped.
+        let mut msg = MessageCtx::new(Box::new(7_u32) as Box<dyn Any>);
+        element.dispatch(&[RoutingId::new(1)], Dispatch::Message(&mut msg));
 
         assert_eq!(messages.get(), 0);
     }
 
     #[test]
-    fn type_swap_increments_generation_dropping_old_dispatches() {
+    fn type_swap_bumps_generation_dropping_old_dispatches() {
         let messages = Rc::new(Cell::new(0_usize));
-        let widget_a: Box<dyn AnyWidget<Render = ()>> = Box::new(Leaf::new().on_message({
-            let messages = Rc::clone(&messages);
-            move |_| messages.set(messages.get() + 1)
-        }));
-        let mut harness = TestHarness::mount(&widget_a);
+        let (mut element, mut render) = with_ctx(|ctx| leaf_widget(&messages).create(ctx));
 
-        // Swap to a different concrete type, which forces a generation increment.
-        let widget_b: Box<dyn AnyWidget<Render = ()>> = Box::new(TestWidget::new(0_u8));
-        harness.update(&widget_a, &widget_b);
+        // Swap to a different concrete type, forcing a generation increment.
+        let (other, _, _) = test_widget(0_u8);
+        with_ctx(|ctx| boxed_dyn(other).update(&mut element, &mut render, ctx));
 
-        // The old generation (0) is stale, so the dispatch should be dropped at the boundary
-        // and never reach the replaced inner.
-        let _ = harness.dispatch_message(&widget_b, &[RoutingId::new(0)], Box::new(42_u32));
+        // The old generation (0) is now stale, so the dispatch is dropped at the boundary.
+        let mut msg = MessageCtx::new(Box::new(42_u32) as Box<dyn Any>);
+        element.dispatch(&[RoutingId::new(0)], Dispatch::Message(&mut msg));
 
         assert_eq!(
             messages.get(),
             0,
             "the replaced inner must not receive messages addressed to the old generation"
-        );
-    }
-
-    struct Counted {
-        creates: Rc<Cell<usize>>,
-    }
-
-    struct CountedElement;
-
-    impl Element for CountedElement {}
-
-    impl Widget for Counted {
-        type Element = CountedElement;
-
-        type Render = ();
-
-        fn create_element(&self, _: &mut UpdateCtx) -> CountedElement {
-            CountedElement
-        }
-
-        fn update(&self, _: &mut CountedElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, _: &CountedElement) -> Self::Render {
-            self.creates.set(self.creates.get() + 1);
-        }
-
-        fn update_render_object(&self, _: &CountedElement, (): &mut Self::Render) {}
-    }
-
-    #[test]
-    fn updating_boxed_widget_reuses_render_object() {
-        let creates = Rc::new(Cell::new(0usize));
-
-        let widget = Counted {
-            creates: Rc::clone(&creates),
-        }
-        .into_boxed_render_box();
-
-        let harness = TestHarness::mount(&widget);
-
-        let mut ro = widget.create_render_object(&harness.root.element);
-        assert_eq!(creates.get(), 1);
-
-        widget.update_render_object(&harness.root.element, &mut ro);
-
-        assert_eq!(
-            creates.get(),
-            1,
-            "same-type update must reuse the render object, not recreate it"
         );
     }
 }

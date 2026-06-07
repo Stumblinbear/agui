@@ -9,11 +9,13 @@ pub trait AnyKeyable: Any {
     fn dyn_eq(&self, other: &dyn Any) -> bool;
 
     fn dyn_hash(&self, state: &mut dyn Hasher);
+
+    fn dyn_clone(&self) -> Box<dyn AnyKeyable>;
 }
 
 impl<T> AnyKeyable for T
 where
-    T: Hash + PartialEq + Eq + Any,
+    T: Hash + PartialEq + Eq + Any + Clone,
 {
     fn as_any(&self) -> &dyn Any {
         self
@@ -29,5 +31,9 @@ where
 
     fn dyn_hash(&self, mut state: &mut dyn Hasher) {
         self.hash(&mut state);
+    }
+
+    fn dyn_clone(&self) -> Box<dyn AnyKeyable> {
+        Box::new(self.clone())
     }
 }

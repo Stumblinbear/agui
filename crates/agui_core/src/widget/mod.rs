@@ -1,40 +1,42 @@
-use crate::{
-    context::{Dispatch, UpdateCtx},
-    element::{Element, RoutingId},
-    key::AnyKeyable,
-};
+use std::any::TypeId;
+
+use crate::{context::UpdateCtx, element::Element, key::AnyKeyable};
 
 mod any_widget;
 
 pub use any_widget::*;
 
-/// The immutable description of a piece of the tree. A `Widget` materializes and reconciles its
-/// persistent [`Element`] (which holds state and children) and supplies the recipe for its render
-/// object. The render type lives here, on the description, so the [`Element`] can stay
-/// render-agnostic and be shared across widgets.
+/// The immutable description of a piece of the tree. A `Widget` is consumed to build its persistent
+/// [`Element`], which holds state and children, together with its render object; it is consumed
+/// again on each reconcile to sync both.
+///
+/// The type of its render object is [`Render`](Self::Render).
 pub trait Widget {
     type Element: Element;
 
     type Render;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element;
+    /// Builds this widget's persistent [`Element`] and its render object, consuming the description.
+    /// Called once, when the widget first enters the tree.
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render);
 
-    /// Reconcile `element` in place against this (new) widget; `old` is the previous widget of the same
-    /// type, for prop diffing.
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx);
+    /// Reconciles `element` and `render_object` against this new description, consuming it. Called
+    /// when the parent supplies a new widget of the same type.
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    );
 
-    /// Route a [`Dispatch`] along `path` to the destination element.
-    fn dispatch(&self, _element: &mut Self::Element, path: &[RoutingId], _action: Dispatch) {
-        debug_assert!(path.is_empty(), "widget has nothing to route to");
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render;
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render);
-
-    fn is_same_type(&self, other: &Self) -> bool {
-        let _ = other;
-        true
+    /// The type identity used, together with [`key`](Self::key), to decide whether a new widget
+    /// reconciles an existing element in place rather than replacing it. Type-erased widgets report
+    /// their concrete inner widget's identity.
+    fn widget_type_id(&self) -> TypeId
+    where
+        Self: Sized + 'static,
+    {
+        TypeId::of::<Self>()
     }
 
     /// This is an implementation detail of element keys and should not be overriden by any user code.
@@ -48,77 +50,116 @@ impl Widget for () {
 
     type Render = ();
 
-    fn create_element(&self, _: &mut UpdateCtx) {}
+    fn create(self, _: &mut UpdateCtx) -> ((), ()) {
+        ((), ())
+    }
 
-    fn update(&self, (): &mut (), (): &Self, _: &mut UpdateCtx) {}
-
-    fn create_render_object(&self, (): &()) -> Self::Render {}
-
-    fn update_render_object(&self, (): &(), (): &mut Self::Render) {}
+    fn update(self, (): &mut (), (): &mut (), _: &mut UpdateCtx) {}
 }
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::{any::Any, cell::Cell, rc::Rc};
 
     use crate::{
-        context::MessageCtx,
-        element::RoutingId,
+        context::{Dispatch, MessageCtx},
+        element::{Element, RoutingId},
         test_fixtures::{Leaf, MultiChild, Transparent},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
+        widget::Widget,
     };
+
+    fn counter() -> Rc<Cell<usize>> {
+        Rc::new(Cell::new(0))
+    }
+
+    /// A leaf that bumps `count` on each message it receives.
+    fn counting_leaf(count: &Rc<Cell<usize>>) -> Leaf {
+        let count = Rc::clone(count);
+        Leaf::new().on_message(move |_| count.set(count.get() + 1))
+    }
+
+    /// A leaf that bumps `count` and records the message's `u32` payload.
+    fn recording_leaf(count: &Rc<Cell<usize>>, payload: &Rc<Cell<Option<u32>>>) -> Leaf {
+        let count = Rc::clone(count);
+        let payload = Rc::clone(payload);
+        Leaf::new().on_message(move |ctx| {
+            count.set(count.get() + 1);
+            payload.set(Some(ctx.consume::<u32>()));
+        })
+    }
+
+    /// A leaf that bumps `count` on each rebuild.
+    fn rebuilding_leaf(count: &Rc<Cell<usize>>) -> Leaf {
+        let count = Rc::clone(count);
+        Leaf::new().on_rebuild(move |_| count.set(count.get() + 1))
+    }
+
+    /// A leaf that bumps `count` on each update.
+    fn updating_leaf(count: &Rc<Cell<usize>>) -> Leaf {
+        let count = Rc::clone(count);
+        Leaf::new().on_update(move |_| count.set(count.get() + 1))
+    }
+
+    fn mount<W: Widget>(widget: W) -> (W::Element, W::Render) {
+        with_ctx(|ctx| widget.create(ctx))
+    }
+
+    fn message(
+        element: &mut impl Element,
+        path: &[RoutingId],
+        payload: Box<dyn Any>,
+    ) -> MessageCtx {
+        let mut ctx = MessageCtx::new(payload);
+        element.dispatch(path, Dispatch::Message(&mut ctx));
+        ctx
+    }
+
+    fn rebuild(element: &mut impl Element, path: &[RoutingId]) {
+        with_ctx(|ctx| element.dispatch(path, Dispatch::Rebuild(ctx)));
+    }
 
     #[test]
     fn message_at_empty_path_invokes_leaf() {
-        let messages = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let widget = Leaf::new().on_message(|ctx| {
-            messages.set(messages.get() + 1);
-            payload.set(Some(ctx.consume::<u32>()));
-        });
-        let mut harness = TestHarness::mount(&widget);
+        let count = counter();
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, ()) = mount(recording_leaf(&count, &payload));
 
-        let _ = harness.dispatch_message(&widget, &[], Box::new(42_u32));
+        message(&mut element, &[], Box::new(42_u32));
 
-        assert_eq!(messages.get(), 1);
+        assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(42));
     }
 
     #[test]
     fn rebuild_at_empty_path_invokes_leaf() {
-        let rebuilds = Cell::new(0_usize);
-        let widget = Leaf::new().on_rebuild(|_| rebuilds.set(rebuilds.get() + 1));
-        let mut harness = TestHarness::mount(&widget);
+        let count = counter();
+        let (mut element, ()) = mount(rebuilding_leaf(&count));
 
-        harness.dispatch_rebuild(&widget, &[]);
+        rebuild(&mut element, &[]);
 
-        assert_eq!(rebuilds.get(), 1);
+        assert_eq!(count.get(), 1);
     }
 
     #[test]
     fn message_without_request_rebuild_leaves_flag_unset() {
-        let widget = Leaf::new();
-        let mut harness = TestHarness::mount(&widget);
+        let (mut element, ()) = mount(Leaf::new());
 
-        let msg_ctx = harness.dispatch_message(&widget, &[], Box::new(1_u32));
+        let ctx = message(&mut element, &[], Box::new(1_u32));
 
         assert!(
-            !msg_ctx.rebuild_requested(),
+            !ctx.rebuild_requested(),
             "leaf did not call request_rebuild"
         );
     }
 
     #[test]
     fn message_with_request_rebuild_sets_flag() {
-        let widget = Leaf::new().on_message(MessageCtx::request_rebuild);
-        let mut harness = TestHarness::mount(&widget);
+        let (mut element, ()) = mount(Leaf::new().on_message(MessageCtx::request_rebuild));
 
-        let msg_ctx = harness.dispatch_message(&widget, &[], Box::new(7_u32));
+        let ctx = message(&mut element, &[], Box::new(7_u32));
 
-        assert!(
-            msg_ctx.rebuild_requested(),
-            "leaf called request_rebuild on the MessageCtx"
-        );
+        assert!(ctx.rebuild_requested(), "leaf called request_rebuild");
     }
 
     #[test]
@@ -138,216 +179,141 @@ mod tests {
 
     #[test]
     fn transparent_forwards_path_verbatim() {
-        // Transparent does not consume any path entry. Dispatching with an empty
-        // path through Transparent reaches the inner leaf directly.
-        let messages = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let widget = Transparent {
-            child: Leaf::new().on_message(|ctx| {
-                messages.set(messages.get() + 1);
-                payload.set(Some(ctx.consume::<u32>()));
-            }),
-        };
-        let mut harness = TestHarness::mount(&widget);
+        let count = counter();
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, ()) = mount(Transparent {
+            child: recording_leaf(&count, &payload),
+        });
 
-        let _ = harness.dispatch_message(&widget, &[], Box::new(5_u32));
+        message(&mut element, &[], Box::new(5_u32));
 
-        assert_eq!(messages.get(), 1);
+        assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(5));
     }
 
     #[test]
     fn nested_transparent_wrappers_forward_path_verbatim() {
-        // Two layers of Transparent should still expose the inner leaf at empty
-        // path; the path passes through both layers unchanged.
-        let messages = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let widget = Transparent {
+        let count = counter();
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, ()) = mount(Transparent {
             child: Transparent {
-                child: Leaf::new().on_message(|ctx| {
-                    messages.set(messages.get() + 1);
-                    payload.set(Some(ctx.consume::<u32>()));
-                }),
+                child: recording_leaf(&count, &payload),
             },
-        };
-        let mut harness = TestHarness::mount(&widget);
+        });
 
-        let _ = harness.dispatch_message(&widget, &[], Box::new(11_u32));
+        message(&mut element, &[], Box::new(11_u32));
 
-        assert_eq!(messages.get(), 1);
+        assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(11));
     }
 
     #[test]
     fn multichild_routes_to_correct_child_by_id() {
-        // MultiChild pushes routing id N for child N. Dispatching `[2]` reaches
-        // the third child and no others.
-        let m0 = Cell::new(0_usize);
-        let m1 = Cell::new(0_usize);
-        let m2 = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let widget = MultiChild {
+        let (m0, m1, m2) = (counter(), counter(), counter());
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, _) = mount(MultiChild {
             children: vec![
-                Leaf::new().on_message(|_| m0.set(m0.get() + 1)),
-                Leaf::new().on_message(|_| m1.set(m1.get() + 1)),
-                Leaf::new().on_message(|ctx| {
-                    m2.set(m2.get() + 1);
-                    payload.set(Some(ctx.consume::<u32>()));
-                }),
+                counting_leaf(&m0),
+                counting_leaf(&m1),
+                recording_leaf(&m2, &payload),
             ],
-        };
-        let mut harness = TestHarness::mount(&widget);
+        });
 
-        let _ = harness.dispatch_message(&widget, &[RoutingId::new(2)], Box::new(99_u32));
+        message(&mut element, &[RoutingId::new(2)], Box::new(99_u32));
 
-        assert_eq!(m0.get(), 0);
-        assert_eq!(m1.get(), 0);
-        assert_eq!(m2.get(), 1);
+        assert_eq!((m0.get(), m1.get(), m2.get()), (0, 0, 1));
         assert_eq!(payload.get(), Some(99));
     }
 
     #[test]
     fn multichild_rebuild_only_touches_target_child() {
-        // Dispatch::Rebuild through a routing widget should only invoke `rebuild`
-        // on the addressed child, not on siblings.
-        let r0 = Cell::new(0_usize);
-        let r1 = Cell::new(0_usize);
-        let widget = MultiChild {
-            children: vec![
-                Leaf::new().on_rebuild(|_| r0.set(r0.get() + 1)),
-                Leaf::new().on_rebuild(|_| r1.set(r1.get() + 1)),
-            ],
-        };
-        let mut harness = TestHarness::mount(&widget);
+        let (r0, r1) = (counter(), counter());
+        let (mut element, _) = mount(MultiChild {
+            children: vec![rebuilding_leaf(&r0), rebuilding_leaf(&r1)],
+        });
 
-        harness.dispatch_rebuild(&widget, &[RoutingId::new(0)]);
+        rebuild(&mut element, &[RoutingId::new(0)]);
 
-        assert_eq!(r0.get(), 1);
-        assert_eq!(r1.get(), 0);
+        assert_eq!((r0.get(), r1.get()), (1, 0));
     }
 
     #[test]
     fn dispatch_through_transparent_then_routing_widget() {
-        // A path like `[1]` should pass through a transparent outer widget and
-        // then index into the multichild beneath it.
-        let m0 = Cell::new(0_usize);
-        let m1 = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let widget = Transparent {
+        let (m0, m1) = (counter(), counter());
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, _) = mount(Transparent {
             child: MultiChild {
-                children: vec![
-                    Leaf::new().on_message(|_| m0.set(m0.get() + 1)),
-                    Leaf::new().on_message(|ctx| {
-                        m1.set(m1.get() + 1);
-                        payload.set(Some(ctx.consume::<u32>()));
-                    }),
-                ],
+                children: vec![counting_leaf(&m0), recording_leaf(&m1, &payload)],
             },
-        };
-        let mut harness = TestHarness::mount(&widget);
+        });
 
-        let _ = harness.dispatch_message(&widget, &[RoutingId::new(1)], Box::new(3_u32));
+        message(&mut element, &[RoutingId::new(1)], Box::new(3_u32));
 
-        assert_eq!(m0.get(), 0);
-        assert_eq!(m1.get(), 1);
+        assert_eq!((m0.get(), m1.get()), (0, 1));
         assert_eq!(payload.get(), Some(3));
     }
 
     #[test]
     fn deep_path_through_nested_routing_widgets() {
-        // Path `[0, 1]` walks into MultiChild's slot 0, then into that nested
-        // MultiChild's slot 1.
-        let m00 = Cell::new(0_usize);
-        let m01 = Cell::new(0_usize);
-        let m10 = Cell::new(0_usize);
-        let m11 = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let widget = MultiChild {
+        let (m00, m01, m10, m11) = (counter(), counter(), counter(), counter());
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, _) = mount(MultiChild {
             children: vec![
                 MultiChild {
-                    children: vec![
-                        Leaf::new().on_message(|_| m00.set(m00.get() + 1)),
-                        Leaf::new().on_message(|ctx| {
-                            m01.set(m01.get() + 1);
-                            payload.set(Some(ctx.consume::<u32>()));
-                        }),
-                    ],
+                    children: vec![counting_leaf(&m00), recording_leaf(&m01, &payload)],
                 },
                 MultiChild {
-                    children: vec![
-                        Leaf::new().on_message(|_| m10.set(m10.get() + 1)),
-                        Leaf::new().on_message(|_| m11.set(m11.get() + 1)),
-                    ],
+                    children: vec![counting_leaf(&m10), counting_leaf(&m11)],
                 },
             ],
-        };
-        let mut harness = TestHarness::mount(&widget);
+        });
 
-        let _ = harness.dispatch_message(
-            &widget,
+        message(
+            &mut element,
             &[RoutingId::new(0), RoutingId::new(1)],
             Box::new(77_u32),
         );
 
-        assert_eq!(m00.get(), 0);
         assert_eq!(m01.get(), 1);
         assert_eq!(payload.get(), Some(77));
-        assert_eq!(m10.get(), 0);
-        assert_eq!(m11.get(), 0);
+        assert_eq!((m00.get(), m10.get(), m11.get()), (0, 0, 0));
     }
 
     #[test]
-    fn update_through_routing_widget_reaches_correct_child() {
-        let updates = [Cell::new(0_usize), Cell::new(0_usize)];
-        let old_widget = MultiChild {
-            children: vec![
-                Leaf::new().on_update(|_| updates[0].set(updates[0].get() + 1)),
-                Leaf::new().on_update(|_| updates[1].set(updates[1].get() + 1)),
-            ],
-        };
-        let mut harness = TestHarness::mount(&old_widget);
+    fn update_through_routing_widget_reaches_each_child() {
+        let (u0, u1) = (counter(), counter());
+        let (mut element, mut render) = mount(MultiChild {
+            children: vec![updating_leaf(&u0), updating_leaf(&u1)],
+        });
 
-        let new_widget = MultiChild {
-            children: vec![
-                Leaf::new().on_update(|_| updates[0].set(updates[0].get() + 1)),
-                Leaf::new().on_update(|_| updates[1].set(updates[1].get() + 1)),
-            ],
-        };
-        harness.update(&old_widget, &new_widget);
+        with_ctx(|ctx| {
+            MultiChild {
+                children: vec![updating_leaf(&u0), updating_leaf(&u1)],
+            }
+            .update(&mut element, &mut render, ctx);
+        });
 
-        assert_eq!(updates[0].get(), 1);
-        assert_eq!(updates[1].get(), 1);
+        assert_eq!((u0.get(), u1.get()), (1, 1));
     }
 
     #[test]
     fn dispatch_after_update_reaches_correct_child() {
-        let messages = Cell::new(0_usize);
-        let payload = Cell::new(None::<u32>);
-        let old_widget = MultiChild {
-            children: vec![
-                Leaf::new(),
-                Leaf::new().on_message(|ctx| {
-                    messages.set(messages.get() + 1);
-                    payload.set(Some(ctx.consume::<u32>()));
-                }),
-            ],
-        };
-        let mut harness = TestHarness::mount(&old_widget);
+        let count = counter();
+        let payload = Rc::new(Cell::new(None));
+        let (mut element, mut render) = mount(MultiChild {
+            children: vec![Leaf::new(), recording_leaf(&count, &payload)],
+        });
 
-        let new_widget = MultiChild {
-            children: vec![
-                Leaf::new(),
-                Leaf::new().on_message(|ctx| {
-                    messages.set(messages.get() + 1);
-                    payload.set(Some(ctx.consume::<u32>()));
-                }),
-            ],
-        };
-        harness.update(&old_widget, &new_widget);
+        with_ctx(|ctx| {
+            MultiChild {
+                children: vec![Leaf::new(), recording_leaf(&count, &payload)],
+            }
+            .update(&mut element, &mut render, ctx);
+        });
 
-        let _ = harness.dispatch_message(&new_widget, &[RoutingId::new(1)], Box::new(55_u32));
+        message(&mut element, &[RoutingId::new(1)], Box::new(55_u32));
 
-        assert_eq!(messages.get(), 1);
+        assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(55));
     }
 }

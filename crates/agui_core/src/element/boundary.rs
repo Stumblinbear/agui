@@ -1,17 +1,16 @@
 use std::{
     cell::{Cell, RefCell},
     rc::{Rc, Weak},
-    sync::Arc,
 };
 
 use slotmap::SlotMap;
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::{AnyElement, Element, RoutingId, RoutingPath},
+    element::{AnyElement, RoutingId, RoutingPath},
     provide::ProvideScope,
     scheduling::TaskScheduler,
-    widget::AnyWidget,
+    widget::Widget,
 };
 
 slotmap::new_key_type! {
@@ -148,21 +147,15 @@ impl BuildScope {
     }
 }
 
-/// A build boundary's persistent state, owned by its [`BuildBoundaryElement`] handle and referenced by the
-/// registry while it is mounted. It retains the inner widget so a rebuild dispatches into the inner element
-/// directly, without the root holding its recipe.
-struct BoundaryCell<R> {
+/// A build boundary's persistent state, referenced by the registry while it is mounted.
+struct BuildBoundaryCell {
     state: Weak<RefCell<BuildState>>,
 
-    /// This boundary's key in the registry, replayed by the marks it queues. Replaced when the inner widget
-    /// is swapped, so a path addressing the old inner is dropped at lookup.
+    /// This boundary's key in the registry, replayed by the marks it queues.
     id: Cell<BoundaryId>,
 
     /// The depth in the boundary nesting, sorted at flush so the owner re-enters boundaries rootmost-first.
     depth: usize,
-
-    /// The inner widget, retained so a rebuild reaches it without the root holding its recipe.
-    recipe: RefCell<RetainedRecipe<R>>,
 
     /// The inner element this boundary wraps.
     child: RefCell<Box<dyn AnyElement>>,
@@ -175,8 +168,10 @@ struct BoundaryCell<R> {
     is_dirty: Cell<bool>,
 }
 
-impl<R: 'static> BoundaryCell<R> {
-    fn create(recipe: RetainedRecipe<R>, ctx: &mut UpdateCtx) -> Rc<Self> {
+impl BoundaryCell {
+    /// Registers a boundary under the current scope, with a placeholder child to be replaced once the
+    /// inner element is built under [`child_scope`](Self::child_scope).
+    fn register(ctx: &mut UpdateCtx) -> Rc<Self> {
         let scope = ctx.build_scope().clone();
         let depth = scope.depth;
 
@@ -184,22 +179,16 @@ impl<R: 'static> BoundaryCell<R> {
             state: Weak::clone(&scope.state),
             id: Cell::new(BoundaryId::default()),
             depth,
-            recipe: RefCell::new(recipe),
             child: RefCell::new(Box::new(())),
             suffixes: RefCell::new(Vec::new()),
             is_dirty: Cell::new(false),
         });
 
         if let Some(state) = scope.state.upgrade() {
-            let typed = Rc::downgrade(&cell);
+            let typed: Weak<BoundaryCell> = Rc::downgrade(&cell);
             let weak: Weak<dyn DynBoundary> = typed;
             cell.id.set(state.borrow_mut().boundaries.insert(weak));
         }
-
-        let child = ctx.with_build_scope(&cell.child_scope(), |ctx| {
-            cell.recipe.borrow().get().dyn_create_element(ctx)
-        });
-        *cell.child.borrow_mut() = child;
 
         cell
     }
@@ -228,21 +217,20 @@ impl<R: 'static> BoundaryCell<R> {
     }
 }
 
-impl<R> Drop for BoundaryCell<R> {
+impl Drop for BoundaryCell {
     fn drop(&mut self) {
         let Some(state) = self.state.upgrade() else {
             return;
         };
 
         let mut state = state.borrow_mut();
-        state.boundaries.remove(self.id.get());
         let id = self.id.get();
+        state.boundaries.remove(id);
         state.dirty.retain(|&dirty| dirty != id);
     }
 }
 
-/// The behavior of a [`BoundaryCell`], erased so the registry can hold boundaries of differing render
-/// types in one map.
+/// The behavior of a [`BoundaryCell`], erased so the registry can hold boundaries in one map.
 trait DynBoundary {
     fn dispatch_within(&self, within: &[RoutingId], action: Dispatch);
 
@@ -255,12 +243,10 @@ trait DynBoundary {
     fn flush_rebuilds(&self, scheduler: &mut dyn TaskScheduler, provide: &ProvideScope);
 }
 
-impl<R: 'static> DynBoundary for BoundaryCell<R> {
+impl DynBoundary for BoundaryCell {
     fn dispatch_within(&self, within: &[RoutingId], action: Dispatch) {
-        self.recipe
-            .borrow()
-            .get()
-            .dyn_dispatch(&mut **self.child.borrow_mut(), within, action);
+        let mut child = self.child.borrow_mut();
+        child.dyn_dispatch(within, action);
     }
 
     fn mark(&self, within: &[RoutingId]) {
@@ -285,61 +271,56 @@ impl<R: 'static> DynBoundary for BoundaryCell<R> {
             let mut path = suffix.to_vec();
             let mut ctx = UpdateCtx::new(scheduler, &mut path, provide, &child_scope);
 
-            self.recipe.borrow().get().dyn_dispatch(
-                &mut **self.child.borrow_mut(),
-                &suffix,
-                Dispatch::Rebuild(&mut ctx),
-            );
+            let mut child = self.child.borrow_mut();
+            child.dyn_dispatch(&suffix, Dispatch::Rebuild(&mut ctx));
         }
     }
 }
 
-/// The retained inner widget of a boundary, in whichever shared pointer wrapped it.
-enum RetainedRecipe<R> {
-    Rc(Rc<dyn AnyWidget<Render = R>>),
-    Arc(Arc<dyn AnyWidget<Render = R>>),
+/// The root build boundary: a handle over the boundary's persistent state. Built by consuming a widget,
+/// it produces the widget's render object once and registers the inner element so rebuilds reach it.
+pub struct BuildBoundaryElement {
+    cell: Rc<BoundaryCell>,
 }
 
-impl<R> RetainedRecipe<R> {
-    fn get(&self) -> &dyn AnyWidget<Render = R> {
-        match self {
-            Self::Rc(recipe) => &**recipe,
-            Self::Arc(recipe) => &**recipe,
-        }
-    }
-}
+impl BuildBoundaryElement {
+    /// Registers a boundary and builds `widget`'s element and render object under it, consuming the widget.
+    pub fn create<V>(widget: V, ctx: &mut UpdateCtx) -> (Self, V::Render)
+    where
+        V: Widget,
+        V::Element: 'static,
+    {
+        let cell = BoundaryCell::register(ctx);
 
-/// The [`Element`] of a shared-pointer build boundary. A thin handle over the boundary's persistent state,
-/// so the element can move with reconcile while the boundary itself stays put and registered.
-pub struct BuildBoundaryElement<R: 'static> {
-    cell: Rc<BoundaryCell<R>>,
-}
+        let (element, render_object) =
+            ctx.with_build_scope(&cell.child_scope(), |ctx| widget.create(ctx));
 
-impl<R: 'static> Element for BuildBoundaryElement<R> {}
+        *cell.child.borrow_mut() = Box::new(element);
 
-impl<R: 'static> BuildBoundaryElement<R> {
-    /// Creates a boundary whose inner widget is retained in an [`Rc`].
-    pub fn create_rc(recipe: Rc<dyn AnyWidget<Render = R>>, ctx: &mut UpdateCtx) -> Self {
-        Self {
-            cell: BoundaryCell::create(RetainedRecipe::Rc(recipe), ctx),
-        }
+        (Self { cell }, render_object)
     }
 
-    /// Creates a boundary whose inner widget is retained in an [`Arc`].
-    pub fn create_arc(recipe: Arc<dyn AnyWidget<Render = R>>, ctx: &mut UpdateCtx) -> Self {
-        Self {
-            cell: BoundaryCell::create(RetainedRecipe::Arc(recipe), ctx),
-        }
-    }
+    /// Reconciles the inner element and `render_object` against a new `widget` of the root's type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `widget`'s element type differs from the one the boundary was built with.
+    pub fn update<V>(&mut self, widget: V, render_object: &mut V::Render, ctx: &mut UpdateCtx)
+    where
+        V: Widget,
+        V::Element: 'static,
+    {
+        let child_scope = self.cell.child_scope();
 
-    /// Reconciles against an [`Rc`]-retained `new`.
-    pub fn update_rc(&mut self, recipe: Rc<dyn AnyWidget<Render = R>>, ctx: &mut UpdateCtx) {
-        self.update(RetainedRecipe::Rc(recipe), ctx);
-    }
+        ctx.with_build_scope(&child_scope, |ctx| {
+            let mut child = self.cell.child.borrow_mut();
+            let element = (**child)
+                .as_any_mut()
+                .downcast_mut::<V::Element>()
+                .expect("root element does not match its widget's type");
 
-    /// Reconciles against an [`Arc`]-retained `new`.
-    pub fn update_arc(&mut self, recipe: Arc<dyn AnyWidget<Render = R>>, ctx: &mut UpdateCtx) {
-        self.update(RetainedRecipe::Arc(recipe), ctx);
+            widget.update(element, render_object, ctx);
+        });
     }
 
     /// The id of this boundary in its registry.
@@ -347,53 +328,8 @@ impl<R: 'static> BuildBoundaryElement<R> {
         self.cell.id.get()
     }
 
-    /// Reconciles the inner element in place when its type is unchanged; otherwise replaces the whole
-    /// boundary, so the stale id drops any rebuilds still pending for the old inner.
-    fn update(&mut self, recipe: RetainedRecipe<R>, ctx: &mut UpdateCtx) {
-        let same = self
-            .cell
-            .recipe
-            .borrow()
-            .get()
-            .dyn_is_same_type(recipe.get());
-
-        if !same {
-            self.cell = BoundaryCell::create(recipe, ctx);
-            return;
-        }
-
-        let old = std::mem::replace(&mut *self.cell.recipe.borrow_mut(), recipe);
-        let child_scope = self.cell.child_scope();
-
-        ctx.with_build_scope(&child_scope, |ctx| {
-            self.cell.recipe.borrow().get().dyn_update(
-                &mut self.cell.child.borrow_mut(),
-                old.get(),
-                ctx,
-            );
-        });
-    }
-
     /// Routes `action` along `within` to the inner element. The path is relative to this boundary.
     pub fn dispatch(&mut self, within: &[RoutingId], action: Dispatch) {
         self.cell.dispatch_within(within, action);
-    }
-
-    /// Produces the render object from the retained inner widget and its element.
-    pub fn create_render_object(&self) -> R {
-        self.cell
-            .recipe
-            .borrow()
-            .get()
-            .dyn_create_render_object(&**self.cell.child.borrow())
-    }
-
-    /// Syncs `render_object` from the retained inner widget and its element.
-    pub fn update_render_object(&self, render_object: &mut R) {
-        self.cell
-            .recipe
-            .borrow()
-            .get()
-            .dyn_update_render_object(&**self.cell.child.borrow(), render_object);
     }
 }
