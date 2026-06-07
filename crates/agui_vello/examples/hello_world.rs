@@ -331,7 +331,18 @@ impl ApplicationHandler<WakeUp> for App {
                 self.draw();
             }
 
-            WindowEvent::RedrawRequested => self.draw(),
+            WindowEvent::RedrawRequested => {
+                self.draw();
+
+                // Sustain the frame loop from here rather than only from `about_to_wait`: the Win32 modal
+                // resize loop pumps `WM_PAINT` but never lets `about_to_wait` run, so re-requesting on each
+                // draw is what keeps an animation turning while the edge is held.
+                if self.view.needs_frame()
+                    && let Some(active) = self.active.as_ref()
+                {
+                    active.window.request_redraw();
+                }
+            }
             _ => {}
         }
     }
