@@ -199,12 +199,6 @@ impl App {
 
             self.painted = true;
         }
-
-        // While frame callbacks are registered, request the next frame so animations keep advancing.
-        // AutoVsync paces these to the display.
-        if self.view.is_animating() {
-            active.window.request_redraw();
-        }
     }
 }
 
@@ -407,11 +401,9 @@ trait View {
     fn resize(&mut self, constraints: BoxConstraints);
     /// Advances spawned tasks as far as they will go and applies the messages they post.
     fn poll_tasks(&mut self);
-    /// Whether a frame is owed: the tree was dirtied or an animation is running.
+    /// Whether a frame is owed: the tree was dirtied or an animation is still ticking.
     fn needs_frame(&self) -> bool;
     fn frame(&mut self, now: Duration) -> Scene;
-    /// Whether a frame callback is registered, so the loop should keep requesting frames.
-    fn is_animating(&self) -> bool;
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
@@ -447,7 +439,7 @@ where
     }
 
     fn frame(&mut self, now: Duration) -> Scene {
-        // Tasks have already been drained, so apply any rebuild they queued, run frame callbacks for
+        // Tasks have already been drained, so apply any rebuild they queued, advance frame callbacks for
         // this frame's time, then lay out and paint what changed.
         if self.build.flush(&mut self.reactor.scheduler()) {
             self.sync_render();
@@ -458,10 +450,6 @@ where
         self.owner.flush_layout();
         self.owner.flush_paint();
         self.owner.composite()
-    }
-
-    fn is_animating(&self) -> bool {
-        !self.vsync.is_idle()
     }
 
     fn hit_test(&self, position: Offset) -> HitTestResult {

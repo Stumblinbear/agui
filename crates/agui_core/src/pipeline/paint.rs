@@ -259,12 +259,11 @@ struct PaintCell {
     content: BoundaryContent,
     layer: LayerHandle<ContainerLayer>,
 
-    /// Whether this cell is currently in the paint channel, guarding a double-mark from linking it
-    /// twice.
+    /// Whether this cell is currently in the paint channel, guarding a double-mark from linking it twice.
     needs_paint: Cell<bool>,
 
-    /// Whether this cell is currently in the compositing channel, guarding a double-mark from linking it
-    /// twice.
+    /// Whether this cell is currently in the compositing-bits channel, guarding a double-mark from linking
+    /// it twice.
     needs_compositing: Cell<bool>,
 }
 
@@ -374,28 +373,29 @@ impl PaintPipelineState {
         }
     }
 
-    fn mark_needs_compositing_update(&mut self, cell: &Rc<PaintCell>) {
+    fn mark_needs_compositing_bits_update(&mut self, cell: &Rc<PaintCell>) {
         match self.phase {
             PaintPipelinePhase::Idle => {}
 
             PaintPipelinePhase::UpdateCompositingBits => {
                 panic!(
-                    "cannot mark a render object for compositing update while updating compositing bits"
+                    "cannot mark a render object for compositing bits update while updating compositing bits"
                 );
             }
 
             PaintPipelinePhase::Paint => {
                 panic!(
-                    "cannot mark a render object for compositing update while painting is in progress"
+                    "cannot mark a render object for compositing bits update while painting is in progress"
                 );
             }
         }
 
-        tracing::trace!(boundary = ?Rc::as_ptr(cell), "marked boundary for compositing update");
+        tracing::trace!(boundary = ?Rc::as_ptr(cell), "marked boundary for compositing bits update");
 
         let was_clean = self.is_clean();
 
         self.link_compositing(cell);
+        // A changed compositing bit changes how the boundary paints, so it must also repaint.
         self.link_paint(cell);
 
         if was_clean {
@@ -448,7 +448,7 @@ impl PaintScope {
 
     /// Marks the boundary's compositing bits for recomputation before its next repaint, and the
     /// boundary for repaint. Only an inner boundary tracks its bits this way.
-    pub fn mark_needs_compositing_update(&self) {
+    pub fn mark_needs_compositing_bits_update(&self) {
         let PaintScopeInner::Boundary { pending, cell, .. } = &self.0 else {
             return;
         };
@@ -461,7 +461,9 @@ impl PaintScope {
             return;
         };
 
-        pending.borrow_mut().mark_needs_compositing_update(&cell);
+        pending
+            .borrow_mut()
+            .mark_needs_compositing_bits_update(&cell);
     }
 }
 
@@ -489,8 +491,8 @@ impl PaintBoundaryHandle {
     }
 
     /// Marks this boundary's compositing bits for recomputation before its next repaint.
-    pub fn mark_needs_compositing_update(&self) {
-        self.scope().mark_needs_compositing_update();
+    pub fn mark_needs_compositing_bits_update(&self) {
+        self.scope().mark_needs_compositing_bits_update();
     }
 }
 
@@ -819,10 +821,10 @@ mod tests {
         assert_eq!(paints.get(), 2, "the boundary repainted");
         assert_eq!(bits.get(), 1, "a paint mark does not recompute bits");
 
-        boundary.mark_needs_compositing_update();
+        boundary.mark_needs_compositing_bits_update();
         flush_paint(&mut pipeline);
         assert_eq!(paints.get(), 3, "the boundary repainted");
-        assert_eq!(bits.get(), 2, "a compositing mark recomputes bits");
+        assert_eq!(bits.get(), 2, "a compositing-bits mark recomputes bits");
     }
 
     #[test]

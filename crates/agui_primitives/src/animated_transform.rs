@@ -130,8 +130,9 @@ where
         let layer = self.build_layer();
         let transform = Rc::clone(&self.transform);
 
-        self.handle =
-            Some(vsync.on_frame(move |now| layer.borrow_mut().set_transform(transform(now))));
+        self.handle = Some(vsync.on_frame(move |now| {
+            layer.borrow_mut().set_transform(transform(now));
+        }));
     }
 
     /// This subtree's transform layer, once it has been built.
