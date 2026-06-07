@@ -53,7 +53,7 @@ fn main() {
 
         Provide::new(Rc::new(Fonts::new())).child(LayoutBuilder::new(move |constraints| {
             if constraints.max_width().get() < 900.0 {
-                return ColoredBox::new(Color::rgb8(255, 138, 0))
+                return ColoredBox::new(Color::from_rgb8(255, 138, 0))
                     .child(Text::new("Hello, world!").family("Arial"))
                     .into_boxed_render_box();
             }
@@ -83,7 +83,7 @@ fn main() {
                                 .vsync(vsync.clone())
                                 .child(
                                     Opacity::new(0.5).child(
-                                        ColoredBox::new(Color::rgb8(255, 138, 0))
+                                        ColoredBox::new(Color::from_rgb8(255, 138, 0))
                                             .child(Text::new("Hello, world!").family("Arial")),
                                     ),
                                 ),
@@ -178,23 +178,38 @@ impl App {
         append_scene(&scene, &mut self.vello_scene);
 
         let device = &self.context.devices[active.surface.dev_id];
-        let texture = active.surface.surface.get_current_texture().unwrap();
-        self.renderers[active.surface.dev_id]
+        let surface = &active.surface;
+
+        self.renderers[surface.dev_id]
             .as_mut()
             .unwrap()
-            .render_to_surface(
+            .render_to_texture(
                 &device.device,
                 &device.queue,
                 &self.vello_scene,
-                &texture,
+                &surface.target_view,
                 &RenderParams {
-                    base_color: Color::rgb8(30, 30, 30),
+                    base_color: Color::from_rgb8(30, 30, 30),
                     width,
                     height,
                     antialiasing_method: AaConfig::Area,
                 },
             )
             .unwrap();
+
+        let texture = surface.surface.get_current_texture().unwrap();
+        let mut encoder = device
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        surface.blitter.copy(
+            &device.device,
+            &mut encoder,
+            &surface.target_view,
+            &texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+        );
+        device.queue.submit([encoder.finish()]);
         texture.present();
 
         // The first frame is on screen; reveal the window and start accepting pointer events.
@@ -258,10 +273,10 @@ impl ApplicationHandler<WakeUp> for App {
             Renderer::new(
                 &self.context.devices[surface.dev_id].device,
                 RendererOptions {
-                    surface_format: Some(surface.format),
                     use_cpu: false,
                     antialiasing_support: AaSupport::area_only(),
                     num_init_threads: NonZeroUsize::new(1),
+                    pipeline_cache: None,
                 },
             )
             .unwrap()

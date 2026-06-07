@@ -267,8 +267,8 @@ struct PaintCell {
     needs_compositing: Cell<bool>,
 }
 
-intrusive_adapter!(PaintLinkAdapter = UnsafeRef<PaintCell>: PaintCell { paint_link: LinkedListLink });
-intrusive_adapter!(CompositingLinkAdapter = UnsafeRef<PaintCell>: PaintCell { compositing_link: LinkedListLink });
+intrusive_adapter!(PaintLinkAdapter = UnsafeRef<PaintCell>: PaintCell { paint_link => LinkedListLink });
+intrusive_adapter!(CompositingLinkAdapter = UnsafeRef<PaintCell>: PaintCell { compositing_link => LinkedListLink });
 
 /// Recovers a counted owning `Rc` from a non-owning ref popped off a channel.
 fn recover_owner(popped: UnsafeRef<PaintCell>) -> Rc<PaintCell> {
@@ -706,7 +706,7 @@ mod tests {
         let child = pipeline.register(
             content(Counter {
                 paints: Rc::clone(&child_paints),
-                color: Color::rgb8(255, 0, 0),
+                color: Color::from_rgb8(255, 0, 0),
             }),
             child_layer,
         );
@@ -855,7 +855,7 @@ mod tests {
         let animated = pipeline.register(
             content(Counter {
                 paints: Rc::clone(&animated_paints),
-                color: Color::rgb8(255, 0, 0),
+                color: Color::from_rgb8(255, 0, 0),
             }),
             animated_layer,
         );

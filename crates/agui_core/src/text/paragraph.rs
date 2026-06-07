@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use parley::{Alignment, Layout, PositionedLayoutItem};
+use parley::{Alignment, AlignmentOptions, Layout, PositionedLayoutItem};
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
@@ -172,7 +172,7 @@ impl RenderBox for RenderParagraph {
         // Reuse the existing line breaking when the width hasn't changed since the last pass.
         if self.broken_width != max_advance {
             layout.break_all_lines(max_advance);
-            layout.align(max_advance, Alignment::Start);
+            layout.align(Alignment::Start, AlignmentOptions::default());
         }
 
         let size = Size::new(layout.width(), layout.height());
@@ -183,7 +183,8 @@ impl RenderBox for RenderParagraph {
     }
 
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        // parley 0.2 exposes no content-width helper, so a minimum cannot be derived.
+        // A real minimum is available via the layout's content widths, but deriving one is left for
+        // its own change rather than folded into the dependency bump.
         None
     }
 

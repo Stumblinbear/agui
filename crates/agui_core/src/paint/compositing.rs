@@ -593,8 +593,8 @@ mod tests {
 
     #[test]
     fn flatten_inlines_references_and_keeps_distinct_brushes() {
-        let red = Color::rgb8(255, 0, 0);
-        let blue = Color::rgb8(0, 0, 255);
+        let red = Color::from_rgb8(255, 0, 0);
+        let blue = Color::from_rgb8(0, 0, 255);
 
         let mut container = ContainerLayer::new();
         container.append(LayerHandle::new(PictureLayer::new(solid_fill(red))).into());

@@ -1,6 +1,7 @@
-use std::{borrow::Cow, cell::RefCell};
+use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
-use parley::{FontContext, FontFamily, FontStack, Layout, LayoutContext, StyleProperty};
+use parley::{FontContext, FontFamily, FontFamilyName, Layout, LayoutContext, StyleProperty};
+use peniko::Blob;
 
 use crate::text::TextBrush;
 
@@ -25,7 +26,10 @@ impl Fonts {
 
     /// Registers a font blob, making its families available to shaping.
     pub fn register(&self, data: Vec<u8>) {
-        self.ctx.borrow_mut().collection.register_fonts(data);
+        self.ctx
+            .borrow_mut()
+            .collection
+            .register_fonts(Blob::new(Arc::new(data)), None);
     }
 
     /// Shapes `text` into an unbroken layout, borrowing the database and scratch for the call. A leaf
@@ -40,12 +44,12 @@ impl Fonts {
         let mut ctx = self.ctx.borrow_mut();
         let mut scratch = self.scratch.borrow_mut();
 
-        let mut builder = scratch.ranged_builder(&mut ctx, text, 1.0);
+        let mut builder = scratch.ranged_builder(&mut ctx, text, 1.0, true);
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(StyleProperty::Brush(brush));
         if let Some(family) = family {
-            builder.push_default(StyleProperty::FontStack(FontStack::Single(
-                FontFamily::Named(Cow::Borrowed(family)),
+            builder.push_default(StyleProperty::FontFamily(FontFamily::Single(
+                FontFamilyName::Named(Cow::Borrowed(family)),
             )));
         }
 

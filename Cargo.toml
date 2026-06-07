@@ -35,19 +35,19 @@ agui_test = { path = "crates/agui_test", version = "0.1" }
 
 bon = "3.3.2"
 fnv = "1.0"
-intrusive-collections = "0.9.7"
+intrusive-collections = "0.10"
 smallbox = "0.8"
 smallvec = "1.14.0"
-thiserror = "1.0"
+thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 typed_floats = "1.0.2"
 
-rand = "0.8"
-rustc-hash = "1.1"
+rand = "0.10"
+rustc-hash = "2.1"
 slotmap = "1.0"
 parking_lot = "0.12"
-imbl = "5.0"
+imbl = "7.0"
 bitflags = "2.4"
 url = "2.4"
 
@@ -55,25 +55,25 @@ futures = "0.3"
 futures-util = { version = "0.3", default-features = false }
 futures-lite = "2.2"
 futures-executor = "0.3"
-event-listener = "4.0"
+event-listener = "5.4"
 async_cell = "0.2.2"
 async-watch = "0.3"
 async-lock = "3.3"
 async-channel = "2.1"
 
-mockall = "0.11"
-criterion = { version = "0.5", features = ["html_reports"] }
+mockall = "0.14"
+criterion = { version = "0.8", features = ["html_reports"] }
 
 lyon = "1.0"
-parley = "0.2"
-peniko = "0.2"
-vello = "0.3"
-png = "0.17"
+parley = "0.10"
+peniko = "0.6"
+vello = "0.7"
+png = "0.18"
 
 raw-window-handle = "0.6"
 
 winit = "0.30"
-pollster = "0.3"
+pollster = "0.4"
 
 [features]
 # default = ["primitives", "widgets", "macros"]

@@ -133,7 +133,7 @@ impl<'b> Canvas<'b> {
     /// coordinate system in effect.
     pub fn draw_glyphs(
         &mut self,
-        font: &peniko::Font,
+        font: &peniko::FontData,
         font_size: f32,
         brush: BrushId<'b>,
         glyphs: Vec<GlyphInstance>,
@@ -175,7 +175,7 @@ mod tests {
     fn draw_glyphs_records_a_draw_glyphs_command() {
         let scene = Canvas::record(|canvas| {
             let black = canvas.brush(Color::BLACK);
-            let font = peniko::Font::new(peniko::Blob::new(std::sync::Arc::new(Vec::new())), 0);
+            let font = peniko::FontData::new(peniko::Blob::new(std::sync::Arc::new(Vec::new())), 0);
 
             canvas.draw_glyphs(
                 &font,

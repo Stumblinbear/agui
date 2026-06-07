@@ -23,7 +23,7 @@ fn orange_half_pane_matches_golden() {
     let widget = FractionallySizedBox::new()
         .width_factor(0.5)
         .height_factor(1.0)
-        .child(ColoredBox::new(Color::rgb8(255, 138, 0)));
+        .child(ColoredBox::new(Color::from_rgb8(255, 138, 0)));
 
     let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
     render.layout(
@@ -36,7 +36,7 @@ fn orange_half_pane_matches_golden() {
     let scene = Compositor::compose(&root);
     let vello_scene = to_vello_scene(&scene);
 
-    let image = headless.render(&vello_scene, width, height, Color::rgb8(30, 30, 30));
+    let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
 
     assert_golden(
         &image,

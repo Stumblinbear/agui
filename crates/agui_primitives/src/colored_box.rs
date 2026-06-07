@@ -183,8 +183,8 @@ mod tests {
 
     #[test]
     fn paints_its_color_over_the_child_bounds() {
-        let widget =
-            ColoredBox::new(Color::rgb8(255, 0, 0)).child(SizedBox::new().width(20).height(10));
+        let widget = ColoredBox::new(Color::from_rgb8(255, 0, 0))
+            .child(SizedBox::new().width(20).height(10));
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
 
@@ -203,7 +203,9 @@ mod tests {
             panic!("expected a fill");
         };
 
-        assert!(matches!(scene.brush(*brush), Brush::Solid(c) if *c == Color::rgb8(255, 0, 0)));
+        assert!(
+            matches!(scene.brush(*brush), Brush::Solid(c) if *c == Color::from_rgb8(255, 0, 0))
+        );
 
         let PaintShape::Rect(rect) = shape else {
             panic!("expected the bounds to be kept as a primitive rect, not flattened to a path");
@@ -215,8 +217,9 @@ mod tests {
     #[test]
     fn paints_the_child_over_its_color() {
         // A painting child nested inside, so the outer fill must be followed by the child's own.
-        let widget = ColoredBox::new(Color::rgb8(255, 0, 0)).child(
-            ColoredBox::new(Color::rgb8(0, 0, 255)).child(SizedBox::new().width(20).height(10)),
+        let widget = ColoredBox::new(Color::from_rgb8(255, 0, 0)).child(
+            ColoredBox::new(Color::from_rgb8(0, 0, 255))
+                .child(SizedBox::new().width(20).height(10)),
         );
         let mut render_object =
             widget.create_render_object(&TestHarness::mount(&widget).root.element);
@@ -244,7 +247,7 @@ mod tests {
 
         assert_eq!(
             colors,
-            vec![Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255)],
+            vec![Color::from_rgb8(255, 0, 0), Color::from_rgb8(0, 0, 255)],
             "the color fills first, then the child paints over it"
         );
     }

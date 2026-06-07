@@ -83,7 +83,7 @@ pub enum PaintCommand {
     /// Draws a run of positioned glyphs from one font at one size, filled with `brush`. Positions are
     /// baked into each glyph's coordinates; the transform in effect places the run.
     DrawGlyphs {
-        font: peniko::Font,
+        font: peniko::FontData,
         font_size: f32,
         brush: u32,
         glyphs: Vec<GlyphInstance>,

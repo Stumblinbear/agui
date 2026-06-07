@@ -189,7 +189,7 @@ struct LayoutCell {
     is_dirty: Cell<bool>,
 }
 
-intrusive_adapter!(LayoutCellAdapter = UnsafeRef<LayoutCell>: LayoutCell { link: LinkedListLink });
+intrusive_adapter!(LayoutCellAdapter = UnsafeRef<LayoutCell>: LayoutCell { link => LinkedListLink });
 
 /// The layout dirty state, shared so a [`LayoutScope`] can mark a boundary out of band.
 struct LayoutPipelineState {

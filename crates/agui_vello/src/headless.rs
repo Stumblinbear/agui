@@ -9,7 +9,7 @@ use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
     peniko::Color,
     wgpu::{
-        self, Extent3d, Maintain, MapMode, Origin3d, TextureAspect, TextureDescriptor,
+        self, Extent3d, MapMode, Origin3d, PollType, TextureAspect, TextureDescriptor,
         TextureDimension, TextureFormat, TextureUsages,
     },
 };
@@ -25,30 +25,30 @@ impl HeadlessRenderer {
     /// Creates a renderer on a default GPU adapter, or `None` if none is available, so a caller on a
     /// machine without a GPU can skip golden tests rather than fail.
     pub fn new() -> Option<Self> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
 
         let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
             &instance, None,
-        ))?;
-
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: adapter.features() & wgpu::Features::CLEAR_TEXTURE,
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::default(),
-            },
-            None,
         ))
+        .ok()?;
+
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: adapter.features() & wgpu::Features::CLEAR_TEXTURE,
+            required_limits: wgpu::Limits::default(),
+            experimental_features: wgpu::ExperimentalFeatures::default(),
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: wgpu::Trace::Off,
+        }))
         .ok()?;
 
         let renderer = Renderer::new(
             &device,
             RendererOptions {
-                surface_format: None,
                 use_cpu: false,
                 antialiasing_support: AaSupport::area_only(),
                 num_init_threads: NonZeroUsize::new(1),
+                pipeline_cache: None,
             },
         )
         .ok()?;
@@ -117,15 +117,15 @@ impl HeadlessRenderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture,
                 mip_level: 0,
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_row),
                     rows_per_image: Some(height),
@@ -141,7 +141,9 @@ impl HeadlessRenderer {
 
         let slice = buffer.slice(..);
         slice.map_async(MapMode::Read, |_| {});
-        self.device.poll(Maintain::Wait);
+        self.device
+            .poll(PollType::wait_indefinitely())
+            .expect("poll device");
         let mapped = slice.get_mapped_range();
 
         let row = width as usize * 4;
@@ -185,7 +187,7 @@ impl Image {
     pub fn load_png(path: impl AsRef<Path>) -> Result<Self, png::DecodingError> {
         let mut reader = png::Decoder::new(BufReader::new(File::open(path)?)).read_info()?;
 
-        let mut rgba = vec![0; reader.output_buffer_size()];
+        let mut rgba = vec![0; reader.output_buffer_size().expect("output buffer size")];
         let info = reader.next_frame(&mut rgba)?;
         rgba.truncate(info.buffer_size());
 

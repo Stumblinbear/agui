@@ -32,7 +32,13 @@ fn render_into(scene: &Scene, target: &mut vello::Scene, base: Affine) {
             }
 
             PaintCommand::PushLayer { blend, alpha, clip } => {
-                with_shape!(clip, |s| target.push_layer(*blend, *alpha, transform, s));
+                with_shape!(clip, |s| target.push_layer(
+                    vello::peniko::Fill::NonZero,
+                    *blend,
+                    *alpha,
+                    transform,
+                    s
+                ));
             }
             PaintCommand::PopLayer => target.pop_layer(),
 

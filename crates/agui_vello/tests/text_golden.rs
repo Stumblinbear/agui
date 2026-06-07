@@ -54,7 +54,7 @@ fn text_renders_glyphs_matching_golden() {
     let scene = owner.composite();
     let vello_scene = to_vello_scene(&scene);
 
-    let image = headless.render(&vello_scene, width, height, Color::rgb8(30, 30, 30));
+    let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
 
     assert_golden(
         &image,
