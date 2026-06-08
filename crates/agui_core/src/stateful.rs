@@ -1,21 +1,25 @@
 use crate::{
-    context::{Dispatch, UpdateCtx},
+    context::Dispatch,
     element::{Element, RoutingId, node::ElementNode},
+    prelude::element::UpdateCtx,
     widget::Widget,
 };
 
 /// State that persists across rebuilds and produces the subtree to show for it.
 ///
 /// Implement this on the data a widget owns; [`build`](Self::build) reads that data and returns the
-/// child to display. A [`Stateful`] widget holds the state on its element, so it survives rebuilds, and
-/// reconciles the child returned by `build` whenever the state changes.
-pub trait State: 'static {
-    /// The widget [`build`](Self::build) returns. Its type is fixed across rebuilds; use a boxed widget
-    /// for a subtree whose shape varies.
+/// child to display.
+pub trait WidgetState {
+    type Widget: Widget;
+
     type Child: Widget;
 
+    fn init_state(ctx: &mut UpdateCtx, widget: Self::Widget) -> Self;
+
+    fn did_update_widget(&mut self, ctx: &mut UpdateCtx, widget: Self::Widget);
+
     /// Builds the subtree to show for the current state.
-    fn build(&self) -> Self::Child;
+    fn build(&self, ctx: &mut UpdateCtx) -> Self::Child;
 }
 
 /// A mutation applied to a [`State`] to change it, delivered as a message to a [`Stateful`] widget.
@@ -23,34 +27,33 @@ pub trait State: 'static {
 /// Deliver one to the widget's path to mutate its state and schedule a rebuild of its subtree.
 pub type SetState<S> = Box<dyn FnOnce(&mut S)>;
 
-/// A widget whose [`State`] persists across rebuilds and whose subtree is reconciled when the state
-/// changes.
-///
-/// Mount it with an initial state. A [`SetState`] message delivered to its path mutates the state and
-/// rebuilds the subtree in place, keeping the child's element and render object where their type is
-/// unchanged. The widget reports its child's size as its own; it draws nothing of its own.
-pub struct Stateful<S> {
-    initial: S,
-}
-
-impl<S: State> Stateful<S> {
-    /// A stateful widget starting from `initial`.
-    pub fn new(initial: S) -> Self {
-        Self { initial }
-    }
-}
-
 /// The [`Element`] of a [`Stateful`] widget. It owns the state and the child's materialized subtree.
-pub struct StatefulElement<S: State> {
+pub struct StatefulElement<S>
+where
+    S: WidgetState,
+{
     state: S,
+
     child: ElementNode<<S::Child as Widget>::Element>,
+}
+
+impl<S> StatefulElement<S>
+where
+    S: WidgetState,
+{
+    pub fn new(state: S, child: <S::Child as Widget>::Element) -> Self {
+        Self {
+            state,
+
+            child: ElementNode::new(child),
+        }
+    }
 }
 
 impl<S> Element for StatefulElement<S>
 where
-    S: State,
-    <S::Child as Widget>::Element: Element<Render = <S::Child as Widget>::Render>,
-    <S::Child as Widget>::Render: 'static,
+    S: WidgetState + 'static,
+    S::Child: Widget,
 {
     type Render = <S::Child as Widget>::Render;
 
@@ -64,11 +67,8 @@ where
                 }
 
                 Dispatch::Rebuild(ctx) => {
-                    let child = self.state.build();
-
-                    ctx.with_routing_id(RoutingId::from_index(0), |ctx| {
-                        child.update(&mut self.child.element, render, ctx);
-                    });
+                    let child = self.state.build(ctx);
+                    child.update(&mut self.child.element, render, ctx);
                 }
             }
 
@@ -76,44 +76,6 @@ where
         };
 
         self.child.element.dispatch(render, rest, action);
-    }
-}
-
-impl<S> Widget for Stateful<S>
-where
-    S: State,
-    <S::Child as Widget>::Element: Element<Render = <S::Child as Widget>::Render>,
-    <S::Child as Widget>::Render: 'static,
-{
-    type Element = StatefulElement<S>;
-
-    type Render = <S::Child as Widget>::Render;
-
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let state = self.initial;
-
-        let child = state.build();
-        let (child_element, child_render) =
-            ctx.with_routing_id(RoutingId::from_index(0), |ctx| child.create(ctx));
-
-        let element = StatefulElement {
-            state,
-            child: ElementNode::new(child_element),
-        };
-
-        (element, child_render)
-    }
-
-    fn update(self, element: &mut Self::Element, render: &mut Self::Render, ctx: &mut UpdateCtx) {
-        // State lives on the element and persists, so the re-supplied initial is dropped. Rebuild from
-        // the current state so a provided value that changed above reaches the child.
-        let Self { initial: _ } = self;
-
-        let child = element.state.build();
-
-        ctx.with_routing_id(RoutingId::from_index(0), |ctx| {
-            child.update(&mut element.child.element, render, ctx);
-        });
     }
 }
 
@@ -130,6 +92,7 @@ mod tests {
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
         pipeline::build::BuildOwner,
+        prelude::element::UpdateCtx,
         render_object::{
             RenderObject,
             box_layout::{BoxConstraints, RenderBox},
@@ -142,14 +105,59 @@ mod tests {
     /// objects were built, so a test can tell a reconcile (reused) from a replacement (rebuilt).
     struct Counter {
         count: u32,
+
         creates: Rc<Cell<usize>>,
     }
 
-    impl State for Counter {
+    impl Widget for Counter {
+        type Element = StatefulElement<CounterState>;
+
+        type Render = <<CounterState as WidgetState>::Child as Widget>::Render;
+
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let state = CounterState::init_state(ctx, self);
+            let child = state.build(ctx);
+            let (child_element, child_render) = child.create(ctx);
+            let element = StatefulElement::new(state, child_element);
+            (element, child_render)
+        }
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.state.did_update_widget(ctx, self);
+            let child = element.state.build(ctx);
+            child.update(&mut element.child.element, render, ctx);
+        }
+    }
+
+    struct CounterState {
+        count: u32,
+
+        creates: Rc<Cell<usize>>,
+    }
+
+    impl WidgetState for CounterState {
+        type Widget = Counter;
         type Child = Square;
 
+        fn init_state(_: &mut UpdateCtx, widget: Self::Widget) -> Self {
+            CounterState {
+                count: widget.count,
+                creates: widget.creates,
+            }
+        }
+
+        fn did_update_widget(&mut self, _: &mut UpdateCtx, widget: Self::Widget) {
+            self.count = widget.count;
+            self.creates = widget.creates;
+        }
+
         #[allow(clippy::cast_precision_loss)]
-        fn build(&self) -> Square {
+        fn build(&self, _: &mut UpdateCtx) -> Self::Child {
             Square {
                 side: self.count as f32,
                 creates: Rc::clone(&self.creates),
@@ -249,10 +257,11 @@ mod tests {
 
         let mut tasks = TestTaskRunner::new();
         let (mut owner, render) = BuildOwner::mount(
-            Stateful::new(Counter {
+            Counter {
                 count: 1,
+
                 creates: Rc::clone(&creates),
-            }),
+            },
             &mut tasks.scheduler(),
         );
 
@@ -260,7 +269,7 @@ mod tests {
         assert_eq!(render.borrow().side, 1.0);
 
         // A set-state delivered to the widget's own path mutates the state and asks for a rebuild.
-        let bump: SetState<Counter> = Box::new(|state| state.count += 1);
+        let bump: SetState<CounterState> = Box::new(|state| state.count += 1);
         owner.dispatch_message(
             &RoutingPath::new(owner.root_id(), Vec::new()),
             Box::new(bump),
@@ -285,8 +294,14 @@ mod tests {
     fn the_wrapper_presents_its_child_unchanged() {
         let creates = Rc::new(Cell::new(0));
 
-        let (_element, mut render) =
-            with_ctx(|ctx| Stateful::new(Counter { count: 5, creates }).create(ctx));
+        let (_element, mut render) = with_ctx(|ctx| {
+            Counter {
+                count: 5,
+
+                creates: Rc::clone(&creates),
+            }
+            .create(ctx)
+        });
 
         let size = render.layout(
             &mut LayoutCtx::detached(),
