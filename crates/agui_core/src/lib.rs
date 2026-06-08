@@ -47,8 +47,8 @@ pub mod prelude {
         pub use crate::{
             context::{Dispatch, MessageCtx, UpdateCtx},
             element::{
-                AnyElement, Element, MultiChildElement, RoutingId, RoutingPath, SingleChildElement,
-                node::ElementNode,
+                AnyElement, Element, LeafElement, MultiChildElement, RoutingId, RoutingPath,
+                SingleChildElement, node::ElementNode,
             },
             scheduling::TaskHandle,
             widget::{BoxedSliverWidget, BoxedWidget, Widget},
@@ -63,7 +63,7 @@ pub mod prelude {
             input::hit_test::{HitTest, HitTestResult},
             pipeline::{layout::LayoutScope, paint::PaintScope},
             render_object::{
-                AnyRenderObject, RenderObject,
+                AnyRenderObject, MultiChildRenderObject, RenderObject, SingleChildRenderObject,
                 box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
                 node::{RelayoutRenderNode, RenderNode},
                 sliver::{AnyRenderSliver, RenderSliver},

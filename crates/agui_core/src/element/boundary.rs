@@ -7,7 +7,7 @@ use slotmap::SlotMap;
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::{AnyElement, RoutingId, RoutingPath},
+    element::{AnyElement, Element, RoutingId, RoutingPath},
     provide::ProvideScope,
     render_object::{AnyRenderObject, RenderObject},
     scheduling::TaskScheduler,
@@ -240,8 +240,14 @@ impl Drop for BuildBoundaryCell {
 
 impl BuildBoundaryCell {
     fn dispatch_within(&self, within: &[RoutingId], action: Dispatch) {
+        let render = self.render.borrow();
+        let Some(render) = render.as_ref() else {
+            return;
+        };
+        let mut render = render.borrow_mut();
+
         let mut child = self.child.borrow_mut();
-        child.dyn_dispatch(within, action);
+        child.dyn_dispatch(&mut *render, within, action);
     }
 
     fn mark(&self, within: &[RoutingId]) {
@@ -262,8 +268,14 @@ impl BuildBoundaryCell {
             let mut path = suffix.to_vec();
             let mut ctx = UpdateCtx::new(scheduler, &mut path, provide, &child_scope);
 
+            let render = self.render.borrow();
+            let Some(render) = render.as_ref() else {
+                continue;
+            };
+            let mut render = render.borrow_mut();
+
             let mut child = self.child.borrow_mut();
-            child.dyn_dispatch(&suffix, Dispatch::Rebuild(&mut ctx));
+            child.dyn_dispatch(&mut *render, &suffix, Dispatch::Rebuild(&mut ctx));
         }
     }
 }
@@ -282,6 +294,7 @@ impl BuildBoundaryElement {
     where
         V: Widget,
         V::Element: 'static,
+        <V::Element as Element>::Render: AnyRenderObject + Sized,
         V::Render: RenderObject + 'static,
     {
         let cell = BuildBoundaryCell::register(ctx);

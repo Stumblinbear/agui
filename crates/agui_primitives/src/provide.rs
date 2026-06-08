@@ -40,15 +40,13 @@ where
     type Render = Child::Render;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { value, child } = self;
-
         let (element, render_object) =
-            ctx.with_provided(Rc::clone(&value), |ctx| child.create(ctx));
+            ctx.with_provided(Rc::clone(&self.value), |ctx| self.child.create(ctx));
 
         (
             ProvideElement {
                 child: ElementNode::new(element),
-                value,
+                value: self.value,
             },
             render_object,
         )
@@ -60,12 +58,11 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self { value, child } = self;
+        element.value = Rc::clone(&self.value);
 
-        element.value = Rc::clone(&value);
-
-        ctx.with_provided(value, |ctx| {
-            child.update(&mut element.child.element, render_object, ctx);
+        ctx.with_provided(self.value, |ctx| {
+            self.child
+                .update(&mut element.child.element, render_object, ctx);
         });
     }
 }
@@ -80,14 +77,19 @@ impl<T, C> Element for ProvideElement<T, C>
 where
     T: Any,
     C: Element,
+    C::Render: Sized,
 {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+    type Render = C::Render;
+
+    fn dispatch(&mut self, render: &mut C::Render, path: &[RoutingId], action: Dispatch) {
         match action {
             Dispatch::Rebuild(ctx) => ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                self.child.element.dispatch(path, Dispatch::Rebuild(ctx));
+                self.child
+                    .element
+                    .dispatch(render, path, Dispatch::Rebuild(ctx));
             }),
 
-            action @ Dispatch::Message(_) => self.child.element.dispatch(path, action),
+            action @ Dispatch::Message(_) => self.child.element.dispatch(render, path, action),
         }
     }
 }

@@ -139,24 +139,18 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderSizedBox<Child::Render>>;
 
     type Render = RenderSizedBox<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self {
-            width,
-            height,
-            child,
-        } = self;
-
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
         (
             element,
             RenderSizedBox {
-                width,
-                height,
+                width: self.width,
+                height: self.height,
 
                 layout_scope: LayoutScope::detached(),
                 child: RelayoutRenderNode::new(child_render),
@@ -170,22 +164,16 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self {
-            width,
-            height,
-            child,
-        } = self;
-
-        if render_object.width != width || render_object.height != height {
-            render_object.width = width;
-            render_object.height = height;
+        if render_object.width != self.width || render_object.height != self.height {
+            render_object.width = self.width;
+            render_object.height = self.height;
 
             render_object.layout_scope.mark_needs_layout();
         }
 
         render_object
             .child
-            .with_object_mut(|child_obj| element.update(child, child_obj, ctx));
+            .with_object_mut(|child_obj| element.update(self.child, child_obj, ctx));
     }
 }
 
@@ -195,6 +183,14 @@ pub struct RenderSizedBox<Child> {
 
     layout_scope: LayoutScope,
     child: RelayoutRenderNode<Child, Option<Size>>,
+}
+
+impl<Child: RenderBox> SingleChildRenderObject for RenderSizedBox<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        self.child.with_object_mut(f)
+    }
 }
 
 impl<Child> RenderObject for RenderSizedBox<Child>
@@ -335,7 +331,7 @@ mod tests {
         Child: Widget,
         Child::Render: RenderBox,
     {
-        type Element = SingleChildElement<Child::Element>;
+        type Element = SingleChildElement<Child::Element, RenderCounter<Child::Render>>;
         type Render = RenderCounter<Child::Render>;
 
         fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
@@ -362,6 +358,14 @@ mod tests {
     struct RenderCounter<Child> {
         layouts: Rc<Cell<usize>>,
         child: RenderNode<Child, Option<Size>>,
+    }
+
+    impl<Child> SingleChildRenderObject for RenderCounter<Child> {
+        type Child = Child;
+
+        fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+            f(&mut self.child.object)
+        }
     }
 
     impl<Child: RenderBox> RenderObject for RenderCounter<Child> {
@@ -422,12 +426,12 @@ mod tests {
     }
 
     impl Widget for Probe {
-        type Element = ();
+        type Element = LeafElement<RenderProbe>;
         type Render = RenderProbe;
 
-        fn create(self, _: &mut UpdateCtx) -> ((), RenderProbe) {
+        fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderProbe>, RenderProbe) {
             (
-                (),
+                LeafElement::new(),
                 RenderProbe {
                     layouts: self.layouts,
                     captured: self.captured,
@@ -435,7 +439,7 @@ mod tests {
             )
         }
 
-        fn update(self, _: &mut (), _: &mut RenderProbe, _: &mut UpdateCtx) {}
+        fn update(self, _: &mut LeafElement<RenderProbe>, _: &mut RenderProbe, _: &mut UpdateCtx) {}
     }
 
     struct RenderProbe {

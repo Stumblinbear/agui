@@ -34,21 +34,22 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderOpacity<Child::Render>>;
 
     type Render = RenderOpacity<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { opacity, child } = self;
-
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
         (
             element,
             RenderOpacity {
-                opacity,
-                scope: None,
+                opacity: self.opacity,
+
+                paint_scope: PaintScope::detached(),
+
                 layer: None,
+
                 child: RenderNode::new(child_render),
             },
         )
@@ -60,40 +61,49 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self { opacity, child } = self;
-
-        if opacity != render_object.opacity {
+        if render_object.opacity != self.opacity {
             let was_layer = render_object.needs_layer();
-            render_object.opacity = opacity;
+            render_object.opacity = self.opacity;
             let now_layer = render_object.needs_layer();
 
             if was_layer && now_layer {
                 // Still partial: poke the retained layer's alpha in place; the next composite picks it up.
                 if let Some(layer) = &render_object.layer {
-                    layer.borrow_mut().set_alpha(opacity);
+                    layer.borrow_mut().set_alpha(self.opacity);
                 }
-            } else if let Some(scope) = &render_object.scope {
-                if was_layer == now_layer {
-                    // Both fully transparent or fully opaque: a visibility flip still repaints.
-                    scope.mark_needs_paint();
-                } else {
-                    // Crossing the threshold where a layer is needed changes the compositing bits.
-                    scope.mark_needs_compositing_bits_update();
-                }
+            } else if was_layer == now_layer {
+                // Both fully transparent or fully opaque: a visibility flip still repaints.
+                render_object.paint_scope.mark_needs_paint();
+            } else {
+                // Crossing the threshold where a layer is needed changes the compositing bits.
+                render_object
+                    .paint_scope
+                    .mark_needs_compositing_bits_update();
             }
         }
 
-        element.update(child, &mut render_object.child.object, ctx);
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 
 pub struct RenderOpacity<Child> {
     opacity: f32,
-    scope: Option<PaintScope>,
+
+    paint_scope: PaintScope,
+
     /// The layer painted at the last partial-opacity paint, retained so an opacity change that stays
     /// partial can recomposite it at the new alpha without repainting the subtree.
     layer: Option<LayerHandle<OpacityLayer>>,
+
     child: RenderNode<Child, Option<Size>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderOpacity<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderOpacity<Child> {
@@ -109,7 +119,7 @@ where
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
         // Capture the enclosing boundary so a later opacity change can mark it.
-        self.scope = Some(ctx.paint_scope().clone());
+        self.paint_scope = ctx.paint_scope().clone();
         self.child.mount(ctx);
     }
 
@@ -267,7 +277,9 @@ mod tests {
 
     struct CounterElement;
 
-    impl Element for CounterElement {}
+    impl Element for CounterElement {
+        type Render = RenderCounter;
+    }
 
     impl Widget for Counter {
         type Element = CounterElement;

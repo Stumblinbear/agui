@@ -40,7 +40,9 @@ pub struct TextElement {
     fonts: Option<Rc<Fonts>>,
 }
 
-impl Element for TextElement {}
+impl Element for TextElement {
+    type Render = RenderParagraph;
+}
 
 impl Widget for Text {
     type Element = TextElement;

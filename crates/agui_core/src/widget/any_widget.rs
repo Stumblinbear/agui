@@ -7,6 +7,7 @@ use crate::{
     context::{Dispatch, UpdateCtx},
     element::{AnyElement, Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
+    render_object::AnyRenderObject,
     render_object::box_layout::{AnyRenderBox, RenderBox},
     render_object::sliver::{AnyRenderSliver, RenderSliver},
     widget::Widget,
@@ -37,6 +38,7 @@ pub trait AnyWidget {
 impl<T> AnyWidget for T
 where
     T: Any + Widget,
+    <T::Element as Element>::Render: AnyRenderObject + Sized,
 {
     type Render = T::Render;
 
@@ -84,28 +86,39 @@ where
 /// matches addressed an inner that has since been replaced and is dropped.
 pub struct ErasedElement<R> {
     generation: u16,
+
     type_id: TypeId,
     child: ElementNode<Box<dyn AnyElement>>,
-    _render: PhantomData<R>,
+
+    _render: PhantomData<fn() -> R>,
 }
 
-impl<R: 'static> Element for ErasedElement<R> {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+impl<R> Element for ErasedElement<R>
+where
+    R: AnyRenderObject + 'static,
+{
+    type Render = R;
+
+    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
         let Some((head, rest)) = path.split_first() else {
-            unreachable!("dispatch path cannot be empty");
+            // I'm not certain this is actually unreachable, but I can't prove it.
+            unreachable!("the erasure seam pushes its generation as a leading routing id");
         };
 
+        // A dispatch addressed to an older generation targeted an inner that has since been
+        // replaced, so it is dropped rather than delivered to the replacement.
         if head.get() != self.generation {
             return;
         }
 
-        self.child.element.dispatch(rest, action);
+        let render: &mut dyn AnyRenderObject = render;
+        self.child.element.dispatch(render, rest, action);
     }
 }
 
 impl<R> Widget for Box<dyn AnyWidget<Render = R>>
 where
-    R: 'static,
+    R: AnyRenderObject + 'static,
 {
     type Element = ErasedElement<R>;
 
@@ -120,8 +133,10 @@ where
         (
             ErasedElement {
                 generation: 0,
+
                 type_id,
                 child: ElementNode::new(child),
+
                 _render: PhantomData,
             },
             render_object,
@@ -255,9 +270,22 @@ struct RenderBoxElement<E> {
 impl<E> Element for RenderBoxElement<E>
 where
     E: Element,
+    E::Render: AnyRenderBox + Sized + 'static,
 {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(path, action);
+    type Render = Box<dyn AnyRenderBox>;
+
+    fn dispatch(
+        &mut self,
+        render: &mut Box<dyn AnyRenderBox>,
+        path: &[RoutingId],
+        action: Dispatch,
+    ) {
+        let render = (**render)
+            .as_any_mut()
+            .downcast_mut::<E::Render>()
+            .expect("a boxed render box keeps its inner render type for its whole life");
+
+        self.inner.dispatch(render, path, action);
     }
 }
 
@@ -314,9 +342,22 @@ struct RenderSliverElement<E> {
 impl<E> Element for RenderSliverElement<E>
 where
     E: Element,
+    E::Render: AnyRenderSliver + Sized + 'static,
 {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
-        self.inner.dispatch(path, action);
+    type Render = Box<dyn AnyRenderSliver>;
+
+    fn dispatch(
+        &mut self,
+        render: &mut Box<dyn AnyRenderSliver>,
+        path: &[RoutingId],
+        action: Dispatch,
+    ) {
+        let render = (**render)
+            .as_any_mut()
+            .downcast_mut::<E::Render>()
+            .expect("a boxed render sliver keeps its inner render type for its whole life");
+
+        self.inner.dispatch(render, path, action);
     }
 }
 
@@ -328,6 +369,7 @@ pub trait AsAnyWidget: Widget + 'static {
     fn as_dyn_widget(&self) -> &dyn AnyWidget<Render = Self::Render>
     where
         Self: Sized,
+        <Self::Element as Element>::Render: AnyRenderObject + Sized,
     {
         self
     }
@@ -374,7 +416,9 @@ mod tests {
         value: T,
     }
 
-    impl<T: 'static> Element for TestWidgetElement<T> {}
+    impl<T: 'static> Element for TestWidgetElement<T> {
+        type Render = ();
+    }
 
     impl<T: 'static> Widget for TestWidget<T> {
         type Element = TestWidgetElement<T>;
@@ -528,11 +572,15 @@ mod tests {
                 payload.set(Some(ctx.consume::<u32>()));
             }
         }));
-        let (mut element, ()) = with_ctx(|ctx| widget.create(ctx));
+        let (mut element, mut render) = with_ctx(|ctx| widget.create(ctx));
 
         // Initial generation is 0, so routing id 0 forwards to the inner.
         let mut msg = MessageCtx::new(Box::new(123_u32) as Box<dyn Any>);
-        element.dispatch(&[RoutingId::new(0)], Dispatch::Message(&mut msg));
+        element.dispatch(
+            &mut render,
+            &[RoutingId::new(0)],
+            Dispatch::Message(&mut msg),
+        );
 
         assert_eq!(messages.get(), 1);
         assert_eq!(payload.get(), Some(123));
@@ -541,11 +589,15 @@ mod tests {
     #[test]
     fn dispatch_with_stale_generation_is_dropped() {
         let messages = Rc::new(Cell::new(0_usize));
-        let (mut element, ()) = with_ctx(|ctx| leaf_widget(&messages).create(ctx));
+        let (mut element, mut render) = with_ctx(|ctx| leaf_widget(&messages).create(ctx));
 
         // Generation is 0, so routing id 1 is stale and dropped.
         let mut msg = MessageCtx::new(Box::new(7_u32) as Box<dyn Any>);
-        element.dispatch(&[RoutingId::new(1)], Dispatch::Message(&mut msg));
+        element.dispatch(
+            &mut render,
+            &[RoutingId::new(1)],
+            Dispatch::Message(&mut msg),
+        );
 
         assert_eq!(messages.get(), 0);
     }
@@ -561,7 +613,11 @@ mod tests {
 
         // The old generation (0) is now stale, so the dispatch is dropped at the boundary.
         let mut msg = MessageCtx::new(Box::new(42_u32) as Box<dyn Any>);
-        element.dispatch(&[RoutingId::new(0)], Dispatch::Message(&mut msg));
+        element.dispatch(
+            &mut render,
+            &[RoutingId::new(0)],
+            Dispatch::Message(&mut msg),
+        );
 
         assert_eq!(
             messages.get(),

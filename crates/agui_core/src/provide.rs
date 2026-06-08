@@ -70,15 +70,13 @@ where
     type Render = Child::Render;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { value, child } = self;
-
         let (element, render_object) =
-            ctx.with_provided(Rc::clone(&value), |ctx| child.create(ctx));
+            ctx.with_provided(Rc::clone(&self.value), |ctx| self.child.create(ctx));
 
         (
             ProvideElement {
                 child: ElementNode::new(element),
-                value,
+                value: self.value,
             },
             render_object,
         )
@@ -90,12 +88,11 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self { value, child } = self;
+        element.value = Rc::clone(&self.value);
 
-        element.value = Rc::clone(&value);
-
-        ctx.with_provided(value, |ctx| {
-            child.update(&mut element.child.element, render_object, ctx);
+        ctx.with_provided(self.value, |ctx| {
+            self.child
+                .update(&mut element.child.element, render_object, ctx);
         });
     }
 }
@@ -110,14 +107,25 @@ impl<V, C> Element for ProvideElement<V, C>
 where
     V: Any,
     C: Element,
+    C::Render: Sized,
 {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
-        match action {
-            Dispatch::Rebuild(ctx) => ctx.with_provided(Rc::clone(&self.value), |ctx| {
-                self.child.element.dispatch(path, Dispatch::Rebuild(ctx));
-            }),
+    type Render = C::Render;
 
-            action @ Dispatch::Message(_) => self.child.element.dispatch(path, action),
+    fn dispatch(&mut self, render: &mut C::Render, path: &[RoutingId], action: Dispatch) {
+        match action {
+            Dispatch::Rebuild(ctx) => {
+                let value = Rc::clone(&self.value);
+                ctx.with_provided(value, |ctx| {
+                    self.child
+                        .element
+                        .dispatch(render, path, Dispatch::Rebuild(ctx));
+                });
+            }
+            Dispatch::Message(ctx) => {
+                self.child
+                    .element
+                    .dispatch(render, path, Dispatch::Message(ctx));
+            }
         }
     }
 }
@@ -261,7 +269,7 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let (mut element, ()) = with_ctx(|ctx| {
+        let (mut element, mut render) = with_ctx(|ctx| {
             Provide::new(Rc::new(42_usize))
                 .child(Transparent {
                     child: Leaf::new().on_rebuild(move |ctx| {
@@ -272,7 +280,7 @@ mod tests {
         });
 
         // The transparent single child pushes no routing id, so the leaf sits at the empty path.
-        with_ctx(|ctx| element.dispatch(&[], Dispatch::Rebuild(ctx)));
+        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
 
         assert_eq!(
             seen.get(),
@@ -286,7 +294,7 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let (mut element, ()) = with_ctx(|ctx| {
+        let (mut element, mut render) = with_ctx(|ctx| {
             Transparent {
                 child: Leaf::new().on_rebuild(move |ctx| {
                     recorder.set(ctx.get_provided::<usize>().as_deref().copied());
@@ -296,7 +304,9 @@ mod tests {
         });
 
         let scope = ProvideScope::new().provide::<usize>(Rc::new(7_usize));
-        with_ctx_in(&scope, |ctx| element.dispatch(&[], Dispatch::Rebuild(ctx)));
+        with_ctx_in(&scope, |ctx| {
+            element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx));
+        });
 
         assert_eq!(
             seen.get(),

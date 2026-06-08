@@ -55,7 +55,7 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderAnimatedTransform<Child::Render>>;
 
     type Render = RenderAnimatedTransform<Child::Render>;
 
@@ -87,11 +87,32 @@ where
 /// The render object of an [`AnimatedTransform`]: applies a per-frame transform to its subtree without
 /// repainting it.
 pub struct RenderAnimatedTransform<Child> {
-    child: Child,
     transform: TransformFn,
     layer: Option<LayerHandle<TransformLayer>>,
     handle: Option<VsyncHandle>,
     vsync: Option<Vsync>,
+    animation: Option<VsyncHandle>,
+
+    child: RenderNode<Child, Option<Size>>,
+}
+
+/// The transform with its pivot folded in, in the child's coordinate space.
+fn fold_pivot(raw: Affine, origin: Offset, alignment: Alignment, size: Size) -> Affine {
+    let pivot = origin + alignment.along_size(size);
+
+    if pivot == Offset::ZERO {
+        return raw;
+    }
+
+    Affine::translate(pivot) * raw * Affine::translate(-pivot)
+}
+
+impl<Child> SingleChildRenderObject for RenderAnimatedTransform<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderAnimatedTransform<Child>
@@ -246,7 +267,9 @@ mod tests {
 
     struct CounterElement;
 
-    impl agui_core::element::Element for CounterElement {}
+    impl agui_core::element::Element for CounterElement {
+        type Render = RenderCounter;
+    }
 
     impl Widget for Counter {
         type Element = CounterElement;

@@ -115,21 +115,19 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderSpy<Child::Render>>;
 
     type Render = RenderSpy<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { state, child } = self;
+        self.state.borrow_mut().path = Some(ctx.routing_path());
 
-        state.borrow_mut().path = Some(ctx.routing_path());
-
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
         (
             element,
             RenderSpy {
-                state,
+                state: self.state,
                 child: RenderNode::new(child_render),
             },
         )
@@ -149,6 +147,14 @@ where
 pub struct RenderSpy<Child> {
     state: Rc<RefCell<ProbeState>>,
     child: RenderNode<Child>,
+}
+
+impl<Child> SingleChildRenderObject for RenderSpy<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child: RenderBox> RenderObject for RenderSpy<Child> {

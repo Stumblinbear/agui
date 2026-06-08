@@ -1,17 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
-
-use typed_floats::{Positive, PositiveFinite};
-
 use crate::{
-    context::{Dispatch, LayoutCtx, MountCtx, PaintCtx, UpdateCtx},
+    context::{Dispatch, UpdateCtx},
     element::{Element, RoutingId, node::ElementNode},
-    geometry::{Offset, Size},
-    input::hit_test::{HitTest, HitTestResult},
-    render_object::{
-        RenderObject,
-        box_layout::{BoxConstraints, RenderBox},
-    },
-    text::TextBaseline,
     widget::Widget,
 };
 
@@ -51,23 +40,21 @@ impl<S: State> Stateful<S> {
     }
 }
 
-/// The [`Element`] of a [`Stateful`] widget. It owns the state and the child's materialized subtree, and
-/// reconciles the child against the state on each rebuild.
+/// The [`Element`] of a [`Stateful`] widget. It owns the state and the child's materialized subtree.
 pub struct StatefulElement<S: State> {
     state: S,
     child: ElementNode<<S::Child as Widget>::Element>,
-
-    /// The child's render object, shared with the render tree so a rebuild reconciles it from here.
-    render: Rc<RefCell<<S::Child as Widget>::Render>>,
 }
 
 impl<S> Element for StatefulElement<S>
 where
     S: State,
-    <S::Child as Widget>::Element: 'static,
+    <S::Child as Widget>::Element: Element<Render = <S::Child as Widget>::Render>,
     <S::Child as Widget>::Render: 'static,
 {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+    type Render = <S::Child as Widget>::Render;
+
+    fn dispatch(&mut self, render: &mut Self::Render, path: &[RoutingId], action: Dispatch) {
         let Some((_, rest)) = path.split_first() else {
             match action {
                 Dispatch::Message(ctx) => {
@@ -78,10 +65,9 @@ where
 
                 Dispatch::Rebuild(ctx) => {
                     let child = self.state.build();
-                    let mut render = self.render.borrow_mut();
 
                     ctx.with_routing_id(RoutingId::from_index(0), |ctx| {
-                        child.update(&mut self.child.element, &mut render, ctx);
+                        child.update(&mut self.child.element, render, ctx);
                     });
                 }
             }
@@ -89,19 +75,19 @@ where
             return;
         };
 
-        self.child.element.dispatch(rest, action);
+        self.child.element.dispatch(render, rest, action);
     }
 }
 
 impl<S> Widget for Stateful<S>
 where
     S: State,
-    <S::Child as Widget>::Element: 'static,
-    <S::Child as Widget>::Render: RenderBox + 'static,
+    <S::Child as Widget>::Element: Element<Render = <S::Child as Widget>::Render>,
+    <S::Child as Widget>::Render: 'static,
 {
     type Element = StatefulElement<S>;
 
-    type Render = StatefulRender<<S::Child as Widget>::Render>;
+    type Render = <S::Child as Widget>::Render;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
         let state = self.initial;
@@ -110,15 +96,12 @@ where
         let (child_element, child_render) =
             ctx.with_routing_id(RoutingId::from_index(0), |ctx| child.create(ctx));
 
-        let render = Rc::new(RefCell::new(child_render));
-
         let element = StatefulElement {
             state,
             child: ElementNode::new(child_element),
-            render: Rc::clone(&render),
         };
 
-        (element, StatefulRender { child: render })
+        (element, child_render)
     }
 
     fn update(self, element: &mut Self::Element, render: &mut Self::Render, ctx: &mut UpdateCtx) {
@@ -129,90 +112,30 @@ where
         let child = element.state.build();
 
         ctx.with_routing_id(RoutingId::from_index(0), |ctx| {
-            child.update(
-                &mut element.child.element,
-                &mut render.child.borrow_mut(),
-                ctx,
-            );
+            child.update(&mut element.child.element, render, ctx);
         });
-    }
-}
-
-/// The render object of a [`Stateful`] widget: it presents its child unchanged, sharing the child's
-/// render object with the element so a rebuild reconciles the same object the render tree lays out.
-pub struct StatefulRender<R> {
-    child: Rc<RefCell<R>>,
-}
-
-impl<R: RenderObject> RenderObject for StatefulRender<R> {
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.child.borrow_mut().mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.borrow_mut().unmount(ctx);
-    }
-
-    fn update_compositing_bits(&mut self) -> bool {
-        self.child.borrow_mut().update_compositing_bits()
-    }
-}
-
-impl<R: RenderBox> RenderBox for StatefulRender<R> {
-    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.child.borrow().min_intrinsic_width(height)
-    }
-
-    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.child.borrow().max_intrinsic_width(height)
-    }
-
-    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.child.borrow().min_intrinsic_height(width)
-    }
-
-    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        self.child.borrow().max_intrinsic_height(width)
-    }
-
-    fn measure(&self, constraints: BoxConstraints) -> Size {
-        self.child.borrow().measure(constraints)
-    }
-
-    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.child.borrow_mut().layout(ctx, constraints)
-    }
-
-    fn measure_baseline(
-        &self,
-        constraints: BoxConstraints,
-        baseline: TextBaseline,
-    ) -> Option<PositiveFinite<f32>> {
-        self.child.borrow().measure_baseline(constraints, baseline)
-    }
-
-    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
-        self.child.borrow_mut().distance_to_baseline(baseline)
-    }
-
-    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.child.borrow().hit_test(result, position)
-    }
-
-    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        self.child.borrow_mut().paint(ctx, offset);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::{cell::Cell, rc::Rc};
+
+    use typed_floats::{Positive, PositiveFinite};
 
     use super::*;
     use crate::{
-        element::RoutingPath,
+        context::{LayoutCtx, MountCtx, PaintCtx},
+        element::{LeafElement, RoutingPath},
+        geometry::{Offset, Size},
+        input::hit_test::{HitTest, HitTestResult},
         pipeline::build::BuildOwner,
+        render_object::{
+            RenderObject,
+            box_layout::{BoxConstraints, RenderBox},
+        },
         test_harness::{TestTaskRunner, with_ctx},
+        text::TextBaseline,
     };
 
     /// State holding a count, building a square sized to it. `creates` tallies how many child render
@@ -241,17 +164,22 @@ mod tests {
     }
 
     impl Widget for Square {
-        type Element = ();
+        type Element = LeafElement<RenderSquare>;
 
         type Render = RenderSquare;
 
-        fn create(self, _: &mut UpdateCtx) -> ((), RenderSquare) {
+        fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderSquare>, RenderSquare) {
             self.creates.set(self.creates.get() + 1);
 
-            ((), RenderSquare { side: self.side })
+            (LeafElement::new(), RenderSquare { side: self.side })
         }
 
-        fn update(self, (): &mut (), render: &mut RenderSquare, _: &mut UpdateCtx) {
+        fn update(
+            self,
+            _: &mut LeafElement<RenderSquare>,
+            render: &mut RenderSquare,
+            _: &mut UpdateCtx,
+        ) {
             render.side = self.side;
         }
     }
@@ -329,7 +257,7 @@ mod tests {
         );
 
         assert_eq!(creates.get(), 1);
-        assert_eq!(render.borrow().child.borrow().side, 1.0);
+        assert_eq!(render.borrow().side, 1.0);
 
         // A set-state delivered to the widget's own path mutates the state and asks for a rebuild.
         let bump: SetState<Counter> = Box::new(|state| state.count += 1);
@@ -342,7 +270,7 @@ mod tests {
         assert!(owner.flush(&mut tasks.scheduler()));
 
         assert_eq!(
-            render.borrow().child.borrow().side,
+            render.borrow().side,
             2.0,
             "the rebuild reconciled the child render to the new state"
         );

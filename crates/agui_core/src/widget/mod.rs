@@ -12,9 +12,9 @@ pub use any_widget::*;
 ///
 /// The type of its render object is [`Render`](Self::Render).
 pub trait Widget {
-    type Element: Element;
-
     type Render;
+
+    type Element: Element<Render = Self::Render>;
 
     /// Builds this widget's persistent [`Element`] and its render object, consuming the description.
     /// Called once, when the widget first enters the tree.
@@ -105,27 +105,28 @@ mod tests {
         with_ctx(|ctx| widget.create(ctx))
     }
 
-    fn message(
-        element: &mut impl Element,
+    fn message<E: Element>(
+        element: &mut E,
+        render: &mut E::Render,
         path: &[RoutingId],
         payload: Box<dyn Any>,
     ) -> MessageCtx {
         let mut ctx = MessageCtx::new(payload);
-        element.dispatch(path, Dispatch::Message(&mut ctx));
+        element.dispatch(render, path, Dispatch::Message(&mut ctx));
         ctx
     }
 
-    fn rebuild(element: &mut impl Element, path: &[RoutingId]) {
-        with_ctx(|ctx| element.dispatch(path, Dispatch::Rebuild(ctx)));
+    fn rebuild<E: Element>(element: &mut E, render: &mut E::Render, path: &[RoutingId]) {
+        with_ctx(|ctx| element.dispatch(render, path, Dispatch::Rebuild(ctx)));
     }
 
     #[test]
     fn message_at_empty_path_invokes_leaf() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, ()) = mount(recording_leaf(&count, &payload));
+        let (mut element, mut render) = mount(recording_leaf(&count, &payload));
 
-        message(&mut element, &[], Box::new(42_u32));
+        message(&mut element, &mut render, &[], Box::new(42_u32));
 
         assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(42));
@@ -134,18 +135,18 @@ mod tests {
     #[test]
     fn rebuild_at_empty_path_invokes_leaf() {
         let count = counter();
-        let (mut element, ()) = mount(rebuilding_leaf(&count));
+        let (mut element, mut render) = mount(rebuilding_leaf(&count));
 
-        rebuild(&mut element, &[]);
+        rebuild(&mut element, &mut render, &[]);
 
         assert_eq!(count.get(), 1);
     }
 
     #[test]
     fn message_without_request_rebuild_leaves_flag_unset() {
-        let (mut element, ()) = mount(Leaf::new());
+        let (mut element, mut render) = mount(Leaf::new());
 
-        let ctx = message(&mut element, &[], Box::new(1_u32));
+        let ctx = message(&mut element, &mut render, &[], Box::new(1_u32));
 
         assert!(
             !ctx.rebuild_requested(),
@@ -155,9 +156,9 @@ mod tests {
 
     #[test]
     fn message_with_request_rebuild_sets_flag() {
-        let (mut element, ()) = mount(Leaf::new().on_message(MessageCtx::request_rebuild));
+        let (mut element, mut render) = mount(Leaf::new().on_message(MessageCtx::request_rebuild));
 
-        let ctx = message(&mut element, &[], Box::new(7_u32));
+        let ctx = message(&mut element, &mut render, &[], Box::new(7_u32));
 
         assert!(ctx.rebuild_requested(), "leaf called request_rebuild");
     }
@@ -181,11 +182,11 @@ mod tests {
     fn transparent_forwards_path_verbatim() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, ()) = mount(Transparent {
+        let (mut element, mut render) = mount(Transparent {
             child: recording_leaf(&count, &payload),
         });
 
-        message(&mut element, &[], Box::new(5_u32));
+        message(&mut element, &mut render, &[], Box::new(5_u32));
 
         assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(5));
@@ -195,13 +196,13 @@ mod tests {
     fn nested_transparent_wrappers_forward_path_verbatim() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, ()) = mount(Transparent {
+        let (mut element, mut render) = mount(Transparent {
             child: Transparent {
                 child: recording_leaf(&count, &payload),
             },
         });
 
-        message(&mut element, &[], Box::new(11_u32));
+        message(&mut element, &mut render, &[], Box::new(11_u32));
 
         assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(11));
@@ -211,7 +212,7 @@ mod tests {
     fn multichild_routes_to_correct_child_by_id() {
         let (m0, m1, m2) = (counter(), counter(), counter());
         let payload = Rc::new(Cell::new(None));
-        let (mut element, _) = mount(MultiChild {
+        let (mut element, mut render) = mount(MultiChild {
             children: vec![
                 counting_leaf(&m0),
                 counting_leaf(&m1),
@@ -219,7 +220,12 @@ mod tests {
             ],
         });
 
-        message(&mut element, &[RoutingId::new(2)], Box::new(99_u32));
+        message(
+            &mut element,
+            &mut render,
+            &[RoutingId::new(2)],
+            Box::new(99_u32),
+        );
 
         assert_eq!((m0.get(), m1.get(), m2.get()), (0, 0, 1));
         assert_eq!(payload.get(), Some(99));
@@ -228,11 +234,11 @@ mod tests {
     #[test]
     fn multichild_rebuild_only_touches_target_child() {
         let (r0, r1) = (counter(), counter());
-        let (mut element, _) = mount(MultiChild {
+        let (mut element, mut render) = mount(MultiChild {
             children: vec![rebuilding_leaf(&r0), rebuilding_leaf(&r1)],
         });
 
-        rebuild(&mut element, &[RoutingId::new(0)]);
+        rebuild(&mut element, &mut render, &[RoutingId::new(0)]);
 
         assert_eq!((r0.get(), r1.get()), (1, 0));
     }
@@ -241,13 +247,18 @@ mod tests {
     fn dispatch_through_transparent_then_routing_widget() {
         let (m0, m1) = (counter(), counter());
         let payload = Rc::new(Cell::new(None));
-        let (mut element, _) = mount(Transparent {
+        let (mut element, mut render) = mount(Transparent {
             child: MultiChild {
                 children: vec![counting_leaf(&m0), recording_leaf(&m1, &payload)],
             },
         });
 
-        message(&mut element, &[RoutingId::new(1)], Box::new(3_u32));
+        message(
+            &mut element,
+            &mut render,
+            &[RoutingId::new(1)],
+            Box::new(3_u32),
+        );
 
         assert_eq!((m0.get(), m1.get()), (0, 1));
         assert_eq!(payload.get(), Some(3));
@@ -257,7 +268,7 @@ mod tests {
     fn deep_path_through_nested_routing_widgets() {
         let (m00, m01, m10, m11) = (counter(), counter(), counter(), counter());
         let payload = Rc::new(Cell::new(None));
-        let (mut element, _) = mount(MultiChild {
+        let (mut element, mut render) = mount(MultiChild {
             children: vec![
                 MultiChild {
                     children: vec![counting_leaf(&m00), recording_leaf(&m01, &payload)],
@@ -270,6 +281,7 @@ mod tests {
 
         message(
             &mut element,
+            &mut render,
             &[RoutingId::new(0), RoutingId::new(1)],
             Box::new(77_u32),
         );
@@ -311,7 +323,12 @@ mod tests {
             .update(&mut element, &mut render, ctx);
         });
 
-        message(&mut element, &[RoutingId::new(1)], Box::new(55_u32));
+        message(
+            &mut element,
+            &mut render,
+            &[RoutingId::new(1)],
+            Box::new(55_u32),
+        );
 
         assert_eq!(count.get(), 1);
         assert_eq!(payload.get(), Some(55));

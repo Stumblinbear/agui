@@ -83,24 +83,20 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderFractionallySizedBox<Child::Render>>;
 
     type Render = RenderFractionallySizedBox<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self {
-            width_factor,
-            height_factor,
-            alignment,
-            child,
-        } = self;
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
         (
             element,
             RenderFractionallySizedBox {
-                width_factor,
-                height_factor,
-                alignment,
+                width_factor: self.width_factor,
+                height_factor: self.height_factor,
+                alignment: self.alignment,
+
+                layout_scope: LayoutScope::detached(),
 
                 child: RenderNode::new(child_render),
             },
@@ -113,19 +109,18 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self {
-            width_factor,
-            height_factor,
-            alignment,
-            child,
-        } = self;
+        if render_object.width_factor != self.width_factor
+            || render_object.height_factor != self.height_factor
+            || render_object.alignment != self.alignment
+        {
+            render_object.width_factor = self.width_factor;
+            render_object.height_factor = self.height_factor;
+            render_object.alignment = self.alignment;
 
-        // TODO(trevin): mark it for re-layout if the factors or alignment have changed
-        render_object.width_factor = width_factor;
-        render_object.height_factor = height_factor;
-        render_object.alignment = alignment;
+            render_object.layout_scope.mark_needs_layout();
+        }
 
-        element.update(child, &mut render_object.child.object, ctx);
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -140,7 +135,17 @@ pub struct RenderFractionallySizedBox<Child> {
     height_factor: Option<PositiveFinite<f32>>,
     alignment: Alignment,
 
+    layout_scope: LayoutScope,
+
     child: RenderNode<Child, Option<ChildParentData>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderFractionallySizedBox<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderFractionallySizedBox<Child> {
@@ -215,6 +220,8 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        self.layout_scope = ctx.scope().clone();
+
         let child_size = self
             .child
             .layout_and_get_size(ctx, self.inner_constraints(constraints));

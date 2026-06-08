@@ -27,13 +27,13 @@ impl TestBox {
 }
 
 impl Widget for TestBox {
-    type Element = ();
+    type Element = LeafElement<RenderTestBox>;
 
     type Render = RenderTestBox;
 
-    fn create(self, _: &mut UpdateCtx) -> ((), Self::Render) {
+    fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderTestBox>, Self::Render) {
         (
-            (),
+            LeafElement::new(),
             RenderTestBox {
                 size: self.size,
                 color: self.color,
@@ -41,7 +41,12 @@ impl Widget for TestBox {
         )
     }
 
-    fn update(self, (): &mut (), render_object: &mut Self::Render, _: &mut UpdateCtx) {
+    fn update(
+        self,
+        _: &mut LeafElement<RenderTestBox>,
+        render_object: &mut Self::Render,
+        _: &mut UpdateCtx,
+    ) {
         render_object.size = self.size;
         render_object.color = self.color;
     }
@@ -152,13 +157,13 @@ impl IntrinsicBox {
 }
 
 impl Widget for IntrinsicBox {
-    type Element = ();
+    type Element = LeafElement<RenderIntrinsicBox>;
 
     type Render = RenderIntrinsicBox;
 
-    fn create(self, _: &mut UpdateCtx) -> ((), Self::Render) {
+    fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderIntrinsicBox>, Self::Render) {
         (
-            (),
+            LeafElement::new(),
             RenderIntrinsicBox {
                 size: self.size,
                 min: self.min,
@@ -167,7 +172,12 @@ impl Widget for IntrinsicBox {
         )
     }
 
-    fn update(self, (): &mut (), render_object: &mut Self::Render, _: &mut UpdateCtx) {
+    fn update(
+        self,
+        _: &mut LeafElement<RenderIntrinsicBox>,
+        render_object: &mut Self::Render,
+        _: &mut UpdateCtx,
+    ) {
         render_object.size = self.size;
         render_object.min = self.min;
         render_object.max = self.max;

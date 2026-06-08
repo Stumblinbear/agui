@@ -137,7 +137,7 @@ mod tests {
         context::UpdateCtx,
         element::{Element, SingleChildElement},
         paint::compositing::{ContainerLayer, LayerHandle},
-        render_object::box_layout::RenderBox,
+        render_object::{SingleChildRenderObject, box_layout::RenderBox},
         test_fixtures::Leaf,
         test_harness::with_ctx,
         text::TextBaseline,
@@ -147,6 +147,14 @@ mod tests {
     struct RenderPad<C: RenderBox> {
         pad: u32,
         child: RenderNode<C>,
+    }
+
+    impl<C: RenderBox> SingleChildRenderObject for RenderPad<C> {
+        type Child = C;
+
+        fn with_child<R>(&mut self, f: impl FnOnce(&mut C) -> R) -> R {
+            f(&mut self.child.object)
+        }
     }
 
     impl<C: RenderBox> RenderObject for RenderPad<C> {
@@ -214,7 +222,7 @@ mod tests {
     where
         Child::Render: RenderBox,
     {
-        type Element = SingleChildElement<Child::Element>;
+        type Element = SingleChildElement<Child::Element, RenderPad<Child::Render>>;
 
         type Render = RenderPad<Child::Render>;
 
@@ -284,7 +292,9 @@ mod tests {
 
     struct CountedElement;
 
-    impl Element for CountedElement {}
+    impl Element for CountedElement {
+        type Render = ();
+    }
 
     impl Widget for Counted {
         type Element = CountedElement;
@@ -391,7 +401,9 @@ mod tests {
 
     struct CountedOtherElement;
 
-    impl Element for CountedOtherElement {}
+    impl Element for CountedOtherElement {
+        type Render = RenderOther;
+    }
 
     impl Widget for CountedOther {
         type Element = CountedOtherElement;

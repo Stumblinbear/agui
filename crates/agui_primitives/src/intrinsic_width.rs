@@ -15,13 +15,13 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderIntrinsicWidth<Child::Render>>;
 
     type Render = RenderIntrinsicWidth<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { child } = self;
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
+
         (
             element,
             RenderIntrinsicWidth {
@@ -36,13 +36,20 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self { child } = self;
-        element.update(child, &mut render_object.child.object, ctx);
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 
 pub struct RenderIntrinsicWidth<Child> {
     child: RenderNode<Child, Option<Size>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderIntrinsicWidth<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderObject for RenderIntrinsicWidth<Child>

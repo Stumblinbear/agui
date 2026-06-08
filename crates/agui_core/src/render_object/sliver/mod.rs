@@ -387,7 +387,9 @@ mod tests {
 
     struct SliverFixedElement;
 
-    impl Element for SliverFixedElement {}
+    impl Element for SliverFixedElement {
+        type Render = RenderSliverFixed;
+    }
 
     impl Widget for SliverFixedWidget {
         type Element = SliverFixedElement;

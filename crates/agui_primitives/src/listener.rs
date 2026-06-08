@@ -55,7 +55,7 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderPointerListener<Child::Render>>;
 
     type Render = RenderPointerListener<Child::Render>;
 
@@ -95,6 +95,14 @@ pub struct RenderPointerListener<Child> {
     handler: PointerHandler,
     behavior: HitTestBehavior,
     child: RenderNode<Child, Option<Size>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderPointerListener<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderObject for RenderPointerListener<Child>

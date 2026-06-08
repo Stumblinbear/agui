@@ -30,28 +30,24 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderPadding<Child::Render>>;
 
     type Render = RenderPadding<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self {
-            child,
-            padding,
-            text_direction,
-        } = self;
-
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
         (
             element,
             RenderPadding {
                 padding: EdgeInsets {
-                    left: padding.left(text_direction),
-                    top: padding.top(),
-                    right: padding.right(text_direction),
-                    bottom: padding.bottom(),
+                    left: self.padding.left(self.text_direction),
+                    top: self.padding.top(),
+                    right: self.padding.right(self.text_direction),
+                    bottom: self.padding.bottom(),
                 },
+
+                layout_scope: LayoutScope::detached(),
 
                 child: RenderNode::new(child_render),
             },
@@ -64,21 +60,21 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self {
-            child,
-            padding,
-            text_direction,
-        } = self;
-
         // TODO(trevin): mark for re-layout if padding changes
-        render_object.padding = EdgeInsets {
-            left: padding.left(text_direction),
-            top: padding.top(),
-            right: padding.right(text_direction),
-            bottom: padding.bottom(),
+        let new_padding = EdgeInsets {
+            left: self.padding.left(self.text_direction),
+            top: self.padding.top(),
+            right: self.padding.right(self.text_direction),
+            bottom: self.padding.bottom(),
         };
 
-        element.update(child, &mut render_object.child.object, ctx);
+        if render_object.padding != new_padding {
+            render_object.padding = new_padding;
+
+            render_object.layout_scope.mark_needs_layout();
+        }
+
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -91,7 +87,17 @@ struct ChildParentData {
 pub struct RenderPadding<Child> {
     padding: EdgeInsets,
 
+    layout_scope: LayoutScope,
+
     child: RenderNode<Child, Option<ChildParentData>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderPadding<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderObject for RenderPadding<Child>
@@ -175,6 +181,8 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        self.layout_scope = ctx.scope().clone();
+
         let inner_constraints = constraints.deflate(&self.padding);
         let child_size = self.child.layout_and_get_size(ctx, inner_constraints);
 

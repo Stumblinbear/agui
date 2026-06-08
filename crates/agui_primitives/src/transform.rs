@@ -53,25 +53,22 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderTransform<Child::Render>>;
 
     type Render = RenderTransform<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self {
-            child,
-            transform,
-            origin,
-            alignment,
-        } = self;
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
+
         (
             element,
             RenderTransform {
-                transform,
-                origin,
-                alignment,
-                scope: None,
+                transform: self.transform,
+                origin: self.origin,
+                alignment: self.alignment,
+
+                paint_scope: PaintScope::detached(),
+
                 child: RenderNode::new(child_render),
             },
         )
@@ -83,28 +80,19 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self {
-            child,
-            transform,
-            origin,
-            alignment,
-        } = self;
-
-        if transform != render_object.transform
-            || origin != render_object.origin
-            || alignment != render_object.alignment
+        if render_object.transform != self.transform
+            || render_object.origin != self.origin
+            || render_object.alignment != self.alignment
         {
-            render_object.transform = transform;
-            render_object.origin = origin;
-            render_object.alignment = alignment;
+            render_object.transform = self.transform;
+            render_object.origin = self.origin;
+            render_object.alignment = self.alignment;
 
             // A transform is paint-only and never alters compositing, so a plain repaint suffices.
-            if let Some(scope) = &render_object.scope {
-                scope.mark_needs_paint();
-            }
+            render_object.paint_scope.mark_needs_paint();
         }
 
-        element.update(child, &mut render_object.child.object, ctx);
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -112,8 +100,18 @@ pub struct RenderTransform<Child> {
     transform: Affine,
     origin: Offset,
     alignment: Alignment,
-    scope: Option<PaintScope>,
+
+    paint_scope: PaintScope,
+
     child: RenderNode<Child, Option<Size>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderTransform<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderTransform<Child> {
@@ -151,11 +149,14 @@ where
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
         // Capture the enclosing boundary so a later transform change can mark it.
-        self.scope = Some(ctx.paint_scope().clone());
+        self.paint_scope = ctx.paint_scope().clone();
+
         self.child.mount(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
+        self.paint_scope = PaintScope::detached();
+
         self.child.unmount(ctx);
     }
 

@@ -1,4 +1,4 @@
-use std::{any::TypeId, ops::Range};
+use std::{any::TypeId, marker::PhantomData, ops::Range};
 
 use fnv::FnvHashMap;
 
@@ -6,22 +6,31 @@ use crate::{
     context::{Dispatch, UpdateCtx},
     element::{Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
-    render_object::{MultiChildRender, node::RenderNode},
+    render_object::{MultiChildRenderObject, SingleChildRenderObject, node::RenderNode},
     widget::Widget,
 };
 
-/// The [`Element`] of a widget with a single child.
-pub struct SingleChildElement<C> {
+/// The [`Element`] of a widget with a single child, threading the widget's render `R` to the child.
+pub struct SingleChildElement<C, R: ?Sized> {
     pub child: ElementNode<C>,
+    _render: PhantomData<fn() -> R>,
 }
 
-impl<C: Element> Element for SingleChildElement<C> {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
-        self.child.element.dispatch(path, action);
+impl<C, R> Element for SingleChildElement<C, R>
+where
+    C: Element,
+    R: SingleChildRenderObject<Child = C::Render> + 'static,
+    C::Render: Sized,
+{
+    type Render = R;
+
+    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
+        let child = &mut self.child.element;
+        render.with_child(|child_render| child.dispatch(child_render, path, action));
     }
 }
 
-impl<C: Element> SingleChildElement<C> {
+impl<C: Element, R: ?Sized> SingleChildElement<C, R> {
     /// Builds the element and the child's render object from `child`.
     pub fn new<CV: Widget<Element = C>>(child: CV, ctx: &mut UpdateCtx) -> (Self, CV::Render) {
         let (element, render) = child.create(ctx);
@@ -29,6 +38,7 @@ impl<C: Element> SingleChildElement<C> {
         (
             SingleChildElement {
                 child: ElementNode::new(element),
+                _render: PhantomData,
             },
             render,
         )
@@ -45,9 +55,11 @@ impl<C: Element> SingleChildElement<C> {
     }
 }
 
-/// The [`Element`] of a widget with a flat, keyed list of children.
-pub struct MultiChildElement<C> {
+/// The [`Element`] of a widget with a flat, keyed list of children, threading the widget's render `R`
+/// to each child.
+pub struct MultiChildElement<C, R: ?Sized> {
     children: Vec<KeyedNode<C>>,
+    _render: PhantomData<fn() -> R>,
 }
 
 /// A child element paired with the type and key its widget reported at build.
@@ -57,23 +69,35 @@ struct KeyedNode<C> {
     key: Option<Box<dyn AnyKeyable>>,
 }
 
-impl<C: Element> Element for MultiChildElement<C> {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+impl<C, R> Element for MultiChildElement<C, R>
+where
+    C: Element,
+    R: MultiChildRenderObject<Child = C::Render>,
+{
+    type Render = R;
+
+    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
         let Some((head, rest)) = path.split_first() else {
-            unreachable!("dispatch path cannot be empty");
+            // I'm not certain this is actually unreachable, but I can't prove it.
+            unreachable!("multi-child element addresses one of its children");
         };
 
-        let idx = head.get() as usize;
+        let index = head.get() as usize;
 
-        self.children[idx].node.element.dispatch(rest, action);
+        render.with_child(index, |child_render| {
+            self.children[index]
+                .node
+                .element
+                .dispatch(child_render, rest, action);
+        });
     }
 }
 
-impl<C: Element> MultiChildElement<C> {
+impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
     /// Builds an element per child and installs each child's render object into `render`.
     pub fn new<CV>(
         children: Vec<CV>,
-        render: &mut impl MultiChildRender<Child = CV::Render>,
+        render: &mut impl MultiChildRenderObject<Child = CV::Render>,
         ctx: &mut UpdateCtx,
     ) -> Self
     where
@@ -99,14 +123,17 @@ impl<C: Element> MultiChildElement<C> {
 
         render.set_children(render_children);
 
-        Self { children: nodes }
+        Self {
+            children: nodes,
+            _render: PhantomData,
+        }
     }
 
     /// Reconciles the child elements and `render`'s child render objects against `children`.
     pub fn update<CV>(
         &mut self,
         children: Vec<CV>,
-        render: &mut impl MultiChildRender<Child = CV::Render>,
+        render: &mut impl MultiChildRenderObject<Child = CV::Render>,
         ctx: &mut UpdateCtx,
     ) where
         CV: Widget<Element = C> + 'static,
@@ -276,7 +303,7 @@ fn reuse<C, CV>(
     ctx: &mut UpdateCtx,
 ) where
     C: Element,
-    CV: Widget<Element = C> + 'static,
+    CV: Widget<Element = C>,
 {
     let (mut keyed, mut render) = old_slots[old_index].take().expect("reused a slot twice");
     let child = new_slots[new_index].take().expect("consumed a slot twice");
@@ -388,7 +415,9 @@ mod tests {
         mounted_id: u32,
     }
 
-    impl Element for ProbeElement {}
+    impl Element for ProbeElement {
+        type Render = ProbeRender;
+    }
 
     impl Widget for Probe {
         type Element = ProbeElement;
@@ -458,12 +487,16 @@ mod tests {
         }
     }
 
-    fn child_ids(element: &MultiChildElement<ProbeElement>) -> Vec<u32> {
+    fn child_ids(
+        element: &MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
+    ) -> Vec<u32> {
         element.children.iter().map(|n| n.node.element.id).collect()
     }
 
     /// The mount-stamped identities in order, showing which element instance sits at each position.
-    fn mounted_ids(element: &MultiChildElement<ProbeElement>) -> Vec<u32> {
+    fn mounted_ids(
+        element: &MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
+    ) -> Vec<u32> {
         element
             .children
             .iter()
@@ -569,7 +602,10 @@ mod tests {
     #[test]
     fn single_child_reuses_its_element_across_update() {
         let (m, u) = (counter(), counter());
-        let (mut element, mut render) = with_ctx(|ctx| {
+        let (mut element, mut render): (
+            SingleChildElement<ProbeElement, ProbeRender>,
+            ProbeRender,
+        ) = with_ctx(|ctx| {
             SingleChildElement::new(
                 Probe {
                     id: 1,
@@ -671,7 +707,7 @@ mod tests {
     }
 
     impl Widget for Group {
-        type Element = MultiChildElement<ProbeElement>;
+        type Element = MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>;
 
         type Render = MultiChildRenderList<ProbeRender>;
 
@@ -709,7 +745,10 @@ mod tests {
         };
 
         // Two keyed groups, each a keyed child list.
-        let mut element = with_ctx(|ctx| {
+        let mut element: MultiChildElement<
+            MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
+            MultiChildRenderList<MultiChildRenderList<ProbeRender>>,
+        > = with_ctx(|ctx| {
             MultiChildElement::new(
                 vec![
                     group(0, &[(100, 0), (101, 1)]),

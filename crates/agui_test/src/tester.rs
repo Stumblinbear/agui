@@ -194,10 +194,7 @@ impl WidgetTester {
             kind,
         };
 
-        let Self {
-            dispatcher, owner, ..
-        } = self;
-
-        dispatcher.handle(&event, |position| owner.hit_test(position));
+        self.dispatcher
+            .handle(&event, |position| self.owner.hit_test(position));
     }
 }

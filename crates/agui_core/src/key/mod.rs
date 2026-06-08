@@ -5,7 +5,7 @@ use std::{
 
 use bon::Builder;
 
-use crate::{context::UpdateCtx, element::SingleChildElement, widget::Widget};
+use crate::{context::UpdateCtx, render_object::box_layout::RenderBox, widget::Widget};
 
 mod any_key;
 
@@ -50,13 +50,14 @@ impl<V, Child> Widget for Key<V, Child>
 where
     V: Clone + Hash + PartialEq + Eq + Any,
     Child: Widget,
+    Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = Child::Element;
 
     type Render = Child::Render;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        SingleChildElement::new(self.child, ctx)
+        self.child.create(ctx)
     }
 
     fn update(
@@ -65,7 +66,7 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        element.update(self.child, render_object, ctx);
+        self.child.update(element, render_object, ctx);
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {

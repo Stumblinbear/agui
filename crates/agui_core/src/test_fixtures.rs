@@ -1,7 +1,16 @@
+use typed_floats::{Positive, PositiveFinite};
+
 use crate::{
-    context::{Dispatch, MessageCtx, MountCtx, UpdateCtx},
-    element::{Element, MultiChildElement, RoutingId, SingleChildElement},
-    render_object::{MultiChildRender, RenderObject, node::RenderNode},
+    context::{Dispatch, LayoutCtx, MessageCtx, MountCtx, PaintCtx, UpdateCtx},
+    element::{Element, MultiChildElement, RoutingId},
+    geometry::{Offset, Size},
+    input::hit_test::{HitTest, HitTestResult},
+    render_object::{
+        MultiChildRenderObject, RenderObject,
+        box_layout::{BoxConstraints, RenderBox},
+        node::RenderNode,
+    },
+    text::TextBaseline,
     widget::Widget,
 };
 
@@ -63,7 +72,9 @@ pub struct LeafElement {
 }
 
 impl Element for LeafElement {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+    type Render = ();
+
+    fn dispatch(&mut self, (): &mut (), path: &[RoutingId], action: Dispatch) {
         debug_assert!(path.is_empty(), "Leaf has no children");
 
         if !path.is_empty() {
@@ -106,13 +117,16 @@ pub struct Transparent<Child> {
     pub child: Child,
 }
 
-impl<Child: Widget> Widget for Transparent<Child> {
-    type Element = SingleChildElement<Child::Element>;
+impl<Child: Widget> Widget for Transparent<Child>
+where
+    Child::Render: RenderBox,
+{
+    type Element = Child::Element;
 
     type Render = Child::Render;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        SingleChildElement::new(self.child, ctx)
+        self.child.create(ctx)
     }
 
     fn update(
@@ -121,7 +135,7 @@ impl<Child: Widget> Widget for Transparent<Child> {
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        element.update(self.child, render_object, ctx);
+        self.child.update(element, render_object, ctx);
     }
 }
 
@@ -130,7 +144,7 @@ pub struct MultiChildRenderList<C> {
     pub children: Vec<RenderNode<C>>,
 }
 
-impl<C> MultiChildRender for MultiChildRenderList<C> {
+impl<C> MultiChildRenderObject for MultiChildRenderList<C> {
     type Child = C;
 
     fn take_children(&mut self) -> Vec<RenderNode<C>> {
@@ -139,6 +153,58 @@ impl<C> MultiChildRender for MultiChildRenderList<C> {
 
     fn set_children(&mut self, children: Vec<RenderNode<C>>) {
         self.children = children;
+    }
+
+    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
+        f(&mut self.children[index].object)
+    }
+}
+
+impl<C: RenderBox> RenderBox for MultiChildRenderList<C> {
+    fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn measure(&self, constraints: BoxConstraints) -> Size {
+        constraints.smallest()
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        for child in &mut self.children {
+            child.layout(ctx, constraints);
+        }
+
+        constraints.smallest()
+    }
+
+    fn measure_baseline(&self, _: BoxConstraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+        HitTest::Pass
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        for child in &mut self.children {
+            child.paint(ctx, offset);
+        }
     }
 }
 
@@ -169,7 +235,7 @@ pub struct MultiChild<Child> {
 }
 
 impl<Child: Widget + 'static> Widget for MultiChild<Child> {
-    type Element = MultiChildElement<Child::Element>;
+    type Element = MultiChildElement<Child::Element, MultiChildRenderList<Child::Render>>;
 
     type Render = MultiChildRenderList<Child::Render>;
 

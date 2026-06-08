@@ -34,19 +34,19 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderColoredBox<Child::Render>>;
 
     type Render = RenderColoredBox<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { color, child } = self;
-
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
         (
             element,
             RenderColoredBox {
-                color,
+                color: self.color,
+
+                paint_scope: PaintScope::detached(),
 
                 child: RenderNode::new(child_render),
             },
@@ -59,19 +59,30 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self { color, child } = self;
+        if render_object.color != self.color {
+            render_object.color = self.color;
 
-        // TODO(trevin): mark it for repaint if the color has changed
-        render_object.color = color;
+            render_object.paint_scope.mark_needs_paint();
+        }
 
-        element.update(child, &mut render_object.child.object, ctx);
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 
 pub struct RenderColoredBox<Child> {
     color: Color,
 
+    paint_scope: PaintScope,
+
     child: RenderNode<Child, Option<Size>>,
+}
+
+impl<Child> SingleChildRenderObject for RenderColoredBox<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        f(&mut self.child.object)
+    }
 }
 
 impl<Child> RenderObject for RenderColoredBox<Child>
@@ -79,6 +90,8 @@ where
     Child: RenderBox,
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
+        self.paint_scope = ctx.paint_scope().clone();
+
         self.child.mount(ctx);
     }
 

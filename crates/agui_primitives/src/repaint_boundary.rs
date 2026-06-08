@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -37,21 +37,23 @@ where
     Child: Widget,
     Child::Render: RenderBox,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = SingleChildElement<Child::Element, RenderRepaintBoundary<Child::Render>>;
 
-    type Render = RenderRepaintBoundary;
+    type Render = RenderRepaintBoundary<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self { child } = self;
-
-        let (element, child_render) = SingleChildElement::new(child, ctx);
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
         (
             element,
             RenderRepaintBoundary {
                 content: Rc::new(RefCell::new(child_render)),
+
                 layer: LayerHandle::new(ContainerLayer::new()),
+
                 handle: None,
+
+                _phantom: PhantomData,
             },
         )
     }
@@ -62,16 +64,9 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self { child } = self;
-
-        {
-            let mut content = render_object.content.borrow_mut();
-            let child_render = content
-                .as_any_mut()
-                .downcast_mut::<Child::Render>()
-                .expect("a boundary's content keeps its child's render type for its whole life");
-            element.update(child, child_render, ctx);
-        }
+        render_object.with_child(|child_render| {
+            element.update(self.child, child_render, ctx);
+        });
 
         // The subtree's description changed, so the boundary must repaint.
         if let Some(handle) = &render_object.handle {
@@ -82,13 +77,31 @@ where
 
 /// The render object of a [`RepaintBoundary`]: it paints its subtree into a retained layer that is
 /// reused until the boundary is marked for repaint.
-pub struct RenderRepaintBoundary {
+pub struct RenderRepaintBoundary<Child> {
     content: BoundaryContent,
+
     layer: LayerHandle<ContainerLayer>,
+
     handle: Option<PaintBoundaryHandle>,
+
+    _phantom: PhantomData<fn() -> Child>,
 }
 
-impl RenderObject for RenderRepaintBoundary {
+impl<Child: RenderBox> SingleChildRenderObject for RenderRepaintBoundary<Child> {
+    type Child = Child;
+
+    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        let mut content = self.content.borrow_mut();
+        let child_render = content
+            .as_any_mut()
+            .downcast_mut::<Child>()
+            .expect("a boundary's content keeps its child's render type for its whole life");
+
+        f(child_render)
+    }
+}
+
+impl<Child: RenderBox> RenderObject for RenderRepaintBoundary<Child> {
     fn mount(&mut self, ctx: &mut MountCtx) {
         let handle = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
 
@@ -113,7 +126,7 @@ impl RenderObject for RenderRepaintBoundary {
     }
 }
 
-impl RenderBox for RenderRepaintBoundary {
+impl<Child: RenderBox> RenderBox for RenderRepaintBoundary<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.content.min_intrinsic_width(height)
     }
@@ -216,7 +229,7 @@ mod tests {
         Child: Widget,
         Child::Render: RenderBox,
     {
-        type Element = SingleChildElement<Child::Element>;
+        type Element = SingleChildElement<Child::Element, RenderCounter<Child::Render>>;
         type Render = RenderCounter<Child::Render>;
 
         fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
@@ -243,6 +256,14 @@ mod tests {
         paints: Rc<Cell<usize>>,
         capture: Option<Rc<RefCell<Option<PaintScope>>>>,
         child: RenderNode<C>,
+    }
+
+    impl<C> SingleChildRenderObject for RenderCounter<C> {
+        type Child = C;
+
+        fn with_child<R>(&mut self, f: impl FnOnce(&mut C) -> R) -> R {
+            f(&mut self.child.object)
+        }
     }
 
     impl<C: RenderBox> RenderObject for RenderCounter<C> {

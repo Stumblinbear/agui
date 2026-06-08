@@ -748,15 +748,15 @@ mod tests {
     struct RenderLiar;
 
     impl Widget for Liar {
-        type Element = ();
+        type Element = LeafElement<RenderLiar>;
 
         type Render = RenderLiar;
 
-        fn create(self, _: &mut UpdateCtx) -> ((), RenderLiar) {
-            ((), RenderLiar)
+        fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderLiar>, RenderLiar) {
+            (LeafElement::new(), RenderLiar)
         }
 
-        fn update(self, (): &mut (), _: &mut RenderLiar, _: &mut UpdateCtx) {}
+        fn update(self, _: &mut LeafElement<RenderLiar>, _: &mut RenderLiar, _: &mut UpdateCtx) {}
     }
 
     impl RenderObject for RenderLiar {
@@ -833,13 +833,13 @@ mod tests {
     }
 
     impl Widget for Naughty {
-        type Element = ();
+        type Element = LeafElement<RenderNaughty>;
 
         type Render = RenderNaughty;
 
-        fn create(self, _: &mut UpdateCtx) -> ((), RenderNaughty) {
+        fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderNaughty>, RenderNaughty) {
             (
-                (),
+                LeafElement::new(),
                 RenderNaughty {
                     mode: self.mode,
                     laid_out: Cell::new(false),
@@ -848,7 +848,13 @@ mod tests {
             )
         }
 
-        fn update(self, (): &mut (), _: &mut RenderNaughty, _: &mut UpdateCtx) {}
+        fn update(
+            self,
+            _: &mut LeafElement<RenderNaughty>,
+            _: &mut RenderNaughty,
+            _: &mut UpdateCtx,
+        ) {
+        }
     }
 
     impl RenderObject for RenderNaughty {

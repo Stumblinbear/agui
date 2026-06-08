@@ -78,15 +78,26 @@ impl<F, Child> Element for LayoutBuilderElement<F, Child>
 where
     F: 'static,
     Child: Widget + 'static,
+    Child::Render: RenderBox,
 {
-    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+    type Render = RenderLayoutBuilder<Child::Render>;
+
+    fn dispatch(&mut self, render: &mut Self::Render, path: &[RoutingId], action: Dispatch) {
         let mut child_widget = self.child_widget.borrow_mut();
 
         let Some(retained) = child_widget.as_mut() else {
             panic!("child was dispatched to before being laid out");
         };
 
-        retained.node.element.dispatch(path, action);
+        let child_render = render
+            .child_render
+            .as_mut()
+            .expect("child was dispatched to before being laid out");
+
+        retained
+            .node
+            .element
+            .dispatch(&mut child_render.object, path, action);
     }
 }
 
@@ -422,7 +433,9 @@ mod tests {
         _handle: Option<TaskHandle>,
     }
 
-    impl Element for SpawnOnMountElement {}
+    impl Element for SpawnOnMountElement {
+        type Render = ();
+    }
 
     impl Widget for SpawnOnMount {
         type Element = SpawnOnMountElement;
@@ -485,7 +498,9 @@ mod tests {
 
     struct MountProbeElement;
 
-    impl Element for MountProbeElement {}
+    impl Element for MountProbeElement {
+        type Render = MountProbeRender;
+    }
 
     impl Widget for MountProbe {
         type Element = MountProbeElement;

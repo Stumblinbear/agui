@@ -2,7 +2,7 @@ use bon::Builder;
 
 use agui_core::{
     prelude::{element::*, render_object::*},
-    render_object::MultiChildRender,
+    render_object::MultiChildRenderObject,
 };
 
 use typed_floats::{Positive, PositiveFinite};
@@ -70,26 +70,19 @@ where
     Children: Widget + 'static,
     Children::Render: RenderObject,
 {
-    type Element = MultiChildElement<Children::Element>;
+    type Element = MultiChildElement<Children::Element, RenderFlex<Children::Render>>;
 
     type Render = RenderFlex<Children::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self {
-            main_axis_size,
-            main_axis_alignment,
-            cross_axis_alignment,
-            vertical_direction,
-            text_direction,
-            children,
-        } = self;
-
         let mut render_object = RenderFlex {
-            main_axis_size,
-            main_axis_alignment,
-            cross_axis_alignment,
-            vertical_direction,
-            text_direction,
+            main_axis_size: self.main_axis_size,
+            main_axis_alignment: self.main_axis_alignment,
+            cross_axis_alignment: self.cross_axis_alignment,
+            vertical_direction: self.vertical_direction,
+            text_direction: self.text_direction,
+
+            layout_scope: LayoutScope::detached(),
 
             children: Vec::new(),
 
@@ -97,7 +90,7 @@ where
         };
 
         let element = MultiChildElement::new(
-            children
+            self.children
                 .into_iter()
                 .map(|flexible| flexible.child)
                 .collect(),
@@ -114,23 +107,23 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        let Self {
-            main_axis_size,
-            main_axis_alignment,
-            cross_axis_alignment,
-            vertical_direction,
-            text_direction,
-            children,
-        } = self;
+        if render_object.main_axis_size != self.main_axis_size
+            || render_object.main_axis_alignment != self.main_axis_alignment
+            || render_object.cross_axis_alignment != self.cross_axis_alignment
+            || render_object.vertical_direction != self.vertical_direction
+            || render_object.text_direction != self.text_direction
+        {
+            render_object.main_axis_size = self.main_axis_size;
+            render_object.main_axis_alignment = self.main_axis_alignment;
+            render_object.cross_axis_alignment = self.cross_axis_alignment;
+            render_object.vertical_direction = self.vertical_direction;
+            render_object.text_direction = self.text_direction;
 
-        render_object.main_axis_size = main_axis_size;
-        render_object.main_axis_alignment = main_axis_alignment;
-        render_object.cross_axis_alignment = cross_axis_alignment;
-        render_object.vertical_direction = vertical_direction;
-        render_object.text_direction = text_direction;
+            render_object.layout_scope.mark_needs_layout();
+        }
 
         element.update(
-            children
+            self.children
                 .into_iter()
                 .map(|flexible| flexible.child)
                 .collect(),
@@ -147,12 +140,14 @@ pub struct RenderFlex<Children> {
     vertical_direction: VerticalDirection,
     text_direction: Option<TextDirection>,
 
+    layout_scope: LayoutScope,
+
     children: Vec<RenderNode<Children>>,
 
     size: Size,
 }
 
-impl<Children> MultiChildRender for RenderFlex<Children> {
+impl<Children> MultiChildRenderObject for RenderFlex<Children> {
     type Child = Children;
 
     fn take_children(&mut self) -> Vec<RenderNode<Children>> {
@@ -161,6 +156,10 @@ impl<Children> MultiChildRender for RenderFlex<Children> {
 
     fn set_children(&mut self, children: Vec<RenderNode<Children>>) {
         self.children = children;
+    }
+
+    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut Children) -> R) -> R {
+        f(&mut self.children[index].object)
     }
 }
 
@@ -175,6 +174,8 @@ where
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
+        self.layout_scope = LayoutScope::detached();
+
         for child in &mut self.children {
             child.unmount(ctx);
         }
@@ -215,7 +216,9 @@ where
         Size::ZERO
     }
 
-    fn layout(&mut self, _: &mut LayoutCtx, _: BoxConstraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
+        self.layout_scope = ctx.scope().clone();
+
         Size::ZERO
     }
 
@@ -269,7 +272,9 @@ mod tests {
         value: T,
     }
 
-    impl<T: 'static> Element for TestWidgetElement<T> {}
+    impl<T: 'static> Element for TestWidgetElement<T> {
+        type Render = ();
+    }
 
     impl<T> Widget for TestWidget<T>
     where
