@@ -390,7 +390,7 @@ impl WindowDriver {
     ) -> Self
     where
         V: Widget + 'static,
-        V::Render: RenderBox + 'static,
+        V::Render: RenderBox,
     {
         // Build the element tree and its root render object together, registering the root as the
         // pipeline's outermost boundary.

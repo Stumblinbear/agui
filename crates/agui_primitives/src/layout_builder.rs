@@ -76,7 +76,7 @@ where
 impl<F, Child> Element for LayoutBuilderElement<F, Child>
 where
     F: 'static,
-    Child: Widget + 'static,
+    Child: Widget,
     Child::Render: RenderBox,
 {
     type Render = RenderLayoutBuilder<Child::Render>;
@@ -597,8 +597,8 @@ mod tests {
     /// and the subtree built during layout is mounted.
     fn owner_for<W>(layout_builder: W) -> PipelineOwner
     where
-        W: Widget + 'static,
-        W::Render: RenderBox + 'static,
+        W: Widget,
+        W::Render: RenderBox,
     {
         let (_, render) = with_ctx(|ctx| layout_builder.create(ctx));
         let content: BoundaryContent = Rc::new(RefCell::new(render));

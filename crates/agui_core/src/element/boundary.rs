@@ -7,7 +7,7 @@ use slotmap::SlotMap;
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
-    element::{AnyElement, Element, RoutingId, RoutingPath},
+    element::{AnyElement, RoutingId, RoutingPath},
     provide::ProvideScope,
     render_object::{AnyRenderObject, RenderObject},
     scheduling::TaskScheduler,
@@ -294,8 +294,7 @@ impl BuildBoundaryElement {
     where
         V: Widget,
         V::Element: 'static,
-        <V::Element as Element>::Render: AnyRenderObject + Sized,
-        V::Render: RenderObject + 'static,
+        V::Render: RenderObject,
     {
         let cell = BuildBoundaryCell::register(ctx);
 

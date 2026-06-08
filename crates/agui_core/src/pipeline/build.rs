@@ -3,10 +3,9 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     context::{MessageCtx, UpdateCtx},
     element::{
-        BuildBoundaryElement, BuildBoundaryId, BuildState, Element, RoutingPath, deliver_message,
+        BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath, deliver_message,
         flush_boundaries, mark_rebuild,
     },
-    prelude::element::AnyRenderObject,
     provide::ProvideScope,
     render_object::RenderObject,
     scheduling::TaskScheduler,
@@ -30,10 +29,9 @@ impl BuildOwner {
     /// render object.
     pub fn mount<V>(widget: V, scheduler: &mut dyn TaskScheduler) -> (Self, Rc<RefCell<V::Render>>)
     where
-        V: Widget + 'static,
+        V: Widget,
         V::Element: 'static,
-        <V::Element as Element>::Render: AnyRenderObject + Sized,
-        V::Render: RenderObject + 'static,
+        V::Render: RenderObject,
     {
         let provide = ProvideScope::new();
         let (state, root_scope) = BuildState::new();

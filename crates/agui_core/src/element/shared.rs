@@ -19,8 +19,7 @@ pub struct SingleChildElement<C, R: ?Sized> {
 impl<C, R> Element for SingleChildElement<C, R>
 where
     C: Element,
-    R: SingleChildRenderObject<Child = C::Render> + 'static,
-    C::Render: Sized,
+    R: SingleChildRenderObject<Child = C::Render>,
 {
     type Render = R;
 

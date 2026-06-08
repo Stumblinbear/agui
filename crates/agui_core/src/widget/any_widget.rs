@@ -222,7 +222,7 @@ struct RenderBoxWrapper<T> {
 
 impl<T> Widget for RenderBoxWrapper<T>
 where
-    T: Widget + 'static,
+    T: Widget,
     T::Render: RenderBox,
 {
     type Element = RenderBoxElement<T::Element>;
