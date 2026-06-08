@@ -19,7 +19,7 @@ use agui_core::{
 /// widget type, so the return type is typically a boxed widget such as the one produced by
 /// [`into_boxed_render_box`](agui_core::widget::AsAnyWidget::into_boxed_render_box).
 pub struct LayoutBuilder<F, Child> {
-    builder: Rc<F>,
+    builder: F,
 
     _phantom: PhantomData<Child>,
 }
@@ -30,7 +30,7 @@ where
 {
     pub fn new(builder: F) -> Self {
         Self {
-            builder: Rc::new(builder),
+            builder,
 
             _phantom: PhantomData,
         }
@@ -67,9 +67,8 @@ where
 {
     child_widget: RetainedChild<Child>,
 
-    /// The closure the element was last built from, retained so an update can tell a reused closure
-    /// from a fresh one and rebuild the subtree only when it changed.
-    source: Rc<F>,
+    /// The closure the element was last built from.
+    source: F,
 
     builder: BuildClosure<Child::Render>,
 }
@@ -104,6 +103,7 @@ where
 impl<F, Child> Widget for LayoutBuilder<F, Child>
 where
     F: Fn(BoxConstraints) -> Child + 'static,
+    F: Clone,
     Child: Widget + 'static,
     Child::Render: RenderBox,
 {
@@ -148,37 +148,38 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        if !Rc::ptr_eq(&self.builder, &element.source) {
-            element.source = Rc::clone(&self.builder);
+        // TODO(trevin): Is there some way to check equality of the builder?
 
-            // Keep the retained child: the next layout reconciles it in place against the new closure
-            // rather than discarding it.
-            element.builder = build_closure(&self.builder, &element.child_widget, ctx);
+        element.source = self.builder;
 
-            // The build logic changed, so the child must be rebuilt even if the constraints are
-            // unchanged. `needs_build` forces the re-run, and marking the enclosing boundary
-            // schedules the layout that performs it; the retained subtree is reconciled there.
-            render_object.builder = Rc::clone(&element.builder);
+        // Keep the retained child: the next layout reconciles it in place against the new closure
+        // rather than discarding it.
+        element.builder = build_closure(&element.source, &element.child_widget, ctx);
 
-            render_object.needs_build = true;
-            render_object.layout_scope.mark_needs_layout();
-        }
+        // The build logic changed, so the child must be rebuilt even if the constraints are
+        // unchanged. `needs_build` forces the re-run, and marking the enclosing boundary
+        // schedules the layout that performs it; the retained subtree is reconciled there.
+        render_object.builder = Rc::clone(&element.builder);
+
+        render_object.needs_build = true;
+        render_object.layout_scope.mark_needs_layout();
     }
 }
 
 /// Builds the closure the render object runs during layout to bring the child up to date for a set of
 /// constraints, reusing the retained subtree where it can and replacing it where it cannot.
 fn build_closure<F, Child>(
-    builder: &Rc<F>,
+    builder: &F,
     child_widget: &RetainedChild<Child>,
     ctx: &mut UpdateCtx,
 ) -> BuildClosure<Child::Render>
 where
     F: Fn(BoxConstraints) -> Child + 'static,
+    F: Clone,
     Child: Widget + 'static,
     Child::Render: RenderBox,
 {
-    let builder = Rc::clone(builder);
+    let builder = builder.clone();
     let child_widget = Rc::clone(child_widget);
 
     let scheduler = ctx.deferred_scheduler();
