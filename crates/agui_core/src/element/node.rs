@@ -8,3 +8,15 @@ impl<E> ElementNode<E> {
         Self { element }
     }
 }
+
+impl<E> AsRef<E> for ElementNode<E> {
+    fn as_ref(&self) -> &E {
+        &self.element
+    }
+}
+
+impl<E> AsMut<E> for ElementNode<E> {
+    fn as_mut(&mut self) -> &mut E {
+        &mut self.element
+    }
+}

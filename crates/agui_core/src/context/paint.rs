@@ -73,6 +73,7 @@ impl PaintCtx<'_> {
 
                 ctx.flush();
             }
+
             self.container.append(layer.into());
 
             return;

@@ -126,6 +126,18 @@ impl<R: RenderBox, P> RenderNode<R, P> {
     }
 }
 
+impl<R, P> AsRef<R> for RenderNode<R, P> {
+    fn as_ref(&self) -> &R {
+        &self.object
+    }
+}
+
+impl<R, P> AsMut<R> for RenderNode<R, P> {
+    fn as_mut(&mut self) -> &mut R {
+        &mut self.object
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::Cell, rc::Rc};

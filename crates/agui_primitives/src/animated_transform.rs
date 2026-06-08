@@ -1,12 +1,9 @@
-use std::{rc::Rc, time::Duration};
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    paint::{
-        compositing::{LayerHandle, TransformLayer},
-        peniko::kurbo::Affine,
-    },
+    paint::peniko::kurbo::Affine,
     prelude::{element::*, render_object::*},
     scheduling::{Vsync, VsyncHandle},
 };
@@ -15,29 +12,44 @@ use agui_core::{
 pub type TransformFn = Rc<dyn Fn(Duration) -> Affine>;
 
 /// A widget that applies a per-frame transform to its subtree.
-///
-/// Use it to move, scale, or rotate a subtree continuously; the subtree is not repainted as it
-/// animates.
 pub struct AnimatedTransform<Child> {
-    child: Child,
     transform: TransformFn,
+    origin: Offset,
+    alignment: Alignment,
+
     vsync: Option<Vsync>,
+
+    child: Child,
 }
 
 impl AnimatedTransform<()> {
     /// Builds an animation that transforms its subtree by `transform` sampled at each frame's time.
     pub fn new(transform: impl Fn(Duration) -> Affine + 'static) -> Self {
         Self {
-            child: (),
             transform: Rc::new(transform),
+            origin: Offset::ZERO,
+            alignment: Alignment::TOP_LEFT,
             vsync: None,
+
+            child: (),
         }
     }
 
-    /// Drives the animation from `vsync`: the transform is resampled and reapplied each frame the
-    /// registry ticks. Without one, the subtree keeps the transform sampled at the first frame.
+    /// Drives the animation from `vsync`.
     pub fn vsync(mut self, vsync: Vsync) -> Self {
         self.vsync = Some(vsync);
+        self
+    }
+
+    /// Sets the pivot the transform is applied around, as an offset from the child's top-left.
+    pub fn origin(mut self, origin: Offset) -> Self {
+        self.origin = origin;
+        self
+    }
+
+    /// Sets the point within the child the transform pivots around, in addition to `origin`.
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
         self
     }
 
@@ -45,6 +57,8 @@ impl AnimatedTransform<()> {
         AnimatedTransform {
             child,
             transform: self.transform,
+            origin: self.origin,
+            alignment: self.alignment,
             vsync: self.vsync,
         }
     }
@@ -60,16 +74,12 @@ where
     type Render = RenderAnimatedTransform<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let Self {
-            child,
-            transform,
-            vsync,
-        } = self;
+        let (element, child_render) = SingleChildElement::new(self.child, ctx);
 
-        let (element, child_render) = SingleChildElement::new(child, ctx);
-
-        let mut render = RenderAnimatedTransform::new(child_render, transform);
-        render.vsync = vsync;
+        let mut render = RenderAnimatedTransform::new(child_render, self.transform);
+        render.origin = self.origin;
+        render.alignment = self.alignment;
+        render.vsync = self.vsync;
 
         (element, render)
     }
@@ -80,16 +90,34 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        element.update(self.child, &mut render_object.child, ctx);
+        render_object.transform = self.transform;
+        render_object.origin = self.origin;
+        render_object.alignment = self.alignment;
+
+        render_object.vsync = self.vsync;
+        render_object.animation = None;
+
+        element.update(self.child, &mut render_object.child.object, ctx);
+
+        // The transform or subtree may have changed, so the subtree repaints. An animating transform
+        // already marks this every frame; this covers a rebuild while idle.
+        if let Some(scope) = &render_object.scope {
+            scope.mark_needs_paint();
+        }
     }
 }
 
-/// The render object of an [`AnimatedTransform`]: applies a per-frame transform to its subtree without
-/// repainting it.
+/// The render object of an [`AnimatedTransform`]: resamples its transform each frame and repaints its
+/// child under it.
 pub struct RenderAnimatedTransform<Child> {
     transform: TransformFn,
-    layer: Option<LayerHandle<TransformLayer>>,
-    handle: Option<VsyncHandle>,
+    origin: Offset,
+    alignment: Alignment,
+
+    /// The frame time the transform is sampled at, advanced by the animation each frame.
+    now: Rc<Cell<Duration>>,
+
+    scope: Option<PaintScope>,
     vsync: Option<Vsync>,
     animation: Option<VsyncHandle>,
 
@@ -115,76 +143,50 @@ impl<Child> SingleChildRenderObject for RenderAnimatedTransform<Child> {
     }
 }
 
-impl<Child> RenderAnimatedTransform<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox> RenderAnimatedTransform<Child> {
     pub fn new(child: Child, transform: TransformFn) -> Self {
         Self {
-            child,
             transform,
-            layer: None,
-            handle: None,
+            origin: Offset::ZERO,
+            alignment: Alignment::TOP_LEFT,
+
+            now: Rc::new(Cell::new(Duration::ZERO)),
+            scope: None,
             vsync: None,
+            animation: None,
+
+            child: RenderNode::new(child),
         }
     }
 
-    /// Builds and returns this subtree's transform layer, painting the subtree once. Call after layout;
-    /// repeated calls return the same layer.
-    pub fn build_layer(&mut self) -> LayerHandle<TransformLayer> {
-        if let Some(layer) = &self.layer {
-            return layer.clone();
-        }
-
-        let layer = LayerHandle::new(TransformLayer::new((self.transform)(Duration::ZERO)));
-        PaintCtx::paint(&layer, |ctx| self.child.paint(ctx, Offset::ZERO));
-
-        self.layer = Some(layer.clone());
-
-        layer
-    }
-
-    /// Starts the animation: the transform is resampled and applied each frame, until this render
-    /// object unmounts or is dropped.
-    pub fn animate(&mut self, vsync: &Vsync) {
-        let layer = self.build_layer();
-        let transform = Rc::clone(&self.transform);
-
-        self.handle = Some(vsync.on_frame(move |now| {
-            layer.borrow_mut().set_transform(transform(now));
-        }));
-    }
-
-    /// This subtree's transform layer, once it has been built.
-    pub fn layer(&self) -> Option<LayerHandle<TransformLayer>> {
-        self.layer.clone()
+    /// The transform to paint and hit-test under, sampled at the current frame and pivoted to `size`.
+    fn effective(&self, size: Size) -> Affine {
+        fold_pivot(
+            (self.transform)(self.now.get()),
+            self.origin,
+            self.alignment,
+            size,
+        )
     }
 }
 
-impl<Child> RenderObject for RenderAnimatedTransform<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox> RenderObject for RenderAnimatedTransform<Child> {
     fn mount(&mut self, ctx: &mut MountCtx) {
+        self.scope = Some(ctx.paint_scope().clone());
         self.child.mount(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
-        // Stop animating the moment the subtree leaves the tree.
-        self.handle = None;
+        self.animation = None;
         self.child.unmount(ctx);
     }
 
     fn update_compositing_bits(&mut self) -> bool {
-        // The subtree is painted into a retained transform layer, so this node always composites.
-        true
+        self.child.update_compositing_bits()
     }
 }
 
-impl<Child> RenderBox for RenderAnimatedTransform<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }
@@ -206,7 +208,9 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.child.layout(ctx, constraints)
+        let size = self.child.layout_and_get_size(ctx, constraints);
+        self.child.parent_data = Some(size);
+        size
     }
 
     fn measure_baseline(
@@ -222,43 +226,62 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        // Localize through the transform the layer currently shows, so a hit lands where the
-        // animated subtree is drawn rather than where it was laid out.
-        let transform = self
-            .layer
-            .as_ref()
-            .map_or(Affine::IDENTITY, |layer| layer.borrow().transform());
+        let size = self
+            .child
+            .parent_data
+            .expect("animated transform has not been laid out");
 
-        result.with_transform(transform, position, |result, local| {
+        result.with_transform(self.effective(size), position, |result, local| {
             self.child.hit_test(result, local)
         })
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        let layer = self.build_layer();
-
-        // Begin animating on the first paint, once the layer exists and the subtree has been laid out.
-        if self.handle.is_none()
-            && let Some(vsync) = self.vsync.clone()
+        // Begin animating on the first paint, once the subtree has been laid out.
+        if self.animation.is_none()
+            && let Some(vsync) = self.vsync.as_ref()
         {
-            self.animate(&vsync);
+            let now = Rc::clone(&self.now);
+            let scope = self.scope.clone();
+
+            self.animation = Some(vsync.on_frame(move |frame| {
+                now.set(frame);
+
+                if let Some(scope) = &scope {
+                    scope.mark_needs_paint();
+                }
+            }));
         }
 
-        ctx.add_layer(layer.into(), offset);
+        let size = self
+            .child
+            .parent_data
+            .expect("animated transform has not been laid out");
+
+        ctx.with_transform(
+            self.child.needs_compositing(),
+            Affine::translate(offset) * self.effective(size),
+            |ctx| self.child.paint(ctx, Offset::ZERO),
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, rc::Rc, time::Duration};
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+        time::Duration,
+    };
 
     use agui_core::{
         paint::{
             command::PaintCommand,
-            compositing::Compositor,
+            compositing::{ContainerLayer, LayerHandle},
             peniko::{Color, Fill, kurbo::Affine},
             scene::Scene,
         },
+        pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
         scheduling::Vsync,
         test_harness::with_ctx,
@@ -267,16 +290,17 @@ mod tests {
     use typed_floats::{Positive, PositiveFinite, as_const};
 
     use super::AnimatedTransform;
+    use crate::repaint_boundary::RepaintBoundary;
 
-    /// A leaf that records how many times it painted, so a test can prove the cached subtree is not
-    /// repainted as the transform animates.
+    /// A leaf that counts its paints and draws a fill, so a test can see how often the subtree under a
+    /// transform is repainted.
     struct Counter {
         paints: Rc<Cell<usize>>,
     }
 
     struct CounterElement;
 
-    impl agui_core::element::Element for CounterElement {
+    impl Element for CounterElement {
         type Render = RenderCounter;
     }
 
@@ -378,50 +402,91 @@ mod tests {
         panic!("expected a fill, got {:?}", flat.commands());
     }
 
-    /// Ticking vsync re-places the subtree at the new transform; the subtree is painted exactly once,
-    /// no matter how many frames the transform animates over.
+    fn mount(widget: impl Widget<Render: RenderBox + 'static> + 'static) -> PipelineOwner {
+        let (_, render) = with_ctx(|ctx| widget.create(ctx));
+
+        let owner = PipelineOwner::new(
+            Rc::new(RefCell::new(render)),
+            LayerHandle::new(ContainerLayer::new()),
+        );
+
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+
+        owner
+    }
+
+    /// Each tick resamples the transform and repaints the subtree under it at the new transform.
     #[test]
-    fn transform_animates_via_vsync_without_repainting() {
+    fn the_transform_resamples_each_frame() {
         let vsync = Vsync::new();
         let paints = Rc::new(Cell::new(0usize));
 
         let widget = AnimatedTransform::new(|now| Affine::translate((now.as_millis() as f64, 0.0)))
+            .vsync(vsync.clone())
             .child(Counter {
                 paints: Rc::clone(&paints),
             });
 
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
-
-        render.build_layer();
-        assert_eq!(
-            paints.get(),
-            1,
-            "building the layer paints the subtree once"
-        );
-
-        render.animate(&vsync);
+        let mut owner = mount(widget);
+        owner.flush_layout();
+        owner.flush_paint();
 
         vsync.tick(Duration::from_millis(16));
-        let scene = Compositor::compose(&render.layer().unwrap());
-        assert_eq!(only_fill_transform(&scene), Affine::translate((16.0, 0.0)));
-        assert_eq!(paints.get(), 1, "no repaint after the first frame");
+        owner.flush_paint();
+        assert_eq!(
+            only_fill_transform(&owner.composite()),
+            Affine::translate((16.0, 0.0))
+        );
 
         vsync.tick(Duration::from_millis(32));
-        let scene = Compositor::compose(&render.layer().unwrap());
-        assert_eq!(only_fill_transform(&scene), Affine::translate((32.0, 0.0)));
+        owner.flush_paint();
         assert_eq!(
-            paints.get(),
-            1,
-            "the subtree painted once across the whole animation"
+            only_fill_transform(&owner.composite()),
+            Affine::translate((32.0, 0.0))
+        );
+
+        assert!(
+            paints.get() >= 3,
+            "the subtree repaints as the transform moves"
         );
     }
 
-    /// A hit is localized through the transform the layer shows, so a quarter-turn routes a point
-    /// that lies only within the rotated bounds to the child.
+    /// Wrapping the subtree in a repaint boundary reuses its painting: the transform animates while the
+    /// subtree paints once.
+    #[test]
+    fn a_repaint_boundary_child_paints_once_across_the_animation() {
+        let vsync = Vsync::new();
+        let paints = Rc::new(Cell::new(0usize));
+
+        let widget = AnimatedTransform::new(|now| Affine::translate((now.as_millis() as f64, 0.0)))
+            .vsync(vsync.clone())
+            .child(RepaintBoundary::new().child(Counter {
+                paints: Rc::clone(&paints),
+            }));
+
+        let mut owner = mount(widget);
+        owner.flush_layout();
+        owner.flush_paint();
+        assert_eq!(paints.get(), 1);
+
+        vsync.tick(Duration::from_millis(16));
+        owner.flush_paint();
+        assert_eq!(
+            only_fill_transform(&owner.composite()),
+            Affine::translate((16.0, 0.0))
+        );
+
+        vsync.tick(Duration::from_millis(32));
+        owner.flush_paint();
+        assert_eq!(
+            paints.get(),
+            1,
+            "the boundary reused its painting across the animation"
+        );
+    }
+
+    /// A hit is localized through the current transform, so a quarter-turn routes a point that lies
+    /// only within the rotated bounds to the child.
     #[test]
     fn a_hit_is_localized_through_the_current_transform() {
         use std::f64::consts::FRAC_PI_2;
@@ -434,21 +499,40 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
 
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
-        // Build the layer so it carries the rotation the hit test reads.
-        render.build_layer();
+        let mut owner = mount(widget);
+        owner.flush_layout();
 
-        // A quarter-turn about the origin places the 50x50 child at x in [-50, 0]. The point
-        // (-5, 5) lies outside the unrotated bounds but inside the rotated ones, localizing to the
-        // child's (5, 5).
-        let mut result = HitTestResult::new();
-        let hit = render.hit_test(&mut result, Offset::new(-5.0, 5.0));
+        // A quarter-turn about the origin places the 50x50 child at x in [-50, 0]. The point (-5, 5)
+        // lies outside the unrotated bounds but inside the rotated ones, localizing to the child.
+        let result = owner.hit_test(Offset::new(-5.0, 5.0));
 
-        assert_eq!(hit, HitTest::Absorb);
+        assert!(!result.path().is_empty(), "the rotated child is hit");
+    }
+
+    /// Aligning the pivot to the child's center rotates it in place: a half-turn about the center keeps
+    /// the 50x50 child within its own bounds, so a far-corner hit still lands.
+    #[test]
+    fn the_pivot_aligns_to_the_child() {
+        use std::f64::consts::PI;
+
+        use crate::{listener::Listener, sized_box::SizedBox};
+
+        let widget = AnimatedTransform::new(|_| Affine::rotate(PI))
+            .alignment(Alignment::CENTER)
+            .child(
+                Listener::builder()
+                    .behavior(HitTestBehavior::Opaque)
+                    .child(SizedBox::new().width(50).height(50)),
+            );
+
+        let mut owner = mount(widget);
+        owner.flush_layout();
+
+        // A half-turn about the center maps the child's (10, 10) to (40, 40); without the center pivot
+        // it would map about the origin and leave the bounds entirely.
+        let result = owner.hit_test(Offset::new(40.0, 40.0));
+
+        assert!(!result.path().is_empty(), "the rotated child is hit");
     }
 }
 

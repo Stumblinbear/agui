@@ -80,6 +80,7 @@ fn main() {
                         .child(
                             AnimatedTransform::new(|now| Affine::rotate(now.as_secs_f64()))
                                 .vsync(vsync.clone())
+                                .alignment(Alignment::CENTER)
                                 .child(
                                     Opacity::new(0.5).child(
                                         ColoredBox::new(Color::from_rgb8(255, 138, 0))

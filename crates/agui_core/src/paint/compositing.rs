@@ -134,17 +134,14 @@ impl Compositor<'_> {
     /// Composes `root` and its descendants into a fresh scene.
     pub fn compose<L: Layer + ?Sized>(root: &LayerHandle<L>) -> Scene {
         let mut scene = Scene::new();
-        Self::compose_into(&mut scene, root);
-        scene
-    }
 
-    /// Composes `root` and its descendants into `scene`.
-    pub fn compose_into<L: Layer + ?Sized>(scene: &mut Scene, root: &LayerHandle<L>) {
         let mut root = root.borrow_mut();
 
         // Settle every dirty flag before composing; compose reads them to decide cache reuse.
         root.update_dirty();
-        root.compose(&mut Compositor { scene });
+        root.compose(&mut Compositor { scene: &mut scene });
+
+        scene
     }
 
     /// Splices `sub` into the scene by reference, under the transform in effect.
