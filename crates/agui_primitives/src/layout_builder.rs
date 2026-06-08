@@ -236,6 +236,10 @@ where
 
             if let Some(paint_scope) = paint_scope {
                 ctx.mount(paint_scope, |mount| child_render.mount(mount));
+
+                // The fresh subtree's compositing bits sit at their defaults; schedule a recompute so a
+                // compositing descendant paints into its layer rather than as flat drawing.
+                paint_scope.mark_needs_compositing_bits_update();
             }
 
             *slot = Some(child_render);
