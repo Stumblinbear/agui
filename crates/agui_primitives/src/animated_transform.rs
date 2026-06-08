@@ -222,7 +222,16 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        self.child.hit_test(result, position)
+        // Localize through the transform the layer currently shows, so a hit lands where the
+        // animated subtree is drawn rather than where it was laid out.
+        let transform = self
+            .layer
+            .as_ref()
+            .map_or(Affine::IDENTITY, |layer| layer.borrow().transform());
+
+        result.with_transform(transform, position, |result, local| {
+            self.child.hit_test(result, local)
+        })
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -409,6 +418,37 @@ mod tests {
             1,
             "the subtree painted once across the whole animation"
         );
+    }
+
+    /// A hit is localized through the transform the layer shows, so a quarter-turn routes a point
+    /// that lies only within the rotated bounds to the child.
+    #[test]
+    fn a_hit_is_localized_through_the_current_transform() {
+        use std::f64::consts::FRAC_PI_2;
+
+        use crate::{listener::Listener, sized_box::SizedBox};
+
+        let widget = AnimatedTransform::new(|_| Affine::rotate(FRAC_PI_2)).child(
+            Listener::builder()
+                .behavior(HitTestBehavior::Opaque)
+                .child(SizedBox::new().width(50).height(50)),
+        );
+
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
+        render.layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
+        // Build the layer so it carries the rotation the hit test reads.
+        render.build_layer();
+
+        // A quarter-turn about the origin places the 50x50 child at x in [-50, 0]. The point
+        // (-5, 5) lies outside the unrotated bounds but inside the rotated ones, localizing to the
+        // child's (5, 5).
+        let mut result = HitTestResult::new();
+        let hit = render.hit_test(&mut result, Offset::new(-5.0, 5.0));
+
+        assert_eq!(hit, HitTest::Absorb);
     }
 }
 
