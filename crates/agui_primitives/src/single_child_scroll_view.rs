@@ -33,26 +33,25 @@ where
 
     type Render = RenderSingleChildScrollView<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { child } = self;
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+        (
+            element,
+            RenderSingleChildScrollView {
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderSingleChildScrollView {
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, &mut render_object.child.object);
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { child } = self;
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -140,7 +139,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::TestHarness;
+    use agui_core::test_harness::with_ctx;
 
     use crate::sized_box::SizedBox;
 
@@ -148,9 +147,8 @@ mod tests {
 
     #[test]
     fn requires_child_with_intrinsic_width() {
-        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10));
-        let mut render_object =
-            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
+        let (_, mut render_object) =
+            with_ctx(|ctx| SingleChildScrollView::new(SizedBox::new().width(10)).create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -161,9 +159,8 @@ mod tests {
             "should only be the width of the child"
         );
 
-        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256));
-        let mut render_object =
-            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
+        let (_, mut render_object) =
+            with_ctx(|ctx| SingleChildScrollView::new(SizedBox::new().width(256)).create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -174,9 +171,9 @@ mod tests {
             "should not exceed the width of the constraints"
         );
 
-        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(10).height(16));
-        let mut render_object =
-            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            SingleChildScrollView::new(SizedBox::new().width(10).height(16)).create(ctx)
+        });
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -187,9 +184,9 @@ mod tests {
             "should be the width of the child and the height of the child"
         );
 
-        let scroll_view = SingleChildScrollView::new(SizedBox::new().expand_width().height(16));
-        let mut render_object =
-            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            SingleChildScrollView::new(SizedBox::new().expand_width().height(16)).create(ctx)
+        });
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -200,9 +197,9 @@ mod tests {
             "should not exceed the width of the constraints and be the height of the child"
         );
 
-        let scroll_view = SingleChildScrollView::new(SizedBox::new().width(256).height(256));
-        let mut render_object =
-            scroll_view.create_render_object(&TestHarness::mount(&scroll_view).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            SingleChildScrollView::new(SizedBox::new().width(256).height(256)).create(ctx)
+        });
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -224,8 +221,7 @@ mod harness {
 
     #[test]
     fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default().run(&SingleChildScrollView::new(
-            SizedBox::new().width(10).height(256),
-        ));
+        BoxSizingCheck::default()
+            .run(|| SingleChildScrollView::new(SizedBox::new().width(10).height(256)));
     }
 }

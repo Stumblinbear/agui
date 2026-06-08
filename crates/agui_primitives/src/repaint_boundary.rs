@@ -41,36 +41,36 @@ where
 
     type Render = RenderRepaintBoundary;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { child } = self;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderRepaintBoundary {
+                content: Rc::new(RefCell::new(child_render)),
+                layer: LayerHandle::new(ContainerLayer::new()),
+                handle: None,
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { child } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        let child = element.create_render_object(&self.child);
-
-        RenderRepaintBoundary {
-            content: Rc::new(RefCell::new(child)),
-            layer: LayerHandle::new(ContainerLayer::new()),
-            handle: None,
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         {
             let mut content = render_object.content.borrow_mut();
-            let child = content
+            let child_render = content
                 .as_any_mut()
                 .downcast_mut::<Child::Render>()
                 .expect("a boundary's content keeps its child's render type for its whole life");
-            element.update_render_object(&self.child, child);
+            element.update(child, child_render, ctx);
         }
 
         // The subtree's description changed, so the boundary must repaint.
@@ -171,7 +171,7 @@ mod tests {
         },
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use typed_floats::{PositiveFinite, as_const};
@@ -219,28 +219,23 @@ mod tests {
         type Element = SingleChildElement<Child::Element>;
         type Render = RenderCounter<Child::Render>;
 
-        fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-            SingleChildElement::new(&self.child, ctx)
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let (element, child_render) = SingleChildElement::new(self.child, ctx);
+            let render = RenderCounter {
+                paints: self.paints,
+                capture: self.capture,
+                child: RenderNode::new(child_render),
+            };
+            (element, render)
         }
 
-        fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-            element.update(&self.child, &old.child, ctx);
-        }
-
-        fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-            element.dispatch(&self.child, path, action)
-        }
-
-        fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-            RenderCounter {
-                paints: Rc::clone(&self.paints),
-                capture: self.capture.clone(),
-                child: RenderNode::new(element.create_render_object(&self.child)),
-            }
-        }
-
-        fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-            element.update_render_object(&self.child, &mut render_object.child.object);
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render_object: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.update(self.child, &mut render_object.child.object, ctx);
         }
     }
 
@@ -337,7 +332,7 @@ mod tests {
                     Counter::new(Rc::clone(&inner_paints)).capture(Rc::clone(&inner_scope)),
                 ));
 
-        let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, render) = with_ctx(|ctx| widget.create(ctx));
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
             LayerHandle::new(ContainerLayer::new()),
@@ -384,6 +379,6 @@ mod harness {
     #[test]
     fn obeys_the_box_sizing_contracts() {
         BoxSizingCheck::default()
-            .run(&RepaintBoundary::new().child(SizedBox::new().width(20).height(10)));
+            .run(|| RepaintBoundary::new().child(SizedBox::new().width(20).height(10)));
     }
 }

@@ -274,7 +274,7 @@ mod tests {
         let reactor = LocalReactor::new(|| {});
 
         let tx = reactor.scheduler().event_tx();
-        let path = RoutingPath::new(crate::element::BoundaryId::default(), Vec::new());
+        let path = RoutingPath::new(crate::element::BuildBoundaryId::default(), Vec::new());
         tx.send((path.clone(), Box::new(1_u32))).unwrap();
         tx.send((path, Box::new(2_u32))).unwrap();
 

@@ -36,26 +36,28 @@ where
 
     type Render = RenderCenter<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { child } = self;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderCenter {
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { child } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderCenter {
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -185,7 +187,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::TestHarness;
+    use agui_core::test_harness::with_ctx;
 
     use crate::sized_box::SizedBox;
 
@@ -196,8 +198,7 @@ mod tests {
         // A 50x50 child inside a 200x100 box sits at ((200-50)/2, (100-50)/2) = (75, 25).
         let widget = Center::new().child(SizedBox::new().width(50).height(50));
 
-        let mut render_object =
-            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| widget.create(ctx));
 
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
@@ -243,6 +244,6 @@ mod harness {
 
     #[test]
     fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default().run(&Center::new().child(SizedBox::new().width(20).height(10)));
+        BoxSizingCheck::default().run(|| Center::new().child(SizedBox::new().width(20).height(10)));
     }
 }

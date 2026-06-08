@@ -31,18 +31,17 @@ impl Widget for TestBox {
 
     type Render = RenderTestBox;
 
-    fn create_element(&self, _: &mut UpdateCtx) {}
-
-    fn update(&self, (): &mut (), _: &Self, _: &mut UpdateCtx) {}
-
-    fn create_render_object(&self, (): &()) -> Self::Render {
-        RenderTestBox {
-            size: self.size,
-            color: self.color,
-        }
+    fn create(self, _: &mut UpdateCtx) -> ((), Self::Render) {
+        (
+            (),
+            RenderTestBox {
+                size: self.size,
+                color: self.color,
+            },
+        )
     }
 
-    fn update_render_object(&self, (): &(), render_object: &mut Self::Render) {
+    fn update(self, (): &mut (), render_object: &mut Self::Render, _: &mut UpdateCtx) {
         render_object.size = self.size;
         render_object.color = self.color;
     }
@@ -157,19 +156,18 @@ impl Widget for IntrinsicBox {
 
     type Render = RenderIntrinsicBox;
 
-    fn create_element(&self, _: &mut UpdateCtx) {}
-
-    fn update(&self, (): &mut (), _: &Self, _: &mut UpdateCtx) {}
-
-    fn create_render_object(&self, (): &()) -> Self::Render {
-        RenderIntrinsicBox {
-            size: self.size,
-            min: self.min,
-            max: self.max,
-        }
+    fn create(self, _: &mut UpdateCtx) -> ((), Self::Render) {
+        (
+            (),
+            RenderIntrinsicBox {
+                size: self.size,
+                min: self.min,
+                max: self.max,
+            },
+        )
     }
 
-    fn update_render_object(&self, (): &(), render_object: &mut Self::Render) {
+    fn update(self, (): &mut (), render_object: &mut Self::Render, _: &mut UpdateCtx) {
         render_object.size = self.size;
         render_object.min = self.min;
         render_object.max = self.max;

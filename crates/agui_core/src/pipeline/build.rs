@@ -3,7 +3,7 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     context::{MessageCtx, UpdateCtx},
     element::{
-        BoundaryId, BuildBoundaryElement, BuildState, RoutingPath, deliver_message,
+        BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath, deliver_message,
         flush_boundaries, mark_rebuild,
     },
     provide::ProvideScope,
@@ -25,17 +25,18 @@ pub struct BuildOwner {
 }
 
 impl BuildOwner {
-    /// Mounts `widget` as the root boundary, returning the owner and the root's render object.
-    pub fn mount<V>(widget: V, scheduler: &mut dyn TaskScheduler) -> (Self, V::Render)
+    /// Mounts `widget` as the root boundary, returning the owner and a shared cell holding the root's
+    /// render object.
+    pub fn mount<V>(widget: V, scheduler: &mut dyn TaskScheduler) -> (Self, Rc<RefCell<V::Render>>)
     where
         V: Widget + 'static,
         V::Element: 'static,
-        V::Render: RenderObject,
+        V::Render: RenderObject + 'static,
     {
         let provide = ProvideScope::new();
         let (state, root_scope) = BuildState::new();
 
-        let (root, render_object) = {
+        let (root, render) = {
             let mut path = Vec::new();
             let mut ctx = UpdateCtx::new(scheduler, &mut path, &provide, &root_scope);
 
@@ -48,12 +49,12 @@ impl BuildOwner {
                 state,
                 root,
             },
-            render_object,
+            render,
         )
     }
 
     /// The id of the root boundary, for addressing a root-relative path.
-    pub fn root_id(&self) -> BoundaryId {
+    pub fn root_id(&self) -> BuildBoundaryId {
         self.root.id()
     }
 
@@ -198,7 +199,7 @@ mod tests {
         let widget = Leaf::new().on_rebuild(bump(&r0));
 
         let mut tasks = TestTaskRunner::new();
-        let (mut owner, ()) = BuildOwner::mount(widget, &mut tasks.scheduler());
+        let (mut owner, _) = BuildOwner::mount(widget, &mut tasks.scheduler());
 
         assert!(!owner.is_dirty());
         assert!(!owner.flush(&mut tasks.scheduler()));
@@ -233,7 +234,7 @@ mod tests {
                 move |ctx| received.set(Some(ctx.consume::<u32>()))
             });
 
-        let (mut owner, ()) = BuildOwner::mount(widget, &mut tasks.scheduler());
+        let (mut owner, _) = BuildOwner::mount(widget, &mut tasks.scheduler());
 
         tasks.run_to_completion();
 

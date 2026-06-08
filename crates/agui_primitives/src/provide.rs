@@ -1,6 +1,10 @@
 use std::{any::Any, rc::Rc};
 
-use agui_core::prelude::element::*;
+use agui_core::{
+    context::{Dispatch, UpdateCtx},
+    element::{Element, RoutingId, node::ElementNode},
+    widget::Widget,
+};
 
 /// Makes `value` available to the subtree below it, captured by descendants that ask for the type.
 ///
@@ -31,31 +35,59 @@ where
     T: Any,
     Child: Widget,
 {
-    type Element = SingleChildElement<Child::Element>;
+    type Element = ProvideElement<T, Child::Element>;
 
     type Render = Child::Render;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        ctx.with_provided(Rc::clone(&self.value), |ctx| {
-            SingleChildElement::new(&self.child, ctx)
-        })
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { value, child } = self;
+
+        let (element, render_object) =
+            ctx.with_provided(Rc::clone(&value), |ctx| child.create(ctx));
+
+        (
+            ProvideElement {
+                child: ElementNode::new(element),
+                value,
+            },
+            render_object,
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        ctx.with_provided(Rc::clone(&self.value), |ctx| {
-            element.update(&self.child, &old.child, ctx);
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { value, child } = self;
+
+        element.value = Rc::clone(&value);
+
+        ctx.with_provided(value, |ctx| {
+            child.update(&mut element.child.element, render_object, ctx);
         });
     }
+}
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action);
-    }
+/// The [`Element`] of a [`Provide`], re-applying the provided value when a rebuild reaches its subtree.
+pub struct ProvideElement<T, C> {
+    child: ElementNode<C>,
+    value: Rc<T>,
+}
 
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        element.create_render_object(&self.child)
-    }
+impl<T, C> Element for ProvideElement<T, C>
+where
+    T: Any,
+    C: Element,
+{
+    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+        match action {
+            Dispatch::Rebuild(ctx) => ctx.with_provided(Rc::clone(&self.value), |ctx| {
+                self.child.element.dispatch(path, Dispatch::Rebuild(ctx));
+            }),
 
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, render_object);
+            action @ Dispatch::Message(_) => self.child.element.dispatch(path, action),
+        }
     }
 }

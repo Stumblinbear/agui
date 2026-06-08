@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     num::NonZeroUsize,
     rc::Rc,
     sync::Arc,
@@ -374,37 +373,32 @@ impl ApplicationHandler<WakeUp> for App {
 /// something asks it to, the pipeline owner brings layout and paint up to date, and each frame keeps the
 /// two in step before compositing for presentation. `on_layer_created` receives the layer the window
 /// presents.
-struct WindowDriver<V: Widget>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
+struct WindowDriver {
     reactor: LocalReactor,
     vsync: Vsync,
-    build: BuildOwner<V>,
-    content: BoundaryContent,
+    build: BuildOwner,
     owner: PipelineOwner,
 }
 
-impl<V: Widget> WindowDriver<V>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
-    fn new(
+impl WindowDriver {
+    fn new<V>(
         widget: V,
         reactor: LocalReactor,
         vsync: Vsync,
         on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>),
-    ) -> Self {
-        let mut build = BuildOwner::mount(widget, &mut reactor.scheduler());
+    ) -> Self
+    where
+        V: Widget + 'static,
+        V::Render: RenderBox + 'static,
+    {
+        // Build the element tree and its root render object together, registering the root as the
+        // pipeline's outermost boundary.
+        let (build, render) = BuildOwner::mount(widget, &mut reactor.scheduler());
 
-        // Seed the render tree from the element tree and register its root as the pipeline's outermost
-        // boundary.
-        let content: BoundaryContent = Rc::new(RefCell::new(build.create_render_object()));
+        let content: BoundaryContent = render;
         let layer = LayerHandle::new(ContainerLayer::new());
 
-        let owner = PipelineOwner::new(Rc::clone(&content), layer.clone());
+        let owner = PipelineOwner::new(content, layer.clone());
 
         on_layer_created(layer);
 
@@ -412,19 +406,8 @@ where
             reactor,
             vsync,
             build,
-            content,
             owner,
         }
-    }
-
-    fn sync_render(&mut self) {
-        let mut content = self.content.borrow_mut();
-        let render = content
-            .as_any_mut()
-            .downcast_mut::<V::Render>()
-            .expect("the root render object keeps its type");
-
-        self.build.update_render_object(render);
     }
 }
 
@@ -439,11 +422,7 @@ trait View {
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
-impl<V: Widget> View for WindowDriver<V>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
+impl View for WindowDriver {
     fn resize(&mut self, constraints: BoxConstraints) {
         self.owner.resize(constraints);
     }
@@ -474,9 +453,7 @@ where
     fn frame(&mut self, now: Duration) -> Scene {
         // Tasks have already been drained, so apply any rebuild they queued, advance frame callbacks for
         // this frame's time, then lay out and paint what changed.
-        if self.build.flush(&mut self.reactor.scheduler()) {
-            self.sync_render();
-        }
+        self.build.flush(&mut self.reactor.scheduler());
 
         self.vsync.tick(now);
 

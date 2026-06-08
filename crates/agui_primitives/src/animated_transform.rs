@@ -59,29 +59,28 @@ where
 
     type Render = RenderAnimatedTransform<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self {
+            child,
+            transform,
+            vsync,
+        } = self;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        let mut render = RenderAnimatedTransform::new(child_render, transform);
+        render.vsync = vsync;
+
+        (element, render)
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        let mut render = RenderAnimatedTransform::new(
-            element.create_render_object(&self.child),
-            Rc::clone(&self.transform),
-        );
-        render.vsync = self.vsync.clone();
-        render
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, &mut render_object.child);
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        element.update(self.child, &mut render_object.child, ctx);
     }
 }
 
@@ -232,7 +231,7 @@ mod tests {
         },
         prelude::{element::*, render_object::*},
         scheduling::Vsync,
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use typed_floats::{Positive, PositiveFinite, as_const};
@@ -253,21 +252,16 @@ mod tests {
         type Element = CounterElement;
         type Render = RenderCounter;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> CounterElement {
-            CounterElement
+        fn create(self, _: &mut UpdateCtx) -> (CounterElement, RenderCounter) {
+            (
+                CounterElement,
+                RenderCounter {
+                    paints: self.paints,
+                },
+            )
         }
 
-        fn update(&self, _: &mut CounterElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn dispatch(&self, _: &mut CounterElement, _: &[RoutingId], _: Dispatch) {}
-
-        fn create_render_object(&self, _: &CounterElement) -> RenderCounter {
-            RenderCounter {
-                paints: Rc::clone(&self.paints),
-            }
-        }
-
-        fn update_render_object(&self, _: &CounterElement, _: &mut RenderCounter) {}
+        fn update(self, _: &mut CounterElement, _: &mut RenderCounter, _: &mut UpdateCtx) {}
     }
 
     struct RenderCounter {
@@ -364,7 +358,7 @@ mod tests {
                 paints: Rc::clone(&paints),
             });
 
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -405,9 +399,8 @@ mod harness {
 
     #[test]
     fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default().run(
-            &AnimatedTransform::new(|_| Affine::IDENTITY)
-                .child(SizedBox::new().width(20).height(10)),
-        );
+        BoxSizingCheck::default().run(|| {
+            AnimatedTransform::new(|_| Affine::IDENTITY).child(SizedBox::new().width(20).height(10))
+        });
     }
 }

@@ -87,35 +87,45 @@ where
 
     type Render = RenderFractionallySizedBox<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self {
+            width_factor,
+            height_factor,
+            alignment,
+            child,
+        } = self;
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+        (
+            element,
+            RenderFractionallySizedBox {
+                width_factor,
+                height_factor,
+                alignment,
+
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self {
+            width_factor,
+            height_factor,
+            alignment,
+            child,
+        } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderFractionallySizedBox {
-            width_factor: self.width_factor,
-            height_factor: self.height_factor,
-            alignment: self.alignment,
-
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         // TODO(trevin): mark it for re-layout if the factors or alignment have changed
-        render_object.width_factor = self.width_factor;
-        render_object.height_factor = self.height_factor;
-        render_object.alignment = self.alignment;
+        render_object.width_factor = width_factor;
+        render_object.height_factor = height_factor;
+        render_object.alignment = alignment;
 
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -259,18 +269,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::TestHarness;
+    use agui_core::test_harness::with_ctx;
 
     use super::*;
 
     #[test]
     fn sizes_child_to_a_fraction_of_the_constraints() {
-        let widget = FractionallySizedBox::new()
-            .width_factor(0.5_f32)
-            .height_factor(1.0_f32);
-
-        let mut render_object =
-            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            FractionallySizedBox::new()
+                .width_factor(0.5_f32)
+                .height_factor(1.0_f32)
+                .create(ctx)
+        });
 
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
@@ -292,12 +302,12 @@ mod tests {
     fn alignment_centers_the_child_when_the_box_is_forced_larger() {
         // A tight 200x200 forces the box to 200 while the factor sizes the child to 100; the default
         // center alignment then places the child at (50, 50).
-        let widget = FractionallySizedBox::new()
-            .width_factor(0.5_f32)
-            .height_factor(0.5_f32);
-
-        let mut render_object =
-            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            FractionallySizedBox::new()
+                .width_factor(0.5_f32)
+                .height_factor(0.5_f32)
+                .create(ctx)
+        });
 
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
@@ -316,13 +326,13 @@ mod tests {
 
     #[test]
     fn top_left_alignment_pins_the_child_to_the_origin() {
-        let widget = FractionallySizedBox::new()
-            .width_factor(0.5_f32)
-            .height_factor(0.5_f32)
-            .alignment(Alignment::TOP_LEFT);
-
-        let mut render_object =
-            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            FractionallySizedBox::new()
+                .width_factor(0.5_f32)
+                .height_factor(0.5_f32)
+                .alignment(Alignment::TOP_LEFT)
+                .create(ctx)
+        });
 
         render_object.layout(
             &mut LayoutCtx::detached(),
@@ -346,6 +356,6 @@ mod harness {
     #[test]
     fn obeys_the_box_sizing_contracts() {
         BoxSizingCheck::default()
-            .run(&FractionallySizedBox::new().child(SizedBox::new().width(20).height(10)));
+            .run(|| FractionallySizedBox::new().child(SizedBox::new().width(20).height(10)));
     }
 }

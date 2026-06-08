@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::time::Duration;
 
 use agui_core::{
     paint::{
@@ -23,14 +23,9 @@ use crate::gesture::{PointerDispatcher, PointerEvent, PointerEventKind, PointerI
 /// in the tree or through the composited [`scene`](Self::scene), and drive pointer input by coordinate
 /// with [`tap_at`](Self::tap_at), [`drag_from`](Self::drag_from), and
 /// [`start_gesture`](Self::start_gesture).
-pub struct WidgetTester<V: Widget>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
-    build: BuildOwner<V>,
+pub struct WidgetTester {
+    build: BuildOwner,
 
-    content: BoundaryContent,
     owner: PipelineOwner,
 
     tasks: TestTaskRunner,
@@ -42,25 +37,24 @@ where
     next_pointer: u64,
 }
 
-impl<V: Widget> WidgetTester<V>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
+impl WidgetTester {
     /// Mounts `widget` as the root of a fresh tree, ready to be sized and pumped.
-    pub fn mount(widget: V) -> Self {
+    pub fn mount<V>(widget: V) -> Self
+    where
+        V: Widget + 'static,
+        V::Render: RenderBox + 'static,
+    {
         let mut tasks = TestTaskRunner::new();
 
-        let mut build = BuildOwner::mount(widget, &mut tasks.scheduler());
+        let (build, render) = BuildOwner::mount(widget, &mut tasks.scheduler());
 
-        let content: BoundaryContent = Rc::new(RefCell::new(build.create_render_object()));
+        let content: BoundaryContent = render;
         let layer = LayerHandle::new(ContainerLayer::new());
-        let owner = PipelineOwner::new(Rc::clone(&content), layer);
+        let owner = PipelineOwner::new(content, layer);
 
         Self {
             build,
 
-            content,
             owner,
 
             tasks,
@@ -97,9 +91,7 @@ where
             self.build.dispatch_message(&path, message);
         }
 
-        if self.build.flush(&mut self.tasks.scheduler()) {
-            self.sync_render();
-        }
+        self.build.flush(&mut self.tasks.scheduler());
 
         self.owner.flush_layout();
         self.owner.flush_paint();
@@ -164,7 +156,7 @@ where
     }
 
     /// Presses a pointer at `position` and returns a gesture that moves and releases it step by step.
-    pub fn start_gesture(&mut self, position: Offset) -> TestGesture<'_, V> {
+    pub fn start_gesture(&mut self, position: Offset) -> TestGesture<'_> {
         let pointer = self.allocate_pointer();
         self.send_pointer(pointer, PointerEventKind::Down, position);
 
@@ -182,17 +174,6 @@ where
     /// object that animates.
     pub fn vsync(&self) -> Vsync {
         self.vsync.clone()
-    }
-
-    fn sync_render(&mut self) {
-        let mut content = self.content.borrow_mut();
-
-        let render = content
-            .as_any_mut()
-            .downcast_mut::<V::Render>()
-            .expect("the root render object keeps its type");
-
-        self.build.update_render_object(render);
     }
 
     fn allocate_pointer(&mut self) -> PointerId {

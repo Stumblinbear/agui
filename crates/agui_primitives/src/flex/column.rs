@@ -1,6 +1,9 @@
 use bon::Builder;
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_core::{
+    prelude::{element::*, render_object::*},
+    render_object::MultiChildRender,
+};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -64,84 +67,76 @@ where
 
 impl<Children> Widget for Column<Children>
 where
-    Children: Widget,
+    Children: Widget + 'static,
     Children::Render: RenderObject,
 {
     type Element = MultiChildElement<Children::Element>;
 
     type Render = RenderFlex<Children::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        MultiChildElement::new(self.children.len(), |i| &self.children[i].child, ctx)
-    }
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self {
+            main_axis_size,
+            main_axis_alignment,
+            cross_axis_alignment,
+            vertical_direction,
+            text_direction,
+            children,
+        } = self;
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(
-            self.children.len(),
-            |i| &self.children[i].child,
-            |i| &old.children[i].child,
-            ctx,
-        );
-    }
+        let mut render_object = RenderFlex {
+            main_axis_size,
+            main_axis_alignment,
+            cross_axis_alignment,
+            vertical_direction,
+            text_direction,
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(|i| &self.children[i].child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderFlex {
-            main_axis_size: self.main_axis_size,
-            main_axis_alignment: self.main_axis_alignment,
-            cross_axis_alignment: self.cross_axis_alignment,
-            vertical_direction: self.vertical_direction,
-            text_direction: self.text_direction,
-
-            children: self
-                .children
-                .iter()
-                .enumerate()
-                .map(|(idx, flexible)| {
-                    flexible
-                        .child
-                        .create_render_object(&element.children[idx].element)
-                })
-                .collect(),
+            children: Vec::new(),
 
             size: Size::ZERO,
-        }
+        };
+
+        let element = MultiChildElement::new(
+            children
+                .into_iter()
+                .map(|flexible| flexible.child)
+                .collect(),
+            &mut render_object,
+            ctx,
+        );
+
+        (element, render_object)
     }
 
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        if render_object.main_axis_size != self.main_axis_size {
-            render_object.main_axis_size = self.main_axis_size;
-        }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self {
+            main_axis_size,
+            main_axis_alignment,
+            cross_axis_alignment,
+            vertical_direction,
+            text_direction,
+            children,
+        } = self;
 
-        if render_object.main_axis_alignment != self.main_axis_alignment {
-            render_object.main_axis_alignment = self.main_axis_alignment;
-        }
+        render_object.main_axis_size = main_axis_size;
+        render_object.main_axis_alignment = main_axis_alignment;
+        render_object.cross_axis_alignment = cross_axis_alignment;
+        render_object.vertical_direction = vertical_direction;
+        render_object.text_direction = text_direction;
 
-        if render_object.cross_axis_alignment != self.cross_axis_alignment {
-            render_object.cross_axis_alignment = self.cross_axis_alignment;
-        }
-
-        if render_object.vertical_direction != self.vertical_direction {
-            render_object.vertical_direction = self.vertical_direction;
-        }
-
-        if render_object.text_direction != self.text_direction {
-            render_object.text_direction = self.text_direction;
-        }
-
-        for (idx, (child, flexible)) in render_object
-            .children
-            .iter_mut()
-            .zip(self.children.iter())
-            .enumerate()
-        {
-            flexible
-                .child
-                .update_render_object(&element.children[idx].element, child);
-        }
+        element.update(
+            children
+                .into_iter()
+                .map(|flexible| flexible.child)
+                .collect(),
+            render_object,
+            ctx,
+        );
     }
 }
 
@@ -152,9 +147,21 @@ pub struct RenderFlex<Children> {
     vertical_direction: VerticalDirection,
     text_direction: Option<TextDirection>,
 
-    children: Vec<Children>,
+    children: Vec<RenderNode<Children>>,
 
     size: Size,
+}
+
+impl<Children> MultiChildRender for RenderFlex<Children> {
+    type Child = Children;
+
+    fn take_children(&mut self) -> Vec<RenderNode<Children>> {
+        std::mem::take(&mut self.children)
+    }
+
+    fn set_children(&mut self, children: Vec<RenderNode<Children>>) {
+        self.children = children;
+    }
 }
 
 impl<Child> RenderObject for RenderFlex<Child>
@@ -239,7 +246,7 @@ where
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{element::Element, key::Key, test_harness::TestHarness, widget::AsAnyWidget};
+    use agui_core::{element::Element, key::Key, test_harness::with_ctx, widget::AsAnyWidget};
 
     use super::*;
 
@@ -266,29 +273,23 @@ mod tests {
 
     impl<T> Widget for TestWidget<T>
     where
-        T: Clone + 'static,
+        T: 'static,
     {
         type Element = TestWidgetElement<T>;
 
         type Render = ();
 
-        fn create_element(&self, _: &mut UpdateCtx) -> Self::Element {
+        fn create(self, _: &mut UpdateCtx) -> (Self::Element, Self::Render) {
             MOUNT_COUNT.with(|count| *count.borrow_mut() += 1);
 
-            TestWidgetElement {
-                value: self.value.clone(),
-            }
+            (TestWidgetElement { value: self.value }, ())
         }
 
-        fn update(&self, element: &mut Self::Element, _: &Self, _: &mut UpdateCtx) {
+        fn update(self, element: &mut Self::Element, (): &mut Self::Render, _: &mut UpdateCtx) {
             UPDATE_COUNT.with(|count| *count.borrow_mut() += 1);
 
-            element.value = self.value.clone();
+            element.value = self.value;
         }
-
-        fn create_render_object(&self, _: &Self::Element) -> Self::Render {}
-
-        fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
     }
 
     #[test]
@@ -332,9 +333,9 @@ mod tests {
             ])
             .build();
 
-        let harness = TestHarness::mount(&column);
+        let (_, render) = with_ctx(|ctx| column.create(ctx));
 
-        assert_eq!(harness.root.element.children.len(), 3);
+        assert_eq!(render.children.len(), 3);
     }
 
     #[test]
@@ -346,7 +347,7 @@ mod tests {
             ])
             .build();
 
-        let mut harness = TestHarness::mount(&column_1);
+        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -358,7 +359,7 @@ mod tests {
             ])
             .build();
 
-        harness.update(&column_1, &column_2);
+        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 4);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -373,7 +374,7 @@ mod tests {
             ])
             .build();
 
-        let mut harness = TestHarness::mount(&column_1);
+        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -385,7 +386,7 @@ mod tests {
             ])
             .build();
 
-        harness.update(&column_1, &column_2);
+        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -403,7 +404,7 @@ mod tests {
             ])
             .build();
 
-        let mut harness = TestHarness::mount(&column_1);
+        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -416,7 +417,7 @@ mod tests {
             ])
             .build();
 
-        harness.update(&column_1, &column_2);
+        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -434,7 +435,7 @@ mod tests {
             ])
             .build();
 
-        let mut harness = TestHarness::mount(&column_1);
+        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -447,7 +448,7 @@ mod tests {
             ])
             .build();
 
-        harness.update(&column_1, &column_2);
+        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -465,7 +466,7 @@ mod tests {
             ])
             .build();
 
-        let mut harness = TestHarness::mount(&column_1);
+        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -481,7 +482,7 @@ mod tests {
             ])
             .build();
 
-        harness.update(&column_1, &column_2);
+        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 7);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 4);
@@ -504,7 +505,7 @@ mod tests {
             ])
             .build();
 
-        let mut harness = TestHarness::mount(&column_1);
+        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -522,7 +523,7 @@ mod tests {
             ])
             .build();
 
-        harness.update(&column_1, &column_2);
+        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 9);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);

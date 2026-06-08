@@ -18,6 +18,7 @@ pub mod pipeline;
 pub mod provide;
 pub mod render_object;
 pub mod scheduling;
+pub mod stateful;
 #[cfg(test)]
 pub mod test_fixtures;
 pub mod test_harness;

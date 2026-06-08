@@ -34,41 +34,51 @@ where
 
     type Render = RenderPadding<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
-    }
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self {
+            child,
+            padding,
+            text_direction,
+        } = self;
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+        let (element, child_render) = SingleChildElement::new(child, ctx);
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
+        (
+            element,
+            RenderPadding {
+                padding: EdgeInsets {
+                    left: padding.left(text_direction),
+                    top: padding.top(),
+                    right: padding.right(text_direction),
+                    bottom: padding.bottom(),
+                },
 
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderPadding {
-            padding: EdgeInsets {
-                left: self.padding.left(self.text_direction),
-                top: self.padding.top(),
-                right: self.padding.right(self.text_direction),
-                bottom: self.padding.bottom(),
+                child: RenderNode::new(child_render),
             },
-
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
+        )
     }
 
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self {
+            child,
+            padding,
+            text_direction,
+        } = self;
+
         // TODO(trevin): mark for re-layout if padding changes
         render_object.padding = EdgeInsets {
-            left: self.padding.left(self.text_direction),
-            top: self.padding.top(),
-            right: self.padding.right(self.text_direction),
-            bottom: self.padding.bottom(),
+            left: padding.left(text_direction),
+            top: padding.top(),
+            right: padding.right(text_direction),
+            bottom: padding.bottom(),
         };
 
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -232,17 +242,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{geometry::EdgeInsets, test_harness::TestHarness};
+    use agui_core::{geometry::EdgeInsets, test_harness::with_ctx};
 
     use super::*;
     use crate::sized_box::SizedBox;
 
     #[test]
     fn adds_correct_padding() {
-        let padding = Padding::new(EdgeInsets::all(10.0)).child(());
-
-        let mut render_object =
-            padding.create_render_object(&TestHarness::mount(&padding).root.element);
+        let (_, mut render_object) =
+            with_ctx(|ctx| Padding::new(EdgeInsets::all(10.0)).child(()).create(ctx));
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -262,9 +270,11 @@ mod tests {
             "child is offset by the leading padding"
         );
 
-        let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink());
-        let mut render_object =
-            padding.create_render_object(&TestHarness::mount(&padding).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            Padding::new(EdgeInsets::all(50.0))
+                .child(SizedBox::shrink())
+                .create(ctx)
+        });
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -284,9 +294,11 @@ mod tests {
             "child is offset by the leading padding"
         );
 
-        let padding = Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand());
-        let mut render_object =
-            padding.create_render_object(&TestHarness::mount(&padding).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| {
+            Padding::new(EdgeInsets::all(50.0))
+                .child(SizedBox::expand())
+                .create(ctx)
+        });
         let size = render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -319,7 +331,7 @@ mod harness {
     #[test]
     fn obeys_the_box_sizing_contracts() {
         BoxSizingCheck::default()
-            .run(&Padding::new(EdgeInsets::all(8)).child(SizedBox::new().width(16).height(48)));
+            .run(|| Padding::new(EdgeInsets::all(8)).child(SizedBox::new().width(16).height(48)));
     }
 
     #[test]
@@ -329,18 +341,19 @@ mod harness {
             .shrink_wraps_height()
             .width_independent_of_height()
             .height_independent_of_width()
-            .run(&Padding::new(EdgeInsets::all(8)).child(SizedBox::new().width(16).height(48)));
+            .run(|| Padding::new(EdgeInsets::all(8)).child(SizedBox::new().width(16).height(48)));
     }
 
     #[test]
     fn combines_a_child_with_known_intrinsics() {
         // A child whose minimum and maximum intrinsics differ, so the parent's combination is
         // exercised with metrics the test controls.
-        let child = IntrinsicBox::new(Size::new(40, 20)).min_intrinsic(Size::new(10, 8));
-
         BoxSizingCheck::new()
             .shrink_wraps_width()
             .shrink_wraps_height()
-            .run(&Padding::new(EdgeInsets::all(8)).child(child));
+            .run(|| {
+                let child = IntrinsicBox::new(Size::new(40, 20)).min_intrinsic(Size::new(10, 8));
+                Padding::new(EdgeInsets::all(8)).child(child)
+            });
     }
 }

@@ -143,39 +143,49 @@ where
 
     type Render = RenderSizedBox<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self {
+            width,
+            height,
+            child,
+        } = self;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderSizedBox {
+                width,
+                height,
+
+                layout_scope: LayoutScope::detached(),
+                child: RelayoutRenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self {
+            width,
+            height,
+            child,
+        } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderSizedBox {
-            width: self.width,
-            height: self.height,
-
-            layout_scope: LayoutScope::detached(),
-            child: RelayoutRenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        if render_object.width != self.width || render_object.height != self.height {
-            render_object.width = self.width;
-            render_object.height = self.height;
+        if render_object.width != width || render_object.height != height {
+            render_object.width = width;
+            render_object.height = height;
 
             render_object.layout_scope.mark_needs_layout();
         }
 
         render_object
             .child
-            .with_object_mut(|child| element.update_render_object(&self.child, child));
+            .with_object_mut(|child_obj| element.update(child, child_obj, ctx));
     }
 }
 
@@ -304,7 +314,7 @@ mod tests {
         paint::compositing::{ContainerLayer, LayerHandle},
         pipeline::{PipelineOwner, layout::BoundaryContent},
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use crate::{center::Center, sized_box::SizedBox};
@@ -328,23 +338,24 @@ mod tests {
         type Element = SingleChildElement<Child::Element>;
         type Render = RenderCounter<Child::Render>;
 
-        fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-            SingleChildElement::new(&self.child, ctx)
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let (element, child_render) = SingleChildElement::new(self.child, ctx);
+            (
+                element,
+                RenderCounter {
+                    layouts: self.layouts,
+                    child: RenderNode::new(child_render),
+                },
+            )
         }
-        fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-            element.update(&self.child, &old.child, ctx);
-        }
-        fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-            element.dispatch(&self.child, path, action)
-        }
-        fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-            RenderCounter {
-                layouts: Rc::clone(&self.layouts),
-                child: RenderNode::new(element.create_render_object(&self.child)),
-            }
-        }
-        fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-            element.update_render_object(&self.child, &mut render_object.child.object);
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render_object: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.update(self.child, &mut render_object.child.object, ctx);
         }
     }
 
@@ -414,16 +425,17 @@ mod tests {
         type Element = ();
         type Render = RenderProbe;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> Self::Element {}
-        fn update(&self, _: &mut Self::Element, _: &Self, _: &mut UpdateCtx) {}
-        fn dispatch(&self, _: &mut Self::Element, _: &[RoutingId], _: Dispatch) {}
-        fn create_render_object(&self, _: &Self::Element) -> Self::Render {
-            RenderProbe {
-                layouts: Rc::clone(&self.layouts),
-                captured: Rc::clone(&self.captured),
-            }
+        fn create(self, _: &mut UpdateCtx) -> ((), RenderProbe) {
+            (
+                (),
+                RenderProbe {
+                    layouts: self.layouts,
+                    captured: self.captured,
+                },
+            )
         }
-        fn update_render_object(&self, _: &Self::Element, _: &mut Self::Render) {}
+
+        fn update(self, _: &mut (), _: &mut RenderProbe, _: &mut UpdateCtx) {}
     }
 
     struct RenderProbe {
@@ -479,9 +491,8 @@ mod tests {
 
     #[test]
     fn results_in_correct_sizing() {
-        let sized_box = SizedBox::new().width(16).height(48);
-        let mut render_object =
-            sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
+        let (_, mut render_object) =
+            with_ctx(|ctx| SizedBox::new().width(16).height(48).create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -492,9 +503,8 @@ mod tests {
             "should use the given sizes"
         );
 
-        let sized_box = SizedBox::new().width(0).height(16);
-        let mut render_object =
-            sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
+        let (_, mut render_object) =
+            with_ctx(|ctx| SizedBox::new().width(0).height(16).create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(16, 128, 32, 128),
@@ -505,9 +515,7 @@ mod tests {
             "should ignore the given sizes and use the smallest size allowed by the constraints"
         );
 
-        let sized_box = SizedBox::shrink();
-        let mut render_object =
-            sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| SizedBox::shrink().create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -518,9 +526,7 @@ mod tests {
             "should shrink to the smallest size possible"
         );
 
-        let sized_box = SizedBox::shrink();
-        let mut render_object =
-            sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| SizedBox::shrink().create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(10, 128, 20, 128),
@@ -531,9 +537,7 @@ mod tests {
             "should shrink to the smallest size possible within the constraints"
         );
 
-        let sized_box = SizedBox::expand();
-        let mut render_object =
-            sized_box.create_render_object(&TestHarness::mount(&sized_box).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| SizedBox::expand().create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 128, 0, 128),
@@ -562,7 +566,7 @@ mod tests {
             })),
         };
 
-        let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, render) = with_ctx(|ctx| widget.create(ctx));
         let content: BoundaryContent = Rc::new(RefCell::new(render));
         let mut owner =
             PipelineOwner::new(Rc::clone(&content), LayerHandle::new(ContainerLayer::new()));
@@ -597,7 +601,7 @@ mod harness {
 
     #[test]
     fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default().run(&SizedBox::new().width(16).height(48));
+        BoxSizingCheck::default().run(|| SizedBox::new().width(16).height(48));
     }
 
     #[test]
@@ -607,7 +611,7 @@ mod harness {
             .shrink_wraps_height()
             .width_independent_of_height()
             .height_independent_of_width()
-            .run(&SizedBox::new().width(16).height(48));
+            .run(|| SizedBox::new().width(16).height(48));
     }
 
     #[test]
@@ -615,7 +619,7 @@ mod harness {
         BoxSizingCheck::new()
             .fills_width()
             .fills_height()
-            .run(&SizedBox::expand());
+            .run(SizedBox::expand);
     }
 
     #[test]

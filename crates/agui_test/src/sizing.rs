@@ -199,29 +199,29 @@ impl BoxSizingCheck {
         self
     }
 
-    /// Checks `widget`'s render object against the configured samples.
+    /// Checks the render object built by `widget` against the configured samples.
+    ///
+    /// `widget` is a factory called once per render object the checks need, since building a render
+    /// object consumes the widget that produced it.
     ///
     /// # Panics
     ///
     /// Panics on the first contract the render object breaks.
-    pub fn run<W>(&self, widget: &W)
+    pub fn run<W>(&self, widget: impl Fn() -> W)
     where
         W: Widget,
         W::Render: RenderBox,
     {
-        let mut tasks = TestTaskRunner::new();
-        let provide = ProvideScope::new();
-        let mut path = Vec::new();
-
-        let element = {
+        let make = || {
+            let mut tasks = TestTaskRunner::new();
+            let provide = ProvideScope::new();
+            let mut path = Vec::new();
             let mut scheduler = tasks.scheduler();
             let scope = BuildScope::detached();
             let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, &provide, &scope);
 
-            widget.create_element(&mut ctx)
+            widget().create(&mut ctx).1
         };
-
-        let make = || widget.create_render_object(&element);
 
         self.check_intrinsic_ordering(&make());
 
@@ -693,19 +693,19 @@ mod tests {
     #[should_panic(expected = "does not satisfy")]
     fn a_box_that_ignores_its_constraints_is_caught() {
         // TestBox takes its given size regardless of constraints, so a tight surface catches it.
-        BoxSizingCheck::default().run(&TestBox::new(Size::new(20, 20)));
+        BoxSizingCheck::default().run(|| TestBox::new(Size::new(20, 20)));
     }
 
     #[test]
     #[should_panic(expected = "must agree")]
     fn a_wrong_max_intrinsic_is_caught_for_a_shrink_wrapping_box() {
-        BoxSizingCheck::new().shrink_wraps_width().run(&Liar);
+        BoxSizingCheck::new().shrink_wraps_width().run(|| Liar);
     }
 
     #[test]
     #[should_panic(expected = "dry baseline must match")]
     fn a_dry_baseline_that_disagrees_with_the_laid_out_baseline_is_caught() {
-        BoxSizingCheck::default().run(&Naughty {
+        BoxSizingCheck::default().run(|| Naughty {
             mode: Naughtiness::BadBaseline,
         });
     }
@@ -713,7 +713,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "must not depend on layout state")]
     fn an_intrinsic_that_changes_after_layout_is_caught() {
-        BoxSizingCheck::default().run(&Naughty {
+        BoxSizingCheck::default().run(|| Naughty {
             mode: Naughtiness::UnstableIntrinsic,
         });
     }
@@ -721,7 +721,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "the same size")]
     fn a_layout_that_is_not_idempotent_is_caught() {
-        BoxSizingCheck::default().run(&Naughty {
+        BoxSizingCheck::default().run(|| Naughty {
             mode: Naughtiness::GrowingLayout,
         });
     }
@@ -729,14 +729,14 @@ mod tests {
     #[test]
     #[should_panic(expected = "paint within itself")]
     fn a_box_that_paints_outside_its_minimum_is_caught() {
-        BoxSizingCheck::default().run(&Naughty {
+        BoxSizingCheck::default().run(|| Naughty {
             mode: Naughtiness::OverflowsAtMin,
         });
     }
 
     #[test]
     fn an_overflowing_box_passes_when_overflow_is_allowed() {
-        BoxSizingCheck::new().allow_overflow().run(&Naughty {
+        BoxSizingCheck::new().allow_overflow().run(|| Naughty {
             mode: Naughtiness::OverflowsAtMin,
         });
     }
@@ -752,15 +752,11 @@ mod tests {
 
         type Render = RenderLiar;
 
-        fn create_element(&self, _: &mut UpdateCtx) {}
-
-        fn update(&self, (): &mut (), _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, (): &()) -> RenderLiar {
-            RenderLiar
+        fn create(self, _: &mut UpdateCtx) -> ((), RenderLiar) {
+            ((), RenderLiar)
         }
 
-        fn update_render_object(&self, (): &(), _: &mut RenderLiar) {}
+        fn update(self, (): &mut (), _: &mut RenderLiar, _: &mut UpdateCtx) {}
     }
 
     impl RenderObject for RenderLiar {
@@ -841,19 +837,18 @@ mod tests {
 
         type Render = RenderNaughty;
 
-        fn create_element(&self, _: &mut UpdateCtx) {}
-
-        fn update(&self, (): &mut (), _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, (): &()) -> RenderNaughty {
-            RenderNaughty {
-                mode: self.mode,
-                laid_out: Cell::new(false),
-                layouts: Cell::new(0),
-            }
+        fn create(self, _: &mut UpdateCtx) -> ((), RenderNaughty) {
+            (
+                (),
+                RenderNaughty {
+                    mode: self.mode,
+                    laid_out: Cell::new(false),
+                    layouts: Cell::new(0),
+                },
+            )
         }
 
-        fn update_render_object(&self, (): &(), _: &mut RenderNaughty) {}
+        fn update(self, (): &mut (), _: &mut RenderNaughty, _: &mut UpdateCtx) {}
     }
 
     impl RenderObject for RenderNaughty {

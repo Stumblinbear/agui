@@ -119,28 +119,29 @@ where
 
     type Render = RenderSpy<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        self.state.borrow_mut().path = Some(ctx.routing_path());
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { state, child } = self;
+
+        state.borrow_mut().path = Some(ctx.routing_path());
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderSpy {
+                state,
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action);
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderSpy {
-            state: Rc::clone(&self.state),
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        element.update_render_object(&self.child, &mut render_object.child.object);
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        element.update(self.child, &mut render_object.child.object, ctx);
     }
 }
 

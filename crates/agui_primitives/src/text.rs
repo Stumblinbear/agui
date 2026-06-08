@@ -47,32 +47,32 @@ impl Widget for Text {
 
     type Render = RenderParagraph;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        TextElement {
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let element = TextElement {
             fonts: ctx.get_provided::<Fonts>(),
-        }
-    }
+        };
 
-    fn update(&self, element: &mut Self::Element, _: &Self, ctx: &mut UpdateCtx) {
-        element.fonts = ctx.get_provided::<Fonts>();
-    }
-
-    fn dispatch(&self, _: &mut Self::Element, _: &[RoutingId], _: Dispatch) {}
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        let mut paragraph = RenderParagraph::new(self.text.clone());
+        let mut paragraph = RenderParagraph::new(self.text);
         paragraph.set_font_size(self.font_size);
-        paragraph.set_brush(self.brush.clone());
-        paragraph.set_font_family(self.family.clone());
+        paragraph.set_brush(self.brush);
+        paragraph.set_font_family(self.family);
         paragraph.set_fonts(element.fonts.clone());
-        paragraph
+
+        (element, paragraph)
     }
 
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        render_object.set_text(self.text.clone());
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        element.fonts = ctx.get_provided::<Fonts>();
+
+        render_object.set_text(self.text);
         render_object.set_font_size(self.font_size);
-        render_object.set_brush(self.brush.clone());
-        render_object.set_font_family(self.family.clone());
+        render_object.set_brush(self.brush);
+        render_object.set_font_family(self.family);
         render_object.set_fonts(element.fonts.clone());
     }
 }

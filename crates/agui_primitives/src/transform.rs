@@ -57,36 +57,46 @@ where
 
     type Render = RenderTransform<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self {
+            child,
+            transform,
+            origin,
+            alignment,
+        } = self;
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+        (
+            element,
+            RenderTransform {
+                transform,
+                origin,
+                alignment,
+                scope: None,
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self {
+            child,
+            transform,
+            origin,
+            alignment,
+        } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderTransform {
-            transform: self.transform,
-            origin: self.origin,
-            alignment: self.alignment,
-            scope: None,
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        if self.transform != render_object.transform
-            || self.origin != render_object.origin
-            || self.alignment != render_object.alignment
+        if transform != render_object.transform
+            || origin != render_object.origin
+            || alignment != render_object.alignment
         {
-            render_object.transform = self.transform;
-            render_object.origin = self.origin;
-            render_object.alignment = self.alignment;
+            render_object.transform = transform;
+            render_object.origin = origin;
+            render_object.alignment = alignment;
 
             // A transform is paint-only and never alters compositing, so a plain repaint suffices.
             if let Some(scope) = &render_object.scope {
@@ -94,7 +104,7 @@ where
             }
         }
 
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -246,7 +256,7 @@ mod tests {
             },
         },
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use crate::{
@@ -263,7 +273,7 @@ mod tests {
     #[test]
     fn a_rotation_over_a_flat_child_paints_under_a_transform() {
         let widget = Transform::rotate(0.5).child(boxed());
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -290,7 +300,7 @@ mod tests {
     #[test]
     fn a_translation_folds_into_the_offset() {
         let widget = Transform::translate(Offset::new(5.0, 7.0)).child(boxed());
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -327,7 +337,7 @@ mod tests {
     #[test]
     fn the_compositing_bit_is_inherited_from_the_child() {
         let flat = Transform::rotate(0.5).child(boxed());
-        let mut flat = flat.create_render_object(&TestHarness::mount(&flat).root.element);
+        let (_, mut flat) = with_ctx(|ctx| flat.create(ctx));
         assert!(
             !flat.update_compositing_bits(),
             "a transform over a flat child does not composite"
@@ -335,7 +345,7 @@ mod tests {
 
         let layered = Transform::rotate(0.5)
             .child(Opacity::new(0.5).child(SizedBox::new().width(10).height(10)));
-        let mut layered = layered.create_render_object(&TestHarness::mount(&layered).root.element);
+        let (_, mut layered) = with_ctx(|ctx| layered.create(ctx));
         assert!(
             layered.update_compositing_bits(),
             "a transform inherits its child's compositing need"
@@ -347,7 +357,7 @@ mod tests {
     #[test]
     fn a_transform_over_a_compositing_child_wraps_its_layer() {
         let widget = Transform::rotate(0.5).child(Opacity::new(0.5).child(boxed()));
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -383,7 +393,7 @@ mod tests {
                 .behavior(HitTestBehavior::Opaque)
                 .child(SizedBox::new().width(50).height(50)),
         );
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -408,7 +418,7 @@ mod tests {
                 .behavior(HitTestBehavior::Opaque)
                 .child(SizedBox::new().width(50).height(50)),
         );
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -425,7 +435,7 @@ mod tests {
     #[test]
     fn a_degenerate_transform_paints_nothing() {
         let widget = Transform::scale(0.0).child(boxed());
-        let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
         render.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 100, 0, 100),
@@ -454,6 +464,6 @@ mod harness {
     #[test]
     fn obeys_the_box_sizing_contracts() {
         BoxSizingCheck::default()
-            .run(&Transform::new(Affine::IDENTITY).child(SizedBox::new().width(20).height(10)));
+            .run(|| Transform::new(Affine::IDENTITY).child(SizedBox::new().width(20).height(10)));
     }
 }

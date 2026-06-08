@@ -9,13 +9,16 @@ use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     element::{AnyElement, RoutingId, RoutingPath},
     provide::ProvideScope,
+    render_object::{AnyRenderObject, RenderObject},
     scheduling::TaskScheduler,
     widget::Widget,
 };
 
+type SharedRenderObject = Rc<RefCell<dyn AnyRenderObject>>;
+
 slotmap::new_key_type! {
     /// Identifies a registered build boundary within one [`BuildState`].
-    pub struct BoundaryId;
+    pub struct BuildBoundaryId;
 }
 
 /// The registry of build boundaries, shared between the owner that flushes them, the boundaries that mark
@@ -25,8 +28,8 @@ slotmap::new_key_type! {
 /// A boundary is addressed by its [`BoundaryId`], so a message or rebuild reaches it without walking from
 /// the root.
 pub struct BuildState {
-    boundaries: SlotMap<BoundaryId, Weak<dyn DynBoundary>>,
-    dirty: Vec<BoundaryId>,
+    boundaries: SlotMap<BuildBoundaryId, Weak<BuildBoundaryCell>>,
+    dirty: Vec<BuildBoundaryId>,
 }
 
 impl BuildState {
@@ -47,17 +50,17 @@ impl BuildState {
         !self.dirty.is_empty()
     }
 
-    fn lookup(&self, id: BoundaryId) -> Option<Rc<dyn DynBoundary>> {
+    fn lookup(&self, id: BuildBoundaryId) -> Option<Rc<BuildBoundaryCell>> {
         self.boundaries.get(id).and_then(Weak::upgrade)
     }
 
     /// Drains the marked boundaries into their owning `Rc`s, ordered shallowest-depth first so that
     /// re-dispatching an outer boundary, which reconciles the boundaries nested in it, lets the inner ones
     /// be skipped rather than rebuilt twice.
-    fn drain_rootmost_first(&mut self) -> Vec<Rc<dyn DynBoundary>> {
-        let ids: Vec<BoundaryId> = self.dirty.drain(..).collect();
+    fn drain_rootmost_first(&mut self) -> Vec<Rc<BuildBoundaryCell>> {
+        let ids: Vec<BuildBoundaryId> = self.dirty.drain(..).collect();
 
-        let mut ordered: Vec<Rc<dyn DynBoundary>> = ids
+        let mut ordered: Vec<Rc<BuildBoundaryCell>> = ids
             .into_iter()
             .filter_map(|id| self.boundaries.get(id).and_then(Weak::upgrade))
             .collect();
@@ -66,7 +69,7 @@ impl BuildState {
             cell.clear_dirty();
         }
 
-        ordered.sort_by_key(|cell| cell.depth());
+        ordered.sort_by_key(|cell| cell.depth);
 
         ordered
     }
@@ -118,7 +121,7 @@ pub fn flush_boundaries(
 #[derive(Clone)]
 pub struct BuildScope {
     state: Weak<RefCell<BuildState>>,
-    boundary: Option<BoundaryId>,
+    boundary: Option<BuildBoundaryId>,
     depth: usize,
 }
 
@@ -142,7 +145,7 @@ impl BuildScope {
     }
 
     /// The boundary the current subtree is reconciled under, if any.
-    pub fn boundary(&self) -> Option<BoundaryId> {
+    pub fn boundary(&self) -> Option<BuildBoundaryId> {
         self.boundary
     }
 }
@@ -152,13 +155,18 @@ struct BuildBoundaryCell {
     state: Weak<RefCell<BuildState>>,
 
     /// This boundary's key in the registry, replayed by the marks it queues.
-    id: Cell<BoundaryId>,
+    id: Cell<BuildBoundaryId>,
 
     /// The depth in the boundary nesting, sorted at flush so the owner re-enters boundaries rootmost-first.
     depth: usize,
 
     /// The inner element this boundary wraps.
     child: RefCell<Box<dyn AnyElement>>,
+
+    /// The root of this boundary's render subtree, shared with the pipeline, so a rebuild can reconcile
+    /// the render objects from here rather than walking the render tree from its root. Absent until the
+    /// pipeline that owns the subtree attaches it.
+    render: RefCell<Option<SharedRenderObject>>,
 
     /// The paths, relative to the inner element, of the descendants marked for rebuild.
     suffixes: RefCell<Vec<Box<[RoutingId]>>>,
@@ -168,7 +176,7 @@ struct BuildBoundaryCell {
     is_dirty: Cell<bool>,
 }
 
-impl BoundaryCell {
+impl BuildBoundaryCell {
     /// Registers a boundary under the current scope, with a placeholder child to be replaced once the
     /// inner element is built under [`child_scope`](Self::child_scope).
     fn register(ctx: &mut UpdateCtx) -> Rc<Self> {
@@ -177,17 +185,17 @@ impl BoundaryCell {
 
         let cell = Rc::new(Self {
             state: Weak::clone(&scope.state),
-            id: Cell::new(BoundaryId::default()),
+            id: Cell::new(BuildBoundaryId::default()),
             depth,
             child: RefCell::new(Box::new(())),
+            render: RefCell::new(None),
             suffixes: RefCell::new(Vec::new()),
             is_dirty: Cell::new(false),
         });
 
         if let Some(state) = scope.state.upgrade() {
-            let typed: Weak<BoundaryCell> = Rc::downgrade(&cell);
-            let weak: Weak<dyn DynBoundary> = typed;
-            cell.id.set(state.borrow_mut().boundaries.insert(weak));
+            cell.id
+                .set(state.borrow_mut().boundaries.insert(Rc::downgrade(&cell)));
         }
 
         cell
@@ -217,7 +225,7 @@ impl BoundaryCell {
     }
 }
 
-impl Drop for BoundaryCell {
+impl Drop for BuildBoundaryCell {
     fn drop(&mut self) {
         let Some(state) = self.state.upgrade() else {
             return;
@@ -230,20 +238,7 @@ impl Drop for BoundaryCell {
     }
 }
 
-/// The behavior of a [`BoundaryCell`], erased so the registry can hold boundaries in one map.
-trait DynBoundary {
-    fn dispatch_within(&self, within: &[RoutingId], action: Dispatch);
-
-    fn mark(&self, within: &[RoutingId]);
-
-    fn depth(&self) -> usize;
-
-    fn clear_dirty(&self);
-
-    fn flush_rebuilds(&self, scheduler: &mut dyn TaskScheduler, provide: &ProvideScope);
-}
-
-impl DynBoundary for BoundaryCell {
+impl BuildBoundaryCell {
     fn dispatch_within(&self, within: &[RoutingId], action: Dispatch) {
         let mut child = self.child.borrow_mut();
         child.dyn_dispatch(within, action);
@@ -251,10 +246,6 @@ impl DynBoundary for BoundaryCell {
 
     fn mark(&self, within: &[RoutingId]) {
         self.mark_within(within);
-    }
-
-    fn depth(&self) -> usize {
-        self.depth
     }
 
     fn clear_dirty(&self) {
@@ -280,24 +271,35 @@ impl DynBoundary for BoundaryCell {
 /// The root build boundary: a handle over the boundary's persistent state. Built by consuming a widget,
 /// it produces the widget's render object once and registers the inner element so rebuilds reach it.
 pub struct BuildBoundaryElement {
-    cell: Rc<BoundaryCell>,
+    cell: Rc<BuildBoundaryCell>,
 }
 
 impl BuildBoundaryElement {
-    /// Registers a boundary and builds `widget`'s element and render object under it, consuming the widget.
-    pub fn create<V>(widget: V, ctx: &mut UpdateCtx) -> (Self, V::Render)
+    /// Registers a boundary and builds `widget`'s element and render object under it, consuming the
+    /// widget. The render object is held in a shared cell, returned to the caller and retained on the
+    /// boundary, so a rebuild reconciles it from here while the pipeline lays out the same cell.
+    pub fn create<V>(widget: V, ctx: &mut UpdateCtx) -> (Self, Rc<RefCell<V::Render>>)
     where
         V: Widget,
         V::Element: 'static,
+        V::Render: RenderObject + 'static,
     {
-        let cell = BoundaryCell::register(ctx);
+        let cell = BuildBoundaryCell::register(ctx);
 
         let (element, render_object) =
             ctx.with_build_scope(&cell.child_scope(), |ctx| widget.create(ctx));
 
         *cell.child.borrow_mut() = Box::new(element);
 
-        (Self { cell }, render_object)
+        let render = Rc::new(RefCell::new(render_object));
+
+        // Retain a protocol-agnostic view of the same cell. The unsize coercion needs a plain
+        // binding: coercing at the `Rc::clone` call would unify it on the target type and refuse.
+        let shared = Rc::clone(&render);
+        let shared: SharedRenderObject = shared;
+        *cell.render.borrow_mut() = Some(shared);
+
+        (Self { cell }, render)
     }
 
     /// Reconciles the inner element and `render_object` against a new `widget` of the root's type.
@@ -324,7 +326,7 @@ impl BuildBoundaryElement {
     }
 
     /// The id of this boundary in its registry.
-    pub fn id(&self) -> BoundaryId {
+    pub fn id(&self) -> BuildBoundaryId {
         self.cell.id.get()
     }
 

@@ -59,31 +59,35 @@ where
 
     type Render = RenderPointerListener<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let handler = self.handler();
+        let behavior = self.behavior;
+        let child = self.child;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderPointerListener {
+                handler,
+                behavior,
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderPointerListener {
-            handler: self.handler(),
-            behavior: self.behavior,
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
         render_object.handler = self.handler();
         render_object.behavior = self.behavior;
 
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        let child = self.child;
+
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -186,7 +190,7 @@ mod tests {
         paint::compositing::{ContainerLayer, LayerHandle},
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use crate::{padding::Padding, sized_box::SizedBox};
@@ -211,7 +215,7 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
 
-        let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, render) = with_ctx(|ctx| widget.create(ctx));
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
@@ -272,6 +276,6 @@ mod harness {
     #[test]
     fn obeys_the_box_sizing_contracts() {
         BoxSizingCheck::default()
-            .run(&Listener::builder().child(SizedBox::new().width(20).height(10)));
+            .run(|| Listener::builder().child(SizedBox::new().width(20).height(10)));
     }
 }

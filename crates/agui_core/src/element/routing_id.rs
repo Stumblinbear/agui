@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::element::BoundaryId;
+use crate::element::BuildBoundaryId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoutingId(u16);
@@ -37,12 +37,12 @@ impl RoutingId {
 /// reaches the element without descending from the root.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoutingPath {
-    boundary: BoundaryId,
+    boundary: BuildBoundaryId,
     within: Arc<[RoutingId]>,
 }
 
 impl RoutingPath {
-    pub fn new(boundary: BoundaryId, within: impl Into<Arc<[RoutingId]>>) -> Self {
+    pub fn new(boundary: BuildBoundaryId, within: impl Into<Arc<[RoutingId]>>) -> Self {
         Self {
             boundary,
             within: within.into(),
@@ -50,7 +50,7 @@ impl RoutingPath {
     }
 
     /// The boundary this path is relative to.
-    pub fn boundary(&self) -> BoundaryId {
+    pub fn boundary(&self) -> BuildBoundaryId {
         self.boundary
     }
 

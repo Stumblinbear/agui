@@ -2,7 +2,7 @@ use agui_core::geometry::Offset;
 
 pub use agui_core::input::pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId};
 
-use crate::{prelude::RenderBox, tester::WidgetTester};
+use crate::tester::WidgetTester;
 
 /// A pointer held down on the tree, moved and released step by step.
 ///
@@ -10,26 +10,14 @@ use crate::{prelude::RenderBox, tester::WidgetTester};
 /// [`move_by`](Self::move_by) or [`move_to`](Self::move_to) to drag, then [`up`](Self::up) to release
 /// or [`cancel`](Self::cancel) to abandon. While the pointer is held it keeps reaching the handlers it
 /// pressed on, even as it moves off them.
-pub struct TestGesture<'a, V: agui_core::widget::Widget>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
-    tester: &'a mut WidgetTester<V>,
+pub struct TestGesture<'a> {
+    tester: &'a mut WidgetTester,
     pointer: PointerId,
     position: Offset,
 }
 
-impl<'a, V: agui_core::widget::Widget> TestGesture<'a, V>
-where
-    V: 'static,
-    V::Render: RenderBox + 'static,
-{
-    pub(crate) fn new(
-        tester: &'a mut WidgetTester<V>,
-        pointer: PointerId,
-        position: Offset,
-    ) -> Self {
+impl<'a> TestGesture<'a> {
+    pub(crate) fn new(tester: &'a mut WidgetTester, pointer: PointerId, position: Offset) -> Self {
         Self {
             tester,
             pointer,

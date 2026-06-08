@@ -38,31 +38,33 @@ where
 
     type Render = RenderColoredBox<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { color, child } = self;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderColoredBox {
+                color,
+
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { color, child } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderColoredBox {
-            color: self.color,
-
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
         // TODO(trevin): mark it for repaint if the color has changed
-        render_object.color = self.color;
+        render_object.color = color;
 
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -174,7 +176,7 @@ mod tests {
             peniko::{Brush, kurbo},
         },
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use crate::sized_box::SizedBox;
@@ -185,8 +187,7 @@ mod tests {
     fn paints_its_color_over_the_child_bounds() {
         let widget = ColoredBox::new(Color::from_rgb8(255, 0, 0))
             .child(SizedBox::new().width(20).height(10));
-        let mut render_object =
-            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| widget.create(ctx));
 
         render_object.layout(
             &mut LayoutCtx::detached(),
@@ -221,8 +222,7 @@ mod tests {
             ColoredBox::new(Color::from_rgb8(0, 0, 255))
                 .child(SizedBox::new().width(20).height(10)),
         );
-        let mut render_object =
-            widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| widget.create(ctx));
 
         render_object.layout(
             &mut LayoutCtx::detached(),
@@ -263,6 +263,6 @@ mod harness {
     #[test]
     fn paints_within_its_bounds() {
         BoxSizingCheck::default()
-            .run(&ColoredBox::new(Color::BLACK).child(SizedBox::new().width(20).height(10)));
+            .run(|| ColoredBox::new(Color::BLACK).child(SizedBox::new().width(20).height(10)));
     }
 }

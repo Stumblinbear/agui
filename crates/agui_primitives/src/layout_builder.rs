@@ -1,8 +1,11 @@
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{any::TypeId, cell::RefCell, marker::PhantomData, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_core::{
+    key::AnyKeyable,
+    prelude::{element::*, render_object::*},
+};
 
 /// A widget that builds its child from the constraints handed to it.
 ///
@@ -36,7 +39,15 @@ where
 
 /// The child built during layout, shared so the element can dispatch into it while the render object
 /// owns its rebuilding. The child is absent until the first layout has run the builder.
-type RetainedChild<Child> = Rc<RefCell<Option<(ElementNode<<Child as Widget>::Element>, Child)>>>;
+type RetainedChild<Child> = Rc<RefCell<Option<RetainedNode<Child>>>>;
+
+/// A retained child element paired with the type and key its widget reported at build, so the next
+/// layout can decide whether to reconcile it in place or replace it.
+struct RetainedNode<Child: Widget> {
+    node: ElementNode<Child::Element>,
+    type_id: TypeId,
+    key: Option<Box<dyn AnyKeyable>>,
+}
 
 /// The reconcile the render object runs during layout. It builds the child for the current
 /// constraints and reconciles the retained subtree, `R` being the child's render type, in place when
@@ -50,16 +61,34 @@ type BuildClosure<R> = Rc<
     ),
 >;
 
-pub struct LayoutBuilderElement<Child>
+pub struct LayoutBuilderElement<F, Child>
 where
     Child: Widget,
 {
     child_widget: RetainedChild<Child>,
 
+    /// The closure the element was last built from, retained so an update can tell a reused closure
+    /// from a fresh one and rebuild the subtree only when it changed.
+    source: Rc<F>,
+
     builder: BuildClosure<Child::Render>,
 }
 
-impl<Child> Element for LayoutBuilderElement<Child> where Child: Widget + 'static {}
+impl<F, Child> Element for LayoutBuilderElement<F, Child>
+where
+    F: 'static,
+    Child: Widget + 'static,
+{
+    fn dispatch(&mut self, path: &[RoutingId], action: Dispatch) {
+        let mut child_widget = self.child_widget.borrow_mut();
+
+        let Some(retained) = child_widget.as_mut() else {
+            panic!("child was dispatched to before being laid out");
+        };
+
+        retained.node.element.dispatch(path, action);
+    }
+}
 
 impl<F, Child> Widget for LayoutBuilder<F, Child>
 where
@@ -67,43 +96,18 @@ where
     Child: Widget + 'static,
     Child::Render: RenderBox,
 {
-    type Element = LayoutBuilderElement<Child>;
+    type Element = LayoutBuilderElement<F, Child>;
 
     type Render = RenderLayoutBuilder<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let source = self.builder;
         let child_widget = RetainedChild::<Child>::default();
 
-        let builder = build_closure(&self.builder, &child_widget, ctx);
+        let builder = build_closure(&source, &child_widget, ctx);
 
-        LayoutBuilderElement {
-            child_widget,
-
-            builder,
-        }
-    }
-
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        if !Rc::ptr_eq(&self.builder, &old.builder) {
-            // Keep the retained child: the next layout reconciles it in place against the new closure
-            // rather than discarding it.
-            element.builder = build_closure(&self.builder, &element.child_widget, ctx);
-        }
-    }
-
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        let mut child_widget = element.child_widget.borrow_mut();
-
-        let Some((child_element, child)) = child_widget.as_mut() else {
-            panic!("child was dispatched to before being laid out");
-        };
-
-        child.dispatch(&mut child_element.element, path, action);
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderLayoutBuilder {
-            builder: Rc::clone(&element.builder),
+        let render_object = RenderLayoutBuilder {
+            builder: Rc::clone(&builder),
 
             old_constraints: BoxConstraints::default(),
 
@@ -114,11 +118,32 @@ where
             child_render: None,
 
             paint_scope: None,
-        }
+        };
+
+        let element = LayoutBuilderElement {
+            child_widget,
+
+            source,
+
+            builder,
+        };
+
+        (element, render_object)
     }
 
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        if !Rc::ptr_eq(&element.builder, &render_object.builder) {
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        if !Rc::ptr_eq(&self.builder, &element.source) {
+            element.source = Rc::clone(&self.builder);
+
+            // Keep the retained child: the next layout reconciles it in place against the new closure
+            // rather than discarding it.
+            element.builder = build_closure(&self.builder, &element.child_widget, ctx);
+
             // The build logic changed, so the child must be rebuilt even if the constraints are
             // unchanged. `needs_build` forces the re-run, and marking the enclosing boundary
             // schedules the layout that performs it; the retained subtree is reconciled there.
@@ -170,16 +195,21 @@ where
 
             let mut retained = child_widget.borrow_mut();
 
-            // Reuse the retained subtree when the new child can update it in place.
-            if let (Some((node, old_child)), Some(child_render)) =
-                (retained.as_mut(), slot.as_mut())
-                && new_child.is_same_type(old_child)
-                && new_child.key() == old_child.key()
-            {
-                new_child.update(&mut node.element, old_child, &mut update);
-                new_child.update_render_object(&node.element, &mut child_render.object);
+            let new_type_id = new_child.widget_type_id();
+            let new_key = new_child.key().map(AnyKeyable::dyn_clone);
 
-                *old_child = new_child;
+            // Reuse the retained subtree when the new child can update it in place.
+            if let (Some(node), Some(child_render)) = (retained.as_mut(), slot.as_mut())
+                && node.type_id == new_type_id
+                && key_eq(new_key.as_deref(), node.key.as_deref())
+            {
+                node.key = new_key;
+
+                new_child.update(
+                    &mut node.node.element,
+                    &mut child_render.object,
+                    &mut update,
+                );
 
                 return;
             }
@@ -190,17 +220,29 @@ where
                 ctx.mount(paint_scope, |mount| old.unmount(mount));
             }
 
-            let element = new_child.create_element(&mut update);
-            let mut child_render = RenderNode::new(new_child.create_render_object(&element));
+            let (element, child_object) = new_child.create(&mut update);
+            let mut child_render = RenderNode::new(child_object);
 
             if let Some(paint_scope) = paint_scope {
                 ctx.mount(paint_scope, |mount| child_render.mount(mount));
             }
 
             *slot = Some(child_render);
-            *retained = Some((ElementNode::new(element), new_child));
+            *retained = Some(RetainedNode {
+                node: ElementNode::new(element),
+                type_id: new_type_id,
+                key: new_key,
+            });
         },
     )
+}
+
+fn key_eq(a: Option<&dyn AnyKeyable>, b: Option<&dyn AnyKeyable>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a == b,
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 pub struct RenderLayoutBuilder<Child> {
@@ -322,10 +364,12 @@ mod tests {
     use std::cell::Cell;
 
     use agui_core::{
+        element::BuildScope,
         paint::compositing::{ContainerLayer, LayerHandle},
         pipeline::{PipelineOwner, layout::BoundaryContent},
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        provide::ProvideScope,
+        test_harness::{TestTaskRunner, with_ctx},
     };
 
     use super::*;
@@ -349,8 +393,7 @@ mod tests {
             }
         });
 
-        let mut render_object =
-            layout_builder.create_render_object(&TestHarness::mount(&layout_builder).root.element);
+        let (_, mut render_object) = with_ctx(|ctx| layout_builder.create(ctx));
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 50, 0, 50),
@@ -386,17 +429,13 @@ mod tests {
 
         type Render = ();
 
-        fn create_element(&self, ctx: &mut UpdateCtx) -> SpawnOnMountElement {
+        fn create(self, ctx: &mut UpdateCtx) -> (SpawnOnMountElement, ()) {
             let handle = ctx.spawn(|task| async move { task.send(1_u32) }).ok();
 
-            SpawnOnMountElement { _handle: handle }
+            (SpawnOnMountElement { _handle: handle }, ())
         }
 
-        fn update(&self, _: &mut SpawnOnMountElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, _: &SpawnOnMountElement) -> Self::Render {}
-
-        fn update_render_object(&self, _: &SpawnOnMountElement, _: &mut Self::Render) {}
+        fn update(self, _: &mut SpawnOnMountElement, (): &mut (), _: &mut UpdateCtx) {}
     }
 
     #[test]
@@ -405,18 +444,26 @@ mod tests {
         // a working scheduler (the deferred handle captured at mount) and posts a message back.
         let layout_builder = LayoutBuilder::new(|_| SpawnOnMount);
 
-        let mut harness = TestHarness::mount(&layout_builder);
+        let mut tasks = TestTaskRunner::new();
 
-        let mut render_object = layout_builder.create_render_object(&harness.root.element);
+        let (_, mut render_object) = {
+            let provide = ProvideScope::new();
+            let mut path = Vec::new();
+            let mut scheduler = tasks.scheduler();
+            let scope = BuildScope::detached();
+            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, &provide, &scope);
+
+            layout_builder.create(&mut ctx)
+        };
         render_object.layout(
             &mut LayoutCtx::detached(),
             BoxConstraints::new(0, 50, 0, 50),
         );
 
-        harness.task_runner.run_to_completion();
+        tasks.run_to_completion();
 
         assert_eq!(
-            harness.task_runner.messages().count(),
+            tasks.messages().count(),
             1,
             "the subtree spawned a task during layout that posted one message"
         );
@@ -445,19 +492,21 @@ mod tests {
 
         type Render = MountProbeRender;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> MountProbeElement {
-            MountProbeElement
+        fn create(self, _: &mut UpdateCtx) -> (MountProbeElement, MountProbeRender) {
+            (
+                MountProbeElement,
+                MountProbeRender {
+                    counts: self.counts,
+                },
+            )
         }
 
-        fn update(&self, _: &mut MountProbeElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn create_render_object(&self, _: &MountProbeElement) -> MountProbeRender {
-            MountProbeRender {
-                counts: self.counts.clone(),
-            }
-        }
-
-        fn update_render_object(&self, _: &MountProbeElement, render: &mut MountProbeRender) {
+        fn update(
+            self,
+            _: &mut MountProbeElement,
+            render: &mut MountProbeRender,
+            _: &mut UpdateCtx,
+        ) {
             render.counts.updates.set(render.counts.updates.get() + 1);
         }
     }
@@ -526,13 +575,12 @@ mod tests {
 
     /// Drives `layout_builder` as the root of a real pipeline, so layout reaches the paint registry
     /// and the subtree built during layout is mounted.
-    fn owner_for<W>(layout_builder: &W) -> PipelineOwner
+    fn owner_for<W>(layout_builder: W) -> PipelineOwner
     where
-        W: Widget,
-        W::Render: RenderBox,
+        W: Widget + 'static,
+        W::Render: RenderBox + 'static,
     {
-        let harness = TestHarness::mount(layout_builder);
-        let render = layout_builder.create_render_object(&harness.root.element);
+        let (_, render) = with_ctx(|ctx| layout_builder.create(ctx));
         let content: BoundaryContent = Rc::new(RefCell::new(render));
 
         PipelineOwner::new(content, LayerHandle::new(ContainerLayer::new()))
@@ -553,7 +601,7 @@ mod tests {
             }
         });
 
-        let mut owner = owner_for(&layout_builder);
+        let mut owner = owner_for(layout_builder);
 
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
@@ -594,7 +642,7 @@ mod tests {
             }
         });
 
-        let mut owner = owner_for(&layout_builder);
+        let mut owner = owner_for(layout_builder);
 
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
@@ -631,8 +679,7 @@ mod tests {
         };
 
         let widget_a = widget_for(&builds);
-        let mut harness = TestHarness::mount(&widget_a);
-        let render = widget_a.create_render_object(&harness.root.element);
+        let (mut element, render) = with_ctx(|ctx| widget_a.create(ctx));
         let content: BoundaryContent = Rc::new(RefCell::new(render));
         let mut owner =
             PipelineOwner::new(Rc::clone(&content), LayerHandle::new(ContainerLayer::new()));
@@ -647,14 +694,13 @@ mod tests {
         // The widget rebuilds with a new callback at the same constraints. This must schedule a
         // relayout that reruns the builder, the way Flutter's markNeedsLayout does.
         let widget_b = widget_for(&builds);
-        harness.update(&widget_a, &widget_b);
         owner.update(|root| {
             let render = root
                 .as_any_mut()
                 .downcast_mut::<RenderLayoutBuilder<Box<dyn AnyRenderBox>>>()
                 .expect("the root is the layout builder");
 
-            widget_b.update_render_object(&harness.root.element, render);
+            with_ctx(|ctx| widget_b.update(&mut element, render, ctx));
         });
 
         owner.flush_layout();

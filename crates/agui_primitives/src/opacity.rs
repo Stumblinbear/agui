@@ -38,37 +38,39 @@ where
 
     type Render = RenderOpacity<Child::Render>;
 
-    fn create_element(&self, ctx: &mut UpdateCtx) -> Self::Element {
-        SingleChildElement::new(&self.child, ctx)
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let Self { opacity, child } = self;
+
+        let (element, child_render) = SingleChildElement::new(child, ctx);
+
+        (
+            element,
+            RenderOpacity {
+                opacity,
+                scope: None,
+                layer: None,
+                child: RenderNode::new(child_render),
+            },
+        )
     }
 
-    fn update(&self, element: &mut Self::Element, old: &Self, ctx: &mut UpdateCtx) {
-        element.update(&self.child, &old.child, ctx);
-    }
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        let Self { opacity, child } = self;
 
-    fn dispatch(&self, element: &mut Self::Element, path: &[RoutingId], action: Dispatch) {
-        element.dispatch(&self.child, path, action)
-    }
-
-    fn create_render_object(&self, element: &Self::Element) -> Self::Render {
-        RenderOpacity {
-            opacity: self.opacity,
-            scope: None,
-            layer: None,
-            child: RenderNode::new(element.create_render_object(&self.child)),
-        }
-    }
-
-    fn update_render_object(&self, element: &Self::Element, render_object: &mut Self::Render) {
-        if self.opacity != render_object.opacity {
+        if opacity != render_object.opacity {
             let was_layer = render_object.needs_layer();
-            render_object.opacity = self.opacity;
+            render_object.opacity = opacity;
             let now_layer = render_object.needs_layer();
 
             if was_layer && now_layer {
                 // Still partial: poke the retained layer's alpha in place; the next composite picks it up.
                 if let Some(layer) = &render_object.layer {
-                    layer.borrow_mut().set_alpha(self.opacity);
+                    layer.borrow_mut().set_alpha(opacity);
                 }
             } else if let Some(scope) = &render_object.scope {
                 if was_layer == now_layer {
@@ -81,7 +83,7 @@ where
             }
         }
 
-        element.update_render_object(&self.child, &mut render_object.child.object);
+        element.update(child, &mut render_object.child.object, ctx);
     }
 }
 
@@ -208,7 +210,7 @@ mod tests {
         paint::{command::PaintCommand, compositing::ContainerLayer, peniko::Color},
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
-        test_harness::TestHarness,
+        test_harness::with_ctx,
     };
 
     use crate::{colored_box::ColoredBox, sized_box::SizedBox};
@@ -221,7 +223,7 @@ mod tests {
     fn the_compositing_bit_tracks_the_opacity() {
         for (opacity, needs) in [(0.0, false), (0.5, true), (1.0, false)] {
             let widget = Opacity::new(opacity).child(SizedBox::new().width(10).height(10));
-            let mut render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+            let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
 
             assert_eq!(
                 render.update_compositing_bits(),
@@ -236,7 +238,7 @@ mod tests {
     fn partial_opacity_composites_the_subtree_at_its_alpha() {
         let widget = Opacity::new(0.5)
             .child(ColoredBox::new(Color::BLACK).child(SizedBox::new().width(10).height(10)));
-        let render = widget.create_render_object(&TestHarness::mount(&widget).root.element);
+        let (_, render) = with_ctx(|ctx| widget.create(ctx));
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
@@ -271,21 +273,16 @@ mod tests {
         type Element = CounterElement;
         type Render = RenderCounter;
 
-        fn create_element(&self, _: &mut UpdateCtx) -> CounterElement {
-            CounterElement
+        fn create(self, _: &mut UpdateCtx) -> (CounterElement, RenderCounter) {
+            (
+                CounterElement,
+                RenderCounter {
+                    paints: self.paints,
+                },
+            )
         }
 
-        fn update(&self, _: &mut CounterElement, _: &Self, _: &mut UpdateCtx) {}
-
-        fn dispatch(&self, _: &mut CounterElement, _: &[RoutingId], _: Dispatch) {}
-
-        fn create_render_object(&self, _: &CounterElement) -> RenderCounter {
-            RenderCounter {
-                paints: std::rc::Rc::clone(&self.paints),
-            }
-        }
-
-        fn update_render_object(&self, _: &CounterElement, _: &mut RenderCounter) {}
+        fn update(self, _: &mut CounterElement, _: &mut RenderCounter, _: &mut UpdateCtx) {}
     }
 
     struct RenderCounter {
@@ -360,8 +357,7 @@ mod tests {
         let widget = Opacity::new(0.5).child(Counter {
             paints: Rc::clone(&paints),
         });
-        let element = TestHarness::mount(&widget).root.element;
-        let mut render = widget.create_render_object(&element);
+        let (mut element, mut render) = with_ctx(|ctx| widget.create(ctx));
 
         // Mount under a repaint boundary so the opacity captures a scope it can mark.
         let dummy: BoundaryContent = Rc::new(RefCell::new(RenderCounter {
@@ -390,7 +386,7 @@ mod tests {
         let next = Opacity::new(0.25).child(Counter {
             paints: Rc::clone(&paints),
         });
-        next.update_render_object(&element, &mut render);
+        with_ctx(|ctx| next.update(&mut element, &mut render, ctx));
 
         assert_eq!(paints.get(), 1, "the subtree was not repainted");
 
@@ -419,6 +415,6 @@ mod harness {
     #[test]
     fn obeys_the_box_sizing_contracts() {
         BoxSizingCheck::default()
-            .run(&Opacity::new(0.5).child(SizedBox::new().width(20).height(10)));
+            .run(|| Opacity::new(0.5).child(SizedBox::new().width(20).height(10)));
     }
 }
