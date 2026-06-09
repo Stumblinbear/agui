@@ -247,25 +247,23 @@ impl Rem for Size {
 
     fn rem(self, rhs: Self) -> Self::Output {
         assert!(
-            !(self.width.classify() == FpCategory::Zero
-                && rhs.width.classify() == FpCategory::Zero),
-            "cannot divide a zero width by a zero width"
+            rhs.width.classify() != FpCategory::Zero,
+            "cannot take the remainder of a width by zero"
         );
 
         assert!(
-            !(self.width.is_infinite() && rhs.width.is_infinite()),
-            "cannot divide an infinite width by an infinite width"
+            !self.width.is_infinite(),
+            "cannot take the remainder of an infinite width"
         );
 
         assert!(
-            !(self.height.classify() == FpCategory::Zero
-                && rhs.height.classify() == FpCategory::Zero),
-            "cannot divide a zero height by a zero height"
+            rhs.height.classify() != FpCategory::Zero,
+            "cannot take the remainder of a height by zero"
         );
 
         assert!(
-            !(self.height.is_infinite() && rhs.height.is_infinite()),
-            "cannot divide an infinite height by an infinite height"
+            !self.height.is_infinite(),
+            "cannot take the remainder of an infinite height"
         );
 
         Self::new(self.width % rhs.width, self.height % rhs.height)
@@ -438,11 +436,36 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "cannot divide a zero width by a zero width")]
-    fn rem_zero_by_zero_width_panics() {
-        let a = Size::new(0.0, 1.0);
+    #[should_panic(expected = "cannot take the remainder of a width by zero")]
+    fn rem_by_zero_width_panics() {
+        let a = Size::new(10.0, 1.0);
         let b = Size::new(0.0, 1.0);
         let _ = a % b;
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot take the remainder of an infinite width")]
+    fn rem_of_infinite_width_panics() {
+        let a = Size::new(f32::INFINITY, 1.0);
+        let b = Size::new(3.0, 1.0);
+        let _ = a % b;
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot take the remainder of a height by zero")]
+    fn rem_by_zero_height_panics() {
+        let a = Size::new(1.0, 10.0);
+        let b = Size::new(1.0, 0.0);
+        let _ = a % b;
+    }
+
+    #[test]
+    fn rem_by_infinite_size_is_identity() {
+        let a = Size::new(10.0, 7.0);
+        let b = Size::new(f32::INFINITY, f32::INFINITY);
+        let c = a % b;
+        assert_eq!(c.width.get(), 10.0);
+        assert_eq!(c.height.get(), 7.0);
     }
 
     #[test]
