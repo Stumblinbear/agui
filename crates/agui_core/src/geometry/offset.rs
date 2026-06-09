@@ -152,6 +152,9 @@ impl Div for Offset {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
+        assert!(rhs.x != 0.0, "cannot divide an offset x by zero");
+        assert!(rhs.y != 0.0, "cannot divide an offset y by zero");
+
         Self::new(self.x / rhs.x, self.y / rhs.y)
     }
 }
@@ -167,6 +170,7 @@ impl Div<f32> for Offset {
 
     fn div(self, rhs: f32) -> Self::Output {
         let rhs = NonNaNFinite::try_from(rhs).expect("rhs must be a finite number");
+        assert!(rhs != 0.0, "cannot divide an offset by zero");
 
         Self::new(self.x / rhs, self.y / rhs)
     }
@@ -182,6 +186,15 @@ impl Rem for Offset {
     type Output = Self;
 
     fn rem(self, rhs: Self) -> Self::Output {
+        assert!(
+            rhs.x != 0.0,
+            "cannot take the remainder of an offset x by zero"
+        );
+        assert!(
+            rhs.y != 0.0,
+            "cannot take the remainder of an offset y by zero"
+        );
+
         Self::new(self.x % rhs.x, self.y % rhs.y)
     }
 }
@@ -197,6 +210,7 @@ impl Rem<f32> for Offset {
 
     fn rem(self, rhs: f32) -> Self::Output {
         let rhs = NonNaNFinite::try_from(rhs).expect("rhs must be a finite number");
+        assert!(rhs != 0.0, "cannot take the remainder of an offset by zero");
 
         Self::new(self.x % rhs, self.y % rhs)
     }
