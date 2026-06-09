@@ -1,9 +1,12 @@
-use std::{borrow::Cow, cell::RefCell, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
-use parley::{FontContext, FontFamily, FontFamilyName, Layout, LayoutContext, StyleProperty};
+use parley::{FontContext, InlineBox, InlineBoxKind, Layout, LayoutContext};
 use peniko::Blob;
 
-use crate::text::TextBrush;
+use crate::{
+    geometry::Size,
+    text::{ParagraphContent, TextBrush},
+};
 
 pub struct Fonts {
     ctx: RefCell<FontContext>,
@@ -32,27 +35,34 @@ impl Fonts {
             .register_fonts(Blob::new(Arc::new(data)), None);
     }
 
-    /// Shapes `text` into an unbroken layout, borrowing the database and scratch for the call. A leaf
-    /// operation: both borrows release on return, so a caller never juggles the two cells.
+    /// Shapes `content` into an unbroken layout, sizing the inline placeholders in order from
+    /// `placeholder_sizes`.
     pub fn shape(
         &self,
-        text: &str,
-        font_size: f32,
-        brush: TextBrush,
-        family: Option<&str>,
+        content: &ParagraphContent,
+        placeholder_sizes: &[Size],
     ) -> Layout<TextBrush> {
         let mut ctx = self.ctx.borrow_mut();
         let mut scratch = self.scratch.borrow_mut();
 
-        let mut builder = scratch.ranged_builder(&mut ctx, text, 1.0, true);
-        builder.push_default(StyleProperty::FontSize(font_size));
-        builder.push_default(StyleProperty::Brush(brush));
-        if let Some(family) = family {
-            builder.push_default(StyleProperty::FontFamily(FontFamily::Single(
-                FontFamilyName::Named(Cow::Borrowed(family)),
-            )));
+        let mut builder = scratch.ranged_builder(&mut ctx, &content.text, 1.0, true);
+
+        for (range, style) in &content.runs {
+            style.push_into(&mut builder, range.clone());
         }
 
-        builder.build(text)
+        for (id, &index) in content.placeholders.iter().enumerate() {
+            let size = placeholder_sizes.get(id).copied().unwrap_or(Size::ZERO);
+
+            builder.push_inline_box(InlineBox {
+                id: id as u64,
+                index,
+                width: size.width.get(),
+                height: size.height.get(),
+                kind: InlineBoxKind::InFlow,
+            });
+        }
+
+        builder.build(&content.text)
     }
 }

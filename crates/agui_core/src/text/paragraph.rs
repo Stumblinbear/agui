@@ -1,86 +1,92 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-use parley::{Alignment, AlignmentOptions, Layout, PositionedLayoutItem};
+use parley::{Alignment, AlignmentOptions, Decoration, GlyphRun, Layout, PositionedLayoutItem};
+use peniko::{
+    Fill,
+    kurbo::{Line, Rect, Stroke},
+};
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     context::{LayoutCtx, MountCtx, PaintCtx},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
-    paint::command::GlyphInstance,
+    paint::{Canvas, command::GlyphInstance},
     pipeline::{layout::LayoutScope, paint::PaintScope},
-    render_object::{RenderObject, box_layout::BoxConstraints},
-    text::{Fonts, TextBaseline, TextBrush},
+    render_object::{
+        MultiChildRenderObject, RenderObject,
+        box_layout::{BoxConstraints, RenderBox},
+        node::RenderNode,
+    },
+    text::{Fonts, ParagraphContent, TextBaseline, TextBrush},
 };
 
-use crate::render_object::box_layout::RenderBox;
+#[derive(Clone, Copy, Default)]
+struct InlineChildData {
+    size: Size,
+    offset: Offset,
+}
 
-/// A box render object that shapes and sizes a run of text.
-pub struct RenderParagraph {
-    text: String,
+/// Memoized results of the non-mutating queries, so a layout pass that fires several of them in a
+/// row reshapes at most once.
+#[derive(Default)]
+struct QueryMemo {
+    /// The unbroken shaped layout for the current content and fonts, reused across queries. Only
+    /// populated when there are no inline placeholders, whose sizes would otherwise key it.
+    shaped: Option<Layout<TextBrush>>,
+    /// The unconstrained size at a given break width, so a repeated `measure` skips the re-break.
+    broken: Option<(Option<f32>, Size)>,
+}
 
-    font_size: f32,
-    brush: TextBrush,
-    family: Option<String>,
+/// A box render object that shapes, sizes, and paints rich text, laying out any inline child widgets
+/// in line with it.
+pub struct RenderParagraph<C = ()> {
+    content: ParagraphContent,
 
     fonts: Option<Rc<Fonts>>,
 
+    children: Vec<RenderNode<C>>,
+    child_data: Vec<InlineChildData>,
+
     layout: Option<Layout<TextBrush>>,
     dirty: bool,
-    /// The width the cached layout was last broken to, so a query at the same width reuses it.
+    /// The width the committed layout was last broken to, so a re-layout at the same width is reused.
     broken_width: Option<f32>,
+    /// The placeholder sizes the committed layout was shaped against, so a child resize re-shapes.
+    placeholder_sizes: Vec<Size>,
+
+    memo: RefCell<QueryMemo>,
 
     layout_scope: LayoutScope,
     paint_scope: Option<PaintScope>,
 }
 
-impl RenderParagraph {
-    pub fn new(text: impl Into<String>) -> Self {
+impl<C> RenderParagraph<C> {
+    pub fn new(content: impl Into<ParagraphContent>) -> Self {
         Self {
-            text: text.into(),
-            font_size: 16.0,
-            brush: TextBrush::default(),
-            family: None,
+            content: content.into(),
 
             fonts: None,
+
+            children: Vec::new(),
+            child_data: Vec::new(),
 
             layout: None,
             dirty: true,
             broken_width: None,
+            placeholder_sizes: Vec::new(),
+
+            memo: RefCell::new(QueryMemo::default()),
 
             layout_scope: LayoutScope::detached(),
             paint_scope: None,
         }
     }
 
-    pub fn set_text(&mut self, text: impl Into<String>) {
-        let text = text.into();
-        if self.text != text {
-            self.text = text;
-            self.mark_needs_reshape();
-        }
-    }
-
-    // Exact comparison is the intent: shape only when the size literally changes.
-    #[allow(clippy::float_cmp)]
-    pub fn set_font_size(&mut self, font_size: f32) {
-        if self.font_size != font_size {
-            self.font_size = font_size;
-            self.mark_needs_reshape();
-        }
-    }
-
-    pub fn set_brush(&mut self, brush: TextBrush) {
-        if self.brush != brush {
-            self.brush = brush;
-            // The brush is baked into each run during shaping, so a recolor re-shapes.
-            self.mark_needs_reshape();
-        }
-    }
-
-    pub fn set_font_family(&mut self, family: Option<String>) {
-        if self.family != family {
-            self.family = family;
+    pub fn set_content(&mut self, content: impl Into<ParagraphContent>) {
+        let content = content.into();
+        if self.content != content {
+            self.content = content;
             self.mark_needs_reshape();
         }
     }
@@ -99,22 +105,12 @@ impl RenderParagraph {
         }
     }
 
-    /// Re-shapes on the next layout and asks the pipeline to re-lay this box out.
     fn mark_needs_reshape(&mut self) {
         self.dirty = true;
+        let memo = self.memo.get_mut();
+        memo.shaped = None;
+        memo.broken = None;
         self.layout_scope.mark_needs_layout();
-    }
-
-    /// Shapes the current text into a fresh layout via the captured handle, leaving `self` untouched.
-    fn shape(&self) -> Option<Layout<TextBrush>> {
-        let fonts = self.fonts.as_ref()?;
-
-        Some(fonts.shape(
-            &self.text,
-            self.font_size,
-            self.brush.clone(),
-            self.family.as_deref(),
-        ))
     }
 
     /// The maximum advance to break against: the finite max width, or `None` when unbounded.
@@ -123,29 +119,124 @@ impl RenderParagraph {
             .has_bounded_width()
             .then(|| constraints.max_width().get())
     }
+
+    /// A fresh shaped layout sized to `placeholder_sizes`, reusing the memo when there are no inline
+    /// placeholders. Leaves `self` untouched.
+    fn shaped_for(&self, placeholder_sizes: &[Size]) -> Option<Layout<TextBrush>> {
+        let fonts = self.fonts.as_ref()?;
+
+        if self.content.placeholders.is_empty() {
+            let mut memo = self.memo.borrow_mut();
+            if memo.shaped.is_none() {
+                memo.shaped = Some(fonts.shape(&self.content, &[]));
+            }
+            memo.shaped.clone()
+        } else {
+            Some(fonts.shape(&self.content, placeholder_sizes))
+        }
+    }
 }
 
-impl RenderObject for RenderParagraph {
+impl<C: RenderBox> RenderParagraph<C> {
+    fn measured_placeholder_sizes(&self, constraints: BoxConstraints) -> Vec<Size> {
+        let child_constraints = BoxConstraints::loose(constraints.biggest());
+        self.children
+            .iter()
+            .map(|child| child.measure(child_constraints))
+            .collect()
+    }
+
+    fn intrinsic_placeholder_sizes(&self) -> Vec<Size> {
+        self.children
+            .iter()
+            .map(|child| {
+                let width = child
+                    .max_intrinsic_width(unbounded())
+                    .map_or(0.0, |extent| extent.get());
+                let height = child
+                    .max_intrinsic_height(unbounded())
+                    .map_or(0.0, |extent| extent.get());
+                Size::new(width, height)
+            })
+            .collect()
+    }
+}
+
+impl<C: RenderObject> RenderObject for RenderParagraph<C> {
     fn mount(&mut self, ctx: &mut MountCtx) {
         self.paint_scope = Some(ctx.paint_scope().clone());
+
+        for child in &mut self.children {
+            child.mount(ctx);
+        }
     }
 
-    fn unmount(&mut self, _: &mut MountCtx) {}
+    fn unmount(&mut self, ctx: &mut MountCtx) {
+        for child in &mut self.children {
+            child.unmount(ctx);
+        }
+    }
 
     fn update_compositing_bits(&mut self) -> bool {
-        false
+        let mut needs = false;
+        for child in &mut self.children {
+            needs |= child.update_compositing_bits();
+        }
+        needs
     }
 }
 
-impl RenderBox for RenderParagraph {
-    fn measure(&self, constraints: BoxConstraints) -> Size {
-        let shaped = self.shape();
+impl<C> MultiChildRenderObject for RenderParagraph<C> {
+    type Child = C;
 
-        let Some(layout) = shaped.as_ref().or(self.layout.as_ref()) else {
+    fn take_children(&mut self) -> Vec<RenderNode<C>> {
+        std::mem::take(&mut self.children)
+    }
+
+    fn set_children(&mut self, children: Vec<RenderNode<C>>) {
+        self.child_data = vec![InlineChildData::default(); children.len()];
+        self.children = children;
+        self.mark_needs_reshape();
+    }
+
+    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
+        f(&mut self.children[index].object)
+    }
+}
+
+impl<C: RenderBox> RenderBox for RenderParagraph<C> {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
+        if self.fonts.is_none() {
+            return constraints.smallest();
+        }
+
+        let max_advance = Self::max_advance(constraints);
+
+        if self.content.placeholders.is_empty() {
+            if let Some((width, size)) = self.memo.borrow().broken
+                && width == max_advance
+            {
+                return constraints.constrain(size);
+            }
+
+            let Some(mut layout) = self.shaped_for(&[]) else {
+                return constraints.smallest();
+            };
+            layout.break_all_lines(max_advance);
+            let size = Size::new(layout.width(), layout.height());
+
+            self.memo.borrow_mut().broken = Some((max_advance, size));
+
+            return constraints.constrain(size);
+        }
+
+        let sizes = self.measured_placeholder_sizes(constraints);
+        let Some(mut layout) = self.shaped_for(&sizes) else {
             return constraints.smallest();
         };
+        layout.break_all_lines(max_advance);
 
-        constraints.constrain(measure_clone(layout, Self::max_advance(constraints)))
+        constraints.constrain(Size::new(layout.width(), layout.height()))
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
@@ -155,10 +246,18 @@ impl RenderBox for RenderParagraph {
             return constraints.smallest();
         }
 
-        let reshaped = self.dirty || self.layout.is_none();
+        // Inline children must be sized before shaping, since their dimensions feed the line breaker.
+        let placeholder_sizes = self.measured_placeholder_sizes(constraints);
+
+        let reshaped =
+            self.dirty || self.layout.is_none() || self.placeholder_sizes != placeholder_sizes;
 
         if reshaped {
-            self.layout = self.shape();
+            self.layout = self
+                .fonts
+                .as_ref()
+                .map(|fonts| fonts.shape(&self.content, &placeholder_sizes));
+            self.placeholder_sizes = placeholder_sizes;
             self.dirty = false;
             self.broken_width = None;
         }
@@ -169,29 +268,46 @@ impl RenderBox for RenderParagraph {
             return constraints.smallest();
         };
 
-        // Reuse the existing line breaking when the width hasn't changed since the last pass.
         if self.broken_width != max_advance {
             layout.break_all_lines(max_advance);
             layout.align(Alignment::Start, AlignmentOptions::default());
         }
 
         let size = Size::new(layout.width(), layout.height());
-
         self.broken_width = max_advance;
+
+        // `id` is the child's index, set when the box was pushed during shaping.
+        let mut placements = Vec::new();
+        for line in layout.lines() {
+            for item in line.items() {
+                if let PositionedLayoutItem::InlineBox(inline_box) = item {
+                    placements.push((
+                        usize::try_from(inline_box.id).expect("inline box id is too large"),
+                        Size::new(inline_box.width, inline_box.height),
+                        Offset::new(inline_box.x, inline_box.y),
+                    ));
+                }
+            }
+        }
+
+        for (index, child_size, offset) in placements {
+            self.children[index].layout_and_get_size(ctx, BoxConstraints::tight(child_size));
+            self.child_data[index] = InlineChildData {
+                size: child_size,
+                offset,
+            };
+        }
 
         constraints.constrain(size)
     }
 
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        // A real minimum is available via the layout's content widths, but deriving one is left for
-        // its own change rather than folded into the dependency bump.
         None
     }
 
     fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        let shaped = self.shape();
-        let layout = shaped.as_ref().or(self.layout.as_ref())?;
-        let width = measure_clone(layout, None).width.get();
+        let layout = self.shaped_for(&self.intrinsic_placeholder_sizes())?;
+        let width = measure_clone(&layout, None).width.get();
         PositiveFinite::try_from(width).ok()
     }
 
@@ -200,11 +316,9 @@ impl RenderBox for RenderParagraph {
     }
 
     fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
-        let shaped = self.shape();
-        let layout = shaped.as_ref().or(self.layout.as_ref())?;
-        // Infinite width means no wrap.
+        let layout = self.shaped_for(&self.intrinsic_placeholder_sizes())?;
         let max_advance = (width.get() < f32::INFINITY).then(|| width.get());
-        let height = measure_clone(layout, max_advance).height.get();
+        let height = measure_clone(&layout, max_advance).height.get();
         PositiveFinite::try_from(height).ok()
     }
 
@@ -213,11 +327,9 @@ impl RenderBox for RenderParagraph {
         constraints: BoxConstraints,
         _: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
-        let shaped = self.shape();
-        let layout = shaped.as_ref().or(self.layout.as_ref())?;
-        let mut clone = layout.clone();
-        clone.break_all_lines(Self::max_advance(constraints));
-        let baseline = clone.lines().next()?.metrics().baseline;
+        let mut layout = self.shaped_for(&self.intrinsic_placeholder_sizes())?;
+        layout.break_all_lines(Self::max_advance(constraints));
+        let baseline = layout.lines().next()?.metrics().baseline;
         PositiveFinite::try_from(baseline).ok()
     }
 
@@ -227,42 +339,47 @@ impl RenderBox for RenderParagraph {
         PositiveFinite::try_from(baseline).ok()
     }
 
-    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        for (child, data) in self.children.iter().zip(&self.child_data).rev() {
+            let local = position - data.offset;
+            if !data.size.contains(local) {
+                continue;
+            }
+
+            let hit = result.with_offset(data.offset, position, |result, transformed| {
+                child.hit_test(result, transformed)
+            });
+
+            if hit == HitTest::Absorb {
+                return HitTest::Absorb;
+            }
+        }
+
         HitTest::Pass
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        let Some(layout) = self.layout.as_ref() else {
-            return;
-        };
-
-        let mut canvas = ctx.canvas();
-        canvas.with_offset(offset, |canvas| {
-            for line in layout.lines() {
-                for item in line.items() {
-                    let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
-                        continue;
-                    };
-
-                    let run = glyph_run.run();
-                    // Each run carries its own brush, so a styled paragraph paints in several colors.
-                    let brush = canvas.brush(glyph_run.style().brush.0.clone());
-
-                    // positioned_glyphs bakes the run offset and baseline into each glyph's x/y.
-                    let glyphs = glyph_run
-                        .positioned_glyphs()
-                        .map(|glyph| GlyphInstance {
-                            id: glyph.id,
-                            x: glyph.x,
-                            y: glyph.y,
-                        })
-                        .collect();
-
-                    canvas.draw_glyphs(run.font(), run.font_size(), brush, glyphs);
+        if let Some(layout) = self.layout.as_ref() {
+            let mut canvas = ctx.canvas();
+            canvas.with_offset(offset, |canvas| {
+                for line in layout.lines() {
+                    for item in line.items() {
+                        if let PositionedLayoutItem::GlyphRun(glyph_run) = item {
+                            paint_glyph_run(canvas, &glyph_run);
+                        }
+                    }
                 }
-            }
-        });
+            });
+        }
+
+        for (child, data) in self.children.iter_mut().zip(&self.child_data) {
+            child.paint(ctx, offset + data.offset);
+        }
     }
+}
+
+fn unbounded() -> Positive<f32> {
+    Positive::try_from(f32::INFINITY).expect("infinity is a valid positive extent")
 }
 
 fn measure_clone(layout: &Layout<TextBrush>, max_advance: Option<f32>) -> Size {
@@ -271,33 +388,134 @@ fn measure_clone(layout: &Layout<TextBrush>, max_advance: Option<f32>) -> Size {
     Size::new(clone.width(), clone.height())
 }
 
+/// Paints one shaped run: its highlight, then its glyphs, then its decorations.
+fn paint_glyph_run(canvas: &mut Canvas, glyph_run: &GlyphRun<TextBrush>) {
+    let run = glyph_run.run();
+    let style = glyph_run.style();
+    let metrics = run.metrics();
+
+    if let Some(background) = &style.brush.background {
+        let brush = canvas.brush(background.clone());
+        let left = glyph_run.offset();
+        let rect = Rect::new(
+            f64::from(left),
+            f64::from(glyph_run.baseline() - metrics.ascent),
+            f64::from(left + glyph_run.advance()),
+            f64::from(glyph_run.baseline() + metrics.descent),
+        );
+        canvas.fill(Fill::NonZero, brush, &rect);
+    }
+
+    let fill = canvas.brush(style.brush.fill.clone());
+    let glyphs = glyph_run
+        .positioned_glyphs()
+        .map(|glyph| GlyphInstance {
+            id: glyph.id,
+            x: glyph.x,
+            y: glyph.y,
+        })
+        .collect();
+    canvas.draw_glyphs(run.font(), run.font_size(), fill, glyphs);
+
+    if let Some(decoration) = &style.underline {
+        paint_decoration(
+            canvas,
+            glyph_run,
+            decoration,
+            metrics.underline_offset,
+            metrics.underline_size,
+        );
+    }
+
+    if let Some(decoration) = &style.strikethrough {
+        paint_decoration(
+            canvas,
+            glyph_run,
+            decoration,
+            metrics.strikethrough_offset,
+            metrics.strikethrough_size,
+        );
+    }
+}
+
+/// Strokes one decoration line across a run, falling back to the run's metrics for an unset offset
+/// or thickness.
+fn paint_decoration(
+    canvas: &mut Canvas,
+    glyph_run: &GlyphRun<TextBrush>,
+    decoration: &Decoration<TextBrush>,
+    metric_offset: f32,
+    metric_size: f32,
+) {
+    let offset = decoration.offset.unwrap_or(metric_offset);
+    let size = decoration.size.unwrap_or(metric_size);
+
+    let y = glyph_run.baseline() - offset + size / 2.0;
+    let left = glyph_run.offset();
+    let line = Line::new(
+        (f64::from(left), f64::from(y)),
+        (f64::from(left + glyph_run.advance()), f64::from(y)),
+    );
+
+    let brush = canvas.brush(decoration.brush.fill.clone());
+    let stroke = canvas.stroke_style(Stroke::new(f64::from(size)));
+    canvas.stroke(stroke, brush, &line);
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::text::{Fonts, TextBaseline};
+    use peniko::Color;
+
+    use crate::{
+        paint::{
+            command::PaintCommand,
+            compositing::{Compositor, ContainerLayer, LayerHandle},
+            scene::Scene,
+        },
+        prelude::render_object::{InlineSpan, TextSpan},
+        text::{Fonts, TextBaseline, TextStyle},
+    };
 
     use super::*;
+
+    /// Paints `paragraph` and returns the flattened scene, for inspecting the recorded commands.
+    fn paint_scene(paragraph: &mut RenderParagraph) -> Scene {
+        let root = LayerHandle::new(ContainerLayer::new());
+        PaintCtx::paint(&root, |ctx| paragraph.paint(ctx, Offset::ZERO));
+        Compositor::compose(&root).flatten()
+    }
 
     fn infinite() -> Positive<f32> {
         Positive::try_from(f32::INFINITY).unwrap()
     }
 
-    /// A paragraph with a font handle captured, sized through a detached layout pass.
-    fn shaped(text: &str, constraints: BoxConstraints) -> RenderParagraph {
-        let mut paragraph = RenderParagraph::new(text);
-        paragraph.set_font_size(20.0);
+    fn with_fonts(content: ParagraphContent) -> RenderParagraph {
+        let mut paragraph = RenderParagraph::new(content);
         paragraph.set_fonts(Some(Rc::new(Fonts::new())));
-        paragraph.layout(&mut LayoutCtx::detached(), constraints);
-
         paragraph
+    }
+
+    /// A paragraph sized through a detached layout pass.
+    fn shaped(content: ParagraphContent, constraints: BoxConstraints) -> RenderParagraph {
+        let mut paragraph = with_fonts(content);
+        paragraph.layout(&mut LayoutCtx::detached(), constraints);
+        paragraph
+    }
+
+    /// Builds content with a single styled run over the whole string.
+    fn styled(text: &str, style: TextStyle) -> ParagraphContent {
+        ParagraphContent {
+            runs: vec![(0..text.len(), style)],
+            text: text.to_owned(),
+            placeholders: Vec::new(),
+        }
     }
 
     #[test]
     fn measure_agrees_with_layout_after_shaping() {
         let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
 
-        let mut paragraph = RenderParagraph::new("hello world");
-        paragraph.set_font_size(20.0);
-        paragraph.set_fonts(Some(Rc::new(Fonts::new())));
+        let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
         let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
 
         assert_eq!(paragraph.measure(constraints), laid_out);
@@ -307,20 +525,119 @@ mod tests {
     fn measure_works_without_a_prior_layout() {
         let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
 
-        let mut paragraph = RenderParagraph::new("no prior layout");
-        paragraph.set_font_size(20.0);
-        paragraph.set_fonts(Some(Rc::new(Fonts::new())));
+        let mut paragraph = with_fonts(styled("no prior layout", TextStyle::new().font_size(20.0)));
 
-        // The handle lets measure shape on demand, even though layout never ran.
         let measured = paragraph.measure(constraints);
         let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
         assert_eq!(measured, laid_out);
     }
 
     #[test]
+    fn larger_font_run_grows_the_paragraph() {
+        let constraints = BoxConstraints::new(0.0, 1000.0, 0.0, 1000.0);
+
+        let small = shaped(
+            styled("ABCDEF", TextStyle::new().font_size(10.0)),
+            constraints,
+        );
+        let large = shaped(
+            styled("ABCDEF", TextStyle::new().font_size(40.0)),
+            constraints,
+        );
+
+        assert!(large.measure(constraints).width > small.measure(constraints).width);
+        assert!(large.measure(constraints).height > small.measure(constraints).height);
+    }
+
+    #[test]
+    fn two_runs_are_wider_than_either_alone() {
+        let constraints = BoxConstraints::new(0.0, 1000.0, 0.0, 1000.0);
+
+        let style = TextStyle::new().font_size(20.0);
+        let one = shaped(styled("hello", style.clone()), constraints);
+        let two = shaped(
+            ParagraphContent {
+                text: "hellohello".to_owned(),
+                runs: vec![(0..5, style.clone()), (5..10, style.clone())],
+                placeholders: Vec::new(),
+            },
+            constraints,
+        );
+
+        assert!(two.measure(constraints).width > one.measure(constraints).width);
+    }
+
+    #[test]
+    fn cascade_inherits_color_and_overrides_independently() {
+        // A parent color with a child that sets only a background keeps the inherited color.
+        let parent = TextStyle::new().color(Color::from_rgb8(10, 20, 30));
+        let child = TextStyle::new().background(Color::from_rgb8(40, 50, 60));
+
+        let span = TextSpan::new("a")
+            .style(parent.clone())
+            .children([InlineSpan::Text(
+                TextSpan::<()>::new("b").style(child.clone()),
+            )]);
+
+        let (content, _) = span.flatten();
+
+        let (_, second) = &content.runs[1];
+        assert_eq!(second.color, parent.color);
+        assert_eq!(second.background, child.background);
+    }
+
+    #[test]
+    fn background_run_paints_a_fill_behind_the_glyphs() {
+        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
+        let mut paragraph = shaped(
+            styled(
+                "hi",
+                TextStyle::new()
+                    .font_size(20.0)
+                    .background(Color::from_rgb8(200, 100, 50)),
+            ),
+            constraints,
+        );
+
+        let scene = paint_scene(&mut paragraph);
+
+        let has_fill = scene
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::Fill { .. }));
+        assert!(
+            has_fill,
+            "a highlighted run records a fill behind its glyphs"
+        );
+    }
+
+    #[test]
+    fn underline_run_paints_a_stroke() {
+        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
+        let mut paragraph = shaped(
+            styled("hi", TextStyle::new().font_size(20.0).underline(true)),
+            constraints,
+        );
+
+        let scene = paint_scene(&mut paragraph);
+
+        let has_stroke = scene
+            .commands()
+            .iter()
+            .any(|command| matches!(command, PaintCommand::Stroke { .. }));
+        assert!(has_stroke, "an underlined run records a stroke");
+    }
+
+    #[test]
     fn narrower_break_does_not_grow_width() {
         let wide = BoxConstraints::new(0.0, 1000.0, 0.0, 1000.0);
-        let paragraph = shaped("the quick brown fox jumps over the lazy dog", wide);
+        let paragraph = shaped(
+            styled(
+                "the quick brown fox jumps over the lazy dog",
+                TextStyle::new().font_size(20.0),
+            ),
+            wide,
+        );
 
         let wide_width = paragraph.measure(wide).width;
         let narrow = BoxConstraints::new(0.0, 80.0, 0.0, 1000.0);
@@ -332,7 +649,10 @@ mod tests {
     #[test]
     fn baseline_within_height_and_intrinsics_ordered() {
         let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-        let paragraph = shaped("baseline test", constraints);
+        let paragraph = shaped(
+            styled("baseline test", TextStyle::new().font_size(20.0)),
+            constraints,
+        );
 
         let size = paragraph.measure(constraints);
         if let Some(baseline) = paragraph.measure_baseline(constraints, TextBaseline::Alphabetic) {
@@ -348,16 +668,8 @@ mod tests {
     }
 
     #[test]
-    fn infinite_width_intrinsic_height_resolves() {
-        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-        let paragraph = shaped("resolve me", constraints);
-
-        let _ = paragraph.max_intrinsic_height(infinite());
-    }
-
-    #[test]
     fn paragraph_without_fonts_sizes_to_smallest() {
-        let paragraph = RenderParagraph::new("no fonts provided");
+        let paragraph = RenderParagraph::<()>::new("no fonts provided");
         let constraints = BoxConstraints::new(5.0, 100.0, 7.0, 100.0);
         assert_eq!(paragraph.measure(constraints), constraints.smallest());
         assert_eq!(paragraph.min_intrinsic_width(infinite()), None);

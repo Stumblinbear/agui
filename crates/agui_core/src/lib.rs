@@ -68,7 +68,10 @@ pub mod prelude {
                 node::{RelayoutRenderNode, RenderNode},
                 sliver::{AnyRenderSliver, RenderSliver},
             },
-            text::{Fonts, RenderParagraph, TextBrush},
+            text::{
+                FontStyle, FontWeight, FontWidth, Fonts, InlineSpan, LineHeight, ParagraphContent,
+                RenderParagraph, TextBrush, TextSpan, TextStyle,
+            },
         };
 
         pub use super::{shared::*, unit::*};

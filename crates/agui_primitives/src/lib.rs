@@ -10,6 +10,7 @@ pub mod opacity;
 pub mod padding;
 pub mod provide;
 pub mod repaint_boundary;
+pub mod rich_text;
 pub mod single_child_scroll_view;
 pub mod sized_box;
 pub mod stack;
