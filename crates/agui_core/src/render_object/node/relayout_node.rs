@@ -423,12 +423,13 @@ mod tests {
 
     type Captured = Rc<RefCell<Option<LayoutScope>>>;
 
-    /// A leaf that counts its layouts and paints and captures the scope it was laid out under, so a test
-    /// can re-lay it the way a change inside it would.
+    /// A leaf that counts its layouts and paints and captures the scope and constraints it was laid
+    /// out under, so a test can re-lay it the way a change inside it would.
     struct Probe {
         layouts: Rc<Cell<usize>>,
         paints: Rc<Cell<usize>>,
         captured: Captured,
+        constraints_seen: Rc<Cell<Option<BoxConstraints>>>,
     }
 
     impl RenderObject for Probe {
@@ -458,6 +459,7 @@ mod tests {
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.scope().clone());
+            self.constraints_seen.set(Some(constraints));
 
             constraints.smallest()
         }
@@ -553,6 +555,7 @@ mod tests {
                 layouts: Rc::clone(&probe_layouts),
                 paints: Rc::clone(&probe_paints),
                 captured: Rc::clone(&captured),
+                constraints_seen: Rc::new(Cell::new(None)),
             }),
         };
 
@@ -586,6 +589,48 @@ mod tests {
             probe_paints.get(),
             2,
             "the relayout repainted the boundary enclosing the child"
+        );
+    }
+
+    #[test]
+    fn an_outer_relayout_covers_a_dirty_inner_boundary() {
+        let probe_layouts = Rc::new(Cell::new(0));
+        let captured: Captured = Rc::new(RefCell::new(None));
+        let tighten_layouts = Rc::new(Cell::new(0));
+
+        let tighten = Tighten {
+            layouts: Rc::clone(&tighten_layouts),
+            child: RelayoutRenderNode::new(Probe {
+                layouts: Rc::clone(&probe_layouts),
+                paints: Rc::new(Cell::new(0)),
+                captured: Rc::clone(&captured),
+                constraints_seen: Rc::new(Cell::new(None)),
+            }),
+        };
+
+        let content: BoundaryContent = Rc::new(RefCell::new(tighten));
+        let mut owner = PipelineOwner::new(content, layer());
+
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        owner.flush_layout();
+        assert_eq!(probe_layouts.get(), 1);
+        assert_eq!(tighten_layouts.get(), 1);
+
+        // Mark the inner boundary and the root in the same frame; the root's relayout re-lays the
+        // inner child in place, which satisfies the inner mark.
+        captured
+            .borrow()
+            .clone()
+            .expect("laid out once")
+            .mark_needs_layout();
+        owner.resize(BoxConstraints::new(0, 200, 0, 200));
+
+        owner.flush_layout();
+        assert_eq!(tighten_layouts.get(), 2, "the root re-laid");
+        assert_eq!(
+            probe_layouts.get(),
+            2,
+            "the inner boundary covered by the outer relayout is not re-laid a second time"
         );
     }
 
@@ -665,6 +710,8 @@ mod tests {
         tight: Rc<Cell<bool>>,
         inline_after: Rc<Cell<bool>>,
         registered_after: Rc<Cell<bool>>,
+        probe_captured: Captured,
+        probe_constraints: Rc<Cell<Option<BoxConstraints>>>,
         owner: PipelineOwner,
     }
 
@@ -673,6 +720,8 @@ mod tests {
             let tight = Rc::new(Cell::new(true));
             let inline_after = Rc::new(Cell::new(false));
             let registered_after = Rc::new(Cell::new(false));
+            let probe_captured: Captured = Rc::new(RefCell::new(None));
+            let probe_constraints = Rc::new(Cell::new(None));
 
             let toggle = Toggle {
                 tight: Rc::clone(&tight),
@@ -681,7 +730,8 @@ mod tests {
                 child: RelayoutRenderNode::new(Probe {
                     layouts: Rc::new(Cell::new(0)),
                     paints: Rc::new(Cell::new(0)),
-                    captured: Rc::new(RefCell::new(None)),
+                    captured: Rc::clone(&probe_captured),
+                    constraints_seen: Rc::clone(&probe_constraints),
                 }),
             };
 
@@ -692,6 +742,8 @@ mod tests {
                 tight,
                 inline_after,
                 registered_after,
+                probe_captured,
+                probe_constraints,
                 owner,
             }
         }
@@ -737,6 +789,28 @@ mod tests {
         assert!(
             d.inline_after.get(),
             "a child loose for the threshold run of layouts recovers to the inline form"
+        );
+    }
+
+    #[test]
+    fn a_boundary_unregistered_mid_flush_is_not_relaid_with_stale_constraints() {
+        let mut d = Driver::new();
+
+        // One tight layout boxes and registers the child, caching tight constraints on its cell.
+        d.relay();
+        let scope = d.probe_captured.borrow().clone().expect("laid out once");
+        assert!(d.probe_constraints.get().expect("laid out once").is_tight());
+
+        // Mark the inner boundary, then flip the holder loose; the root's relayout in the same frame
+        // lays the child loosely and unregisters it, so the inner mark is moot.
+        scope.mark_needs_layout();
+        d.tight.set(false);
+        d.relay();
+
+        let last = d.probe_constraints.get().expect("laid out");
+        assert!(
+            !last.is_tight(),
+            "the loose layout from the parent is final; the stale tight entry must not re-lay the child"
         );
     }
 

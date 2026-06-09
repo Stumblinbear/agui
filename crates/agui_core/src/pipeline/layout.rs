@@ -76,6 +76,7 @@ impl LayoutPipeline {
             constraints: Cell::new(None),
             paint,
             is_dirty: Cell::new(false),
+            needs_layout: Cell::new(false),
         });
 
         RegisteredLayoutBoundary {
@@ -93,8 +94,12 @@ impl LayoutPipeline {
         let ordered = self.drain_rootmost_first();
 
         for cell in ordered {
-            // An enclosing boundary's relayout may have already covered this one; its constraints are
-            // unchanged and it was unmarked when that pass re-laid it.
+            // An enclosing boundary's relayout may have already covered this one: re-laying it in
+            // place cleared its pending mark, and unregistering it dropped the mark with the handle.
+            if !cell.needs_layout.replace(false) {
+                continue;
+            }
+
             let Some(constraints) = cell.constraints.get() else {
                 continue;
             };
@@ -187,6 +192,10 @@ struct LayoutCell {
     /// Whether this cell is currently linked into the dirty list, guarding a double-mark from linking it
     /// twice.
     is_dirty: Cell<bool>,
+
+    /// Whether this boundary is awaiting re-layout. Outlives the cell's place in the dirty list, and
+    /// clears when the boundary is re-laid, whether by the flush or in place by the boundary above it.
+    needs_layout: Cell<bool>,
 }
 
 intrusive_adapter!(LayoutCellAdapter = UnsafeRef<LayoutCell>: LayoutCell { link => LinkedListLink });
@@ -216,6 +225,8 @@ impl LayoutPipelineState {
             !self.in_layout,
             "cannot request layout while layout is in progress"
         );
+
+        cell.needs_layout.set(true);
 
         if cell.is_dirty.get() {
             return;
@@ -264,9 +275,11 @@ impl RegisteredLayoutBoundary {
     }
 
     /// Records the constraints this boundary is re-laid under, without marking it. A boundary re-laid in
-    /// place by its parent keeps its cached constraints current this way.
+    /// place by its parent keeps its cached constraints current this way, and that relayout satisfies
+    /// any re-layout still pending on the boundary.
     pub fn update_constraints(&self, constraints: BoxConstraints) {
         self.cell.constraints.set(Some(constraints));
+        self.cell.needs_layout.set(false);
     }
 
     /// Records the constraints this boundary is re-laid under and marks it. A boundary constrained from
@@ -291,6 +304,10 @@ impl RegisteredLayoutBoundary {
 
 impl Drop for RegisteredLayoutBoundary {
     fn drop(&mut self) {
+        // An unregistered boundary can no longer be re-laid on its own; a flush that already drained
+        // its cell must skip it rather than replay its stale constraints.
+        self.cell.needs_layout.set(false);
+
         if !self.cell.is_dirty.get() {
             return;
         }
@@ -362,6 +379,7 @@ impl LayoutScope {
             constraints: Cell::new(None),
             paint,
             is_dirty: Cell::new(false),
+            needs_layout: Cell::new(false),
         });
 
         RegisteredLayoutBoundary { cell, state }
