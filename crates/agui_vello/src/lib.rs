@@ -8,7 +8,11 @@ pub use vello;
 pub mod headless;
 
 pub fn append_scene(scene: &Scene, target: &mut vello::Scene) {
-    render_into(scene, target, Affine::IDENTITY);
+    append_scene_with_transform(scene, target, Affine::IDENTITY);
+}
+
+pub fn append_scene_with_transform(scene: &Scene, target: &mut vello::Scene, base: Affine) {
+    render_into(scene, target, base);
 }
 
 pub fn to_vello_scene(scene: &Scene) -> vello::Scene {

@@ -22,7 +22,7 @@ use agui_primitives::{
     fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
     listener::Listener, opacity::Opacity, text::Text,
 };
-use agui_vello::append_scene;
+use agui_vello::append_scene_with_transform;
 use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
     peniko::Color,
@@ -116,15 +116,18 @@ fn main() {
 /// Posted by the reactor through the event-loop proxy to wake the loop when a spawned task is ready.
 struct WakeUp;
 
-/// The loose constraints a window of `width` by `height` lays its subtree out under.
-#[allow(clippy::cast_precision_loss)]
-fn viewport(width: u32, height: u32) -> BoxConstraints {
-    BoxConstraints::tight(Size::new(width, height))
+/// The constraints a window's subtree lays out under, in logical pixels, converting the physical
+/// `width` by `height` of its surface by `scale_factor`.
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+fn viewport(width: u32, height: u32, scale_factor: f64) -> BoxConstraints {
+    let scale = scale_factor as f32;
+    BoxConstraints::tight(Size::new(width as f32 / scale, height as f32 / scale))
 }
 
 struct ActiveWindow {
     surface: RenderSurface<'static>,
     window: Arc<Window>,
+    scale_factor: f64,
 }
 
 struct App {
@@ -169,13 +172,14 @@ impl App {
 
         let width = active.surface.config.width;
         let height = active.surface.config.height;
+        let scale_factor = active.scale_factor;
 
         let _frame = tracing::info_span!("frame", width, height).entered();
 
         let scene = self.view.frame(self.start.elapsed());
 
         self.vello_scene.reset();
-        append_scene(&scene, &mut self.vello_scene);
+        append_scene_with_transform(&scene, &mut self.vello_scene, Affine::scale(scale_factor));
 
         let device = &self.context.devices[active.surface.dev_id];
         let surface = &active.surface;
@@ -258,6 +262,7 @@ impl ApplicationHandler<WakeUp> for App {
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
         let size = window.inner_size();
+        let scale_factor = window.scale_factor();
         let surface = pollster::block_on(self.context.create_surface(
             window.clone(),
             size.width,
@@ -282,10 +287,15 @@ impl ApplicationHandler<WakeUp> for App {
             .unwrap()
         });
 
-        self.active = Some(ActiveWindow { surface, window });
+        self.active = Some(ActiveWindow {
+            surface,
+            window,
+            scale_factor,
+        });
 
         // Lay out, paint, and reveal the first frame inline; a hidden window receives no redraw request.
-        self.view.resize(viewport(size.width, size.height));
+        self.view
+            .resize(viewport(size.width, size.height, scale_factor));
         self.draw();
 
         tracing::info!(width = size.width, height = size.height, "window created");
@@ -300,9 +310,11 @@ impl ApplicationHandler<WakeUp> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
 
             WindowEvent::CursorMoved { position, .. } => {
+                let scale = self.active.as_ref().map_or(1.0, |a| a.scale_factor);
+                let logical = position.to_logical::<f64>(scale);
                 #[allow(clippy::cast_possible_truncation)]
                 {
-                    self.cursor = Offset::new(position.x as f32, position.y as f32);
+                    self.cursor = Offset::new(logical.x as f32, logical.y as f32);
                 }
 
                 if self.painted {
@@ -339,14 +351,34 @@ impl ApplicationHandler<WakeUp> for App {
 
             WindowEvent::Resized(size) => {
                 tracing::info!(width = size.width, height = size.height, "resized");
-                if let Some(active) = self.active.as_mut() {
+                let scale_factor = if let Some(active) = self.active.as_mut() {
                     self.context
                         .resize_surface(&mut active.surface, size.width, size.height);
-                }
+                    active.scale_factor
+                } else {
+                    return;
+                };
 
                 // The viewport changed, so re-lay and repaint the subtree at the new size.
-                self.view.resize(viewport(size.width, size.height));
+                self.view
+                    .resize(viewport(size.width, size.height, scale_factor));
 
+                self.draw();
+            }
+
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                tracing::info!(scale_factor, "scale factor changed");
+
+                // A resize follows on most platforms, but re-lay out here so the subtree tracks the new
+                // density even when the physical size is unchanged.
+                let size = if let Some(active) = self.active.as_mut() {
+                    active.scale_factor = scale_factor;
+                    (active.surface.config.width, active.surface.config.height)
+                } else {
+                    return;
+                };
+
+                self.view.resize(viewport(size.0, size.1, scale_factor));
                 self.draw();
             }
 
