@@ -268,7 +268,7 @@ impl<C: RenderBox> RenderBox for RenderParagraph<C> {
             return constraints.smallest();
         };
 
-        if self.broken_width != max_advance {
+        if reshaped || self.broken_width != max_advance {
             layout.break_all_lines(max_advance);
             layout.align(Alignment::Start, AlignmentOptions::default());
         }
@@ -530,6 +530,19 @@ mod tests {
         let measured = paragraph.measure(constraints);
         let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
         assert_eq!(measured, laid_out);
+    }
+
+    #[test]
+    fn unbounded_width_layout_agrees_with_measure() {
+        let constraints = BoxConstraints::default();
+
+        let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
+
+        let measured = paragraph.measure(constraints);
+        let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
+
+        assert_eq!(laid_out, measured);
+        assert!(laid_out.height.get() > 0.0, "the text occupies a line");
     }
 
     #[test]
