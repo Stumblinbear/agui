@@ -107,16 +107,23 @@ impl ChildLayers {
     /// Composes the children, reusing the cache when none have changed, and embeds the result.
     fn embed(&mut self, compositor: &mut Compositor) {
         if self.cache.is_none() || self.dirty {
-            let mut scene = Scene::new();
-            {
-                let mut sub = Compositor { scene: &mut scene };
-
-                for child in &self.children {
-                    child.borrow_mut().compose(&mut sub);
-                }
+            // A prior composition's embed may still reference the cache, so reuse it only when unaliased.
+            if self.cache.as_mut().and_then(Rc::get_mut).is_none() {
+                self.cache = Some(Rc::new(Scene::new()));
             }
 
-            self.cache = Some(Rc::new(scene));
+            let scene = self
+                .cache
+                .as_mut()
+                .and_then(Rc::get_mut)
+                .expect("the cache was just made unique");
+
+            scene.reset();
+
+            let mut sub = Compositor { scene };
+            for child in &self.children {
+                child.borrow_mut().compose(&mut sub);
+            }
         }
 
         if let Some(scene) = &self.cache {
@@ -134,14 +141,24 @@ impl Compositor<'_> {
     /// Composes `root` and its descendants into a fresh scene.
     pub fn compose<L: Layer + ?Sized>(root: &LayerHandle<L>) -> Scene {
         let mut scene = Scene::new();
+        Self::do_compose(root, &mut scene);
+        scene
+    }
 
+    /// Composes `root` and its descendants into `scene`, replacing its previous content. Composing
+    /// successive frames into one held scene reuses its storage instead of allocating each frame.
+    pub fn compose_into<L: Layer + ?Sized>(root: &LayerHandle<L>, scene: &mut Scene) {
+        scene.reset();
+
+        Self::do_compose(root, scene);
+    }
+
+    fn do_compose<L: Layer + ?Sized>(root: &LayerHandle<L>, scene: &mut Scene) {
         let mut root = root.borrow_mut();
 
         // Settle every dirty flag before composing; compose reads them to decide cache reuse.
         root.update_dirty();
-        root.compose(&mut Compositor { scene: &mut scene });
-
-        scene
+        root.compose(&mut Compositor { scene });
     }
 
     /// Splices `sub` into the scene by reference, under the transform in effect.
@@ -557,6 +574,49 @@ mod tests {
 
         Compositor::compose(&layer);
         assert_eq!(count.get(), 1, "a third, unchanged pass did no work");
+    }
+
+    /// Composing successive frames into one held scene replays caches and reflects changes, as a
+    /// per-frame driver does.
+    #[test]
+    fn compose_into_reuses_one_scene_across_frames() {
+        let (child, composes, _) = CountingLayer::new();
+        let layer = transform_over(child, Affine::translate((10.0, 0.0)));
+
+        let mut scene = Scene::new();
+        Compositor::compose_into(&layer, &mut scene);
+        assert_eq!(composes.get(), 1);
+        assert_eq!(fill_transform(&scene), Affine::translate((10.0, 0.0)));
+
+        layer
+            .borrow_mut()
+            .set_transform(Affine::translate((20.0, 0.0)));
+
+        Compositor::compose_into(&layer, &mut scene);
+        assert_eq!(
+            composes.get(),
+            1,
+            "the leaf cache was replayed, not recomposed"
+        );
+        assert_eq!(fill_transform(&scene), Affine::translate((20.0, 0.0)));
+    }
+
+    /// Recomposing a dirtied tree leaves a still-held previous composition intact.
+    #[test]
+    fn a_recompose_leaves_a_held_composition_intact() {
+        let (child, _, dirty) = CountingLayer::new();
+        let layer = transform_over(child, Affine::IDENTITY);
+
+        let first = Compositor::compose(&layer);
+
+        dirty.set(true);
+        layer
+            .borrow_mut()
+            .set_transform(Affine::translate((5.0, 0.0)));
+        let second = Compositor::compose(&layer);
+
+        assert_eq!(fill_transform(&first), Affine::IDENTITY);
+        assert_eq!(fill_transform(&second), Affine::translate((5.0, 0.0)));
     }
 
     /// A change bubbles up through several clean container ancestors, rebuilding each cache, while the

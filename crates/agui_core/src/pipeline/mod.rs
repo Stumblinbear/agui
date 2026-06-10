@@ -112,6 +112,12 @@ impl PipelineOwner {
         Compositor::compose(&self.layer)
     }
 
+    /// Composites the subtree's retained layers into `scene` to present, replacing its previous
+    /// content. A driver presenting every frame composites into one held scene to reuse its storage.
+    pub fn composite_into(&self, scene: &mut Scene) {
+        Compositor::compose_into(&self.layer, scene);
+    }
+
     /// Hit-tests the subtree at `position`, in the root coordinate space, returning the handlers under
     /// it ordered most-specific first.
     pub fn hit_test(&self, position: Offset) -> HitTestResult {

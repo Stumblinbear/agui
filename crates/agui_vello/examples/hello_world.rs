@@ -231,7 +231,7 @@ impl App {
         let scene = self.view.frame(self.start.elapsed());
 
         self.vello_scene.reset();
-        append_scene_with_transform(&scene, &mut self.vello_scene, Affine::scale(scale_factor));
+        append_scene_with_transform(scene, &mut self.vello_scene, Affine::scale(scale_factor));
 
         let device = &self.context.devices[active.surface.dev_id];
         let surface = &active.surface;
@@ -466,6 +466,7 @@ struct WindowDriver {
     vsync: Vsync,
     build: BuildOwner,
     owner: PipelineOwner,
+    scene: Scene,
 }
 
 impl WindowDriver {
@@ -505,6 +506,7 @@ impl WindowDriver {
             vsync,
             build,
             owner,
+            scene: Scene::new(),
         }
     }
 
@@ -523,7 +525,7 @@ trait View {
     fn poll_tasks(&mut self);
     /// Whether a frame is owed: the tree was dirtied or an animation is still ticking.
     fn needs_frame(&self) -> bool;
-    fn frame(&mut self, now: Duration) -> Scene;
+    fn frame(&mut self, now: Duration) -> &Scene;
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
@@ -565,7 +567,7 @@ impl View for WindowDriver {
         self.build.is_dirty() || !self.vsync.is_idle()
     }
 
-    fn frame(&mut self, now: Duration) -> Scene {
+    fn frame(&mut self, now: Duration) -> &Scene {
         // Tasks have already been drained, so apply any rebuild they queued, advance frame callbacks for
         // this frame's time, then lay out and paint what changed.
         let mut scheduler = self.scheduler();
@@ -575,7 +577,8 @@ impl View for WindowDriver {
 
         self.owner.flush_layout();
         self.owner.flush_paint();
-        self.owner.composite()
+        self.owner.composite_into(&mut self.scene);
+        &self.scene
     }
 
     fn hit_test(&self, position: Offset) -> HitTestResult {
