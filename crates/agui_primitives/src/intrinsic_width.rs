@@ -47,7 +47,11 @@ pub struct RenderIntrinsicWidth<Child> {
 impl<Child> SingleChildRenderObject for RenderIntrinsicWidth<Child> {
     type Child = Child;
 
-    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+        f(&self.child.object)
+    }
+
+    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
         f(&mut self.child.object)
     }
 }
@@ -66,6 +70,12 @@ where
 
     fn update_compositing_bits(&mut self) -> bool {
         self.child.update_compositing_bits()
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.child.describe(d))
+            .finish()
     }
 }
 

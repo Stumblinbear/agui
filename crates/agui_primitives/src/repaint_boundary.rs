@@ -64,7 +64,7 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        render_object.with_child(|child_render| {
+        render_object.with_child_mut(|child_render| {
             element.update(self.child, child_render, ctx);
         });
 
@@ -90,7 +90,17 @@ pub struct RenderRepaintBoundary<Child> {
 impl<Child: RenderBox> SingleChildRenderObject for RenderRepaintBoundary<Child> {
     type Child = Child;
 
-    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+        let content = self.content.borrow();
+        let child_render = content
+            .as_any()
+            .downcast_ref::<Child>()
+            .expect("a boundary's content keeps its child's render type for its whole life");
+
+        f(child_render)
+    }
+
+    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
         let mut content = self.content.borrow_mut();
         let child_render = content
             .as_any_mut()
@@ -123,6 +133,12 @@ impl<Child: RenderBox> RenderObject for RenderRepaintBoundary<Child> {
     fn update_compositing_bits(&mut self) -> bool {
         // A boundary always composites into its own layer; its subtree recomputes on its own repaint.
         true
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.content.borrow().dyn_describe(d))
+            .finish()
     }
 }
 
@@ -261,7 +277,11 @@ mod tests {
     impl<C> SingleChildRenderObject for RenderCounter<C> {
         type Child = C;
 
-        fn with_child<R>(&mut self, f: impl FnOnce(&mut C) -> R) -> R {
+        fn with_child<R>(&self, f: impl FnOnce(&C) -> R) -> R {
+            f(&self.child.object)
+        }
+
+        fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut C) -> R) -> R {
             f(&mut self.child.object)
         }
     }

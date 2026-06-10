@@ -4,6 +4,7 @@ use fnv::FnvHashMap;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
     render_object::{MultiChildRenderObject, SingleChildRenderObject, node::RenderNode},
@@ -25,7 +26,13 @@ where
 
     fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
         let child = &mut self.child.element;
-        render.with_child(|child_render| child.dispatch(child_render, path, action));
+        render.with_child_mut(|child_render| child.dispatch(child_render, path, action));
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.child.element.describe(d))
+            .finish()
     }
 }
 
@@ -83,12 +90,22 @@ where
 
         let index = head.get() as usize;
 
-        render.with_child(index, |child_render| {
+        render.with_child_mut(index, |child_render| {
             self.children[index]
                 .node
                 .element
                 .dispatch(child_render, rest, action);
         });
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        let mut builder = d.node_for::<Self>();
+
+        for keyed in &self.children {
+            builder = builder.child(|d| keyed.node.element.describe(d));
+        }
+
+        builder.finish()
     }
 }
 
@@ -390,8 +407,13 @@ mod tests {
     use std::{cell::Cell, rc::Rc};
 
     use crate::{
-        context::UpdateCtx, element::Element, key::AnyKeyable, test_fixtures::MultiChildRenderList,
-        test_harness::with_ctx, widget::Widget,
+        context::{MountCtx, UpdateCtx},
+        element::Element,
+        key::AnyKeyable,
+        render_object::RenderObject,
+        test_fixtures::MultiChildRenderList,
+        test_harness::with_ctx,
+        widget::Widget,
     };
 
     use super::{MultiChildElement, SingleChildElement};
@@ -416,6 +438,16 @@ mod tests {
 
     impl Element for ProbeElement {
         type Render = ProbeRender;
+    }
+
+    impl RenderObject for ProbeRender {
+        fn mount(&mut self, _: &mut MountCtx) {}
+
+        fn unmount(&mut self, _: &mut MountCtx) {}
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
     }
 
     impl Widget for Probe {

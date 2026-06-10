@@ -2,6 +2,7 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::{
     context::{MessageCtx, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{
         BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath, deliver_message,
         flush_boundaries, mark_rebuild,
@@ -56,6 +57,11 @@ impl BuildOwner {
     /// The id of the root boundary, for addressing a root-relative path.
     pub fn root_id(&self) -> BuildBoundaryId {
         self.root.id()
+    }
+
+    /// Captures the tree under the root boundary as a diagnostics snapshot.
+    pub fn describe(&self) -> DiagnosticsNode {
+        self.root.describe(&mut Diagnostics::new())
     }
 
     /// Delivers `message` to the element at `path`. If that element asks to rebuild, its boundary is

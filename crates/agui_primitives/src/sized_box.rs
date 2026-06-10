@@ -188,7 +188,11 @@ pub struct RenderSizedBox<Child> {
 impl<Child: RenderBox> SingleChildRenderObject for RenderSizedBox<Child> {
     type Child = Child;
 
-    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+        self.child.with_object(f)
+    }
+
+    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
         self.child.with_object_mut(f)
     }
 }
@@ -207,6 +211,14 @@ where
 
     fn update_compositing_bits(&mut self) -> bool {
         self.child.update_compositing_bits()
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .property_opt("width", self.width)
+            .property_opt("height", self.height)
+            .child(|d| self.child.describe(d))
+            .finish()
     }
 }
 
@@ -363,7 +375,11 @@ mod tests {
     impl<Child> SingleChildRenderObject for RenderCounter<Child> {
         type Child = Child;
 
-        fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+        fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+            f(&self.child.object)
+        }
+
+        fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
             f(&mut self.child.object)
         }
     }

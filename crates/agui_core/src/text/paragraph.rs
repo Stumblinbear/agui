@@ -9,6 +9,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     context::{LayoutCtx, MountCtx, PaintCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     paint::{Canvas, command::GlyphInstance},
@@ -184,6 +185,22 @@ impl<C: RenderObject> RenderObject for RenderParagraph<C> {
         }
         needs
     }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .property("text", excerpt(&self.content.text))
+            .finish()
+    }
+}
+
+/// `text` shortened to its first 32 characters, with an ellipsis when it was cut.
+fn excerpt(text: &str) -> String {
+    const LIMIT: usize = 32;
+
+    match text.char_indices().nth(LIMIT) {
+        Some((cut, _)) => format!("{}…", &text[..cut]),
+        None => text.to_owned(),
+    }
 }
 
 impl<C> MultiChildRenderObject for RenderParagraph<C> {
@@ -199,7 +216,11 @@ impl<C> MultiChildRenderObject for RenderParagraph<C> {
         self.mark_needs_reshape();
     }
 
-    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
+    fn with_child<R>(&self, index: usize, f: impl FnOnce(&C) -> R) -> R {
+        f(&self.children[index].object)
+    }
+
+    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
         f(&mut self.children[index].object)
     }
 }

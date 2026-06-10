@@ -22,12 +22,18 @@ pub struct RichTextElement<C: Element, R> {
 impl<C, R> Element for RichTextElement<C, R>
 where
     C: Element,
-    R: MultiChildRenderObject<Child = C::Render>,
+    R: MultiChildRenderObject<Child = C::Render> + RenderObject,
 {
     type Render = R;
 
     fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
         self.children.dispatch(render, path, action);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.children.describe(d))
+            .finish()
     }
 }
 

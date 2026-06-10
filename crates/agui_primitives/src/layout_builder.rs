@@ -98,6 +98,18 @@ where
             .element
             .dispatch(&mut child_render.object, path, action);
     }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        let mut node = d.node_for::<Self>();
+
+        let child_widget = self.child_widget.borrow();
+
+        if let Some(retained) = child_widget.as_ref() {
+            node = node.child(|d| retained.node.element.describe(d));
+        }
+
+        node.finish()
+    }
 }
 
 impl<F, Child> Widget for LayoutBuilder<F, Child>
@@ -299,6 +311,16 @@ where
         } else {
             false
         }
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        let mut node = d.node_for::<Self>();
+
+        if let Some(child_render) = self.child_render.as_ref() {
+            node = node.child(|d| child_render.describe(d));
+        }
+
+        node.finish()
     }
 }
 

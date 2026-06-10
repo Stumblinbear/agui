@@ -1,4 +1,7 @@
-use crate::context::{LayoutCtx, MountCtx};
+use crate::{
+    context::{LayoutCtx, MountCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
+};
 
 mod any_render_object;
 pub mod box_layout;
@@ -24,6 +27,11 @@ pub trait RenderObject: 'static {
     /// implementation must fold in every child's bit; a node that reads its own bit while painting
     /// caches it here.
     fn update_compositing_bits(&mut self) -> bool;
+
+    /// Captures this render object's subtree as a diagnostics snapshot.
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>().finish()
+    }
 }
 
 impl RenderObject for () {

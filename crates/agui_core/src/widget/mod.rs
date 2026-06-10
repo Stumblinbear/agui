@@ -12,9 +12,9 @@ pub use any_widget::*;
 ///
 /// The type of its render object is [`Render`](Self::Render).
 pub trait Widget {
-    type Render;
-
     type Element: Element<Render = Self::Render>;
+
+    type Render;
 
     /// Builds this widget's persistent [`Element`] and its render object, consuming the description.
     /// Called once, when the widget first enters the tree.

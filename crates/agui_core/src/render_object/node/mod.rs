@@ -2,6 +2,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     context::PaintCtx,
+    diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
@@ -64,6 +65,14 @@ impl<R: RenderObject, P> RenderNode<R, P> {
     /// Whether this child's subtree contributes a compositing layer, as of the last recompute.
     pub fn needs_compositing(&self) -> bool {
         self.needs_compositing
+    }
+
+    /// Captures the held render object's subtree, annotated with this holder's pipeline state.
+    pub fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.decorate()
+            .flag("parent_uses_size", self.parent_uses_size)
+            .flag("needs_compositing", self.needs_compositing)
+            .child(|d| self.object.describe(d))
     }
 }
 
@@ -164,7 +173,11 @@ mod tests {
     impl<C: RenderBox> SingleChildRenderObject for RenderPad<C> {
         type Child = C;
 
-        fn with_child<R>(&mut self, f: impl FnOnce(&mut C) -> R) -> R {
+        fn with_child<R>(&self, f: impl FnOnce(&C) -> R) -> R {
+            f(&self.child.object)
+        }
+
+        fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut C) -> R) -> R {
             f(&mut self.child.object)
         }
     }

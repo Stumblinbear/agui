@@ -9,6 +9,7 @@ use imbl::shared_ptr::RcK;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{Element, RoutingId, node::ElementNode},
     widget::Widget,
 };
@@ -121,12 +122,19 @@ where
                         .dispatch(render, path, Dispatch::Rebuild(ctx));
                 });
             }
+
             Dispatch::Message(ctx) => {
                 self.child
                     .element
                     .dispatch(render, path, Dispatch::Message(ctx));
             }
         }
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node(format!("Provide<{}>", Diagnostics::short_type_name::<V>()))
+            .child(|d| self.child.element.describe(d))
+            .finish()
     }
 }
 

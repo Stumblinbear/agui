@@ -11,7 +11,10 @@ pub use shared::*;
 
 use std::marker::PhantomData;
 
-use crate::context::Dispatch;
+use crate::{
+    context::Dispatch,
+    diagnostics::{Diagnostics, DiagnosticsNode},
+};
 
 /// A persistent node in the element tree, holding its widget's state and materialized children.
 pub trait Element {
@@ -23,6 +26,11 @@ pub trait Element {
     fn dispatch(&mut self, render: &mut Self::Render, path: &[RoutingId], action: Dispatch) {
         debug_assert!(path.is_empty(), "leaf element has nothing to route to");
         let _ = (render, action);
+    }
+
+    /// Captures this element's subtree as a diagnostics snapshot.
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>().finish()
     }
 }
 
@@ -47,4 +55,8 @@ impl<R: ?Sized> Default for LeafElement<R> {
 
 impl<R: 'static> Element for LeafElement<R> {
     type Render = R;
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>().finish()
+    }
 }

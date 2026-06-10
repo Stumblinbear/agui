@@ -155,7 +155,11 @@ impl<C> MultiChildRenderObject for MultiChildRenderList<C> {
         self.children = children;
     }
 
-    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
+    fn with_child<R>(&self, index: usize, f: impl FnOnce(&C) -> R) -> R {
+        f(&self.children[index].object)
+    }
+
+    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
         f(&mut self.children[index].object)
     }
 }
@@ -234,7 +238,11 @@ pub struct MultiChild<Child> {
     pub children: Vec<Child>,
 }
 
-impl<Child: Widget + 'static> Widget for MultiChild<Child> {
+impl<Child> Widget for MultiChild<Child>
+where
+    Child: Widget + 'static,
+    Child::Render: RenderObject,
+{
     type Element = MultiChildElement<Child::Element, MultiChildRenderList<Child::Render>>;
 
     type Render = MultiChildRenderList<Child::Render>;

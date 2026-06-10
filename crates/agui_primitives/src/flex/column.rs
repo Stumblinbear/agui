@@ -158,7 +158,11 @@ impl<Children> MultiChildRenderObject for RenderFlex<Children> {
         self.children = children;
     }
 
-    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut Children) -> R) -> R {
+    fn with_child<R>(&self, index: usize, f: impl FnOnce(&Children) -> R) -> R {
+        f(&self.children[index].object)
+    }
+
+    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut Children) -> R) -> R {
         f(&mut self.children[index].object)
     }
 }
@@ -189,6 +193,21 @@ where
         }
 
         needs
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        let mut node = d
+            .node_for::<Self>()
+            .property("main_axis_size", self.main_axis_size)
+            .property("main_axis_alignment", self.main_axis_alignment)
+            .property("cross_axis_alignment", self.cross_axis_alignment)
+            .property("vertical_direction", self.vertical_direction);
+
+        for child in &self.children {
+            node = node.child(|d| child.describe(d));
+        }
+
+        node.finish()
     }
 }
 

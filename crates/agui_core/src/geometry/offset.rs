@@ -1,15 +1,27 @@
-use std::ops::{
-    Add, AddAssign, BitAnd, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
+use std::{
+    fmt,
+    ops::{
+        Add, AddAssign, BitAnd, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
+    },
 };
 
 use typed_floats::{Atan2, NonNaN, NonNaNFinite, Positive, Powf, as_const};
 
 use crate::geometry::{EdgeInsets, Rect, Size};
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Offset {
     pub x: NonNaNFinite<f32>,
     pub y: NonNaNFinite<f32>,
+}
+
+impl fmt::Debug for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Offset")
+            .field("x", &self.x.get())
+            .field("y", &self.y.get())
+            .finish()
+    }
 }
 
 impl Offset {

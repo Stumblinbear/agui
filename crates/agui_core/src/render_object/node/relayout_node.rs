@@ -4,6 +4,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     context::PaintCtx,
+    diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     pipeline::{
@@ -110,6 +111,36 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     /// Whether this child's subtree contributes a compositing layer, as of the last recompute.
     pub fn needs_compositing(&self) -> bool {
         self.needs_compositing
+    }
+
+    /// Captures the held render object's subtree, annotated with this holder's pipeline state.
+    pub fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        let dec = d
+            .decorate()
+            .flag("parent_uses_size", self.parent_uses_size)
+            .flag("needs_compositing", self.needs_compositing);
+
+        match &self.child {
+            RelayoutChild::Inline(child) => dec.child(|d| child.describe(d)),
+
+            RelayoutChild::Boxed { content, boundary } => dec
+                .property(
+                    "relayout_boundary",
+                    if boundary.is_some() {
+                        "registered"
+                    } else {
+                        "unregistered"
+                    },
+                )
+                .child(|d| content.borrow().describe(d)),
+        }
+    }
+
+    pub fn with_object<T>(&self, f: impl FnOnce(&R) -> T) -> T {
+        match &self.child {
+            RelayoutChild::Inline(child) => f(child),
+            RelayoutChild::Boxed { content, .. } => f(&content.borrow()),
+        }
     }
 
     /// Reconciles the child, reaching it through the shared cell while it is a boundary.
@@ -404,6 +435,7 @@ mod tests {
 
     use crate::{
         context::PaintCtx,
+        diagnostics::{Diagnostics, DiagnosticsNode},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
         paint::compositing::{ContainerLayer, LayerHandle},
@@ -444,18 +476,23 @@ mod tests {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.scope().clone());
@@ -463,6 +500,7 @@ mod tests {
 
             constraints.smallest()
         }
+
         fn measure_baseline(
             &self,
             _: BoxConstraints,
@@ -470,12 +508,15 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {
             self.paints.set(self.paints.get() + 1);
         }
@@ -492,11 +533,19 @@ mod tests {
         fn mount(&mut self, ctx: &mut MountCtx) {
             self.child.mount(ctx);
         }
+
         fn unmount(&mut self, ctx: &mut MountCtx) {
             self.child.unmount(ctx);
         }
+
         fn update_compositing_bits(&mut self) -> bool {
             self.child.update_compositing_bits()
+        }
+
+        fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+            d.node_for::<Self>()
+                .child(|d| self.child.describe(d))
+                .finish()
         }
     }
 
@@ -504,18 +553,23 @@ mod tests {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
 
@@ -531,12 +585,15 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.child.paint(ctx, offset);
         }

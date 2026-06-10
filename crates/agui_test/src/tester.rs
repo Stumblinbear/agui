@@ -133,6 +133,16 @@ impl WidgetTester {
         self.owner.composite()
     }
 
+    /// Captures the element tree as a diagnostics snapshot.
+    pub fn element_diagnostics(&self) -> DiagnosticsNode {
+        self.build.describe()
+    }
+
+    /// Captures the render tree as a diagnostics snapshot.
+    pub fn render_diagnostics(&self) -> DiagnosticsNode {
+        self.owner.diagnostics()
+    }
+
     /// Hit-tests the tree at `position`, in the root coordinate space, returning the handlers under it
     /// ordered most-specific first.
     pub fn hit_test(&self, position: Offset) -> HitTestResult {

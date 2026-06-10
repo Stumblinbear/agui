@@ -1,15 +1,45 @@
-use std::ops::{Div, Mul, MulAssign};
+use std::{
+    fmt,
+    ops::{Div, Mul, MulAssign},
+};
 
 use typed_floats::{Positive, StrictlyPositiveFinite, as_const};
 
 use crate::geometry::{Axis, EdgeInsetsGeometry, Size};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct BoxConstraints {
     min_width: Positive<f32>,
     max_width: Positive<f32>,
     min_height: Positive<f32>,
     max_height: Positive<f32>,
+}
+
+impl fmt::Debug for BoxConstraints {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn axis(
+            f: &mut fmt::Formatter<'_>,
+            label: char,
+            min: Positive<f32>,
+            max: Positive<f32>,
+        ) -> fmt::Result {
+            if min == max {
+                return write!(f, "{label}={:?}", min.get());
+            }
+
+            write!(f, "{:?}<={label}<=", min.get())?;
+
+            if max.is_infinite() {
+                f.write_str("inf")
+            } else {
+                write!(f, "{:?}", max.get())
+            }
+        }
+
+        axis(f, 'w', self.min_width, self.max_width)?;
+        f.write_str(", ")?;
+        axis(f, 'h', self.min_height, self.max_height)
+    }
 }
 
 impl Default for BoxConstraints {
@@ -903,5 +933,23 @@ mod tests {
         assert_eq!(scaled.max_width().get(), 50.0);
         assert_eq!(scaled.min_height().get(), 10.0);
         assert_eq!(scaled.max_height().get(), 100.0);
+    }
+
+    #[test]
+    fn debug_prints_ranges_per_axis() {
+        let c = BoxConstraints::new(0.0, 300.0, 0.0, 200.0);
+        assert_eq!(format!("{c:?}"), "0.0<=w<=300.0, 0.0<=h<=200.0");
+    }
+
+    #[test]
+    fn debug_collapses_a_tight_axis() {
+        let c = BoxConstraints::new(100.0, 100.0, 0.0, 200.0);
+        assert_eq!(format!("{c:?}"), "w=100.0, 0.0<=h<=200.0");
+    }
+
+    #[test]
+    fn debug_prints_infinite_max_as_inf() {
+        let c = BoxConstraints::along_axis(Axis::Horizontal, 0.0, 300.0);
+        assert_eq!(format!("{c:?}"), "0.0<=w<=300.0, 0.0<=h<=inf");
     }
 }

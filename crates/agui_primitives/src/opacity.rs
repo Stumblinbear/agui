@@ -101,7 +101,11 @@ pub struct RenderOpacity<Child> {
 impl<Child> SingleChildRenderObject for RenderOpacity<Child> {
     type Child = Child;
 
-    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+        f(&self.child.object)
+    }
+
+    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
         f(&mut self.child.object)
     }
 }
@@ -130,6 +134,13 @@ where
     fn update_compositing_bits(&mut self) -> bool {
         let child = self.child.update_compositing_bits();
         self.needs_layer() || child
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .property("opacity", self.opacity)
+            .child(|d| self.child.describe(d))
+            .finish()
     }
 }
 

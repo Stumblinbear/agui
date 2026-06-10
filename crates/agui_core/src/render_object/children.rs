@@ -8,8 +8,11 @@ pub trait SingleChildRenderObject {
     /// The child's render object type.
     type Child;
 
-    /// Runs `f` on the child render object, for the element to reconcile against a new child widget.
-    fn with_child<R>(&mut self, f: impl FnOnce(&mut Self::Child) -> R) -> R;
+    /// Runs `f` on the child render object.
+    fn with_child<R>(&self, f: impl FnOnce(&Self::Child) -> R) -> R;
+
+    /// Runs `f` on the child render object.
+    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Self::Child) -> R) -> R;
 }
 
 /// A render object that owns an ordered list of child render objects.
@@ -28,5 +31,12 @@ pub trait MultiChildRenderObject {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds.
-    fn with_child<R>(&mut self, index: usize, f: impl FnOnce(&mut Self::Child) -> R) -> R;
+    fn with_child<R>(&self, index: usize, f: impl FnOnce(&Self::Child) -> R) -> R;
+
+    /// Runs `f` on the child render object at `index`, for the element to reconcile against a new child widget.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut Self::Child) -> R) -> R;
 }

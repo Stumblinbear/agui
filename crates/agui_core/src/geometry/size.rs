@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     num::FpCategory,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
@@ -8,10 +9,19 @@ use typed_floats::{NonNaN, as_const};
 use crate::geometry::{Axis, Offset, Rect};
 
 /// Holds width and height values.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct Size {
     pub width: NonNaN<f32>,
     pub height: NonNaN<f32>,
+}
+
+impl fmt::Debug for Size {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Size")
+            .field("width", &self.width.get())
+            .field("height", &self.height.get())
+            .finish()
+    }
 }
 
 impl Default for Size {

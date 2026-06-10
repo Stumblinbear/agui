@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     context::MountCtx,
+    diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::Offset,
     input::hit_test::HitTestResult,
     paint::{
@@ -97,6 +98,13 @@ impl PipelineOwner {
         self.paint.flush_compositing_bits();
 
         self.paint.flush_paint();
+    }
+
+    /// Captures the render tree as a diagnostics snapshot.
+    pub fn diagnostics(&self) -> DiagnosticsNode {
+        let mut d = Diagnostics::new();
+
+        self.root.borrow().dyn_describe(&mut d)
     }
 
     /// Composites the subtree's retained layers into a scene to present.

@@ -2,6 +2,7 @@ use typed_floats::{NonNaNFinite, Positive, PositiveFinite, as_const};
 
 use crate::{
     context::PaintCtx,
+    diagnostics::{Diagnostics, DiagnosticsNode, ProtocolTag},
     geometry::{Axis, AxisDirection, Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
@@ -226,6 +227,12 @@ impl<S: RenderSliver> RenderObject for RenderViewport<S> {
 
     fn update_compositing_bits(&mut self) -> bool {
         self.sliver.update_compositing_bits()
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child_in(Some(ProtocolTag::SLIVER), |d| self.sliver.describe(d))
+            .finish()
     }
 }
 

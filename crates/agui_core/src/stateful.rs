@@ -1,5 +1,6 @@
 use crate::{
     context::Dispatch,
+    diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::{Element, RoutingId, node::ElementNode},
     prelude::element::UpdateCtx,
     widget::Widget,
@@ -20,6 +21,11 @@ pub trait WidgetState {
 
     /// Builds the subtree to show for the current state.
     fn build(&self, ctx: &mut UpdateCtx) -> Self::Child;
+
+    /// Adds this state's data to `node`, for a diagnostics dump.
+    fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a> {
+        node
+    }
 }
 
 /// A mutation applied to a [`State`] to change it, delivered as a message to a [`Stateful`] widget.
@@ -77,6 +83,13 @@ where
 
         self.child.element.dispatch(render, rest, action);
     }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.state
+            .describe(d.node_for::<S::Widget>())
+            .child(|d| self.child.element.describe(d))
+            .finish()
+    }
 }
 
 #[cfg(test)]
@@ -88,7 +101,8 @@ mod tests {
     use super::*;
     use crate::{
         context::{LayoutCtx, MountCtx, PaintCtx},
-        element::{LeafElement, RoutingPath},
+        diagnostics::{Diagnostics, DiagnosticsNodeBuilder},
+        element::{Element, LeafElement, RoutingPath},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
         pipeline::build::BuildOwner,
@@ -162,6 +176,10 @@ mod tests {
                 side: self.count as f32,
                 creates: Rc::clone(&self.creates),
             }
+        }
+
+        fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a> {
+            node.property("count", self.count)
         }
     }
 
@@ -313,5 +331,20 @@ mod tests {
             Size::new(5.0, 5.0),
             "the wrapper reports its child's size"
         );
+    }
+
+    #[test]
+    fn describe_includes_state_properties() {
+        let (element, _render) = with_ctx(|ctx| {
+            Counter {
+                count: 7,
+                creates: Rc::new(Cell::new(0)),
+            }
+            .create(ctx)
+        });
+
+        let dump = element.describe(&mut Diagnostics::new()).to_string();
+
+        assert!(dump.starts_with("Counter  count=7"), "dump was:\n{dump}");
     }
 }

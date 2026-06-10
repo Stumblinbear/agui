@@ -9,6 +9,7 @@
 // #![warn(missing_docs)]
 
 pub mod context;
+pub mod diagnostics;
 pub mod element;
 pub mod geometry;
 pub mod input;
@@ -27,7 +28,11 @@ pub mod widget;
 
 pub mod prelude {
     mod shared {
-        pub use crate::{render_object::AnyRenderObject, widget::AsAnyWidget};
+        pub use crate::{
+            diagnostics::{Diagnostics, DiagnosticsNode, ProtocolTag},
+            render_object::AnyRenderObject,
+            widget::AsAnyWidget,
+        };
     }
 
     mod unit {

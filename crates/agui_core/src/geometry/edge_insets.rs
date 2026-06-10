@@ -1,3 +1,5 @@
+use std::fmt;
+
 use typed_floats::{Max, NonNaNFinite, Positive, PositiveFinite, as_const};
 
 use crate::{
@@ -57,12 +59,31 @@ pub trait EdgeInsetsGeometry {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct EdgeInsets {
     pub top: PositiveFinite<f32>,
     pub right: PositiveFinite<f32>,
     pub bottom: PositiveFinite<f32>,
     pub left: PositiveFinite<f32>,
+}
+
+impl fmt::Debug for EdgeInsets {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.left == self.top && self.top == self.right && self.right == self.bottom {
+            write!(f, "{:?}", self.left.get())
+        } else if self.left == self.right && self.top == self.bottom {
+            write!(f, "(h={:?}, v={:?})", self.left.get(), self.top.get())
+        } else {
+            write!(
+                f,
+                "(l={:?}, t={:?}, r={:?}, b={:?})",
+                self.left.get(),
+                self.top.get(),
+                self.right.get(),
+                self.bottom.get()
+            )
+        }
+    }
 }
 
 impl Default for EdgeInsets {

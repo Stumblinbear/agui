@@ -7,6 +7,7 @@ use slotmap::SlotMap;
 
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, RoutingId, RoutingPath},
     provide::ProvideScope,
     render_object::{AnyRenderObject, RenderObject},
@@ -340,6 +341,11 @@ impl BuildBoundaryElement {
     /// The id of this boundary in its registry.
     pub fn id(&self) -> BuildBoundaryId {
         self.cell.id.get()
+    }
+
+    /// Captures the inner element's subtree as a diagnostics snapshot, into `d`.
+    pub(crate) fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.cell.child.borrow().dyn_describe(d)
     }
 
     /// Routes `action` along `within` to the inner element. The path is relative to this boundary.

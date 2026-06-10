@@ -2,6 +2,7 @@ use std::any::Any;
 
 use crate::{
     context::Dispatch,
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{Element, RoutingId},
     render_object::AnyRenderObject,
 };
@@ -20,6 +21,8 @@ pub trait AnyElement {
         path: &[RoutingId],
         action: Dispatch,
     );
+
+    fn dyn_describe(&self, d: &mut Diagnostics) -> DiagnosticsNode;
 }
 
 impl<T> AnyElement for T
@@ -52,6 +55,10 @@ where
 
         self.dispatch(render, path, action);
     }
+
+    fn dyn_describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.describe(d)
+    }
 }
 
 impl Element for Box<dyn AnyElement> {
@@ -64,5 +71,9 @@ impl Element for Box<dyn AnyElement> {
         action: Dispatch,
     ) {
         (**self).dyn_dispatch(render, path, action);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        (**self).dyn_describe(d)
     }
 }

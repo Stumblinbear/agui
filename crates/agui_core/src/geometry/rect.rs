@@ -1,14 +1,27 @@
+use std::fmt;
+
 use typed_floats::{NonNaN, NonNaNFinite, as_const};
 
 use crate::geometry::Size;
 
 /// Holds exact position and size values.
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Rect {
     pub left: NonNaNFinite<f32>,
     pub top: NonNaNFinite<f32>,
     pub width: NonNaN<f32>,
     pub height: NonNaN<f32>,
+}
+
+impl fmt::Debug for Rect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Rect")
+            .field("left", &self.left.get())
+            .field("top", &self.top.get())
+            .field("width", &self.width.get())
+            .field("height", &self.height.get())
+            .finish()
+    }
 }
 
 impl Rect {

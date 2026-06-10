@@ -138,7 +138,11 @@ fn fold_pivot(raw: Affine, origin: Offset, alignment: Alignment, size: Size) -> 
 impl<Child> SingleChildRenderObject for RenderAnimatedTransform<Child> {
     type Child = Child;
 
-    fn with_child<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+        f(&self.child.object)
+    }
+
+    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
         f(&mut self.child.object)
     }
 }
@@ -183,6 +187,14 @@ impl<Child: RenderBox> RenderObject for RenderAnimatedTransform<Child> {
 
     fn update_compositing_bits(&mut self) -> bool {
         self.child.update_compositing_bits()
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .property("origin", self.origin)
+            .property("alignment", self.alignment)
+            .child(|d| self.child.describe(d))
+            .finish()
     }
 }
 

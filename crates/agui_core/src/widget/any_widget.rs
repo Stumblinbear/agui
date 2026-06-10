@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     context::{Dispatch, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
     render_object::AnyRenderObject,
@@ -113,6 +114,12 @@ where
 
         let render: &mut dyn AnyRenderObject = render;
         self.child.element.dispatch(render, rest, action);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.decorate()
+            .property("generation", self.generation)
+            .child(|d| self.child.element.describe(d))
     }
 }
 
@@ -287,6 +294,10 @@ where
 
         self.inner.dispatch(render, path, action);
     }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.inner.describe(d)
+    }
 }
 
 struct RenderSliverWrapper<T> {
@@ -358,6 +369,10 @@ where
             .expect("a boxed render sliver keeps its inner render type for its whole life");
 
         self.inner.dispatch(render, path, action);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.inner.describe(d)
     }
 }
 
