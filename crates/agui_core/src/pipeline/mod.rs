@@ -6,7 +6,7 @@ use crate::{
     geometry::Offset,
     input::hit_test::HitTestResult,
     paint::{
-        compositing::{Compositor, ContainerLayer, LayerHandle},
+        compositing::{Compositor, LayerHandle, OffsetLayer},
         scene::Scene,
     },
     pipeline::{
@@ -42,13 +42,13 @@ pub struct PipelineOwner {
     root_layout: RegisteredLayoutBoundary,
     root_paint: PaintBoundaryHandle,
 
-    layer: LayerHandle<ContainerLayer>,
+    layer: LayerHandle<OffsetLayer>,
 }
 
 impl PipelineOwner {
     /// Builds the owner around `root`, registering it as the outermost boundary and mounting its
     /// subtree. The root paints into `layer`, which is composited for presentation.
-    pub fn new(mut root: BoundaryContent, layer: LayerHandle<ContainerLayer>) -> Self {
+    pub fn new(mut root: BoundaryContent, layer: LayerHandle<OffsetLayer>) -> Self {
         let (mut paint, root_paint) = PaintPipeline::new(Rc::clone(&root), layer.clone());
         let (layout, root_layout) = LayoutPipeline::new(Rc::clone(&root), root_paint.scope());
 

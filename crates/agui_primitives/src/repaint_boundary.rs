@@ -3,7 +3,7 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    paint::compositing::{ContainerLayer, LayerHandle},
+    paint::compositing::{LayerHandle, OffsetLayer},
     pipeline::{layout::BoundaryContent, paint::PaintBoundaryHandle},
     prelude::{element::*, render_object::*},
 };
@@ -49,7 +49,7 @@ where
             RenderRepaintBoundary {
                 content: Rc::new(RefCell::new(child_render)),
 
-                layer: LayerHandle::new(ContainerLayer::new()),
+                layer: LayerHandle::new(OffsetLayer::new()),
 
                 handle: None,
 
@@ -80,7 +80,7 @@ where
 pub struct RenderRepaintBoundary<Child> {
     content: BoundaryContent,
 
-    layer: LayerHandle<ContainerLayer>,
+    layer: LayerHandle<OffsetLayer>,
 
     handle: Option<PaintBoundaryHandle>,
 
@@ -184,7 +184,7 @@ impl<Child: RenderBox> RenderBox for RenderRepaintBoundary<Child> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        ctx.add_layer(self.layer.clone().into(), offset);
+        ctx.add_layer(self.layer.clone(), offset);
     }
 }
 
@@ -376,7 +376,7 @@ mod tests {
         let (_, render) = with_ctx(|ctx| widget.create(ctx));
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();

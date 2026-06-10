@@ -403,7 +403,7 @@ mod tests {
 
     use agui_core::{
         element::BuildScope,
-        paint::compositing::{ContainerLayer, LayerHandle},
+        paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::{PipelineOwner, layout::BoundaryContent},
         prelude::{element::*, render_object::*},
         provide::ProvideScope,
@@ -625,7 +625,7 @@ mod tests {
         let (_, render) = with_ctx(|ctx| layout_builder.create(ctx));
         let content: BoundaryContent = Rc::new(RefCell::new(render));
 
-        PipelineOwner::new(content, LayerHandle::new(ContainerLayer::new()))
+        PipelineOwner::new(content, LayerHandle::new(OffsetLayer::new()))
     }
 
     #[test]
@@ -724,7 +724,7 @@ mod tests {
         let (mut element, render) = with_ctx(|ctx| widget_a.create(ctx));
         let content: BoundaryContent = Rc::new(RefCell::new(render));
         let mut owner =
-            PipelineOwner::new(Rc::clone(&content), LayerHandle::new(ContainerLayer::new()));
+            PipelineOwner::new(Rc::clone(&content), LayerHandle::new(OffsetLayer::new()));
 
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();

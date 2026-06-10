@@ -11,7 +11,7 @@ use intrusive_collections::{LinkedList, LinkedListLink, UnsafeRef, intrusive_ada
 use crate::{
     context::PaintCtx,
     geometry::Offset,
-    paint::compositing::{ContainerLayer, LayerHandle},
+    paint::compositing::{LayerHandle, OffsetLayer},
     pipeline::layout::BoundaryContent,
     render_object::{RenderObject, box_layout::RenderBox},
 };
@@ -47,7 +47,7 @@ impl PaintPipeline {
     /// handle that owns it.
     pub fn new(
         root: BoundaryContent,
-        layer: LayerHandle<ContainerLayer>,
+        layer: LayerHandle<OffsetLayer>,
     ) -> (Self, PaintBoundaryHandle) {
         let mut pipeline = Self::default();
         let handle = pipeline.register(root, layer);
@@ -68,7 +68,7 @@ impl PaintPipeline {
     pub fn register(
         &mut self,
         content: BoundaryContent,
-        layer: LayerHandle<ContainerLayer>,
+        layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
         match self.pending.borrow().phase {
             PaintPipelinePhase::Idle => {}
@@ -257,7 +257,7 @@ struct PaintCell {
     compositing_link: LinkedListLink,
 
     content: BoundaryContent,
-    layer: LayerHandle<ContainerLayer>,
+    layer: LayerHandle<OffsetLayer>,
 
     /// Whether this cell is currently in the paint channel, guarding a double-mark from linking it twice.
     needs_paint: Cell<bool>,
@@ -549,7 +549,7 @@ mod tests {
     struct Embedder {
         paints: Rc<Cell<usize>>,
         color: Color,
-        children: Vec<LayerHandle<ContainerLayer>>,
+        children: Vec<LayerHandle<OffsetLayer>>,
     }
 
     macro_rules! trivial_box_layout {
@@ -637,7 +637,7 @@ mod tests {
             }
 
             for child in &self.children {
-                ctx.add_layer(child.clone().into(), offset);
+                ctx.add_layer(child.clone(), offset);
             }
         }
     }
@@ -668,8 +668,8 @@ mod tests {
         Rc::new(RefCell::new(render))
     }
 
-    fn layer() -> LayerHandle<ContainerLayer> {
-        LayerHandle::new(ContainerLayer::new())
+    fn layer() -> LayerHandle<OffsetLayer> {
+        LayerHandle::new(OffsetLayer::new())
     }
 
     fn fills(scene: &Scene) -> usize {

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use agui_core::{
     paint::{
-        compositing::{ContainerLayer, LayerHandle},
+        compositing::{LayerHandle, OffsetLayer},
         scene::Scene,
     },
     pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
@@ -49,7 +49,7 @@ impl WidgetTester {
         let (build, render) = BuildOwner::mount(widget, &mut tasks.scheduler());
 
         let content: BoundaryContent = render;
-        let layer = LayerHandle::new(ContainerLayer::new());
+        let layer = LayerHandle::new(OffsetLayer::new());
         let owner = PipelineOwner::new(content, layer);
 
         Self {

@@ -289,7 +289,7 @@ mod tests {
     use agui_core::{
         paint::{
             command::PaintCommand,
-            compositing::{ContainerLayer, LayerHandle},
+            compositing::{LayerHandle, OffsetLayer},
             peniko::{Color, Fill, kurbo::Affine},
             scene::Scene,
         },
@@ -419,7 +419,7 @@ mod tests {
 
         let owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
 
         owner.resize(BoxConstraints::new(0, 100, 0, 100));

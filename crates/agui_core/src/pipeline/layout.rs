@@ -422,7 +422,7 @@ mod tests {
         context::{MountCtx, PaintCtx},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
-        paint::compositing::{ContainerLayer, LayerHandle},
+        paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::PipelineOwner,
         render_object::{RenderObject, box_layout::RenderBox},
         text::TextBaseline,
@@ -509,7 +509,7 @@ mod tests {
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
 
@@ -539,7 +539,7 @@ mod tests {
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
@@ -574,7 +574,7 @@ mod tests {
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();

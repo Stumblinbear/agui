@@ -157,7 +157,7 @@ mod tests {
     use crate::{
         context::UpdateCtx,
         element::{Element, SingleChildElement},
-        paint::compositing::{ContainerLayer, LayerHandle},
+        paint::compositing::{LayerHandle, OffsetLayer},
         render_object::{SingleChildRenderObject, box_layout::RenderBox},
         test_fixtures::Leaf,
         test_harness::with_ctx,
@@ -306,7 +306,7 @@ mod tests {
         );
         assert_eq!(size, Size::new(10.0, 20.0));
 
-        PaintCtx::paint(&LayerHandle::new(ContainerLayer::new()), |ctx| {
+        PaintCtx::paint(&LayerHandle::new(OffsetLayer::new()), |ctx| {
             node.paint(ctx, Offset::ZERO);
         });
     }

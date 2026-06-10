@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use agui_core::{
-    paint::compositing::{ContainerLayer, LayerHandle},
+    paint::compositing::{LayerHandle, OffsetLayer},
     pipeline::{PipelineOwner, layout::BoundaryContent},
     prelude::{element::*, render_object::*},
     test_harness::with_ctx,
@@ -42,7 +42,7 @@ fn text_renders_glyphs_matching_golden() {
     let (_, render) = with_ctx(|ctx| widget.create(ctx));
     let content: BoundaryContent = Rc::new(RefCell::new(render));
 
-    let layer = LayerHandle::new(ContainerLayer::new());
+    let layer = LayerHandle::new(OffsetLayer::new());
     let mut owner = PipelineOwner::new(Rc::clone(&content), layer);
 
     owner.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
@@ -103,7 +103,7 @@ fn rich_text_renders_styled_runs_matching_golden() {
     let (_, render) = with_ctx(|ctx| widget.create(ctx));
     let content: BoundaryContent = Rc::new(RefCell::new(render));
 
-    let layer = LayerHandle::new(ContainerLayer::new());
+    let layer = LayerHandle::new(OffsetLayer::new());
     let mut owner = PipelineOwner::new(Rc::clone(&content), layer);
 
     owner.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));

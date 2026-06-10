@@ -9,7 +9,7 @@ use std::{
 use agui_core::{
     input::pointer::{PointerDispatcher, PointerHandler},
     paint::{
-        compositing::{ContainerLayer, LayerHandle},
+        compositing::{LayerHandle, OffsetLayer},
         peniko::kurbo::Affine,
         scene::Scene,
     },
@@ -115,7 +115,7 @@ fn main() {
         events_rx,
         waker,
         vsync,
-        |_layer: LayerHandle<ContainerLayer>| {},
+        |_layer: LayerHandle<OffsetLayer>| {},
     );
     let view: Box<dyn View> = Box::new(driver);
 
@@ -477,7 +477,7 @@ impl WindowDriver {
         events_rx: mpsc::Receiver<TaskEventMessage>,
         waker: Waker,
         vsync: Vsync,
-        on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>),
+        on_layer_created: impl FnOnce(LayerHandle<OffsetLayer>),
     ) -> Self
     where
         V: Widget + 'static,
@@ -492,7 +492,7 @@ impl WindowDriver {
         let (build, render) = BuildOwner::mount(widget, &mut scheduler);
 
         let content: BoundaryContent = render;
-        let layer = LayerHandle::new(ContainerLayer::new());
+        let layer = LayerHandle::new(OffsetLayer::new());
 
         let owner = PipelineOwner::new(content, layer.clone());
 

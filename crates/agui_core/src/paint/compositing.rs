@@ -5,9 +5,12 @@ use std::{
 
 use peniko::{BlendMode, Compose, Mix, kurbo::Affine};
 
-use crate::paint::{
-    command::{PaintCommand, PaintShape},
-    scene::Scene,
+use crate::{
+    geometry::Offset,
+    paint::{
+        command::{PaintCommand, PaintShape},
+        scene::Scene,
+    },
 };
 
 /// A shared, mutable handle to a layer.
@@ -60,9 +63,18 @@ pub trait Layer {
 }
 
 /// A layer that holds an ordered sequence of child layers.
-pub trait Container: Layer {
+pub trait ContainerLayer: Layer {
     /// Adds `child` after the existing children.
     fn append(&mut self, child: LayerHandle);
+}
+
+/// A layer whose content its parent positions when contributing it.
+///
+/// The offset survives the layer's own repaints, so a retained layer keeps its place until the
+/// parent contributes it somewhere else.
+pub trait PositionedLayer: Layer {
+    /// Repositions this layer's content relative to its parent.
+    fn set_offset(&mut self, offset: Offset);
 }
 
 /// An ordered set of child layers.
@@ -193,7 +205,10 @@ impl Compositor<'_> {
 /// A layer that applies a transform to its children.
 pub struct TransformLayer {
     transform: Affine,
+
+    offset: Offset,
     dirty: bool,
+
     children: ChildLayers,
 }
 
@@ -201,7 +216,10 @@ impl TransformLayer {
     pub fn new(transform: Affine) -> Self {
         Self {
             transform,
+
+            offset: Offset::ZERO,
             dirty: false,
+
             children: ChildLayers::new(),
         }
     }
@@ -220,8 +238,9 @@ impl TransformLayer {
 
 impl Layer for TransformLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        // A changed transform only re-places the children; it doesn't invalidate their cache.
-        compositor.push_transform(self.transform);
+        // A changed transform or offset only re-places the children; it doesn't invalidate their
+        // cache.
+        compositor.push_transform(Affine::translate(self.offset) * self.transform);
         self.children.embed(compositor);
         compositor.pop_transform();
 
@@ -233,9 +252,18 @@ impl Layer for TransformLayer {
     }
 }
 
-impl Container for TransformLayer {
+impl ContainerLayer for TransformLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
+    }
+}
+
+impl PositionedLayer for TransformLayer {
+    fn set_offset(&mut self, offset: Offset) {
+        if self.offset != offset {
+            self.offset = offset;
+            self.dirty = true;
+        }
     }
 }
 
@@ -243,7 +271,10 @@ impl Container for TransformLayer {
 pub struct OpacityLayer {
     alpha: f32,
     clip: PaintShape,
+
+    offset: Offset,
     dirty: bool,
+
     children: ChildLayers,
 }
 
@@ -252,7 +283,10 @@ impl OpacityLayer {
         Self {
             alpha,
             clip,
+
+            offset: Offset::ZERO,
             dirty: false,
+
             children: ChildLayers::new(),
         }
     }
@@ -266,6 +300,12 @@ impl OpacityLayer {
 
 impl Layer for OpacityLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
+        let positioned = self.offset != Offset::ZERO;
+
+        if positioned {
+            compositor.push_transform(Affine::translate(self.offset));
+        }
+
         compositor.push_layer(
             BlendMode::new(Mix::Normal, Compose::SrcOver),
             self.alpha,
@@ -276,6 +316,10 @@ impl Layer for OpacityLayer {
         }
         compositor.pop_layer();
 
+        if positioned {
+            compositor.pop_transform();
+        }
+
         self.dirty = false;
     }
 
@@ -284,49 +328,81 @@ impl Layer for OpacityLayer {
     }
 }
 
-impl Container for OpacityLayer {
+impl ContainerLayer for OpacityLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
     }
 }
 
-/// Groups a sequence of layers with no effect of its own.
-pub struct ContainerLayer {
+impl PositionedLayer for OpacityLayer {
+    fn set_offset(&mut self, offset: Offset) {
+        if self.offset != offset {
+            self.offset = offset;
+            self.dirty = true;
+        }
+    }
+}
+
+/// Positions a sequence of child layers as a group, with no other effect of its own.
+pub struct OffsetLayer {
+    offset: Offset,
+    dirty: bool,
+
     children: ChildLayers,
 }
 
-impl ContainerLayer {
+impl OffsetLayer {
     pub fn new() -> Self {
         Self {
+            offset: Offset::ZERO,
+            dirty: false,
+
             children: ChildLayers::new(),
         }
     }
 
-    /// Removes every child from the layer.
+    /// Removes every child from the layer, keeping its position.
     pub fn clear(&mut self) {
         self.children.clear();
     }
 }
 
-impl Default for ContainerLayer {
+impl Default for OffsetLayer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Layer for ContainerLayer {
+impl Layer for OffsetLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        self.children.embed(compositor);
+        if self.offset == Offset::ZERO {
+            self.children.embed(compositor);
+        } else {
+            compositor.push_transform(Affine::translate(self.offset));
+            self.children.embed(compositor);
+            compositor.pop_transform();
+        }
+
+        self.dirty = false;
     }
 
     fn update_dirty(&mut self) -> bool {
-        self.children.update_dirty()
+        self.children.update_dirty() || self.dirty
     }
 }
 
-impl Container for ContainerLayer {
+impl ContainerLayer for OffsetLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
+    }
+}
+
+impl PositionedLayer for OffsetLayer {
+    fn set_offset(&mut self, offset: Offset) {
+        if self.offset != offset {
+            self.offset = offset;
+            self.dirty = true;
+        }
     }
 }
 
@@ -505,7 +581,7 @@ mod tests {
         let (child, composes, _) = CountingLayer::new();
         let inner = transform_over(child, Affine::translate((5.0, 0.0)));
 
-        let mut outer = ContainerLayer::new();
+        let mut outer = OffsetLayer::new();
         outer.append(inner.clone().into());
         let outer = LayerHandle::new(outer);
 
@@ -536,7 +612,7 @@ mod tests {
         let a = transform_over(leaf_a, Affine::IDENTITY);
         let b = transform_over(leaf_b, Affine::IDENTITY);
 
-        let mut container = ContainerLayer::new();
+        let mut container = OffsetLayer::new();
         container.append(a.clone().into());
         container.append(b.into());
         let container = LayerHandle::new(container);
@@ -574,6 +650,63 @@ mod tests {
 
         Compositor::compose(&layer);
         assert_eq!(count.get(), 1, "a third, unchanged pass did no work");
+    }
+
+    /// Repositioning a retained container re-places its children without recomposing them.
+    #[test]
+    fn repositioning_a_container_reuses_the_child_cache() {
+        let (child, composes, _) = CountingLayer::new();
+        let mut inner = OffsetLayer::new();
+        inner.append(LayerHandle::new(child).into());
+        let inner = LayerHandle::new(inner);
+
+        let mut outer = OffsetLayer::new();
+        outer.append(inner.clone().into());
+        let outer = LayerHandle::new(outer);
+
+        let first = Compositor::compose(&outer);
+        assert_eq!(composes.get(), 1);
+        assert_eq!(fill_transform(&first), Affine::IDENTITY);
+
+        inner.borrow_mut().set_offset(Offset::new(6.0, 0.0));
+        let second = Compositor::compose(&outer);
+        assert_eq!(
+            composes.get(),
+            1,
+            "the child cache was replayed at the new offset"
+        );
+        assert_eq!(fill_transform(&second), Affine::translate((6.0, 0.0)));
+    }
+
+    /// Re-setting the offset a layer already has leaves it clean.
+    #[test]
+    fn an_unchanged_offset_marks_nothing_dirty() {
+        let layer = LayerHandle::new(OffsetLayer::new());
+        Compositor::compose(&layer);
+
+        layer.borrow_mut().set_offset(Offset::new(2.0, 0.0));
+        assert!(layer.borrow_mut().update_dirty());
+        Compositor::compose(&layer);
+
+        layer.borrow_mut().set_offset(Offset::new(2.0, 0.0));
+        assert!(!layer.borrow_mut().update_dirty());
+    }
+
+    /// The offset a parent placed a layer at survives the layer clearing and repainting its own
+    /// content.
+    #[test]
+    fn an_offset_survives_clearing_the_children() {
+        let layer = LayerHandle::new(OffsetLayer::new());
+        layer.borrow_mut().set_offset(Offset::new(3.0, 0.0));
+
+        {
+            let mut guard = layer.borrow_mut();
+            guard.clear();
+            guard.append(LayerHandle::new(PictureLayer::new(solid_fill(Color::BLACK))).into());
+        }
+
+        let scene = Compositor::compose(&layer);
+        assert_eq!(fill_transform(&scene), Affine::translate((3.0, 0.0)));
     }
 
     /// Composing successive frames into one held scene replays caches and reflects changes, as a
@@ -626,9 +759,9 @@ mod tests {
         let (leaf, count, _) = CountingLayer::new();
         let transform = transform_over(leaf, Affine::translate((1.0, 0.0)));
 
-        let mut mid = ContainerLayer::new();
+        let mut mid = OffsetLayer::new();
         mid.append(transform.clone().into());
-        let mut top = ContainerLayer::new();
+        let mut top = OffsetLayer::new();
         top.append(LayerHandle::new(mid).into());
         let top = LayerHandle::new(top);
 
@@ -653,7 +786,7 @@ mod tests {
         let red = Color::from_rgb8(255, 0, 0);
         let blue = Color::from_rgb8(0, 0, 255);
 
-        let mut container = ContainerLayer::new();
+        let mut container = OffsetLayer::new();
         container.append(LayerHandle::new(PictureLayer::new(solid_fill(red))).into());
         container.append(LayerHandle::new(PictureLayer::new(solid_fill(blue))).into());
         let scene = Compositor::compose(&LayerHandle::new(container)).flatten();
@@ -723,7 +856,7 @@ mod tests {
 
     #[test]
     fn an_empty_container_composes_to_nothing() {
-        let scene = Compositor::compose(&LayerHandle::new(ContainerLayer::new())).flatten();
+        let scene = Compositor::compose(&LayerHandle::new(OffsetLayer::new())).flatten();
 
         assert!(scene.is_empty());
     }

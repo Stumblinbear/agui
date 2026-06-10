@@ -438,7 +438,7 @@ mod tests {
         diagnostics::{Diagnostics, DiagnosticsNode},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
-        paint::compositing::{ContainerLayer, LayerHandle},
+        paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::PipelineOwner,
         render_object::{
             MountCtx, RenderObject,
@@ -449,8 +449,8 @@ mod tests {
 
     use super::*;
 
-    fn layer() -> LayerHandle<ContainerLayer> {
-        LayerHandle::new(ContainerLayer::new())
+    fn layer() -> LayerHandle<OffsetLayer> {
+        LayerHandle::new(OffsetLayer::new())
     }
 
     type Captured = Rc<RefCell<Option<LayoutScope>>>;

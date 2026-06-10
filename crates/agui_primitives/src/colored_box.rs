@@ -196,7 +196,7 @@ mod tests {
     use agui_core::{
         paint::{
             command::{PaintCommand, PaintShape},
-            compositing::{Compositor, ContainerLayer, LayerHandle},
+            compositing::{Compositor, LayerHandle, OffsetLayer},
             peniko::{Brush, kurbo},
         },
         prelude::{element::*, render_object::*},
@@ -218,7 +218,7 @@ mod tests {
             BoxConstraints::new(0, 100, 0, 100),
         );
 
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
@@ -253,7 +253,7 @@ mod tests {
             BoxConstraints::new(0, 100, 0, 100),
         );
 
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 

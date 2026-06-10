@@ -5,7 +5,7 @@ use crate::{
     paint::{
         Canvas,
         command::PaintCommand,
-        compositing::{Container, LayerHandle, PictureLayer, TransformLayer},
+        compositing::{ContainerLayer, LayerHandle, PictureLayer, PositionedLayer, TransformLayer},
         scene::Scene,
     },
 };
@@ -20,14 +20,14 @@ use crate::{
 /// contributed within it.
 pub struct PaintCtx<'a> {
     /// Where sealed pictures and contributed layers are appended.
-    container: &'a mut dyn Container,
+    container: &'a mut dyn ContainerLayer,
     /// The picture currently accumulating flat drawing.
     picture: Scene,
 }
 
 impl PaintCtx<'_> {
     /// Paints `build` into `root`.
-    pub fn paint(root: &LayerHandle<impl Container>, build: impl FnOnce(&mut PaintCtx)) {
+    pub fn paint(root: &LayerHandle<impl ContainerLayer>, build: impl FnOnce(&mut PaintCtx)) {
         let mut root = root.borrow_mut();
 
         let mut ctx = PaintCtx {
@@ -89,7 +89,7 @@ impl PaintCtx<'_> {
     /// Contributes a retained layer at `offset` and paints `paint_into` as its content. Use it for a
     /// subtree worth keeping across frames, so it can be reused without repainting. The content is
     /// painted in the layer's own coordinates, so `paint_into` should paint at [`Offset::ZERO`].
-    pub fn push_layer<L: Container + 'static>(
+    pub fn push_layer<L: ContainerLayer + PositionedLayer + 'static>(
         &mut self,
         layer: LayerHandle<L>,
         offset: Offset,
@@ -99,6 +99,8 @@ impl PaintCtx<'_> {
 
         {
             let mut guard = layer.borrow_mut();
+            guard.set_offset(offset);
+
             let mut ctx = PaintCtx {
                 container: &mut *guard,
                 picture: Scene::new(),
@@ -107,26 +109,20 @@ impl PaintCtx<'_> {
             ctx.flush();
         }
 
-        self.place(layer.into(), offset);
+        self.container.append(layer.into());
     }
 
     /// Contributes an already-built retained layer at `offset`, painting nothing into it. Use it to
     /// reuse a layer whose content is unchanged.
-    pub fn add_layer(&mut self, layer: LayerHandle, offset: Offset) {
+    pub fn add_layer<L: PositionedLayer + 'static>(
+        &mut self,
+        layer: LayerHandle<L>,
+        offset: Offset,
+    ) {
         self.flush();
-        self.place(layer, offset);
-    }
 
-    /// Appends `layer`, positioned at `offset`.
-    fn place(&mut self, layer: LayerHandle, offset: Offset) {
-        if offset == Offset::ZERO {
-            self.container.append(layer);
-            return;
-        }
-
-        let positioned = LayerHandle::new(TransformLayer::new(Affine::translate(offset)));
-        positioned.borrow_mut().append(layer);
-        self.container.append(positioned.into());
+        layer.borrow_mut().set_offset(offset);
+        self.container.append(layer.into());
     }
 
     /// Appends the flat drawing accumulated so far as a [`PictureLayer`], then starts a fresh picture.
@@ -158,14 +154,14 @@ mod tests {
         paint::{
             Canvas,
             command::PaintCommand,
-            compositing::{Compositor, ContainerLayer, Layer},
+            compositing::{Compositor, Layer, OffsetLayer},
         },
     };
 
     use super::*;
 
-    fn root() -> LayerHandle<ContainerLayer> {
-        LayerHandle::new(ContainerLayer::new())
+    fn root() -> LayerHandle<OffsetLayer> {
+        LayerHandle::new(OffsetLayer::new())
     }
 
     fn fill(ctx: &mut PaintCtx) {
@@ -175,13 +171,15 @@ mod tests {
     }
 
     /// A pre-built retained layer holding a single fill, for [`add_layer`](PaintContext::add_layer).
-    fn fill_layer() -> LayerHandle {
+    fn fill_layer() -> LayerHandle<OffsetLayer> {
         let picture = Canvas::record(|canvas| {
             let brush = canvas.brush(Color::BLACK);
             canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(1.0, 1.0)));
         });
 
-        LayerHandle::new(PictureLayer::new(picture)).into()
+        let mut layer = OffsetLayer::new();
+        layer.append(LayerHandle::new(PictureLayer::new(picture)).into());
+        LayerHandle::new(layer)
     }
 
     /// The transform in effect at each fill of the composed, flattened scene, in order.
@@ -227,7 +225,7 @@ mod tests {
     fn a_pushed_layer_carries_its_content() {
         let root = root();
         PaintCtx::paint(&root, |ctx| {
-            ctx.push_layer(LayerHandle::new(ContainerLayer::new()), Offset::ZERO, fill);
+            ctx.push_layer(LayerHandle::new(OffsetLayer::new()), Offset::ZERO, fill);
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::IDENTITY]);

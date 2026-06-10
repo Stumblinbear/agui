@@ -206,7 +206,7 @@ mod tests {
 
     use agui_core::{
         input::pointer::PointerDispatcher,
-        paint::compositing::{ContainerLayer, LayerHandle},
+        paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
         test_harness::with_ctx,
@@ -238,7 +238,7 @@ mod tests {
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();

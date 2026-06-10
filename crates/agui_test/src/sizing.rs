@@ -4,7 +4,7 @@ use agui_core::{
     element::BuildScope,
     paint::{
         command::{PaintCommand, PaintShape},
-        compositing::{Compositor, ContainerLayer, LayerHandle},
+        compositing::{Compositor, LayerHandle, OffsetLayer},
         peniko::kurbo::{self, Affine, Point, Shape},
         scene::Scene,
     },
@@ -378,7 +378,7 @@ impl BoxSizingCheck {
         let mut render = make();
         let size = render.layout(&mut LayoutCtx::detached(), constraints);
 
-        let layer = LayerHandle::new(ContainerLayer::new());
+        let layer = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&layer, |ctx| render.paint(ctx, Offset::ZERO));
 
         let Some(painted) = painted_bounds(&Compositor::compose(&layer)) else {

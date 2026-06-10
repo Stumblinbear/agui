@@ -228,7 +228,7 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use agui_core::{
-        paint::{command::PaintCommand, compositing::ContainerLayer, peniko::Color},
+        paint::{command::PaintCommand, compositing::OffsetLayer, peniko::Color},
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
         test_harness::with_ctx,
@@ -263,7 +263,7 @@ mod tests {
 
         let mut owner = PipelineOwner::new(
             Rc::new(RefCell::new(render)),
-            LayerHandle::new(ContainerLayer::new()),
+            LayerHandle::new(OffsetLayer::new()),
         );
         owner.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
@@ -387,7 +387,7 @@ mod tests {
             paints: Rc::new(Cell::new(0)),
         }));
         let (mut pipeline, boundary) =
-            PaintPipeline::new(dummy, LayerHandle::new(ContainerLayer::new()));
+            PaintPipeline::new(dummy, LayerHandle::new(OffsetLayer::new()));
         {
             let mut ctx = MountCtx::new(&mut pipeline, boundary.scope());
             render.mount(&mut ctx);
@@ -398,7 +398,7 @@ mod tests {
         );
 
         // First paint into a host layer builds and retains the opacity layer.
-        let host = LayerHandle::new(ContainerLayer::new());
+        let host = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&host, |ctx| render.paint(ctx, Offset::ZERO));
         assert_eq!(paints.get(), 1, "the subtree paints once");
 

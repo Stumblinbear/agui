@@ -490,7 +490,7 @@ mod tests {
     use crate::{
         paint::{
             command::PaintCommand,
-            compositing::{Compositor, ContainerLayer, LayerHandle},
+            compositing::{Compositor, LayerHandle, OffsetLayer},
             scene::Scene,
         },
         prelude::render_object::{InlineSpan, TextSpan},
@@ -501,7 +501,7 @@ mod tests {
 
     /// Paints `paragraph` and returns the flattened scene, for inspecting the recorded commands.
     fn paint_scene(paragraph: &mut RenderParagraph) -> Scene {
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| paragraph.paint(ctx, Offset::ZERO));
         Compositor::compose(&root).flatten()
     }

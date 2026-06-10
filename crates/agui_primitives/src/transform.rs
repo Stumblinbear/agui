@@ -261,7 +261,7 @@ mod tests {
     use agui_core::{
         paint::{
             command::{PaintCommand, PaintShape},
-            compositing::{Compositor, ContainerLayer, LayerHandle},
+            compositing::{Compositor, LayerHandle, OffsetLayer},
             peniko::{
                 Color,
                 kurbo::{Affine, Point},
@@ -292,7 +292,7 @@ mod tests {
         );
         render.update_compositing_bits();
 
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
@@ -319,7 +319,7 @@ mod tests {
         );
         render.update_compositing_bits();
 
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
@@ -376,7 +376,7 @@ mod tests {
         );
         render.update_compositing_bits();
 
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 
@@ -454,7 +454,7 @@ mod tests {
         );
         render.update_compositing_bits();
 
-        let root = LayerHandle::new(ContainerLayer::new());
+        let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let scene = Compositor::compose(&root).flatten();
 

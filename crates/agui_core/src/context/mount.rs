@@ -1,5 +1,5 @@
 use crate::{
-    paint::compositing::{ContainerLayer, LayerHandle},
+    paint::compositing::{LayerHandle, OffsetLayer},
     pipeline::{
         layout::BoundaryContent,
         paint::{PaintBoundaryHandle, PaintPipeline, PaintScope},
@@ -23,7 +23,7 @@ impl<'a> MountCtx<'a> {
     pub fn register_boundary(
         &mut self,
         content: BoundaryContent,
-        layer: LayerHandle<ContainerLayer>,
+        layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
         self.paint.register(content, layer)
     }
