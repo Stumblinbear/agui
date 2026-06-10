@@ -60,6 +60,7 @@ async_cell = "0.2.2"
 async-watch = "0.3"
 async-lock = "3.3"
 async-channel = "2.1"
+async-executor = "1"
 
 mockall = "0.14"
 criterion = { version = "0.8", features = ["html_reports"] }

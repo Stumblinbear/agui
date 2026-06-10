@@ -1,7 +1,8 @@
 use std::{
     num::NonZeroUsize,
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, mpsc},
+    task::{Context, Wake, Waker},
     time::{Duration, Instant},
 };
 
@@ -15,7 +16,7 @@ use agui_core::{
     pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
     prelude::{element::*, render_object::*},
     provide::Provide,
-    scheduling::{LocalReactor, Vsync},
+    scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler, Vsync},
 };
 use agui_primitives::{
     animated_transform::AnimatedTransform, colored_box::ColoredBox,
@@ -23,6 +24,7 @@ use agui_primitives::{
     listener::Listener, opacity::Opacity, text::Text,
 };
 use agui_vello::append_scene_with_transform;
+use async_executor::LocalExecutor;
 use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
     peniko::Color,
@@ -33,7 +35,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
     event::{ElementState, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
 
@@ -97,24 +99,74 @@ fn main() {
 
     let event_loop = EventLoop::<WakeUp>::with_user_event().build().unwrap();
 
-    // The reactor drives spawned tasks; when one becomes ready it posts a WakeUp through the proxy so
-    // this loop, otherwise asleep, comes back to advance it.
+    // A single-threaded executor drives spawned tasks. Its waker posts a WakeUp through the proxy so
+    // this loop, otherwise asleep, comes back to advance a task that became ready off-thread.
     let proxy = event_loop.create_proxy();
-    let reactor = LocalReactor::new(move || {
-        let _ = proxy.send_event(WakeUp);
-    });
+    let waker = Waker::from(Arc::new(ProxyWaker(proxy)));
+    let executor = Rc::new(LocalExecutor::new());
+    let (event_tx, events_rx) = mpsc::channel::<TaskEventMessage>();
 
     // The driver owns the pipeline for the subtree and hands its presentation layer back out here. The
     // OS surface would normally take that layer; this example presents it by compositing each frame.
-    let driver = WindowDriver::new(ui, reactor, vsync, |_layer: LayerHandle<ContainerLayer>| {});
+    let driver = WindowDriver::new(
+        ui,
+        executor,
+        event_tx,
+        events_rx,
+        waker,
+        vsync,
+        |_layer: LayerHandle<ContainerLayer>| {},
+    );
     let view: Box<dyn View> = Box::new(driver);
 
     tracing::info!("window mounted; starting event loop");
     event_loop.run_app(&mut App::new(view)).unwrap();
 }
 
-/// Posted by the reactor through the event-loop proxy to wake the loop when a spawned task is ready.
+/// Posted through the event-loop proxy to wake the loop when a spawned task becomes ready.
 struct WakeUp;
+
+/// Bridges the executor's wakeups to the event loop: a task's waker calls this, and it posts a
+/// `WakeUp` through the proxy so an otherwise-sleeping loop comes back to tick the ready task.
+struct ProxyWaker(EventLoopProxy<WakeUp>);
+
+impl Wake for ProxyWaker {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        let _ = self.0.send_event(WakeUp);
+    }
+}
+
+/// A [`TaskScheduler`] that spawns onto a single-threaded [`LocalExecutor`] and posts task messages back
+/// through `event_tx`. Cloning shares the executor, so it is free of borrows and can be captured to
+/// spawn later, including during layout.
+struct ExecutorScheduler {
+    executor: Rc<LocalExecutor<'static>>,
+    event_tx: EventSender,
+}
+
+impl TaskScheduler for ExecutorScheduler {
+    fn event_tx(&self) -> EventSender {
+        self.event_tx.clone()
+    }
+
+    fn spawn(&mut self, func: TaskFuture) -> Result<TaskHandle, Box<dyn std::error::Error>> {
+        // Holding the returned handle keeps the task alive; dropping it drops the `Task`, which cancels.
+        let task = self.executor.spawn(func);
+
+        Ok(TaskHandle::new(Box::new(move || drop(task))))
+    }
+
+    fn deferred(&self) -> Box<dyn TaskScheduler> {
+        Box::new(ExecutorScheduler {
+            executor: Rc::clone(&self.executor),
+            event_tx: self.event_tx.clone(),
+        })
+    }
+}
 
 /// The constraints a window's subtree lays out under, in logical pixels, converting the physical
 /// `width` by `height` of its surface by `scale_factor`.
@@ -407,7 +459,10 @@ impl ApplicationHandler<WakeUp> for App {
 /// two in step before compositing for presentation. `on_layer_created` receives the layer the window
 /// presents.
 struct WindowDriver {
-    reactor: LocalReactor,
+    executor: Rc<LocalExecutor<'static>>,
+    event_tx: EventSender,
+    events_rx: mpsc::Receiver<TaskEventMessage>,
+    waker: Waker,
     vsync: Vsync,
     build: BuildOwner,
     owner: PipelineOwner,
@@ -416,7 +471,10 @@ struct WindowDriver {
 impl WindowDriver {
     fn new<V>(
         widget: V,
-        reactor: LocalReactor,
+        executor: Rc<LocalExecutor<'static>>,
+        event_tx: EventSender,
+        events_rx: mpsc::Receiver<TaskEventMessage>,
+        waker: Waker,
         vsync: Vsync,
         on_layer_created: impl FnOnce(LayerHandle<ContainerLayer>),
     ) -> Self
@@ -426,7 +484,11 @@ impl WindowDriver {
     {
         // Build the element tree and its root render object together, registering the root as the
         // pipeline's outermost boundary.
-        let (build, render) = BuildOwner::mount(widget, &mut reactor.scheduler());
+        let mut scheduler = ExecutorScheduler {
+            executor: Rc::clone(&executor),
+            event_tx: event_tx.clone(),
+        };
+        let (build, render) = BuildOwner::mount(widget, &mut scheduler);
 
         let content: BoundaryContent = render;
         let layer = LayerHandle::new(ContainerLayer::new());
@@ -436,10 +498,20 @@ impl WindowDriver {
         on_layer_created(layer);
 
         Self {
-            reactor,
+            executor,
+            event_tx,
+            events_rx,
+            waker,
             vsync,
             build,
             owner,
+        }
+    }
+
+    fn scheduler(&self) -> ExecutorScheduler {
+        ExecutorScheduler {
+            executor: Rc::clone(&self.executor),
+            event_tx: self.event_tx.clone(),
         }
     }
 }
@@ -464,10 +536,20 @@ impl View for WindowDriver {
         // Keep polling while tasks make progress or post messages, so a chain of wakeups settles in
         // one pass rather than one per frame. Dispatching a message may ready a task, so both are
         // drained together.
-        loop {
-            let ran = self.reactor.poll();
+        let mut cx = Context::from_waker(&self.waker);
 
-            let messages = self.reactor.messages().collect::<Vec<_>>();
+        loop {
+            // `tick` readies one task per poll; drain every ready one. When it goes pending the proxy
+            // waker is armed, so a later off-thread wakeup re-posts `WakeUp` and brings the loop back.
+            let mut ran = false;
+            while std::pin::pin!(self.executor.tick())
+                .poll(&mut cx)
+                .is_ready()
+            {
+                ran = true;
+            }
+
+            let messages = self.events_rx.try_iter().collect::<Vec<_>>();
             let delivered = !messages.is_empty();
             for (path, message) in messages {
                 self.build.dispatch_message(&path, message);
@@ -486,7 +568,8 @@ impl View for WindowDriver {
     fn frame(&mut self, now: Duration) -> Scene {
         // Tasks have already been drained, so apply any rebuild they queued, advance frame callbacks for
         // this frame's time, then lay out and paint what changed.
-        self.build.flush(&mut self.reactor.scheduler());
+        let mut scheduler = self.scheduler();
+        self.build.flush(&mut scheduler);
 
         self.vsync.tick(now);
 
