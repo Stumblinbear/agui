@@ -196,6 +196,17 @@ where
         return (out_nodes, out_render);
     }
 
+    // The common stable-list update: same length, every child reusable where it sits. Reconcile in
+    // place and hand back the old vectors, sparing the slot and output allocations the keyed scan needs.
+    if old_len == new_len
+        && old
+            .iter()
+            .zip(&new)
+            .all(|(keyed, child)| node_can_update(keyed, child))
+    {
+        return reuse_all_in_place(old, old_render, new, ctx);
+    }
+
     let mut old_slots: Vec<Slot<C, CV::Render>> =
         old.into_iter().zip(old_render).map(Some).collect();
     let mut new_slots: Vec<Option<CV>> = new.into_iter().map(Some).collect();
@@ -304,6 +315,16 @@ where
         .as_ref()
         .expect("compared a taken slot");
 
+    node_can_update(keyed, child)
+}
+
+/// Whether the old `keyed` child can be reconciled in place by the new `child` widget: same widget
+/// type and same key.
+fn node_can_update<C, CV>(keyed: &KeyedNode<C>, child: &CV) -> bool
+where
+    C: Element,
+    CV: Widget<Element = C> + 'static,
+{
     keyed.type_id == child.widget_type_id() && key_eq(child.key(), keyed.key.as_deref())
 }
 
@@ -324,14 +345,40 @@ fn reuse<C, CV>(
     let (mut keyed, mut render) = old_slots[old_index].take().expect("reused a slot twice");
     let child = new_slots[new_index].take().expect("consumed a slot twice");
 
-    keyed.key = child.key().map(AnyKeyable::dyn_clone);
-
+    // The stored key already equals the new child's: reuse is gated on `node_can_update`, which
+    // compares them. So there is nothing to re-store here.
     ctx.with_routing_id(RoutingId::from_index(new_index), |ctx| {
         child.update(&mut keyed.node.element, &mut render.object, ctx);
     });
 
     out_nodes.push(keyed);
     out_render.push(render);
+}
+
+/// Reconciles every new child against the old child at the same index, reusing the old element and
+/// render-object vectors as the result. The caller guarantees equal length and that each position
+/// passes [`node_can_update`].
+fn reuse_all_in_place<C, CV>(
+    mut out_nodes: Vec<KeyedNode<C>>,
+    mut out_render: Vec<RenderNode<CV::Render>>,
+    new: Vec<CV>,
+    ctx: &mut UpdateCtx,
+) -> (Vec<KeyedNode<C>>, Vec<RenderNode<CV::Render>>)
+where
+    C: Element,
+    CV: Widget<Element = C>,
+{
+    for (index, child) in new.into_iter().enumerate() {
+        ctx.with_routing_id(RoutingId::from_index(index), |ctx| {
+            child.update(
+                &mut out_nodes[index].node.element,
+                &mut out_render[index].object,
+                ctx,
+            );
+        });
+    }
+
+    (out_nodes, out_render)
 }
 
 /// Builds a fresh element and render object for the new child at `new_index`, appending both to the
@@ -568,6 +615,23 @@ mod tests {
 
         assert_eq!(m.get(), 3, "no children remounted");
         assert_eq!(u.get(), 3, "each child reconciled in place");
+        assert_eq!(child_ids(&element), vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn same_length_update_keeps_elements_and_render_in_place() {
+        let (m, u) = (counter(), counter());
+        let mut render = render_list();
+        let mut element =
+            with_ctx(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+
+        // A same-length update reconciles each child where it sits: no child changes position, and
+        // the render children stay in lockstep with their elements.
+        with_ctx(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
+
+        assert_eq!(m.get(), 3, "nothing remounted");
+        assert_eq!(mounted_ids(&element), vec![1, 2, 3]);
+        assert_eq!(render_mounted_ids(&render), vec![1, 2, 3]);
         assert_eq!(child_ids(&element), vec![4, 5, 6]);
     }
 
