@@ -83,7 +83,7 @@ impl Element for LeafElement {
 
         match action {
             Dispatch::Message(ctx) => (self.on_message)(ctx),
-            Dispatch::Rebuild(ctx) => (self.on_rebuild)(ctx),
+            Dispatch::Rebuild(ctx) | Dispatch::DependencyChanged(ctx) => (self.on_rebuild)(ctx),
         }
     }
 }

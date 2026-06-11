@@ -17,6 +17,15 @@ use crate::{
 
 type SharedRenderObject = Rc<RefCell<dyn AnyRenderObject>>;
 
+/// Why a descendant was marked: a plain rebuild, or a change in a provided value it depends on. The
+/// kind selects which dispatch the flush delivers, so a dependency change runs the element's
+/// dependency-change hook.
+#[derive(Clone, Copy)]
+enum MarkKind {
+    Rebuild,
+    DependencyChanged,
+}
+
 slotmap::new_key_type! {
     /// Identifies a registered build boundary within one [`BuildState`].
     pub struct BuildBoundaryId;
@@ -55,6 +64,34 @@ impl BuildState {
         self.boundaries.get(id).and_then(Weak::upgrade)
     }
 
+    /// Marks the element at `path` to rebuild on the next flush.
+    pub(crate) fn mark_rebuild(&mut self, path: &RoutingPath) {
+        self.mark(path, MarkKind::Rebuild);
+    }
+
+    /// Marks the element at `path` to rebuild on the next flush because a provided value it depends
+    /// on changed, so its dependency-change hook runs.
+    pub(crate) fn mark_dependency_changed(&mut self, path: &RoutingPath) {
+        self.mark(path, MarkKind::DependencyChanged);
+    }
+
+    /// Queues the boundary owning `path` for the next flush, recording the within-path and why. A
+    /// path whose boundary is gone is dropped.
+    fn mark(&mut self, path: &RoutingPath, kind: MarkKind) {
+        let Some(cell) = self.boundaries.get(path.boundary()).and_then(Weak::upgrade) else {
+            return;
+        };
+
+        if !cell.is_dirty.get() {
+            cell.is_dirty.set(true);
+            self.dirty.push(cell.id.get());
+        }
+
+        cell.suffixes
+            .borrow_mut()
+            .push((path.within().into(), kind));
+    }
+
     /// Drains the marked boundaries into their owning `Rc`s, ordered shallowest-depth first so that
     /// re-dispatching an outer boundary, which reconciles the boundaries nested in it, lets the inner ones
     /// be skipped rather than rebuilt twice.
@@ -74,45 +111,39 @@ impl BuildState {
 
         ordered
     }
-}
 
-/// Delivers `ctx` to the element at `path`, marking its boundary for rebuild if the element asks. A path
-/// whose boundary is gone (unmounted, or its inner replaced) is dropped.
-pub fn deliver_message(state: &Rc<RefCell<BuildState>>, path: &RoutingPath, ctx: &mut MessageCtx) {
-    let Some(cell) = state.borrow().lookup(path.boundary()) else {
-        return;
-    };
+    /// Delivers `ctx` to the element at `path`, marking its boundary for rebuild if the element asks.
+    /// A path whose boundary is gone (unmounted, or its inner replaced) is dropped.
+    pub(crate) fn deliver_message(
+        state: &Rc<RefCell<Self>>,
+        path: &RoutingPath,
+        ctx: &mut MessageCtx,
+    ) {
+        let Some(cell) = state.borrow().lookup(path.boundary()) else {
+            return;
+        };
 
-    cell.dispatch_within(path.within(), Dispatch::Message(ctx));
+        cell.dispatch_within(path.within(), Dispatch::Message(ctx));
 
-    if ctx.rebuild_requested() {
-        cell.mark(path.within());
-    }
-}
-
-/// Marks the element at `path` to rebuild on the next flush. A path whose boundary is gone is dropped.
-pub fn mark_rebuild(state: &Rc<RefCell<BuildState>>, path: &RoutingPath) {
-    if let Some(cell) = state.borrow().lookup(path.boundary()) {
-        cell.mark(path.within());
-    }
-}
-
-/// Rebuilds every boundary marked since the last flush. Returns whether anything rebuilt.
-pub fn flush_boundaries(
-    state: &Rc<RefCell<BuildState>>,
-    scheduler: &mut dyn TaskScheduler,
-) -> bool {
-    let ordered = state.borrow_mut().drain_rootmost_first();
-
-    if ordered.is_empty() {
-        return false;
+        if ctx.rebuild_requested() {
+            state.borrow_mut().mark_rebuild(path);
+        }
     }
 
-    for cell in ordered {
-        cell.flush_rebuilds(scheduler);
-    }
+    /// Rebuilds every boundary marked since the last flush. Returns whether anything rebuilt.
+    pub(crate) fn flush(state: &Rc<RefCell<Self>>, scheduler: &mut dyn TaskScheduler) -> bool {
+        let ordered = state.borrow_mut().drain_rootmost_first();
 
-    true
+        if ordered.is_empty() {
+            return false;
+        }
+
+        for cell in ordered {
+            cell.flush_rebuilds(scheduler);
+        }
+
+        true
+    }
 }
 
 /// The enclosing build boundary a subtree is reconciled under, threaded through the build walk so a
@@ -168,8 +199,9 @@ struct BuildBoundaryCell {
     /// pipeline that owns the subtree attaches it.
     render: RefCell<Option<SharedRenderObject>>,
 
-    /// The paths, relative to the inner element, of the descendants marked for rebuild.
-    suffixes: RefCell<Vec<Box<[RoutingId]>>>,
+    /// The descendants marked since the last flush: each path relative to the inner element, tagged
+    /// with why it was marked.
+    suffixes: RefCell<Vec<(Box<[RoutingId]>, MarkKind)>>,
 
     /// Whether this boundary is currently in the registry's dirty list, guarding a double-mark from
     /// queueing it twice.
@@ -214,20 +246,6 @@ impl BuildBoundaryCell {
             depth: self.depth + 1,
         }
     }
-
-    /// Marks the descendant at `within` for rebuild, registering this boundary on the clean-to-dirty edge.
-    fn mark_within(&self, within: &[RoutingId]) {
-        let Some(state) = self.state.upgrade() else {
-            return;
-        };
-
-        if !self.is_dirty.get() {
-            self.is_dirty.set(true);
-            state.borrow_mut().dirty.push(self.id.get());
-        }
-
-        self.suffixes.borrow_mut().push(within.into());
-    }
 }
 
 impl Drop for BuildBoundaryCell {
@@ -255,10 +273,6 @@ impl BuildBoundaryCell {
         child.dyn_dispatch(&mut *render, within, action);
     }
 
-    fn mark(&self, within: &[RoutingId]) {
-        self.mark_within(within);
-    }
-
     fn clear_dirty(&self) {
         self.is_dirty.set(false);
     }
@@ -268,7 +282,7 @@ impl BuildBoundaryCell {
         let child_scope = self.child_scope();
         let provide = self.provide.borrow().clone();
 
-        for suffix in suffixes {
+        for (suffix, kind) in suffixes {
             // Pre-seed the routing path with the target's path under this boundary, so a task spawned during
             // the rebuild captures its own location rather than the boundary's.
             let mut path = suffix.to_vec();
@@ -280,8 +294,13 @@ impl BuildBoundaryCell {
             };
             let mut render = render.borrow_mut();
 
+            let action = match kind {
+                MarkKind::Rebuild => Dispatch::Rebuild(&mut ctx),
+                MarkKind::DependencyChanged => Dispatch::DependencyChanged(&mut ctx),
+            };
+
             let mut child = self.child.borrow_mut();
-            child.dyn_dispatch(&mut *render, &suffix, Dispatch::Rebuild(&mut ctx));
+            child.dyn_dispatch(&mut *render, &suffix, action);
         }
     }
 }

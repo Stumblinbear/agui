@@ -19,6 +19,13 @@ pub trait WidgetState {
 
     fn did_update_widget(&mut self, ctx: &mut UpdateCtx, widget: Self::Widget);
 
+    /// Reacts to a change in a value this state depends on, before the rebuild's
+    /// [`build`](Self::build). Recompute derived state or re-establish anything keyed by the
+    /// dependency here. The default does nothing.
+    fn did_change_dependencies(&mut self, ctx: &mut UpdateCtx) {
+        let _ = ctx;
+    }
+
     /// Builds the subtree to show for the current state.
     fn build(&self, ctx: &mut UpdateCtx) -> Self::Child;
 
@@ -76,6 +83,12 @@ where
                     let child = self.state.build(ctx);
                     child.update(&mut self.child.element, render, ctx);
                 }
+
+                Dispatch::DependencyChanged(ctx) => {
+                    self.state.did_change_dependencies(ctx);
+                    let child = self.state.build(ctx);
+                    child.update(&mut self.child.element, render, ctx);
+                }
             }
 
             return;
@@ -100,7 +113,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        context::{LayoutCtx, MountCtx, PaintCtx},
+        context::{Dispatch, LayoutCtx, MountCtx, PaintCtx},
         diagnostics::{Diagnostics, DiagnosticsNodeBuilder},
         element::{Element, LeafElement, RoutingPath},
         geometry::{Offset, Size},
@@ -266,6 +279,130 @@ mod tests {
         }
 
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+    }
+
+    /// A stateful fixture that tallies its builds and its dependency-change hook calls, so a test
+    /// can tell a dependency change from a plain rebuild.
+    struct DepWidget {
+        builds: Rc<Cell<usize>>,
+        dep_changes: Rc<Cell<usize>>,
+    }
+
+    struct DepState {
+        builds: Rc<Cell<usize>>,
+        dep_changes: Rc<Cell<usize>>,
+    }
+
+    impl Widget for DepWidget {
+        type Element = StatefulElement<DepState>;
+
+        type Render = <<DepState as WidgetState>::Child as Widget>::Render;
+
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let state = DepState::init_state(ctx, self);
+            let child = state.build(ctx);
+            let (child_element, child_render) = child.create(ctx);
+            (StatefulElement::new(state, child_element), child_render)
+        }
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.state.did_update_widget(ctx, self);
+            let child = element.state.build(ctx);
+            child.update(&mut element.child.element, render, ctx);
+        }
+    }
+
+    impl WidgetState for DepState {
+        type Widget = DepWidget;
+        type Child = Square;
+
+        fn init_state(_: &mut UpdateCtx, widget: Self::Widget) -> Self {
+            DepState {
+                builds: widget.builds,
+                dep_changes: widget.dep_changes,
+            }
+        }
+
+        fn did_update_widget(&mut self, _: &mut UpdateCtx, widget: Self::Widget) {
+            self.builds = widget.builds;
+            self.dep_changes = widget.dep_changes;
+        }
+
+        fn did_change_dependencies(&mut self, _: &mut UpdateCtx) {
+            self.dep_changes.set(self.dep_changes.get() + 1);
+        }
+
+        fn build(&self, _: &mut UpdateCtx) -> Self::Child {
+            self.builds.set(self.builds.get() + 1);
+            Square {
+                side: 1.0,
+                creates: Rc::new(Cell::new(0)),
+            }
+        }
+    }
+
+    #[test]
+    fn dependency_change_runs_the_hook_then_rebuilds() {
+        let builds = Rc::new(Cell::new(0));
+        let deps = Rc::new(Cell::new(0));
+
+        let (mut element, mut render) = with_ctx(|ctx| {
+            DepWidget {
+                builds: Rc::clone(&builds),
+                dep_changes: Rc::clone(&deps),
+            }
+            .create(ctx)
+        });
+
+        let after_create = builds.get();
+        assert_eq!(deps.get(), 0, "create does not run the dependency hook");
+
+        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
+        assert_eq!(
+            deps.get(),
+            1,
+            "a dependency change runs did_change_dependencies"
+        );
+        assert_eq!(builds.get(), after_create + 1, "and then rebuilds");
+
+        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
+        assert_eq!(
+            deps.get(),
+            1,
+            "a plain rebuild does not run did_change_dependencies"
+        );
+        assert_eq!(builds.get(), after_create + 2, "but still rebuilds");
+    }
+
+    #[test]
+    fn request_dependency_change_routes_a_dependency_dispatch_through_flush() {
+        let builds = Rc::new(Cell::new(0));
+        let deps = Rc::new(Cell::new(0));
+
+        let mut tasks = TestTaskRunner::new();
+        let (mut owner, _render) = BuildOwner::mount(
+            DepWidget {
+                builds: Rc::clone(&builds),
+                dep_changes: Rc::clone(&deps),
+            },
+            &mut tasks.scheduler(),
+        );
+        assert_eq!(deps.get(), 0);
+
+        owner.request_dependency_change(&RoutingPath::new(owner.root_id(), Vec::new()));
+        assert!(owner.is_dirty(), "the dependency change queued a rebuild");
+        assert!(owner.flush(&mut tasks.scheduler()));
+
+        assert_eq!(
+            deps.get(),
+            1,
+            "the flush delivered a dependency change, not a plain rebuild"
+        );
     }
 
     #[test]

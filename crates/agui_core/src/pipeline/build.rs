@@ -3,10 +3,7 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     context::{MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{
-        BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath, deliver_message,
-        flush_boundaries, mark_rebuild,
-    },
+    element::{BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath},
     provide::ProvideScope,
     render_object::RenderObject,
     scheduling::TaskScheduler,
@@ -60,12 +57,18 @@ impl BuildOwner {
     pub fn dispatch_message(&mut self, path: &RoutingPath, message: Box<dyn Any>) {
         let mut ctx = MessageCtx::new(message);
 
-        deliver_message(&self.state, path, &mut ctx);
+        BuildState::deliver_message(&self.state, path, &mut ctx);
     }
 
     /// Marks the element at `path` to rebuild on the next [`flush`](Self::flush).
     pub fn request_rebuild(&mut self, path: &RoutingPath) {
-        mark_rebuild(&self.state, path);
+        self.state.borrow_mut().mark_rebuild(path);
+    }
+
+    /// Marks the element at `path` to rebuild on the next [`flush`](Self::flush) because a provided
+    /// value it depends on changed, so its dependency-change hook runs.
+    pub fn request_dependency_change(&mut self, path: &RoutingPath) {
+        self.state.borrow_mut().mark_dependency_changed(path);
     }
 
     /// Whether any boundary is waiting to rebuild.
@@ -76,7 +79,7 @@ impl BuildOwner {
     /// Rebuilds every boundary marked since the last flush. Returns whether anything rebuilt, so the
     /// caller can skip reconciling the render tree when nothing changed.
     pub fn flush(&mut self, scheduler: &mut dyn TaskScheduler) -> bool {
-        flush_boundaries(&self.state, scheduler)
+        BuildState::flush(&self.state, scheduler)
     }
 }
 

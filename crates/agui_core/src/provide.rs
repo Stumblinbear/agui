@@ -146,6 +146,15 @@ where
                 });
             }
 
+            Dispatch::DependencyChanged(ctx) => {
+                let value = Rc::clone(&self.value);
+                ctx.with_provided(value, |ctx| {
+                    self.child
+                        .element
+                        .dispatch(render, path, Dispatch::DependencyChanged(ctx));
+                });
+            }
+
             Dispatch::Message(ctx) => {
                 self.child
                     .element
@@ -292,6 +301,32 @@ mod tests {
             seen.get(),
             Some(42),
             "an ancestor's provided value is still visible when only the descendant rebuilds"
+        );
+    }
+
+    #[test]
+    fn provided_value_reaches_a_dependency_changed_rebuild() {
+        let seen = Rc::new(Cell::new(None::<usize>));
+
+        let recorder = Rc::clone(&seen);
+        let (mut element, mut render) = with_ctx(|ctx| {
+            Provide::new(Rc::new(42_usize))
+                .child(Transparent {
+                    child: Leaf::new().on_rebuild(move |ctx| {
+                        recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                    }),
+                })
+                .create(ctx)
+        });
+
+        // A dependency-changed dispatch must re-thread the ancestor's provided value just like a
+        // plain rebuild, so the woken descendant still reads it.
+        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
+
+        assert_eq!(
+            seen.get(),
+            Some(42),
+            "a dependency-changed rebuild re-threads the ancestor's provided value"
         );
     }
 

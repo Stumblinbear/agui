@@ -5,4 +5,7 @@ use crate::context::{MessageCtx, UpdateCtx};
 pub enum Dispatch<'b, 'a: 'b> {
     Message(&'b mut MessageCtx),
     Rebuild(&'b mut UpdateCtx<'a>),
+    /// Rebuild the destination because a value it depends on changed, running its
+    /// dependency-change hook before the rebuild.
+    DependencyChanged(&'b mut UpdateCtx<'a>),
 }
