@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use crate::element::BuildBoundaryId;
 
@@ -38,11 +38,11 @@ impl RoutingId {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoutingPath {
     boundary: BuildBoundaryId,
-    within: Arc<[RoutingId]>,
+    within: Rc<[RoutingId]>,
 }
 
 impl RoutingPath {
-    pub fn new(boundary: BuildBoundaryId, within: impl Into<Arc<[RoutingId]>>) -> Self {
+    pub fn new(boundary: BuildBoundaryId, within: impl Into<Rc<[RoutingId]>>) -> Self {
         Self {
             boundary,
             within: within.into(),
