@@ -176,10 +176,11 @@ mod tests {
 
     use crate::{
         context::{Dispatch, UpdateCtx},
-        element::Element,
+        element::{BuildBoundaryId, Element, RebuildBoundary, RoutingPath},
+        pipeline::build::BuildOwner,
         provide::ProvideScope,
         test_fixtures::{Leaf, Transparent},
-        test_harness::{with_ctx, with_ctx_in},
+        test_harness::{TestTaskRunner, with_ctx, with_ctx_in},
         widget::Widget,
     };
 
@@ -327,6 +328,44 @@ mod tests {
             seen.get(),
             Some(42),
             "a dependency-changed rebuild re-threads the ancestor's provided value"
+        );
+    }
+
+    #[test]
+    fn provided_value_survives_a_nested_build_boundary() {
+        let boundary = Rc::new(Cell::new(None::<BuildBoundaryId>));
+        let seen = Rc::new(Cell::new(None::<usize>));
+
+        let captured = Rc::clone(&boundary);
+        let recorder = Rc::clone(&seen);
+        let widget = Provide::new(Rc::new(42_usize)).child(
+            RebuildBoundary::new().child(
+                Leaf::new()
+                    .on_mount(move |ctx: &mut UpdateCtx| {
+                        captured.set(ctx.build_scope().boundary());
+                    })
+                    .on_rebuild(move |ctx: &mut UpdateCtx| {
+                        recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                    }),
+            ),
+        );
+
+        let mut tasks = TestTaskRunner::new();
+        let (mut owner, _render) = BuildOwner::mount(widget, &mut tasks.scheduler());
+
+        let boundary = boundary
+            .get()
+            .expect("the leaf mounted under the rebuild boundary");
+
+        // The Provide sits above the boundary, so the value lives in the scope the boundary captured
+        // at registration; a targeted flush into the boundary must re-enter with that scope.
+        owner.request_dependency_change(&RoutingPath::new(boundary, Vec::new()));
+        assert!(owner.flush(&mut tasks.scheduler()));
+
+        assert_eq!(
+            seen.get(),
+            Some(42),
+            "an ancestor's provided value reaches a descendant across a build boundary"
         );
     }
 

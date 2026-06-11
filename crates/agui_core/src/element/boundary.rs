@@ -1,5 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
+    marker::PhantomData,
     rc::{Rc, Weak},
 };
 
@@ -8,7 +9,7 @@ use slotmap::SlotMap;
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{AnyElement, RoutingId, RoutingPath},
+    element::{AnyElement, Element, RoutingId, RoutingPath},
     provide::ProvideScope,
     render_object::{AnyRenderObject, RenderObject},
     scheduling::TaskScheduler,
@@ -379,5 +380,174 @@ impl BuildBoundaryElement {
     /// Routes `action` along `within` to the inner element. The path is relative to this boundary.
     pub fn dispatch(&mut self, within: &[RoutingId], action: Dispatch) {
         self.cell.dispatch_within(within, action);
+    }
+}
+
+/// A widget whose subtree is a build boundary: a rebuild requested inside it reconciles only that
+/// subtree, reached directly by its boundary id rather than by a walk from the root. Wrap a subtree
+/// that rebuilds on its own so an unrelated rebuild elsewhere leaves it untouched.
+pub struct RebuildBoundary<Child> {
+    child: Child,
+}
+
+impl RebuildBoundary<()> {
+    pub fn new() -> Self {
+        Self { child: () }
+    }
+
+    pub fn child<Child>(self, child: Child) -> RebuildBoundary<Child> {
+        RebuildBoundary { child }
+    }
+}
+
+impl Default for RebuildBoundary<()> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Child> Widget for RebuildBoundary<Child>
+where
+    Child: Widget,
+    Child::Element: 'static,
+    Child::Render: RenderObject,
+{
+    type Element = RebuildBoundaryElement<Rc<RefCell<Child::Render>>>;
+
+    type Render = Rc<RefCell<Child::Render>>;
+
+    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let (boundary, content) = BuildBoundaryElement::create(self.child, ctx);
+
+        (
+            RebuildBoundaryElement {
+                boundary,
+                _render: PhantomData,
+            },
+            content,
+        )
+    }
+
+    fn update(
+        self,
+        element: &mut Self::Element,
+        render_object: &mut Self::Render,
+        ctx: &mut UpdateCtx,
+    ) {
+        // The parent-threaded render is the same shared object the boundary holds; reconcile the
+        // inner subtree against it in place.
+        let mut content = render_object.borrow_mut();
+        element.boundary.update(self.child, &mut content, ctx);
+    }
+}
+
+/// The [`Element`] of a [`RebuildBoundary`]. It names the shared render threaded to the parent while
+/// the boundary it wraps holds the same render for an in-place rebuild.
+pub struct RebuildBoundaryElement<R: ?Sized> {
+    boundary: BuildBoundaryElement,
+    _render: PhantomData<fn() -> R>,
+}
+
+impl<R> Element for RebuildBoundaryElement<R>
+where
+    R: ?Sized + 'static,
+{
+    type Render = R;
+
+    fn dispatch(&mut self, _render: &mut R, path: &[RoutingId], action: Dispatch) {
+        // The boundary holds its own render, so a dispatch routes through it rather than through the
+        // parent-threaded render.
+        self.boundary.dispatch(path, action);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.boundary.describe(d)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::Cell, rc::Rc};
+
+    use crate::{
+        context::UpdateCtx,
+        element::RoutingPath,
+        pipeline::build::BuildOwner,
+        test_fixtures::{Leaf, MultiChild},
+        test_harness::TestTaskRunner,
+    };
+
+    use super::{BuildBoundaryId, RebuildBoundary};
+
+    /// A leaf that records the boundary it mounts under and counts the rebuilds delivered to it.
+    fn probe(boundary: &Rc<Cell<Option<BuildBoundaryId>>>, rebuilds: &Rc<Cell<usize>>) -> Leaf {
+        let boundary = Rc::clone(boundary);
+        let rebuilds = Rc::clone(rebuilds);
+
+        Leaf::new()
+            .on_mount(move |ctx: &mut UpdateCtx| boundary.set(ctx.build_scope().boundary()))
+            .on_rebuild(move |_: &mut UpdateCtx| rebuilds.set(rebuilds.get() + 1))
+    }
+
+    #[test]
+    fn each_rebuild_boundary_registers_its_own_boundary() {
+        let a = Rc::new(Cell::new(None));
+        let b = Rc::new(Cell::new(None));
+
+        let widget = MultiChild {
+            children: vec![
+                RebuildBoundary::new().child(probe(&a, &Rc::new(Cell::new(0)))),
+                RebuildBoundary::new().child(probe(&b, &Rc::new(Cell::new(0)))),
+            ],
+        };
+
+        let mut tasks = TestTaskRunner::new();
+        let (owner, _render) = BuildOwner::mount(widget, &mut tasks.scheduler());
+
+        let a = a.get().expect("the first leaf mounted under a boundary");
+        let b = b.get().expect("the second leaf mounted under a boundary");
+
+        assert_ne!(
+            a,
+            owner.root_id(),
+            "a RebuildBoundary is its own boundary, not the root"
+        );
+        assert_ne!(a, b, "sibling boundaries are distinct");
+    }
+
+    #[test]
+    fn marking_a_rebuild_boundary_rebuilds_only_its_subtree() {
+        let a_boundary = Rc::new(Cell::new(None));
+        let a_rebuilds = Rc::new(Cell::new(0));
+        let b_boundary = Rc::new(Cell::new(None));
+        let b_rebuilds = Rc::new(Cell::new(0));
+
+        let widget = MultiChild {
+            children: vec![
+                RebuildBoundary::new().child(probe(&a_boundary, &a_rebuilds)),
+                RebuildBoundary::new().child(probe(&b_boundary, &b_rebuilds)),
+            ],
+        };
+
+        let mut tasks = TestTaskRunner::new();
+        let (mut owner, _render) = BuildOwner::mount(widget, &mut tasks.scheduler());
+
+        let a = a_boundary.get().unwrap();
+        let b = b_boundary.get().unwrap();
+
+        // Each leaf sits at the empty path within its own boundary, reached by that boundary's id.
+        owner.request_rebuild(&RoutingPath::new(a, Vec::new()));
+        assert!(owner.flush(&mut tasks.scheduler()));
+        assert_eq!(a_rebuilds.get(), 1);
+        assert_eq!(b_rebuilds.get(), 0, "the sibling boundary was not rebuilt");
+
+        owner.request_rebuild(&RoutingPath::new(b, Vec::new()));
+        assert!(owner.flush(&mut tasks.scheduler()));
+        assert_eq!(
+            a_rebuilds.get(),
+            1,
+            "the first boundary was not rebuilt again"
+        );
+        assert_eq!(b_rebuilds.get(), 1);
     }
 }
