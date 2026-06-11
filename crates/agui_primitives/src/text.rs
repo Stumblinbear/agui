@@ -36,15 +36,17 @@ impl Text {
     }
 
     fn content(
-        text: String,
+        text: &str,
         font_size: f32,
-        brush: TextBrush,
-        family: Option<String>,
+        brush: &TextBrush,
+        family: Option<&str>,
     ) -> ParagraphContent {
-        let mut style = TextStyle::new().font_size(font_size).color(brush.fill);
+        let mut style = TextStyle::new()
+            .font_size(font_size)
+            .color(brush.fill.clone());
 
-        if let Some(background) = brush.background {
-            style = style.background(background);
+        if let Some(background) = &brush.background {
+            style = style.background(background.clone());
         }
 
         if let Some(family) = family {
@@ -57,6 +59,10 @@ impl Text {
 
 pub struct TextElement {
     fonts: Option<Rc<Fonts>>,
+    text: String,
+    font_size: f32,
+    brush: TextBrush,
+    family: Option<String>,
 }
 
 impl Element for TextElement {
@@ -71,13 +77,17 @@ impl Widget for Text {
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
         let element = TextElement {
             fonts: ctx.get_provided::<Fonts>(),
+            text: self.text,
+            font_size: self.font_size,
+            brush: self.brush,
+            family: self.family,
         };
 
         let mut paragraph = RenderParagraph::new(Self::content(
-            self.text,
-            self.font_size,
-            self.brush,
-            self.family,
+            &element.text,
+            element.font_size,
+            &element.brush,
+            element.family.as_deref(),
         ));
 
         paragraph.set_fonts(element.fonts.clone());
@@ -93,12 +103,23 @@ impl Widget for Text {
     ) {
         element.fonts = ctx.get_provided::<Fonts>();
 
-        render_object.set_content(Self::content(
-            self.text,
-            self.font_size,
-            self.brush,
-            self.family,
-        ));
+        if element.text != self.text
+            || element.font_size != self.font_size
+            || element.brush != self.brush
+            || element.family != self.family
+        {
+            element.text = self.text;
+            element.font_size = self.font_size;
+            element.brush = self.brush;
+            element.family = self.family;
+
+            render_object.set_content(Self::content(
+                &element.text,
+                element.font_size,
+                &element.brush,
+                element.family.as_deref(),
+            ));
+        }
 
         render_object.set_fonts(element.fonts.clone());
     }
