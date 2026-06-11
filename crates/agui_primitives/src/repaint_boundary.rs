@@ -64,14 +64,10 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
+        // A descendant whose painting changed marks this boundary's scope itself; an idle rebuild does not.
         render_object.with_child_mut(|child_render| {
             element.update(self.child, child_render, ctx);
         });
-
-        // The subtree's description changed, so the boundary must repaint.
-        if let Some(handle) = &render_object.handle {
-            handle.mark_needs_paint();
-        }
     }
 }
 
@@ -406,6 +402,44 @@ mod tests {
             fills(&second),
             2,
             "the outer boundary still embeds the inner one through its retained layer"
+        );
+    }
+
+    /// A rebuild that changes nothing the subtree draws does not repaint the boundary: with no
+    /// descendant marking the boundary's scope, the retained layer is reused.
+    #[test]
+    fn an_unchanged_rebuild_does_not_repaint_the_boundary() {
+        let outer_paints = Rc::new(Cell::new(0));
+        let inner_paints = Rc::new(Cell::new(0));
+
+        let widget = Counter::new(Rc::clone(&outer_paints))
+            .child(RepaintBoundary::new().child(Counter::new(Rc::clone(&inner_paints))));
+
+        let (mut element, render) = with_ctx(|ctx| widget.create(ctx));
+        let root = Rc::new(RefCell::new(render));
+        let owner_root: Rc<RefCell<dyn AnyRenderBox>> = root.clone();
+        let mut owner = PipelineOwner::new(owner_root, LayerHandle::new(OffsetLayer::new()));
+        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        owner.flush_layout();
+        owner.flush_paint();
+        let _ = owner.composite();
+        assert_eq!(inner_paints.get(), 1);
+
+        // Rebuild with an identical tree, so nothing inside marks the boundary's scope.
+        let widget = Counter::new(Rc::clone(&outer_paints))
+            .child(RepaintBoundary::new().child(Counter::new(Rc::clone(&inner_paints))));
+        with_ctx(|ctx| {
+            let mut render = root.borrow_mut();
+            widget.update(&mut element, &mut render, ctx);
+        });
+
+        owner.flush_paint();
+        let _ = owner.composite();
+
+        assert_eq!(
+            inner_paints.get(),
+            1,
+            "an unchanged rebuild reuses the boundary's painting instead of repainting it"
         );
     }
 }
