@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData, ops::Range};
 
-use fnv::FnvHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
     context::{Dispatch, UpdateCtx},
@@ -419,7 +419,8 @@ where
     CV: Widget<Element = C> + 'static,
 {
     #[allow(clippy::mutable_key_type)]
-    let mut old_keyed: FnvHashMap<&dyn AnyKeyable, usize> = FnvHashMap::default();
+    let mut old_keyed: FxHashMap<&dyn AnyKeyable, usize> =
+        FxHashMap::with_capacity_and_hasher(old_range.len(), FxBuildHasher);
 
     for index in old_range {
         if let Some((keyed, _)) = old_slots[index].as_ref()

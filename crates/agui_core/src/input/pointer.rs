@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use fnv::FnvHashMap;
 use peniko::kurbo::Point;
+use rustc_hash::FxHashMap;
 
 use crate::{geometry::Offset, input::hit_test::HitTestResult};
 
@@ -46,7 +46,7 @@ pub type PointerHandler = Rc<dyn Fn(&PointerEvent)>;
 /// to whatever is under the cursor at that moment.
 #[derive(Default)]
 pub struct PointerDispatcher {
-    active: FnvHashMap<PointerId, HitTestResult>,
+    active: FxHashMap<PointerId, HitTestResult>,
 }
 
 impl PointerDispatcher {

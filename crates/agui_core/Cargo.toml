@@ -13,11 +13,11 @@ readme = "README.md"
 
 [dependencies]
 bon.workspace = true
-fnv.workspace = true
 imbl.workspace = true
 intrusive-collections.workspace = true
 parley.workspace = true
 peniko.workspace = true
+rustc-hash.workspace = true
 slotmap.workspace = true
 smallbox.workspace = true
 typed_floats.workspace = true
@@ -29,7 +29,6 @@ tracing.workspace = true
 thiserror.workspace = true
 
 # rand.workspace = true
-# rustc-hash.workspace = true
 # slotmap.workspace = true
 # parking_lot = { workspace = true, optional = true }
 # im-rc.workspace = true
