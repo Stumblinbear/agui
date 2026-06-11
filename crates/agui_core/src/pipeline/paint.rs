@@ -86,6 +86,7 @@ impl PaintPipeline {
         let cell = Rc::new(PaintCell {
             paint_link: LinkedListLink::new(),
             compositing_link: LinkedListLink::new(),
+            pending: Rc::downgrade(&self.pending),
             content,
             layer,
             paint_capacity: Cell::new(SceneCapacity::default()),
@@ -102,10 +103,7 @@ impl PaintPipeline {
 
         tracing::debug!(boundary = ?Rc::as_ptr(&cell), "registered repaint boundary");
 
-        PaintBoundaryHandle {
-            pending: Rc::downgrade(&self.pending),
-            cell,
-        }
+        PaintBoundaryHandle { cell }
     }
 
     /// Removes a boundary, discarding its layer and clearing any pending mark. The handle is spent.
@@ -258,6 +256,9 @@ enum PaintPipelinePhase {
 struct PaintCell {
     paint_link: LinkedListLink,
     compositing_link: LinkedListLink,
+
+    /// The pipeline state this cell's marks are linked into.
+    pending: Weak<RefCell<PaintPipelineState>>,
 
     content: BoundaryContent,
     layer: LayerHandle<OffsetLayer>,
@@ -416,36 +417,28 @@ impl PaintPipelineState {
 /// marked from anywhere, including a per-frame callback. A scope can only mark its boundary, never
 /// remove it, so it is safe to hand down a subtree.
 #[derive(Clone)]
-pub struct PaintScope(PaintScopeInner);
-
-#[derive(Clone)]
-enum PaintScopeInner {
-    Detached,
-
-    Boundary {
-        cell: Weak<PaintCell>,
-        pending: Weak<RefCell<PaintPipelineState>>,
-    },
-}
+pub struct PaintScope(Weak<PaintCell>);
 
 impl PaintScope {
     /// A scope detached from any pipeline, whose marks reach nothing.
     pub fn detached() -> Self {
-        Self(PaintScopeInner::Detached)
+        Self(Weak::new())
+    }
+
+    /// Whether marks through this scope reach nothing, because the scope was created detached or its
+    /// boundary has since been freed.
+    pub fn is_detached(&self) -> bool {
+        Weak::strong_count(&self.0) == 0
     }
 
     /// Marks the boundary to be repainted on the next frame. If this is the first mark on an otherwise
     /// clean pipeline, the schedule hook fires so the driver schedules a frame.
     pub fn mark_needs_paint(&self) {
-        let PaintScopeInner::Boundary { pending, cell, .. } = &self.0 else {
+        let Some(cell) = self.0.upgrade() else {
             return;
         };
 
-        let Some(pending) = pending.upgrade() else {
-            return;
-        };
-
-        let Some(cell) = cell.upgrade() else {
+        let Some(pending) = cell.pending.upgrade() else {
             return;
         };
 
@@ -455,15 +448,11 @@ impl PaintScope {
     /// Marks the boundary's compositing bits for recomputation before its next repaint, and the
     /// boundary for repaint. Only an inner boundary tracks its bits this way.
     pub fn mark_needs_compositing_bits_update(&self) {
-        let PaintScopeInner::Boundary { pending, cell, .. } = &self.0 else {
+        let Some(cell) = self.0.upgrade() else {
             return;
         };
 
-        let Some(pending) = pending.upgrade() else {
-            return;
-        };
-
-        let Some(cell) = cell.upgrade() else {
+        let Some(pending) = cell.pending.upgrade() else {
             return;
         };
 
@@ -478,17 +467,13 @@ impl PaintScope {
 /// hands out mark-only [`PaintScope`]s for the subtree. Keeping removal here, off the scope, stops a
 /// descendant that was handed a scope to mark with from unregistering the boundary it lives under.
 pub struct PaintBoundaryHandle {
-    pending: Weak<RefCell<PaintPipelineState>>,
     cell: Rc<PaintCell>,
 }
 
 impl PaintBoundaryHandle {
     /// A mark-only handle to this boundary, for descendants to repaint into it.
     pub fn scope(&self) -> PaintScope {
-        PaintScope(PaintScopeInner::Boundary {
-            cell: Rc::downgrade(&self.cell),
-            pending: Weak::clone(&self.pending),
-        })
+        PaintScope(Rc::downgrade(&self.cell))
     }
 
     /// Marks this boundary to be repainted on the next frame.
@@ -505,7 +490,7 @@ impl PaintBoundaryHandle {
 impl Drop for PaintBoundaryHandle {
     fn drop(&mut self) {
         // The channels hold non-owning refs into this cell; unlink it before its `Rc` frees it.
-        let Some(pending) = self.pending.upgrade() else {
+        let Some(pending) = self.cell.pending.upgrade() else {
             return;
         };
 
@@ -692,6 +677,15 @@ mod tests {
     fn flush_paint(pipeline: &mut PaintPipeline) {
         pipeline.flush_compositing_bits();
         pipeline.flush_paint();
+    }
+
+    /// A scope is cloned onto every node that can mark its boundary, so it stays one pointer wide.
+    #[test]
+    fn a_paint_scope_is_one_pointer() {
+        assert_eq!(
+            std::mem::size_of::<PaintScope>(),
+            std::mem::size_of::<usize>()
+        );
     }
 
     #[test]

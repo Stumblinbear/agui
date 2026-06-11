@@ -34,7 +34,8 @@ pub struct RelayoutRenderNode<R, P = ()> {
     /// Consecutive layouts under loose constraints, reset to zero by any tight layout.
     loose_streak: u8,
 
-    paint: Option<PaintScope>,
+    /// The enclosing repaint boundary, captured at mount; detached until then.
+    paint: PaintScope,
     parent_uses_size: bool,
     needs_compositing: bool,
 }
@@ -70,7 +71,7 @@ impl<R, P: Default> RelayoutRenderNode<R, P> {
 
             loose_streak: 0,
 
-            paint: None,
+            paint: PaintScope::detached(),
             parent_uses_size: false,
             needs_compositing: false,
         }
@@ -79,7 +80,7 @@ impl<R, P: Default> RelayoutRenderNode<R, P> {
 
 impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     pub fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint = Some(ctx.paint_scope().clone());
+        self.paint = ctx.paint_scope().clone();
 
         match &mut self.child {
             RelayoutChild::Inline(child) => child.mount(ctx),
@@ -283,10 +284,12 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
 
         match form {
             Form::BoxAndRegister => {
-                let paint = self
-                    .paint
-                    .clone()
-                    .expect("child must be mounted before it is laid out");
+                debug_assert!(
+                    !self.paint.is_detached(),
+                    "child must be mounted before it is laid out"
+                );
+
+                let paint = self.paint.clone();
 
                 take(&mut self.child, |child| {
                     let RelayoutChild::Inline(child) = child else {
@@ -307,10 +310,12 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
             }
 
             Form::Register => {
-                let paint = self
-                    .paint
-                    .clone()
-                    .expect("child must be mounted before it is laid out");
+                debug_assert!(
+                    !self.paint.is_detached(),
+                    "child must be mounted before it is laid out"
+                );
+
+                let paint = self.paint.clone();
 
                 if let RelayoutChild::Boxed { content, boundary } = &mut self.child {
                     *boundary = Some(scope.register(erase(Rc::clone(content)), paint));

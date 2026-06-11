@@ -104,9 +104,7 @@ where
 
         // The transform or subtree may have changed, so the subtree repaints. An animating transform
         // already marks this every frame; this covers a rebuild while idle.
-        if let Some(scope) = &render_object.scope {
-            scope.mark_needs_paint();
-        }
+        render_object.scope.mark_needs_paint();
     }
 }
 
@@ -120,7 +118,7 @@ pub struct RenderAnimatedTransform<Child> {
     /// The frame time the transform is sampled at, advanced by the animation each frame.
     now: Rc<Cell<Duration>>,
 
-    scope: Option<PaintScope>,
+    scope: PaintScope,
     vsync: Option<Vsync>,
     animation: Option<VsyncHandle>,
 
@@ -158,7 +156,7 @@ impl<Child: RenderBox> RenderAnimatedTransform<Child> {
             alignment: Alignment::TOP_LEFT,
 
             now: Rc::new(Cell::new(Duration::ZERO)),
-            scope: None,
+            scope: PaintScope::detached(),
             vsync: None,
             animation: None,
 
@@ -179,7 +177,7 @@ impl<Child: RenderBox> RenderAnimatedTransform<Child> {
 
 impl<Child: RenderBox> RenderObject for RenderAnimatedTransform<Child> {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.scope = Some(ctx.paint_scope().clone());
+        self.scope = ctx.paint_scope().clone();
         self.child.mount(ctx);
     }
 
@@ -261,10 +259,7 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
 
             self.animation = Some(vsync.on_frame(move |frame| {
                 now.set(frame);
-
-                if let Some(scope) = &scope {
-                    scope.mark_needs_paint();
-                }
+                scope.mark_needs_paint();
             }));
         }
 

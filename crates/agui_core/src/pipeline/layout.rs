@@ -71,6 +71,7 @@ impl LayoutPipeline {
     ) -> RegisteredLayoutBoundary {
         let cell = Rc::new(LayoutCell {
             link: LinkedListLink::new(),
+            state: Rc::downgrade(&self.state),
             depth,
             content,
             constraints: Cell::new(None),
@@ -79,10 +80,7 @@ impl LayoutPipeline {
             needs_layout: Cell::new(false),
         });
 
-        RegisteredLayoutBoundary {
-            cell,
-            state: Rc::downgrade(&self.state),
-        }
+        RegisteredLayoutBoundary { cell }
     }
 
     /// Re-lays every marked boundary from the constraints it last took, leaving the rest untouched.
@@ -104,11 +102,7 @@ impl LayoutPipeline {
                 continue;
             };
 
-            let scope = LayoutScope(LayoutScopeInner::Boundary {
-                state: Rc::downgrade(&self.state),
-                cell: Rc::downgrade(&cell),
-                depth: cell.depth,
-            });
+            let scope = LayoutScope(Rc::downgrade(&cell));
 
             let mut ctx = LayoutCtx::new(scope, &mut *paint_pipeline);
 
@@ -174,6 +168,9 @@ pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
 /// dirty list while it awaits re-layout.
 struct LayoutCell {
     link: LinkedListLink,
+
+    /// The pipeline state this cell's marks are linked into.
+    state: Weak<RefCell<LayoutPipelineState>>,
 
     /// The depth in the boundary nesting, sorted at flush so the pipeline re-enters marked boundaries
     /// rootmost-first.
@@ -261,17 +258,12 @@ impl LayoutPipelineState {
 /// [`mark_needs_layout`]: Self::mark_needs_layout
 pub struct RegisteredLayoutBoundary {
     cell: Rc<LayoutCell>,
-    state: Weak<RefCell<LayoutPipelineState>>,
 }
 
 impl RegisteredLayoutBoundary {
     /// A clone-able scope that marks this boundary and registers descendants under it.
     pub fn scope(&self) -> LayoutScope {
-        LayoutScope(LayoutScopeInner::Boundary {
-            state: Weak::clone(&self.state),
-            cell: Rc::downgrade(&self.cell),
-            depth: self.cell.depth,
-        })
+        LayoutScope(Rc::downgrade(&self.cell))
     }
 
     /// Records the constraints this boundary is re-laid under, without marking it. A boundary re-laid in
@@ -296,7 +288,7 @@ impl RegisteredLayoutBoundary {
     ///
     /// Panics if called during a layout pass, since the dirty list is being flushed.
     pub fn mark_needs_layout(&self) {
-        if let Some(state) = self.state.upgrade() {
+        if let Some(state) = self.cell.state.upgrade() {
             state.borrow_mut().mark_needs_layout(&self.cell);
         }
     }
@@ -312,7 +304,7 @@ impl Drop for RegisteredLayoutBoundary {
             return;
         }
 
-        let Some(state) = self.state.upgrade() else {
+        let Some(state) = self.cell.state.upgrade() else {
             return;
         };
 
@@ -333,28 +325,18 @@ impl Drop for RegisteredLayoutBoundary {
 /// the same target, so the scope can be marked from anywhere, including a reconcile or a per-frame
 /// callback.
 #[derive(Clone)]
-pub struct LayoutScope(LayoutScopeInner);
-
-#[derive(Clone)]
-enum LayoutScopeInner {
-    Detached,
-
-    Boundary {
-        state: Weak<RefCell<LayoutPipelineState>>,
-        cell: Weak<LayoutCell>,
-        depth: usize,
-    },
-}
+pub struct LayoutScope(Weak<LayoutCell>);
 
 impl LayoutScope {
     /// A scope detached from any pipeline, whose marks reach nothing.
     pub fn detached() -> Self {
-        Self(LayoutScopeInner::Detached)
+        Self(Weak::new())
     }
 
-    /// Whether this scope reaches no pipeline, so registering a boundary under it would do nothing.
+    /// Whether this scope reaches no live boundary, because it was created detached or its boundary
+    /// has since been freed, so registering under it would do nothing.
     pub fn is_detached(&self) -> bool {
-        matches!(self.0, LayoutScopeInner::Detached)
+        Weak::strong_count(&self.0) == 0
     }
 
     /// Registers `content` as a relayout boundary nested under this one and returns the handle that owns
@@ -366,14 +348,15 @@ impl LayoutScope {
         content: BoundaryContent,
         paint: PaintScope,
     ) -> RegisteredLayoutBoundary {
-        let (state, depth) = match &self.0 {
-            LayoutScopeInner::Boundary { state, depth, .. } => (Weak::clone(state), depth + 1),
+        let (state, depth) = match self.0.upgrade() {
+            Some(enclosing) => (Weak::clone(&enclosing.state), enclosing.depth + 1),
             // A detached handle reaches no pipeline, so its cell is never marked or linked.
-            LayoutScopeInner::Detached => (Weak::new(), 0),
+            None => (Weak::new(), 0),
         };
 
         let cell = Rc::new(LayoutCell {
             link: LinkedListLink::new(),
+            state,
             depth,
             content,
             constraints: Cell::new(None),
@@ -382,7 +365,7 @@ impl LayoutScope {
             needs_layout: Cell::new(false),
         });
 
-        RegisteredLayoutBoundary { cell, state }
+        RegisteredLayoutBoundary { cell }
     }
 
     /// Requests that this boundary be re-laid-out before the next frame. On the clean-to-dirty edge of
@@ -393,15 +376,11 @@ impl LayoutScope {
     ///
     /// Panics if called during a layout pass, since the dirty list is being flushed.
     pub fn mark_needs_layout(&self) {
-        let LayoutScopeInner::Boundary { state, cell, .. } = &self.0 else {
+        let Some(cell) = self.0.upgrade() else {
             return;
         };
 
-        let Some(state) = state.upgrade() else {
-            return;
-        };
-
-        let Some(cell) = cell.upgrade() else {
+        let Some(state) = cell.state.upgrade() else {
             return;
         };
 
@@ -501,6 +480,15 @@ mod tests {
         };
 
         (layouts, captured, render)
+    }
+
+    /// A scope is cloned onto every node that can mark its boundary, so it stays one pointer wide.
+    #[test]
+    fn a_layout_scope_is_one_pointer() {
+        assert_eq!(
+            std::mem::size_of::<LayoutScope>(),
+            std::mem::size_of::<usize>()
+        );
     }
 
     #[test]

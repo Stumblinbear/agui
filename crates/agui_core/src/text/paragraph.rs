@@ -59,7 +59,7 @@ pub struct RenderParagraph<C = ()> {
     memo: RefCell<QueryMemo>,
 
     layout_scope: LayoutScope,
-    paint_scope: Option<PaintScope>,
+    paint_scope: PaintScope,
 }
 
 impl<C> RenderParagraph<C> {
@@ -80,7 +80,7 @@ impl<C> RenderParagraph<C> {
             memo: RefCell::new(QueryMemo::default()),
 
             layout_scope: LayoutScope::detached(),
-            paint_scope: None,
+            paint_scope: PaintScope::detached(),
         }
     }
 
@@ -165,7 +165,7 @@ impl<C: RenderBox> RenderParagraph<C> {
 
 impl<C: RenderObject> RenderObject for RenderParagraph<C> {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = Some(ctx.paint_scope().clone());
+        self.paint_scope = ctx.paint_scope().clone();
 
         for child in &mut self.children {
             child.mount(ctx);
