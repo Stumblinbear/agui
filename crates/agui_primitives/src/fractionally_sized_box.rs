@@ -98,7 +98,7 @@ where
 
                 layout_scope: LayoutScope::detached(),
 
-                child: RenderNode::new(child_render),
+                child: RelayoutRenderNode::new(child_render),
             },
         )
     }
@@ -120,7 +120,9 @@ where
             render_object.layout_scope.mark_needs_layout();
         }
 
-        element.update(self.child, &mut render_object.child.object, ctx);
+        render_object
+            .child
+            .with_object_mut(|child_obj| element.update(self.child, child_obj, ctx));
     }
 }
 
@@ -137,18 +139,18 @@ pub struct RenderFractionallySizedBox<Child> {
 
     layout_scope: LayoutScope,
 
-    child: RenderNode<Child, Option<ChildParentData>>,
+    child: RelayoutRenderNode<Child, Option<ChildParentData>>,
 }
 
-impl<Child> SingleChildRenderObject for RenderFractionallySizedBox<Child> {
+impl<Child: RenderBox> SingleChildRenderObject for RenderFractionallySizedBox<Child> {
     type Child = Child;
 
     fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
+        self.child.with_object(f)
     }
 
     fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+        self.child.with_object_mut(f)
     }
 }
 
@@ -289,9 +291,250 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::with_ctx;
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+    };
+
+    use agui_core::{
+        paint::compositing::{LayerHandle, OffsetLayer},
+        pipeline::{PipelineOwner, layout::BoundaryContent},
+        prelude::element::*,
+        test_harness::with_ctx,
+    };
+
+    use typed_floats::as_const;
+
+    use crate::center::Center;
 
     use super::*;
+
+    type Captured = Rc<RefCell<Option<LayoutScope>>>;
+
+    /// A single-child wrapper that counts its layouts, so a test can confirm it is not re-laid when only
+    /// a boundary below it changes.
+    struct Counter<Child> {
+        layouts: Rc<Cell<usize>>,
+        child: Child,
+    }
+
+    impl<Child> Widget for Counter<Child>
+    where
+        Child: Widget,
+        Child::Render: RenderBox,
+    {
+        type Element = SingleChildElement<Child::Element, RenderCounter<Child::Render>>;
+        type Render = RenderCounter<Child::Render>;
+
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let (element, child_render) = SingleChildElement::new(self.child, ctx);
+            (
+                element,
+                RenderCounter {
+                    layouts: self.layouts,
+                    child: RenderNode::new(child_render),
+                },
+            )
+        }
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render_object: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.update(self.child, &mut render_object.child.object, ctx);
+        }
+    }
+
+    struct RenderCounter<Child> {
+        layouts: Rc<Cell<usize>>,
+        child: RenderNode<Child, Option<Size>>,
+    }
+
+    impl<Child> SingleChildRenderObject for RenderCounter<Child> {
+        type Child = Child;
+
+        fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
+            f(&self.child.object)
+        }
+
+        fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
+            f(&mut self.child.object)
+        }
+    }
+
+    impl<Child: RenderBox> RenderObject for RenderCounter<Child> {
+        fn mount(&mut self, ctx: &mut MountCtx) {
+            self.child.mount(ctx);
+        }
+        fn unmount(&mut self, ctx: &mut MountCtx) {
+            self.child.unmount(ctx);
+        }
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
+        }
+    }
+
+    impl<Child: RenderBox> RenderBox for RenderCounter<Child> {
+        fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.min_intrinsic_width(height)
+        }
+        fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.max_intrinsic_width(height)
+        }
+        fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.min_intrinsic_height(width)
+        }
+        fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            self.child.max_intrinsic_height(width)
+        }
+        fn measure(&self, constraints: BoxConstraints) -> Size {
+            self.child.measure(constraints)
+        }
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+            self.layouts.set(self.layouts.get() + 1);
+            self.child.layout_and_get_size(ctx, constraints)
+        }
+        fn measure_baseline(
+            &self,
+            constraints: BoxConstraints,
+            baseline: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            self.child.measure_baseline(constraints, baseline)
+        }
+        fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+            self.child.distance_to_baseline(baseline)
+        }
+        fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+            self.child.hit_test(result, position)
+        }
+        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+            self.child.paint(ctx, offset);
+        }
+    }
+
+    /// A leaf that counts its layouts and captures the scope it was laid out under, so a test can re-lay
+    /// it the way a change inside it would.
+    struct Probe {
+        layouts: Rc<Cell<usize>>,
+        captured: Captured,
+    }
+
+    impl Widget for Probe {
+        type Element = LeafElement<RenderProbe>;
+        type Render = RenderProbe;
+
+        fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderProbe>, RenderProbe) {
+            (
+                LeafElement::new(),
+                RenderProbe {
+                    layouts: self.layouts,
+                    captured: self.captured,
+                },
+            )
+        }
+
+        fn update(self, _: &mut LeafElement<RenderProbe>, _: &mut RenderProbe, _: &mut UpdateCtx) {}
+    }
+
+    struct RenderProbe {
+        layouts: Rc<Cell<usize>>,
+        captured: Captured,
+    }
+
+    impl RenderObject for RenderProbe {
+        fn mount(&mut self, _: &mut MountCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {}
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl RenderBox for RenderProbe {
+        fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            Some(as_const!(PositiveFinite, f32, 0.0))
+        }
+        fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            Some(as_const!(PositiveFinite, f32, 0.0))
+        }
+        fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            Some(as_const!(PositiveFinite, f32, 0.0))
+        }
+        fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            Some(as_const!(PositiveFinite, f32, 0.0))
+        }
+        fn measure(&self, constraints: BoxConstraints) -> Size {
+            constraints.smallest()
+        }
+        fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+            self.layouts.set(self.layouts.get() + 1);
+            *self.captured.borrow_mut() = Some(ctx.scope().clone());
+
+            constraints.smallest()
+        }
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+            None
+        }
+        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+            HitTest::Pass
+        }
+        fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+    }
+
+    /// Both factors size the child tightly even under the loose constraints Center hands down, so the
+    /// boundary forms at the child and a change inside it does not re-lay anything above.
+    #[test]
+    fn a_factored_box_makes_its_child_a_relayout_boundary() {
+        let outer = Rc::new(Cell::new(0));
+        let probe_layouts = Rc::new(Cell::new(0));
+        let captured: Captured = Rc::new(RefCell::new(None));
+
+        let widget = Counter {
+            layouts: Rc::clone(&outer),
+            child: Center::new().child(
+                FractionallySizedBox::new()
+                    .width_factor(0.5_f32)
+                    .height_factor(0.5_f32)
+                    .child(Probe {
+                        layouts: Rc::clone(&probe_layouts),
+                        captured: Rc::clone(&captured),
+                    }),
+            ),
+        };
+
+        let (_, render) = with_ctx(|ctx| widget.create(ctx));
+        let content: BoundaryContent = Rc::new(RefCell::new(render));
+        let mut owner =
+            PipelineOwner::new(Rc::clone(&content), LayerHandle::new(OffsetLayer::new()));
+
+        owner.resize(BoxConstraints::new(0, 200, 0, 200));
+        owner.flush_layout();
+        assert_eq!(outer.get(), 1);
+        assert_eq!(probe_layouts.get(), 1);
+
+        // A change confined to the factored box's child marks the boundary it registered.
+        captured
+            .borrow()
+            .clone()
+            .expect("laid out once")
+            .mark_needs_layout();
+
+        owner.flush_layout();
+        assert_eq!(
+            probe_layouts.get(),
+            2,
+            "the tightly-factored child re-laid on its own"
+        );
+        assert_eq!(outer.get(), 1, "nothing above the boundary was re-laid");
+    }
 
     #[test]
     fn sizes_child_to_a_fraction_of_the_constraints() {
