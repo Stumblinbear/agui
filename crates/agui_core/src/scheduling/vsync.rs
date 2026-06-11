@@ -26,6 +26,15 @@ pub struct Vsync {
     inner: Rc<RefCell<Inner>>,
 }
 
+/// Two handles are equal when they are clones of one another, sharing a single callback registry.
+impl PartialEq for Vsync {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for Vsync {}
+
 impl Vsync {
     pub fn new() -> Self {
         Self::default()

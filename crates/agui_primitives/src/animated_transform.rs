@@ -94,8 +94,11 @@ where
         render_object.origin = self.origin;
         render_object.alignment = self.alignment;
 
-        render_object.vsync = self.vsync;
-        render_object.animation = None;
+        // Drop the subscription only when its source changes, so an idle rebuild keeps animating.
+        if render_object.vsync != self.vsync {
+            render_object.vsync = self.vsync;
+            render_object.animation = None;
+        }
 
         element.update(self.child, &mut render_object.child.object, ctx);
 
