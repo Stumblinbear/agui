@@ -83,8 +83,10 @@ mod harness {
     use agui_core::prelude::render_object::{Fonts, InlineSpan, TextSpan, TextStyle};
     use agui_test::prelude::*;
 
+    use agui_core::provide::Provide;
+
     use super::RichText;
-    use crate::{provide::Provide, sized_box::SizedBox};
+    use crate::sized_box::SizedBox;
 
     #[test]
     fn mixed_styles_produce_a_finite_size() {

@@ -111,8 +111,9 @@ mod harness {
     use agui_core::prelude::render_object::Fonts;
     use agui_test::prelude::*;
 
+    use agui_core::provide::Provide;
+
     use super::Text;
-    use crate::provide::Provide;
 
     #[test]
     fn produces_a_finite_size() {

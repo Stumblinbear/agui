@@ -85,7 +85,11 @@ impl<'a> UpdateCtx<'a> {
         ret
     }
 
-    pub fn with_provided<V, T>(&mut self, value: Rc<V>, func: impl FnOnce(&mut UpdateCtx) -> T) -> T
+    pub(crate) fn with_provided<V, T>(
+        &mut self,
+        value: Rc<V>,
+        func: impl FnOnce(&mut UpdateCtx) -> T,
+    ) -> T
     where
         V: Any,
     {

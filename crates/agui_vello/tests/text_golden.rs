@@ -4,10 +4,11 @@ use agui_core::{
     paint::compositing::{LayerHandle, OffsetLayer},
     pipeline::{PipelineOwner, layout::BoundaryContent},
     prelude::{element::*, render_object::*},
+    provide::Provide,
     test_harness::with_ctx,
 };
 use agui_primitives::{
-    colored_box::ColoredBox, provide::Provide, rich_text::RichText, sized_box::SizedBox, text::Text,
+    colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
 };
 use agui_vello::{
     headless::{HeadlessRenderer, assert_golden},
