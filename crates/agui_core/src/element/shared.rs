@@ -209,12 +209,10 @@ where
 
     let mut old_slots: Vec<Slot<C, CV::Render>> =
         old.into_iter().zip(old_render).map(Some).collect();
-    let mut new_slots: Vec<Option<CV>> = new.into_iter().map(Some).collect();
 
     // Leading children that line up positionally.
     let mut prefix = 0;
-    while prefix < old_len && prefix < new_len && can_update(&old_slots, &new_slots, prefix, prefix)
-    {
+    while prefix < old_len && prefix < new_len && can_update(&old_slots, &new, prefix, prefix) {
         prefix += 1;
     }
 
@@ -223,68 +221,73 @@ where
     let mut old_bottom = old_len;
     while prefix < old_bottom
         && prefix < new_bottom
-        && can_update(&old_slots, &new_slots, old_bottom - 1, new_bottom - 1)
+        && can_update(&old_slots, &new, old_bottom - 1, new_bottom - 1)
     {
         old_bottom -= 1;
         new_bottom -= 1;
     }
 
+    // Plan the keyed middle while `new` can still be borrowed; the loops below then move each child
+    // out in ascending order, which is the only order they are consumed.
+    let plan = (prefix < old_bottom && prefix < new_bottom)
+        .then(|| match_keyed_middle(&old_slots, &new, prefix..old_bottom, prefix..new_bottom));
+
+    let mut new = new.into_iter();
+
     for index in 0..prefix {
+        let child = new.next().expect("prefix child");
+
         reuse(
             &mut out_nodes,
             &mut out_render,
             &mut old_slots,
-            &mut new_slots,
             index,
             index,
+            child,
             ctx,
         );
     }
 
-    // The middle is matched by key; an unmatched new slot is created, an unmatched old one dropped.
-    if prefix < new_bottom {
-        if prefix < old_bottom {
-            let plan = match_keyed_middle(
-                &old_slots,
-                &new_slots,
-                prefix..old_bottom,
-                prefix..new_bottom,
-            );
+    // The middle is matched by key: a matched new child reuses its old one, an unmatched new child is
+    // created, and an old child no entry claims is left in `old_slots` to drop.
+    if let Some(plan) = plan {
+        for (offset, matched) in plan.into_iter().enumerate() {
+            let new_index = prefix + offset;
+            let child = new.next().expect("middle child");
 
-            for (offset, matched) in plan.into_iter().enumerate() {
-                let new_index = prefix + offset;
-
-                if let Some(old_index) = matched {
-                    reuse(
-                        &mut out_nodes,
-                        &mut out_render,
-                        &mut old_slots,
-                        &mut new_slots,
-                        new_index,
-                        old_index,
-                        ctx,
-                    );
-                } else {
-                    let child = new_slots[new_index].take().expect("new slot taken twice");
-                    create(&mut out_nodes, &mut out_render, new_index, child, ctx);
-                }
+            if let Some(old_index) = matched {
+                reuse(
+                    &mut out_nodes,
+                    &mut out_render,
+                    &mut old_slots,
+                    new_index,
+                    old_index,
+                    child,
+                    ctx,
+                );
+            } else {
+                create(&mut out_nodes, &mut out_render, new_index, child, ctx);
             }
-        } else {
-            for (offset, slot) in new_slots[prefix..new_bottom].iter_mut().enumerate() {
-                let child = slot.take().expect("new slot taken twice");
-                create(&mut out_nodes, &mut out_render, prefix + offset, child, ctx);
-            }
+        }
+    } else {
+        // No old children span the middle, so every new child there is created.
+        for offset in 0..(new_bottom - prefix) {
+            let new_index = prefix + offset;
+            let child = new.next().expect("middle child");
+            create(&mut out_nodes, &mut out_render, new_index, child, ctx);
         }
     }
 
     for offset in 0..(new_len - new_bottom) {
+        let child = new.next().expect("suffix child");
+
         reuse(
             &mut out_nodes,
             &mut out_render,
             &mut old_slots,
-            &mut new_slots,
             new_bottom + offset,
             old_bottom + offset,
+            child,
             ctx,
         );
     }
@@ -299,7 +302,7 @@ type OldSlots<C, R> = [Slot<C, R>];
 /// Whether the old child at `old_index` can be reconciled in place by the new child at `new_index`.
 fn can_update<C, CV>(
     old_slots: &OldSlots<C, CV::Render>,
-    new_slots: &[Option<CV>],
+    new: &[CV],
     old_index: usize,
     new_index: usize,
 ) -> bool
@@ -311,11 +314,8 @@ where
         .as_ref()
         .expect("compared a taken slot")
         .0;
-    let child = new_slots[new_index]
-        .as_ref()
-        .expect("compared a taken slot");
 
-    node_can_update(keyed, child)
+    node_can_update(keyed, &new[new_index])
 }
 
 /// Whether the old `keyed` child can be reconciled in place by the new `child` widget: same widget
@@ -334,16 +334,15 @@ fn reuse<C, CV>(
     out_nodes: &mut Vec<KeyedNode<C>>,
     out_render: &mut Vec<RenderNode<CV::Render>>,
     old_slots: &mut OldSlots<C, CV::Render>,
-    new_slots: &mut [Option<CV>],
     new_index: usize,
     old_index: usize,
+    child: CV,
     ctx: &mut UpdateCtx,
 ) where
     C: Element,
     CV: Widget<Element = C>,
 {
     let (mut keyed, mut render) = old_slots[old_index].take().expect("reused a slot twice");
-    let child = new_slots[new_index].take().expect("consumed a slot twice");
 
     // The stored key already equals the new child's: reuse is gated on `node_can_update`, which
     // compares them. So there is nothing to re-store here.
@@ -411,7 +410,7 @@ fn create<C, CV>(
 /// to create one.
 fn match_keyed_middle<C, CV>(
     old_slots: &OldSlots<C, CV::Render>,
-    new_slots: &[Option<CV>],
+    new: &[CV],
     old_range: Range<usize>,
     new_range: Range<usize>,
 ) -> Vec<Option<usize>>
@@ -431,12 +430,7 @@ where
     }
 
     new_range
-        .map(|index| {
-            new_slots[index]
-                .as_ref()
-                .and_then(|child| child.key())
-                .and_then(|key| old_keyed.remove(&key))
-        })
+        .map(|index| new[index].key().and_then(|key| old_keyed.remove(&key)))
         .collect()
 }
 
