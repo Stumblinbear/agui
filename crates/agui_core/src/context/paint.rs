@@ -161,14 +161,7 @@ impl PaintCtx<'_> {
 
     /// Appends the flat drawing accumulated so far as a [`PictureLayer`], then starts a fresh picture.
     fn flush(&mut self) {
-        let has_drawing = self.picture.commands().iter().any(|command| {
-            !matches!(
-                command,
-                PaintCommand::PushTransform(_) | PaintCommand::PopTransform
-            )
-        });
-
-        if !has_drawing {
+        if !self.picture.has_drawing() {
             return;
         }
 

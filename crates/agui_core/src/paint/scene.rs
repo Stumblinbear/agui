@@ -12,6 +12,8 @@ pub struct Scene {
 
     brushes: Vec<Brush>,
     strokes: Vec<Stroke>,
+
+    has_drawing: bool,
 }
 
 /// The buffer lengths of a recorded [`Scene`].
@@ -72,6 +74,12 @@ impl Scene {
         self.commands.clear();
         self.brushes.clear();
         self.strokes.clear();
+        self.has_drawing = false;
+    }
+
+    /// Whether the scene holds a command that draws, as opposed to only transform pushes and pops.
+    pub(crate) fn has_drawing(&self) -> bool {
+        self.has_drawing
     }
 
     pub fn commands(&self) -> &[PaintCommand] {
@@ -97,6 +105,13 @@ impl Scene {
     }
 
     pub(crate) fn push(&mut self, command: PaintCommand) {
+        if !matches!(
+            command,
+            PaintCommand::PushTransform(_) | PaintCommand::PopTransform
+        ) {
+            self.has_drawing = true;
+        }
+
         self.commands.push(command);
     }
 
