@@ -3,7 +3,10 @@ use std::{cell::Cell, rc::Rc, time::Duration};
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    paint::peniko::kurbo::Affine,
+    paint::{
+        compositing::{LayerHandle, TransformLayer},
+        peniko::kurbo::Affine,
+    },
     prelude::{element::*, render_object::*},
     scheduling::{Vsync, VsyncHandle},
 };
@@ -90,13 +93,17 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        render_object.transform = self.transform;
-        render_object.origin = self.origin;
-        render_object.alignment = self.alignment;
+        if !Rc::ptr_eq(&render_object.transform, &self.transform)
+            || render_object.origin != self.origin
+            || render_object.alignment != self.alignment
+        {
+            render_object.transform = self.transform;
+            render_object.origin = self.origin;
+            render_object.alignment = self.alignment;
 
-        // Drop the subscription only when its source changes, so an idle rebuild keeps animating.
-        if render_object.vsync != self.vsync {
             render_object.vsync = self.vsync;
+
+            // Rebuild the subscription so it captures the new inputs.
             render_object.animation = None;
         }
 
@@ -108,8 +115,8 @@ where
     }
 }
 
-/// The render object of an [`AnimatedTransform`]: resamples its transform each frame and repaints its
-/// child under it.
+/// The render object of an [`AnimatedTransform`]: resamples its transform each frame and recomposites
+/// its child under it through a retained layer.
 pub struct RenderAnimatedTransform<Child> {
     transform: TransformFn,
     origin: Offset,
@@ -121,6 +128,9 @@ pub struct RenderAnimatedTransform<Child> {
     scope: PaintScope,
     vsync: Option<Vsync>,
     animation: Option<VsyncHandle>,
+
+    /// The layer the child paints into, retained so the animation moves it without a repaint.
+    layer: Option<LayerHandle<TransformLayer>>,
 
     child: RenderNode<Child, Option<Size>>,
 }
@@ -160,6 +170,8 @@ impl<Child: RenderBox> RenderAnimatedTransform<Child> {
             vsync: None,
             animation: None,
 
+            layer: None,
+
             child: RenderNode::new(child),
         }
     }
@@ -183,11 +195,16 @@ impl<Child: RenderBox> RenderObject for RenderAnimatedTransform<Child> {
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.animation = None;
+        self.layer = None;
         self.child.unmount(ctx);
     }
 
     fn update_compositing_bits(&mut self) -> bool {
-        self.child.update_compositing_bits()
+        self.child.update_compositing_bits();
+
+        // An animated transform always composites its child as a group, so it can move the group by
+        // recompositing instead of repainting.
+        true
     }
 
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
@@ -250,29 +267,51 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        // Begin animating on the first paint, once the subtree has been laid out.
-        if self.animation.is_none()
-            && let Some(vsync) = self.vsync.as_ref()
-        {
-            let now = Rc::clone(&self.now);
-            let scope = self.scope.clone();
-
-            self.animation = Some(vsync.on_frame(move |frame| {
-                now.set(frame);
-                scope.mark_needs_paint();
-            }));
-        }
-
         let size = self
             .child
             .parent_data
             .expect("animated transform has not been laid out");
+        let transform = self.effective(size);
 
-        ctx.with_transform(
-            self.child.needs_compositing(),
-            Affine::translate(offset) * self.effective(size),
-            |ctx| self.child.paint(ctx, Offset::ZERO),
-        );
+        // Reuse the retained layer across repaints; create it on the first paint. Clearing drops the
+        // previous repaint's child drawing so the child paints in fresh, and is a noop on a new layer.
+        let layer = self
+            .layer
+            .get_or_insert_with(|| LayerHandle::new(TransformLayer::new(transform)))
+            .clone();
+        {
+            let mut guard = layer.borrow_mut();
+            guard.clear();
+            guard.set_transform(transform);
+        }
+
+        // Begin animating on the first paint, once the subtree has been laid out. The subscription
+        // moves the retained layer and recomposites, so the subtree is not repainted as it animates.
+        if self.animation.is_none()
+            && let Some(vsync) = self.vsync.as_ref()
+        {
+            let now = Rc::clone(&self.now);
+            let transform = Rc::clone(&self.transform);
+            let origin = self.origin;
+            let alignment = self.alignment;
+            let layer = layer.clone();
+            let scope = self.scope.clone();
+
+            self.animation = Some(vsync.on_frame(move |frame| {
+                now.set(frame);
+
+                layer.borrow_mut().set_transform(fold_pivot(
+                    (transform)(frame),
+                    origin,
+                    alignment,
+                    size,
+                ));
+
+                scope.mark_needs_composite();
+            }));
+        }
+
+        ctx.push_layer(layer, offset, |ctx| self.child.paint(ctx, Offset::ZERO));
     }
 }
 
@@ -425,9 +464,10 @@ mod tests {
         owner
     }
 
-    /// Each tick resamples the transform and repaints the subtree under it at the new transform.
+    /// Each tick resamples the transform and recomposites the retained layer at the new transform; the
+    /// subtree under it is painted once and replayed, not repainted.
     #[test]
-    fn the_transform_resamples_each_frame() {
+    fn the_transform_recomposites_without_repainting_the_subtree() {
         let vsync = Vsync::new();
         let paints = Rc::new(Cell::new(0usize));
 
@@ -440,6 +480,7 @@ mod tests {
         let mut owner = mount(widget);
         owner.flush_layout();
         owner.flush_paint();
+        assert_eq!(paints.get(), 1);
 
         vsync.tick(Duration::from_millis(16));
         owner.flush_paint();
@@ -455,9 +496,10 @@ mod tests {
             Affine::translate((32.0, 0.0))
         );
 
-        assert!(
-            paints.get() >= 3,
-            "the subtree repaints as the transform moves"
+        assert_eq!(
+            paints.get(),
+            1,
+            "the subtree was painted once and replayed at each transform"
         );
     }
 

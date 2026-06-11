@@ -234,6 +234,11 @@ impl TransformLayer {
     pub fn transform(&self) -> Affine {
         self.transform
     }
+
+    /// Removes every child, keeping the transform and offset. The parent repaints the children in.
+    pub fn clear(&mut self) {
+        self.children.clear();
+    }
 }
 
 impl Layer for TransformLayer {

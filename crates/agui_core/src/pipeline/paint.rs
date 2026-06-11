@@ -35,6 +35,7 @@ impl Default for PaintPipeline {
             pending: Rc::new(RefCell::new(PaintPipelineState {
                 needs_paint: LinkedList::new(PaintLinkAdapter::new()),
                 needs_compositing: LinkedList::new(CompositingLinkAdapter::new()),
+                needs_composite: false,
                 notify: Box::new(noop),
 
                 phase: PaintPipelinePhase::Idle,
@@ -185,7 +186,7 @@ impl PaintPipeline {
     /// Panics if called while updating compositing bits or painting is in progress.
     pub fn flush_paint(&mut self) {
         {
-            let pending = self.pending.borrow();
+            let mut pending = self.pending.borrow_mut();
 
             match pending.phase {
                 PaintPipelinePhase::Idle => {}
@@ -198,6 +199,10 @@ impl PaintPipeline {
                     panic!("paint cannot be flushed while painting is in progress");
                 }
             }
+
+            // This flush is part of the frame that composites, so any standalone composite request is
+            // about to be satisfied; a later mark schedules the next frame afresh.
+            pending.needs_composite = false;
 
             if pending.needs_paint.is_empty() {
                 return;
@@ -295,15 +300,20 @@ struct PaintPipelineState {
     needs_compositing: LinkedList<CompositingLinkAdapter>,
     needs_paint: LinkedList<PaintLinkAdapter>,
 
+    /// Whether a layer's placement changed and the subtree must recomposite, with no boundary to
+    /// repaint. Set out of band by an animation that moves a retained layer; cleared when the frame
+    /// composites.
+    needs_composite: bool,
+
     notify: Box<dyn Fn()>,
 
     phase: PaintPipelinePhase,
 }
 
 impl PaintPipelineState {
-    /// Returns `true` if nothing is awaiting repaint or compositing update.
+    /// Returns `true` if nothing is awaiting repaint, compositing update, or recomposite.
     fn is_clean(&self) -> bool {
-        self.needs_paint.is_empty() && self.needs_compositing.is_empty()
+        self.needs_paint.is_empty() && self.needs_compositing.is_empty() && !self.needs_composite
     }
 
     fn link_paint(&mut self, cell: &Rc<PaintCell>) {
@@ -409,6 +419,28 @@ impl PaintPipelineState {
             (self.notify)();
         }
     }
+
+    fn mark_needs_composite(&mut self) {
+        match self.phase {
+            PaintPipelinePhase::Idle => {}
+
+            PaintPipelinePhase::UpdateCompositingBits => {
+                panic!("cannot mark a recomposite while updating compositing bits");
+            }
+
+            PaintPipelinePhase::Paint => {
+                panic!("cannot mark a recomposite while painting is in progress");
+            }
+        }
+
+        let was_clean = self.is_clean();
+
+        self.needs_composite = true;
+
+        if was_clean {
+            (self.notify)();
+        }
+    }
 }
 
 /// The boundary a render object repaints into. A node deep in a subtree holds the scope of its nearest
@@ -460,6 +492,21 @@ impl PaintScope {
             .borrow_mut()
             .mark_needs_compositing_bits_update(&cell);
     }
+
+    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary. Use
+    /// it when only a retained layer's placement changed, as a per-frame animation of a transform or
+    /// offset does.
+    pub fn mark_needs_composite(&self) {
+        let Some(cell) = self.0.upgrade() else {
+            return;
+        };
+
+        let Some(pending) = cell.pending.upgrade() else {
+            return;
+        };
+
+        pending.borrow_mut().mark_needs_composite();
+    }
 }
 
 /// A registered boundary, returned to the render object that registered it. It owns the boundary's
@@ -484,6 +531,11 @@ impl PaintBoundaryHandle {
     /// Marks this boundary's compositing bits for recomputation before its next repaint.
     pub fn mark_needs_compositing_bits_update(&self) {
         self.scope().mark_needs_compositing_bits_update();
+    }
+
+    /// Schedules a recomposite of the subtree on the next frame, without repainting this boundary.
+    pub fn mark_needs_composite(&self) {
+        self.scope().mark_needs_composite();
     }
 }
 
@@ -825,6 +877,49 @@ mod tests {
         flush_paint(&mut pipeline);
         assert_eq!(paints.get(), 3, "the boundary repainted");
         assert_eq!(bits.get(), 2, "a compositing-bits mark recomputes bits");
+    }
+
+    #[test]
+    fn a_composite_mark_schedules_a_frame_without_repainting() {
+        let frames = Rc::new(Cell::new(0));
+        let scheduled = Rc::clone(&frames);
+        let paints = Rc::new(Cell::new(0));
+
+        let (mut pipeline, boundary) = PaintPipeline::new(
+            content(Counter {
+                paints: Rc::clone(&paints),
+                color: Color::BLACK,
+            }),
+            layer(),
+        );
+        pipeline.on_needs_paint(Box::new(move || scheduled.set(scheduled.get() + 1)));
+
+        // Registration left the boundary dirty; the first frame clears it without involving the hook.
+        flush_paint(&mut pipeline);
+        assert_eq!(paints.get(), 1);
+        assert_eq!(frames.get(), 0, "registration alone schedules no frame");
+
+        boundary.mark_needs_composite();
+        boundary.mark_needs_composite();
+        assert_eq!(
+            frames.get(),
+            1,
+            "only the clean-to-dirty edge schedules a frame"
+        );
+
+        flush_paint(&mut pipeline);
+        assert_eq!(
+            paints.get(),
+            1,
+            "a composite mark recomposites without repainting the boundary"
+        );
+
+        boundary.mark_needs_composite();
+        assert_eq!(
+            frames.get(),
+            2,
+            "a mark after the flush schedules another frame"
+        );
     }
 
     #[test]
