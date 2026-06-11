@@ -46,7 +46,6 @@ rand = "0.10"
 rustc-hash = "2.1"
 slotmap = "1.0"
 parking_lot = "0.12"
-imbl = "7.0"
 bitflags = "2.4"
 url = "2.4"
 

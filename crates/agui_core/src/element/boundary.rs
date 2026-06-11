@@ -101,7 +101,6 @@ pub fn mark_rebuild(state: &Rc<RefCell<BuildState>>, path: &RoutingPath) {
 pub fn flush_boundaries(
     state: &Rc<RefCell<BuildState>>,
     scheduler: &mut dyn TaskScheduler,
-    provide: &ProvideScope,
 ) -> bool {
     let ordered = state.borrow_mut().drain_rootmost_first();
 
@@ -110,7 +109,7 @@ pub fn flush_boundaries(
     }
 
     for cell in ordered {
-        cell.flush_rebuilds(scheduler, provide);
+        cell.flush_rebuilds(scheduler);
     }
 
     true
@@ -175,6 +174,10 @@ struct BuildBoundaryCell {
     /// Whether this boundary is currently in the registry's dirty list, guarding a double-mark from
     /// queueing it twice.
     is_dirty: Cell<bool>,
+
+    /// The provided-value scope captured when this boundary was reconciled, so a targeted flush
+    /// re-enters the subtree with the values an ancestor put in scope above it.
+    provide: RefCell<ProvideScope>,
 }
 
 impl BuildBoundaryCell {
@@ -192,6 +195,7 @@ impl BuildBoundaryCell {
             render: RefCell::new(None),
             suffixes: RefCell::new(Vec::new()),
             is_dirty: Cell::new(false),
+            provide: RefCell::new(ctx.provide_scope().clone()),
         });
 
         if let Some(state) = scope.state.upgrade() {
@@ -259,15 +263,16 @@ impl BuildBoundaryCell {
         self.is_dirty.set(false);
     }
 
-    fn flush_rebuilds(&self, scheduler: &mut dyn TaskScheduler, provide: &ProvideScope) {
+    fn flush_rebuilds(&self, scheduler: &mut dyn TaskScheduler) {
         let suffixes = std::mem::take(&mut *self.suffixes.borrow_mut());
         let child_scope = self.child_scope();
+        let provide = self.provide.borrow().clone();
 
         for suffix in suffixes {
             // Pre-seed the routing path with the target's path under this boundary, so a task spawned during
             // the rebuild captures its own location rather than the boundary's.
             let mut path = suffix.to_vec();
-            let mut ctx = UpdateCtx::new(scheduler, &mut path, provide, &child_scope);
+            let mut ctx = UpdateCtx::new(scheduler, &mut path, &provide, &child_scope);
 
             let render = self.render.borrow();
             let Some(render) = render.as_ref() else {
@@ -325,6 +330,10 @@ impl BuildBoundaryElement {
         V: Widget,
         V::Element: 'static,
     {
+        // An ancestor reconciling through this boundary may carry updated provides; recapture them so
+        // a later targeted flush re-enters with the current scope, not the one seen at registration.
+        *self.cell.provide.borrow_mut() = ctx.provide_scope().clone();
+
         let child_scope = self.cell.child_scope();
 
         ctx.with_build_scope(&child_scope, |ctx| {

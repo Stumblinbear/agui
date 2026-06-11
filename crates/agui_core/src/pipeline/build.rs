@@ -18,8 +18,6 @@ use crate::{
 /// The root widget is registered as the outermost build boundary, so every element lives under a
 /// boundary and a rebuild dispatches straight into the nearest one without a walk from the root.
 pub struct BuildOwner {
-    provide: ProvideScope,
-
     state: Rc<RefCell<BuildState>>,
 
     root: BuildBoundaryElement,
@@ -44,14 +42,7 @@ impl BuildOwner {
             BuildBoundaryElement::create(widget, &mut ctx)
         };
 
-        (
-            Self {
-                provide,
-                state,
-                root,
-            },
-            render,
-        )
+        (Self { state, root }, render)
     }
 
     /// The id of the root boundary, for addressing a root-relative path.
@@ -85,7 +76,7 @@ impl BuildOwner {
     /// Rebuilds every boundary marked since the last flush. Returns whether anything rebuilt, so the
     /// caller can skip reconciling the render tree when nothing changed.
     pub fn flush(&mut self, scheduler: &mut dyn TaskScheduler) -> bool {
-        flush_boundaries(&self.state, scheduler, &self.provide)
+        flush_boundaries(&self.state, scheduler)
     }
 }
 

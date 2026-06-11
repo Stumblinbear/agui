@@ -1,11 +1,9 @@
 use std::{
     any::{Any, TypeId},
-    hash::{BuildHasherDefault, Hasher},
     rc::Rc,
 };
 
 use bon::Builder;
-use imbl::shared_ptr::RcK;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
@@ -14,9 +12,21 @@ use crate::{
     widget::Widget,
 };
 
+/// The values in scope for a subtree, each looked up by its type.
+///
+/// A value added with [`provide`](Self::provide) is visible through [`get`](Self::get) to the
+/// subtree built under that call. Providing a type already in scope shadows the earlier value for
+/// the new subtree, leaving the scope it extended untouched, so sibling subtrees keep seeing the
+/// original.
 #[derive(Default, Clone)]
 pub struct ProvideScope {
-    map: imbl::GenericHashMap<TypeId, Rc<dyn Any>, BuildHasherDefault<TypeIdHasher>, RcK>,
+    head: Option<Rc<ProvideNode>>,
+}
+
+struct ProvideNode {
+    type_id: TypeId,
+    value: Rc<dyn Any>,
+    parent: Option<Rc<ProvideNode>>,
 }
 
 impl ProvideScope {
@@ -28,9 +38,18 @@ impl ProvideScope {
     where
         T: Any,
     {
-        self.map
-            .get(&TypeId::of::<T>())
-            .and_then(|rc| Rc::clone(rc).downcast::<T>().ok())
+        let target = TypeId::of::<T>();
+        let mut node = self.head.as_deref();
+
+        while let Some(current) = node {
+            if current.type_id == target {
+                return Rc::clone(&current.value).downcast::<T>().ok();
+            }
+
+            node = current.parent.as_deref();
+        }
+
+        None
     }
 
     pub fn provide<T>(&self, value: Rc<T>) -> ProvideScope
@@ -38,7 +57,11 @@ impl ProvideScope {
         T: Any,
     {
         ProvideScope {
-            map: self.map.update(TypeId::of::<T>(), value),
+            head: Some(Rc::new(ProvideNode {
+                type_id: TypeId::of::<T>(),
+                value,
+                parent: self.head.clone(),
+            })),
         }
     }
 }
@@ -135,31 +158,6 @@ where
         d.node(format!("Provide<{}>", Diagnostics::short_type_name::<V>()))
             .child(|d| self.child.element.describe(d))
             .finish()
-    }
-}
-
-#[derive(Default)]
-pub struct TypeIdHasher {
-    value: u64,
-}
-
-impl Hasher for TypeIdHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        // This expects to receive exactly one 64-bit value, and there’s no realistic chance of
-        // that changing, but I don’t want to depend on something that isn’t expressly part of the
-        // contract for safety. But I’m OK with release builds putting everything in one bucket
-        // if it *did* change (and debug builds panicking).
-        debug_assert_eq!(bytes.len(), 8);
-
-        let _ = bytes
-            .try_into()
-            .map(|array| self.value = u64::from_ne_bytes(array));
-    }
-
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.value
     }
 }
 
