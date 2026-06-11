@@ -12,6 +12,7 @@ use crate::{
     context::PaintCtx,
     geometry::Offset,
     paint::compositing::{LayerHandle, OffsetLayer},
+    paint::scene::SceneCapacity,
     pipeline::layout::BoundaryContent,
     render_object::{RenderObject, box_layout::RenderBox},
 };
@@ -87,6 +88,7 @@ impl PaintPipeline {
             compositing_link: LinkedListLink::new(),
             content,
             layer,
+            paint_capacity: Cell::new(SceneCapacity::default()),
             needs_paint: Cell::new(false),
             needs_compositing: Cell::new(false),
         });
@@ -225,9 +227,10 @@ impl PaintPipeline {
             layer.borrow_mut().clear();
 
             let mut content = Rc::clone(&cell.content);
-            PaintCtx::paint(layer, |ctx| {
+            let recorded = PaintCtx::paint_with_capacity(layer, cell.paint_capacity.get(), |ctx| {
                 content.paint(ctx, Offset::ZERO);
             });
+            cell.paint_capacity.set(recorded);
         }
 
         self.pending.borrow_mut().phase = PaintPipelinePhase::Idle;
@@ -258,6 +261,9 @@ struct PaintCell {
 
     content: BoundaryContent,
     layer: LayerHandle<OffsetLayer>,
+
+    /// The buffer lengths the last repaint recorded, sizing the next repaint's buffers.
+    paint_capacity: Cell<SceneCapacity>,
 
     /// Whether this cell is currently in the paint channel, guarding a double-mark from linking it twice.
     needs_paint: Cell<bool>,

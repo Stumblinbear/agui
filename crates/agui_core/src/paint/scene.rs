@@ -14,9 +14,57 @@ pub struct Scene {
     strokes: Vec<Stroke>,
 }
 
+/// The buffer lengths of a recorded [`Scene`].
+///
+/// A caller that repeats a recording passes the lengths reported by the previous one as the
+/// capacity for the next, so a recording of similar size fills pre-sized buffers instead of
+/// growing them.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SceneCapacity {
+    commands: usize,
+    brushes: usize,
+    strokes: usize,
+}
+
+impl SceneCapacity {
+    pub(crate) fn add(&mut self, other: SceneCapacity) {
+        self.commands += other.commands;
+        self.brushes += other.brushes;
+        self.strokes += other.strokes;
+    }
+
+    pub(crate) fn saturating_sub(self, other: SceneCapacity) -> SceneCapacity {
+        SceneCapacity {
+            commands: self.commands.saturating_sub(other.commands),
+            brushes: self.brushes.saturating_sub(other.brushes),
+            strokes: self.strokes.saturating_sub(other.strokes),
+        }
+    }
+}
+
 impl Scene {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The lengths of this scene's buffers, for sizing a later recording.
+    pub fn lengths(&self) -> SceneCapacity {
+        SceneCapacity {
+            commands: self.commands.len(),
+            brushes: self.brushes.len(),
+            strokes: self.strokes.len(),
+        }
+    }
+
+    /// Ensures each buffer can hold at least the corresponding count in `capacity` without
+    /// reallocating.
+    pub fn reserve(&mut self, capacity: SceneCapacity) {
+        self.commands
+            .reserve(capacity.commands.saturating_sub(self.commands.len()));
+        self.brushes
+            .reserve(capacity.brushes.saturating_sub(self.brushes.len()));
+        self.strokes
+            .reserve(capacity.strokes.saturating_sub(self.strokes.len()));
     }
 
     /// Discards all recorded operations, leaving the scene empty for reuse.

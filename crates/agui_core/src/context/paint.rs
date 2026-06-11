@@ -6,9 +6,16 @@ use crate::{
         Canvas,
         command::PaintCommand,
         compositing::{ContainerLayer, LayerHandle, PictureLayer, PositionedLayer, TransformLayer},
-        scene::Scene,
+        scene::{Scene, SceneCapacity},
     },
 };
+
+/// A paint's remaining buffer capacity and the lengths recorded so far, shared by every picture
+/// the paint seals.
+struct PaintBudget {
+    remaining: SceneCapacity,
+    recorded: SceneCapacity,
+}
 
 /// The surface a render object paints onto.
 ///
@@ -23,25 +30,50 @@ pub struct PaintCtx<'a> {
     container: &'a mut dyn ContainerLayer,
     /// The picture currently accumulating flat drawing.
     picture: Scene,
+    /// The capacity budget shared with any nested context of the same paint.
+    budget: &'a mut PaintBudget,
 }
 
 impl PaintCtx<'_> {
     /// Paints `build` into `root`.
     pub fn paint(root: &LayerHandle<impl ContainerLayer>, build: impl FnOnce(&mut PaintCtx)) {
+        Self::paint_with_capacity(root, SceneCapacity::default(), build);
+    }
+
+    /// Paints `build` into `root`, sizing the recording buffers from `capacity`, and returns the
+    /// lengths actually recorded.
+    ///
+    /// A caller that repaints the same content passes the lengths returned by the previous paint,
+    /// so a recording of similar size fills pre-sized buffers instead of growing them.
+    pub fn paint_with_capacity(
+        root: &LayerHandle<impl ContainerLayer>,
+        capacity: SceneCapacity,
+        build: impl FnOnce(&mut PaintCtx),
+    ) -> SceneCapacity {
         let mut root = root.borrow_mut();
+
+        let mut budget = PaintBudget {
+            remaining: capacity,
+            recorded: SceneCapacity::default(),
+        };
 
         let mut ctx = PaintCtx {
             container: &mut *root,
             picture: Scene::new(),
+            budget: &mut budget,
         };
 
         build(&mut ctx);
 
         ctx.flush();
+
+        budget.recorded
     }
 
     /// A [`Canvas`] for flat drawing, ordered before any layer contributed after this call.
     pub fn canvas(&mut self) -> Canvas<'_> {
+        self.picture.reserve(self.budget.remaining);
+
         Canvas::over(&mut self.picture)
     }
 
@@ -67,6 +99,7 @@ impl PaintCtx<'_> {
                 let mut ctx = PaintCtx {
                     container: &mut *guard,
                     picture: Scene::new(),
+                    budget: &mut *self.budget,
                 };
 
                 f(&mut ctx);
@@ -104,6 +137,7 @@ impl PaintCtx<'_> {
             let mut ctx = PaintCtx {
                 container: &mut *guard,
                 picture: Scene::new(),
+                budget: &mut *self.budget,
             };
             paint_into(&mut ctx);
             ctx.flush();
@@ -139,6 +173,10 @@ impl PaintCtx<'_> {
         }
 
         let picture = std::mem::take(&mut self.picture);
+
+        let lengths = picture.lengths();
+        self.budget.recorded.add(lengths);
+        self.budget.remaining = self.budget.remaining.saturating_sub(lengths);
 
         self.container
             .append(LayerHandle::new(PictureLayer::new(picture)).into());
@@ -241,6 +279,27 @@ mod tests {
         });
 
         assert_eq!(fill_transforms(&root), vec![Affine::translate((3.0, 0.0))]);
+    }
+
+    /// The reported capacity covers every picture of the paint, including one sealed inside a pushed
+    /// layer, and a repaint primed with it records the same content.
+    #[test]
+    fn a_repaint_primed_with_the_recorded_capacity_paints_identically() {
+        let paint = |ctx: &mut PaintCtx| {
+            fill(ctx);
+            ctx.push_layer(LayerHandle::new(OffsetLayer::new()), Offset::ZERO, fill);
+            ctx.with_transform(false, Affine::translate((5.0, 0.0)), fill);
+        };
+
+        let first_root = root();
+        let recorded = PaintCtx::paint_with_capacity(&first_root, SceneCapacity::default(), paint);
+        assert_ne!(recorded, SceneCapacity::default());
+
+        let second_root = root();
+        let second = PaintCtx::paint_with_capacity(&second_root, recorded, paint);
+
+        assert_eq!(second, recorded);
+        assert_eq!(fill_transforms(&second_root), fill_transforms(&first_root));
     }
 
     /// Drawing, then a layer, then drawing, inside one transform bracket: both pictures stay under the
