@@ -4,7 +4,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
     paint::compositing::{LayerHandle, OffsetLayer},
-    pipeline::{layout::BoundaryContent, paint::PaintBoundaryHandle},
+    pipeline::{BoundaryContent, paint::PaintBoundaryHandle},
     prelude::{element::*, render_object::*},
 };
 
@@ -64,9 +64,17 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        // A descendant whose painting changed marks this boundary's scope itself; an idle rebuild does not.
-        render_object.with_child_mut(|child_render| {
-            element.update(self.child, child_render, ctx);
+        let scope = render_object
+            .handle
+            .as_ref()
+            .expect("a mounted boundary holds its handle")
+            .scope();
+
+        // A render object grafted during the rebuild mounts into this boundary, not the one above it.
+        ctx.with_paint_scope(&scope, |ctx| {
+            render_object.with_child_mut(|child_render| {
+                element.update(self.child, child_render, ctx);
+            });
         });
     }
 }
@@ -113,7 +121,8 @@ impl<Child: RenderBox> RenderObject for RenderRepaintBoundary<Child> {
 
         // Descendants repaint into this boundary, not into the one above it.
         let mut content = Rc::clone(&self.content);
-        ctx.with_paint_scope(handle.scope(), |ctx| content.mount(ctx));
+        let boundary_scope = handle.scope();
+        ctx.with_paint_scope(&boundary_scope, |ctx| content.mount(ctx));
 
         self.handle = Some(handle);
     }
@@ -191,12 +200,16 @@ mod tests {
     use agui_core::{
         paint::{
             command::PaintCommand,
+            compositing::{Compositor, LayerHandle, OffsetLayer},
             peniko::{Color, Fill},
             scene::Scene,
         },
-        pipeline::PipelineOwner,
+        pipeline::{
+            layout::{BoundaryContent, LayoutPipeline},
+            paint::PaintPipeline,
+        },
         prelude::{element::*, render_object::*},
-        test_harness::with_ctx,
+        test_harness::{mount_view, with_ctx},
     };
 
     use typed_floats::{PositiveFinite, as_const};
@@ -369,16 +382,12 @@ mod tests {
                     Counter::new(Rc::clone(&inner_paints)).capture(Rc::clone(&inner_scope)),
                 ));
 
-        let (_, render) = with_ctx(|ctx| widget.create(ctx));
-        let mut owner = PipelineOwner::new(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        let (mut owner, view) = mount_view(widget);
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
 
         owner.flush_paint();
-        let first = owner.composite();
+        let first = view.composite();
         assert_eq!(outer_paints.get(), 1);
         assert_eq!(inner_paints.get(), 1);
         assert_eq!(fills(&first), 2, "both boundaries contributed a fill");
@@ -391,7 +400,7 @@ mod tests {
         inner.mark_needs_paint();
 
         owner.flush_paint();
-        let second = owner.composite();
+        let second = view.composite();
         assert_eq!(inner_paints.get(), 2, "the marked inner boundary repainted");
         assert_eq!(
             outer_paints.get(),
@@ -417,12 +426,26 @@ mod tests {
 
         let (mut element, render) = with_ctx(|ctx| widget.create(ctx));
         let root = Rc::new(RefCell::new(render));
-        let owner_root: Rc<RefCell<dyn AnyRenderBox>> = root.clone();
-        let mut owner = PipelineOwner::new(owner_root, LayerHandle::new(OffsetLayer::new()));
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
-        owner.flush_layout();
-        owner.flush_paint();
-        let _ = owner.composite();
+
+        // Mount the subtree under a paint boundary by hand, so the rebuild can be driven directly to
+        // confirm it leaves the inner boundary's retained layer untouched.
+        let root_content: BoundaryContent = root.clone();
+        let layer = LayerHandle::new(OffsetLayer::new());
+        let (mut pipeline, root_boundary) = PaintPipeline::new(root_content, layer.clone());
+        let layout = LayoutPipeline::default();
+        {
+            let scope = root_boundary.scope();
+            let mut ctx = MountCtx::new(&layout, &mut pipeline, &scope);
+            root.borrow_mut().mount(&mut ctx);
+        }
+        root.borrow_mut().layout(
+            &mut LayoutCtx::detached(),
+            BoxConstraints::new(0, 100, 0, 100),
+        );
+
+        pipeline.flush_compositing_bits();
+        pipeline.flush_paint();
+        let _ = Compositor::compose(&layer);
         assert_eq!(inner_paints.get(), 1);
 
         // Rebuild with an identical tree, so nothing inside marks the boundary's scope.
@@ -433,8 +456,9 @@ mod tests {
             widget.update(&mut element, &mut render, ctx);
         });
 
-        owner.flush_paint();
-        let _ = owner.composite();
+        pipeline.flush_compositing_bits();
+        pipeline.flush_paint();
+        let _ = Compositor::compose(&layer);
 
         assert_eq!(
             inner_paints.get(),

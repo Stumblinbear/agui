@@ -317,23 +317,19 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::{Cell, RefCell},
-        rc::Rc,
-        time::Duration,
-    };
+    use std::{cell::Cell, rc::Rc, time::Duration};
 
     use agui_core::{
         paint::{
             command::PaintCommand,
-            compositing::{LayerHandle, OffsetLayer},
             peniko::{Color, Fill, kurbo::Affine},
             scene::Scene,
         },
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
         scheduling::Vsync,
-        test_harness::with_ctx,
+        test_harness::mount_view,
+        view::ViewHandle,
     };
 
     use typed_floats::{Positive, PositiveFinite, as_const};
@@ -451,17 +447,14 @@ mod tests {
         panic!("expected a fill, got {:?}", flat.commands());
     }
 
-    fn mount(widget: impl Widget<Render: RenderBox + 'static> + 'static) -> PipelineOwner {
-        let (_, render) = with_ctx(|ctx| widget.create(ctx));
+    fn mount(
+        widget: impl Widget<Render: RenderBox + 'static> + 'static,
+    ) -> (PipelineOwner, ViewHandle) {
+        let (owner, view) = mount_view(widget);
 
-        let owner = PipelineOwner::new(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
 
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
-
-        owner
+        (owner, view)
     }
 
     /// Each tick resamples the transform and recomposites the retained layer at the new transform; the
@@ -477,7 +470,7 @@ mod tests {
                 paints: Rc::clone(&paints),
             });
 
-        let mut owner = mount(widget);
+        let (mut owner, view) = mount(widget);
         owner.flush_layout();
         owner.flush_paint();
         assert_eq!(paints.get(), 1);
@@ -485,14 +478,14 @@ mod tests {
         vsync.tick(Duration::from_millis(16));
         owner.flush_paint();
         assert_eq!(
-            only_fill_transform(&owner.composite()),
+            only_fill_transform(&view.composite()),
             Affine::translate((16.0, 0.0))
         );
 
         vsync.tick(Duration::from_millis(32));
         owner.flush_paint();
         assert_eq!(
-            only_fill_transform(&owner.composite()),
+            only_fill_transform(&view.composite()),
             Affine::translate((32.0, 0.0))
         );
 
@@ -516,7 +509,7 @@ mod tests {
                 paints: Rc::clone(&paints),
             }));
 
-        let mut owner = mount(widget);
+        let (mut owner, view) = mount(widget);
         owner.flush_layout();
         owner.flush_paint();
         assert_eq!(paints.get(), 1);
@@ -524,7 +517,7 @@ mod tests {
         vsync.tick(Duration::from_millis(16));
         owner.flush_paint();
         assert_eq!(
-            only_fill_transform(&owner.composite()),
+            only_fill_transform(&view.composite()),
             Affine::translate((16.0, 0.0))
         );
 
@@ -551,12 +544,12 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
 
-        let mut owner = mount(widget);
+        let (mut owner, view) = mount(widget);
         owner.flush_layout();
 
         // A quarter-turn about the origin places the 50x50 child at x in [-50, 0]. The point (-5, 5)
         // lies outside the unrotated bounds but inside the rotated ones, localizing to the child.
-        let result = owner.hit_test(Offset::new(-5.0, 5.0));
+        let result = view.hit_test(Offset::new(-5.0, 5.0));
 
         assert!(!result.path().is_empty(), "the rotated child is hit");
     }
@@ -577,12 +570,12 @@ mod tests {
                     .child(SizedBox::new().width(50).height(50)),
             );
 
-        let mut owner = mount(widget);
+        let (mut owner, view) = mount(widget);
         owner.flush_layout();
 
         // A half-turn about the center maps the child's (10, 10) to (40, 40); without the center pivot
         // it would map about the origin and leave the bounds entirely.
-        let result = owner.hit_test(Offset::new(40.0, 40.0));
+        let result = view.hit_test(Offset::new(40.0, 40.0));
 
         assert!(!result.path().is_empty(), "the rotated child is hit");
     }

@@ -297,10 +297,8 @@ mod tests {
     };
 
     use agui_core::{
-        paint::compositing::{LayerHandle, OffsetLayer},
-        pipeline::{PipelineOwner, layout::BoundaryContent},
         prelude::element::*,
-        test_harness::with_ctx,
+        test_harness::{mount_view, with_ctx},
     };
 
     use typed_floats::as_const;
@@ -510,12 +508,9 @@ mod tests {
             ),
         };
 
-        let (_, render) = with_ctx(|ctx| widget.create(ctx));
-        let content: BoundaryContent = Rc::new(RefCell::new(render));
-        let mut owner =
-            PipelineOwner::new(Rc::clone(&content), LayerHandle::new(OffsetLayer::new()));
+        let (mut owner, view) = mount_view(widget);
 
-        owner.resize(BoxConstraints::new(0, 200, 0, 200));
+        view.resize(BoxConstraints::new(0, 200, 0, 200));
         owner.flush_layout();
         assert_eq!(outer.get(), 1);
         assert_eq!(probe_layouts.get(), 1);

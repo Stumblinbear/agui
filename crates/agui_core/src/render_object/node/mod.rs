@@ -158,6 +158,8 @@ mod tests {
         context::UpdateCtx,
         element::{Element, SingleChildElement},
         paint::compositing::{LayerHandle, OffsetLayer},
+        pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
+        prelude::render_object::LayoutScope,
         render_object::{SingleChildRenderObject, box_layout::RenderBox},
         test_fixtures::Leaf,
         test_harness::with_ctx,
@@ -300,8 +302,11 @@ mod tests {
     fn node_layout_and_paint_helpers() {
         let mut node = RenderNode::<(), ()>::new(());
 
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+
         let size = node.layout_and_get_size(
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
             BoxConstraints::tight(Size::new(10.0, 20.0)),
         );
         assert_eq!(size, Size::new(10.0, 20.0));

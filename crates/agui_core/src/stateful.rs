@@ -118,13 +118,14 @@ mod tests {
         element::{Element, LeafElement, RoutingPath},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
-        pipeline::build::BuildOwner,
-        prelude::element::UpdateCtx,
+        pipeline::{PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
+        prelude::{element::UpdateCtx, render_object::LayoutScope},
         render_object::{
             RenderObject,
             box_layout::{BoxConstraints, RenderBox},
         },
-        test_harness::{TestTaskRunner, with_ctx},
+        test_fixtures::MultiChild,
+        test_harness::{TestBuildOwner, TestTaskRunner, mount_view_with, with_ctx},
         text::TextBaseline,
     };
 
@@ -379,20 +380,22 @@ mod tests {
         assert_eq!(builds.get(), after_create + 2, "but still rebuilds");
     }
 
+    /// A dependency change queued against a path is delivered by the flush as a dependency dispatch,
+    /// running the hook, rather than as a plain rebuild.
     #[test]
-    fn request_dependency_change_routes_a_dependency_dispatch_through_flush() {
+    fn a_queued_dependency_change_flushes_as_a_dependency_dispatch() {
         let builds = Rc::new(Cell::new(0));
         let deps = Rc::new(Cell::new(0));
 
         let mut tasks = TestTaskRunner::new();
-        let (mut owner, _render) = BuildOwner::mount(
+        let mut owner = TestBuildOwner::mount(
             DepWidget {
                 builds: Rc::clone(&builds),
                 dep_changes: Rc::clone(&deps),
             },
             &mut tasks.scheduler(),
         );
-        assert_eq!(deps.get(), 0);
+        assert_eq!(deps.get(), 0, "mount does not run the dependency hook");
 
         owner.request_dependency_change(&RoutingPath::new(owner.root_id(), Vec::new()));
         assert!(owner.is_dirty(), "the dependency change queued a rebuild");
@@ -411,7 +414,7 @@ mod tests {
         let creates = Rc::new(Cell::new(0));
 
         let mut tasks = TestTaskRunner::new();
-        let (mut owner, render) = BuildOwner::mount(
+        let mut owner = PipelineOwner::new(
             Counter {
                 count: 1,
 
@@ -421,7 +424,10 @@ mod tests {
         );
 
         assert_eq!(creates.get(), 1);
-        assert_eq!(render.borrow().side, 1.0);
+        assert!(
+            owner.diagnostics().to_string().contains("count=1"),
+            "the state starts at one"
+        );
 
         // A set-state delivered to the widget's own path mutates the state and asks for a rebuild.
         let bump: SetState<CounterState> = Box::new(|state| state.count += 1);
@@ -431,12 +437,11 @@ mod tests {
         );
         assert!(owner.is_dirty(), "set-state requested a rebuild");
 
-        assert!(owner.flush(&mut tasks.scheduler()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
 
-        assert_eq!(
-            render.borrow().side,
-            2.0,
-            "the rebuild reconciled the child render to the new state"
+        assert!(
+            owner.diagnostics().to_string().contains("count=2"),
+            "the rebuild reconciled the state to its new value"
         );
         assert_eq!(
             creates.get(),
@@ -458,8 +463,11 @@ mod tests {
             .create(ctx)
         });
 
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+
         let size = render.layout(
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
             BoxConstraints::loose(Size::new(100, 100)),
         );
 
@@ -483,5 +491,201 @@ mod tests {
         let dump = element.describe(&mut Diagnostics::new()).to_string();
 
         assert!(dump.starts_with("Counter  count=7"), "dump was:\n{dump}");
+    }
+
+    /// A render object that tallies how many times it was mounted.
+    struct RenderMountProbe {
+        mounts: Rc<Cell<usize>>,
+    }
+
+    impl RenderObject for RenderMountProbe {
+        fn mount(&mut self, _: &mut MountCtx) {
+            self.mounts.set(self.mounts.get() + 1);
+        }
+
+        fn unmount(&mut self, _: &mut MountCtx) {}
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+    }
+
+    impl RenderBox for RenderMountProbe {
+        fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn measure(&self, constraints: BoxConstraints) -> Size {
+            constraints.smallest()
+        }
+
+        fn layout(&mut self, _: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+            constraints.smallest()
+        }
+
+        fn measure_baseline(
+            &self,
+            _: BoxConstraints,
+            _: TextBaseline,
+        ) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+            None
+        }
+
+        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+            HitTest::Pass
+        }
+
+        fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+    }
+
+    /// A leaf whose render object tallies its mounts onto a shared counter.
+    struct MountProbe {
+        mounts: Rc<Cell<usize>>,
+    }
+
+    impl Widget for MountProbe {
+        type Element = LeafElement<RenderMountProbe>;
+
+        type Render = RenderMountProbe;
+
+        fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderMountProbe>, RenderMountProbe) {
+            (
+                LeafElement::new(),
+                RenderMountProbe {
+                    mounts: self.mounts,
+                },
+            )
+        }
+
+        fn update(
+            self,
+            _: &mut LeafElement<RenderMountProbe>,
+            render: &mut RenderMountProbe,
+            _: &mut UpdateCtx,
+        ) {
+            render.mounts = self.mounts;
+        }
+    }
+
+    /// A stateful widget that builds a list of `count` [`MountProbe`]s, so bumping the count appends a
+    /// child and creates a fresh render object on the rebuild.
+    struct Grower {
+        count: u32,
+        mounts: Rc<Cell<usize>>,
+    }
+
+    struct GrowerState {
+        count: u32,
+        mounts: Rc<Cell<usize>>,
+    }
+
+    impl Widget for Grower {
+        type Element = StatefulElement<GrowerState>;
+
+        type Render = <<GrowerState as WidgetState>::Child as Widget>::Render;
+
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let state = GrowerState::init_state(ctx, self);
+            let child = state.build(ctx);
+            let (child_element, child_render) = child.create(ctx);
+            (StatefulElement::new(state, child_element), child_render)
+        }
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.state.did_update_widget(ctx, self);
+            let child = element.state.build(ctx);
+            child.update(&mut element.child.element, render, ctx);
+        }
+    }
+
+    impl WidgetState for GrowerState {
+        type Widget = Grower;
+        type Child = MultiChild<MountProbe>;
+
+        fn init_state(_: &mut UpdateCtx, widget: Self::Widget) -> Self {
+            GrowerState {
+                count: widget.count,
+                mounts: widget.mounts,
+            }
+        }
+
+        fn did_update_widget(&mut self, _: &mut UpdateCtx, widget: Self::Widget) {
+            self.count = widget.count;
+            self.mounts = widget.mounts;
+        }
+
+        fn build(&self, _: &mut UpdateCtx) -> Self::Child {
+            MultiChild {
+                children: (0..self.count)
+                    .map(|_| MountProbe {
+                        mounts: Rc::clone(&self.mounts),
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    /// A render object created by a rebuild should be mounted, the same as one in the initial tree:
+    /// otherwise it never captures its enclosing boundary and can never mark itself for paint.
+    #[test]
+    fn a_render_object_created_on_rebuild_is_mounted() {
+        let mounts = Rc::new(Cell::new(0));
+
+        let mut tasks = TestTaskRunner::new();
+        let (mut owner, view) = mount_view_with(
+            Grower {
+                count: 1,
+                mounts: Rc::clone(&mounts),
+            },
+            &mut tasks.scheduler(),
+        );
+
+        view.resize(BoxConstraints::tight(Size::new(100, 100)));
+        owner.flush_layout();
+        owner.flush_paint();
+
+        assert_eq!(
+            mounts.get(),
+            1,
+            "the initial child is mounted with the root"
+        );
+
+        // Bump the count so the rebuild appends a second child, creating a new render object.
+        let grow: SetState<GrowerState> = Box::new(|state| state.count = 2);
+        owner.dispatch_message(
+            &RoutingPath::new(owner.root_id(), Vec::new()),
+            Box::new(grow),
+        );
+        assert!(owner.flush_build(&mut tasks.scheduler()));
+
+        owner.flush_layout();
+        owner.flush_paint();
+
+        assert_eq!(
+            mounts.get(),
+            2,
+            "the render object created on rebuild is mounted, as the initial tree is"
+        );
     }
 }

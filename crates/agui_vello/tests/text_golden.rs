@@ -1,12 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
-use agui_core::{
-    paint::compositing::{LayerHandle, OffsetLayer},
-    pipeline::{PipelineOwner, layout::BoundaryContent},
-    prelude::{element::*, render_object::*},
-    provide::Provide,
-    test_harness::with_ctx,
-};
+use agui_core::{prelude::render_object::*, provide::Provide, test_harness::mount_view};
 use agui_primitives::{
     colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
 };
@@ -40,17 +34,13 @@ fn text_renders_glyphs_matching_golden() {
     fonts.register(FONT.to_vec());
     let widget = Provide::new(fonts).child(text);
 
-    let (_, render) = with_ctx(|ctx| widget.create(ctx));
-    let content: BoundaryContent = Rc::new(RefCell::new(render));
+    let (mut owner, view) = mount_view(widget);
 
-    let layer = LayerHandle::new(OffsetLayer::new());
-    let mut owner = PipelineOwner::new(Rc::clone(&content), layer);
-
-    owner.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
+    view.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
     owner.flush_layout();
     owner.flush_paint();
 
-    let scene = owner.composite();
+    let scene = view.composite();
     let vello_scene = to_vello_scene(&scene);
 
     let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
@@ -101,17 +91,13 @@ fn rich_text_renders_styled_runs_matching_golden() {
     fonts.register(FONT.to_vec());
     let widget = Provide::new(fonts).child(RichText::new(span));
 
-    let (_, render) = with_ctx(|ctx| widget.create(ctx));
-    let content: BoundaryContent = Rc::new(RefCell::new(render));
+    let (mut owner, view) = mount_view(widget);
 
-    let layer = LayerHandle::new(OffsetLayer::new());
-    let mut owner = PipelineOwner::new(Rc::clone(&content), layer);
-
-    owner.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
+    view.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
     owner.flush_layout();
     owner.flush_paint();
 
-    let scene = owner.composite();
+    let scene = view.composite();
     let vello_scene = to_vello_scene(&scene);
 
     let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));

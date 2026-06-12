@@ -13,7 +13,7 @@ use crate::{
     geometry::Offset,
     paint::compositing::{LayerHandle, OffsetLayer},
     paint::scene::SceneCapacity,
-    pipeline::layout::BoundaryContent,
+    pipeline::BoundaryContent,
     render_object::{RenderObject, box_layout::RenderBox},
 };
 

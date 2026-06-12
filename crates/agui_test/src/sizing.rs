@@ -8,6 +8,7 @@ use agui_core::{
         peniko::kurbo::{self, Affine, Point, Shape},
         scene::Scene,
     },
+    pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
     prelude::{element::*, render_object::*},
     provide::ProvideScope,
     test_harness::TestTaskRunner,
@@ -218,7 +219,18 @@ impl BoxSizingCheck {
             let mut path = Vec::new();
             let mut scheduler = tasks.scheduler();
             let scope = BuildScope::detached();
-            let mut ctx = UpdateCtx::new(&mut scheduler, &mut path, &provide, &scope);
+            let mut paint = PaintPipeline::default();
+            let layout = LayoutPipeline::default();
+            let paint_scope = PaintScope::detached();
+            let mut ctx = UpdateCtx::new(
+                &mut scheduler,
+                &mut path,
+                &provide,
+                &scope,
+                &layout,
+                &mut paint,
+                &paint_scope,
+            );
 
             widget().create(&mut ctx).1
         };

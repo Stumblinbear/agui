@@ -177,10 +177,9 @@ mod tests {
     use crate::{
         context::{Dispatch, UpdateCtx},
         element::{BuildBoundaryId, Element, RebuildBoundary, RoutingPath},
-        pipeline::build::BuildOwner,
         provide::ProvideScope,
         test_fixtures::{Leaf, Transparent},
-        test_harness::{TestTaskRunner, with_ctx, with_ctx_in},
+        test_harness::{TestBuildOwner, TestTaskRunner, with_ctx, with_ctx_in},
         widget::Widget,
     };
 
@@ -351,7 +350,7 @@ mod tests {
         );
 
         let mut tasks = TestTaskRunner::new();
-        let (mut owner, _render) = BuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
 
         let boundary = boundary
             .get()

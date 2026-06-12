@@ -24,6 +24,7 @@ pub mod stateful;
 pub mod test_fixtures;
 pub mod test_harness;
 pub mod text;
+pub mod view;
 pub mod widget;
 
 pub mod prelude {

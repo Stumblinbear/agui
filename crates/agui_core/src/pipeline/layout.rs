@@ -10,7 +10,10 @@ use intrusive_collections::{LinkedList, LinkedListLink, UnsafeRef, intrusive_ada
 
 use crate::{
     context::LayoutCtx,
-    pipeline::paint::{PaintPipeline, PaintScope},
+    pipeline::{
+        BoundaryContent,
+        paint::{PaintPipeline, PaintScope},
+    },
     render_object::box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
 };
 
@@ -48,17 +51,18 @@ impl Default for LayoutPipeline {
 }
 
 impl LayoutPipeline {
-    /// Registers `root` as the outermost boundary, painting into `paint`, and returns the pipeline
-    /// together with the handle that owns and marks it.
-    pub fn new(root: BoundaryContent, paint: PaintScope) -> (Self, RegisteredLayoutBoundary) {
-        let pipeline = Self::default();
-        let boundary = pipeline.insert(root, 0, paint);
-
-        (pipeline, boundary)
-    }
-
     pub fn on_needs_layout(&mut self, f: Box<dyn Fn()>) {
         self.state.borrow_mut().notify = f;
+    }
+
+    /// Registers `root` as the outermost boundary, enclosed by `paint`, returning the handle that owns
+    /// and marks it.
+    pub fn register_root(
+        &self,
+        root: BoundaryContent,
+        paint: PaintScope,
+    ) -> RegisteredLayoutBoundary {
+        self.insert(root, 0, paint)
     }
 
     /// Registers `content` as a boundary at `depth`, enclosed by `paint`, and returns the handle that
@@ -104,7 +108,7 @@ impl LayoutPipeline {
 
             let scope = LayoutScope(Rc::downgrade(&cell));
 
-            let mut ctx = LayoutCtx::new(scope, &mut *paint_pipeline);
+            let mut ctx = LayoutCtx::new(self, &mut *paint_pipeline, scope);
 
             let mut content = Rc::clone(&cell.content);
             content.layout(&mut ctx, constraints);
@@ -159,10 +163,6 @@ fn recover_owner(popped: UnsafeRef<LayoutCell>) -> Rc<LayoutCell> {
         Rc::from_raw(ptr)
     }
 }
-
-/// A render object shared between the layout and paint registries, so a node that is both a relayout
-/// and a repaint boundary is held in one place.
-pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
 
 /// A registered relayout boundary, owned by its [`RegisteredLayoutBoundary`] handle and linked into the
 /// dirty list while it awaits re-layout.
@@ -404,6 +404,7 @@ mod tests {
         paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::PipelineOwner,
         render_object::{RenderObject, box_layout::RenderBox},
+        test_harness::{RawWidget, mount_view},
         text::TextBaseline,
     };
 
@@ -495,7 +496,7 @@ mod tests {
     fn flush_layout_skips_a_clean_frame_and_relays_out_when_marked_or_resized() {
         let (layouts, captured, render) = probe(false);
 
-        let mut owner = PipelineOwner::new(
+        let mut owner = PipelineOwner::from_root(
             Rc::new(RefCell::new(render)),
             LayerHandle::new(OffsetLayer::new()),
         );
@@ -525,7 +526,7 @@ mod tests {
     fn a_relayout_request_schedules_a_frame_on_the_clean_to_dirty_edge() {
         let (_layouts, captured, render) = probe(false);
 
-        let mut owner = PipelineOwner::new(
+        let mut owner = PipelineOwner::from_root(
             Rc::new(RefCell::new(render)),
             LayerHandle::new(OffsetLayer::new()),
         );
@@ -560,7 +561,7 @@ mod tests {
     fn requesting_a_relayout_during_layout_panics() {
         let (_layouts, _captured, render) = probe(true);
 
-        let mut owner = PipelineOwner::new(
+        let mut owner = PipelineOwner::from_root(
             Rc::new(RefCell::new(render)),
             LayerHandle::new(OffsetLayer::new()),
         );

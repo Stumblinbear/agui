@@ -1,70 +1,89 @@
-use std::rc::Rc;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::{
-    context::MountCtx,
+    context::{MessageCtx, MountCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    geometry::Offset,
-    input::hit_test::HitTestResult,
-    paint::{
-        compositing::{Compositor, LayerHandle, OffsetLayer},
-        scene::Scene,
-    },
+    element::{BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath},
     pipeline::{
-        layout::{BoundaryContent, LayoutPipeline, RegisteredLayoutBoundary},
-        paint::{PaintBoundaryHandle, PaintPipeline},
+        layout::LayoutPipeline,
+        paint::{PaintPipeline, PaintScope},
     },
-    render_object::{
-        RenderObject,
-        box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
-    },
+    prelude::render_object::AnyRenderBox,
+    provide::ProvideScope,
+    render_object::RenderObject,
+    scheduling::TaskScheduler,
+    widget::Widget,
 };
 
-pub mod build;
 pub mod layout;
 pub mod paint;
 
-/// Drives one subtree's whole pipeline: it registers the subtree root as a boundary, lays it out, paints
-/// it, composites it for presentation, and hit-tests it.
+/// A render object shared between the layout and paint registries, so a node that is both a relayout
+/// and a repaint boundary is held in one place.
+pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
+
+/// Drives one widget tree's build and pipeline state: it builds the element tree from a root widget,
+/// rebuilds the boundaries that ask to, and flushes the layout and paint of every boundary registered
+/// under it.
 ///
-/// The root is the outermost relayout and repaint boundary. Its constraints come from the caller through
-/// [`resize`], and every boundary nested inside is re-laid or repainted on its own when only it has
-/// changed. The root is mounted when the owner is built and lives for the owner's whole life; [`update`]
-/// reconciles it in place.
-///
-/// [`resize`]: Self::resize
-/// [`update`]: Self::update
+/// It holds no render root of its own. A render subtree presented to a surface is established by a
+/// [`View`](crate::view::View) inside the tree, which self-registers its relayout and repaint boundary
+/// during mount and surfaces a [`ViewHandle`](crate::view::ViewHandle) for the per-view operations. The
+/// owner's pipelines lay out and paint whatever boundaries those views and the inner repaint boundaries
+/// register, so a tree may hold any number of views, or none.
 pub struct PipelineOwner {
-    root: BoundaryContent,
+    build_state: Rc<RefCell<BuildState>>,
+    build_root: BuildBoundaryElement,
 
     layout: LayoutPipeline,
     paint: PaintPipeline,
-
-    root_layout: RegisteredLayoutBoundary,
-    root_paint: PaintBoundaryHandle,
-
-    layer: LayerHandle<OffsetLayer>,
 }
 
 impl PipelineOwner {
-    /// Builds the owner around `root`, registering it as the outermost boundary and mounting its
-    /// subtree. The root paints into `layer`, which is composited for presentation.
-    pub fn new(mut root: BoundaryContent, layer: LayerHandle<OffsetLayer>) -> Self {
-        let (mut paint, root_paint) = PaintPipeline::new(Rc::clone(&root), layer.clone());
-        let (layout, root_layout) = LayoutPipeline::new(Rc::clone(&root), root_paint.scope());
+    /// Builds `widget` as the root of a fresh tree, registering its element as the outermost build
+    /// boundary and mounting its render subtree. Any [`View`](crate::view::View) the tree holds
+    /// self-registers as it mounts.
+    pub fn new<V>(widget: V, scheduler: &mut dyn TaskScheduler) -> Self
+    where
+        V: Widget,
+        V::Element: 'static,
+        V::Render: RenderObject,
+    {
+        let provide = ProvideScope::new();
+        let (build_state, root_scope) = BuildState::new();
 
-        let mut ctx = MountCtx::new(&mut paint, root_paint.scope());
-        root.mount(&mut ctx);
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+        let detached = PaintScope::detached();
+
+        let (build_root, mut render) = {
+            let mut path = Vec::new();
+
+            // `create` builds without mounting, so it registers nothing; the live pipelines it threads
+            // are first touched by the mount below.
+            let mut ctx = UpdateCtx::new(
+                scheduler,
+                &mut path,
+                &provide,
+                &root_scope,
+                &layout,
+                &mut paint,
+                &detached,
+            );
+
+            BuildBoundaryElement::create(widget, &mut ctx)
+        };
+
+        {
+            let mut ctx = MountCtx::new(&layout, &mut paint, &detached);
+            render.mount(&mut ctx);
+        }
 
         Self {
-            root,
-
+            build_state,
+            build_root,
             layout,
             paint,
-
-            root_layout,
-            root_paint,
-
-            layer,
         }
     }
 
@@ -76,16 +95,29 @@ impl PipelineOwner {
         self.paint.on_needs_paint(f);
     }
 
-    /// Reconciles the root render object in place.
-    pub fn update(&self, f: impl FnOnce(&mut dyn AnyRenderBox)) {
-        f(&mut *self.root.borrow_mut());
+    /// The id of the root build boundary, for addressing a root-relative path.
+    pub fn root_id(&self) -> BuildBoundaryId {
+        self.build_root.id()
     }
 
-    /// Lays the root out under `constraints` and repaints it. The caller drives this on the first frame
-    /// and whenever the subtree's outer constraints change.
-    pub fn resize(&self, constraints: BoxConstraints) {
-        self.root_layout.set_constraints(constraints);
-        self.root_paint.mark_needs_paint();
+    /// Whether any build boundary is waiting to rebuild.
+    pub fn is_dirty(&self) -> bool {
+        self.build_state.borrow().is_dirty()
+    }
+
+    /// Delivers `message` to the element at `path`. If that element asks to rebuild, its boundary is
+    /// marked for the next [`flush_build`](Self::flush_build).
+    pub fn dispatch_message(&mut self, path: &RoutingPath, message: Box<dyn Any>) {
+        let mut ctx = MessageCtx::new(message);
+
+        BuildState::deliver_message(&self.build_state, path, &mut ctx);
+    }
+
+    /// Rebuilds every build boundary marked since the last flush. Returns whether anything rebuilt, so
+    /// the caller can skip reconciling the render tree when nothing changed. A render object built during
+    /// a rebuild is mounted under the boundary enclosing it.
+    pub fn flush_build(&mut self, scheduler: &mut dyn TaskScheduler) -> bool {
+        BuildState::flush(&self.build_state, scheduler, &self.layout, &mut self.paint)
     }
 
     /// Lays out any boundary that has been marked for layout since the last flush.
@@ -100,30 +132,8 @@ impl PipelineOwner {
         self.paint.flush_paint();
     }
 
-    /// Captures the render tree as a diagnostics snapshot.
+    /// Captures the element tree under the root boundary as a diagnostics snapshot.
     pub fn diagnostics(&self) -> DiagnosticsNode {
-        let mut d = Diagnostics::new();
-
-        self.root.borrow().dyn_describe(&mut d)
-    }
-
-    /// Composites the subtree's retained layers into a scene to present.
-    pub fn composite(&self) -> Scene {
-        Compositor::compose(&self.layer)
-    }
-
-    /// Composites the subtree's retained layers into `scene` to present, replacing its previous
-    /// content. A driver presenting every frame composites into one held scene to reuse its storage.
-    pub fn composite_into(&self, scene: &mut Scene) {
-        Compositor::compose_into(&self.layer, scene);
-    }
-
-    /// Hit-tests the subtree at `position`, in the root coordinate space, returning the handlers under
-    /// it ordered most-specific first.
-    pub fn hit_test(&self, position: Offset) -> HitTestResult {
-        let mut result = HitTestResult::new();
-        self.root.hit_test(&mut result, position);
-
-        result
+        self.build_root.describe(&mut Diagnostics::new())
     }
 }

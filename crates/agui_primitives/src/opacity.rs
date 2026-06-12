@@ -229,9 +229,8 @@ mod tests {
 
     use agui_core::{
         paint::{command::PaintCommand, compositing::OffsetLayer, peniko::Color},
-        pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
-        test_harness::with_ctx,
+        test_harness::{mount_view, with_ctx},
     };
 
     use crate::{colored_box::ColoredBox, sized_box::SizedBox};
@@ -259,17 +258,13 @@ mod tests {
     fn partial_opacity_composites_the_subtree_at_its_alpha() {
         let widget = Opacity::new(0.5)
             .child(ColoredBox::new(Color::BLACK).child(SizedBox::new().width(10).height(10)));
-        let (_, render) = with_ctx(|ctx| widget.create(ctx));
 
-        let mut owner = PipelineOwner::new(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        let (mut owner, view) = mount_view(widget);
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         owner.flush_paint();
 
-        let scene = owner.composite().flatten();
+        let scene = view.composite().flatten();
         let alpha = scene.commands().iter().find_map(|command| match command {
             PaintCommand::PushLayer { alpha, .. } => Some(*alpha),
             _ => None,
@@ -373,7 +368,10 @@ mod tests {
         use agui_core::{
             context::MountCtx,
             paint::compositing::Compositor,
-            pipeline::{layout::BoundaryContent, paint::PaintPipeline},
+            pipeline::{
+                layout::{BoundaryContent, LayoutPipeline},
+                paint::PaintPipeline,
+            },
         };
 
         let paints = Rc::new(Cell::new(0));
@@ -388,8 +386,10 @@ mod tests {
         }));
         let (mut pipeline, boundary) =
             PaintPipeline::new(dummy, LayerHandle::new(OffsetLayer::new()));
+        let layout = LayoutPipeline::default();
         {
-            let mut ctx = MountCtx::new(&mut pipeline, boundary.scope());
+            let boundary_scope = boundary.scope();
+            let mut ctx = MountCtx::new(&layout, &mut pipeline, &boundary_scope);
             render.mount(&mut ctx);
         }
         render.layout(

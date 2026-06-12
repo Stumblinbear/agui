@@ -1,31 +1,30 @@
 use crate::{
     context::MountCtx,
     pipeline::{
-        layout::LayoutScope,
+        layout::{LayoutPipeline, LayoutScope},
         paint::{PaintPipeline, PaintScope},
     },
 };
 
 /// The context threaded through a layout pass.
 pub struct LayoutCtx<'a> {
+    layout: &'a LayoutPipeline,
+    paint: &'a mut PaintPipeline,
+
     scope: LayoutScope,
-    paint: Option<&'a mut PaintPipeline>,
 }
 
 impl<'a> LayoutCtx<'a> {
-    /// A context that reaches no pipeline, for laying a render object out in isolation. Its scope
-    /// marks nothing and it mounts nothing.
-    pub fn detached() -> LayoutCtx<'static> {
-        LayoutCtx {
-            scope: LayoutScope::detached(),
-            paint: None,
-        }
-    }
-
-    pub(crate) fn new(scope: LayoutScope, paint: &'a mut PaintPipeline) -> Self {
+    pub fn new(
+        layout: &'a LayoutPipeline,
+        paint: &'a mut PaintPipeline,
+        scope: LayoutScope,
+    ) -> Self {
         Self {
+            layout,
+            paint,
+
             scope,
-            paint: Some(paint),
         }
     }
 
@@ -43,8 +42,10 @@ impl<'a> LayoutCtx<'a> {
         f: impl FnOnce(&mut LayoutCtx) -> R,
     ) -> R {
         let mut child = LayoutCtx {
+            paint: self.paint,
+            layout: self.layout,
+
             scope,
-            paint: self.paint.as_deref_mut(),
         };
 
         f(&mut child)
@@ -54,8 +55,6 @@ impl<'a> LayoutCtx<'a> {
     /// building node captured at its own mount. Runs `f` with a [`MountCtx`] for that boundary, and
     /// does nothing when detached, since there is no registry to mount into.
     pub fn mount(&mut self, paint_scope: &PaintScope, f: impl FnOnce(&mut MountCtx)) {
-        if let Some(paint) = self.paint.as_deref_mut() {
-            f(&mut MountCtx::new(paint, paint_scope.clone()));
-        }
+        f(&mut MountCtx::new(self.layout, self.paint, paint_scope));
     }
 }

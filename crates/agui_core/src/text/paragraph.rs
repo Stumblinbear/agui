@@ -493,6 +493,7 @@ mod tests {
             compositing::{Compositor, LayerHandle, OffsetLayer},
             scene::Scene,
         },
+        pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
         prelude::render_object::{InlineSpan, TextSpan},
         text::{Fonts, TextBaseline, TextStyle},
     };
@@ -519,7 +520,12 @@ mod tests {
     /// A paragraph sized through a detached layout pass.
     fn shaped(content: ParagraphContent, constraints: BoxConstraints) -> RenderParagraph {
         let mut paragraph = with_fonts(content);
-        paragraph.layout(&mut LayoutCtx::detached(), constraints);
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+        paragraph.layout(
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
+            constraints,
+        );
         paragraph
     }
 
@@ -537,7 +543,12 @@ mod tests {
         let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
 
         let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
-        let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+        let laid_out = paragraph.layout(
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
+            constraints,
+        );
 
         assert_eq!(paragraph.measure(constraints), laid_out);
     }
@@ -548,8 +559,14 @@ mod tests {
 
         let mut paragraph = with_fonts(styled("no prior layout", TextStyle::new().font_size(20.0)));
 
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+
         let measured = paragraph.measure(constraints);
-        let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
+        let laid_out = paragraph.layout(
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
+            constraints,
+        );
         assert_eq!(measured, laid_out);
     }
 
@@ -559,8 +576,14 @@ mod tests {
 
         let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
 
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+
         let measured = paragraph.measure(constraints);
-        let laid_out = paragraph.layout(&mut LayoutCtx::detached(), constraints);
+        let laid_out = paragraph.layout(
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
+            constraints,
+        );
 
         assert_eq!(laid_out, measured);
         assert!(laid_out.height.get() > 0.0, "the text occupies a line");

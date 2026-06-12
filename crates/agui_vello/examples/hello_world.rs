@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     num::NonZeroUsize,
     rc::Rc,
     sync::{Arc, mpsc},
@@ -8,15 +9,12 @@ use std::{
 
 use agui_core::{
     input::pointer::{PointerDispatcher, PointerHandler},
-    paint::{
-        compositing::{LayerHandle, OffsetLayer},
-        peniko::kurbo::Affine,
-        scene::Scene,
-    },
-    pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
+    paint::{peniko::kurbo::Affine, scene::Scene},
+    pipeline::PipelineOwner,
     prelude::{element::*, render_object::*},
     provide::Provide,
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler, Vsync},
+    view::ViewHandle,
 };
 use agui_primitives::{
     animated_transform::AnimatedTransform, colored_box::ColoredBox,
@@ -106,17 +104,9 @@ fn main() {
     let executor = Rc::new(LocalExecutor::new());
     let (event_tx, events_rx) = mpsc::channel::<TaskEventMessage>();
 
-    // The driver owns the pipeline for the subtree and hands its presentation layer back out here. The
-    // OS surface would normally take that layer; this example presents it by compositing each frame.
-    let driver = WindowDriver::new(
-        ui,
-        executor,
-        event_tx,
-        events_rx,
-        waker,
-        vsync,
-        |_layer: LayerHandle<OffsetLayer>| {},
-    );
+    // The driver owns the pipeline for the subtree; the View inside it registers the boundary the
+    // window presents, which this example composites each frame.
+    let driver = WindowDriver::new(ui, executor, event_tx, events_rx, waker, vsync);
     let view: Box<dyn View> = Box::new(driver);
 
     tracing::info!("window mounted; starting event loop");
@@ -451,21 +441,20 @@ impl ApplicationHandler<WakeUp> for App {
     }
 }
 
-/// Pairs a [`BuildOwner`], which holds the element tree the widget describes, with a [`PipelineOwner`],
-/// which lays out and paints the matching render tree, to drive one window from the event loop.
+/// Drives one window from the event loop through a [`PipelineOwner`], which builds the element tree the
+/// widget describes and lays out, paints, and composites the matching render tree.
 ///
-/// This is the shape a real window binding takes: the build owner rebuilds the element tree when
-/// something asks it to, the pipeline owner brings layout and paint up to date, and each frame keeps the
-/// two in step before compositing for presentation. `on_layer_created` receives the layer the window
-/// presents.
+/// This is the shape a real window binding takes: the owner rebuilds what was dirtied and brings layout
+/// and paint up to date each frame, and the [`ViewHandle`] the wrapping [`View`](agui_core::view::View)
+/// surfaces sizes, hit-tests, and composites the subtree the window presents.
 struct WindowDriver {
     executor: Rc<LocalExecutor<'static>>,
     event_tx: EventSender,
     events_rx: mpsc::Receiver<TaskEventMessage>,
     waker: Waker,
     vsync: Vsync,
-    build: BuildOwner,
     owner: PipelineOwner,
+    view: ViewHandle,
     scene: Scene,
 }
 
@@ -477,26 +466,27 @@ impl WindowDriver {
         events_rx: mpsc::Receiver<TaskEventMessage>,
         waker: Waker,
         vsync: Vsync,
-        on_layer_created: impl FnOnce(LayerHandle<OffsetLayer>),
     ) -> Self
     where
         V: Widget + 'static,
         V::Render: RenderBox,
     {
-        // Build the element tree and its root render object together, registering the root as the
-        // pipeline's outermost boundary.
         let mut scheduler = ExecutorScheduler {
             executor: Rc::clone(&executor),
             event_tx: event_tx.clone(),
         };
-        let (build, render) = BuildOwner::mount(widget, &mut scheduler);
 
-        let content: BoundaryContent = render;
-        let layer = LayerHandle::new(OffsetLayer::new());
+        let surface = Rc::new(RefCell::new(None));
 
-        let owner = PipelineOwner::new(content, layer.clone());
+        let owner = PipelineOwner::new(
+            agui_core::view::View::new(Rc::clone(&surface)).child(widget),
+            &mut scheduler,
+        );
 
-        on_layer_created(layer);
+        let view = surface
+            .borrow()
+            .clone()
+            .expect("a mounted View fills its surface slot");
 
         Self {
             executor,
@@ -504,8 +494,8 @@ impl WindowDriver {
             events_rx,
             waker,
             vsync,
-            build,
             owner,
+            view,
             scene: Scene::new(),
         }
     }
@@ -531,7 +521,7 @@ trait View {
 
 impl View for WindowDriver {
     fn resize(&mut self, constraints: BoxConstraints) {
-        self.owner.resize(constraints);
+        self.view.resize(constraints);
     }
 
     fn poll_tasks(&mut self) {
@@ -554,7 +544,7 @@ impl View for WindowDriver {
             let messages = self.events_rx.try_iter().collect::<Vec<_>>();
             let delivered = !messages.is_empty();
             for (path, message) in messages {
-                self.build.dispatch_message(&path, message);
+                self.owner.dispatch_message(&path, message);
             }
 
             if !ran && !delivered {
@@ -564,24 +554,24 @@ impl View for WindowDriver {
     }
 
     fn needs_frame(&self) -> bool {
-        self.build.is_dirty() || !self.vsync.is_idle()
+        self.owner.is_dirty() || !self.vsync.is_idle()
     }
 
     fn frame(&mut self, now: Duration) -> &Scene {
         // Tasks have already been drained, so apply any rebuild they queued, advance frame callbacks for
         // this frame's time, then lay out and paint what changed.
         let mut scheduler = self.scheduler();
-        self.build.flush(&mut scheduler);
+        self.owner.flush_build(&mut scheduler);
 
         self.vsync.tick(now);
 
         self.owner.flush_layout();
         self.owner.flush_paint();
-        self.owner.composite_into(&mut self.scene);
+        self.view.composite_into(&mut self.scene);
         &self.scene
     }
 
     fn hit_test(&self, position: Offset) -> HitTestResult {
-        self.owner.hit_test(position)
+        self.view.hit_test(position)
     }
 }

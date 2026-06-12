@@ -10,6 +10,10 @@ use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element, RoutingId, RoutingPath},
+    pipeline::{
+        layout::LayoutPipeline,
+        paint::{PaintPipeline, PaintScope},
+    },
     provide::ProvideScope,
     render_object::{AnyRenderObject, RenderObject},
     scheduling::TaskScheduler,
@@ -132,15 +136,27 @@ impl BuildState {
     }
 
     /// Rebuilds every boundary marked since the last flush. Returns whether anything rebuilt.
-    pub(crate) fn flush(state: &Rc<RefCell<Self>>, scheduler: &mut dyn TaskScheduler) -> bool {
+    ///
+    /// A render object built during a rebuild is mounted into `paint` and `layout` under the nearest
+    /// enclosing boundary, which the boundaries below the root re-establish as the walk descends.
+    pub(crate) fn flush(
+        state: &Rc<RefCell<Self>>,
+        scheduler: &mut dyn TaskScheduler,
+        layout: &LayoutPipeline,
+        paint: &mut PaintPipeline,
+    ) -> bool {
         let ordered = state.borrow_mut().drain_rootmost_first();
 
         if ordered.is_empty() {
             return false;
         }
 
+        // Nothing encloses a rebuilt boundary above the root view, so each walk starts detached and the
+        // views and repaint boundaries it crosses replace the scope as it descends.
+        let detached = PaintScope::detached();
+
         for cell in ordered {
-            cell.flush_rebuilds(scheduler);
+            cell.flush_rebuilds(scheduler, paint, layout, &detached);
         }
 
         true
@@ -214,10 +230,13 @@ struct BuildBoundaryCell {
 }
 
 impl BuildBoundaryCell {
-    /// Registers a boundary under the current scope, with a placeholder child to be replaced once the
-    /// inner element is built under [`child_scope`](Self::child_scope).
     fn register(ctx: &mut UpdateCtx) -> Rc<Self> {
-        let scope = ctx.build_scope().clone();
+        Self::register_under(ctx.build_scope(), ctx.provide_scope())
+    }
+
+    /// Registers a boundary under `scope`, capturing `provide`, with a placeholder child to be replaced
+    /// once the inner element is built under [`child_scope`](Self::child_scope).
+    fn register_under(scope: &BuildScope, provide: &ProvideScope) -> Rc<Self> {
         let depth = scope.depth;
 
         let cell = Rc::new(Self {
@@ -228,7 +247,7 @@ impl BuildBoundaryCell {
             render: RefCell::new(None),
             suffixes: RefCell::new(Vec::new()),
             is_dirty: Cell::new(false),
-            provide: RefCell::new(ctx.provide_scope().clone()),
+            provide: RefCell::new(provide.clone()),
         });
 
         if let Some(state) = scope.state.upgrade() {
@@ -278,7 +297,13 @@ impl BuildBoundaryCell {
         self.is_dirty.set(false);
     }
 
-    fn flush_rebuilds(&self, scheduler: &mut dyn TaskScheduler) {
+    fn flush_rebuilds(
+        &self,
+        scheduler: &mut dyn TaskScheduler,
+        paint: &mut PaintPipeline,
+        layout: &LayoutPipeline,
+        scope: &PaintScope,
+    ) {
         let suffixes = std::mem::take(&mut *self.suffixes.borrow_mut());
         let child_scope = self.child_scope();
         let provide = self.provide.borrow().clone();
@@ -287,7 +312,15 @@ impl BuildBoundaryCell {
             // Pre-seed the routing path with the target's path under this boundary, so a task spawned during
             // the rebuild captures its own location rather than the boundary's.
             let mut path = suffix.to_vec();
-            let mut ctx = UpdateCtx::new(scheduler, &mut path, &provide, &child_scope);
+            let mut ctx = UpdateCtx::new(
+                scheduler,
+                &mut path,
+                &provide,
+                &child_scope,
+                layout,
+                paint,
+                scope,
+            );
 
             let render = self.render.borrow();
             let Some(render) = render.as_ref() else {
@@ -313,6 +346,15 @@ pub struct BuildBoundaryElement {
 }
 
 impl BuildBoundaryElement {
+    /// Registers an empty boundary with a placeholder inner element, for a pipeline whose root render
+    /// object was built without a widget. It registers and dispatches like any other, but reaching its
+    /// placeholder child does nothing.
+    pub fn empty(scope: &BuildScope) -> Self {
+        Self {
+            cell: BuildBoundaryCell::register_under(scope, &ProvideScope::new()),
+        }
+    }
+
     /// Registers a boundary and builds `widget`'s element and render object under it, consuming the
     /// widget. The render object is held in a shared cell, returned to the caller and retained on the
     /// boundary, so a rebuild reconciles it from here while the pipeline lays out the same cell.
@@ -467,17 +509,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, rc::Rc};
-
-    use crate::{
-        context::UpdateCtx,
-        element::RoutingPath,
-        pipeline::build::BuildOwner,
-        test_fixtures::{Leaf, MultiChild},
-        test_harness::TestTaskRunner,
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
     };
 
-    use super::{BuildBoundaryId, RebuildBoundary};
+    use crate::{
+        context::{MessageCtx, UpdateCtx},
+        element::RoutingPath,
+        scheduling::TaskHandle,
+        test_fixtures::{Leaf, MultiChild},
+        test_harness::{TestBuildOwner, TestTaskRunner},
+    };
+
+    use super::{BuildBoundaryId, RebuildBoundary, RoutingId};
 
     /// A leaf that records the boundary it mounts under and counts the rebuilds delivered to it.
     fn probe(boundary: &Rc<Cell<Option<BuildBoundaryId>>>, rebuilds: &Rc<Cell<usize>>) -> Leaf {
@@ -502,7 +547,7 @@ mod tests {
         };
 
         let mut tasks = TestTaskRunner::new();
-        let (owner, _render) = BuildOwner::mount(widget, &mut tasks.scheduler());
+        let owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
 
         let a = a.get().expect("the first leaf mounted under a boundary");
         let b = b.get().expect("the second leaf mounted under a boundary");
@@ -530,7 +575,7 @@ mod tests {
         };
 
         let mut tasks = TestTaskRunner::new();
-        let (mut owner, _render) = BuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
 
         let a = a_boundary.get().unwrap();
         let b = b_boundary.get().unwrap();
@@ -549,5 +594,219 @@ mod tests {
             "the first boundary was not rebuilt again"
         );
         assert_eq!(b_rebuilds.get(), 1);
+    }
+
+    /// A shared counter, so a widget's closures can be `'static` and still be observed by the test.
+    fn counter() -> Rc<Cell<usize>> {
+        Rc::new(Cell::new(0))
+    }
+
+    /// A rebuild handler that bumps `c`.
+    fn bump(c: &Rc<Cell<usize>>) -> impl Fn(&mut UpdateCtx) + 'static {
+        let c = Rc::clone(c);
+        move |_| c.set(c.get() + 1)
+    }
+
+    #[test]
+    fn message_dirties_target_and_rebuild_only_reaches_that_target() {
+        use crate::test_fixtures::Transparent;
+
+        //   MultiChild
+        //   ├─ [0] Transparent -> Leaf (no rebuild)
+        //   ├─ [1] Transparent -> Leaf (requests rebuild)
+        //   └─ [2] Transparent -> Leaf (no rebuild)
+        let r0 = counter();
+        let r1 = counter();
+        let r2 = counter();
+
+        let widget = MultiChild {
+            children: vec![
+                Transparent {
+                    child: Leaf::new().on_rebuild(bump(&r0)),
+                },
+                Transparent {
+                    child: Leaf::new()
+                        .on_message(MessageCtx::request_rebuild)
+                        .on_rebuild(bump(&r1)),
+                },
+                Transparent {
+                    child: Leaf::new().on_rebuild(bump(&r2)),
+                },
+            ],
+        };
+
+        let mut tasks = TestTaskRunner::new();
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+
+        let target = RoutingPath::new(owner.root_id(), vec![RoutingId::new(1)]);
+        owner.dispatch_message(&target, Box::new(42_u32));
+        assert!(
+            owner.is_dirty(),
+            "the addressed element requested a rebuild"
+        );
+
+        assert!(owner.flush(&mut tasks.scheduler()));
+
+        assert_eq!(r0.get(), 0);
+        assert_eq!(r1.get(), 1);
+        assert_eq!(r2.get(), 0);
+    }
+
+    #[test]
+    fn rebuild_reaches_every_dirtied_target() {
+        use crate::test_fixtures::Transparent;
+
+        let r0 = counter();
+        let r1 = counter();
+        let r2 = counter();
+
+        let widget = MultiChild {
+            children: vec![
+                Transparent {
+                    child: Leaf::new()
+                        .on_message(MessageCtx::request_rebuild)
+                        .on_rebuild(bump(&r0)),
+                },
+                Transparent {
+                    child: Leaf::new().on_rebuild(bump(&r1)),
+                },
+                Transparent {
+                    child: Leaf::new()
+                        .on_message(MessageCtx::request_rebuild)
+                        .on_rebuild(bump(&r2)),
+                },
+            ],
+        };
+
+        let mut tasks = TestTaskRunner::new();
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+
+        let root = owner.root_id();
+        owner.dispatch_message(
+            &RoutingPath::new(root, vec![RoutingId::new(0)]),
+            Box::new(1_u32),
+        );
+        owner.dispatch_message(
+            &RoutingPath::new(root, vec![RoutingId::new(2)]),
+            Box::new(2_u32),
+        );
+
+        assert!(owner.flush(&mut tasks.scheduler()));
+
+        assert_eq!(r0.get(), 1);
+        assert_eq!(r1.get(), 0);
+        assert_eq!(r2.get(), 1);
+    }
+
+    #[test]
+    fn flush_with_empty_set_is_noop() {
+        let r0 = counter();
+
+        let widget = Leaf::new().on_rebuild(bump(&r0));
+
+        let mut tasks = TestTaskRunner::new();
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+
+        assert!(!owner.is_dirty());
+        assert!(!owner.flush(&mut tasks.scheduler()));
+
+        assert_eq!(r0.get(), 0);
+    }
+
+    #[test]
+    fn spawned_task_posts_message_back_to_its_element() {
+        // A leaf spawns a task on mount and stashes its handle (as a real element would) so the
+        // task outlives the build. The runner drives it to completion; the task posts a message
+        // back to its own routing path, which dispatching then delivers to the same leaf.
+        let mut tasks = TestTaskRunner::new();
+
+        let received = Rc::new(Cell::new(None::<u32>));
+        let handle = Rc::new(RefCell::new(None::<TaskHandle>));
+
+        let widget = Leaf::new()
+            .on_mount({
+                let handle = Rc::clone(&handle);
+                move |ctx| {
+                    *handle.borrow_mut() = Some(
+                        ctx.spawn(|task| async move {
+                            task.send(7_u32);
+                        })
+                        .expect("scheduler available during build"),
+                    );
+                }
+            })
+            .on_message({
+                let received = Rc::clone(&received);
+                move |ctx| received.set(Some(ctx.consume::<u32>()))
+            });
+
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+
+        tasks.run_to_completion();
+
+        let messages: Vec<_> = tasks.messages().collect();
+        assert_eq!(messages.len(), 1, "the task posted exactly one message");
+
+        for (path, message) in messages {
+            owner.dispatch_message(&path, message);
+        }
+
+        assert_eq!(received.get(), Some(7));
+    }
+
+    #[test]
+    fn task_message_rebuilds_only_the_messaged_child() {
+        let mut tasks = TestTaskRunner::new();
+
+        let a_messages = counter();
+        let a_rebuilds = counter();
+        let b_rebuilds = counter();
+        let a_handle = Rc::new(RefCell::new(None::<TaskHandle>));
+
+        let widget = MultiChild {
+            children: vec![
+                Leaf::new()
+                    .on_mount({
+                        let a_handle = Rc::clone(&a_handle);
+                        move |ctx| {
+                            *a_handle.borrow_mut() = Some(
+                                ctx.spawn(|task| async move {
+                                    task.send(42_u32);
+                                })
+                                .expect("scheduler available during build"),
+                            );
+                        }
+                    })
+                    .on_message({
+                        let a_messages = Rc::clone(&a_messages);
+                        move |ctx| {
+                            a_messages.set(a_messages.get() + 1);
+                            let _ = ctx.consume::<u32>();
+                            ctx.request_rebuild();
+                        }
+                    })
+                    .on_rebuild(bump(&a_rebuilds)),
+                Leaf::new().on_rebuild(bump(&b_rebuilds)),
+            ],
+        };
+
+        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+
+        tasks.run_to_completion();
+
+        let messages: Vec<_> = tasks.messages().collect();
+        assert_eq!(messages.len(), 1, "the task posted exactly one message");
+
+        for (path, message) in messages {
+            owner.dispatch_message(&path, message);
+        }
+
+        assert_eq!(a_messages.get(), 1);
+        assert!(owner.is_dirty(), "only the messaged child was dirtied");
+
+        assert!(owner.flush(&mut tasks.scheduler()));
+
+        assert_eq!(a_rebuilds.get(), 1, "child 0 rebuilt");
+        assert_eq!(b_rebuilds.get(), 0, "the sibling was not rebuilt");
     }
 }

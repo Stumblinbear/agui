@@ -1,17 +1,15 @@
 use std::time::Duration;
 
 use agui_core::{
-    paint::{
-        compositing::{LayerHandle, OffsetLayer},
-        scene::Scene,
-    },
-    pipeline::{PipelineOwner, build::BuildOwner, layout::BoundaryContent},
+    paint::scene::Scene,
+    pipeline::PipelineOwner,
     prelude::{
         element::*,
         render_object::{BoxConstraints, HitTestResult, RenderBox},
     },
     scheduling::Vsync,
-    test_harness::TestTaskRunner,
+    test_harness::{TestTaskRunner, mount_view_with},
+    view::ViewHandle,
 };
 
 use crate::gesture::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId, TestGesture};
@@ -24,9 +22,8 @@ use crate::gesture::{PointerDispatcher, PointerEvent, PointerEventKind, PointerI
 /// with [`tap_at`](Self::tap_at), [`drag_from`](Self::drag_from), and
 /// [`start_gesture`](Self::start_gesture).
 pub struct WidgetTester {
-    build: BuildOwner,
-
     owner: PipelineOwner,
+    view: ViewHandle,
 
     tasks: TestTaskRunner,
 
@@ -46,16 +43,11 @@ impl WidgetTester {
     {
         let mut tasks = TestTaskRunner::new();
 
-        let (build, render) = BuildOwner::mount(widget, &mut tasks.scheduler());
-
-        let content: BoundaryContent = render;
-        let layer = LayerHandle::new(OffsetLayer::new());
-        let owner = PipelineOwner::new(content, layer);
+        let (owner, view) = mount_view_with(widget, &mut tasks.scheduler());
 
         Self {
-            build,
-
             owner,
+            view,
 
             tasks,
 
@@ -69,12 +61,12 @@ impl WidgetTester {
 
     /// Lays the root out as tightly constrained to `size`, repainting it on the next pump.
     pub fn resize(&mut self, size: Size) {
-        self.owner.resize(BoxConstraints::tight(size));
+        self.view.resize(BoxConstraints::tight(size));
     }
 
     /// Lays the root out under `constraints`, repainting it on the next pump.
     pub fn resize_with(&mut self, constraints: BoxConstraints) {
-        self.owner.resize(constraints);
+        self.view.resize(constraints);
     }
 
     /// Advances time by `delta` and produces one frame: it ticks frame callbacks, runs spawned tasks
@@ -88,10 +80,10 @@ impl WidgetTester {
 
         let messages = self.tasks.messages().collect::<Vec<_>>();
         for (path, message) in messages {
-            self.build.dispatch_message(&path, message);
+            self.owner.dispatch_message(&path, message);
         }
 
-        self.build.flush(&mut self.tasks.scheduler());
+        self.owner.flush_build(&mut self.tasks.scheduler());
 
         self.owner.flush_layout();
         self.owner.flush_paint();
@@ -108,7 +100,7 @@ impl WidgetTester {
         for _ in 0..max_frames {
             self.pump(Duration::from_millis(16));
 
-            if self.vsync.is_idle() && !self.build.is_dirty() {
+            if self.vsync.is_idle() && !self.owner.is_dirty() {
                 return;
             }
         }
@@ -130,23 +122,23 @@ impl WidgetTester {
 
     /// The scene composited from the most recent paint.
     pub fn scene(&self) -> Scene {
-        self.owner.composite()
+        self.view.composite()
     }
 
     /// Captures the element tree as a diagnostics snapshot.
     pub fn element_diagnostics(&self) -> DiagnosticsNode {
-        self.build.describe()
+        self.owner.diagnostics()
     }
 
     /// Captures the render tree as a diagnostics snapshot.
     pub fn render_diagnostics(&self) -> DiagnosticsNode {
-        self.owner.diagnostics()
+        self.view.diagnostics()
     }
 
     /// Hit-tests the tree at `position`, in the root coordinate space, returning the handlers under it
     /// ordered most-specific first.
     pub fn hit_test(&self, position: Offset) -> HitTestResult {
-        self.owner.hit_test(position)
+        self.view.hit_test(position)
     }
 
     /// Presses and releases a pointer at `position`.
@@ -176,8 +168,8 @@ impl WidgetTester {
     /// Dispatches `message` to the element at `path`, marking it to rebuild on the next pump if it asks
     /// to.
     pub fn send<M: 'static>(&mut self, path: &[RoutingId], message: M) {
-        let path = RoutingPath::new(self.build.root_id(), path.to_vec());
-        self.build.dispatch_message(&path, Box::new(message));
+        let path = RoutingPath::new(self.owner.root_id(), path.to_vec());
+        self.owner.dispatch_message(&path, Box::new(message));
     }
 
     /// A clone of the frame-callback registry the tester ticks each pump, for handing to a render
@@ -205,6 +197,6 @@ impl WidgetTester {
         };
 
         self.dispatcher
-            .handle(&event, |position| self.owner.hit_test(position));
+            .handle(&event, |position| self.view.hit_test(position));
     }
 }

@@ -319,8 +319,12 @@ mod tests {
 
     use super::*;
     use crate::{
-        context::UpdateCtx, element::Element, test_harness::with_ctx, widget::AsAnyWidget,
-        widget::Widget,
+        context::UpdateCtx,
+        element::Element,
+        pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
+        prelude::render_object::LayoutScope,
+        test_harness::with_ctx,
+        widget::{AsAnyWidget, Widget},
     };
 
     /// A sliver that occupies a fixed scroll extent and paints whatever of it is currently in widget.
@@ -362,10 +366,13 @@ mod tests {
         let mut viewport =
             RenderViewport::new(RenderNode::new(RenderSliverFixed { extent: 100.0 }));
 
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+
         // 100 wide x 50 tall viewport: the sliver is 100 long, only 50 fits.
         let size = RenderBox::layout(
             &mut viewport,
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
             BoxConstraints::tight(Size::new(100.0, 50.0)),
         );
         assert_eq!(size, Size::new(100.0, 50.0));
@@ -381,7 +388,7 @@ mod tests {
         viewport.offset = PositiveFinite::try_from(80.0).unwrap();
         RenderBox::layout(
             &mut viewport,
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
             BoxConstraints::tight(Size::new(100.0, 50.0)),
         );
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
@@ -425,9 +432,13 @@ mod tests {
         let (_element, erased) = with_ctx(|ctx| boxed_widget.create(ctx));
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
+
+        let layout = LayoutPipeline::default();
+        let mut paint = PaintPipeline::default();
+
         RenderBox::layout(
             &mut viewport,
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
             BoxConstraints::tight(Size::new(100.0, 50.0)),
         );
 

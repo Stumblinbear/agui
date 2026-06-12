@@ -202,14 +202,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::cell::{Cell, RefCell};
+    use std::cell::Cell;
 
     use agui_core::{
         input::pointer::PointerDispatcher,
-        paint::compositing::{LayerHandle, OffsetLayer},
-        pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
-        test_harness::with_ctx,
+        test_harness::mount_view,
     };
 
     use crate::{padding::Padding, sized_box::SizedBox};
@@ -234,13 +232,8 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
 
-        let (_, render) = with_ctx(|ctx| widget.create(ctx));
-
-        let mut owner = PipelineOwner::new(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        let (mut owner, view) = mount_view(widget);
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
 
         let mut dispatcher = PointerDispatcher::new();
@@ -250,7 +243,7 @@ mod tests {
                 position: Offset::new(35.0, 40.0),
                 kind: PointerEventKind::Down,
             },
-            |position| owner.hit_test(position),
+            |position| view.hit_test(position),
         );
 
         let got = local.get().expect("the listener handled the down");

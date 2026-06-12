@@ -8,7 +8,8 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     pipeline::{
-        layout::{BoundaryContent, LayoutScope, RegisteredLayoutBoundary},
+        BoundaryContent,
+        layout::{LayoutScope, RegisteredLayoutBoundary},
         paint::PaintScope,
     },
     render_object::{
@@ -443,20 +444,17 @@ mod tests {
         diagnostics::{Diagnostics, DiagnosticsNode},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
-        paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::PipelineOwner,
         render_object::{
             MountCtx, RenderObject,
             box_layout::{BoxConstraints, RenderBox},
         },
+        test_harness::{RawWidget, mount_view},
         text::TextBaseline,
+        view::ViewHandle,
     };
 
     use super::*;
-
-    fn layer() -> LayerHandle<OffsetLayer> {
-        LayerHandle::new(OffsetLayer::new())
-    }
 
     type Captured = Rc<RefCell<Option<LayoutScope>>>;
 
@@ -621,10 +619,9 @@ mod tests {
             }),
         };
 
-        let content: BoundaryContent = Rc::new(RefCell::new(tighten));
-        let mut owner = PipelineOwner::new(Rc::clone(&content), layer());
+        let (mut owner, view) = mount_view(RawWidget::new(tighten));
 
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         owner.flush_paint();
         assert_eq!(probe_layouts.get(), 1);
@@ -670,10 +667,9 @@ mod tests {
             }),
         };
 
-        let content: BoundaryContent = Rc::new(RefCell::new(tighten));
-        let mut owner = PipelineOwner::new(content, layer());
+        let (mut owner, view) = mount_view(RawWidget::new(tighten));
 
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         assert_eq!(probe_layouts.get(), 1);
         assert_eq!(tighten_layouts.get(), 1);
@@ -685,7 +681,7 @@ mod tests {
             .clone()
             .expect("laid out once")
             .mark_needs_layout();
-        owner.resize(BoxConstraints::new(0, 200, 0, 200));
+        view.resize(BoxConstraints::new(0, 200, 0, 200));
 
         owner.flush_layout();
         assert_eq!(tighten_layouts.get(), 2, "the root re-laid");
@@ -775,6 +771,7 @@ mod tests {
         probe_captured: Captured,
         probe_constraints: Rc<Cell<Option<BoxConstraints>>>,
         owner: PipelineOwner,
+        view: ViewHandle,
     }
 
     impl Driver {
@@ -797,8 +794,7 @@ mod tests {
                 }),
             };
 
-            let root: BoundaryContent = Rc::new(RefCell::new(toggle));
-            let owner = PipelineOwner::new(root, layer());
+            let (owner, view) = mount_view(RawWidget::new(toggle));
 
             Self {
                 tight,
@@ -807,12 +803,13 @@ mod tests {
                 probe_captured,
                 probe_constraints,
                 owner,
+                view,
             }
         }
 
         /// Re-lays the root, so the toggle re-lays its child under the constraints its flag selects.
         fn relay(&mut self) {
-            self.owner.resize(BoxConstraints::new(0, 100, 0, 100));
+            self.view.resize(BoxConstraints::new(0, 100, 0, 100));
             self.owner.flush_layout();
         }
     }

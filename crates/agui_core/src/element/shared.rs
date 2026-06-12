@@ -7,7 +7,9 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{Element, RoutingId, node::ElementNode},
     key::AnyKeyable,
-    render_object::{MultiChildRenderObject, SingleChildRenderObject, node::RenderNode},
+    render_object::{
+        MultiChildRenderObject, RenderObject, SingleChildRenderObject, node::RenderNode,
+    },
     widget::Widget,
 };
 
@@ -153,6 +155,7 @@ impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
         ctx: &mut UpdateCtx,
     ) where
         CV: Widget<Element = C> + 'static,
+        CV::Render: RenderObject,
     {
         let old_render = render.take_children();
         let old = std::mem::take(&mut self.children);
@@ -175,6 +178,7 @@ fn reconcile<C, CV>(
 where
     C: Element,
     CV: Widget<Element = C> + 'static,
+    CV::Render: RenderObject,
 {
     let new_len = new.len();
     let old_len = old.len();
@@ -391,12 +395,16 @@ fn create<C, CV>(
 ) where
     C: Element,
     CV: Widget<Element = C> + 'static,
+    CV::Render: RenderObject,
 {
     let type_id = child.widget_type_id();
     let key = child.key().map(AnyKeyable::dyn_clone);
 
-    let (element, render_object) =
+    let (element, mut render_object) =
         ctx.with_routing_id(RoutingId::from_index(new_index), |ctx| child.create(ctx));
+
+    // A subtree grafted onto the mounted tree is mounted here; its own mount cascades to its children.
+    ctx.mount(&mut render_object);
 
     out_nodes.push(KeyedNode {
         node: ElementNode::new(element),
