@@ -8,7 +8,7 @@ use agui_core::{
         render_object::{BoxConstraints, HitTestResult, RenderBox},
     },
     scheduling::Vsync,
-    test_harness::{TestTaskRunner, mount_view_with},
+    test_harness::TestCtx,
     view::ViewHandle,
 };
 
@@ -25,7 +25,7 @@ pub struct WidgetTester {
     owner: PipelineOwner,
     view: ViewHandle,
 
-    tasks: TestTaskRunner,
+    ctx: TestCtx,
 
     vsync: Vsync,
     now: Duration,
@@ -41,15 +41,15 @@ impl WidgetTester {
         V: Widget + 'static,
         V::Render: RenderBox + 'static,
     {
-        let mut tasks = TestTaskRunner::new();
+        let mut ctx = TestCtx::new();
 
-        let (owner, view) = mount_view_with(widget, &mut tasks.scheduler());
+        let (owner, view) = ctx.mount_view(widget);
 
         Self {
             owner,
             view,
 
-            tasks,
+            ctx,
 
             vsync: Vsync::new(),
             now: Duration::ZERO,
@@ -76,14 +76,14 @@ impl WidgetTester {
         self.now += delta;
         self.vsync.tick(self.now);
 
-        self.tasks.poll();
+        self.ctx.poll();
 
-        let messages = self.tasks.messages().collect::<Vec<_>>();
+        let messages = self.ctx.messages().collect::<Vec<_>>();
         for (path, message) in messages {
             self.owner.dispatch_message(&path, message);
         }
 
-        self.owner.flush_build(&mut self.tasks.scheduler());
+        self.owner.flush_build(&mut self.ctx.scheduler());
 
         self.owner.flush_layout();
         self.owner.flush_paint();
@@ -111,13 +111,13 @@ impl WidgetTester {
     /// Polls every spawned task once without producing a frame. A message a task posts is delivered on
     /// the next [`pump`](Self::pump).
     pub fn poll_tasks(&mut self) {
-        self.tasks.poll();
+        self.ctx.poll();
     }
 
     /// Runs every spawned task to completion. Use only for tasks that finish on their own; a long-lived
     /// task never returns and this spins forever.
     pub fn run_tasks_to_completion(&mut self) {
-        self.tasks.run_to_completion();
+        self.ctx.run_tasks_to_completion();
     }
 
     /// The scene composited from the most recent paint.

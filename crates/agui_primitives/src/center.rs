@@ -201,7 +201,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::with_ctx;
+    use agui_core::test_harness::TestCtx;
 
     use crate::sized_box::SizedBox;
 
@@ -212,12 +212,11 @@ mod tests {
         // A 50x50 child inside a 200x100 box sits at ((200-50)/2, (100-50)/2) = (75, 25).
         let widget = Center::new().child(SizedBox::new().width(50).height(50));
 
-        let (_, mut render_object) = with_ctx(|ctx| widget.create(ctx));
+        let mut tcx = TestCtx::new();
+        let (_, mut render_object) = tcx.create(widget);
 
-        let size = render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 200, 0, 100),
-        );
+        let size =
+            render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 200, 0, 100));
 
         assert_eq!(
             size,

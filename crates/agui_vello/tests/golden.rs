@@ -1,7 +1,7 @@
 use agui_core::{
     paint::compositing::{Compositor, LayerHandle, OffsetLayer},
     prelude::{element::*, render_object::*},
-    test_harness::with_ctx,
+    test_harness::TestCtx,
 };
 use agui_primitives::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
 use agui_vello::{
@@ -25,11 +25,8 @@ fn orange_half_pane_matches_golden() {
         .height_factor(1.0)
         .child(ColoredBox::new(Color::from_rgb8(255, 138, 0)));
 
-    let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-    render.layout(
-        &mut LayoutCtx::detached(),
-        BoxConstraints::new(0.0, width as f32, 0.0, height as f32),
-    );
+    let mut render = TestCtx::new()
+        .laid_out(widget, BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
 
     let root = LayerHandle::new(OffsetLayer::new());
     PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));

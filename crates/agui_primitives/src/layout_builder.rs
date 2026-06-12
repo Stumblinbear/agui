@@ -396,12 +396,10 @@ mod tests {
     use std::cell::Cell;
 
     use agui_core::{
-        element::BuildScope,
         paint::compositing::{LayerHandle, OffsetLayer},
-        pipeline::{PipelineOwner, layout::BoundaryContent},
+        pipeline::{BoundaryContent, PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
         prelude::{element::*, render_object::*},
-        provide::ProvideScope,
-        test_harness::{TestTaskRunner, mount_view, with_ctx},
+        test_harness::TestCtx,
         view::ViewHandle,
     };
 
@@ -426,21 +424,16 @@ mod tests {
             }
         });
 
-        let (_, mut render_object) = with_ctx(|ctx| layout_builder.create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 50, 0, 50),
-        );
+        let mut tcx = TestCtx::new();
+        let (_, mut render_object) = tcx.create(layout_builder);
+        render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 50, 0, 50));
         assert_eq!(*build_count.borrow(), 1);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
             Some(Size::new(0.0, 0.0))
         );
 
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 150, 0, 150),
-        );
+        render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 150, 0, 150));
         assert_eq!(*build_count.borrow(), 2);
         assert_eq!(
             render_object.child_render.as_ref().unwrap().parent_data,
@@ -479,37 +472,15 @@ mod tests {
         // a working scheduler (the deferred handle captured at mount) and posts a message back.
         let layout_builder = LayoutBuilder::new(|_| SpawnOnMount);
 
-        let mut tasks = TestTaskRunner::new();
+        let mut ctx = TestCtx::new();
 
-        let (_, mut render_object) = {
-            let provide = ProvideScope::new();
-            let mut path = Vec::new();
-            let mut scheduler = tasks.scheduler();
-            let build_scope = BuildScope::detached();
-            let mut paint = PaintPipeline::default();
-            let layout = LayoutPipeline::default();
-            let paint_scope = PaintScope::detached();
-            let mut ctx = UpdateCtx::new(
-                &mut scheduler,
-                &mut path,
-                &provide,
-                &build_scope,
-                &layout,
-                &mut paint,
-                &paint_scope,
-            );
+        let (_, mut render_object) = ctx.create(layout_builder);
+        render_object.layout(&mut ctx.layout_ctx(), BoxConstraints::new(0, 50, 0, 50));
 
-            layout_builder.create(&mut ctx)
-        };
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 50, 0, 50),
-        );
-
-        tasks.run_to_completion();
+        ctx.run_tasks_to_completion();
 
         assert_eq!(
-            tasks.messages().count(),
+            ctx.messages().count(),
             1,
             "the subtree spawned a task during layout that posted one message"
         );
@@ -629,7 +600,7 @@ mod tests {
         W::Element: 'static,
         W::Render: RenderBox,
     {
-        mount_view(layout_builder)
+        TestCtx::new().mount_view(layout_builder)
     }
 
     #[test]
@@ -725,7 +696,7 @@ mod tests {
         };
 
         let widget_a = widget_for(&builds);
-        let (mut element, render) = with_ctx(|ctx| widget_a.create(ctx));
+        let (mut element, render) = TestCtx::new().create(widget_a);
         let mut content: BoundaryContent = Rc::new(RefCell::new(render));
 
         // Mount the builder as a root layout boundary by hand, so the manual callback change below can
@@ -757,7 +728,7 @@ mod tests {
                 .downcast_mut::<RenderLayoutBuilder<Box<dyn AnyRenderBox>>>()
                 .expect("the root is the layout builder");
 
-            with_ctx(|ctx| widget_b.update(&mut element, render, ctx));
+            TestCtx::new().run(|ctx| widget_b.update(&mut element, render, ctx));
         }
 
         layout.flush(&mut paint);

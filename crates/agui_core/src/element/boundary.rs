@@ -517,9 +517,10 @@ mod tests {
     use crate::{
         context::{MessageCtx, UpdateCtx},
         element::RoutingPath,
+        pipeline::PipelineOwner,
         scheduling::TaskHandle,
         test_fixtures::{Leaf, MultiChild},
-        test_harness::{TestBuildOwner, TestTaskRunner},
+        test_harness::TestCtx,
     };
 
     use super::{BuildBoundaryId, RebuildBoundary, RoutingId};
@@ -531,6 +532,7 @@ mod tests {
 
         Leaf::new()
             .on_mount(move |ctx: &mut UpdateCtx| boundary.set(ctx.build_scope().boundary()))
+            .on_message(MessageCtx::request_rebuild)
             .on_rebuild(move |_: &mut UpdateCtx| rebuilds.set(rebuilds.get() + 1))
     }
 
@@ -546,8 +548,8 @@ mod tests {
             ],
         };
 
-        let mut tasks = TestTaskRunner::new();
-        let owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut tasks = TestCtx::new();
+        let owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
         let a = a.get().expect("the first leaf mounted under a boundary");
         let b = b.get().expect("the second leaf mounted under a boundary");
@@ -574,20 +576,21 @@ mod tests {
             ],
         };
 
-        let mut tasks = TestTaskRunner::new();
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
         let a = a_boundary.get().unwrap();
         let b = b_boundary.get().unwrap();
 
-        // Each leaf sits at the empty path within its own boundary, reached by that boundary's id.
-        owner.request_rebuild(&RoutingPath::new(a, Vec::new()));
-        assert!(owner.flush(&mut tasks.scheduler()));
+        // Each leaf sits at the empty path within its own boundary, reached by that boundary's id; a
+        // message there asks it to rebuild, the way a set-state would.
+        owner.dispatch_message(&RoutingPath::new(a, Vec::new()), Box::new(()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
         assert_eq!(a_rebuilds.get(), 1);
         assert_eq!(b_rebuilds.get(), 0, "the sibling boundary was not rebuilt");
 
-        owner.request_rebuild(&RoutingPath::new(b, Vec::new()));
-        assert!(owner.flush(&mut tasks.scheduler()));
+        owner.dispatch_message(&RoutingPath::new(b, Vec::new()), Box::new(()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
         assert_eq!(
             a_rebuilds.get(),
             1,
@@ -635,8 +638,8 @@ mod tests {
             ],
         };
 
-        let mut tasks = TestTaskRunner::new();
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
         let target = RoutingPath::new(owner.root_id(), vec![RoutingId::new(1)]);
         owner.dispatch_message(&target, Box::new(42_u32));
@@ -645,7 +648,7 @@ mod tests {
             "the addressed element requested a rebuild"
         );
 
-        assert!(owner.flush(&mut tasks.scheduler()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
 
         assert_eq!(r0.get(), 0);
         assert_eq!(r1.get(), 1);
@@ -678,8 +681,8 @@ mod tests {
             ],
         };
 
-        let mut tasks = TestTaskRunner::new();
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
         let root = owner.root_id();
         owner.dispatch_message(
@@ -691,7 +694,7 @@ mod tests {
             Box::new(2_u32),
         );
 
-        assert!(owner.flush(&mut tasks.scheduler()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
 
         assert_eq!(r0.get(), 1);
         assert_eq!(r1.get(), 0);
@@ -704,11 +707,11 @@ mod tests {
 
         let widget = Leaf::new().on_rebuild(bump(&r0));
 
-        let mut tasks = TestTaskRunner::new();
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
         assert!(!owner.is_dirty());
-        assert!(!owner.flush(&mut tasks.scheduler()));
+        assert!(!owner.flush_build(&mut tasks.scheduler()));
 
         assert_eq!(r0.get(), 0);
     }
@@ -718,7 +721,7 @@ mod tests {
         // A leaf spawns a task on mount and stashes its handle (as a real element would) so the
         // task outlives the build. The runner drives it to completion; the task posts a message
         // back to its own routing path, which dispatching then delivers to the same leaf.
-        let mut tasks = TestTaskRunner::new();
+        let mut tasks = TestCtx::new();
 
         let received = Rc::new(Cell::new(None::<u32>));
         let handle = Rc::new(RefCell::new(None::<TaskHandle>));
@@ -740,9 +743,9 @@ mod tests {
                 move |ctx| received.set(Some(ctx.consume::<u32>()))
             });
 
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
-        tasks.run_to_completion();
+        tasks.run_tasks_to_completion();
 
         let messages: Vec<_> = tasks.messages().collect();
         assert_eq!(messages.len(), 1, "the task posted exactly one message");
@@ -756,7 +759,7 @@ mod tests {
 
     #[test]
     fn task_message_rebuilds_only_the_messaged_child() {
-        let mut tasks = TestTaskRunner::new();
+        let mut tasks = TestCtx::new();
 
         let a_messages = counter();
         let a_rebuilds = counter();
@@ -790,9 +793,9 @@ mod tests {
             ],
         };
 
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
-        tasks.run_to_completion();
+        tasks.run_tasks_to_completion();
 
         let messages: Vec<_> = tasks.messages().collect();
         assert_eq!(messages.len(), 1, "the task posted exactly one message");
@@ -804,7 +807,7 @@ mod tests {
         assert_eq!(a_messages.get(), 1);
         assert!(owner.is_dirty(), "only the messaged child was dirtied");
 
-        assert!(owner.flush(&mut tasks.scheduler()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
 
         assert_eq!(a_rebuilds.get(), 1, "child 0 rebuilt");
         assert_eq!(b_rebuilds.get(), 0, "the sibling was not rebuilt");

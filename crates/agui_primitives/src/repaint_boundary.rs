@@ -205,11 +205,12 @@ mod tests {
             scene::Scene,
         },
         pipeline::{
-            layout::{BoundaryContent, LayoutPipeline},
+            BoundaryContent,
+            layout::LayoutPipeline,
             paint::PaintPipeline,
         },
         prelude::{element::*, render_object::*},
-        test_harness::{mount_view, with_ctx},
+        test_harness::TestCtx,
     };
 
     use typed_floats::{PositiveFinite, as_const};
@@ -382,7 +383,7 @@ mod tests {
                     Counter::new(Rc::clone(&inner_paints)).capture(Rc::clone(&inner_scope)),
                 ));
 
-        let (mut owner, view) = mount_view(widget);
+        let (mut owner, view) = TestCtx::new().mount_view(widget);
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
 
@@ -424,7 +425,7 @@ mod tests {
         let widget = Counter::new(Rc::clone(&outer_paints))
             .child(RepaintBoundary::new().child(Counter::new(Rc::clone(&inner_paints))));
 
-        let (mut element, render) = with_ctx(|ctx| widget.create(ctx));
+        let (mut element, render) = TestCtx::new().create(widget);
         let root = Rc::new(RefCell::new(render));
 
         // Mount the subtree under a paint boundary by hand, so the rebuild can be driven directly to
@@ -439,7 +440,7 @@ mod tests {
             root.borrow_mut().mount(&mut ctx);
         }
         root.borrow_mut().layout(
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut pipeline, LayoutScope::detached()),
             BoxConstraints::new(0, 100, 0, 100),
         );
 
@@ -451,7 +452,7 @@ mod tests {
         // Rebuild with an identical tree, so nothing inside marks the boundary's scope.
         let widget = Counter::new(Rc::clone(&outer_paints))
             .child(RepaintBoundary::new().child(Counter::new(Rc::clone(&inner_paints))));
-        with_ctx(|ctx| {
+        TestCtx::new().run(|ctx| {
             let mut render = root.borrow_mut();
             widget.update(&mut element, &mut render, ctx);
         });

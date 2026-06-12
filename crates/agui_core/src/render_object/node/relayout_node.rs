@@ -449,7 +449,7 @@ mod tests {
             MountCtx, RenderObject,
             box_layout::{BoxConstraints, RenderBox},
         },
-        test_harness::{RawWidget, mount_view},
+        test_harness::{RawWidget, TestCtx},
         text::TextBaseline,
         view::ViewHandle,
     };
@@ -619,7 +619,7 @@ mod tests {
             }),
         };
 
-        let (mut owner, view) = mount_view(RawWidget::new(tighten));
+        let (mut owner, view) = TestCtx::new().mount_view(RawWidget::new(tighten));
 
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
@@ -667,7 +667,7 @@ mod tests {
             }),
         };
 
-        let (mut owner, view) = mount_view(RawWidget::new(tighten));
+        let (mut owner, view) = TestCtx::new().mount_view(RawWidget::new(tighten));
 
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
@@ -794,7 +794,7 @@ mod tests {
                 }),
             };
 
-            let (owner, view) = mount_view(RawWidget::new(toggle));
+            let (owner, view) = TestCtx::new().mount_view(RawWidget::new(toggle));
 
             Self {
                 tight,

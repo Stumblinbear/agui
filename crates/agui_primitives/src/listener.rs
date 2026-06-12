@@ -207,7 +207,7 @@ mod tests {
     use agui_core::{
         input::pointer::PointerDispatcher,
         prelude::{element::*, render_object::*},
-        test_harness::mount_view,
+        test_harness::TestCtx,
     };
 
     use crate::{padding::Padding, sized_box::SizedBox};
@@ -232,7 +232,7 @@ mod tests {
                 .child(SizedBox::new().width(50).height(50)),
         );
 
-        let (mut owner, view) = mount_view(widget);
+        let (mut owner, view) = TestCtx::new().mount_view(widget);
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
 

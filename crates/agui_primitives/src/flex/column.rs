@@ -31,39 +31,39 @@ pub struct Column<Children> {
     children: Vec<Flexible<Children>>,
 }
 
-impl<Children, S: column_builder::State> ColumnBuilder<Children, S>
-where
-    Children: AsAnyWidget,
-    Children::Render: RenderBox,
-{
-    #[allow(deprecated)]
-    pub fn dyn_children(
-        self,
-        iter: impl IntoIterator<Item = Flexible<Children>>,
-    ) -> ColumnBuilder<BoxedWidget, column_builder::SetChildren<S>>
-    where
-        S::Children: column_builder::IsUnset,
-    {
-        ColumnBuilder {
-            __unsafe_private_phantom: ::core::marker::PhantomData,
-            __unsafe_private_named: (
-                self.__unsafe_private_named.0,
-                self.__unsafe_private_named.1,
-                self.__unsafe_private_named.2,
-                self.__unsafe_private_named.3,
-                self.__unsafe_private_named.4,
-                Some(FromIterator::from_iter(iter.into_iter().map(|c| {
-                    Flexible {
-                        child: c.child.into_boxed_render_box(),
+// impl<Children, S: column_builder::State> ColumnBuilder<Children, S>
+// where
+//     Children: AsAnyWidget,
+//     Children::Render: RenderBox,
+// {
+//     #[allow(deprecated)]
+//     pub fn dyn_children(
+//         self,
+//         iter: impl IntoIterator<Item = Flexible<Children>>,
+//     ) -> ColumnBuilder<BoxedBoxWidget, column_builder::SetChildren<S>>
+//     where
+//         S::Children: column_builder::IsUnset,
+//     {
+//         ColumnBuilder {
+//             __unsafe_private_phantom: ::core::marker::PhantomData,
+//             __unsafe_private_named: (
+//                 self.__unsafe_private_named.0,
+//                 self.__unsafe_private_named.1,
+//                 self.__unsafe_private_named.2,
+//                 self.__unsafe_private_named.3,
+//                 self.__unsafe_private_named.4,
+//                 Some(FromIterator::from_iter(iter.into_iter().map(|c| {
+//                     Flexible {
+//                         child: c.child.into_boxed_render_box(),
 
-                        flex: c.flex,
-                        fit: c.fit,
-                    }
-                }))),
-            ),
-        }
-    }
-}
+//                         flex: c.flex,
+//                         fit: c.fit,
+//                     }
+//                 }))),
+//             ),
+//         }
+//     }
+// }
 
 impl<Children> Widget for Column<Children>
 where
@@ -268,7 +268,7 @@ where
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{element::Element, key::Key, test_harness::with_ctx, widget::AsAnyWidget};
+    use agui_core::{element::Element, key::Key, test_harness::TestCtx, widget::AsAnyWidget};
 
     use super::*;
 
@@ -338,13 +338,13 @@ mod tests {
             ])
             .build();
 
-        let _ = Column::builder()
-            .dyn_children(bon::vec![
-                TestWidget::new(0),
-                TestWidget::new(0),
-                Flexible::from(TestWidget::new(0)),
-            ])
-            .build();
+        // let _ = Column::builder()
+        //     .children(bon::vec![
+        //         TestWidget::new(0),
+        //         TestWidget::new(0),
+        //         Flexible::from(TestWidget::new(0)),
+        //     ])
+        //     .build();
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
             ])
             .build();
 
-        let (_, render) = with_ctx(|ctx| column.create(ctx));
+        let (_, render) = TestCtx::new().create(column);
 
         assert_eq!(render.children.len(), 3);
     }
@@ -371,7 +371,7 @@ mod tests {
             ])
             .build();
 
-        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -383,7 +383,7 @@ mod tests {
             ])
             .build();
 
-        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(column_2, &mut element, &mut render);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 4);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -398,7 +398,7 @@ mod tests {
             ])
             .build();
 
-        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -410,7 +410,7 @@ mod tests {
             ])
             .build();
 
-        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(column_2, &mut element, &mut render);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -428,7 +428,7 @@ mod tests {
             ])
             .build();
 
-        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -441,7 +441,7 @@ mod tests {
             ])
             .build();
 
-        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(column_2, &mut element, &mut render);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -459,7 +459,7 @@ mod tests {
             ])
             .build();
 
-        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -472,7 +472,7 @@ mod tests {
             ])
             .build();
 
-        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(column_2, &mut element, &mut render);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
@@ -490,7 +490,7 @@ mod tests {
             ])
             .build();
 
-        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -506,7 +506,7 @@ mod tests {
             ])
             .build();
 
-        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(column_2, &mut element, &mut render);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 7);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 4);
@@ -529,7 +529,7 @@ mod tests {
             ])
             .build();
 
-        let (mut element, mut render) = with_ctx(|ctx| column_1.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(column_1);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
@@ -547,7 +547,7 @@ mod tests {
             ])
             .build();
 
-        with_ctx(|ctx| column_2.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(column_2, &mut element, &mut render);
 
         assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 9);
         assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);

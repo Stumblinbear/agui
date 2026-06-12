@@ -328,7 +328,7 @@ mod tests {
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
         scheduling::Vsync,
-        test_harness::mount_view,
+        test_harness::TestCtx,
         view::ViewHandle,
     };
 
@@ -450,7 +450,7 @@ mod tests {
     fn mount(
         widget: impl Widget<Render: RenderBox + 'static> + 'static,
     ) -> (PipelineOwner, ViewHandle) {
-        let (owner, view) = mount_view(widget);
+        let (owner, view) = TestCtx::new().mount_view(widget);
 
         view.resize(BoxConstraints::new(0, 100, 0, 100));
 

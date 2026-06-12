@@ -215,6 +215,37 @@ impl Image {
             })
             .count()
     }
+
+    /// A visualization of where this image differs from `other` by more than `tolerance`: each
+    /// differing pixel is solid red, each matching pixel a dim grey ghost of this image, so the
+    /// mismatch stands out over the original. `None` when the dimensions differ, since there is no
+    /// per-pixel overlay to draw.
+    pub fn diff_image(&self, other: &Self, tolerance: u8) -> Option<Image> {
+        if self.width != other.width || self.height != other.height {
+            return None;
+        }
+
+        let mut rgba = Vec::with_capacity(self.rgba.len());
+        for (a, b) in self.rgba.chunks_exact(4).zip(other.rgba.chunks_exact(4)) {
+            let differs = a
+                .iter()
+                .zip(b.iter())
+                .any(|(x, y)| x.abs_diff(*y) > tolerance);
+
+            if differs {
+                rgba.extend_from_slice(&[255, 0, 0, 255]);
+            } else {
+                let ghost = ((u16::from(a[0]) + u16::from(a[1]) + u16::from(a[2])) / 6) as u8;
+                rgba.extend_from_slice(&[ghost, ghost, ghost, 255]);
+            }
+        }
+
+        Some(Image {
+            width: self.width,
+            height: self.height,
+            rgba,
+        })
+    }
 }
 
 /// Compares `actual` against the golden PNG at `path`, panicking on a mismatch.
@@ -222,6 +253,10 @@ impl Image {
 /// Writes the golden instead when it is missing or the `AGUI_UPDATE_GOLDEN` environment variable is
 /// set, so goldens are generated on first run and refreshed on demand. Generate them on the machine
 /// the tests run on, since GPU output varies between drivers.
+///
+/// On a mismatch it writes the rendered image to `<golden>.actual.png` and a red-on-grey diff to
+/// `<golden>.diff.png` beside the golden, then names both in the panic, so the failure can be inspected
+/// without re-running with an updated golden.
 pub fn assert_golden(actual: &Image, path: impl AsRef<Path>) {
     let path = path.as_ref();
 
@@ -236,10 +271,24 @@ pub fn assert_golden(actual: &Image, path: impl AsRef<Path>) {
     let expected = Image::load_png(path).expect("read golden");
     let diff = actual.diff_pixels(&expected, 0);
 
-    assert_eq!(
-        diff,
-        0,
-        "{diff} pixels differ from golden {}",
-        path.display()
+    if diff == 0 {
+        return;
+    }
+
+    let actual_path = path.with_extension("actual.png");
+    actual.save_png(&actual_path).expect("write actual image");
+
+    let mut message = format!(
+        "{diff} pixels differ from golden {}\n  actual: {}",
+        path.display(),
+        actual_path.display(),
     );
+
+    if let Some(diff_image) = actual.diff_image(&expected, 0) {
+        let diff_path = path.with_extension("diff.png");
+        diff_image.save_png(&diff_path).expect("write diff image");
+        message.push_str(&format!("\n  diff:   {}", diff_path.display()));
+    }
+
+    panic!("{message}");
 }

@@ -261,19 +261,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{geometry::EdgeInsets, test_harness::with_ctx};
+    use agui_core::{
+        geometry::EdgeInsets,
+        test_harness::TestCtx,
+    };
 
     use super::*;
     use crate::sized_box::SizedBox;
 
     #[test]
     fn adds_correct_padding() {
-        let (_, mut render_object) =
-            with_ctx(|ctx| Padding::new(EdgeInsets::all(10.0)).child(()).create(ctx));
-        let size = render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 128, 0, 128),
-        );
+        let mut tcx = TestCtx::new();
+
+        let (_, mut render_object) = tcx.create(Padding::new(EdgeInsets::all(10.0)).child(()));
+        let size = render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
             Size::new(20.0, 20.0),
@@ -289,15 +290,9 @@ mod tests {
             "child is offset by the leading padding"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| {
-            Padding::new(EdgeInsets::all(50.0))
-                .child(SizedBox::shrink())
-                .create(ctx)
-        });
-        let size = render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 128, 0, 128),
-        );
+        let (_, mut render_object) =
+            tcx.create(Padding::new(EdgeInsets::all(50.0)).child(SizedBox::shrink()));
+        let size = render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
             Size::new(100.0, 100.0),
@@ -313,15 +308,9 @@ mod tests {
             "child is offset by the leading padding"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| {
-            Padding::new(EdgeInsets::all(50.0))
-                .child(SizedBox::expand())
-                .create(ctx)
-        });
-        let size = render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 128, 0, 128),
-        );
+        let (_, mut render_object) =
+            tcx.create(Padding::new(EdgeInsets::all(50.0)).child(SizedBox::expand()));
+        let size = render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 128, 0, 128));
         assert_eq!(
             size,
             Size::new(128.0, 128.0),

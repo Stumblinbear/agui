@@ -376,10 +376,6 @@ where
     }
 }
 
-pub type BoxedWidget = Box<dyn AnyWidget<Render = Box<dyn AnyRenderBox>>>;
-
-pub type BoxedSliverWidget = Box<dyn AnyWidget<Render = Box<dyn AnyRenderSliver>>>;
-
 pub trait AsAnyWidget: Widget + 'static {
     fn as_dyn_widget(&self) -> &dyn AnyWidget<Render = Self::Render>
     where
@@ -389,7 +385,7 @@ pub trait AsAnyWidget: Widget + 'static {
         self
     }
 
-    fn into_boxed_render_box(self) -> BoxedWidget
+    fn into_boxed_render_box(self) -> Box<dyn AnyWidget<Render = Box<dyn AnyRenderBox>>>
     where
         Self: Sized,
         Self::Render: RenderBox,
@@ -397,7 +393,7 @@ pub trait AsAnyWidget: Widget + 'static {
         Box::new(RenderBoxWrapper { inner: self })
     }
 
-    fn into_boxed_render_sliver(self) -> BoxedSliverWidget
+    fn into_boxed_render_sliver(self) -> Box<dyn AnyWidget<Render = Box<dyn AnyRenderSliver>>>
     where
         Self: Sized,
         Self::Render: RenderSliver,
@@ -416,7 +412,7 @@ mod tests {
         context::{Dispatch, MessageCtx, UpdateCtx},
         element::{Element, RoutingId},
         test_fixtures::Leaf,
-        test_harness::with_ctx,
+        test_harness::TestCtx,
     };
 
     use super::{AnyRenderBox, AnyWidget, AsAnyWidget, ErasedElement, RenderBoxElement, Widget};
@@ -495,7 +491,7 @@ mod tests {
     #[test]
     fn mounting_dyn_widgets() {
         let (widget, mounts, updates) = test_widget(7_usize);
-        let (element, ()) = with_ctx(|ctx| boxed_dyn(widget).create(ctx));
+        let (element, ()) = TestCtx::new().create(boxed_dyn(widget));
 
         assert_eq!((mounts.get(), updates.get()), (1, 0));
         assert_eq!(dyn_value::<usize>(&element), 7);
@@ -504,7 +500,7 @@ mod tests {
     #[test]
     fn mounting_boxed_widgets() {
         let (widget, _, _) = test_widget(1_usize);
-        let (element, _) = with_ctx(|ctx| widget.into_boxed_render_box().create(ctx));
+        let (element, _) = TestCtx::new().create(widget.into_boxed_render_box());
 
         assert_eq!(boxed_value::<usize>(&element), 1);
     }
@@ -512,11 +508,11 @@ mod tests {
     #[test]
     fn updating_dyn_widgets_reuses_the_inner() {
         let (widget, _, _) = test_widget(2_usize);
-        let (mut element, mut render) = with_ctx(|ctx| boxed_dyn(widget).create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(boxed_dyn(widget));
         assert_eq!(dyn_value::<usize>(&element), 2);
 
         let (new_widget, new_mounts, new_updates) = test_widget(9_usize);
-        with_ctx(|ctx| boxed_dyn(new_widget).update(&mut element, &mut render, ctx));
+        TestCtx::new().update(boxed_dyn(new_widget), &mut element, &mut render);
 
         // Same concrete type: the inner element is reconciled, not remounted.
         assert_eq!((new_mounts.get(), new_updates.get()), (0, 1));
@@ -526,15 +522,15 @@ mod tests {
     #[test]
     fn updating_boxed_widgets() {
         let (widget, _, _) = test_widget(2_usize);
-        let (mut element, mut render) = with_ctx(|ctx| widget.into_boxed_render_box().create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(widget.into_boxed_render_box());
         assert_eq!(boxed_value::<usize>(&element), 2);
 
         let (new_widget, _, _) = test_widget(9_usize);
-        with_ctx(|ctx| {
-            new_widget
-                .into_boxed_render_box()
-                .update(&mut element, &mut render, ctx);
-        });
+        TestCtx::new().update(
+            new_widget.into_boxed_render_box(),
+            &mut element,
+            &mut render,
+        );
 
         assert_eq!(boxed_value::<usize>(&element), 9);
     }
@@ -542,10 +538,10 @@ mod tests {
     #[test]
     fn replacing_dyn_widgets_recreates_the_inner() {
         let (widget, _, _) = test_widget(2_usize);
-        let (mut element, mut render) = with_ctx(|ctx| boxed_dyn(widget).create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(boxed_dyn(widget));
 
         let (new_widget, new_mounts, new_updates) = test_widget(7_u8);
-        with_ctx(|ctx| boxed_dyn(new_widget).update(&mut element, &mut render, ctx));
+        TestCtx::new().update(boxed_dyn(new_widget), &mut element, &mut render);
 
         // Type changed, so the inner element is recreated, not updated.
         assert_eq!((new_mounts.get(), new_updates.get()), (1, 0));
@@ -555,15 +551,15 @@ mod tests {
     #[test]
     fn replacing_boxed_widgets() {
         let (widget, _, _) = test_widget(2_usize);
-        let (mut element, mut render) = with_ctx(|ctx| widget.into_boxed_render_box().create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(widget.into_boxed_render_box());
         assert_eq!(boxed_value::<usize>(&element), 2);
 
         let (new_widget, _, _) = test_widget(7_u8);
-        with_ctx(|ctx| {
-            new_widget
-                .into_boxed_render_box()
-                .update(&mut element, &mut render, ctx);
-        });
+        TestCtx::new().update(
+            new_widget.into_boxed_render_box(),
+            &mut element,
+            &mut render,
+        );
 
         assert_eq!(boxed_value::<u8>(&element), 7);
     }
@@ -587,7 +583,7 @@ mod tests {
                 payload.set(Some(ctx.consume::<u32>()));
             }
         }));
-        let (mut element, mut render) = with_ctx(|ctx| widget.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(widget);
 
         // Initial generation is 0, so routing id 0 forwards to the inner.
         let mut msg = MessageCtx::new(Box::new(123_u32) as Box<dyn Any>);
@@ -604,7 +600,7 @@ mod tests {
     #[test]
     fn dispatch_with_stale_generation_is_dropped() {
         let messages = Rc::new(Cell::new(0_usize));
-        let (mut element, mut render) = with_ctx(|ctx| leaf_widget(&messages).create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(leaf_widget(&messages));
 
         // Generation is 0, so routing id 1 is stale and dropped.
         let mut msg = MessageCtx::new(Box::new(7_u32) as Box<dyn Any>);
@@ -620,11 +616,11 @@ mod tests {
     #[test]
     fn type_swap_bumps_generation_dropping_old_dispatches() {
         let messages = Rc::new(Cell::new(0_usize));
-        let (mut element, mut render) = with_ctx(|ctx| leaf_widget(&messages).create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(leaf_widget(&messages));
 
         // Swap to a different concrete type, forcing a generation increment.
         let (other, _, _) = test_widget(0_u8);
-        with_ctx(|ctx| boxed_dyn(other).update(&mut element, &mut render, ctx));
+        TestCtx::new().update(boxed_dyn(other), &mut element, &mut render);
 
         // The old generation (0) is now stale, so the dispatch is dropped at the boundary.
         let mut msg = MessageCtx::new(Box::new(42_u32) as Box<dyn Any>);

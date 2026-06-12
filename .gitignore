@@ -17,3 +17,7 @@ Cargo.lock
 .vscode/settings.json
 
 *.local.*
+
+# Golden-test failure artifacts written next to the golden by assert_golden
+*.actual.png
+*.diff.png

@@ -117,10 +117,7 @@ pub struct Transparent<Child> {
     pub child: Child,
 }
 
-impl<Child: Widget> Widget for Transparent<Child>
-where
-    Child::Render: RenderBox,
-{
+impl<Child: Widget> Widget for Transparent<Child> {
     type Element = Child::Element;
 
     type Render = Child::Render;

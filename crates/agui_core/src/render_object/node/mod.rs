@@ -162,7 +162,7 @@ mod tests {
         prelude::render_object::LayoutScope,
         render_object::{SingleChildRenderObject, box_layout::RenderBox},
         test_fixtures::Leaf,
-        test_harness::with_ctx,
+        test_harness::TestCtx,
         text::TextBaseline,
         widget::{AsAnyWidget, Widget},
     };
@@ -279,22 +279,20 @@ mod tests {
 
     #[test]
     fn pad_builds_and_updates_its_render() {
-        let (mut element, mut render) = with_ctx(|ctx| {
-            Pad {
-                pad: 4,
-                child: Leaf::new(),
-            }
-            .create(ctx)
+        let (mut element, mut render) = TestCtx::new().create(Pad {
+            pad: 4,
+            child: Leaf::new(),
         });
         assert_eq!(render.pad, 4);
 
-        with_ctx(|ctx| {
+        TestCtx::new().update(
             Pad {
                 pad: 9,
                 child: Leaf::new(),
-            }
-            .update(&mut element, &mut render, ctx);
-        });
+            },
+            &mut element,
+            &mut render,
+        );
         assert_eq!(render.pad, 9);
     }
 
@@ -344,23 +342,23 @@ mod tests {
     fn boxed_slot_reuses_render_on_same_type() {
         let creates = Rc::new(Cell::new(0usize));
 
-        let (mut element, mut render) = with_ctx(|ctx| {
+        let (mut element, mut render) = TestCtx::new().create(
             Counted {
                 creates: Rc::clone(&creates),
             }
-            .into_boxed_render_box()
-            .create(ctx)
-        });
+            .into_boxed_render_box(),
+        );
         assert_eq!(creates.get(), 1);
 
         // Same concrete type: the boxed render object is reused, not recreated.
-        with_ctx(|ctx| {
+        TestCtx::new().update(
             Counted {
                 creates: Rc::clone(&creates),
             }
-            .into_boxed_render_box()
-            .update(&mut element, &mut render, ctx);
-        });
+            .into_boxed_render_box(),
+            &mut element,
+            &mut render,
+        );
         assert_eq!(
             creates.get(),
             1,
@@ -452,25 +450,25 @@ mod tests {
     #[test]
     fn boxed_slot_recreates_render_on_type_swap() {
         let creates_a = Rc::new(Cell::new(0usize));
-        let (mut element, mut render) = with_ctx(|ctx| {
+        let (mut element, mut render) = TestCtx::new().create(
             Counted {
                 creates: Rc::clone(&creates_a),
             }
-            .into_boxed_render_box()
-            .create(ctx)
-        });
+            .into_boxed_render_box(),
+        );
         assert_eq!(creates_a.get(), 1);
         assert!((*render).as_any_mut().downcast_mut::<()>().is_some());
 
         // Swap to a different concrete render type: the inner is recreated, not reused.
         let creates_b = Rc::new(Cell::new(0usize));
-        with_ctx(|ctx| {
+        TestCtx::new().update(
             CountedOther {
                 creates: Rc::clone(&creates_b),
             }
-            .into_boxed_render_box()
-            .update(&mut element, &mut render, ctx);
-        });
+            .into_boxed_render_box(),
+            &mut element,
+            &mut render,
+        );
 
         assert_eq!(
             creates_b.get(),

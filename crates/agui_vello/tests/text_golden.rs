@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::{prelude::render_object::*, provide::Provide, test_harness::mount_view};
+use agui_core::{prelude::render_object::*, provide::Provide, test_harness::TestCtx};
 use agui_primitives::{
     colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
 };
@@ -34,7 +34,7 @@ fn text_renders_glyphs_matching_golden() {
     fonts.register(FONT.to_vec());
     let widget = Provide::new(fonts).child(text);
 
-    let (mut owner, view) = mount_view(widget);
+    let (mut owner, view) = TestCtx::new().mount_view(widget);
 
     view.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
     owner.flush_layout();
@@ -91,7 +91,7 @@ fn rich_text_renders_styled_runs_matching_golden() {
     fonts.register(FONT.to_vec());
     let widget = Provide::new(fonts).child(RichText::new(span));
 
-    let (mut owner, view) = mount_view(widget);
+    let (mut owner, view) = TestCtx::new().mount_view(widget);
 
     view.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
     owner.flush_layout();

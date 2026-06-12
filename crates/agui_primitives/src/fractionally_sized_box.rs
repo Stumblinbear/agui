@@ -297,8 +297,8 @@ mod tests {
     };
 
     use agui_core::{
-        prelude::element::*,
-        test_harness::{mount_view, with_ctx},
+        prelude::{element::*, render_object::*},
+        test_harness::TestCtx,
     };
 
     use typed_floats::as_const;
@@ -508,7 +508,7 @@ mod tests {
             ),
         };
 
-        let (mut owner, view) = mount_view(widget);
+        let (mut owner, view) = TestCtx::new().mount_view(widget);
 
         view.resize(BoxConstraints::new(0, 200, 0, 200));
         owner.flush_layout();
@@ -533,17 +533,14 @@ mod tests {
 
     #[test]
     fn sizes_child_to_a_fraction_of_the_constraints() {
-        let (_, mut render_object) = with_ctx(|ctx| {
+        let mut tcx = TestCtx::new();
+        let (_, mut render_object) = tcx.create(
             FractionallySizedBox::new()
                 .width_factor(0.5_f32)
-                .height_factor(1.0_f32)
-                .create(ctx)
-        });
-
-        let size = render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 200, 0, 100),
+                .height_factor(1.0_f32),
         );
+
+        let size = render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 200, 0, 100));
 
         assert_eq!(size, Size::new(100, 100));
         assert_eq!(
@@ -560,17 +557,15 @@ mod tests {
     fn alignment_centers_the_child_when_the_box_is_forced_larger() {
         // A tight 200x200 forces the box to 200 while the factor sizes the child to 100; the default
         // center alignment then places the child at (50, 50).
-        let (_, mut render_object) = with_ctx(|ctx| {
+        let mut tcx = TestCtx::new();
+        let (_, mut render_object) = tcx.create(
             FractionallySizedBox::new()
                 .width_factor(0.5_f32)
-                .height_factor(0.5_f32)
-                .create(ctx)
-        });
-
-        let size = render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(200, 200, 200, 200),
+                .height_factor(0.5_f32),
         );
+
+        let size =
+            render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(200, 200, 200, 200));
 
         assert_eq!(size, Size::new(200, 200));
         assert_eq!(
@@ -584,16 +579,11 @@ mod tests {
 
     #[test]
     fn top_left_alignment_pins_the_child_to_the_origin() {
-        let (_, mut render_object) = with_ctx(|ctx| {
+        let render_object = TestCtx::new().laid_out(
             FractionallySizedBox::new()
                 .width_factor(0.5_f32)
                 .height_factor(0.5_f32)
-                .alignment(Alignment::TOP_LEFT)
-                .create(ctx)
-        });
-
-        render_object.layout(
-            &mut LayoutCtx::detached(),
+                .alignment(Alignment::TOP_LEFT),
             BoxConstraints::new(200, 200, 200, 200),
         );
 

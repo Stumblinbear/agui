@@ -7,99 +7,22 @@ use std::{
 };
 
 use crate::{
-    context::{MessageCtx, UpdateCtx},
-    element::{
-        BuildBoundaryElement, BuildBoundaryId, BuildScope, BuildState, LeafElement, RoutingPath,
-    },
+    context::{LayoutCtx, UpdateCtx},
+    element::{BuildScope, LeafElement},
     pipeline::{
         PipelineOwner,
-        layout::LayoutPipeline,
+        layout::{LayoutPipeline, LayoutScope},
         paint::{PaintPipeline, PaintScope},
     },
     provide::ProvideScope,
-    render_object::{RenderObject, box_layout::RenderBox},
+    render_object::{
+        RenderObject,
+        box_layout::{BoxConstraints, RenderBox},
+    },
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
     view::{View, ViewHandle},
     widget::Widget,
 };
-
-/// A build-only owner over the build machinery, for tests that exercise rebuild dispatch without a
-/// render pipeline. It builds a root widget as the outermost build boundary and drives marks and flushes
-/// against it, threading a throwaway paint pipeline the build-only tests never lay out.
-///
-/// A test whose root render object is a [`RenderBox`](crate::render_object::box_layout::RenderBox)
-/// drives a full [`PipelineOwner`](crate::pipeline::PipelineOwner) instead; this is for the tests whose
-/// root has no box layout to lay out.
-pub struct TestBuildOwner {
-    state: Rc<RefCell<BuildState>>,
-    root: BuildBoundaryElement,
-}
-
-impl TestBuildOwner {
-    /// Builds `widget` as the root build boundary.
-    pub fn mount<V>(widget: V, scheduler: &mut dyn TaskScheduler) -> Self
-    where
-        V: Widget,
-        V::Element: 'static,
-        V::Render: RenderObject,
-    {
-        let provide = ProvideScope::new();
-        let (state, root_scope) = BuildState::new();
-
-        let mut path = Vec::new();
-        let mut paint = PaintPipeline::default();
-        let layout = LayoutPipeline::default();
-        let detached = PaintScope::detached();
-
-        let mut ctx = UpdateCtx::new(
-            scheduler,
-            &mut path,
-            &provide,
-            &root_scope,
-            &layout,
-            &mut paint,
-            &detached,
-        );
-
-        let (root, _render) = BuildBoundaryElement::create(widget, &mut ctx);
-
-        Self { state, root }
-    }
-
-    /// The id of the root build boundary, for addressing a root-relative path.
-    pub fn root_id(&self) -> BuildBoundaryId {
-        self.root.id()
-    }
-
-    /// Whether any boundary is waiting to rebuild.
-    pub fn is_dirty(&self) -> bool {
-        self.state.borrow().is_dirty()
-    }
-
-    /// Delivers `message` to the element at `path`, marking its boundary for rebuild if the element asks.
-    pub fn dispatch_message(&mut self, path: &RoutingPath, message: Box<dyn Any>) {
-        let mut ctx = MessageCtx::new(message);
-        BuildState::deliver_message(&self.state, path, &mut ctx);
-    }
-
-    /// Marks the element at `path` to rebuild on the next [`flush`](Self::flush).
-    pub fn request_rebuild(&mut self, path: &RoutingPath) {
-        self.state.borrow_mut().mark_rebuild(path);
-    }
-
-    /// Marks the element at `path` to rebuild on the next [`flush`](Self::flush) because a provided value
-    /// it depends on changed, so its dependency-change hook runs.
-    pub fn request_dependency_change(&mut self, path: &RoutingPath) {
-        self.state.borrow_mut().mark_dependency_changed(path);
-    }
-
-    /// Rebuilds every boundary marked since the last flush, returning whether anything rebuilt.
-    pub fn flush(&mut self, scheduler: &mut dyn TaskScheduler) -> bool {
-        let mut paint = PaintPipeline::default();
-        let layout = LayoutPipeline::default();
-        BuildState::flush(&self.state, scheduler, &layout, &mut paint)
-    }
-}
 
 enum TaskRunnerEvent {
     Dropped(usize),
@@ -287,65 +210,139 @@ fn noop_waker() -> Waker {
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
 }
 
-/// A [`TaskScheduler`] that drops spawned work, for the tests that never poll tasks.
-pub struct NoopScheduler {
-    event_tx: EventSender,
+pub struct TestCtx {
+    tasks: TestTaskRunner,
+    provide: ProvideScope,
+    paint: PaintPipeline,
+    layout: LayoutPipeline,
 }
 
-impl NoopScheduler {
+impl TestCtx {
     pub fn new() -> Self {
-        let (event_tx, _rx) = mpsc::channel();
-        Self { event_tx }
+        Self {
+            tasks: TestTaskRunner::new(),
+            provide: ProvideScope::new(),
+            paint: PaintPipeline::default(),
+            layout: LayoutPipeline::default(),
+        }
+    }
+
+    /// Seeds `value` as a provided value visible to every reconcile run through this context.
+    pub fn with_provided<T: Any>(mut self, value: Rc<T>) -> Self {
+        self.provide = self.provide.provide(value);
+        self
+    }
+
+    /// Runs `f` with a fresh [`UpdateCtx`] over this context. The escape hatch for the reconciles the
+    /// typed helpers do not cover: dispatching into an element, or building a shared element directly.
+    pub fn run<R>(&mut self, f: impl FnOnce(&mut UpdateCtx) -> R) -> R {
+        let mut scheduler = self.tasks.scheduler();
+        let mut path = Vec::new();
+
+        f(&mut UpdateCtx::new(
+            &mut scheduler,
+            &mut path,
+            &self.provide,
+            &BuildScope::detached(),
+            &self.layout,
+            &mut self.paint,
+            &PaintScope::detached(),
+        ))
+    }
+
+    /// Builds `widget`'s element and render object.
+    pub fn create<W: Widget>(&mut self, widget: W) -> (W::Element, W::Render) {
+        self.run(|ctx| widget.create(ctx))
+    }
+
+    /// Reconciles `element` and `render` against a new `widget`.
+    pub fn update<W: Widget>(
+        &mut self,
+        widget: W,
+        element: &mut W::Element,
+        render: &mut W::Render,
+    ) {
+        self.run(|ctx| widget.update(element, render, ctx));
+    }
+
+    /// A [`LayoutCtx`] over this context's pipelines with a detached relayout scope, for laying a
+    /// render object out in isolation. Reuse it to lay the same render object out more than once.
+    pub fn layout_ctx(&mut self) -> LayoutCtx<'_> {
+        LayoutCtx::new(&self.layout, &mut self.paint, LayoutScope::detached())
+    }
+
+    /// Builds `widget`'s render object and lays it out once under `constraints`, returning the laid-out
+    /// render object. For a render object laid out repeatedly, build it with [`create`](Self::create)
+    /// and drive [`layout_ctx`](Self::layout_ctx) directly.
+    pub fn laid_out<W>(&mut self, widget: W, constraints: BoxConstraints) -> W::Render
+    where
+        W: Widget,
+        W::Render: RenderBox,
+    {
+        let (_, mut render) = self.create(widget);
+        render.layout(&mut self.layout_ctx(), constraints);
+
+        render
+    }
+
+    /// Mounts `widget` as the child of a [`View`] and returns the owner together with the view's handle.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`View`] does not fill its surface slot at mount, which never happens for a mounted
+    /// view.
+    pub fn mount_view<V>(&mut self, widget: V) -> (PipelineOwner, ViewHandle)
+    where
+        V: Widget,
+        V::Element: 'static,
+        V::Render: RenderObject + RenderBox,
+    {
+        let surface = Rc::new(RefCell::new(None));
+
+        let owner = {
+            let mut scheduler = self.tasks.scheduler();
+            PipelineOwner::new(View::new(Rc::clone(&surface)).child(widget), &mut scheduler)
+        };
+
+        let view = surface
+            .borrow()
+            .clone()
+            .expect("a mounted View fills its surface slot");
+
+        (owner, view)
+    }
+
+    /// A scheduler handle into this context's task runner, for driving an owner's `flush_build`.
+    pub fn scheduler(&mut self) -> TestTaskScheduler<'_> {
+        self.tasks.scheduler()
+    }
+
+    /// Polls every spawned task once. A message a task posts is read back through
+    /// [`messages`](Self::messages).
+    pub fn poll(&mut self) {
+        self.tasks.poll();
+    }
+
+    /// Runs every spawned task to completion. Use only for tasks that finish on their own.
+    pub fn run_tasks_to_completion(&mut self) {
+        self.tasks.run_to_completion();
+    }
+
+    /// The messages spawned tasks have posted since the last drain.
+    pub fn messages(&self) -> impl Iterator<Item = TaskEventMessage> + '_ {
+        self.tasks.messages()
     }
 }
 
-impl Default for NoopScheduler {
+impl Default for TestCtx {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TaskScheduler for NoopScheduler {
-    fn event_tx(&self) -> EventSender {
-        self.event_tx.clone()
-    }
-
-    fn spawn(&mut self, _func: TaskFuture) -> Result<TaskHandle, Box<dyn std::error::Error>> {
-        Ok(TaskHandle::new(Box::new(|| {})))
-    }
-
-    fn deferred(&self) -> Box<dyn TaskScheduler> {
-        Box::new(NoopScheduler::new())
-    }
-}
-
-/// Builds an [`UpdateCtx`] over a [`NoopScheduler`] and a detached scope, for driving a widget's
-/// `create`/`update` (or a rebuild dispatch) directly in a test that does not poll tasks.
-pub fn with_ctx<R>(f: impl FnOnce(&mut UpdateCtx) -> R) -> R {
-    with_ctx_in(&ProvideScope::new(), f)
-}
-
-/// Like [`with_ctx`], but over `provide_scope`, for tests that read a provided value.
-pub fn with_ctx_in<R>(provide_scope: &ProvideScope, f: impl FnOnce(&mut UpdateCtx) -> R) -> R {
-    let mut scheduler = NoopScheduler::new();
-    let mut path = Vec::new();
-    let mut paint = PaintPipeline::default();
-    let layout = LayoutPipeline::default();
-
-    f(&mut UpdateCtx::new(
-        &mut scheduler,
-        &mut path,
-        provide_scope,
-        &BuildScope::detached(),
-        &layout,
-        &mut paint,
-        &PaintScope::detached(),
-    ))
-}
-
 /// A leaf widget that hands a pre-built render object to the pipeline unchanged, so a test can drive a
 /// hand-built render subtree that has no widget of its own. Wrap it in a [`View`] through
-/// [`mount_view`] to lay it out, paint it, and hit-test it.
+/// [`TestCtx::mount_view`] to lay it out, paint it, and hit-test it.
 pub struct RawWidget<R> {
     render: R,
 }
@@ -369,45 +366,4 @@ where
     }
 
     fn update(self, _: &mut Self::Element, _: &mut Self::Render, _: &mut UpdateCtx) {}
-}
-
-/// Mounts `widget` as the child of a [`View`] and returns the owner together with the view's handle,
-/// for tests that drive a render subtree's layout, paint, and hit-testing without polling tasks. A test
-/// that polls the tasks its subtree spawns uses [`mount_view_with`] with its own scheduler instead.
-pub fn mount_view<V>(widget: V) -> (PipelineOwner, ViewHandle)
-where
-    V: Widget,
-    V::Element: 'static,
-    V::Render: RenderObject + RenderBox,
-{
-    let mut scheduler = NoopScheduler::new();
-
-    mount_view_with(widget, &mut scheduler)
-}
-
-/// Mounts `widget` as the child of a [`View`] over `scheduler` and returns the owner together with the
-/// view's handle.
-///
-/// # Panics
-///
-/// Panics if the [`View`] does not fill its surface slot at mount, which never happens for a mounted
-/// view.
-pub fn mount_view_with<V>(
-    widget: V,
-    scheduler: &mut dyn TaskScheduler,
-) -> (PipelineOwner, ViewHandle)
-where
-    V: Widget,
-    V::Element: 'static,
-    V::Render: RenderObject + RenderBox,
-{
-    let surface = Rc::new(RefCell::new(None));
-    let owner = PipelineOwner::new(View::new(Rc::clone(&surface)).child(widget), scheduler);
-
-    let view = surface
-        .borrow()
-        .clone()
-        .expect("a mounted View fills its surface slot");
-
-    (owner, view)
 }

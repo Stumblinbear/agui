@@ -323,7 +323,7 @@ mod tests {
         element::Element,
         pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
         prelude::render_object::LayoutScope,
-        test_harness::with_ctx,
+        test_harness::TestCtx,
         widget::{AsAnyWidget, Widget},
     };
 
@@ -429,7 +429,7 @@ mod tests {
         // into_boxed_render_sliver erases to Box<dyn AnyRenderSliver>, which is itself a RenderSliver,
         // so the viewport drives it identically to a concrete sliver.
         let boxed_widget = SliverFixedWidget { extent: 100.0 }.into_boxed_render_sliver();
-        let (_element, erased) = with_ctx(|ctx| boxed_widget.create(ctx));
+        let (_element, erased) = TestCtx::new().create(boxed_widget);
 
         let mut viewport = RenderViewport::new(RenderNode::new(erased));
 

@@ -14,7 +14,7 @@ use crate::{
         BoundaryContent,
         paint::{PaintPipeline, PaintScope},
     },
-    render_object::box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
+    render_object::box_layout::{BoxConstraints, RenderBox},
 };
 
 /// Lays out the relayout boundaries of one subtree, re-laying only the ones that changed.
@@ -401,10 +401,8 @@ mod tests {
         context::{MountCtx, PaintCtx},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
-        paint::compositing::{LayerHandle, OffsetLayer},
-        pipeline::PipelineOwner,
         render_object::{RenderObject, box_layout::RenderBox},
-        test_harness::{RawWidget, mount_view},
+        test_harness::{RawWidget, TestCtx},
         text::TextBaseline,
     };
 
@@ -496,11 +494,8 @@ mod tests {
     fn flush_layout_skips_a_clean_frame_and_relays_out_when_marked_or_resized() {
         let (layouts, captured, render) = probe(false);
 
-        let mut owner = PipelineOwner::from_root(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        let (mut owner, view) = TestCtx::new().mount_view(RawWidget::new(render));
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
 
         owner.flush_layout();
         assert_eq!(layouts.get(), 1, "the first frame lays the root out");
@@ -526,11 +521,8 @@ mod tests {
     fn a_relayout_request_schedules_a_frame_on_the_clean_to_dirty_edge() {
         let (_layouts, captured, render) = probe(false);
 
-        let mut owner = PipelineOwner::from_root(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        let (mut owner, view) = TestCtx::new().mount_view(RawWidget::new(render));
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         let captured = captured.borrow().clone().expect("laid out once");
 
@@ -561,11 +553,8 @@ mod tests {
     fn requesting_a_relayout_during_layout_panics() {
         let (_layouts, _captured, render) = probe(true);
 
-        let mut owner = PipelineOwner::from_root(
-            Rc::new(RefCell::new(render)),
-            LayerHandle::new(OffsetLayer::new()),
-        );
-        owner.resize(BoxConstraints::new(0, 100, 0, 100));
+        let (mut owner, view) = TestCtx::new().mount_view(RawWidget::new(render));
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
     }
 }

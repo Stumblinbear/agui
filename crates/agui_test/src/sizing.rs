@@ -1,17 +1,14 @@
 //! Conformance checks for the box-sizing contracts every [`RenderBox`] must satisfy.
 
 use agui_core::{
-    element::BuildScope,
     paint::{
         command::{PaintCommand, PaintShape},
         compositing::{Compositor, LayerHandle, OffsetLayer},
         peniko::kurbo::{self, Affine, Point, Shape},
         scene::Scene,
     },
-    pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
     prelude::{element::*, render_object::*},
-    provide::ProvideScope,
-    test_harness::TestTaskRunner,
+    test_harness::TestCtx,
 };
 use typed_floats::{Positive, PositiveFinite};
 
@@ -213,33 +210,13 @@ impl BoxSizingCheck {
         W: Widget,
         W::Render: RenderBox,
     {
-        let make = || {
-            let mut tasks = TestTaskRunner::new();
-            let provide = ProvideScope::new();
-            let mut path = Vec::new();
-            let mut scheduler = tasks.scheduler();
-            let scope = BuildScope::detached();
-            let mut paint = PaintPipeline::default();
-            let layout = LayoutPipeline::default();
-            let paint_scope = PaintScope::detached();
-            let mut ctx = UpdateCtx::new(
-                &mut scheduler,
-                &mut path,
-                &provide,
-                &scope,
-                &layout,
-                &mut paint,
-                &paint_scope,
-            );
-
-            widget().create(&mut ctx).1
-        };
+        let make = || TestCtx::new().create(widget()).1;
 
         self.check_intrinsic_ordering(&make());
 
         for &constraints in &self.constraints {
             let measured = make().measure(constraints);
-            let laid_out = make().layout(&mut LayoutCtx::detached(), constraints);
+            let laid_out = make().layout(&mut TestCtx::new().layout_ctx(), constraints);
 
             assert!(
                 measured == laid_out,
@@ -290,7 +267,7 @@ impl BoxSizingCheck {
                 let dry = make().measure_baseline(constraints, baseline);
 
                 let mut render = make();
-                render.layout(&mut LayoutCtx::detached(), constraints);
+                render.layout(&mut TestCtx::new().layout_ctx(), constraints);
                 let laid_out = render.distance_to_baseline(baseline);
 
                 assert!(
@@ -311,7 +288,7 @@ impl BoxSizingCheck {
 
         // Laying out may populate internal state; the queries above must not change because of it.
         for &constraints in &self.constraints {
-            render.layout(&mut LayoutCtx::detached(), constraints);
+            render.layout(&mut TestCtx::new().layout_ctx(), constraints);
         }
 
         let intrinsics_after = self.intrinsic_snapshot(&render);
@@ -334,8 +311,8 @@ impl BoxSizingCheck {
         for &constraints in &self.constraints {
             let mut render = make();
 
-            let first = render.layout(&mut LayoutCtx::detached(), constraints);
-            let second = render.layout(&mut LayoutCtx::detached(), constraints);
+            let first = render.layout(&mut TestCtx::new().layout_ctx(), constraints);
+            let second = render.layout(&mut TestCtx::new().layout_ctx(), constraints);
 
             assert!(
                 first == second,
@@ -388,7 +365,7 @@ impl BoxSizingCheck {
         const SLACK: f64 = 0.5;
 
         let mut render = make();
-        let size = render.layout(&mut LayoutCtx::detached(), constraints);
+        let size = render.layout(&mut TestCtx::new().layout_ctx(), constraints);
 
         let layer = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&layer, |ctx| render.paint(ctx, Offset::ZERO));
@@ -477,7 +454,7 @@ impl BoxSizingCheck {
             };
 
             let actual = make()
-                .layout(&mut LayoutCtx::detached(), constraints)
+                .layout(&mut TestCtx::new().layout_ctx(), constraints)
                 .extent(axis);
 
             assert!(
@@ -523,7 +500,7 @@ impl BoxSizingCheck {
             }
 
             let actual = make()
-                .layout(&mut LayoutCtx::detached(), constraints)
+                .layout(&mut TestCtx::new().layout_ctx(), constraints)
                 .extent(axis);
 
             assert!(

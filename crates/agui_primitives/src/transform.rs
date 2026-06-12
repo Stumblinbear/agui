@@ -268,7 +268,7 @@ mod tests {
             },
         },
         prelude::{element::*, render_object::*},
-        test_harness::with_ctx,
+        test_harness::TestCtx,
     };
 
     use crate::{
@@ -285,11 +285,7 @@ mod tests {
     #[test]
     fn a_rotation_over_a_flat_child_paints_under_a_transform() {
         let widget = Transform::rotate(0.5).child(boxed());
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
+        let mut render = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
         render.update_compositing_bits();
 
         let root = LayerHandle::new(OffsetLayer::new());
@@ -312,11 +308,7 @@ mod tests {
     #[test]
     fn a_translation_folds_into_the_offset() {
         let widget = Transform::translate(Offset::new(5.0, 7.0)).child(boxed());
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
+        let mut render = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
         render.update_compositing_bits();
 
         let root = LayerHandle::new(OffsetLayer::new());
@@ -349,7 +341,7 @@ mod tests {
     #[test]
     fn the_compositing_bit_is_inherited_from_the_child() {
         let flat = Transform::rotate(0.5).child(boxed());
-        let (_, mut flat) = with_ctx(|ctx| flat.create(ctx));
+        let (_, mut flat) = TestCtx::new().create(flat);
         assert!(
             !flat.update_compositing_bits(),
             "a transform over a flat child does not composite"
@@ -357,7 +349,7 @@ mod tests {
 
         let layered = Transform::rotate(0.5)
             .child(Opacity::new(0.5).child(SizedBox::new().width(10).height(10)));
-        let (_, mut layered) = with_ctx(|ctx| layered.create(ctx));
+        let (_, mut layered) = TestCtx::new().create(layered);
         assert!(
             layered.update_compositing_bits(),
             "a transform inherits its child's compositing need"
@@ -369,11 +361,7 @@ mod tests {
     #[test]
     fn a_transform_over_a_compositing_child_wraps_its_layer() {
         let widget = Transform::rotate(0.5).child(Opacity::new(0.5).child(boxed()));
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
+        let mut render = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
         render.update_compositing_bits();
 
         let root = LayerHandle::new(OffsetLayer::new());
@@ -405,11 +393,7 @@ mod tests {
                 .behavior(HitTestBehavior::Opaque)
                 .child(SizedBox::new().width(50).height(50)),
         );
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
+        let render = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
 
         let mut result = HitTestResult::new();
         let hit = render.hit_test(&mut result, Offset::new(15.0, 5.0));
@@ -430,11 +414,7 @@ mod tests {
                 .behavior(HitTestBehavior::Opaque)
                 .child(SizedBox::new().width(50).height(50)),
         );
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
+        let render = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
 
         let mut result = HitTestResult::new();
         let hit = render.hit_test(&mut result, Offset::new(10.0, 10.0));
@@ -447,11 +427,7 @@ mod tests {
     #[test]
     fn a_degenerate_transform_paints_nothing() {
         let widget = Transform::scale(0.0).child(boxed());
-        let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
-        render.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
+        let mut render = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
         render.update_compositing_bits();
 
         let root = LayerHandle::new(OffsetLayer::new());

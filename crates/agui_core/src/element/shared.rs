@@ -462,7 +462,7 @@ mod tests {
         key::AnyKeyable,
         render_object::RenderObject,
         test_fixtures::MultiChildRenderList,
-        test_harness::with_ctx,
+        test_harness::TestCtx,
         widget::Widget,
     };
 
@@ -598,8 +598,8 @@ mod tests {
     fn mount_materializes_each_child() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[10, 20, 30], &m, &u), &mut render, ctx));
+        let element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[10, 20, 30], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 3);
         assert_eq!(u.get(), 0);
@@ -611,10 +611,10 @@ mod tests {
     fn update_same_length_reuses_each_child_in_place() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        let mut element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
 
-        with_ctx(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 3, "no children remounted");
         assert_eq!(u.get(), 3, "each child reconciled in place");
@@ -625,12 +625,12 @@ mod tests {
     fn same_length_update_keeps_elements_and_render_in_place() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        let mut element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
 
         // A same-length update reconciles each child where it sits: no child changes position, and
         // the render children stay in lockstep with their elements.
-        with_ctx(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 3, "nothing remounted");
         assert_eq!(mounted_ids(&element), vec![1, 2, 3]);
@@ -642,10 +642,10 @@ mod tests {
     fn appending_only_mounts_the_new_tail() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[1, 2], &m, &u), &mut render, ctx));
+        let mut element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[1, 2], &m, &u), &mut render, ctx));
 
-        with_ctx(|ctx| element.update(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| element.update(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 3, "two initial mounts plus one appended");
         assert_eq!(u.get(), 2, "the two retained children updated");
@@ -657,10 +657,10 @@ mod tests {
     fn truncating_drops_the_extra_tail() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        let mut element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
 
-        with_ctx(|ctx| element.update(probes(&[1, 2], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| element.update(probes(&[1, 2], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 3, "nothing new mounted");
         assert_eq!(u.get(), 2, "the two survivors updated");
@@ -672,10 +672,10 @@ mod tests {
     fn updating_to_empty_clears_children() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[1, 2], &m, &u), &mut render, ctx));
+        let mut element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[1, 2], &m, &u), &mut render, ctx));
 
-        with_ctx(|ctx| element.update(probes(&[], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| element.update(probes(&[], &m, &u), &mut render, ctx));
 
         assert!(child_ids(&element).is_empty());
         assert!(render.children.is_empty());
@@ -685,11 +685,11 @@ mod tests {
     fn updating_from_empty_materializes_children() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element =
-            with_ctx(|ctx| MultiChildElement::new(probes(&[], &m, &u), &mut render, ctx));
+        let mut element = TestCtx::new()
+            .run(|ctx| MultiChildElement::new(probes(&[], &m, &u), &mut render, ctx));
         assert!(child_ids(&element).is_empty());
 
-        with_ctx(|ctx| element.update(probes(&[7, 8], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| element.update(probes(&[7, 8], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 2, "fresh children are mounted");
         assert_eq!(u.get(), 0, "none are updated");
@@ -703,7 +703,7 @@ mod tests {
         let (mut element, mut render): (
             SingleChildElement<ProbeElement, ProbeRender>,
             ProbeRender,
-        ) = with_ctx(|ctx| {
+        ) = TestCtx::new().run(|ctx| {
             SingleChildElement::new(
                 Probe {
                     id: 1,
@@ -717,7 +717,7 @@ mod tests {
         assert_eq!(m.get(), 1);
         assert_eq!(element.child.element.id, 1);
 
-        with_ctx(|ctx| {
+        TestCtx::new().run(|ctx| {
             element.update(
                 Probe {
                     id: 9,
@@ -741,14 +741,15 @@ mod tests {
         let mut render = render_list();
 
         // Two same-type keyed children: id 10 keyed 0, id 20 keyed 1.
-        let mut element = with_ctx(|ctx| {
+        let mut element = TestCtx::new().run(|ctx| {
             MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
         });
         assert_eq!(mounted_ids(&element), vec![10, 20]);
         assert_eq!(render_mounted_ids(&render), vec![10, 20]);
 
         // Reorder to [key 1, key 0] with fresh config ids, so we can see which element moved.
-        with_ctx(|ctx| element.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), &mut render, ctx));
+        TestCtx::new()
+            .run(|ctx| element.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), &mut render, ctx));
 
         assert_eq!(m.get(), 2, "both elements reused, neither remounted");
         // State moved with the key: key 1 (mounted_id 20) to position 0, key 0 (mounted_id 10) to 1.
@@ -765,7 +766,7 @@ mod tests {
         let mut render = render_list();
 
         // Keys 0,1,2 mounted as ids 10,20,30.
-        let mut element = with_ctx(|ctx| {
+        let mut element = TestCtx::new().run(|ctx| {
             MultiChildElement::new(
                 keyed_probes(&[(10, 0), (20, 1), (30, 2)], &m, &u),
                 &mut render,
@@ -776,7 +777,7 @@ mod tests {
 
         // New order [key 2, key 5 (new), key 0]: key 2 and key 0 reuse, key 5 is created, key 1
         // has no new home and is dropped.
-        with_ctx(|ctx| {
+        TestCtx::new().run(|ctx| {
             element.update(
                 keyed_probes(&[(91, 2), (92, 5), (93, 0)], &m, &u),
                 &mut render,
@@ -846,7 +847,7 @@ mod tests {
         let mut element: MultiChildElement<
             MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
             MultiChildRenderList<MultiChildRenderList<ProbeRender>>,
-        > = with_ctx(|ctx| {
+        > = TestCtx::new().run(|ctx| {
             MultiChildElement::new(
                 vec![
                     group(0, &[(100, 0), (101, 1)]),
@@ -860,7 +861,7 @@ mod tests {
 
         // Reorder the groups (key 1 first) AND reorder the probes inside each group. The outer
         // reorder recurses into each inner reorder while applying its plan.
-        with_ctx(|ctx| {
+        TestCtx::new().run(|ctx| {
             element.update(
                 vec![
                     group(1, &[(210, 1), (211, 0)]),

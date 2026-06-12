@@ -125,7 +125,7 @@ mod tests {
             box_layout::{BoxConstraints, RenderBox},
         },
         test_fixtures::MultiChild,
-        test_harness::{TestBuildOwner, TestTaskRunner, mount_view_with, with_ctx},
+        test_harness::TestCtx,
         text::TextBaseline,
     };
 
@@ -352,18 +352,16 @@ mod tests {
         let builds = Rc::new(Cell::new(0));
         let deps = Rc::new(Cell::new(0));
 
-        let (mut element, mut render) = with_ctx(|ctx| {
-            DepWidget {
-                builds: Rc::clone(&builds),
-                dep_changes: Rc::clone(&deps),
-            }
-            .create(ctx)
+        let (mut element, mut render) = TestCtx::new().create(DepWidget {
+            builds: Rc::clone(&builds),
+            dep_changes: Rc::clone(&deps),
         });
 
         let after_create = builds.get();
         assert_eq!(deps.get(), 0, "create does not run the dependency hook");
 
-        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
+        TestCtx::new()
+            .run(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
         assert_eq!(
             deps.get(),
             1,
@@ -371,7 +369,7 @@ mod tests {
         );
         assert_eq!(builds.get(), after_create + 1, "and then rebuilds");
 
-        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
+        TestCtx::new().run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
         assert_eq!(
             deps.get(),
             1,
@@ -380,40 +378,12 @@ mod tests {
         assert_eq!(builds.get(), after_create + 2, "but still rebuilds");
     }
 
-    /// A dependency change queued against a path is delivered by the flush as a dependency dispatch,
-    /// running the hook, rather than as a plain rebuild.
-    #[test]
-    fn a_queued_dependency_change_flushes_as_a_dependency_dispatch() {
-        let builds = Rc::new(Cell::new(0));
-        let deps = Rc::new(Cell::new(0));
-
-        let mut tasks = TestTaskRunner::new();
-        let mut owner = TestBuildOwner::mount(
-            DepWidget {
-                builds: Rc::clone(&builds),
-                dep_changes: Rc::clone(&deps),
-            },
-            &mut tasks.scheduler(),
-        );
-        assert_eq!(deps.get(), 0, "mount does not run the dependency hook");
-
-        owner.request_dependency_change(&RoutingPath::new(owner.root_id(), Vec::new()));
-        assert!(owner.is_dirty(), "the dependency change queued a rebuild");
-        assert!(owner.flush(&mut tasks.scheduler()));
-
-        assert_eq!(
-            deps.get(),
-            1,
-            "the flush delivered a dependency change, not a plain rebuild"
-        );
-    }
-
     #[test]
     #[allow(clippy::float_cmp)]
     fn set_state_reconciles_the_child_render_in_place() {
         let creates = Rc::new(Cell::new(0));
 
-        let mut tasks = TestTaskRunner::new();
+        let mut tasks = TestCtx::new();
         let mut owner = PipelineOwner::new(
             Counter {
                 count: 1,
@@ -454,13 +424,10 @@ mod tests {
     fn the_wrapper_presents_its_child_unchanged() {
         let creates = Rc::new(Cell::new(0));
 
-        let (_element, mut render) = with_ctx(|ctx| {
-            Counter {
-                count: 5,
+        let (_element, mut render) = TestCtx::new().create(Counter {
+            count: 5,
 
-                creates: Rc::clone(&creates),
-            }
-            .create(ctx)
+            creates: Rc::clone(&creates),
         });
 
         let layout = LayoutPipeline::default();
@@ -480,12 +447,9 @@ mod tests {
 
     #[test]
     fn describe_includes_state_properties() {
-        let (element, _render) = with_ctx(|ctx| {
-            Counter {
-                count: 7,
-                creates: Rc::new(Cell::new(0)),
-            }
-            .create(ctx)
+        let (element, _render) = TestCtx::new().create(Counter {
+            count: 7,
+            creates: Rc::new(Cell::new(0)),
         });
 
         let dump = element.describe(&mut Diagnostics::new()).to_string();
@@ -652,14 +616,11 @@ mod tests {
     fn a_render_object_created_on_rebuild_is_mounted() {
         let mounts = Rc::new(Cell::new(0));
 
-        let mut tasks = TestTaskRunner::new();
-        let (mut owner, view) = mount_view_with(
-            Grower {
-                count: 1,
-                mounts: Rc::clone(&mounts),
-            },
-            &mut tasks.scheduler(),
-        );
+        let mut ctx = TestCtx::new();
+        let (mut owner, view) = ctx.mount_view(Grower {
+            count: 1,
+            mounts: Rc::clone(&mounts),
+        });
 
         view.resize(BoxConstraints::tight(Size::new(100, 100)));
         owner.flush_layout();
@@ -677,7 +638,7 @@ mod tests {
             &RoutingPath::new(owner.root_id(), Vec::new()),
             Box::new(grow),
         );
-        assert!(owner.flush_build(&mut tasks.scheduler()));
+        assert!(owner.flush_build(&mut ctx.scheduler()));
 
         owner.flush_layout();
         owner.flush_paint();

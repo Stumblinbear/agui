@@ -175,12 +175,12 @@ mod tests {
     use std::{cell::Cell, rc::Rc};
 
     use crate::{
-        context::{Dispatch, UpdateCtx},
+        context::{Dispatch, MessageCtx, UpdateCtx},
         element::{BuildBoundaryId, Element, RebuildBoundary, RoutingPath},
+        pipeline::PipelineOwner,
         provide::ProvideScope,
         test_fixtures::{Leaf, Transparent},
-        test_harness::{TestBuildOwner, TestTaskRunner, with_ctx, with_ctx_in},
-        widget::Widget,
+        test_harness::TestCtx,
     };
 
     use super::Provide;
@@ -205,11 +205,7 @@ mod tests {
     fn provide_exposes_value_to_subtree_on_mount() {
         let (seen, record) = recorder();
 
-        with_ctx(|ctx| {
-            Provide::new(Rc::new(42_usize))
-                .child(Leaf::new().on_mount(record))
-                .create(ctx);
-        });
+        TestCtx::new().create(Provide::new(Rc::new(42_usize)).child(Leaf::new().on_mount(record)));
 
         assert_eq!(
             seen.get(),
@@ -224,16 +220,12 @@ mod tests {
         let seen_i32 = Rc::new(Cell::new(None));
 
         let (ru, ri) = (Rc::clone(&seen_usize), Rc::clone(&seen_i32));
-        with_ctx(|ctx| {
-            Provide::new(Rc::new(3_usize))
-                .child(
-                    Provide::new(Rc::new(6_i32)).child(Leaf::new().on_mount(move |ctx| {
-                        ru.set(ctx.get_provided::<usize>().as_deref().copied());
-                        ri.set(ctx.get_provided::<i32>().as_deref().copied());
-                    })),
-                )
-                .create(ctx);
-        });
+        TestCtx::new().create(Provide::new(Rc::new(3_usize)).child(
+            Provide::new(Rc::new(6_i32)).child(Leaf::new().on_mount(move |ctx| {
+                ru.set(ctx.get_provided::<usize>().as_deref().copied());
+                ri.set(ctx.get_provided::<i32>().as_deref().copied());
+            })),
+        ));
 
         assert_eq!(seen_usize.get(), Some(3));
         assert_eq!(seen_i32.get(), Some(6));
@@ -243,11 +235,10 @@ mod tests {
     fn providing_same_type_twice_returns_latest() {
         let (seen, record) = recorder();
 
-        with_ctx(|ctx| {
+        TestCtx::new().create(
             Provide::new(Rc::new(1_usize))
-                .child(Provide::new(Rc::new(2_usize)).child(Leaf::new().on_mount(record)))
-                .create(ctx);
-        });
+                .child(Provide::new(Rc::new(2_usize)).child(Leaf::new().on_mount(record))),
+        );
 
         assert_eq!(seen.get(), Some(2));
     }
@@ -255,11 +246,8 @@ mod tests {
     #[test]
     fn update_reprovides_the_new_value() {
         let (mounted, record_mount) = recorder();
-        let (mut element, mut render) = with_ctx(|ctx| {
-            Provide::new(Rc::new(3_usize))
-                .child(Leaf::new().on_mount(record_mount))
-                .create(ctx)
-        });
+        let (mut element, mut render) = TestCtx::new()
+            .create(Provide::new(Rc::new(3_usize)).child(Leaf::new().on_mount(record_mount)));
         assert_eq!(
             mounted.get(),
             Some(3),
@@ -267,11 +255,11 @@ mod tests {
         );
 
         let (updated, record_update) = recorder();
-        with_ctx(|ctx| {
-            Provide::new(Rc::new(6_usize))
-                .child(Leaf::new().on_update(record_update))
-                .update(&mut element, &mut render, ctx);
-        });
+        TestCtx::new().update(
+            Provide::new(Rc::new(6_usize)).child(Leaf::new().on_update(record_update)),
+            &mut element,
+            &mut render,
+        );
         assert_eq!(
             updated.get(),
             Some(6),
@@ -284,18 +272,15 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let (mut element, mut render) = with_ctx(|ctx| {
-            Provide::new(Rc::new(42_usize))
-                .child(Transparent {
-                    child: Leaf::new().on_rebuild(move |ctx| {
-                        recorder.set(ctx.get_provided::<usize>().as_deref().copied());
-                    }),
-                })
-                .create(ctx)
-        });
+        let (mut element, mut render) =
+            TestCtx::new().create(Provide::new(Rc::new(42_usize)).child(Transparent {
+                child: Leaf::new().on_rebuild(move |ctx| {
+                    recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                }),
+            }));
 
         // The transparent single child pushes no routing id, so the leaf sits at the empty path.
-        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
+        TestCtx::new().run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
 
         assert_eq!(
             seen.get(),
@@ -309,19 +294,17 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let (mut element, mut render) = with_ctx(|ctx| {
-            Provide::new(Rc::new(42_usize))
-                .child(Transparent {
-                    child: Leaf::new().on_rebuild(move |ctx| {
-                        recorder.set(ctx.get_provided::<usize>().as_deref().copied());
-                    }),
-                })
-                .create(ctx)
-        });
+        let (mut element, mut render) =
+            TestCtx::new().create(Provide::new(Rc::new(42_usize)).child(Transparent {
+                child: Leaf::new().on_rebuild(move |ctx| {
+                    recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                }),
+            }));
 
         // A dependency-changed dispatch must re-thread the ancestor's provided value just like a
         // plain rebuild, so the woken descendant still reads it.
-        with_ctx(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
+        TestCtx::new()
+            .run(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
 
         assert_eq!(
             seen.get(),
@@ -343,23 +326,24 @@ mod tests {
                     .on_mount(move |ctx: &mut UpdateCtx| {
                         captured.set(ctx.build_scope().boundary());
                     })
+                    .on_message(MessageCtx::request_rebuild)
                     .on_rebuild(move |ctx: &mut UpdateCtx| {
                         recorder.set(ctx.get_provided::<usize>().as_deref().copied());
                     }),
             ),
         );
 
-        let mut tasks = TestTaskRunner::new();
-        let mut owner = TestBuildOwner::mount(widget, &mut tasks.scheduler());
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
         let boundary = boundary
             .get()
             .expect("the leaf mounted under the rebuild boundary");
 
         // The Provide sits above the boundary, so the value lives in the scope the boundary captured
-        // at registration; a targeted flush into the boundary must re-enter with that scope.
-        owner.request_dependency_change(&RoutingPath::new(boundary, Vec::new()));
-        assert!(owner.flush(&mut tasks.scheduler()));
+        // at registration; a targeted rebuild into the boundary must re-enter with that scope.
+        owner.dispatch_message(&RoutingPath::new(boundary, Vec::new()), Box::new(()));
+        assert!(owner.flush_build(&mut tasks.scheduler()));
 
         assert_eq!(
             seen.get(),
@@ -373,19 +357,15 @@ mod tests {
         let seen = Rc::new(Cell::new(None::<usize>));
 
         let recorder = Rc::clone(&seen);
-        let (mut element, mut render) = with_ctx(|ctx| {
-            Transparent {
-                child: Leaf::new().on_rebuild(move |ctx| {
-                    recorder.set(ctx.get_provided::<usize>().as_deref().copied());
-                }),
-            }
-            .create(ctx)
+        let (mut element, mut render) = TestCtx::new().create(Transparent {
+            child: Leaf::new().on_rebuild(move |ctx| {
+                recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+            }),
         });
 
-        let scope = ProvideScope::new().provide::<usize>(Rc::new(7_usize));
-        with_ctx_in(&scope, |ctx| {
-            element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx));
-        });
+        TestCtx::new()
+            .with_provided(Rc::new(7_usize))
+            .run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
 
         assert_eq!(
             seen.get(),

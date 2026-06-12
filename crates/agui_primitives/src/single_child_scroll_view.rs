@@ -156,7 +156,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::with_ctx;
+    use agui_core::{
+        test_harness::TestCtx,
+    };
 
     use crate::sized_box::SizedBox;
 
@@ -164,10 +166,8 @@ mod tests {
 
     #[test]
     fn requires_child_with_intrinsic_width() {
-        let (_, mut render_object) =
-            with_ctx(|ctx| SingleChildScrollView::new(SizedBox::new().width(10)).create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
+        let render_object = TestCtx::new().laid_out(
+            SingleChildScrollView::new(SizedBox::new().width(10)),
             BoxConstraints::new(0, 128, 0, 128),
         );
         assert_eq!(
@@ -176,10 +176,8 @@ mod tests {
             "should only be the width of the child"
         );
 
-        let (_, mut render_object) =
-            with_ctx(|ctx| SingleChildScrollView::new(SizedBox::new().width(256)).create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
+        let render_object = TestCtx::new().laid_out(
+            SingleChildScrollView::new(SizedBox::new().width(256)),
             BoxConstraints::new(0, 128, 0, 128),
         );
         assert_eq!(
@@ -188,11 +186,8 @@ mod tests {
             "should not exceed the width of the constraints"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| {
-            SingleChildScrollView::new(SizedBox::new().width(10).height(16)).create(ctx)
-        });
-        render_object.layout(
-            &mut LayoutCtx::detached(),
+        let render_object = TestCtx::new().laid_out(
+            SingleChildScrollView::new(SizedBox::new().width(10).height(16)),
             BoxConstraints::new(0, 128, 0, 128),
         );
         assert_eq!(
@@ -201,11 +196,8 @@ mod tests {
             "should be the width of the child and the height of the child"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| {
-            SingleChildScrollView::new(SizedBox::new().expand_width().height(16)).create(ctx)
-        });
-        render_object.layout(
-            &mut LayoutCtx::detached(),
+        let render_object = TestCtx::new().laid_out(
+            SingleChildScrollView::new(SizedBox::new().expand_width().height(16)),
             BoxConstraints::new(0, 128, 0, 128),
         );
         assert_eq!(
@@ -214,11 +206,8 @@ mod tests {
             "should not exceed the width of the constraints and be the height of the child"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| {
-            SingleChildScrollView::new(SizedBox::new().width(256).height(256)).create(ctx)
-        });
-        render_object.layout(
-            &mut LayoutCtx::detached(),
+        let render_object = TestCtx::new().laid_out(
+            SingleChildScrollView::new(SizedBox::new().width(256).height(256)),
             BoxConstraints::new(0, 128, 0, 128),
         );
         assert_eq!(

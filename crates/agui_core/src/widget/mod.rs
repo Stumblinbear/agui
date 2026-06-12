@@ -65,8 +65,7 @@ mod tests {
         context::{Dispatch, MessageCtx},
         element::{Element, RoutingId},
         test_fixtures::{Leaf, MultiChild, Transparent},
-        test_harness::with_ctx,
-        widget::Widget,
+        test_harness::TestCtx,
     };
 
     fn counter() -> Rc<Cell<usize>> {
@@ -101,10 +100,6 @@ mod tests {
         Leaf::new().on_update(move |_| count.set(count.get() + 1))
     }
 
-    fn mount<W: Widget>(widget: W) -> (W::Element, W::Render) {
-        with_ctx(|ctx| widget.create(ctx))
-    }
-
     fn message<E: Element>(
         element: &mut E,
         render: &mut E::Render,
@@ -117,14 +112,14 @@ mod tests {
     }
 
     fn rebuild<E: Element>(element: &mut E, render: &mut E::Render, path: &[RoutingId]) {
-        with_ctx(|ctx| element.dispatch(render, path, Dispatch::Rebuild(ctx)));
+        TestCtx::new().run(|ctx| element.dispatch(render, path, Dispatch::Rebuild(ctx)));
     }
 
     #[test]
     fn message_at_empty_path_invokes_leaf() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(recording_leaf(&count, &payload));
+        let (mut element, mut render) = TestCtx::new().create(recording_leaf(&count, &payload));
 
         message(&mut element, &mut render, &[], Box::new(42_u32));
 
@@ -135,7 +130,7 @@ mod tests {
     #[test]
     fn rebuild_at_empty_path_invokes_leaf() {
         let count = counter();
-        let (mut element, mut render) = mount(rebuilding_leaf(&count));
+        let (mut element, mut render) = TestCtx::new().create(rebuilding_leaf(&count));
 
         rebuild(&mut element, &mut render, &[]);
 
@@ -144,7 +139,7 @@ mod tests {
 
     #[test]
     fn message_without_request_rebuild_leaves_flag_unset() {
-        let (mut element, mut render) = mount(Leaf::new());
+        let (mut element, mut render) = TestCtx::new().create(Leaf::new());
 
         let ctx = message(&mut element, &mut render, &[], Box::new(1_u32));
 
@@ -156,7 +151,8 @@ mod tests {
 
     #[test]
     fn message_with_request_rebuild_sets_flag() {
-        let (mut element, mut render) = mount(Leaf::new().on_message(MessageCtx::request_rebuild));
+        let (mut element, mut render) =
+            TestCtx::new().create(Leaf::new().on_message(MessageCtx::request_rebuild));
 
         let ctx = message(&mut element, &mut render, &[], Box::new(7_u32));
 
@@ -182,7 +178,7 @@ mod tests {
     fn transparent_forwards_path_verbatim() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(Transparent {
+        let (mut element, mut render) = TestCtx::new().create(Transparent {
             child: recording_leaf(&count, &payload),
         });
 
@@ -196,7 +192,7 @@ mod tests {
     fn nested_transparent_wrappers_forward_path_verbatim() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(Transparent {
+        let (mut element, mut render) = TestCtx::new().create(Transparent {
             child: Transparent {
                 child: recording_leaf(&count, &payload),
             },
@@ -212,7 +208,7 @@ mod tests {
     fn multichild_routes_to_correct_child_by_id() {
         let (m0, m1, m2) = (counter(), counter(), counter());
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(MultiChild {
+        let (mut element, mut render) = TestCtx::new().create(MultiChild {
             children: vec![
                 counting_leaf(&m0),
                 counting_leaf(&m1),
@@ -234,7 +230,7 @@ mod tests {
     #[test]
     fn multichild_rebuild_only_touches_target_child() {
         let (r0, r1) = (counter(), counter());
-        let (mut element, mut render) = mount(MultiChild {
+        let (mut element, mut render) = TestCtx::new().create(MultiChild {
             children: vec![rebuilding_leaf(&r0), rebuilding_leaf(&r1)],
         });
 
@@ -247,7 +243,7 @@ mod tests {
     fn dispatch_through_transparent_then_routing_widget() {
         let (m0, m1) = (counter(), counter());
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(Transparent {
+        let (mut element, mut render) = TestCtx::new().create(Transparent {
             child: MultiChild {
                 children: vec![counting_leaf(&m0), recording_leaf(&m1, &payload)],
             },
@@ -268,7 +264,7 @@ mod tests {
     fn deep_path_through_nested_routing_widgets() {
         let (m00, m01, m10, m11) = (counter(), counter(), counter(), counter());
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(MultiChild {
+        let (mut element, mut render) = TestCtx::new().create(MultiChild {
             children: vec![
                 MultiChild {
                     children: vec![counting_leaf(&m00), recording_leaf(&m01, &payload)],
@@ -294,16 +290,17 @@ mod tests {
     #[test]
     fn update_through_routing_widget_reaches_each_child() {
         let (u0, u1) = (counter(), counter());
-        let (mut element, mut render) = mount(MultiChild {
+        let (mut element, mut render) = TestCtx::new().create(MultiChild {
             children: vec![updating_leaf(&u0), updating_leaf(&u1)],
         });
 
-        with_ctx(|ctx| {
+        TestCtx::new().update(
             MultiChild {
                 children: vec![updating_leaf(&u0), updating_leaf(&u1)],
-            }
-            .update(&mut element, &mut render, ctx);
-        });
+            },
+            &mut element,
+            &mut render,
+        );
 
         assert_eq!((u0.get(), u1.get()), (1, 1));
     }
@@ -312,16 +309,17 @@ mod tests {
     fn dispatch_after_update_reaches_correct_child() {
         let count = counter();
         let payload = Rc::new(Cell::new(None));
-        let (mut element, mut render) = mount(MultiChild {
+        let (mut element, mut render) = TestCtx::new().create(MultiChild {
             children: vec![Leaf::new(), recording_leaf(&count, &payload)],
         });
 
-        with_ctx(|ctx| {
+        TestCtx::new().update(
             MultiChild {
                 children: vec![Leaf::new(), recording_leaf(&count, &payload)],
-            }
-            .update(&mut element, &mut render, ctx);
-        });
+            },
+            &mut element,
+            &mut render,
+        );
 
         message(
             &mut element,

@@ -230,7 +230,7 @@ mod tests {
     use agui_core::{
         paint::{command::PaintCommand, compositing::OffsetLayer, peniko::Color},
         prelude::{element::*, render_object::*},
-        test_harness::{mount_view, with_ctx},
+        test_harness::TestCtx,
     };
 
     use crate::{colored_box::ColoredBox, sized_box::SizedBox};
@@ -243,7 +243,7 @@ mod tests {
     fn the_compositing_bit_tracks_the_opacity() {
         for (opacity, needs) in [(0.0, false), (0.5, true), (1.0, false)] {
             let widget = Opacity::new(opacity).child(SizedBox::new().width(10).height(10));
-            let (_, mut render) = with_ctx(|ctx| widget.create(ctx));
+            let (_, mut render) = TestCtx::new().create(widget);
 
             assert_eq!(
                 render.update_compositing_bits(),
@@ -259,7 +259,7 @@ mod tests {
         let widget = Opacity::new(0.5)
             .child(ColoredBox::new(Color::BLACK).child(SizedBox::new().width(10).height(10)));
 
-        let (mut owner, view) = mount_view(widget);
+        let (mut owner, view) = TestCtx::new().mount_view(widget);
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         owner.flush_paint();
@@ -369,7 +369,8 @@ mod tests {
             context::MountCtx,
             paint::compositing::Compositor,
             pipeline::{
-                layout::{BoundaryContent, LayoutPipeline},
+                BoundaryContent,
+                layout::LayoutPipeline,
                 paint::PaintPipeline,
             },
         };
@@ -378,7 +379,7 @@ mod tests {
         let widget = Opacity::new(0.5).child(Counter {
             paints: Rc::clone(&paints),
         });
-        let (mut element, mut render) = with_ctx(|ctx| widget.create(ctx));
+        let (mut element, mut render) = TestCtx::new().create(widget);
 
         // Mount under a repaint boundary so the opacity captures a scope it can mark.
         let dummy: BoundaryContent = Rc::new(RefCell::new(RenderCounter {
@@ -393,7 +394,7 @@ mod tests {
             render.mount(&mut ctx);
         }
         render.layout(
-            &mut LayoutCtx::detached(),
+            &mut LayoutCtx::new(&layout, &mut pipeline, LayoutScope::detached()),
             BoxConstraints::new(0, 100, 0, 100),
         );
 
@@ -409,7 +410,7 @@ mod tests {
         let next = Opacity::new(0.25).child(Counter {
             paints: Rc::clone(&paints),
         });
-        with_ctx(|ctx| next.update(&mut element, &mut render, ctx));
+        TestCtx::new().update(next, &mut element, &mut render);
 
         assert_eq!(paints.get(), 1, "the subtree was not repainted");
 

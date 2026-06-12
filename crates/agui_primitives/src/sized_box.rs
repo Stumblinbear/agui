@@ -320,7 +320,7 @@ mod tests {
 
     use agui_core::{
         prelude::{element::*, render_object::*},
-        test_harness::{mount_view, with_ctx},
+        test_harness::TestCtx,
     };
 
     use crate::{center::Center, sized_box::SizedBox};
@@ -509,57 +509,40 @@ mod tests {
 
     #[test]
     fn results_in_correct_sizing() {
-        let (_, mut render_object) =
-            with_ctx(|ctx| SizedBox::new().width(16).height(48).create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 128, 0, 128),
-        );
+        let render_object = TestCtx::new()
+            .laid_out(SizedBox::new().width(16).height(48), BoxConstraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 48)),
             "should use the given sizes"
         );
 
-        let (_, mut render_object) =
-            with_ctx(|ctx| SizedBox::new().width(0).height(16).create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(16, 128, 32, 128),
-        );
+        let render_object = TestCtx::new()
+            .laid_out(SizedBox::new().width(0).height(16), BoxConstraints::new(16, 128, 32, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 32)),
             "should ignore the given sizes and use the smallest size allowed by the constraints"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| SizedBox::shrink().create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 128, 0, 128),
-        );
+        let render_object =
+            TestCtx::new().laid_out(SizedBox::shrink(), BoxConstraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(0, 0)),
             "should shrink to the smallest size possible"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| SizedBox::shrink().create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(10, 128, 20, 128),
-        );
+        let render_object =
+            TestCtx::new().laid_out(SizedBox::shrink(), BoxConstraints::new(10, 128, 20, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(10, 20)),
             "should shrink to the smallest size possible within the constraints"
         );
 
-        let (_, mut render_object) = with_ctx(|ctx| SizedBox::expand().create(ctx));
-        render_object.layout(
-            &mut LayoutCtx::detached(),
-            BoxConstraints::new(0, 128, 0, 128),
-        );
+        let render_object =
+            TestCtx::new().laid_out(SizedBox::expand(), BoxConstraints::new(0, 128, 0, 128));
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(128, 128)),
@@ -584,7 +567,7 @@ mod tests {
             })),
         };
 
-        let (mut owner, view) = mount_view(widget);
+        let (mut owner, view) = TestCtx::new().mount_view(widget);
 
         view.resize(BoxConstraints::new(0, 200, 0, 200));
         owner.flush_layout();

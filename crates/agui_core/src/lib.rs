@@ -57,7 +57,7 @@ pub mod prelude {
                 SingleChildElement, node::ElementNode,
             },
             scheduling::TaskHandle,
-            widget::{BoxedSliverWidget, BoxedWidget, Widget},
+            widget::Widget,
         };
 
         pub use super::{shared::*, unit::*};
