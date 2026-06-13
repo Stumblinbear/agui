@@ -509,16 +509,20 @@ mod tests {
 
     #[test]
     fn results_in_correct_sizing() {
-        let render_object = TestCtx::new()
-            .laid_out(SizedBox::new().width(16).height(48), BoxConstraints::new(0, 128, 0, 128));
+        let render_object = TestCtx::new().laid_out(
+            SizedBox::new().width(16).height(48),
+            BoxConstraints::new(0, 128, 0, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 48)),
             "should use the given sizes"
         );
 
-        let render_object = TestCtx::new()
-            .laid_out(SizedBox::new().width(0).height(16), BoxConstraints::new(16, 128, 32, 128));
+        let render_object = TestCtx::new().laid_out(
+            SizedBox::new().width(0).height(16),
+            BoxConstraints::new(16, 128, 32, 128),
+        );
         assert_eq!(
             render_object.child.parent_data.as_ref(),
             Some(&Size::new(16, 32)),

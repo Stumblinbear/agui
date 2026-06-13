@@ -115,11 +115,12 @@ mod tests {
     use crate::{
         context::{Dispatch, LayoutCtx, MountCtx, PaintCtx},
         diagnostics::{Diagnostics, DiagnosticsNodeBuilder},
-        element::{Element, LeafElement, RoutingPath},
+        element::{Element, LeafElement, RebuildBoundary, RoutingPath},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
         pipeline::{PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
         prelude::{element::UpdateCtx, render_object::LayoutScope},
+        provide::Provide,
         render_object::{
             RenderObject,
             box_layout::{BoxConstraints, RenderBox},
@@ -648,5 +649,200 @@ mod tests {
             2,
             "the render object created on rebuild is mounted, as the initial tree is"
         );
+    }
+
+    /// A host that provides a `usize` from its state. A set-state changes the value, re-providing it to
+    /// the subtree.
+    struct Provider {
+        value: usize,
+        reads: Rc<Cell<Option<usize>>>,
+        dep_changes: Rc<Cell<usize>>,
+    }
+
+    struct ProviderState {
+        value: usize,
+        reads: Rc<Cell<Option<usize>>>,
+        dep_changes: Rc<Cell<usize>>,
+    }
+
+    impl Widget for Provider {
+        type Element = StatefulElement<ProviderState>;
+        type Render = <<ProviderState as WidgetState>::Child as Widget>::Render;
+
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let state = ProviderState::init_state(ctx, self);
+            let child = state.build(ctx);
+            let (child_element, child_render) = child.create(ctx);
+            (StatefulElement::new(state, child_element), child_render)
+        }
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.state.did_update_widget(ctx, self);
+            let child = element.state.build(ctx);
+            child.update(&mut element.child.element, render, ctx);
+        }
+    }
+
+    impl WidgetState for ProviderState {
+        type Widget = Provider;
+        type Child = Provide<usize, RebuildBoundary<Reader>>;
+
+        fn init_state(_: &mut UpdateCtx, widget: Self::Widget) -> Self {
+            ProviderState {
+                value: widget.value,
+                reads: widget.reads,
+                dep_changes: widget.dep_changes,
+            }
+        }
+
+        fn did_update_widget(&mut self, _: &mut UpdateCtx, widget: Self::Widget) {
+            self.value = widget.value;
+            self.reads = widget.reads;
+            self.dep_changes = widget.dep_changes;
+        }
+
+        fn build(&self, _: &mut UpdateCtx) -> Self::Child {
+            Provide::new(self.value).child(RebuildBoundary::new().child(Reader {
+                reads: Rc::clone(&self.reads),
+                dep_changes: Rc::clone(&self.dep_changes),
+            }))
+        }
+    }
+
+    /// A reader, in its own rebuild boundary so it is addressable on its own. It records the provided
+    /// value it depends on and counts the dependency-change hook the value's change runs.
+    struct Reader {
+        reads: Rc<Cell<Option<usize>>>,
+        dep_changes: Rc<Cell<usize>>,
+    }
+
+    struct ReaderState {
+        reads: Rc<Cell<Option<usize>>>,
+        dep_changes: Rc<Cell<usize>>,
+    }
+
+    impl Widget for Reader {
+        type Element = StatefulElement<ReaderState>;
+        type Render = <<ReaderState as WidgetState>::Child as Widget>::Render;
+
+        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            let state = ReaderState::init_state(ctx, self);
+            let (child_element, child_render) = state.build(ctx).create(ctx);
+            (StatefulElement::new(state, child_element), child_render)
+        }
+
+        fn update(
+            self,
+            element: &mut Self::Element,
+            render: &mut Self::Render,
+            ctx: &mut UpdateCtx,
+        ) {
+            element.state.did_update_widget(ctx, self);
+            element
+                .state
+                .build(ctx)
+                .update(&mut element.child.element, render, ctx);
+        }
+    }
+
+    impl WidgetState for ReaderState {
+        type Widget = Reader;
+        type Child = ();
+
+        fn init_state(_: &mut UpdateCtx, widget: Self::Widget) -> Self {
+            ReaderState {
+                reads: widget.reads,
+                dep_changes: widget.dep_changes,
+            }
+        }
+
+        fn did_update_widget(&mut self, _: &mut UpdateCtx, widget: Self::Widget) {
+            self.reads = widget.reads;
+            self.dep_changes = widget.dep_changes;
+        }
+
+        fn did_change_dependencies(&mut self, _: &mut UpdateCtx) {
+            self.dep_changes.set(self.dep_changes.get() + 1);
+        }
+
+        fn build(&self, ctx: &mut UpdateCtx) -> Self::Child {
+            self.reads
+                .set(ctx.depend_on_provided::<usize>().as_deref().copied());
+        }
+    }
+
+    #[test]
+    fn changing_a_provided_value_runs_a_dependents_dependency_hook() {
+        let reads = Rc::new(Cell::new(None));
+        let dep_changes = Rc::new(Cell::new(0));
+
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(
+            Provider {
+                value: 1,
+                reads: Rc::clone(&reads),
+                dep_changes: Rc::clone(&dep_changes),
+            },
+            &mut tasks.scheduler(),
+        );
+        assert_eq!(reads.get(), Some(1), "the reader saw the value at mount");
+        assert_eq!(
+            dep_changes.get(),
+            0,
+            "mount does not run the dependency hook"
+        );
+
+        // A set-state on the host gives the Provide a different value.
+        let bump: SetState<ProviderState> = Box::new(|state| state.value = 2);
+        owner.dispatch_message(
+            &RoutingPath::new(owner.root_id(), Vec::new()),
+            Box::new(bump),
+        );
+        owner.flush_build(&mut tasks.scheduler());
+
+        assert!(
+            owner.is_dirty(),
+            "the value change marked the reader for a dependency rebuild"
+        );
+
+        owner.flush_build(&mut tasks.scheduler());
+        assert_eq!(reads.get(), Some(2), "the reader observed the new value");
+        assert_eq!(
+            dep_changes.get(),
+            1,
+            "the reader's dependency hook ran once"
+        );
+    }
+
+    #[test]
+    fn re_providing_an_equal_value_does_not_notify_dependents() {
+        let reads = Rc::new(Cell::new(None));
+        let dep_changes = Rc::new(Cell::new(0));
+
+        let mut tasks = TestCtx::new();
+        let mut owner = PipelineOwner::new(
+            Provider {
+                value: 1,
+                reads: Rc::clone(&reads),
+                dep_changes: Rc::clone(&dep_changes),
+            },
+            &mut tasks.scheduler(),
+        );
+
+        // A set-state that leaves the value equal re-provides the same value.
+        let same: SetState<ProviderState> = Box::new(|state| state.value = 1);
+        owner.dispatch_message(
+            &RoutingPath::new(owner.root_id(), Vec::new()),
+            Box::new(same),
+        );
+        owner.flush_build(&mut tasks.scheduler());
+
+        assert!(!owner.is_dirty(), "an equal value marks no dependents");
+        assert_eq!(dep_changes.get(), 0, "the dependency hook does not run");
     }
 }

@@ -215,8 +215,7 @@ mod tests {
         let mut tcx = TestCtx::new();
         let (_, mut render_object) = tcx.create(widget);
 
-        let size =
-            render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 200, 0, 100));
+        let size = render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 200, 0, 100));
 
         assert_eq!(
             size,

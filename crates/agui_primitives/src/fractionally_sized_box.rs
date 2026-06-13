@@ -564,8 +564,10 @@ mod tests {
                 .height_factor(0.5_f32),
         );
 
-        let size =
-            render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(200, 200, 200, 200));
+        let size = render_object.layout(
+            &mut tcx.layout_ctx(),
+            BoxConstraints::new(200, 200, 200, 200),
+        );
 
         assert_eq!(size, Size::new(200, 200));
         assert_eq!(

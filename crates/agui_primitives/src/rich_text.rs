@@ -51,7 +51,7 @@ where
 
         let mut render_object = RenderParagraph::new(content);
 
-        let fonts = ctx.get_provided::<Fonts>();
+        let fonts = ctx.depend_on_provided::<Fonts>();
         render_object.set_fonts(fonts.clone());
 
         let children = MultiChildElement::new(widgets, &mut render_object, ctx);
@@ -69,7 +69,7 @@ where
 
         render_object.set_content(content);
 
-        element.fonts = ctx.get_provided::<Fonts>();
+        element.fonts = ctx.depend_on_provided::<Fonts>();
         render_object.set_fonts(element.fonts.clone());
 
         element.children.update(widgets, render_object, ctx);
@@ -91,7 +91,7 @@ mod harness {
     #[test]
     fn mixed_styles_produce_a_finite_size() {
         let probe = Probe::new();
-        let fonts = Rc::new(Fonts::new());
+        let fonts = Fonts::new();
 
         let span = TextSpan::new("hello ").children([InlineSpan::Text(
             TextSpan::<()>::new("world").style(TextStyle::new().font_size(28.0)),
@@ -111,7 +111,7 @@ mod harness {
     #[test]
     fn inline_widget_widens_the_paragraph() {
         let probe = Probe::new();
-        let fonts = Rc::new(Fonts::new());
+        let fonts = Fonts::new();
 
         let span = TextSpan::new("icon ")
             .children([InlineSpan::Widget(SizedBox::new().width(40).height(20))]);

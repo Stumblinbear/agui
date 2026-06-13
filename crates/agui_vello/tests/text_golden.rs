@@ -30,7 +30,7 @@ fn text_renders_glyphs_matching_golden() {
         .brush(Color::WHITE);
 
     // Provide the fonts above the text so its render captures the handle, just as the tree does.
-    let fonts = Rc::new(Fonts::new());
+    let fonts = Fonts::new();
     fonts.register(FONT.to_vec());
     let widget = Provide::new(fonts).child(text);
 
@@ -87,7 +87,7 @@ fn rich_text_renders_styled_runs_matching_golden() {
         ),
     ]);
 
-    let fonts = Rc::new(Fonts::new());
+    let fonts = Fonts::new();
     fonts.register(FONT.to_vec());
     let widget = Provide::new(fonts).child(RichText::new(span));
 

@@ -261,10 +261,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{
-        geometry::EdgeInsets,
-        test_harness::TestCtx,
-    };
+    use agui_core::{geometry::EdgeInsets, test_harness::TestCtx};
 
     use super::*;
     use crate::sized_box::SizedBox;

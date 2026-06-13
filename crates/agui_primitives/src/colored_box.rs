@@ -211,7 +211,8 @@ mod tests {
     fn paints_its_color_over_the_child_bounds() {
         let widget = ColoredBox::new(Color::from_rgb8(255, 0, 0))
             .child(SizedBox::new().width(20).height(10));
-        let mut render_object = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
+        let mut render_object =
+            TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
@@ -241,7 +242,8 @@ mod tests {
             ColoredBox::new(Color::from_rgb8(0, 0, 255))
                 .child(SizedBox::new().width(20).height(10)),
         );
-        let mut render_object = TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
+        let mut render_object =
+            TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));

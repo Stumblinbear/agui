@@ -196,6 +196,14 @@ impl BuildScope {
     pub fn boundary(&self) -> Option<BuildBoundaryId> {
         self.boundary
     }
+
+    /// Marks the element at `path` for a dependency-change rebuild on the next flush. A detached scope
+    /// reaches no registry, so the mark is dropped.
+    pub(crate) fn mark_dependency_changed(&self, path: &RoutingPath) {
+        if let Some(state) = self.state.upgrade() {
+            state.borrow_mut().mark_dependency_changed(path);
+        }
+    }
 }
 
 /// A build boundary's persistent state, referenced by the registry while it is mounted.

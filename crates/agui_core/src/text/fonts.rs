@@ -1,4 +1,4 @@
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use parley::{FontContext, InlineBox, InlineBoxKind, Layout, LayoutContext};
 use peniko::Blob;
@@ -8,7 +8,16 @@ use crate::{
     text::{ParagraphContent, TextBrush},
 };
 
-pub struct Fonts {
+/// A shared handle to a font registry and its shaping scratch space.
+///
+/// Cloning shares the same registry, so fonts registered through one handle are visible through every
+/// clone. Two handles compare equal only when they refer to the same registry, so a value provided
+/// through this handle changes only when a different registry is provided, never when fonts are
+/// registered into the existing one.
+#[derive(Clone)]
+pub struct Fonts(Rc<FontsInner>);
+
+struct FontsInner {
     ctx: RefCell<FontContext>,
     scratch: RefCell<LayoutContext<TextBrush>>,
 }
@@ -21,15 +30,16 @@ impl Default for Fonts {
 
 impl Fonts {
     pub fn new() -> Self {
-        Self {
+        Self(Rc::new(FontsInner {
             ctx: RefCell::new(FontContext::new()),
             scratch: RefCell::new(LayoutContext::new()),
-        }
+        }))
     }
 
     /// Registers a font blob, making its families available to shaping.
     pub fn register(&self, data: Vec<u8>) {
-        self.ctx
+        self.0
+            .ctx
             .borrow_mut()
             .collection
             .register_fonts(Blob::new(Arc::new(data)), None);
@@ -42,8 +52,8 @@ impl Fonts {
         content: &ParagraphContent,
         placeholder_sizes: &[Size],
     ) -> Layout<TextBrush> {
-        let mut ctx = self.ctx.borrow_mut();
-        let mut scratch = self.scratch.borrow_mut();
+        let mut ctx = self.0.ctx.borrow_mut();
+        let mut scratch = self.0.scratch.borrow_mut();
 
         let mut builder = scratch.ranged_builder(&mut ctx, &content.text, 1.0, true);
 
@@ -64,5 +74,11 @@ impl Fonts {
         }
 
         builder.build(&content.text)
+    }
+}
+
+impl PartialEq for Fonts {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }

@@ -1,14 +1,17 @@
 use std::{
     any::{Any, TypeId},
+    cell::RefCell,
+    marker::PhantomData,
     rc::Rc,
 };
 
 use bon::Builder;
+use rustc_hash::FxHashSet;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{Element, RoutingId, node::ElementNode},
+    element::{Element, RoutingId, RoutingPath, node::ElementNode},
     widget::Widget,
 };
 
@@ -24,9 +27,43 @@ pub struct ProvideScope {
 }
 
 struct ProvideNode {
-    type_id: TypeId,
-    value: Rc<dyn Any>,
+    cell: Rc<ProvideCell>,
     parent: Option<Rc<ProvideNode>>,
+}
+
+/// The live value a [`Provide`] holds and the addresses that read it.
+///
+/// The value is replaced in place when the [`Provide`] is given a different one, and every reader is
+/// recorded so that replacement can mark them for a dependency-change rebuild.
+pub(crate) struct ProvideCell {
+    type_id: TypeId,
+    value: RefCell<Rc<dyn Any>>,
+    dependents: RefCell<FxHashSet<RoutingPath>>,
+}
+
+impl ProvideCell {
+    pub(crate) fn new<V: Any>(value: V) -> Rc<Self> {
+        Rc::new(Self {
+            type_id: TypeId::of::<V>(),
+            value: RefCell::new(Rc::new(value)),
+            dependents: RefCell::new(FxHashSet::default()),
+        })
+    }
+
+    fn read(&self) -> Rc<dyn Any> {
+        Rc::clone(&self.value.borrow())
+    }
+
+    fn depend(&self, dependent: &RoutingPath) {
+        self.dependents.borrow_mut().insert(dependent.clone());
+    }
+
+    /// Replaces the held value and returns the readers to notify, clearing them so they re-record
+    /// themselves as they rebuild.
+    fn replace(&self, value: Rc<dyn Any>) -> Vec<RoutingPath> {
+        *self.value.borrow_mut() = value;
+        self.dependents.borrow_mut().drain().collect()
+    }
 }
 
 impl ProvideScope {
@@ -34,35 +71,50 @@ impl ProvideScope {
         Self::default()
     }
 
-    pub fn get<T>(&self) -> Option<Rc<T>>
-    where
-        T: Any,
-    {
-        let target = TypeId::of::<T>();
+    /// Reads the nearest value of type `T`, if one is in scope, without recording a dependency on it.
+    pub fn get<T: Any>(&self) -> Option<Rc<T>> {
+        self.find(TypeId::of::<T>())
+            .and_then(|cell| cell.read().downcast::<T>().ok())
+    }
+
+    /// Reads the nearest value of type `T` and records `dependent` against it, so a later change to
+    /// that value marks `dependent` for a dependency-change rebuild.
+    pub(crate) fn get_and_depend<T: Any>(&self, dependent: &RoutingPath) -> Option<Rc<T>> {
+        let cell = self.find(TypeId::of::<T>())?;
+        cell.depend(dependent);
+
+        cell.read().downcast::<T>().ok()
+    }
+
+    /// Extends this scope with a fresh `value` in scope, owned by the scope rather than a [`Provide`].
+    /// A convenience for building a scope standalone; a change to the value is never observed, since no
+    /// `Provide` re-provides it.
+    pub fn provide<V: Any>(&self, value: V) -> ProvideScope {
+        self.with_cell(ProvideCell::new(value))
+    }
+
+    /// Extends this scope with `cell` in scope for the subtree built under the returned scope.
+    pub(crate) fn with_cell(&self, cell: Rc<ProvideCell>) -> ProvideScope {
+        ProvideScope {
+            head: Some(Rc::new(ProvideNode {
+                cell,
+                parent: self.head.clone(),
+            })),
+        }
+    }
+
+    fn find(&self, type_id: TypeId) -> Option<&Rc<ProvideCell>> {
         let mut node = self.head.as_deref();
 
         while let Some(current) = node {
-            if current.type_id == target {
-                return Rc::clone(&current.value).downcast::<T>().ok();
+            if current.cell.type_id == type_id {
+                return Some(&current.cell);
             }
 
             node = current.parent.as_deref();
         }
 
         None
-    }
-
-    pub fn provide<T>(&self, value: Rc<T>) -> ProvideScope
-    where
-        T: Any,
-    {
-        ProvideScope {
-            head: Some(Rc::new(ProvideNode {
-                type_id: TypeId::of::<T>(),
-                value,
-                parent: self.head.clone(),
-            })),
-        }
     }
 }
 
@@ -71,14 +123,14 @@ impl ProvideScope {
 /// # Examples
 ///
 /// ```ignore
-/// Provide::new(Rc::new(theme)).child(page)
+/// Provide::new(theme).child(page)
 /// ```
 #[derive(Builder)]
 #[builder(start_fn = new)]
 #[builder(finish_fn = child)]
 pub struct Provide<V, Child> {
     #[builder(start_fn)]
-    value: Rc<V>,
+    value: V,
 
     #[builder(finish_fn)]
     child: Child,
@@ -86,7 +138,7 @@ pub struct Provide<V, Child> {
 
 impl<V, Child> Widget for Provide<V, Child>
 where
-    V: Any,
+    V: PartialEq + 'static,
     Child: Widget,
 {
     type Element = ProvideElement<V, Child::Element>;
@@ -94,13 +146,16 @@ where
     type Render = Child::Render;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+        let cell = ProvideCell::new(self.value);
+
         let (element, render_object) =
-            ctx.with_provided(Rc::clone(&self.value), |ctx| self.child.create(ctx));
+            ctx.with_provided(Rc::clone(&cell), |ctx| self.child.create(ctx));
 
         (
             ProvideElement {
                 child: ElementNode::new(element),
-                value: self.value,
+                cell,
+                _value: PhantomData,
             },
             render_object,
         )
@@ -112,11 +167,22 @@ where
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        element.value = Rc::clone(&self.value);
+        let Provide { value, child } = self;
+        let cell = Rc::clone(&element.cell);
 
-        ctx.with_provided(self.value, |ctx| {
-            self.child
-                .update(&mut element.child.element, render_object, ctx);
+        let changed = cell
+            .read()
+            .downcast_ref::<V>()
+            .is_none_or(|current| *current != value);
+
+        if changed {
+            for dependent in cell.replace(Rc::new(value)) {
+                ctx.mark_dependency_changed(&dependent);
+            }
+        }
+
+        ctx.with_provided(cell, |ctx| {
+            child.update(&mut element.child.element, render_object, ctx);
         });
     }
 }
@@ -124,7 +190,8 @@ where
 /// The [`Element`] of a [`Provide`], re-applying the provided value when a rebuild reaches its subtree.
 pub struct ProvideElement<V, C> {
     child: ElementNode<C>,
-    value: Rc<V>,
+    cell: Rc<ProvideCell>,
+    _value: PhantomData<fn() -> V>,
 }
 
 impl<V, C> Element for ProvideElement<V, C>
@@ -138,8 +205,7 @@ where
     fn dispatch(&mut self, render: &mut C::Render, path: &[RoutingId], action: Dispatch) {
         match action {
             Dispatch::Rebuild(ctx) => {
-                let value = Rc::clone(&self.value);
-                ctx.with_provided(value, |ctx| {
+                ctx.with_provided(Rc::clone(&self.cell), |ctx| {
                     self.child
                         .element
                         .dispatch(render, path, Dispatch::Rebuild(ctx));
@@ -147,8 +213,7 @@ where
             }
 
             Dispatch::DependencyChanged(ctx) => {
-                let value = Rc::clone(&self.value);
-                ctx.with_provided(value, |ctx| {
+                ctx.with_provided(Rc::clone(&self.cell), |ctx| {
                     self.child
                         .element
                         .dispatch(render, path, Dispatch::DependencyChanged(ctx));
@@ -187,7 +252,7 @@ mod tests {
 
     #[test]
     fn scope_can_provide_and_get_types() {
-        let scope = ProvideScope::new().provide::<usize>(Rc::new(1));
+        let scope = ProvideScope::new().provide(1_usize);
 
         assert_eq!(scope.get::<usize>(), Some(Rc::new(1)));
     }
@@ -197,7 +262,7 @@ mod tests {
         let seen = Rc::new(Cell::new(None));
         let recorder = Rc::clone(&seen);
         (seen, move |ctx: &mut UpdateCtx| {
-            recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+            recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
         })
     }
 
@@ -205,7 +270,7 @@ mod tests {
     fn provide_exposes_value_to_subtree_on_mount() {
         let (seen, record) = recorder();
 
-        TestCtx::new().create(Provide::new(Rc::new(42_usize)).child(Leaf::new().on_mount(record)));
+        TestCtx::new().create(Provide::new(42_usize).child(Leaf::new().on_mount(record)));
 
         assert_eq!(
             seen.get(),
@@ -220,12 +285,12 @@ mod tests {
         let seen_i32 = Rc::new(Cell::new(None));
 
         let (ru, ri) = (Rc::clone(&seen_usize), Rc::clone(&seen_i32));
-        TestCtx::new().create(Provide::new(Rc::new(3_usize)).child(
-            Provide::new(Rc::new(6_i32)).child(Leaf::new().on_mount(move |ctx| {
-                ru.set(ctx.get_provided::<usize>().as_deref().copied());
-                ri.set(ctx.get_provided::<i32>().as_deref().copied());
-            })),
-        ));
+        TestCtx::new().create(Provide::new(3_usize).child(Provide::new(6_i32).child(
+            Leaf::new().on_mount(move |ctx| {
+                ru.set(ctx.depend_on_provided::<usize>().as_deref().copied());
+                ri.set(ctx.depend_on_provided::<i32>().as_deref().copied());
+            }),
+        )));
 
         assert_eq!(seen_usize.get(), Some(3));
         assert_eq!(seen_i32.get(), Some(6));
@@ -236,8 +301,7 @@ mod tests {
         let (seen, record) = recorder();
 
         TestCtx::new().create(
-            Provide::new(Rc::new(1_usize))
-                .child(Provide::new(Rc::new(2_usize)).child(Leaf::new().on_mount(record))),
+            Provide::new(1_usize).child(Provide::new(2_usize).child(Leaf::new().on_mount(record))),
         );
 
         assert_eq!(seen.get(), Some(2));
@@ -246,8 +310,8 @@ mod tests {
     #[test]
     fn update_reprovides_the_new_value() {
         let (mounted, record_mount) = recorder();
-        let (mut element, mut render) = TestCtx::new()
-            .create(Provide::new(Rc::new(3_usize)).child(Leaf::new().on_mount(record_mount)));
+        let (mut element, mut render) =
+            TestCtx::new().create(Provide::new(3_usize).child(Leaf::new().on_mount(record_mount)));
         assert_eq!(
             mounted.get(),
             Some(3),
@@ -256,7 +320,7 @@ mod tests {
 
         let (updated, record_update) = recorder();
         TestCtx::new().update(
-            Provide::new(Rc::new(6_usize)).child(Leaf::new().on_update(record_update)),
+            Provide::new(6_usize).child(Leaf::new().on_update(record_update)),
             &mut element,
             &mut render,
         );
@@ -273,9 +337,9 @@ mod tests {
 
         let recorder = Rc::clone(&seen);
         let (mut element, mut render) =
-            TestCtx::new().create(Provide::new(Rc::new(42_usize)).child(Transparent {
+            TestCtx::new().create(Provide::new(42_usize).child(Transparent {
                 child: Leaf::new().on_rebuild(move |ctx| {
-                    recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                    recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
                 }),
             }));
 
@@ -295,9 +359,9 @@ mod tests {
 
         let recorder = Rc::clone(&seen);
         let (mut element, mut render) =
-            TestCtx::new().create(Provide::new(Rc::new(42_usize)).child(Transparent {
+            TestCtx::new().create(Provide::new(42_usize).child(Transparent {
                 child: Leaf::new().on_rebuild(move |ctx| {
-                    recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                    recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
                 }),
             }));
 
@@ -320,7 +384,7 @@ mod tests {
 
         let captured = Rc::clone(&boundary);
         let recorder = Rc::clone(&seen);
-        let widget = Provide::new(Rc::new(42_usize)).child(
+        let widget = Provide::new(42_usize).child(
             RebuildBoundary::new().child(
                 Leaf::new()
                     .on_mount(move |ctx: &mut UpdateCtx| {
@@ -328,7 +392,7 @@ mod tests {
                     })
                     .on_message(MessageCtx::request_rebuild)
                     .on_rebuild(move |ctx: &mut UpdateCtx| {
-                        recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                        recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
                     }),
             ),
         );
@@ -359,12 +423,12 @@ mod tests {
         let recorder = Rc::clone(&seen);
         let (mut element, mut render) = TestCtx::new().create(Transparent {
             child: Leaf::new().on_rebuild(move |ctx| {
-                recorder.set(ctx.get_provided::<usize>().as_deref().copied());
+                recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
             }),
         });
 
         TestCtx::new()
-            .with_provided(Rc::new(7_usize))
+            .with_provided(7_usize)
             .run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
 
         assert_eq!(

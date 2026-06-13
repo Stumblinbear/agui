@@ -50,7 +50,7 @@ fn main() {
     let ui = {
         let vsync = vsync.clone();
 
-        Provide::new(Rc::new(Fonts::new())).child(LayoutBuilder::new(move |constraints| {
+        Provide::new(Fonts::new()).child(LayoutBuilder::new(move |constraints| {
             if constraints.max_width().get() < 900.0 {
                 return ColoredBox::new(Color::from_rgb8(255, 138, 0))
                     .child(Text::new("Hello, world!").family("Arial"))

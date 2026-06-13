@@ -76,7 +76,7 @@ impl Widget for Text {
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
         let element = TextElement {
-            fonts: ctx.get_provided::<Fonts>(),
+            fonts: ctx.depend_on_provided::<Fonts>(),
             text: self.text,
             font_size: self.font_size,
             brush: self.brush,
@@ -101,7 +101,7 @@ impl Widget for Text {
         render_object: &mut Self::Render,
         ctx: &mut UpdateCtx,
     ) {
-        element.fonts = ctx.get_provided::<Fonts>();
+        element.fonts = ctx.depend_on_provided::<Fonts>();
 
         if element.text != self.text
             || element.font_size != self.font_size
@@ -139,7 +139,7 @@ mod harness {
     #[test]
     fn produces_a_finite_size() {
         let probe = Probe::new();
-        let fonts = Rc::new(Fonts::new());
+        let fonts = Fonts::new();
 
         let mut tester = WidgetTester::mount(
             probe.wrap(Provide::new(fonts).child(Text::new("hello").font_size(20.0))),

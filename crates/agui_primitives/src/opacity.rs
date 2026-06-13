@@ -368,11 +368,7 @@ mod tests {
         use agui_core::{
             context::MountCtx,
             paint::compositing::Compositor,
-            pipeline::{
-                BoundaryContent,
-                layout::LayoutPipeline,
-                paint::PaintPipeline,
-            },
+            pipeline::{BoundaryContent, layout::LayoutPipeline, paint::PaintPipeline},
         };
 
         let paints = Rc::new(Cell::new(0));

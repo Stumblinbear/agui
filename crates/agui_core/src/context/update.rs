@@ -7,7 +7,7 @@ use crate::{
         layout::LayoutPipeline,
         paint::{PaintPipeline, PaintScope},
     },
-    provide::ProvideScope,
+    provide::{ProvideCell, ProvideScope},
     render_object::RenderObject,
     scheduling::{TaskHandle, TaskScheduler},
 };
@@ -61,11 +61,21 @@ impl<'a> UpdateCtx<'a> {
         self.provide_scope
     }
 
-    pub fn get_provided<T>(&self) -> Option<Rc<T>>
+    /// Reads the nearest provided value of type `T`, recording this element as a dependent so a later
+    /// change to that value rebuilds it with its dependency-change hook run.
+    pub fn depend_on_provided<T>(&self) -> Option<Rc<T>>
     where
         T: Any,
     {
-        self.provide_scope.get()
+        self.provide_scope.get_and_depend(&self.routing_path())
+    }
+
+    /// Marks the element at `path` for a dependency-change rebuild on the next flush. A [`Provide`] calls
+    /// this for each reader of a value it changed.
+    ///
+    /// [`Provide`]: crate::provide::Provide
+    pub(crate) fn mark_dependency_changed(&self, path: &RoutingPath) {
+        self.build_scope.mark_dependency_changed(path);
     }
 
     /// An owned scheduler handle that outlives this build.
@@ -99,15 +109,12 @@ impl<'a> UpdateCtx<'a> {
         ret
     }
 
-    pub(crate) fn with_provided<V, T>(
+    pub(crate) fn with_provided<T>(
         &mut self,
-        value: Rc<V>,
+        cell: Rc<ProvideCell>,
         func: impl FnOnce(&mut UpdateCtx) -> T,
-    ) -> T
-    where
-        V: Any,
-    {
-        let scope = self.provide_scope.provide(value);
+    ) -> T {
+        let scope = self.provide_scope.with_cell(cell);
 
         let mut update_ctx = UpdateCtx {
             scheduler: self.scheduler,

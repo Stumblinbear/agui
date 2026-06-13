@@ -25,8 +25,10 @@ fn orange_half_pane_matches_golden() {
         .height_factor(1.0)
         .child(ColoredBox::new(Color::from_rgb8(255, 138, 0)));
 
-    let mut render = TestCtx::new()
-        .laid_out(widget, BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
+    let mut render = TestCtx::new().laid_out(
+        widget,
+        BoxConstraints::new(0.0, width as f32, 0.0, height as f32),
+    );
 
     let root = LayerHandle::new(OffsetLayer::new());
     PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));

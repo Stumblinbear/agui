@@ -228,7 +228,7 @@ impl TestCtx {
     }
 
     /// Seeds `value` as a provided value visible to every reconcile run through this context.
-    pub fn with_provided<T: Any>(mut self, value: Rc<T>) -> Self {
+    pub fn with_provided<T: Any>(mut self, value: T) -> Self {
         self.provide = self.provide.provide(value);
         self
     }

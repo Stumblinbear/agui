@@ -156,9 +156,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{
-        test_harness::TestCtx,
-    };
+    use agui_core::test_harness::TestCtx;
 
     use crate::sized_box::SizedBox;
 

@@ -204,11 +204,7 @@ mod tests {
             peniko::{Color, Fill},
             scene::Scene,
         },
-        pipeline::{
-            BoundaryContent,
-            layout::LayoutPipeline,
-            paint::PaintPipeline,
-        },
+        pipeline::{BoundaryContent, layout::LayoutPipeline, paint::PaintPipeline},
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
     };
