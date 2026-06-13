@@ -703,7 +703,10 @@ impl SurfaceTransformLayer {
     pub fn set_transform(&mut self, transform: Affine) -> bool {
         self.transform = transform;
 
-        if self.handle.set_transform(transform) {
+        if self
+            .handle
+            .set_transform(Affine::translate(self.offset) * transform)
+        {
             true
         } else {
             self.dirty = true;

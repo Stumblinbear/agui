@@ -16,6 +16,7 @@ agui_window.workspace = true
 png.workspace = true
 pollster.workspace = true
 raw-window-handle.workspace = true
+rustc-hash.workspace = true
 slotmap.workspace = true
 vello.workspace = true
 
@@ -26,3 +27,16 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 typed_floats.workspace = true
 winit.workspace = true
+
+# Pinned to the same `windows` version wgpu-hal links, so the raw D3D12 objects pulled out of wgpu
+# are the same types DirectComposition and DXGI expect — no cross-version COM bridge.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Foundation_Numerics",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_DirectComposition",
+    "Win32_System_Threading",
+] }

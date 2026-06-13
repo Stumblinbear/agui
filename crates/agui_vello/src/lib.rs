@@ -7,6 +7,9 @@ use vello::kurbo::Affine;
 pub mod headless;
 pub mod renderer;
 
+#[cfg(windows)]
+pub mod dcomp;
+
 pub fn append_scene(scene: &Scene, target: &mut vello::Scene) {
     append_scene_with_transform(scene, target, Affine::IDENTITY);
 }
