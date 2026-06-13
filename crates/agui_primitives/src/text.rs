@@ -127,8 +127,6 @@ impl Widget for Text {
 
 #[cfg(test)]
 mod harness {
-    use std::rc::Rc;
-
     use agui_core::prelude::render_object::Fonts;
     use agui_test::prelude::*;
 

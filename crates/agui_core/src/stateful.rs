@@ -726,6 +726,7 @@ mod tests {
         dep_changes: Rc<Cell<usize>>,
     }
 
+    #[allow(clippy::unit_arg)]
     impl Widget for Reader {
         type Element = StatefulElement<ReaderState>;
         type Render = <<ReaderState as WidgetState>::Child as Widget>::Render;
