@@ -6,7 +6,7 @@ use std::{
 use peniko::{BlendMode, Compose, Mix, kurbo::Affine};
 
 use crate::{
-    geometry::Offset,
+    geometry::{Offset, Size},
     paint::{
         command::{PaintCommand, PaintShape},
         scene::Scene,
@@ -52,10 +52,285 @@ impl<L: Layer + 'static> From<LayerHandle<L>> for LayerHandle {
     }
 }
 
+/// Identifies a surface the system compositor owns and agui does not rasterize, such as a video
+/// frame or an embedded view.
+///
+/// A driver mints one for a surface it manages and hands it to the widget that places the surface;
+/// the [`External`](CompositedEntry::External) entry of a composed frame reports where that surface
+/// belongs so the driver can position the matching system visual.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct ExternalSurfaceId(pub u64);
+
+/// One element of a [`CompositedFrame`].
+#[derive(Clone, Debug)]
+pub enum CompositedEntry {
+    /// Rasterized drawing. Its transforms and opacity are recorded within the scene.
+    Raster(Rc<Scene>),
+
+    /// A placement for a surface the system compositor owns. A backend positions that surface at
+    /// `transform`, sized to `size`, blended at `alpha`, clipped to `clip` if present, rather than
+    /// drawing anything here.
+    External {
+        surface: ExternalSurfaceId,
+        size: Size,
+        transform: Affine,
+        alpha: f32,
+        clip: Option<PaintShape>,
+    },
+}
+
+/// The result of composing a layer tree: an ordered list of entries to present, some rasterized and
+/// some placements for system-composited surfaces.
+///
+/// Entries are in back-to-front order, so a surface placed between two rasterized entries draws over
+/// the first and under the second.
+#[derive(Clone, Debug, Default)]
+pub struct CompositedFrame {
+    entries: Vec<CompositedEntry>,
+}
+
+impl CompositedFrame {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The entries to present, back-to-front.
+    pub fn entries(&self) -> &[CompositedEntry] {
+        &self.entries
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Resolves this frame to a single [`Scene`], inlining its rasterized entries in order. Surface
+    /// placements are omitted, since they are not rasterized. A backend that presents only
+    /// rasterized content uses this; one that also places surfaces reads [`entries`](Self::entries).
+    pub fn flatten(&self) -> Scene {
+        let mut staged = Scene::new();
+
+        for entry in &self.entries {
+            if let CompositedEntry::Raster(scene) = entry {
+                staged.push(PaintCommand::Embed {
+                    scene: Rc::clone(scene),
+                });
+            }
+        }
+
+        staged.flatten()
+    }
+}
+
+/// A transform or composited group open while a frame is being built.
+enum Open {
+    Transform(Affine),
+    Layer {
+        blend: BlendMode,
+        alpha: f32,
+        clip: PaintShape,
+    },
+}
+
+/// Builds a [`CompositedFrame`] from a layer tree.
+pub struct Compositor {
+    entries: Vec<CompositedEntry>,
+    current: Scene,
+    current_has_content: bool,
+    open: Vec<Open>,
+}
+
+impl Compositor {
+    fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            current: Scene::new(),
+            current_has_content: false,
+            open: Vec::new(),
+        }
+    }
+
+    /// Composes `root` and its descendants into the frame to present.
+    pub fn compose<L: Layer + ?Sized>(root: &LayerHandle<L>) -> CompositedFrame {
+        let mut root = root.borrow_mut();
+
+        // Settle every dirty flag before composing; compose reads them to decide cache reuse.
+        root.update_dirty();
+
+        let mut compositor = Compositor::new();
+        root.compose(&mut compositor);
+        compositor.finish()
+    }
+
+    /// Begins a transform: drawing contributed until the matching [`pop_transform`](Self::pop_transform)
+    /// is placed under it.
+    pub fn push_transform(&mut self, transform: Affine) {
+        self.current.push(PaintCommand::PushTransform(transform));
+        self.open.push(Open::Transform(transform));
+    }
+
+    /// Ends the most recent [`push_transform`](Self::push_transform).
+    pub fn pop_transform(&mut self) {
+        self.current.push(PaintCommand::PopTransform);
+        self.open.pop();
+    }
+
+    /// Begins a composited group: drawing contributed until the matching [`pop_layer`](Self::pop_layer)
+    /// is clipped to `clip` and blended as one group with `blend` and `alpha`.
+    pub fn push_layer(&mut self, blend: BlendMode, alpha: f32, clip: PaintShape) {
+        self.current.push(PaintCommand::PushLayer {
+            blend,
+            alpha,
+            clip: clip.clone(),
+        });
+
+        self.open.push(Open::Layer { blend, alpha, clip });
+    }
+
+    /// Ends the most recent [`push_layer`](Self::push_layer).
+    pub fn pop_layer(&mut self) {
+        self.current.push(PaintCommand::PopLayer);
+        self.open.pop();
+    }
+
+    /// Contributes rasterized drawing, placed under the transforms and groups in effect.
+    pub fn embed(&mut self, scene: Rc<Scene>) {
+        self.current.push(PaintCommand::Embed { scene });
+        self.current_has_content = true;
+    }
+
+    /// Replays a cached subtree's `frame` into the build under the transforms and groups in effect:
+    /// its rasterized entries accumulate into the current run, its surface placements split it and
+    /// take the enclosing transform and opacity.
+    pub fn splice(&mut self, frame: &CompositedFrame) {
+        for entry in &frame.entries {
+            match entry {
+                CompositedEntry::Raster(scene) => self.embed(Rc::clone(scene)),
+
+                CompositedEntry::External {
+                    surface,
+                    size,
+                    transform,
+                    alpha,
+                    clip,
+                } => {
+                    let (enclosing, group_alpha, group_clip) = self.resolved();
+
+                    self.place_external(
+                        *surface,
+                        *size,
+                        enclosing * *transform,
+                        group_alpha * *alpha,
+                        clip.clone().or(group_clip),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Places a system-composited surface, at the transform and opacity in effect. It splits the
+    /// rasterized content, so what was drawn before it becomes one entry and what follows begins
+    /// another.
+    pub fn external(&mut self, surface: ExternalSurfaceId, size: Size) {
+        let (transform, alpha, clip) = self.resolved();
+        self.place_external(surface, size, transform, alpha, clip);
+    }
+
+    /// The transform, opacity, and innermost clip the open groups resolve to.
+    fn resolved(&self) -> (Affine, f32, Option<PaintShape>) {
+        let mut transform = Affine::IDENTITY;
+        let mut alpha = 1.0;
+        let mut clip = None;
+
+        for op in &self.open {
+            match op {
+                Open::Transform(t) => transform *= *t,
+                Open::Layer {
+                    alpha: a, clip: c, ..
+                } => {
+                    alpha *= *a;
+                    clip = Some(c.clone());
+                }
+            }
+        }
+
+        (transform, alpha, clip)
+    }
+
+    /// Seals the run before the surface, emits the placement, and reopens the run after it.
+    fn place_external(
+        &mut self,
+        surface: ExternalSurfaceId,
+        size: Size,
+        transform: Affine,
+        alpha: f32,
+        clip: Option<PaintShape>,
+    ) {
+        self.seal();
+        {
+            self.entries.push(CompositedEntry::External {
+                surface,
+                size,
+                transform,
+                alpha,
+                clip,
+            });
+        }
+        self.reopen();
+    }
+
+    /// Seals the in-progress scene as a rasterized entry, closing the open brackets so the entry
+    /// stands alone. An in-progress scene with only bracket scaffolding and no drawing is discarded.
+    fn seal(&mut self) {
+        if !self.current_has_content {
+            self.current.reset();
+            return;
+        }
+
+        for index in (0..self.open.len()).rev() {
+            let close = match self.open[index] {
+                Open::Transform(_) => PaintCommand::PopTransform,
+                Open::Layer { .. } => PaintCommand::PopLayer,
+            };
+
+            self.current.push(close);
+        }
+
+        let scene = std::mem::replace(&mut self.current, Scene::new());
+        self.entries.push(CompositedEntry::Raster(Rc::new(scene)));
+        self.current_has_content = false;
+    }
+
+    /// Reopens the bracket stack into the fresh scene, so drawing after a surface keeps its context.
+    fn reopen(&mut self) {
+        for index in 0..self.open.len() {
+            let open = match &self.open[index] {
+                Open::Transform(t) => PaintCommand::PushTransform(*t),
+
+                Open::Layer { blend, alpha, clip } => PaintCommand::PushLayer {
+                    blend: *blend,
+                    alpha: *alpha,
+                    clip: clip.clone(),
+                },
+            };
+
+            self.current.push(open);
+        }
+    }
+
+    fn finish(mut self) -> CompositedFrame {
+        self.seal();
+
+        CompositedFrame {
+            entries: self.entries,
+        }
+    }
+}
+
 /// A node in the retained compositing tree.
 ///
-/// Composing a layer contributes its content to the scene under construction.
+/// Composing a layer contributes its content to the frame under construction.
 pub trait Layer {
+    /// Contributes this layer and its descendants to the frame `compositor` is building.
     fn compose(&mut self, compositor: &mut Compositor);
 
     /// Settles this layer's dirty state and returns whether it or anything beneath it changed.
@@ -77,24 +352,26 @@ pub trait PositionedLayer: Layer {
     fn set_offset(&mut self, offset: Offset);
 }
 
-/// An ordered set of child layers.
+/// An ordered set of child layers, caching the frame they compose to.
 struct ChildLayers {
     children: Vec<LayerHandle>,
     dirty: bool,
-    cache: Option<Rc<Scene>>,
+    cache: Option<Rc<CompositedFrame>>,
 }
 
 impl ChildLayers {
     fn new() -> Self {
         Self {
             children: Vec::new(),
-            dirty: false,
+            dirty: true,
             cache: None,
         }
     }
 
     fn append(&mut self, child: LayerHandle) {
         self.children.push(child);
+        self.dirty = true;
+        self.cache = None;
     }
 
     /// Removes every child and the cached composition.
@@ -104,9 +381,10 @@ impl ChildLayers {
         self.cache = None;
     }
 
-    /// Settles the children's dirty state and returns whether any changed.
+    /// Settles the children's dirty state, folding it into this set's, and returns whether anything
+    /// changed.
     fn update_dirty(&mut self) -> bool {
-        let mut dirty = false;
+        let mut dirty = self.dirty;
 
         for child in &self.children {
             dirty |= child.borrow_mut().update_dirty();
@@ -116,99 +394,32 @@ impl ChildLayers {
         self.dirty
     }
 
-    /// Composes the children, reusing the cache when none have changed, and embeds the result.
-    fn embed(&mut self, compositor: &mut Compositor) {
-        if self.cache.is_none() || self.dirty {
-            // A prior composition's embed may still reference the cache, so reuse it only when unaliased.
-            if self.cache.as_mut().and_then(Rc::get_mut).is_none() {
-                self.cache = Some(Rc::new(Scene::new()));
-            }
-
-            let scene = self
-                .cache
-                .as_mut()
-                .and_then(Rc::get_mut)
-                .expect("the cache was just made unique");
-
-            scene.reset();
-
-            let mut sub = Compositor { scene };
-            for child in &self.children {
-                child.borrow_mut().compose(&mut sub);
-            }
+    /// Composes the children into the build, reusing the cached frame when nothing changed.
+    fn compose(&mut self, compositor: &mut Compositor) {
+        if !self.dirty
+            && let Some(cache) = &self.cache
+        {
+            compositor.splice(cache);
+            return;
         }
 
-        if let Some(scene) = &self.cache {
-            compositor.embed(Rc::clone(scene));
+        let mut sub = Compositor::new();
+        for child in &self.children {
+            child.borrow_mut().compose(&mut sub);
         }
-    }
-}
 
-/// Builds a [`Scene`] from a layer tree.
-pub struct Compositor<'a> {
-    scene: &'a mut Scene,
-}
-
-impl Compositor<'_> {
-    /// Composes `root` and its descendants into a fresh scene.
-    pub fn compose<L: Layer + ?Sized>(root: &LayerHandle<L>) -> Scene {
-        let mut scene = Scene::new();
-        Self::do_compose(root, &mut scene);
-        scene
-    }
-
-    /// Composes `root` and its descendants into `scene`, replacing its previous content. Composing
-    /// successive frames into one held scene reuses its storage instead of allocating each frame.
-    pub fn compose_into<L: Layer + ?Sized>(root: &LayerHandle<L>, scene: &mut Scene) {
-        scene.reset();
-
-        Self::do_compose(root, scene);
-    }
-
-    fn do_compose<L: Layer + ?Sized>(root: &LayerHandle<L>, scene: &mut Scene) {
-        let mut root = root.borrow_mut();
-
-        // Settle every dirty flag before composing; compose reads them to decide cache reuse.
-        root.update_dirty();
-        root.compose(&mut Compositor { scene });
-    }
-
-    /// Splices `sub` into the scene by reference, under the transform in effect.
-    pub fn embed(&mut self, sub: Rc<Scene>) {
-        self.scene.push(PaintCommand::Embed { scene: sub });
-    }
-
-    /// Begins a transform; everything emitted until [`pop_transform`](Compositor::pop_transform) is
-    /// placed under it.
-    pub fn push_transform(&mut self, transform: Affine) {
-        self.scene.push(PaintCommand::PushTransform(transform));
-    }
-
-    /// Ends the most recent [`push_transform`](Compositor::push_transform).
-    pub fn pop_transform(&mut self) {
-        self.scene.push(PaintCommand::PopTransform);
-    }
-
-    /// Begins a composited group; everything emitted until [`pop_layer`](Compositor::pop_layer) is
-    /// composited as one and blended into the scene.
-    pub fn push_layer(&mut self, blend: BlendMode, alpha: f32, clip: PaintShape) {
-        self.scene
-            .push(PaintCommand::PushLayer { blend, alpha, clip });
-    }
-
-    /// Ends the most recent [`push_layer`](Compositor::push_layer).
-    pub fn pop_layer(&mut self) {
-        self.scene.push(PaintCommand::PopLayer);
+        let frame = Rc::new(sub.finish());
+        compositor.splice(&frame);
+        self.cache = Some(frame);
+        self.dirty = false;
     }
 }
 
 /// A layer that applies a transform to its children.
 pub struct TransformLayer {
     transform: Affine,
-
     offset: Offset,
     dirty: bool,
-
     children: ChildLayers,
 }
 
@@ -216,18 +427,18 @@ impl TransformLayer {
     pub fn new(transform: Affine) -> Self {
         Self {
             transform,
-
             offset: Offset::ZERO,
-            dirty: false,
-
+            dirty: true,
             children: ChildLayers::new(),
         }
     }
 
     /// Replaces the transform applied to the children.
     pub fn set_transform(&mut self, transform: Affine) {
-        self.transform = transform;
-        self.dirty = true;
+        if self.transform != transform {
+            self.transform = transform;
+            self.dirty = true;
+        }
     }
 
     /// The transform currently applied to the children.
@@ -238,28 +449,29 @@ impl TransformLayer {
     /// Removes every child, keeping the transform and offset. The parent repaints the children in.
     pub fn clear(&mut self) {
         self.children.clear();
+        self.dirty = true;
     }
 }
 
 impl Layer for TransformLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        // A changed transform or offset only re-places the children; it doesn't invalidate their
-        // cache.
         compositor.push_transform(Affine::translate(self.offset) * self.transform);
-        self.children.embed(compositor);
+        self.children.compose(compositor);
         compositor.pop_transform();
 
         self.dirty = false;
     }
 
     fn update_dirty(&mut self) -> bool {
-        self.children.update_dirty() || self.dirty
+        self.dirty = self.children.update_dirty() || self.dirty;
+        self.dirty
     }
 }
 
 impl ContainerLayer for TransformLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
+        self.dirty = true;
     }
 }
 
@@ -276,10 +488,8 @@ impl PositionedLayer for TransformLayer {
 pub struct OpacityLayer {
     alpha: f32,
     clip: PaintShape,
-
     offset: Offset,
     dirty: bool,
-
     children: ChildLayers,
 }
 
@@ -288,10 +498,8 @@ impl OpacityLayer {
         Self {
             alpha,
             clip,
-
             offset: Offset::ZERO,
-            dirty: false,
-
+            dirty: true,
             children: ChildLayers::new(),
         }
     }
@@ -306,7 +514,6 @@ impl OpacityLayer {
 impl Layer for OpacityLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
         let positioned = self.offset != Offset::ZERO;
-
         if positioned {
             compositor.push_transform(Affine::translate(self.offset));
         }
@@ -316,9 +523,7 @@ impl Layer for OpacityLayer {
             self.alpha,
             self.clip.clone(),
         );
-        {
-            self.children.embed(compositor);
-        }
+        self.children.compose(compositor);
         compositor.pop_layer();
 
         if positioned {
@@ -329,13 +534,15 @@ impl Layer for OpacityLayer {
     }
 
     fn update_dirty(&mut self) -> bool {
-        self.children.update_dirty() || self.dirty
+        self.dirty = self.children.update_dirty() || self.dirty;
+        self.dirty
     }
 }
 
 impl ContainerLayer for OpacityLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
+        self.dirty = true;
     }
 }
 
@@ -352,7 +559,6 @@ impl PositionedLayer for OpacityLayer {
 pub struct OffsetLayer {
     offset: Offset,
     dirty: bool,
-
     children: ChildLayers,
 }
 
@@ -360,8 +566,7 @@ impl OffsetLayer {
     pub fn new() -> Self {
         Self {
             offset: Offset::ZERO,
-            dirty: false,
-
+            dirty: true,
             children: ChildLayers::new(),
         }
     }
@@ -369,6 +574,7 @@ impl OffsetLayer {
     /// Removes every child from the layer, keeping its position.
     pub fn clear(&mut self) {
         self.children.clear();
+        self.dirty = true;
     }
 }
 
@@ -381,10 +587,10 @@ impl Default for OffsetLayer {
 impl Layer for OffsetLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
         if self.offset == Offset::ZERO {
-            self.children.embed(compositor);
+            self.children.compose(compositor);
         } else {
             compositor.push_transform(Affine::translate(self.offset));
-            self.children.embed(compositor);
+            self.children.compose(compositor);
             compositor.pop_transform();
         }
 
@@ -392,13 +598,15 @@ impl Layer for OffsetLayer {
     }
 
     fn update_dirty(&mut self) -> bool {
-        self.children.update_dirty() || self.dirty
+        self.dirty = self.children.update_dirty() || self.dirty;
+        self.dirty
     }
 }
 
 impl ContainerLayer for OffsetLayer {
     fn append(&mut self, child: LayerHandle) {
         self.children.append(child);
+        self.dirty = true;
     }
 }
 
@@ -434,6 +642,74 @@ impl Layer for PictureLayer {
     }
 }
 
+/// A leaf placing a surface the system compositor owns, identified by [`ExternalSurfaceId`].
+///
+/// It draws nothing itself; composing it contributes one [`External`](CompositedEntry::External)
+/// entry, so a backend positions the matching system visual where the layer sits.
+pub struct ExternalSurfaceLayer {
+    surface: ExternalSurfaceId,
+    size: Size,
+    offset: Offset,
+    dirty: bool,
+}
+
+impl ExternalSurfaceLayer {
+    pub fn new(surface: ExternalSurfaceId, size: Size) -> Self {
+        Self {
+            surface,
+            size,
+            offset: Offset::ZERO,
+            dirty: true,
+        }
+    }
+
+    /// Replaces the surface this layer places.
+    pub fn set_surface(&mut self, surface: ExternalSurfaceId) {
+        if self.surface != surface {
+            self.surface = surface;
+            self.dirty = true;
+        }
+    }
+
+    /// Resizes the placed surface.
+    pub fn set_size(&mut self, size: Size) {
+        if self.size != size {
+            self.size = size;
+            self.dirty = true;
+        }
+    }
+}
+
+impl Layer for ExternalSurfaceLayer {
+    fn compose(&mut self, compositor: &mut Compositor) {
+        let positioned = self.offset != Offset::ZERO;
+        if positioned {
+            compositor.push_transform(Affine::translate(self.offset));
+        }
+
+        compositor.external(self.surface, self.size);
+
+        if positioned {
+            compositor.pop_transform();
+        }
+
+        self.dirty = false;
+    }
+
+    fn update_dirty(&mut self) -> bool {
+        self.dirty
+    }
+}
+
+impl PositionedLayer for ExternalSurfaceLayer {
+    fn set_offset(&mut self, offset: Offset) {
+        if self.offset != offset {
+            self.offset = offset;
+            self.dirty = true;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::Cell, rc::Rc};
@@ -444,14 +720,14 @@ mod tests {
     };
 
     use crate::{
-        geometry::{Rect, Size},
+        geometry::{Offset, Rect, Size},
         paint::canvas::Canvas,
     };
 
     use super::*;
 
-    /// A leaf that records how many times it composed, so a test can prove a cached layer is replayed
-    /// rather than recomposed.
+    /// A leaf that records how many times it was composed, so a test can prove a cached subtree is
+    /// replayed rather than recomposed.
     struct CountingLayer {
         composes: Rc<Cell<usize>>,
         dirty: Rc<Cell<bool>>,
@@ -494,8 +770,30 @@ mod tests {
         })
     }
 
-    /// The transform in effect at the single fill of a composed scene, walking the transform stack of
-    /// the flattened result.
+    fn picture(color: Color) -> LayerHandle<PictureLayer> {
+        LayerHandle::new(PictureLayer::new(solid_fill(color)))
+    }
+
+    fn unit_clip() -> PaintShape {
+        PaintShape::from_shape(&Rect::from(Size::new(1.0, 1.0)))
+    }
+
+    fn external(id: u64) -> LayerHandle<ExternalSurfaceLayer> {
+        LayerHandle::new(ExternalSurfaceLayer::new(
+            ExternalSurfaceId(id),
+            Size::new(16.0, 9.0),
+        ))
+    }
+
+    /// The single rasterized entry of a frame, flattened.
+    fn only_raster(frame: &CompositedFrame) -> Scene {
+        match frame.entries() {
+            [CompositedEntry::Raster(scene)] => scene.flatten(),
+            other => panic!("expected one raster entry, got {other:?}"),
+        }
+    }
+
+    /// The transform in effect at the first fill of a scene, walking its transform stack.
     fn fill_transform(scene: &Scene) -> Affine {
         let flat = scene.flatten();
 
@@ -518,25 +816,89 @@ mod tests {
         panic!("expected a fill, got {:?}", flat.commands());
     }
 
-    fn transform_over(
-        child: impl Layer + 'static,
-        transform: Affine,
-    ) -> LayerHandle<TransformLayer> {
+    fn fill_colors(scene: &Scene) -> Vec<Color> {
+        scene
+            .flatten()
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                PaintCommand::Fill { brush, .. } => match scene.brush(*brush) {
+                    Brush::Solid(color) => Some(*color),
+                    other => panic!("expected a solid brush, got {other:?}"),
+                },
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn transform_over(child: LayerHandle, transform: Affine) -> LayerHandle<TransformLayer> {
         let mut layer = TransformLayer::new(transform);
-        layer.append(LayerHandle::new(child).into());
+        layer.append(child);
         LayerHandle::new(layer)
     }
 
-    /// Changing only the transform re-places the child's cached drawing at the new transform; the
-    /// child is composed exactly once across the animation.
+    /// A picture composes to one rasterized entry holding its drawing.
+    #[test]
+    fn a_picture_composes_to_one_raster_entry() {
+        let frame = Compositor::compose(&picture(Color::BLACK));
+        assert_eq!(fill_colors(&only_raster(&frame)), vec![Color::BLACK]);
+    }
+
+    /// A transform places the drawing under it.
+    #[test]
+    fn a_transform_places_drawing_under_it() {
+        let layer = transform_over(picture(Color::BLACK).into(), Affine::translate((10.0, 0.0)));
+        let frame = Compositor::compose(&layer);
+        assert_eq!(
+            fill_transform(&only_raster(&frame)),
+            Affine::translate((10.0, 0.0))
+        );
+    }
+
+    /// Nested transforms compose onto the drawing.
+    #[test]
+    fn nested_transforms_compose() {
+        let inner = transform_over(picture(Color::BLACK).into(), Affine::translate((5.0, 0.0)));
+        let outer = transform_over(inner.into(), Affine::translate((0.0, 3.0)));
+        let frame = Compositor::compose(&outer);
+        assert_eq!(
+            fill_transform(&only_raster(&frame)),
+            Affine::translate((5.0, 3.0))
+        );
+    }
+
+    /// Adjacent rasterized children accumulate into one entry holding both, in order.
+    #[test]
+    fn adjacent_rasters_accumulate_into_one_entry() {
+        let red = Color::from_rgb8(255, 0, 0);
+        let blue = Color::from_rgb8(0, 0, 255);
+
+        let mut container = OffsetLayer::new();
+        container.append(picture(red).into());
+        container.append(picture(blue).into());
+
+        let frame = Compositor::compose(&LayerHandle::new(container));
+        assert_eq!(fill_colors(&only_raster(&frame)), vec![red, blue]);
+    }
+
+    // ── caching ──────────────────────────────────────────────────────────────────────────────────
+
+    /// Changing only the transform re-places the cached subtree at the new transform without
+    /// recomposing it.
     #[test]
     fn animating_a_transform_reuses_the_child_cache() {
         let (child, composes, _) = CountingLayer::new();
-        let layer = transform_over(child, Affine::translate((10.0, 0.0)));
+        let layer = transform_over(
+            LayerHandle::new(child).into(),
+            Affine::translate((10.0, 0.0)),
+        );
 
         let first = Compositor::compose(&layer);
         assert_eq!(composes.get(), 1);
-        assert_eq!(fill_transform(&first), Affine::translate((10.0, 0.0)));
+        assert_eq!(
+            fill_transform(&only_raster(&first)),
+            Affine::translate((10.0, 0.0))
+        );
 
         layer
             .borrow_mut()
@@ -546,16 +908,19 @@ mod tests {
         assert_eq!(
             composes.get(),
             1,
-            "child cache reused — the child did not recompose"
+            "the cached subtree was replayed, not recomposed"
         );
-        assert_eq!(fill_transform(&second), Affine::translate((20.0, 0.0)));
+        assert_eq!(
+            fill_transform(&only_raster(&second)),
+            Affine::translate((20.0, 0.0))
+        );
     }
 
     /// Recomposing with nothing dirty touches no child.
     #[test]
     fn a_clean_recompose_touches_no_child() {
         let (child, composes, _) = CountingLayer::new();
-        let layer = transform_over(child, Affine::IDENTITY);
+        let layer = transform_over(LayerHandle::new(child).into(), Affine::IDENTITY);
 
         Compositor::compose(&layer);
         Compositor::compose(&layer);
@@ -567,7 +932,7 @@ mod tests {
     #[test]
     fn a_dirty_child_recomposes() {
         let (child, composes, dirty) = CountingLayer::new();
-        let layer = transform_over(child, Affine::IDENTITY);
+        let layer = transform_over(LayerHandle::new(child).into(), Affine::IDENTITY);
 
         Compositor::compose(&layer);
         assert_eq!(composes.get(), 1);
@@ -577,14 +942,14 @@ mod tests {
         assert_eq!(composes.get(), 2, "the dirtied child recomposed");
     }
 
-    // ── caching granularity ────────────────────────────────────────────────────────────────────
-
-    /// A transform change deep in the tree invalidates ancestors' caches but not the leaf's: the leaf
-    /// is composed once, while the placement still updates.
+    /// A transform change deep in the tree re-places the cached leaf but does not recompose it.
     #[test]
     fn a_change_bubbles_to_ancestors_but_not_the_leaf() {
         let (child, composes, _) = CountingLayer::new();
-        let inner = transform_over(child, Affine::translate((5.0, 0.0)));
+        let inner = transform_over(
+            LayerHandle::new(child).into(),
+            Affine::translate((5.0, 0.0)),
+        );
 
         let mut outer = OffsetLayer::new();
         outer.append(inner.clone().into());
@@ -592,7 +957,10 @@ mod tests {
 
         let first = Compositor::compose(&outer);
         assert_eq!(composes.get(), 1);
-        assert_eq!(fill_transform(&first), Affine::translate((5.0, 0.0)));
+        assert_eq!(
+            fill_transform(&only_raster(&first)),
+            Affine::translate((5.0, 0.0))
+        );
 
         inner
             .borrow_mut()
@@ -604,60 +972,13 @@ mod tests {
             1,
             "leaf cache survived a change to an ancestor transform"
         );
-        assert_eq!(fill_transform(&second), Affine::translate((7.0, 0.0)));
-    }
-
-    /// Dirtying one child of a container forces the container to re-emit, but a clean sibling's
-    /// subtree is not recomposed — only the dirty branch pays.
-    #[test]
-    fn a_dirty_sibling_does_not_recompose_a_clean_one() {
-        let (leaf_a, count_a, _) = CountingLayer::new();
-        let (leaf_b, count_b, _) = CountingLayer::new();
-
-        let a = transform_over(leaf_a, Affine::IDENTITY);
-        let b = transform_over(leaf_b, Affine::IDENTITY);
-
-        let mut container = OffsetLayer::new();
-        container.append(a.clone().into());
-        container.append(b.into());
-        let container = LayerHandle::new(container);
-
-        Compositor::compose(&container);
-        assert_eq!(count_a.get(), 1);
-        assert_eq!(count_b.get(), 1);
-
-        a.borrow_mut().set_transform(Affine::translate((5.0, 0.0)));
-        Compositor::compose(&container);
-
         assert_eq!(
-            count_a.get(),
-            1,
-            "A's own leaf cache reused despite A's transform change"
+            fill_transform(&only_raster(&second)),
+            Affine::translate((7.0, 0.0))
         );
-        assert_eq!(count_b.get(), 1, "B's subtree untouched by A's change");
     }
 
-    /// After a change is recomposed, the dirty flags clear, so a following pass with nothing changed
-    /// does no work at any level.
-    #[test]
-    fn a_change_clears_so_a_following_compose_is_idle() {
-        let (leaf, count, _) = CountingLayer::new();
-        let layer = transform_over(leaf, Affine::IDENTITY);
-
-        Compositor::compose(&layer);
-        assert_eq!(count.get(), 1);
-
-        layer
-            .borrow_mut()
-            .set_transform(Affine::translate((2.0, 0.0)));
-        Compositor::compose(&layer);
-        assert_eq!(count.get(), 1);
-
-        Compositor::compose(&layer);
-        assert_eq!(count.get(), 1, "a third, unchanged pass did no work");
-    }
-
-    /// Repositioning a retained container re-places its children without recomposing them.
+    /// Repositioning a retained container re-places its cached child without recomposing it.
     #[test]
     fn repositioning_a_container_reuses_the_child_cache() {
         let (child, composes, _) = CountingLayer::new();
@@ -671,155 +992,36 @@ mod tests {
 
         let first = Compositor::compose(&outer);
         assert_eq!(composes.get(), 1);
-        assert_eq!(fill_transform(&first), Affine::IDENTITY);
+        assert_eq!(fill_transform(&only_raster(&first)), Affine::IDENTITY);
 
         inner.borrow_mut().set_offset(Offset::new(6.0, 0.0));
         let second = Compositor::compose(&outer);
         assert_eq!(
             composes.get(),
             1,
-            "the child cache was replayed at the new offset"
+            "the cached child was replayed at the new offset"
         );
-        assert_eq!(fill_transform(&second), Affine::translate((6.0, 0.0)));
-    }
-
-    /// Re-setting the offset a layer already has leaves it clean.
-    #[test]
-    fn an_unchanged_offset_marks_nothing_dirty() {
-        let layer = LayerHandle::new(OffsetLayer::new());
-        Compositor::compose(&layer);
-
-        layer.borrow_mut().set_offset(Offset::new(2.0, 0.0));
-        assert!(layer.borrow_mut().update_dirty());
-        Compositor::compose(&layer);
-
-        layer.borrow_mut().set_offset(Offset::new(2.0, 0.0));
-        assert!(!layer.borrow_mut().update_dirty());
-    }
-
-    /// The offset a parent placed a layer at survives the layer clearing and repainting its own
-    /// content.
-    #[test]
-    fn an_offset_survives_clearing_the_children() {
-        let layer = LayerHandle::new(OffsetLayer::new());
-        layer.borrow_mut().set_offset(Offset::new(3.0, 0.0));
-
-        {
-            let mut guard = layer.borrow_mut();
-            guard.clear();
-            guard.append(LayerHandle::new(PictureLayer::new(solid_fill(Color::BLACK))).into());
-        }
-
-        let scene = Compositor::compose(&layer);
-        assert_eq!(fill_transform(&scene), Affine::translate((3.0, 0.0)));
-    }
-
-    /// Composing successive frames into one held scene replays caches and reflects changes, as a
-    /// per-frame driver does.
-    #[test]
-    fn compose_into_reuses_one_scene_across_frames() {
-        let (child, composes, _) = CountingLayer::new();
-        let layer = transform_over(child, Affine::translate((10.0, 0.0)));
-
-        let mut scene = Scene::new();
-        Compositor::compose_into(&layer, &mut scene);
-        assert_eq!(composes.get(), 1);
-        assert_eq!(fill_transform(&scene), Affine::translate((10.0, 0.0)));
-
-        layer
-            .borrow_mut()
-            .set_transform(Affine::translate((20.0, 0.0)));
-
-        Compositor::compose_into(&layer, &mut scene);
         assert_eq!(
-            composes.get(),
-            1,
-            "the leaf cache was replayed, not recomposed"
-        );
-        assert_eq!(fill_transform(&scene), Affine::translate((20.0, 0.0)));
-    }
-
-    /// Recomposing a dirtied tree leaves a still-held previous composition intact.
-    #[test]
-    fn a_recompose_leaves_a_held_composition_intact() {
-        let (child, _, dirty) = CountingLayer::new();
-        let layer = transform_over(child, Affine::IDENTITY);
-
-        let first = Compositor::compose(&layer);
-
-        dirty.set(true);
-        layer
-            .borrow_mut()
-            .set_transform(Affine::translate((5.0, 0.0)));
-        let second = Compositor::compose(&layer);
-
-        assert_eq!(fill_transform(&first), Affine::IDENTITY);
-        assert_eq!(fill_transform(&second), Affine::translate((5.0, 0.0)));
-    }
-
-    /// A change bubbles up through several clean container ancestors, rebuilding each cache, while the
-    /// leaf below is composed only once.
-    #[test]
-    fn a_change_bubbles_through_multiple_clean_ancestors() {
-        let (leaf, count, _) = CountingLayer::new();
-        let transform = transform_over(leaf, Affine::translate((1.0, 0.0)));
-
-        let mut mid = OffsetLayer::new();
-        mid.append(transform.clone().into());
-        let mut top = OffsetLayer::new();
-        top.append(LayerHandle::new(mid).into());
-        let top = LayerHandle::new(top);
-
-        Compositor::compose(&top);
-        assert_eq!(count.get(), 1);
-
-        transform
-            .borrow_mut()
-            .set_transform(Affine::translate((9.0, 0.0)));
-        let scene = Compositor::compose(&top);
-
-        assert_eq!(fill_transform(&scene), Affine::translate((9.0, 0.0)));
-        assert_eq!(
-            count.get(),
-            1,
-            "the leaf survived a change through two clean containers"
+            fill_transform(&only_raster(&second)),
+            Affine::translate((6.0, 0.0))
         );
     }
 
-    #[test]
-    fn flatten_inlines_references_and_keeps_distinct_brushes() {
-        let red = Color::from_rgb8(255, 0, 0);
-        let blue = Color::from_rgb8(0, 0, 255);
+    // ── flatten and structure ──────────────────────────────────────────────────────────────────
 
-        let mut container = OffsetLayer::new();
-        container.append(LayerHandle::new(PictureLayer::new(solid_fill(red))).into());
-        container.append(LayerHandle::new(PictureLayer::new(solid_fill(blue))).into());
-        let scene = Compositor::compose(&LayerHandle::new(container)).flatten();
-
-        let colors: Vec<Color> = scene
-            .commands()
-            .iter()
-            .filter_map(|command| match command {
-                PaintCommand::Fill { brush, .. } => match scene.brush(*brush) {
-                    Brush::Solid(color) => Some(*color),
-                    other => panic!("expected a solid brush, got {other:?}"),
-                },
-                _ => None,
-            })
-            .collect();
-
-        assert_eq!(colors, vec![red, blue]);
-    }
-
+    /// A stroke survives a flatten of the composed frame.
     #[test]
     fn a_stroke_survives_flatten() {
-        let picture = Canvas::record(|canvas| {
+        let stroke = Canvas::record(|canvas| {
             let style = canvas.stroke_style(Stroke::new(2.0));
             let brush = canvas.brush(Color::BLACK);
             canvas.stroke(style, brush, &Rect::from(Size::new(1.0, 1.0)));
         });
 
-        let layer = transform_over(PictureLayer::new(picture), Affine::translate((3.0, 0.0)));
+        let layer = transform_over(
+            LayerHandle::new(PictureLayer::new(stroke)).into(),
+            Affine::translate((3.0, 0.0)),
+        );
         let scene = Compositor::compose(&layer).flatten();
 
         assert!(matches!(
@@ -834,43 +1036,103 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn a_clip_group_survives_flatten() {
-        let picture = Canvas::record(|canvas| {
-            canvas.with_clip(&Rect::from(Size::new(5.0, 5.0)), |canvas| {
-                let brush = canvas.brush(Color::BLACK);
-
-                canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(1.0, 1.0)));
-            });
-        });
-
-        let layer = transform_over(PictureLayer::new(picture), Affine::translate((4.0, 0.0)));
-        let scene = Compositor::compose(&layer).flatten();
-
-        assert!(matches!(
-            scene.commands(),
-            [
-                PaintCommand::PushTransform(_),
-                PaintCommand::PushLayer { .. },
-                PaintCommand::Fill { .. },
-                PaintCommand::PopLayer,
-                PaintCommand::PopTransform,
-            ]
-        ));
-    }
-
+    /// An empty container composes to an empty frame.
     #[test]
     fn an_empty_container_composes_to_nothing() {
-        let scene = Compositor::compose(&LayerHandle::new(OffsetLayer::new())).flatten();
-
-        assert!(scene.is_empty());
+        let frame = Compositor::compose(&LayerHandle::new(OffsetLayer::new()));
+        assert!(frame.is_empty());
     }
 
-    #[test]
-    fn an_empty_picture_composes_to_nothing() {
-        let scene =
-            Compositor::compose(&LayerHandle::new(PictureLayer::new(Scene::new()))).flatten();
+    // ── external surfaces ────────────────────────────────────────────────────────────────────────
 
-        assert!(scene.is_empty());
+    /// A surface placed between two rasterized children stands as its own entry, with the raster on
+    /// each side accumulated separately around it.
+    #[test]
+    fn a_surface_splits_the_raster_around_it() {
+        let mut container = OffsetLayer::new();
+        container.append(picture(Color::BLACK).into());
+        container.append(external(7).into());
+        container.append(picture(Color::WHITE).into());
+
+        let frame = Compositor::compose(&LayerHandle::new(container));
+
+        match frame.entries() {
+            [
+                CompositedEntry::Raster(_),
+                CompositedEntry::External { surface, size, .. },
+                CompositedEntry::Raster(_),
+            ] => {
+                assert_eq!(*surface, ExternalSurfaceId(7));
+                assert_eq!(*size, Size::new(16.0, 9.0));
+            }
+            other => panic!("expected raster, external, raster; got {other:?}"),
+        }
+    }
+
+    /// A surface under nested transforms is placed at their product, even spliced from a cache.
+    #[test]
+    fn a_surface_resolves_its_absolute_transform() {
+        let inner = {
+            let mut layer = TransformLayer::new(Affine::translate((5.0, 0.0)));
+            layer.append(external(1).into());
+            LayerHandle::new(layer)
+        };
+
+        let mut outer = TransformLayer::new(Affine::translate((0.0, 3.0)));
+        outer.append(inner.into());
+
+        let frame = Compositor::compose(&LayerHandle::new(outer));
+
+        match frame.entries() {
+            [CompositedEntry::External { transform, .. }] => {
+                assert_eq!(*transform, Affine::translate((5.0, 3.0)));
+            }
+            other => panic!("expected one external entry, got {other:?}"),
+        }
+    }
+
+    /// An enclosing opacity sets the placed surface's alpha and clip rather than rasterizing over it.
+    #[test]
+    fn an_opacity_sets_the_surface_alpha() {
+        let mut opacity = OpacityLayer::new(0.5, unit_clip());
+        opacity.append(external(2).into());
+
+        let frame = Compositor::compose(&LayerHandle::new(opacity));
+
+        match frame.entries() {
+            [CompositedEntry::External { alpha, clip, .. }] => {
+                assert!((*alpha - 0.5).abs() < 1e-9);
+                assert!(
+                    clip.is_some(),
+                    "the opacity's clip is carried to the surface"
+                );
+            }
+            other => panic!("expected one external entry, got {other:?}"),
+        }
+    }
+
+    /// Drawing on both sides of a surface keeps each raster side under the enclosing transform: the
+    /// surface does not absorb the surrounding content.
+    #[test]
+    fn raster_resumes_after_a_surface() {
+        let mut container = TransformLayer::new(Affine::translate((4.0, 0.0)));
+        container.append(picture(Color::BLACK).into());
+        container.append(external(9).into());
+        container.append(picture(Color::WHITE).into());
+
+        let frame = Compositor::compose(&LayerHandle::new(container));
+
+        match frame.entries() {
+            [
+                CompositedEntry::Raster(before),
+                CompositedEntry::External { transform, .. },
+                CompositedEntry::Raster(after),
+            ] => {
+                assert_eq!(*transform, Affine::translate((4.0, 0.0)));
+                assert_eq!(fill_transform(before), Affine::translate((4.0, 0.0)));
+                assert_eq!(fill_transform(after), Affine::translate((4.0, 0.0)));
+            }
+            other => panic!("expected raster, external, raster; got {other:?}"),
+        }
     }
 }

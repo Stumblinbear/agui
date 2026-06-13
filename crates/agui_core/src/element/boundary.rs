@@ -504,7 +504,7 @@ pub struct RebuildBoundaryElement<R: ?Sized> {
 
 impl<R> Element for RebuildBoundaryElement<R>
 where
-    R: ?Sized + 'static,
+    R: ?Sized,
 {
     type Render = R;
 

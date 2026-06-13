@@ -15,10 +15,7 @@ use crate::{
         paint::{PaintPipeline, PaintScope},
     },
     provide::ProvideScope,
-    render_object::{
-        RenderObject,
-        box_layout::{BoxConstraints, RenderBox},
-    },
+    render_object::box_layout::{BoxConstraints, RenderBox},
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
     view::{View, ViewHandle},
     widget::Widget,
@@ -295,7 +292,7 @@ impl TestCtx {
     where
         V: Widget,
         V::Element: 'static,
-        V::Render: RenderObject + RenderBox,
+        V::Render: RenderBox,
     {
         let surface = Rc::new(RefCell::new(None));
 
@@ -355,7 +352,7 @@ impl<R> RawWidget<R> {
 
 impl<R> Widget for RawWidget<R>
 where
-    R: RenderObject + RenderBox + 'static,
+    R: RenderBox,
 {
     type Element = LeafElement<R>;
 

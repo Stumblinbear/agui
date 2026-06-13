@@ -9,7 +9,10 @@ use std::{
 
 use agui_core::{
     input::pointer::{PointerDispatcher, PointerHandler},
-    paint::{peniko::kurbo::Affine, scene::Scene},
+    paint::{
+        compositing::{CompositedEntry, CompositedFrame},
+        peniko::kurbo::Affine,
+    },
     pipeline::PipelineOwner,
     prelude::{element::*, render_object::*},
     provide::Provide,
@@ -218,10 +221,20 @@ impl App {
 
         let _frame = tracing::info_span!("frame", width, height).entered();
 
-        let scene = self.view.frame(self.start.elapsed());
+        let frame = self.view.frame(self.start.elapsed());
 
         self.vello_scene.reset();
-        append_scene_with_transform(scene, &mut self.vello_scene, Affine::scale(scale_factor));
+        let base = Affine::scale(scale_factor);
+        for entry in frame.entries() {
+            match entry {
+                CompositedEntry::Raster(scene) => {
+                    append_scene_with_transform(scene, &mut self.vello_scene, base);
+                }
+
+                // No system-compositor backend yet, so a placed surface leaves a hole.
+                CompositedEntry::External { .. } => {}
+            }
+        }
 
         let device = &self.context.devices[active.surface.dev_id];
         let surface = &active.surface;
@@ -455,7 +468,6 @@ struct WindowDriver {
     vsync: Vsync,
     owner: PipelineOwner,
     view: ViewHandle,
-    scene: Scene,
 }
 
 impl WindowDriver {
@@ -496,7 +508,6 @@ impl WindowDriver {
             vsync,
             owner,
             view,
-            scene: Scene::new(),
         }
     }
 
@@ -515,7 +526,7 @@ trait View {
     fn poll_tasks(&mut self);
     /// Whether a frame is owed: the tree was dirtied or an animation is still ticking.
     fn needs_frame(&self) -> bool;
-    fn frame(&mut self, now: Duration) -> &Scene;
+    fn frame(&mut self, now: Duration) -> CompositedFrame;
     fn hit_test(&self, position: Offset) -> HitTestResult;
 }
 
@@ -557,7 +568,7 @@ impl View for WindowDriver {
         self.owner.is_dirty() || !self.vsync.is_idle()
     }
 
-    fn frame(&mut self, now: Duration) -> &Scene {
+    fn frame(&mut self, now: Duration) -> CompositedFrame {
         // Tasks have already been drained, so apply any rebuild they queued, advance frame callbacks for
         // this frame's time, then lay out and paint what changed.
         let mut scheduler = self.scheduler();
@@ -567,8 +578,7 @@ impl View for WindowDriver {
 
         self.owner.flush_layout();
         self.owner.flush_paint();
-        self.view.composite_into(&mut self.scene);
-        &self.scene
+        self.view.composite_frame()
     }
 
     fn hit_test(&self, position: Offset) -> HitTestResult {

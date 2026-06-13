@@ -7,7 +7,7 @@ use crate::{
     geometry::Offset,
     input::hit_test::HitTestResult,
     paint::{
-        compositing::{Compositor, LayerHandle, OffsetLayer},
+        compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
         scene::Scene,
     },
     pipeline::{
@@ -76,15 +76,16 @@ impl ViewHandle {
         result
     }
 
-    /// Composites the view's retained layers into a scene to present.
-    pub fn composite(&self) -> Scene {
+    /// Composites the view's retained layers into the frame to present, ordering rasterized content
+    /// and the placements for any system-composited surfaces it contains.
+    pub fn composite_frame(&self) -> CompositedFrame {
         Compositor::compose(&self.inner.layer)
     }
 
-    /// Composites the view's retained layers into `scene` to present, replacing its previous content. A
-    /// driver presenting every frame composites into one held scene to reuse its storage.
-    pub fn composite_into(&self, scene: &mut Scene) {
-        Compositor::compose_into(&self.inner.layer, scene);
+    /// Composites the view's retained layers into a single scene to present, dropping any
+    /// system-composited surface placements. A driver that only rasterizes uses this.
+    pub fn composite(&self) -> Scene {
+        Compositor::compose(&self.inner.layer).flatten()
     }
 
     /// Captures the view's render tree as a diagnostics snapshot.

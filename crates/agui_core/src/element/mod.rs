@@ -53,7 +53,7 @@ impl<R: ?Sized> Default for LeafElement<R> {
     }
 }
 
-impl<R: 'static> Element for LeafElement<R> {
+impl<R: ?Sized> Element for LeafElement<R> {
     type Render = R;
 
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {

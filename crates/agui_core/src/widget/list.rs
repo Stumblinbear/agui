@@ -80,7 +80,7 @@ impl<L: WidgetSequence, R> ChildrenElement<L, R> {
 
 impl<L: WidgetSequence, R> Element for ChildrenElement<L, R>
 where
-    R: MultiChildRenderObject<Children = L::Renders> + 'static,
+    R: MultiChildRenderObject<Children = L::Renders>,
 {
     type Render = R;
 

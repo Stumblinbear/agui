@@ -12,7 +12,7 @@ pub type VisitorMut<'a, P> = dyn FnMut(&mut RenderNode<dyn RenderBox, P>) + 'a;
 /// render to reconcile it in place.
 pub trait SingleChildRenderObject {
     /// The child's render object type.
-    type Child;
+    type Child: ?Sized;
 
     /// Runs `f` on the child render object.
     fn with_child<R>(&self, f: impl FnOnce(&Self::Child) -> R) -> R;
