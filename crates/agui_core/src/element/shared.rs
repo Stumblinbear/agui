@@ -67,14 +67,17 @@ impl<C: Element, R: ?Sized> SingleChildElement<C, R> {
 /// to each child.
 pub struct MultiChildElement<C, R: ?Sized> {
     children: Vec<KeyedNode<C>>,
+    next_id: RoutingId,
     _render: PhantomData<fn() -> R>,
 }
 
-/// A child element paired with the type and key its widget reported at build.
+/// A child element paired with the type and key its widget reported at build, and the routing id
+/// that addresses it for as long as it lives.
 struct KeyedNode<C> {
     node: ElementNode<C>,
     type_id: TypeId,
     key: Option<Box<dyn AnyKeyable>>,
+    id: RoutingId,
 }
 
 impl<C, R> Element for MultiChildElement<C, R>
@@ -90,7 +93,10 @@ where
             unreachable!("multi-child element addresses one of its children");
         };
 
-        let index = head.get() as usize;
+        // The addressed child may have been removed since the path was captured; drop the dispatch.
+        let Some(index) = self.child_index(*head) else {
+            return;
+        };
 
         render.with_child_mut(index, |child_render| {
             self.children[index]
@@ -112,6 +118,18 @@ where
 }
 
 impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
+    /// The current index of the child addressed by `id`, if it is still present.
+    fn child_index(&self, id: RoutingId) -> Option<usize> {
+        // Ids are issued in order, so a child that has never moved sits at the index matching its id.
+        let guess = id.get() as usize;
+
+        if self.children.get(guess).is_some_and(|keyed| keyed.id == id) {
+            return Some(guess);
+        }
+
+        self.children.iter().position(|keyed| keyed.id == id)
+    }
+
     /// Builds an element per child and installs each child's render object into `render`.
     pub fn new<CV>(
         children: Vec<CV>,
@@ -124,17 +142,20 @@ impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
         let mut nodes = Vec::with_capacity(children.len());
         let mut render_children = Vec::with_capacity(children.len());
 
-        for (idx, child) in children.into_iter().enumerate() {
+        let mut next_id = RoutingId::new(0);
+
+        for child in children {
             let type_id = child.widget_type_id();
             let key = child.key().map(AnyKeyable::dyn_clone);
+            let id = next_id.next();
 
-            let (element, render_object) =
-                ctx.with_routing_id(RoutingId::from_index(idx), |ctx| child.create(ctx));
+            let (element, render_object) = ctx.with_routing_id(id, |ctx| child.create(ctx));
 
             nodes.push(KeyedNode {
                 node: ElementNode::new(element),
                 type_id,
                 key,
+                id,
             });
             render_children.push(RenderNode::new(render_object));
         }
@@ -143,6 +164,7 @@ impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
 
         Self {
             children: nodes,
+            next_id,
             _render: PhantomData,
         }
     }
@@ -160,7 +182,8 @@ impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
         let old_render = render.take_children();
         let old = std::mem::take(&mut self.children);
 
-        let (nodes, render_children) = reconcile::<C, CV>(old, old_render, children, ctx);
+        let (nodes, render_children) =
+            reconcile::<C, CV>(old, old_render, children, &mut self.next_id, ctx);
 
         self.children = nodes;
         render.set_children(render_children);
@@ -173,6 +196,7 @@ fn reconcile<C, CV>(
     old: Vec<KeyedNode<C>>,
     old_render: Vec<RenderNode<CV::Render>>,
     new: Vec<CV>,
+    next_id: &mut RoutingId,
     ctx: &mut UpdateCtx,
 ) -> (Vec<KeyedNode<C>>, Vec<RenderNode<CV::Render>>)
 where
@@ -193,8 +217,8 @@ where
 
     // No children before: materialize all of them.
     if old_len == 0 {
-        for (index, child) in new.into_iter().enumerate() {
-            create(&mut out_nodes, &mut out_render, index, child, ctx);
+        for child in new {
+            create(&mut out_nodes, &mut out_render, next_id, child, ctx);
         }
 
         return (out_nodes, out_render);
@@ -246,7 +270,6 @@ where
             &mut out_render,
             &mut old_slots,
             index,
-            index,
             child,
             ctx,
         );
@@ -255,8 +278,7 @@ where
     // The middle is matched by key: a matched new child reuses its old one, an unmatched new child is
     // created, and an old child no entry claims is left in `old_slots` to drop.
     if let Some(plan) = plan {
-        for (offset, matched) in plan.into_iter().enumerate() {
-            let new_index = prefix + offset;
+        for matched in plan {
             let child = new.next().expect("middle child");
 
             if let Some(old_index) = matched {
@@ -264,21 +286,19 @@ where
                     &mut out_nodes,
                     &mut out_render,
                     &mut old_slots,
-                    new_index,
                     old_index,
                     child,
                     ctx,
                 );
             } else {
-                create(&mut out_nodes, &mut out_render, new_index, child, ctx);
+                create(&mut out_nodes, &mut out_render, next_id, child, ctx);
             }
         }
     } else {
         // No old children span the middle, so every new child there is created.
-        for offset in 0..(new_bottom - prefix) {
-            let new_index = prefix + offset;
+        for _ in 0..(new_bottom - prefix) {
             let child = new.next().expect("middle child");
-            create(&mut out_nodes, &mut out_render, new_index, child, ctx);
+            create(&mut out_nodes, &mut out_render, next_id, child, ctx);
         }
     }
 
@@ -289,7 +309,6 @@ where
             &mut out_nodes,
             &mut out_render,
             &mut old_slots,
-            new_bottom + offset,
             old_bottom + offset,
             child,
             ctx,
@@ -332,13 +351,12 @@ where
     keyed.type_id == child.widget_type_id() && key_eq(child.key(), keyed.key.as_deref())
 }
 
-/// Reuses the old child at `old_index` for the new slot at `new_index`, reconciling it in place and
-/// appending it to the result lists.
+/// Reuses the old child at `old_index` for the next new slot, reconciling it in place under its
+/// existing routing id and appending it to the result lists.
 fn reuse<C, CV>(
     out_nodes: &mut Vec<KeyedNode<C>>,
     out_render: &mut Vec<RenderNode<CV::Render>>,
     old_slots: &mut OldSlots<C, CV::Render>,
-    new_index: usize,
     old_index: usize,
     child: CV,
     ctx: &mut UpdateCtx,
@@ -350,7 +368,7 @@ fn reuse<C, CV>(
 
     // The stored key already equals the new child's: reuse is gated on `node_can_update`, which
     // compares them. So there is nothing to re-store here.
-    ctx.with_routing_id(RoutingId::from_index(new_index), |ctx| {
+    ctx.with_routing_id(keyed.id, |ctx| {
         child.update(&mut keyed.node.element, &mut render.object, ctx);
     });
 
@@ -372,7 +390,9 @@ where
     CV: Widget<Element = C>,
 {
     for (index, child) in new.into_iter().enumerate() {
-        ctx.with_routing_id(RoutingId::from_index(index), |ctx| {
+        let id = out_nodes[index].id;
+
+        ctx.with_routing_id(id, |ctx| {
             child.update(
                 &mut out_nodes[index].node.element,
                 &mut out_render[index].object,
@@ -384,12 +404,12 @@ where
     (out_nodes, out_render)
 }
 
-/// Builds a fresh element and render object for the new child at `new_index`, appending both to the
-/// result lists.
+/// Builds a fresh element and render object for the new `child` under a newly allocated routing id,
+/// appending both to the result lists.
 fn create<C, CV>(
     out_nodes: &mut Vec<KeyedNode<C>>,
     out_render: &mut Vec<RenderNode<CV::Render>>,
-    new_index: usize,
+    next_id: &mut RoutingId,
     child: CV,
     ctx: &mut UpdateCtx,
 ) where
@@ -399,9 +419,9 @@ fn create<C, CV>(
 {
     let type_id = child.widget_type_id();
     let key = child.key().map(AnyKeyable::dyn_clone);
+    let id = next_id.next();
 
-    let (element, mut render_object) =
-        ctx.with_routing_id(RoutingId::from_index(new_index), |ctx| child.create(ctx));
+    let (element, mut render_object) = ctx.with_routing_id(id, |ctx| child.create(ctx));
 
     // A subtree grafted onto the mounted tree is mounted here; its own mount cascades to its children.
     ctx.mount(&mut render_object);
@@ -410,6 +430,7 @@ fn create<C, CV>(
         node: ElementNode::new(element),
         type_id,
         key,
+        id,
     });
     out_render.push(RenderNode::new(render_object));
 }
@@ -457,7 +478,7 @@ mod tests {
     use std::{cell::Cell, rc::Rc};
 
     use crate::{
-        context::{MountCtx, UpdateCtx},
+        context::{Dispatch, MessageCtx, MountCtx, UpdateCtx},
         element::Element,
         key::AnyKeyable,
         render_object::RenderObject,
@@ -466,7 +487,7 @@ mod tests {
         widget::Widget,
     };
 
-    use super::{MultiChildElement, SingleChildElement};
+    use super::{MultiChildElement, RoutingId, SingleChildElement};
 
     struct Probe {
         id: u32,
@@ -488,6 +509,15 @@ mod tests {
 
     impl Element for ProbeElement {
         type Render = ProbeRender;
+
+        fn dispatch(&mut self, _: &mut ProbeRender, path: &[RoutingId], action: Dispatch) {
+            assert!(path.is_empty(), "probe is a leaf");
+
+            if let Dispatch::Message(ctx) = action {
+                ctx.consume::<Rc<Cell<Option<u32>>>>()
+                    .set(Some(self.mounted_id));
+            }
+        }
     }
 
     impl RenderObject for ProbeRender {
@@ -685,8 +715,8 @@ mod tests {
     fn updating_from_empty_materializes_children() {
         let (m, u) = (counter(), counter());
         let mut render = render_list();
-        let mut element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[], &m, &u), &mut render, ctx));
+        let mut element =
+            TestCtx::new().run(|ctx| MultiChildElement::new(probes(&[], &m, &u), &mut render, ctx));
         assert!(child_ids(&element).is_empty());
 
         TestCtx::new().run(|ctx| element.update(probes(&[7, 8], &m, &u), &mut render, ctx));
@@ -796,6 +826,77 @@ mod tests {
         assert_eq!(child_ids(&element), vec![91, 92, 93]);
         // The render children match the element reorder, including the newly created child.
         assert_eq!(render_mounted_ids(&render), vec![30, 92, 10]);
+    }
+
+    /// Delivers a message addressed by `id` into `element`, returning the `mounted_id` of the probe
+    /// that received it, if any did.
+    fn deliver(
+        element: &mut MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
+        render: &mut MultiChildRenderList<ProbeRender>,
+        id: u16,
+    ) -> Option<u32> {
+        let received = Rc::new(Cell::new(None));
+        let mut ctx = MessageCtx::new(Box::new(Rc::clone(&received)));
+
+        element.dispatch(render, &[RoutingId::new(id)], Dispatch::Message(&mut ctx));
+
+        received.get()
+    }
+
+    #[test]
+    fn dispatch_after_keyed_reorder_reaches_the_moved_element() {
+        let (m, u) = (counter(), counter());
+        let mut render = render_list();
+
+        // Ids are allocated in mount order, so key 0's element holds id 0 and key 1's holds id 1.
+        let mut element = TestCtx::new().run(|ctx| {
+            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
+        });
+
+        TestCtx::new()
+            .run(|ctx| element.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), &mut render, ctx));
+
+        // Each id still reaches the element it was issued to, not whoever sits at that index now.
+        assert_eq!(deliver(&mut element, &mut render, 1), Some(20));
+        assert_eq!(deliver(&mut element, &mut render, 0), Some(10));
+    }
+
+    #[test]
+    fn dispatch_to_a_removed_child_is_dropped() {
+        let (m, u) = (counter(), counter());
+        let mut render = render_list();
+
+        let mut element = TestCtx::new().run(|ctx| {
+            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
+        });
+
+        TestCtx::new()
+            .run(|ctx| element.update(keyed_probes(&[(99, 1)], &m, &u), &mut render, ctx));
+
+        assert_eq!(
+            deliver(&mut element, &mut render, 0),
+            None,
+            "the dropped child's id no longer delivers"
+        );
+        assert_eq!(deliver(&mut element, &mut render, 1), Some(20));
+    }
+
+    #[test]
+    fn created_child_gets_a_fresh_id() {
+        let (m, u) = (counter(), counter());
+        let mut render = render_list();
+
+        let mut element = TestCtx::new().run(|ctx| {
+            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
+        });
+
+        // Key 5 is new: it is created under the next id, 2, never one freed by the dropped children.
+        TestCtx::new()
+            .run(|ctx| element.update(keyed_probes(&[(91, 5)], &m, &u), &mut render, ctx));
+
+        assert_eq!(deliver(&mut element, &mut render, 0), None);
+        assert_eq!(deliver(&mut element, &mut render, 1), None);
+        assert_eq!(deliver(&mut element, &mut render, 2), Some(91));
     }
 
     /// A keyed widget whose element is itself a [`MultiChildElement`], so nesting two of them lets a

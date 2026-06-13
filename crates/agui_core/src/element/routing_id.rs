@@ -2,21 +2,17 @@ use std::rc::Rc;
 
 use crate::element::BuildBoundaryId;
 
+/// Addresses one dispatch destination of a routing widget.
+///
+/// An id stays with the element it addresses for that element's whole life: a widget that reorders
+/// its children keeps each child's id, so a path captured before the reorder still reaches the same
+/// element. An id is never reissued while a path may still hold it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoutingId(u16);
 
 impl RoutingId {
     pub const fn new(id: u16) -> Self {
         Self(id)
-    }
-
-    /// Routing id for the child at `index`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `index` exceeds [`u16::MAX`].
-    pub fn from_index(index: usize) -> Self {
-        Self(u16::try_from(index).expect("a widget cannot address more than u16::MAX children"))
     }
 
     pub const fn next(&mut self) -> Self {
