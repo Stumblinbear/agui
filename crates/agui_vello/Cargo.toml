@@ -34,6 +34,7 @@ winit.workspace = true
 windows = { version = "0.58", features = [
     "Foundation_Numerics",
     "Win32_Foundation",
+    "Win32_Graphics_Direct2D_Common",
     "Win32_Graphics_Direct3D12",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",

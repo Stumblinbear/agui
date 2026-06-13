@@ -18,6 +18,7 @@
 use std::sync::Arc;
 use std::{ffi::c_void, mem::ManuallyDrop, num::NonZeroUsize, rc::Rc};
 
+use agui_core::paint::command::PaintShape;
 use agui_core::paint::compositing::{
     CompositedFrame, CompositedNode, CompositorVisual, SurfacePlacement,
 };
@@ -32,6 +33,7 @@ use windows::Foundation::Numerics::Matrix3x2;
 use windows::Win32::{
     Foundation::{CloseHandle, HWND},
     Graphics::{
+        Direct2D::Common::D2D_RECT_F,
         Direct3D12::{
             D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_DESCRIPTOR_HEAP_DESC,
             D3D12_DESCRIPTOR_HEAP_FLAG_NONE, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_FENCE_FLAG_NONE,
@@ -44,7 +46,8 @@ use windows::Win32::{
             ID3D12GraphicsCommandList, ID3D12Resource,
         },
         DirectComposition::{
-            DCompositionCreateDevice, IDCompositionDevice, IDCompositionTarget, IDCompositionVisual,
+            DCompositionCreateDevice, IDCompositionDevice, IDCompositionRectangleClip,
+            IDCompositionTarget, IDCompositionVisual, IDCompositionVisual3,
         },
         Dxgi::{
             Common::{DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC},
@@ -282,7 +285,7 @@ impl Inner {
                     children,
                 } => {
                     let visual = self.dcomp.CreateVisual().expect("surface visual");
-                    apply_transform(&visual, physical(placement.transform, scale));
+                    apply_placement(&self.dcomp, &visual, placement, scale);
                     parent.AddVisual(&visual, false, None).expect("add surface");
 
                     fill_handles(&visual, placement, scale);
@@ -373,8 +376,12 @@ impl CompositorVisual for DcompVisual {
         }
     }
 
-    fn set_opacity(&self, _opacity: f32) {
-        // Opacity drive needs IDCompositionVisual3::SetOpacity; not yet wired.
+    fn set_opacity(&self, opacity: f32) {
+        unsafe {
+            if let Ok(visual) = self.visual.cast::<IDCompositionVisual3>() {
+                visual.SetOpacity2(opacity).expect("set opacity");
+            }
+        }
     }
 }
 
@@ -442,6 +449,90 @@ unsafe fn apply_transform(visual: &IDCompositionVisual, transform: Affine) {
         M32: f,
     };
     visual.SetTransform2(&matrix).expect("set transform");
+}
+
+/// Applies a surface placement to its visual: transform, opacity, and clip. A rect, rounded-rect, or
+/// circle clip maps onto a visual; an arbitrary path cannot, so the compositor bakes those when the
+/// subtree is rasterizable and one over a system surface reaches here and is left unclipped.
+unsafe fn apply_placement(
+    dcomp: &IDCompositionDevice,
+    visual: &IDCompositionVisual,
+    placement: &SurfacePlacement,
+    scale: f64,
+) {
+    apply_transform(visual, physical(placement.transform, scale));
+
+    if placement.opacity < 1.0
+        && let Ok(visual) = visual.cast::<IDCompositionVisual3>()
+    {
+        visual.SetOpacity2(placement.opacity).expect("set opacity");
+    }
+
+    match &placement.clip {
+        Some(PaintShape::Rect(rect)) => {
+            let clip = D2D_RECT_F {
+                left: (rect.x0 * scale) as f32,
+                top: (rect.y0 * scale) as f32,
+                right: (rect.x1 * scale) as f32,
+                bottom: (rect.y1 * scale) as f32,
+            };
+            visual.SetClip2(&clip).expect("set clip");
+        }
+        Some(PaintShape::RoundedRect(rounded)) => {
+            let rect = rounded.rect();
+            let radii = rounded.radii();
+            let clip = rounded_clip(
+                dcomp,
+                [rect.x0, rect.y0, rect.x1, rect.y1],
+                [
+                    radii.top_left,
+                    radii.top_right,
+                    radii.bottom_right,
+                    radii.bottom_left,
+                ],
+                scale,
+            );
+            visual.SetClip(&clip).expect("set clip");
+        }
+        Some(PaintShape::Circle(circle)) => {
+            let (c, r) = (circle.center, circle.radius);
+            let clip = rounded_clip(
+                dcomp,
+                [c.x - r, c.y - r, c.x + r, c.y + r],
+                [r, r, r, r],
+                scale,
+            );
+            visual.SetClip(&clip).expect("set clip");
+        }
+        Some(PaintShape::Path(_)) | None => {}
+    }
+}
+
+/// Builds a rounded-rectangle clip from `edges` (left, top, right, bottom) and per-corner `radii`
+/// (top-left, top-right, bottom-right, bottom-left), scaled to physical pixels.
+unsafe fn rounded_clip(
+    dcomp: &IDCompositionDevice,
+    edges: [f64; 4],
+    radii: [f64; 4],
+    scale: f64,
+) -> IDCompositionRectangleClip {
+    let [left, top, right, bottom] = edges.map(|v| (v * scale) as f32);
+    let [tl, tr, br, bl] = radii.map(|v| (v * scale) as f32);
+
+    let clip = dcomp.CreateRectangleClip().expect("rectangle clip");
+    clip.SetLeft2(left).expect("left");
+    clip.SetTop2(top).expect("top");
+    clip.SetRight2(right).expect("right");
+    clip.SetBottom2(bottom).expect("bottom");
+    clip.SetTopLeftRadiusX2(tl).expect("tl x");
+    clip.SetTopLeftRadiusY2(tl).expect("tl y");
+    clip.SetTopRightRadiusX2(tr).expect("tr x");
+    clip.SetTopRightRadiusY2(tr).expect("tr y");
+    clip.SetBottomRightRadiusX2(br).expect("br x");
+    clip.SetBottomRightRadiusY2(br).expect("br y");
+    clip.SetBottomLeftRadiusX2(bl).expect("bl x");
+    clip.SetBottomLeftRadiusY2(bl).expect("bl y");
+    clip
 }
 
 /// Copies a straight-alpha texture into a render target, premultiplying as it goes, so vello's output

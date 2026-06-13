@@ -60,15 +60,15 @@ fn main() {
                             .on_pointer_down(on_down)
                             .behavior(HitTestBehavior::Opaque)
                             .child(
-                                AnimatedTransform::new(|now| Affine::rotate(now.as_secs_f64()))
-                                    .vsync(vsync.clone())
-                                    .alignment(Alignment::CENTER)
-                                    .child(
-                                        Opacity::new(0.5).child(
+                                Opacity::new(0.5).child(
+                                    AnimatedTransform::new(|now| Affine::rotate(now.as_secs_f64()))
+                                        .vsync(vsync.clone())
+                                        .alignment(Alignment::CENTER)
+                                        .child(
                                             ColoredBox::new(Color::from_rgb8(255, 138, 0))
                                                 .child(Text::new("Hello, world!").family("Arial")),
                                         ),
-                                    ),
+                                ),
                             ),
                     )
                     .into_boxed_render_box()
