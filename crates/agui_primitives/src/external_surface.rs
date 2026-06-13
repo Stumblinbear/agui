@@ -179,7 +179,7 @@ impl RenderBox for RenderExternalSurface {
 #[cfg(test)]
 mod tests {
     use agui_core::{
-        paint::compositing::{CompositedEntry, Compositor, LayerHandle, OffsetLayer},
+        paint::compositing::{CompositedNode, Compositor, LayerHandle, OffsetLayer},
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
     };
@@ -195,12 +195,12 @@ mod tests {
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let frame = Compositor::compose(&root);
 
-        match frame.entries() {
-            [CompositedEntry::External { surface, size, .. }] => {
+        match frame.nodes() {
+            [CompositedNode::External { surface, size, .. }] => {
                 assert_eq!(*surface, ExternalSurfaceId(42));
                 assert_eq!(*size, Size::new(64, 48));
             }
-            other => panic!("expected one external entry, got {other:?}"),
+            other => panic!("expected one external node, got {other:?}"),
         }
     }
 
@@ -215,11 +215,11 @@ mod tests {
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
         let frame = Compositor::compose(&root);
 
-        match frame.entries() {
-            [CompositedEntry::External { size, .. }] => {
+        match frame.nodes() {
+            [CompositedNode::External { size, .. }] => {
                 assert_eq!(*size, Size::new(20, 10));
             }
-            other => panic!("expected one external entry, got {other:?}"),
+            other => panic!("expected one external node, got {other:?}"),
         }
     }
 }

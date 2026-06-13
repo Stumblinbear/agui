@@ -500,7 +500,7 @@ mod tests {
     fn paint_scene(paragraph: &mut RenderParagraph) -> Scene {
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| paragraph.paint(ctx, Offset::ZERO));
-        Compositor::compose(&root).flatten()
+        Compositor::compose(&root).rasterize()
     }
 
     fn infinite() -> Positive<f32> {

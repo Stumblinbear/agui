@@ -4,7 +4,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
     paint::{
-        compositing::{LayerHandle, TransformLayer},
+        compositing::{LayerHandle, SurfaceTransformLayer},
         peniko::kurbo::Affine,
     },
     prelude::{element::*, render_object::*},
@@ -130,7 +130,7 @@ pub struct RenderAnimatedTransform<Child> {
     animation: Option<VsyncHandle>,
 
     /// The layer the child paints into, retained so the animation moves it without a repaint.
-    layer: Option<LayerHandle<TransformLayer>>,
+    layer: Option<LayerHandle<SurfaceTransformLayer>>,
 
     child: RenderNode<Child, Option<Size>>,
 }
@@ -277,7 +277,7 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
         // previous repaint's child drawing so the child paints in fresh, and is a noop on a new layer.
         let layer = self
             .layer
-            .get_or_insert_with(|| LayerHandle::new(TransformLayer::new(transform)))
+            .get_or_insert_with(|| LayerHandle::new(SurfaceTransformLayer::new(transform)))
             .clone();
         {
             let mut guard = layer.borrow_mut();
@@ -300,14 +300,14 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
             self.animation = Some(vsync.on_frame(move |frame| {
                 now.set(frame);
 
-                layer.borrow_mut().set_transform(fold_pivot(
+                if !layer.borrow_mut().set_transform(fold_pivot(
                     (transform)(frame),
                     origin,
                     alignment,
                     size,
-                ));
-
-                scope.mark_needs_composite();
+                )) {
+                    scope.mark_needs_composite();
+                }
             }));
         }
 
@@ -478,14 +478,14 @@ mod tests {
         vsync.tick(Duration::from_millis(16));
         owner.flush_paint();
         assert_eq!(
-            only_fill_transform(&view.composite()),
+            only_fill_transform(&view.composite_frame().rasterize()),
             Affine::translate((16.0, 0.0))
         );
 
         vsync.tick(Duration::from_millis(32));
         owner.flush_paint();
         assert_eq!(
-            only_fill_transform(&view.composite()),
+            only_fill_transform(&view.composite_frame().rasterize()),
             Affine::translate((32.0, 0.0))
         );
 
@@ -517,7 +517,7 @@ mod tests {
         vsync.tick(Duration::from_millis(16));
         owner.flush_paint();
         assert_eq!(
-            only_fill_transform(&view.composite()),
+            only_fill_transform(&view.composite_frame().rasterize()),
             Affine::translate((16.0, 0.0))
         );
 

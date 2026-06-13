@@ -370,7 +370,7 @@ impl BoxSizingCheck {
         let layer = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&layer, |ctx| render.paint(ctx, Offset::ZERO));
 
-        let Some(painted) = painted_bounds(&Compositor::compose(&layer).flatten()) else {
+        let Some(painted) = painted_bounds(&Compositor::compose(&layer).rasterize()) else {
             return;
         };
 

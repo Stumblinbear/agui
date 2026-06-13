@@ -290,7 +290,7 @@ mod tests {
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).flatten();
+        let scene = Compositor::compose(&root).rasterize();
 
         let transforms: Vec<Affine> = scene
             .commands()
@@ -313,7 +313,7 @@ mod tests {
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).flatten();
+        let scene = Compositor::compose(&root).rasterize();
 
         assert!(
             !scene
@@ -366,7 +366,7 @@ mod tests {
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).flatten();
+        let scene = Compositor::compose(&root).rasterize();
 
         let push_transform = scene
             .commands()
@@ -432,7 +432,7 @@ mod tests {
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).flatten();
+        let scene = Compositor::compose(&root).rasterize();
 
         assert!(
             scene.is_empty(),

@@ -6,10 +6,7 @@ use crate::{
     element::SingleChildElement,
     geometry::Offset,
     input::hit_test::HitTestResult,
-    paint::{
-        compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
-        scene::Scene,
-    },
+    paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
     pipeline::{
         BoundaryContent,
         layout::RegisteredLayoutBoundary,
@@ -80,12 +77,6 @@ impl ViewHandle {
     /// and the placements for any system-composited surfaces it contains.
     pub fn composite_frame(&self) -> CompositedFrame {
         Compositor::compose(&self.inner.layer)
-    }
-
-    /// Composites the view's retained layers into a single scene to present, dropping any
-    /// system-composited surface placements. A driver that only rasterizes uses this.
-    pub fn composite(&self) -> Scene {
-        Compositor::compose(&self.inner.layer).flatten()
     }
 
     /// Captures the view's render tree as a diagnostics snapshot.

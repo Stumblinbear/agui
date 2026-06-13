@@ -764,7 +764,7 @@ mod tests {
         );
 
         flush_paint(&mut pipeline);
-        let first = Compositor::compose(&root_layer).flatten();
+        let first = Compositor::compose(&root_layer).rasterize();
         assert_eq!(root_paints.get(), 1);
         assert_eq!(child_paints.get(), 1);
         assert_eq!(
@@ -777,7 +777,7 @@ mod tests {
         child.mark_needs_paint();
 
         flush_paint(&mut pipeline);
-        let second = Compositor::compose(&root_layer).flatten();
+        let second = Compositor::compose(&root_layer).rasterize();
         assert_eq!(child_paints.get(), 2, "the marked boundary repainted");
         assert_eq!(
             root_paints.get(),

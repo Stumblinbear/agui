@@ -264,7 +264,7 @@ mod tests {
         owner.flush_layout();
         owner.flush_paint();
 
-        let scene = view.composite().flatten();
+        let scene = view.composite_frame().rasterize().flatten();
         let alpha = scene.commands().iter().find_map(|command| match command {
             PaintCommand::PushLayer { alpha, .. } => Some(*alpha),
             _ => None,
@@ -411,7 +411,7 @@ mod tests {
         assert_eq!(paints.get(), 1, "the subtree was not repainted");
 
         let alpha = Compositor::compose(&host)
-            .flatten()
+            .rasterize()
             .commands()
             .iter()
             .find_map(|command| match command {

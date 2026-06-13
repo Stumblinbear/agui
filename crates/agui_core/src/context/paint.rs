@@ -215,7 +215,7 @@ mod tests {
 
     /// The transform in effect at each fill of the composed, flattened scene, in order.
     fn fill_transforms(layer: &LayerHandle<impl Layer>) -> Vec<Affine> {
-        let scene = Compositor::compose(layer).flatten();
+        let scene = Compositor::compose(layer).rasterize();
 
         let mut current = Affine::IDENTITY;
         let mut stack = Vec::new();

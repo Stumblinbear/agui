@@ -384,7 +384,7 @@ mod tests {
         owner.flush_layout();
 
         owner.flush_paint();
-        let first = view.composite();
+        let first = view.composite_frame().rasterize();
         assert_eq!(outer_paints.get(), 1);
         assert_eq!(inner_paints.get(), 1);
         assert_eq!(fills(&first), 2, "both boundaries contributed a fill");
@@ -397,7 +397,7 @@ mod tests {
         inner.mark_needs_paint();
 
         owner.flush_paint();
-        let second = view.composite();
+        let second = view.composite_frame().rasterize();
         assert_eq!(inner_paints.get(), 2, "the marked inner boundary repainted");
         assert_eq!(
             outer_paints.get(),

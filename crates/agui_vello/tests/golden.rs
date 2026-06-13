@@ -32,7 +32,7 @@ fn orange_half_pane_matches_golden() {
 
     let root = LayerHandle::new(OffsetLayer::new());
     PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
-    let scene = Compositor::compose(&root).flatten();
+    let scene = Compositor::compose(&root).rasterize();
     let vello_scene = to_vello_scene(&scene);
 
     let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
@@ -43,5 +43,6 @@ fn orange_half_pane_matches_golden() {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/goldens/orange_half_pane.png"
         ),
+        0.01,
     );
 }

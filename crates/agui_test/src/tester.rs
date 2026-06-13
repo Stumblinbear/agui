@@ -122,7 +122,7 @@ impl WidgetTester {
 
     /// The scene composited from the most recent paint.
     pub fn scene(&self) -> Scene {
-        self.view.composite()
+        self.view.composite_frame().rasterize()
     }
 
     /// Captures the element tree as a diagnostics snapshot.

@@ -216,7 +216,7 @@ mod tests {
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).flatten();
+        let scene = Compositor::compose(&root).rasterize();
 
         assert_eq!(scene.len(), 1, "fills once; the empty child paints nothing");
 
@@ -247,7 +247,7 @@ mod tests {
 
         let root = LayerHandle::new(OffsetLayer::new());
         PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).flatten();
+        let scene = Compositor::compose(&root).rasterize();
 
         let colors: Vec<_> = scene
             .commands()

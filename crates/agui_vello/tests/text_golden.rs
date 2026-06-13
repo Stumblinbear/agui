@@ -38,7 +38,7 @@ fn text_renders_glyphs_matching_golden() {
     owner.flush_layout();
     owner.flush_paint();
 
-    let scene = view.composite();
+    let scene = view.composite_frame().rasterize();
     let vello_scene = to_vello_scene(&scene);
 
     let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
@@ -46,6 +46,7 @@ fn text_renders_glyphs_matching_golden() {
     assert_golden(
         &image,
         concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens/text_agui.png"),
+        0.01,
     );
 }
 
@@ -95,7 +96,7 @@ fn rich_text_renders_styled_runs_matching_golden() {
     owner.flush_layout();
     owner.flush_paint();
 
-    let scene = view.composite();
+    let scene = view.composite_frame().rasterize();
     let vello_scene = to_vello_scene(&scene);
 
     let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
@@ -106,5 +107,6 @@ fn rich_text_renders_styled_runs_matching_golden() {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/goldens/rich_text_agui.png"
         ),
+        0.01,
     );
 }

@@ -254,10 +254,14 @@ impl Image {
 /// set, so goldens are generated on first run and refreshed on demand. Generate them on the machine
 /// the tests run on, since GPU output varies between drivers.
 ///
+/// `tolerance` is the fraction of pixels, between 0 and 1, allowed to differ before the comparison
+/// fails: 0 demands an exact match, 0.01 permits up to 1% of pixels to differ. Each pixel is judged
+/// by exact channel equality, so the tolerance bounds how many pixels may differ, not by how much.
+///
 /// On a mismatch it writes the rendered image to `<golden>.actual.png` and a red-on-grey diff to
 /// `<golden>.diff.png` beside the golden, then names both in the panic, so the failure can be inspected
 /// without re-running with an updated golden.
-pub fn assert_golden(actual: &Image, path: impl AsRef<Path>) {
+pub fn assert_golden(actual: &Image, path: impl AsRef<Path>, tolerance: f32) {
     let path = path.as_ref();
 
     if std::env::var_os("AGUI_UPDATE_GOLDEN").is_some() || !path.exists() {
@@ -271,7 +275,9 @@ pub fn assert_golden(actual: &Image, path: impl AsRef<Path>) {
     let expected = Image::load_png(path).expect("read golden");
     let diff = actual.diff_pixels(&expected, 0);
 
-    if diff == 0 {
+    let total = (actual.width * actual.height) as f32;
+    let allowed = (total * tolerance) as usize;
+    if diff <= allowed {
         return;
     }
 

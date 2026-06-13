@@ -9,10 +9,7 @@ use std::{
 
 use agui_core::{
     input::pointer::{PointerDispatcher, PointerHandler},
-    paint::{
-        compositing::{CompositedEntry, CompositedFrame},
-        peniko::kurbo::Affine,
-    },
+    paint::{compositing::CompositedFrame, peniko::kurbo::Affine},
     pipeline::PipelineOwner,
     prelude::{element::*, render_object::*},
     provide::Provide,
@@ -225,16 +222,8 @@ impl App {
 
         self.vello_scene.reset();
         let base = Affine::scale(scale_factor);
-        for entry in frame.entries() {
-            match entry {
-                CompositedEntry::Raster(scene) => {
-                    append_scene_with_transform(scene, &mut self.vello_scene, base);
-                }
-
-                // No system-compositor backend yet, so a placed surface leaves a hole.
-                CompositedEntry::External { .. } => {}
-            }
-        }
+        // This window has no system compositor, so rasterize the whole frame into one scene.
+        append_scene_with_transform(&frame.rasterize(), &mut self.vello_scene, base);
 
         let device = &self.context.devices[active.surface.dev_id];
         let surface = &active.surface;

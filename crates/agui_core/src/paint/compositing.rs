@@ -56,37 +56,182 @@ impl<L: Layer + 'static> From<LayerHandle<L>> for LayerHandle {
 /// frame or an embedded view.
 ///
 /// A driver mints one for a surface it manages and hands it to the widget that places the surface;
-/// the [`External`](CompositedEntry::External) entry of a composed frame reports where that surface
+/// the [`External`](CompositedNode::External) node of a composed frame reports where that surface
 /// belongs so the driver can position the matching system visual.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ExternalSurfaceId(pub u64);
 
-/// One element of a [`CompositedFrame`].
+/// A system-composited visual a driver places a surface on.
+///
+/// A layer drives one of these to move or fade its surface without re-rasterizing, instead of baking
+/// the change into a scene. A driver that places the surface on its own visual implements this.
+pub trait CompositorVisual {
+    /// Replaces the transform applied to the visual.
+    fn set_transform(&self, transform: Affine);
+
+    /// Replaces the opacity applied to the visual.
+    fn set_opacity(&self, opacity: f32);
+}
+
+/// The driver-owned visual a layer's surface was placed on, or detached when none was.
+#[derive(Clone)]
+pub struct SurfaceHandle(Rc<RefCell<Option<Rc<dyn CompositorVisual>>>>);
+
+impl SurfaceHandle {
+    /// Mints a handle with no visual bound yet.
+    fn detached() -> Self {
+        Self(Rc::new(RefCell::new(None)))
+    }
+
+    /// Whether no visual is bound, so a layer must recomposite rather than drive a visual.
+    fn is_detached(&self) -> bool {
+        self.0.borrow().is_none()
+    }
+
+    fn visual(&self) -> Option<Rc<dyn CompositorVisual>> {
+        self.0.borrow().clone()
+    }
+
+    /// Binds the handle to the visual a driver made for it.
+    pub fn fill(&self, visual: Rc<dyn CompositorVisual>) {
+        *self.0.borrow_mut() = Some(visual);
+    }
+}
+
+impl std::fmt::Debug for SurfaceHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SurfaceHandle")
+            .field("attached", &!self.is_detached())
+            .finish()
+    }
+}
+
+/// A layer's handle to drive only the transform of its system-composited surface.
 #[derive(Clone, Debug)]
-pub enum CompositedEntry {
-    /// Rasterized drawing. Its transforms and opacity are recorded within the scene.
-    Raster(Rc<Scene>),
+pub struct SurfaceTransformHandle(SurfaceHandle);
+
+impl Default for SurfaceTransformHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SurfaceTransformHandle {
+    pub fn new() -> Self {
+        Self(SurfaceHandle::detached())
+    }
+
+    /// The binding to hand [`Compositor::push_surface`], which a driver fills with a visual.
+    pub fn surface(&self) -> SurfaceHandle {
+        self.0.clone()
+    }
+
+    /// Drives the transform on the bound visual, returning whether one was bound. `false` means no
+    /// driver placed the surface, so the caller must recomposite instead.
+    pub fn set_transform(&self, transform: Affine) -> bool {
+        match self.0.visual() {
+            Some(visual) => {
+                visual.set_transform(transform);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+/// A layer's handle to drive only the opacity of its system-composited surface.
+#[derive(Clone, Debug)]
+pub struct SurfaceOpacityHandle(SurfaceHandle);
+
+impl Default for SurfaceOpacityHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SurfaceOpacityHandle {
+    pub fn new() -> Self {
+        Self(SurfaceHandle::detached())
+    }
+
+    /// The binding to hand [`Compositor::push_surface`], which a driver fills with a visual.
+    pub fn surface(&self) -> SurfaceHandle {
+        self.0.clone()
+    }
+
+    /// Drives the opacity on the bound visual, returning whether one was bound. `false` means no
+    /// driver placed the surface, so the caller must recomposite instead.
+    pub fn set_opacity(&self, opacity: f32) -> bool {
+        match self.0.visual() {
+            Some(visual) => {
+                visual.set_opacity(opacity);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+/// The transform, opacity, and clip a [`Surface`](CompositedNode::Surface) node applies on its own
+/// system visual, with the handles a driver fills to drive them off the scene.
+///
+/// The `transform` and `opacity` are the values in effect now: a driver reads them to position the
+/// visual, and a presenter that does not composite applies them when it rasterizes the node. Each
+/// handle, once a driver fills it, lets the owning layer change its value on the visual without
+/// re-rasterizing; a handle is absent when no layer drives that capability.
+#[derive(Clone, Debug)]
+pub struct SurfacePlacement {
+    /// The transform applied to the visual, relative to its parent.
+    pub transform: Affine,
+
+    /// The opacity applied to the visual.
+    pub opacity: f32,
+
+    /// The clip applied to the visual, in its own coordinate space, if any.
+    pub clip: Option<PaintShape>,
+
+    /// The handle a layer drives the transform through, once a driver fills it.
+    pub transform_handle: Option<SurfaceTransformHandle>,
+
+    /// The handle a layer drives the opacity through, once a driver fills it.
+    pub opacity_handle: Option<SurfaceOpacityHandle>,
+}
+
+/// One node of a [`CompositedFrame`].
+///
+/// A leaf is rasterized drawing or a placement for a system-owned surface; a [`Surface`](Self::Surface)
+/// is an inner node that gives its children their own system visual, so its transform and opacity
+/// apply to them through the compositor rather than being baked into a scene.
+#[derive(Clone, Debug)]
+pub enum CompositedNode {
+    /// Rasterized drawing, positioned by the transforms of its ancestor [`Surface`](Self::Surface)
+    /// nodes.
+    Raster { scene: Rc<Scene> },
 
     /// A placement for a surface the system compositor owns. A backend positions that surface at
-    /// `transform`, sized to `size`, blended at `alpha`, clipped to `clip` if present, rather than
-    /// drawing anything here.
+    /// `transform` (relative to its parent), sized to `size`, blended at `opacity`, and clipped
+    /// to `clip` if present.
     External {
         surface: ExternalSurfaceId,
         size: Size,
         transform: Affine,
-        alpha: f32,
+        opacity: f32,
         clip: Option<PaintShape>,
+    },
+
+    /// An inner node whose `children` are placed on their own system visual, which `placement`
+    /// positions, fades, and clips. The visual composes its children's transforms beneath it, so
+    /// moving it moves them as one without re-rasterizing.
+    Surface {
+        placement: SurfacePlacement,
+        children: CompositedFrame,
     },
 }
 
-/// The result of composing a layer tree: an ordered list of entries to present, some rasterized and
-/// some placements for system-composited surfaces.
-///
-/// Entries are in back-to-front order, so a surface placed between two rasterized entries draws over
-/// the first and under the second.
+/// The result of composing a layer tree: a back-to-front tree of nodes to present.
 #[derive(Clone, Debug, Default)]
 pub struct CompositedFrame {
-    entries: Vec<CompositedEntry>,
+    nodes: Vec<CompositedNode>,
 }
 
 impl CompositedFrame {
@@ -94,58 +239,100 @@ impl CompositedFrame {
         Self::default()
     }
 
-    /// The entries to present, back-to-front.
-    pub fn entries(&self) -> &[CompositedEntry] {
-        &self.entries
+    /// The top-level nodes to present, back-to-front.
+    pub fn nodes(&self) -> &[CompositedNode] {
+        &self.nodes
     }
 
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.nodes.is_empty()
     }
 
-    /// Resolves this frame to a single [`Scene`], inlining its rasterized entries in order. Surface
-    /// placements are omitted, since they are not rasterized. A backend that presents only
-    /// rasterized content uses this; one that also places surfaces reads [`entries`](Self::entries).
-    pub fn flatten(&self) -> Scene {
-        let mut staged = Scene::new();
+    /// Rasterizes this frame to a single [`Scene`], composing every node's transform and opacity down
+    /// the tree. A presenter without a system compositor uses this; it panics on an
+    /// [`External`](CompositedNode::External) node, which has no rasterization.
+    pub fn rasterize(&self) -> Scene {
+        let mut scene = Scene::new();
+        self.render_into(&mut scene, Affine::IDENTITY);
+        scene.flatten()
+    }
 
-        for entry in &self.entries {
-            if let CompositedEntry::Raster(scene) = entry {
-                staged.push(PaintCommand::Embed {
-                    scene: Rc::clone(scene),
-                });
+    fn render_into(&self, out: &mut Scene, transform: Affine) {
+        for node in &self.nodes {
+            match node {
+                CompositedNode::Raster { scene } => {
+                    let shifted = transform != Affine::IDENTITY;
+
+                    if shifted {
+                        out.push(PaintCommand::PushTransform(transform));
+                    }
+
+                    out.push(PaintCommand::Embed {
+                        scene: Rc::clone(scene),
+                    });
+
+                    if shifted {
+                        out.push(PaintCommand::PopTransform);
+                    }
+                }
+
+                CompositedNode::Surface {
+                    placement,
+                    children,
+                } => {
+                    let inner = transform * placement.transform;
+                    let layered = placement.opacity < 1.0 || placement.clip.is_some();
+
+                    if layered {
+                        let shifted = inner != Affine::IDENTITY;
+
+                        if shifted {
+                            out.push(PaintCommand::PushTransform(inner));
+                        }
+
+                        {
+                            out.push(PaintCommand::PushLayer {
+                                blend: BlendMode::new(Mix::Normal, Compose::SrcOver),
+                                alpha: placement.opacity,
+                                clip: placement.clip.clone().unwrap_or(PaintShape::Rect(
+                                    peniko::kurbo::Rect::new(-1e9, -1e9, 1e9, 1e9),
+                                )),
+                            });
+                            {
+                                children.render_into(out, Affine::IDENTITY);
+                            }
+                            out.push(PaintCommand::PopLayer);
+                        }
+
+                        if shifted {
+                            out.push(PaintCommand::PopTransform);
+                        }
+                    } else {
+                        children.render_into(out, inner);
+                    }
+                }
+
+                CompositedNode::External { .. } => {
+                    debug_assert!(false, "rasterize cannot place a system-owned surface");
+                }
             }
         }
-
-        staged.flatten()
     }
-}
-
-/// A transform or composited group open while a frame is being built.
-enum Open {
-    Transform(Affine),
-    Layer {
-        blend: BlendMode,
-        alpha: f32,
-        clip: PaintShape,
-    },
 }
 
 /// Builds a [`CompositedFrame`] from a layer tree.
 pub struct Compositor {
-    entries: Vec<CompositedEntry>,
-    current: Scene,
-    current_has_content: bool,
-    open: Vec<Open>,
+    nodes: Vec<CompositedNode>,
+    run: Scene,
+    run_has_content: bool,
 }
 
 impl Compositor {
     fn new() -> Self {
         Self {
-            entries: Vec::new(),
-            current: Scene::new(),
-            current_has_content: false,
-            open: Vec::new(),
+            nodes: Vec::new(),
+            run: Scene::new(),
+            run_has_content: false,
         }
     }
 
@@ -161,168 +348,166 @@ impl Compositor {
         compositor.finish()
     }
 
-    /// Begins a transform: drawing contributed until the matching [`pop_transform`](Self::pop_transform)
-    /// is placed under it.
-    pub fn push_transform(&mut self, transform: Affine) {
-        self.current.push(PaintCommand::PushTransform(transform));
-        self.open.push(Open::Transform(transform));
+    /// Pushes rasterized drawing into the current run, to be drawn over what precedes it.
+    pub fn push_raster(&mut self, scene: Rc<Scene>) {
+        self.run.push(PaintCommand::Embed { scene });
+        self.run_has_content = true;
     }
 
-    /// Ends the most recent [`push_transform`](Self::push_transform).
-    pub fn pop_transform(&mut self) {
-        self.current.push(PaintCommand::PopTransform);
-        self.open.pop();
-    }
-
-    /// Begins a composited group: drawing contributed until the matching [`pop_layer`](Self::pop_layer)
-    /// is clipped to `clip` and blended as one group with `blend` and `alpha`.
-    pub fn push_layer(&mut self, blend: BlendMode, alpha: f32, clip: PaintShape) {
-        self.current.push(PaintCommand::PushLayer {
-            blend,
-            alpha,
-            clip: clip.clone(),
-        });
-
-        self.open.push(Open::Layer { blend, alpha, clip });
-    }
-
-    /// Ends the most recent [`push_layer`](Self::push_layer).
-    pub fn pop_layer(&mut self) {
-        self.current.push(PaintCommand::PopLayer);
-        self.open.pop();
-    }
-
-    /// Contributes rasterized drawing, placed under the transforms and groups in effect.
-    pub fn embed(&mut self, scene: Rc<Scene>) {
-        self.current.push(PaintCommand::Embed { scene });
-        self.current_has_content = true;
-    }
-
-    /// Replays a cached subtree's `frame` into the build under the transforms and groups in effect:
-    /// its rasterized entries accumulate into the current run, its surface placements split it and
-    /// take the enclosing transform and opacity.
-    pub fn splice(&mut self, frame: &CompositedFrame) {
-        for entry in &frame.entries {
-            match entry {
-                CompositedEntry::Raster(scene) => self.embed(Rc::clone(scene)),
-
-                CompositedEntry::External {
-                    surface,
-                    size,
-                    transform,
-                    alpha,
-                    clip,
-                } => {
-                    let (enclosing, group_alpha, group_clip) = self.resolved();
-
-                    self.place_external(
-                        *surface,
-                        *size,
-                        enclosing * *transform,
-                        group_alpha * *alpha,
-                        clip.clone().or(group_clip),
-                    );
-                }
-            }
-        }
-    }
-
-    /// Places a system-composited surface, at the transform and opacity in effect. It splits the
-    /// rasterized content, so what was drawn before it becomes one entry and what follows begins
-    /// another.
-    pub fn external(&mut self, surface: ExternalSurfaceId, size: Size) {
-        let (transform, alpha, clip) = self.resolved();
-        self.place_external(surface, size, transform, alpha, clip);
-    }
-
-    /// The transform, opacity, and innermost clip the open groups resolve to.
-    fn resolved(&self) -> (Affine, f32, Option<PaintShape>) {
-        let mut transform = Affine::IDENTITY;
-        let mut alpha = 1.0;
-        let mut clip = None;
-
-        for op in &self.open {
-            match op {
-                Open::Transform(t) => transform *= *t,
-                Open::Layer {
-                    alpha: a, clip: c, ..
-                } => {
-                    alpha *= *a;
-                    clip = Some(c.clone());
-                }
-            }
-        }
-
-        (transform, alpha, clip)
-    }
-
-    /// Seals the run before the surface, emits the placement, and reopens the run after it.
-    fn place_external(
+    /// Pushes a system-owned surface on its own node, flushing the run so drawing after it stacks
+    /// above it.
+    pub fn push_external(
         &mut self,
         surface: ExternalSurfaceId,
         size: Size,
         transform: Affine,
-        alpha: f32,
+        opacity: f32,
         clip: Option<PaintShape>,
     ) {
-        self.seal();
-        {
-            self.entries.push(CompositedEntry::External {
-                surface,
-                size,
-                transform,
-                alpha,
-                clip,
-            });
-        }
-        self.reopen();
+        self.flush_run();
+
+        self.nodes.push(CompositedNode::External {
+            surface,
+            size,
+            transform,
+            opacity,
+            clip,
+        });
     }
 
-    /// Seals the in-progress scene as a rasterized entry, closing the open brackets so the entry
-    /// stands alone. An in-progress scene with only bracket scaffolding and no drawing is discarded.
-    fn seal(&mut self) {
-        if !self.current_has_content {
-            self.current.reset();
+    /// Pushes `children` on their own system visual that `placement` positions, fades, and clips,
+    /// flushing the run.
+    pub fn push_surface(&mut self, placement: SurfacePlacement, children: CompositedFrame) {
+        if children.is_empty() {
             return;
         }
 
-        for index in (0..self.open.len()).rev() {
-            let close = match self.open[index] {
-                Open::Transform(_) => PaintCommand::PopTransform,
-                Open::Layer { .. } => PaintCommand::PopLayer,
-            };
+        self.flush_run();
 
-            self.current.push(close);
-        }
-
-        let scene = std::mem::replace(&mut self.current, Scene::new());
-        self.entries.push(CompositedEntry::Raster(Rc::new(scene)));
-        self.current_has_content = false;
+        self.nodes.push(CompositedNode::Surface {
+            placement,
+            children,
+        });
     }
 
-    /// Reopens the bracket stack into the fresh scene, so drawing after a surface keeps its context.
-    fn reopen(&mut self) {
-        for index in 0..self.open.len() {
-            let open = match &self.open[index] {
-                Open::Transform(t) => PaintCommand::PushTransform(*t),
+    /// Pushes `children` under `transform`: at the identity they pass through unchanged; otherwise the
+    /// transform is baked into the run when the subtree is one rasterized node, or applied on a visual
+    /// the children inherit.
+    pub fn push_transform(&mut self, transform: Affine, children: &CompositedFrame) {
+        self.place_group(transform, 1.0, None, children);
+    }
 
-                Open::Layer { blend, alpha, clip } => PaintCommand::PushLayer {
-                    blend: *blend,
-                    alpha: *alpha,
-                    clip: clip.clone(),
-                },
-            };
+    /// Pushes `children` under `offset`, `opacity`, and `clip`: with no effect they pass through;
+    /// otherwise the effect is baked into the run when the subtree is one rasterized node, or applied
+    /// on a visual the children inherit.
+    pub fn push_opacity(
+        &mut self,
+        offset: Offset,
+        opacity: f32,
+        clip: Option<PaintShape>,
+        children: &CompositedFrame,
+    ) {
+        self.place_group(Affine::translate(offset), opacity, clip, children);
+    }
 
-            self.current.push(open);
+    /// Concatenates `frame`'s nodes into the build: rasterized nodes merge into the current run, and
+    /// every other node flushes the run and stands on its own, so drawing after it stacks above it.
+    pub fn splice(&mut self, frame: &CompositedFrame) {
+        for node in &frame.nodes {
+            match node {
+                CompositedNode::Raster { scene } => self.push_raster(Rc::clone(scene)),
+
+                other => {
+                    self.flush_run();
+                    self.nodes.push(other.clone());
+                }
+            }
         }
     }
 
-    fn finish(mut self) -> CompositedFrame {
-        self.seal();
-
-        CompositedFrame {
-            entries: self.entries,
+    /// Places `children` under `transform`, `opacity`, and `clip`: passes them through when the effect
+    /// is trivial, bakes the effect into the run when the subtree is one rasterized node, and otherwise
+    /// gives them a visual a system-composited child inherits.
+    fn place_group(
+        &mut self,
+        transform: Affine,
+        opacity: f32,
+        clip: Option<PaintShape>,
+        children: &CompositedFrame,
+    ) {
+        if children.is_empty() {
+            return;
         }
+
+        let trivial = transform == Affine::IDENTITY && opacity >= 1.0 && clip.is_none();
+
+        if trivial {
+            self.splice(children);
+
+            return;
+        }
+
+        match children.nodes() {
+            [CompositedNode::Raster { scene }] => {
+                let layered = opacity < 1.0 || clip.is_some();
+
+                self.run.push(PaintCommand::PushTransform(transform));
+                {
+                    if layered {
+                        self.run.push(PaintCommand::PushLayer {
+                            blend: BlendMode::new(Mix::Normal, Compose::SrcOver),
+                            alpha: opacity,
+                            clip: clip.unwrap_or(PaintShape::Rect(peniko::kurbo::Rect::new(
+                                -1e9, -1e9, 1e9, 1e9,
+                            ))),
+                        });
+                    }
+
+                    self.run.push(PaintCommand::Embed {
+                        scene: Rc::clone(scene),
+                    });
+
+                    if layered {
+                        self.run.push(PaintCommand::PopLayer);
+                    }
+                }
+                self.run.push(PaintCommand::PopTransform);
+
+                self.run_has_content = true;
+            }
+
+            _ => {
+                self.push_surface(
+                    SurfacePlacement {
+                        transform,
+                        opacity,
+                        clip,
+                        transform_handle: None,
+                        opacity_handle: None,
+                    },
+                    children.clone(),
+                );
+            }
+        }
+    }
+
+    /// Flushes the accumulated run, if any, to a [`Raster`](CompositedNode::Raster) node.
+    fn flush_run(&mut self) {
+        if self.run_has_content {
+            let scene = std::mem::replace(&mut self.run, Scene::new());
+
+            self.nodes.push(CompositedNode::Raster {
+                scene: Rc::new(scene),
+            });
+
+            self.run_has_content = false;
+        }
+    }
+
+    pub fn finish(mut self) -> CompositedFrame {
+        self.flush_run();
+
+        CompositedFrame { nodes: self.nodes }
     }
 }
 
@@ -353,14 +538,20 @@ pub trait PositionedLayer: Layer {
 }
 
 /// An ordered set of child layers, caching the frame they compose to.
-struct ChildLayers {
+pub struct ChildLayers {
     children: Vec<LayerHandle>,
     dirty: bool,
     cache: Option<Rc<CompositedFrame>>,
 }
 
+impl Default for ChildLayers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChildLayers {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             children: Vec::new(),
             dirty: true,
@@ -368,14 +559,14 @@ impl ChildLayers {
         }
     }
 
-    fn append(&mut self, child: LayerHandle) {
+    pub fn append(&mut self, child: LayerHandle) {
         self.children.push(child);
         self.dirty = true;
         self.cache = None;
     }
 
     /// Removes every child and the cached composition.
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.children.clear();
         self.dirty = true;
         self.cache = None;
@@ -383,7 +574,7 @@ impl ChildLayers {
 
     /// Settles the children's dirty state, folding it into this set's, and returns whether anything
     /// changed.
-    fn update_dirty(&mut self) -> bool {
+    pub fn update_dirty(&mut self) -> bool {
         let mut dirty = self.dirty;
 
         for child in &self.children {
@@ -394,24 +585,25 @@ impl ChildLayers {
         self.dirty
     }
 
-    /// Composes the children into the build, reusing the cached frame when nothing changed.
-    fn compose(&mut self, compositor: &mut Compositor) {
+    /// Composes the children to their frame, reusing the cached one when nothing changed. The parent
+    /// then places that frame under its own transform, so the cache survives a transform change.
+    pub fn compose_frame(&mut self) -> Rc<CompositedFrame> {
         if !self.dirty
             && let Some(cache) = &self.cache
         {
-            compositor.splice(cache);
-            return;
+            return Rc::clone(cache);
         }
 
         let mut sub = Compositor::new();
+
         for child in &self.children {
             child.borrow_mut().compose(&mut sub);
         }
 
         let frame = Rc::new(sub.finish());
-        compositor.splice(&frame);
-        self.cache = Some(frame);
+        self.cache = Some(Rc::clone(&frame));
         self.dirty = false;
+        frame
     }
 }
 
@@ -455,9 +647,10 @@ impl TransformLayer {
 
 impl Layer for TransformLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        compositor.push_transform(Affine::translate(self.offset) * self.transform);
-        self.children.compose(compositor);
-        compositor.pop_transform();
+        compositor.push_transform(
+            Affine::translate(self.offset) * self.transform,
+            &self.children.compose_frame(),
+        );
 
         self.dirty = false;
     }
@@ -476,6 +669,86 @@ impl ContainerLayer for TransformLayer {
 }
 
 impl PositionedLayer for TransformLayer {
+    fn set_offset(&mut self, offset: Offset) {
+        if self.offset != offset {
+            self.offset = offset;
+            self.dirty = true;
+        }
+    }
+}
+
+/// A layer that places its children on a system-composited surface and holds its transform on that
+/// surface's visual, so an animation can move it without re-rasterizing the children.
+pub struct SurfaceTransformLayer {
+    transform: Affine,
+    offset: Offset,
+    handle: SurfaceTransformHandle,
+    dirty: bool,
+    children: ChildLayers,
+}
+
+impl SurfaceTransformLayer {
+    pub fn new(transform: Affine) -> Self {
+        Self {
+            transform,
+            offset: Offset::ZERO,
+            handle: SurfaceTransformHandle::new(),
+            dirty: true,
+            children: ChildLayers::new(),
+        }
+    }
+
+    /// Drives the transform: pokes the bound visual and returns `true` if a driver placed the surface,
+    /// otherwise records that the layer must recomposite and returns `false`.
+    pub fn set_transform(&mut self, transform: Affine) -> bool {
+        self.transform = transform;
+
+        if self.handle.set_transform(transform) {
+            true
+        } else {
+            self.dirty = true;
+            false
+        }
+    }
+
+    /// Removes every child, keeping the transform and offset. The parent repaints the children in.
+    pub fn clear(&mut self) {
+        self.children.clear();
+        self.dirty = true;
+    }
+}
+
+impl Layer for SurfaceTransformLayer {
+    fn compose(&mut self, compositor: &mut Compositor) {
+        let children = self.children.compose_frame();
+        compositor.push_surface(
+            SurfacePlacement {
+                transform: Affine::translate(self.offset) * self.transform,
+                opacity: 1.0,
+                clip: None,
+                transform_handle: Some(self.handle.clone()),
+                opacity_handle: None,
+            },
+            (*children).clone(),
+        );
+
+        self.dirty = false;
+    }
+
+    fn update_dirty(&mut self) -> bool {
+        self.dirty = self.children.update_dirty() || self.dirty;
+        self.dirty
+    }
+}
+
+impl ContainerLayer for SurfaceTransformLayer {
+    fn append(&mut self, child: LayerHandle) {
+        self.children.append(child);
+        self.dirty = true;
+    }
+}
+
+impl PositionedLayer for SurfaceTransformLayer {
     fn set_offset(&mut self, offset: Offset) {
         if self.offset != offset {
             self.offset = offset;
@@ -513,22 +786,8 @@ impl OpacityLayer {
 
 impl Layer for OpacityLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        let positioned = self.offset != Offset::ZERO;
-        if positioned {
-            compositor.push_transform(Affine::translate(self.offset));
-        }
-
-        compositor.push_layer(
-            BlendMode::new(Mix::Normal, Compose::SrcOver),
-            self.alpha,
-            self.clip.clone(),
-        );
-        self.children.compose(compositor);
-        compositor.pop_layer();
-
-        if positioned {
-            compositor.pop_transform();
-        }
+        let children = self.children.compose_frame();
+        compositor.push_opacity(self.offset, self.alpha, Some(self.clip.clone()), &children);
 
         self.dirty = false;
     }
@@ -586,13 +845,8 @@ impl Default for OffsetLayer {
 
 impl Layer for OffsetLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        if self.offset == Offset::ZERO {
-            self.children.compose(compositor);
-        } else {
-            compositor.push_transform(Affine::translate(self.offset));
-            self.children.compose(compositor);
-            compositor.pop_transform();
-        }
+        let children = self.children.compose_frame();
+        compositor.push_transform(Affine::translate(self.offset), &children);
 
         self.dirty = false;
     }
@@ -634,7 +888,7 @@ impl PictureLayer {
 
 impl Layer for PictureLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        compositor.embed(Rc::clone(&self.picture));
+        compositor.push_raster(Rc::clone(&self.picture));
     }
 
     fn update_dirty(&mut self) -> bool {
@@ -644,8 +898,8 @@ impl Layer for PictureLayer {
 
 /// A leaf placing a surface the system compositor owns, identified by [`ExternalSurfaceId`].
 ///
-/// It draws nothing itself; composing it contributes one [`External`](CompositedEntry::External)
-/// entry, so a backend positions the matching system visual where the layer sits.
+/// It draws nothing itself; composing it contributes one [`External`](CompositedNode::External)
+/// node, so a backend positions the matching system visual where the layer sits.
 pub struct ExternalSurfaceLayer {
     surface: ExternalSurfaceId,
     size: Size,
@@ -682,16 +936,13 @@ impl ExternalSurfaceLayer {
 
 impl Layer for ExternalSurfaceLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
-        let positioned = self.offset != Offset::ZERO;
-        if positioned {
-            compositor.push_transform(Affine::translate(self.offset));
-        }
-
-        compositor.external(self.surface, self.size);
-
-        if positioned {
-            compositor.pop_transform();
-        }
+        compositor.push_external(
+            self.surface,
+            self.size,
+            Affine::translate(self.offset),
+            1.0,
+            None,
+        );
 
         self.dirty = false;
     }
@@ -755,7 +1006,7 @@ mod tests {
         fn compose(&mut self, compositor: &mut Compositor) {
             self.composes.set(self.composes.get() + 1);
             self.dirty.set(false);
-            compositor.embed(Rc::clone(&self.picture));
+            compositor.push_raster(Rc::clone(&self.picture));
         }
 
         fn update_dirty(&mut self) -> bool {
@@ -785,11 +1036,11 @@ mod tests {
         ))
     }
 
-    /// The single rasterized entry of a frame, flattened.
+    /// The single rasterized node of a frame, flattened.
     fn only_raster(frame: &CompositedFrame) -> Scene {
-        match frame.entries() {
-            [CompositedEntry::Raster(scene)] => scene.flatten(),
-            other => panic!("expected one raster entry, got {other:?}"),
+        match frame.nodes() {
+            [CompositedNode::Raster { scene }] => scene.flatten(),
+            other => panic!("expected one raster node, got {other:?}"),
         }
     }
 
@@ -1007,11 +1258,11 @@ mod tests {
         );
     }
 
-    // ── flatten and structure ──────────────────────────────────────────────────────────────────
+    // ── rasterize and structure ──────────────────────────────────────────────────────────────────
 
-    /// A stroke survives a flatten of the composed frame.
+    /// A stroke survives rasterizing the composed frame, under its transform.
     #[test]
-    fn a_stroke_survives_flatten() {
+    fn a_stroke_survives_rasterize() {
         let stroke = Canvas::record(|canvas| {
             let style = canvas.stroke_style(Stroke::new(2.0));
             let brush = canvas.brush(Color::BLACK);
@@ -1022,7 +1273,7 @@ mod tests {
             LayerHandle::new(PictureLayer::new(stroke)).into(),
             Affine::translate((3.0, 0.0)),
         );
-        let scene = Compositor::compose(&layer).flatten();
+        let scene = Compositor::compose(&layer).rasterize();
 
         assert!(matches!(
             scene.commands(),
@@ -1043,9 +1294,51 @@ mod tests {
         assert!(frame.is_empty());
     }
 
+    // ── promotion ────────────────────────────────────────────────────────────────────────────────
+
+    /// A static transform over an all-raster subtree bakes into one rasterized node, never a surface.
+    #[test]
+    fn a_static_transform_over_raster_bakes() {
+        let layer = transform_over(picture(Color::BLACK).into(), Affine::translate((10.0, 0.0)));
+        let frame = Compositor::compose(&layer);
+
+        assert!(
+            matches!(frame.nodes(), [CompositedNode::Raster { .. }]),
+            "an all-raster subtree stays a single raster node, got {:?}",
+            frame.nodes()
+        );
+    }
+
+    /// An animated transform always takes a surface, even over an all-raster subtree, so it can move
+    /// its visual without recompositing.
+    #[test]
+    fn an_animated_transform_always_takes_a_surface() {
+        let mut animated = SurfaceTransformLayer::new(Affine::translate((10.0, 0.0)));
+        animated.append(picture(Color::BLACK).into());
+
+        let frame = Compositor::compose(&LayerHandle::new(animated));
+
+        match frame.nodes() {
+            [
+                CompositedNode::Surface {
+                    placement,
+                    children,
+                },
+            ] => {
+                assert_eq!(placement.transform, Affine::translate((10.0, 0.0)));
+                assert!(
+                    placement.transform_handle.is_some(),
+                    "an animated transform carries its handle"
+                );
+                assert!(matches!(children.nodes(), [CompositedNode::Raster { .. }]));
+            }
+            other => panic!("expected one surface node, got {other:?}"),
+        }
+    }
+
     // ── external surfaces ────────────────────────────────────────────────────────────────────────
 
-    /// A surface placed between two rasterized children stands as its own entry, with the raster on
+    /// A surface placed between two rasterized children stands as its own node, with the raster on
     /// each side accumulated separately around it.
     #[test]
     fn a_surface_splits_the_raster_around_it() {
@@ -1056,11 +1349,11 @@ mod tests {
 
         let frame = Compositor::compose(&LayerHandle::new(container));
 
-        match frame.entries() {
+        match frame.nodes() {
             [
-                CompositedEntry::Raster(_),
-                CompositedEntry::External { surface, size, .. },
-                CompositedEntry::Raster(_),
+                CompositedNode::Raster { .. },
+                CompositedNode::External { surface, size, .. },
+                CompositedNode::Raster { .. },
             ] => {
                 assert_eq!(*surface, ExternalSurfaceId(7));
                 assert_eq!(*size, Size::new(16.0, 9.0));
@@ -1069,9 +1362,10 @@ mod tests {
         }
     }
 
-    /// A surface under nested transforms is placed at their product, even spliced from a cache.
+    /// Nested transforms over an external each take a surface, so the external inherits their product
+    /// down the visual tree rather than being baked.
     #[test]
-    fn a_surface_resolves_its_absolute_transform() {
+    fn nested_transforms_over_an_external_nest_surfaces() {
         let inner = {
             let mut layer = TransformLayer::new(Affine::translate((5.0, 0.0)));
             layer.append(external(1).into());
@@ -1083,38 +1377,65 @@ mod tests {
 
         let frame = Compositor::compose(&LayerHandle::new(outer));
 
-        match frame.entries() {
-            [CompositedEntry::External { transform, .. }] => {
-                assert_eq!(*transform, Affine::translate((5.0, 3.0)));
-            }
-            other => panic!("expected one external entry, got {other:?}"),
+        match frame.nodes() {
+            [
+                CompositedNode::Surface {
+                    placement: outer,
+                    children: mid,
+                },
+            ] => match mid.nodes() {
+                [
+                    CompositedNode::Surface {
+                        placement: inner,
+                        children: leaf,
+                    },
+                ] => match leaf.nodes() {
+                    [CompositedNode::External { transform, .. }] => {
+                        let absolute = outer.transform * inner.transform * *transform;
+                        assert_eq!(absolute, Affine::translate((5.0, 3.0)));
+                    }
+                    other => panic!("expected one external node, got {other:?}"),
+                },
+                other => panic!("expected a nested surface, got {other:?}"),
+            },
+            other => panic!("expected one surface node, got {other:?}"),
         }
     }
 
-    /// An enclosing opacity sets the placed surface's alpha and clip rather than rasterizing over it.
+    /// An enclosing opacity puts the external on a faded, clipped visual rather than rasterizing over
+    /// it.
     #[test]
-    fn an_opacity_sets_the_surface_alpha() {
+    fn an_opacity_over_an_external_takes_a_surface() {
         let mut opacity = OpacityLayer::new(0.5, unit_clip());
         opacity.append(external(2).into());
 
         let frame = Compositor::compose(&LayerHandle::new(opacity));
 
-        match frame.entries() {
-            [CompositedEntry::External { alpha, clip, .. }] => {
-                assert!((*alpha - 0.5).abs() < 1e-9);
+        match frame.nodes() {
+            [
+                CompositedNode::Surface {
+                    placement,
+                    children,
+                },
+            ] => {
+                assert!((placement.opacity - 0.5).abs() < 1e-9);
                 assert!(
-                    clip.is_some(),
-                    "the opacity's clip is carried to the surface"
+                    placement.clip.is_some(),
+                    "the opacity's clip reaches the visual"
                 );
+                assert!(matches!(
+                    children.nodes(),
+                    [CompositedNode::External { .. }]
+                ));
             }
-            other => panic!("expected one external entry, got {other:?}"),
+            other => panic!("expected one surface node, got {other:?}"),
         }
     }
 
-    /// Drawing on both sides of a surface keeps each raster side under the enclosing transform: the
-    /// surface does not absorb the surrounding content.
+    /// Drawing on both sides of an external puts the whole group on one visual, with the over-content
+    /// stacked above the external as its own raster node.
     #[test]
-    fn raster_resumes_after_a_surface() {
+    fn raster_resumes_after_an_external() {
         let mut container = TransformLayer::new(Affine::translate((4.0, 0.0)));
         container.append(picture(Color::BLACK).into());
         container.append(external(9).into());
@@ -1122,17 +1443,24 @@ mod tests {
 
         let frame = Compositor::compose(&LayerHandle::new(container));
 
-        match frame.entries() {
+        match frame.nodes() {
             [
-                CompositedEntry::Raster(before),
-                CompositedEntry::External { transform, .. },
-                CompositedEntry::Raster(after),
+                CompositedNode::Surface {
+                    placement,
+                    children,
+                },
             ] => {
-                assert_eq!(*transform, Affine::translate((4.0, 0.0)));
-                assert_eq!(fill_transform(before), Affine::translate((4.0, 0.0)));
-                assert_eq!(fill_transform(after), Affine::translate((4.0, 0.0)));
+                assert_eq!(placement.transform, Affine::translate((4.0, 0.0)));
+                assert!(matches!(
+                    children.nodes(),
+                    [
+                        CompositedNode::Raster { .. },
+                        CompositedNode::External { .. },
+                        CompositedNode::Raster { .. },
+                    ]
+                ));
             }
-            other => panic!("expected raster, external, raster; got {other:?}"),
+            other => panic!("expected one surface node, got {other:?}"),
         }
     }
 }
