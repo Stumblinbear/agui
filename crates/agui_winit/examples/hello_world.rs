@@ -11,6 +11,7 @@ use agui_primitives::{
     fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
     listener::Listener, opacity::Opacity, text::Text,
 };
+use agui_vello::renderer::VelloWindowRenderer;
 use agui_winit::{WindowOptions, run_app};
 
 fn main() {
@@ -27,6 +28,7 @@ fn main() {
             width: 800,
             height: 600,
         },
+        VelloWindowRenderer::new(),
         |vsync| {
             Provide::new(Fonts::new()).child(LayoutBuilder::new(move |constraints| {
                 if constraints.max_width().get() < 900.0 {

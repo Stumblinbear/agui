@@ -1,17 +1,10 @@
-use std::{num::NonZeroUsize, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use agui_core::{
     input::pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId},
-    paint::peniko::kurbo::Affine,
     prelude::{element::*, render_object::*},
 };
-use agui_vello::append_scene_with_transform;
-use vello::{
-    AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
-    peniko::Color,
-    util::{RenderContext, RenderSurface},
-    wgpu,
-};
+use agui_window::WindowRenderer;
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -20,7 +13,10 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::{WindowOptions, driver::WakeUp, driver::WindowDriver};
+use crate::{
+    WindowOptions,
+    driver::{WakeUp, WindowDriver},
+};
 
 /// The constraints a window's subtree lays out under, in logical pixels, converting the physical
 /// `width` by `height` of its surface by `scale_factor`.
@@ -31,22 +27,20 @@ fn viewport(width: u32, height: u32, scale_factor: f64) -> BoxConstraints {
 }
 
 struct ActiveWindow {
-    surface: RenderSurface<'static>,
     window: Arc<Window>,
     scale_factor: f64,
+    width: u32,
+    height: u32,
 }
 
-/// The winit application that hosts one window: it creates the surface, drives the pipeline each
-/// frame, rasterizes the composed frame with vello, and routes pointer input to the subtree.
-pub(crate) struct App {
+/// The winit application that hosts one window: it creates the window, drives the pipeline each frame,
+/// hands the composed frame to its [`WindowRenderer`], and routes pointer input to the subtree.
+pub(crate) struct App<R> {
     options: WindowOptions,
     driver: WindowDriver,
+    renderer: R,
 
-    context: RenderContext,
-    /// One renderer per device; indexed by [`RenderSurface::dev_id`].
-    renderers: Vec<Option<Renderer>>,
     active: Option<ActiveWindow>,
-    vello_scene: vello::Scene,
 
     /// Routes pointer events to the handlers under them, per pointer.
     dispatcher: PointerDispatcher,
@@ -59,15 +53,13 @@ pub(crate) struct App {
     start: Instant,
 }
 
-impl App {
-    pub(crate) fn new(options: WindowOptions, driver: WindowDriver) -> Self {
+impl<R: WindowRenderer> App<R> {
+    pub(crate) fn new(options: WindowOptions, driver: WindowDriver, renderer: R) -> Self {
         Self {
             options,
             driver,
-            context: RenderContext::new(),
-            renderers: Vec::new(),
+            renderer,
             active: None,
-            vello_scene: vello::Scene::new(),
             dispatcher: PointerDispatcher::new(),
             cursor: Offset::ZERO,
             painted: false,
@@ -77,61 +69,20 @@ impl App {
 
     /// Lays out, paints, and presents a frame, revealing the window after its first one.
     fn draw(&mut self) {
-        let Some(active) = self.active.as_ref() else {
+        let Some((scale_factor, window)) = self
+            .active
+            .as_ref()
+            .map(|active| (active.scale_factor, Arc::clone(&active.window)))
+        else {
             return;
         };
 
-        let width = active.surface.config.width;
-        let height = active.surface.config.height;
-        let scale_factor = active.scale_factor;
-
-        let _frame = tracing::info_span!("frame", width, height).entered();
-
         let frame = self.driver.frame(self.start.elapsed());
-
-        self.vello_scene.reset();
-        let base = Affine::scale(scale_factor);
-        // This window has no system compositor, so rasterize the whole frame into one scene.
-        append_scene_with_transform(&frame.rasterize(), &mut self.vello_scene, base);
-
-        let device = &self.context.devices[active.surface.dev_id];
-        let surface = &active.surface;
-
-        self.renderers[surface.dev_id]
-            .as_mut()
-            .unwrap()
-            .render_to_texture(
-                &device.device,
-                &device.queue,
-                &self.vello_scene,
-                &surface.target_view,
-                &RenderParams {
-                    base_color: Color::from_rgb8(30, 30, 30),
-                    width,
-                    height,
-                    antialiasing_method: AaConfig::Area,
-                },
-            )
-            .unwrap();
-
-        let texture = surface.surface.get_current_texture().unwrap();
-        let mut encoder = device
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        surface.blitter.copy(
-            &device.device,
-            &mut encoder,
-            &surface.target_view,
-            &texture
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default()),
-        );
-        device.queue.submit([encoder.finish()]);
-        texture.present();
+        self.renderer.present(&frame, scale_factor);
 
         // The first frame is on screen; reveal the window and start accepting pointer events.
         if !self.painted {
-            active.window.set_visible(true);
+            window.set_visible(true);
             self.painted = true;
         }
     }
@@ -153,7 +104,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler<WakeUp> for App {
+impl<R: WindowRenderer> ApplicationHandler<WakeUp> for App<R> {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: WakeUp) {
         // A task became ready. Delivering this event has woken the loop; `about_to_wait` drains the
         // reactor and decides whether a frame is needed, so there is nothing to do here.
@@ -191,33 +142,14 @@ impl ApplicationHandler<WakeUp> for App {
 
         let size = window.inner_size();
         let scale_factor = window.scale_factor();
-        let surface = pollster::block_on(self.context.create_surface(
-            window.clone(),
-            size.width,
-            size.height,
-            wgpu::PresentMode::AutoVsync,
-        ))
-        .unwrap();
-
-        self.renderers
-            .resize_with(self.context.devices.len(), || None);
-        self.renderers[surface.dev_id].get_or_insert_with(|| {
-            Renderer::new(
-                &self.context.devices[surface.dev_id].device,
-                RendererOptions {
-                    use_cpu: false,
-                    antialiasing_support: AaSupport::area_only(),
-                    num_init_threads: NonZeroUsize::new(1),
-                    pipeline_cache: None,
-                },
-            )
-            .unwrap()
-        });
+        self.renderer
+            .attach(Arc::clone(&window), size.width, size.height);
 
         self.active = Some(ActiveWindow {
-            surface,
             window,
             scale_factor,
+            width: size.width,
+            height: size.height,
         });
 
         // Lay out, paint, and reveal the first frame inline; a hidden window receives no redraw request.
@@ -259,13 +191,14 @@ impl ApplicationHandler<WakeUp> for App {
             WindowEvent::Resized(size) => {
                 tracing::info!(width = size.width, height = size.height, "resized");
                 let scale_factor = if let Some(active) = self.active.as_mut() {
-                    self.context
-                        .resize_surface(&mut active.surface, size.width, size.height);
+                    active.width = size.width;
+                    active.height = size.height;
                     active.scale_factor
                 } else {
                     return;
                 };
 
+                self.renderer.resize(size.width, size.height);
                 // The viewport changed, so re-lay and repaint the subtree at the new size.
                 self.driver
                     .resize(viewport(size.width, size.height, scale_factor));
@@ -279,7 +212,7 @@ impl ApplicationHandler<WakeUp> for App {
                 // new density even when the physical size is unchanged.
                 let size = if let Some(active) = self.active.as_mut() {
                     active.scale_factor = scale_factor;
-                    (active.surface.config.width, active.surface.config.height)
+                    (active.width, active.height)
                 } else {
                     return;
                 };

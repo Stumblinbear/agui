@@ -12,8 +12,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 agui_core.workspace = true
+agui_window.workspace = true
 png.workspace = true
 pollster.workspace = true
+raw-window-handle.workspace = true
 slotmap.workspace = true
 vello.workspace = true
 
@@ -24,7 +26,3 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 typed_floats.workspace = true
 winit.workspace = true
-
-[[example]]
-name = "hello_world"
-path = "examples/hello_world.rs"

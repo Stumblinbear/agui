@@ -1,0 +1,15 @@
+[package]
+name = "agui_window"
+version = "0.1.0"
+edition = "2024"
+resolver = "2"
+description = "Windowing abstractions for Agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui", "graphics", "rendering"]
+categories = ["gui", "graphics", "rendering"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+agui_core.workspace = true
+raw-window-handle.workspace = true

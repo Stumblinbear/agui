@@ -29,9 +29,9 @@ agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 
 agui_test = { path = "crates/agui_test", version = "0.1" }
 
-# agui_renderer = { path = "crates/agui_renderer", version = "0.3" }
-# agui_winit = { path = "crates/agui_winit", version = "0.1" }
-# agui_vello = { path = "crates/agui_vello", version = "0.1" }
+agui_window = { path = "crates/agui_window", version = "0.1" }
+agui_winit = { path = "crates/agui_winit", version = "0.1" }
+agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
 bon = "3.3.2"
 intrusive-collections = "0.10"
@@ -83,8 +83,8 @@ pollster = "0.4"
 # app = ["rustc-hash", "parking_lot"]
 # multi-threaded = ["agui_executor/multi-threaded"]
 
-# winit = ["agui_renderer/window", "agui_winit", "dep:winit"]
-# vello = ["agui_renderer/window", "agui_vello", "dep:vello"]
+# winit = ["agui_window/window", "agui_winit", "dep:winit"]
+# vello = ["agui_window/window", "agui_vello", "dep:vello"]
 # winit-vello = ["winit", "vello", "agui_vello/window"]
 
 # mocks = ["agui_core/mocks"]
@@ -99,7 +99,7 @@ pollster = "0.4"
 # agui_primitives = { workspace = true, optional = true }
 # agui_widgets = { workspace = true, optional = true }
 
-# agui_renderer = { workspace = true, optional = true }
+# agui_window = { workspace = true, optional = true }
 # agui_winit = { workspace = true, optional = true }
 # agui_vello = { workspace = true, optional = true }
 
