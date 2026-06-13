@@ -1,16 +1,12 @@
 use bon::Builder;
 
-use agui_core::{
-    prelude::{element::*, render_object::*},
-    render_object::MultiChildRenderObject,
-};
+use agui_core::prelude::{element::*, render_object::*};
 
 use typed_floats::{Positive, PositiveFinite};
 
-use crate::flex::{
-    CrossAxisAlignment, Flexible, MainAxisAlignment, MainAxisSize, VerticalDirection,
-};
+use crate::flex::{CrossAxisAlignment, MainAxisAlignment, MainAxisSize, VerticalDirection};
 
+/// A widget that lays its children out in a vertical run.
 #[derive(Builder)]
 pub struct Column<Children> {
     #[builder(default)]
@@ -27,55 +23,22 @@ pub struct Column<Children> {
 
     text_direction: Option<TextDirection>,
 
-    #[builder(with = FromIterator::from_iter)]
-    children: Vec<Flexible<Children>>,
+    children: Children,
 }
-
-// impl<Children, S: column_builder::State> ColumnBuilder<Children, S>
-// where
-//     Children: AsAnyWidget,
-//     Children::Render: RenderBox,
-// {
-//     #[allow(deprecated)]
-//     pub fn dyn_children(
-//         self,
-//         iter: impl IntoIterator<Item = Flexible<Children>>,
-//     ) -> ColumnBuilder<BoxedBoxWidget, column_builder::SetChildren<S>>
-//     where
-//         S::Children: column_builder::IsUnset,
-//     {
-//         ColumnBuilder {
-//             __unsafe_private_phantom: ::core::marker::PhantomData,
-//             __unsafe_private_named: (
-//                 self.__unsafe_private_named.0,
-//                 self.__unsafe_private_named.1,
-//                 self.__unsafe_private_named.2,
-//                 self.__unsafe_private_named.3,
-//                 self.__unsafe_private_named.4,
-//                 Some(FromIterator::from_iter(iter.into_iter().map(|c| {
-//                     Flexible {
-//                         child: c.child.into_boxed_render_box(),
-
-//                         flex: c.flex,
-//                         fit: c.fit,
-//                     }
-//                 }))),
-//             ),
-//         }
-//     }
-// }
 
 impl<Children> Widget for Column<Children>
 where
-    Children: Widget + 'static,
-    Children::Render: RenderObject,
+    Children: WidgetSequence,
+    Children::Renders: 'static,
 {
-    type Element = MultiChildElement<Children::Element, RenderFlex<Children::Render>>;
+    type Element = ChildrenElement<Children, RenderFlex<Children::Renders>>;
 
-    type Render = RenderFlex<Children::Render>;
+    type Render = RenderFlex<Children::Renders>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let mut render_object = RenderFlex {
+        let (element, children) = ChildrenElement::new(self.children, ctx);
+
+        let render_object = RenderFlex {
             main_axis_size: self.main_axis_size,
             main_axis_alignment: self.main_axis_alignment,
             cross_axis_alignment: self.cross_axis_alignment,
@@ -84,19 +47,10 @@ where
 
             layout_scope: LayoutScope::detached(),
 
-            children: Vec::new(),
+            children,
 
             size: Size::ZERO,
         };
-
-        let element = MultiChildElement::new(
-            self.children
-                .into_iter()
-                .map(|flexible| flexible.child)
-                .collect(),
-            &mut render_object,
-            ctx,
-        );
 
         (element, render_object)
     }
@@ -122,14 +76,7 @@ where
             render_object.layout_scope.mark_needs_layout();
         }
 
-        element.update(
-            self.children
-                .into_iter()
-                .map(|flexible| flexible.child)
-                .collect(),
-            render_object,
-            ctx,
-        );
+        element.update(self.children, render_object, ctx);
     }
 }
 
@@ -142,79 +89,41 @@ pub struct RenderFlex<Children> {
 
     layout_scope: LayoutScope,
 
-    children: Vec<RenderNode<Children>>,
+    children: Children,
 
     size: Size,
 }
 
-impl<Children> MultiChildRenderObject for RenderFlex<Children> {
-    type Child = Children;
+impl<Children: RenderChildren> MultiChildRenderObject for RenderFlex<Children> {
+    type Children = Children;
 
-    fn take_children(&mut self) -> Vec<RenderNode<Children>> {
-        std::mem::take(&mut self.children)
-    }
-
-    fn set_children(&mut self, children: Vec<RenderNode<Children>>) {
-        self.children = children;
-    }
-
-    fn with_child<R>(&self, index: usize, f: impl FnOnce(&Children) -> R) -> R {
-        f(&self.children[index].object)
-    }
-
-    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut Children) -> R) -> R {
-        f(&mut self.children[index].object)
+    fn children_mut(&mut self) -> &mut Children {
+        &mut self.children
     }
 }
 
-impl<Child> RenderObject for RenderFlex<Child>
-where
-    Child: RenderObject,
-{
+impl<Children: RenderChildren + 'static> RenderObject for RenderFlex<Children> {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        for child in &mut self.children {
-            child.mount(ctx);
-        }
+        self.children.for_each_mut(&mut |child| child.mount(ctx));
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.layout_scope = LayoutScope::detached();
 
-        for child in &mut self.children {
-            child.unmount(ctx);
-        }
+        self.children.for_each_mut(&mut |child| child.unmount(ctx));
     }
 
     fn update_compositing_bits(&mut self) -> bool {
         let mut needs = false;
 
-        for child in &mut self.children {
-            needs |= child.update_compositing_bits();
-        }
+        self.children
+            .for_each_mut(&mut |child| needs |= child.update_compositing_bits());
 
         needs
     }
-
-    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
-        let mut node = d
-            .node_for::<Self>()
-            .property("main_axis_size", self.main_axis_size)
-            .property("main_axis_alignment", self.main_axis_alignment)
-            .property("cross_axis_alignment", self.cross_axis_alignment)
-            .property("vertical_direction", self.vertical_direction);
-
-        for child in &self.children {
-            node = node.child(|d| child.describe(d));
-        }
-
-        node.finish()
-    }
 }
 
-impl<Child> RenderBox for RenderFlex<Child>
-where
-    Child: RenderBox,
-{
+impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
     fn min_intrinsic_width(&self, _height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         None
     }
@@ -268,7 +177,9 @@ where
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{element::Element, key::Key, test_harness::TestCtx, widget::AsAnyWidget};
+    use agui_core::{
+        key::Key, render_object::RenderChildren, test_harness::TestCtx, widget::AsAnyWidget,
+    };
 
     use super::*;
 
@@ -277,6 +188,21 @@ mod tests {
         static UPDATE_COUNT: RefCell<usize> = const { RefCell::new(0) };
     }
 
+    fn reset_counts() {
+        MOUNT_COUNT.with(|count| *count.borrow_mut() = 0);
+        UPDATE_COUNT.with(|count| *count.borrow_mut() = 0);
+    }
+
+    fn mounts() -> usize {
+        MOUNT_COUNT.with(|count| *count.borrow())
+    }
+
+    fn updates() -> usize {
+        UPDATE_COUNT.with(|count| *count.borrow())
+    }
+
+    /// A leaf widget distinguished by its type parameter, so distinct `TestWidget<T>` can sit in one
+    /// heterogeneous tuple. Its render object is the unit box.
     pub struct TestWidget<T> {
         value: T,
     }
@@ -295,10 +221,7 @@ mod tests {
         type Render = ();
     }
 
-    impl<T> Widget for TestWidget<T>
-    where
-        T: 'static,
-    {
+    impl<T: 'static> Widget for TestWidget<T> {
         type Element = TestWidgetElement<T>;
 
         type Render = ();
@@ -317,239 +240,116 @@ mod tests {
     }
 
     #[test]
-    fn column_builder() {
+    fn builder_accepts_tuple_and_vec_children() {
+        // A heterogeneous tuple of distinct widget types.
         let _ = Column::builder()
-            .children([TestWidget::new(0).into(), TestWidget::new(1).into()])
+            .children((TestWidget::new(0_usize), TestWidget::new(1_u32)))
             .build();
 
+        // A homogeneous vec of one widget type.
         let _ = Column::builder()
-            .children(bon::vec![
-                TestWidget::new(0),
-                TestWidget::new(0),
-                Flexible::from(TestWidget::new(0)),
-            ])
+            .children(vec![TestWidget::new(0_usize), TestWidget::new(1_usize)])
             .build();
-
-        let _ = Column::builder()
-            .children(bon::vec![
-                TestWidget::new(0).into_boxed_render_box(),
-                TestWidget::new(0).into_boxed_render_box(),
-                Flexible::from(TestWidget::new(0).into_boxed_render_box()),
-            ])
-            .build();
-
-        // let _ = Column::builder()
-        //     .children(bon::vec![
-        //         TestWidget::new(0),
-        //         TestWidget::new(0),
-        //         Flexible::from(TestWidget::new(0)),
-        //     ])
-        //     .build();
     }
 
     #[test]
-    fn adds_all_children() {
+    fn heterogeneous_tuple_builds_each_child() {
+        reset_counts();
+
         let column = Column::builder()
-            .children([
-                TestWidget::new(0).into(),
-                TestWidget::new(0).into(),
-                TestWidget::new(0).into(),
-            ])
+            .children((
+                TestWidget::new(0_usize),
+                TestWidget::new(0_u32),
+                TestWidget::new(0_u8),
+            ))
             .build();
 
-        let (_, render) = TestCtx::new().create(column);
+        let (_, render) = TestCtx::new().run(|ctx| column.create(ctx));
 
+        assert_eq!(mounts(), 3, "each distinct-typed child mounted once");
         assert_eq!(render.children.len(), 3);
     }
 
     #[test]
-    fn only_remounts_children_when_children_replaced() {
-        let column_1 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-            ])
+    fn tuple_children_reconcile_in_place() {
+        reset_counts();
+
+        let column = Column::builder()
+            .children((TestWidget::new(0_usize), TestWidget::new(0_u32)))
             .build();
 
-        let (mut element, mut render) = TestCtx::new().create(column_1);
+        let (mut element, mut render) = TestCtx::new().run(|ctx| column.create(ctx));
+        assert_eq!(mounts(), 2);
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-
-        let column_2 = Column::builder()
-            .children([
-                TestWidget::<u16>::new(0).into_boxed_render_box().into(),
-                TestWidget::<u16>::new(0).into_boxed_render_box().into(),
-            ])
+        let next = Column::builder()
+            .children((TestWidget::new(1_usize), TestWidget::new(1_u32)))
             .build();
+        TestCtx::new().run(|ctx| next.update(&mut element, &mut render, ctx));
 
-        TestCtx::new().update(column_2, &mut element, &mut render);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 4);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
+        assert_eq!(mounts(), 2, "same-shape rebuild reused each child");
+        assert_eq!(updates(), 2);
     }
 
     #[test]
-    fn only_updates_children_when_children_unchanged() {
-        let column_1 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into(),
-                TestWidget::<usize>::new(0).into(),
+    fn vec_children_count_and_remount_on_type_swap() {
+        reset_counts();
+
+        let column = Column::builder()
+            .children(vec![
+                TestWidget::<usize>::new(0),
+                TestWidget::<usize>::new(0),
             ])
             .build();
 
-        let (mut element, mut render) = TestCtx::new().create(column_1);
+        let (mut element, mut render) = TestCtx::new().run(|ctx| column.create(ctx));
+        assert_eq!(mounts(), 2);
+        assert_eq!(render.children.len(), 2);
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-
-        let column_2 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into(),
-                TestWidget::<usize>::new(0).into(),
+        // Same type: reconciled, not remounted.
+        let same = Column::builder()
+            .children(vec![
+                TestWidget::<usize>::new(0),
+                TestWidget::<usize>::new(0),
             ])
             .build();
-
-        TestCtx::new().update(column_2, &mut element, &mut render);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 2);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
+        TestCtx::new().run(|ctx| same.update(&mut element, &mut render, ctx));
+        assert_eq!(mounts(), 2);
+        assert_eq!(updates(), 2);
     }
 
     #[test]
-    fn retains_leading_unchanged_children() {
-        let column_1 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
+    fn retains_middle_keyed_child_across_reorder() {
+        reset_counts();
+
+        // Boxed children let a single vec hold differently-typed widgets, two of them keyed.
+        let column = Column::builder()
+            .children(vec![
+                TestWidget::<usize>::new(0).into_boxed_render_box(),
+                Key::new(0, TestWidget::<usize>::new(0)).into_boxed_render_box(),
+                Key::new(1, TestWidget::<usize>::new(0)).into_boxed_render_box(),
+                TestWidget::<usize>::new(0).into_boxed_render_box(),
             ])
             .build();
 
-        let (mut element, mut render) = TestCtx::new().create(column_1);
+        let (mut element, mut render) = TestCtx::new().run(|ctx| column.create(ctx));
+        assert_eq!(mounts(), 4);
 
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-
-        let column_2 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
+        // Keep key 0, drop key 1, swap the unkeyed ends for a different type.
+        let next = Column::builder()
+            .children(vec![
+                TestWidget::<u32>::new(0).into_boxed_render_box(),
+                Key::new(0, TestWidget::<usize>::new(0)).into_boxed_render_box(),
+                TestWidget::<u32>::new(0).into_boxed_render_box(),
             ])
             .build();
+        TestCtx::new().run(|ctx| next.update(&mut element, &mut render, ctx));
 
-        TestCtx::new().update(column_2, &mut element, &mut render);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
-    }
-
-    #[test]
-    fn retains_following_unchanged_children() {
-        let column_1 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-            ])
-            .build();
-
-        let (mut element, mut render) = TestCtx::new().create(column_1);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-
-        let column_2 = Column::builder()
-            .children([
-                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-            ])
-            .build();
-
-        TestCtx::new().update(column_2, &mut element, &mut render);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 2);
-    }
-
-    #[test]
-    fn retains_leading_and_following_unchanged_children() {
-        let column_1 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-            ])
-            .build();
-
-        let (mut element, mut render) = TestCtx::new().create(column_1);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 5);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-
-        let column_2 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
-                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-            ])
-            .build();
-
-        TestCtx::new().update(column_2, &mut element, &mut render);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 7);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 4);
-    }
-
-    #[test]
-    fn retains_middle_keyed_child() {
-        let column_1 = Column::builder()
-            .children([
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                Key::new(0, TestWidget::<usize>::new(0))
-                    .into_boxed_render_box()
-                    .into(),
-                Key::new(1, TestWidget::<usize>::new(0))
-                    .into_boxed_render_box()
-                    .into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-                TestWidget::<usize>::new(0).into_boxed_render_box().into(),
-            ])
-            .build();
-
-        let (mut element, mut render) = TestCtx::new().create(column_1);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 6);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 0);
-
-        let column_2 = Column::builder()
-            .children([
-                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
-                Key::new(0, TestWidget::<usize>::new(0))
-                    .into_boxed_render_box()
-                    .into(),
-                Key::new(2, TestWidget::<usize>::new(0))
-                    .into_boxed_render_box()
-                    .into(),
-                TestWidget::<u32>::new(0).into_boxed_render_box().into(),
-            ])
-            .build();
-
-        TestCtx::new().update(column_2, &mut element, &mut render);
-
-        assert_eq!(MOUNT_COUNT.with(|count| *count.borrow()), 9);
-        assert_eq!(UPDATE_COUNT.with(|count| *count.borrow()), 1);
+        // The keyed child (key 0) is reused; the two unkeyed ends are new types so they remount.
+        assert_eq!(
+            mounts(),
+            6,
+            "two new-typed ends mounted; keyed child reused"
+        );
+        assert_eq!(render.children.len(), 3);
     }
 }

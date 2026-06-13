@@ -1,7 +1,7 @@
 use crate::{
     context::Dispatch,
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
-    element::{Element, RoutingId, node::ElementNode},
+    element::{Element, RoutingPath, node::ElementNode},
     prelude::element::UpdateCtx,
     widget::Widget,
 };
@@ -70,8 +70,8 @@ where
 {
     type Render = <S::Child as Widget>::Render;
 
-    fn dispatch(&mut self, render: &mut Self::Render, path: &[RoutingId], action: Dispatch) {
-        let Some((_, rest)) = path.split_first() else {
+    fn dispatch(&mut self, render: &mut Self::Render, path: &RoutingPath, action: Dispatch) {
+        let Some((_, rest)) = path.decode() else {
             match action {
                 Dispatch::Message(ctx) => {
                     let apply: SetState<S> = ctx.consume();
@@ -115,7 +115,7 @@ mod tests {
     use crate::{
         context::{Dispatch, LayoutCtx, MountCtx, PaintCtx},
         diagnostics::{Diagnostics, DiagnosticsNodeBuilder},
-        element::{Element, LeafElement, RebuildBoundary, RoutingPath},
+        element::{Element, LeafElement, RebuildBoundary, RoutingPath, RoutingTarget},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
         pipeline::{PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
@@ -361,8 +361,13 @@ mod tests {
         let after_create = builds.get();
         assert_eq!(deps.get(), 0, "create does not run the dependency hook");
 
-        TestCtx::new()
-            .run(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
+        TestCtx::new().run(|ctx| {
+            element.dispatch(
+                &mut render,
+                RoutingPath::new(&[]),
+                Dispatch::DependencyChanged(ctx),
+            );
+        });
         assert_eq!(
             deps.get(),
             1,
@@ -370,7 +375,9 @@ mod tests {
         );
         assert_eq!(builds.get(), after_create + 1, "and then rebuilds");
 
-        TestCtx::new().run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
+        TestCtx::new().run(|ctx| {
+            element.dispatch(&mut render, RoutingPath::new(&[]), Dispatch::Rebuild(ctx));
+        });
         assert_eq!(
             deps.get(),
             1,
@@ -403,7 +410,7 @@ mod tests {
         // A set-state delivered to the widget's own path mutates the state and asks for a rebuild.
         let bump: SetState<CounterState> = Box::new(|state| state.count += 1);
         owner.dispatch_message(
-            &RoutingPath::new(owner.root_id(), Vec::new()),
+            &RoutingTarget::new(owner.root_id(), Vec::new()),
             Box::new(bump),
         );
         assert!(owner.is_dirty(), "set-state requested a rebuild");
@@ -636,7 +643,7 @@ mod tests {
         // Bump the count so the rebuild appends a second child, creating a new render object.
         let grow: SetState<GrowerState> = Box::new(|state| state.count = 2);
         owner.dispatch_message(
-            &RoutingPath::new(owner.root_id(), Vec::new()),
+            &RoutingTarget::new(owner.root_id(), Vec::new()),
             Box::new(grow),
         );
         assert!(owner.flush_build(&mut ctx.scheduler()));
@@ -801,7 +808,7 @@ mod tests {
         // A set-state on the host gives the Provide a different value.
         let bump: SetState<ProviderState> = Box::new(|state| state.value = 2);
         owner.dispatch_message(
-            &RoutingPath::new(owner.root_id(), Vec::new()),
+            &RoutingTarget::new(owner.root_id(), Vec::new()),
             Box::new(bump),
         );
         owner.flush_build(&mut tasks.scheduler());
@@ -838,7 +845,7 @@ mod tests {
         // A set-state that leaves the value equal re-provides the same value.
         let same: SetState<ProviderState> = Box::new(|state| state.value = 1);
         owner.dispatch_message(
-            &RoutingPath::new(owner.root_id(), Vec::new()),
+            &RoutingTarget::new(owner.root_id(), Vec::new()),
             Box::new(same),
         );
         owner.flush_build(&mut tasks.scheduler());

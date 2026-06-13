@@ -2,7 +2,7 @@ use std::{any::Any, future::Future, rc::Rc};
 
 use crate::{
     context::{MountCtx, TaskCtx},
-    element::{BuildScope, RoutingId, RoutingPath},
+    element::{BuildScope, RoutingId, RoutingTarget},
     pipeline::{
         layout::LayoutPipeline,
         paint::{PaintPipeline, PaintScope},
@@ -15,7 +15,7 @@ use crate::{
 pub struct UpdateCtx<'a> {
     scheduler: &'a mut dyn TaskScheduler,
 
-    routing_path: &'a mut Vec<RoutingId>,
+    routing_path: &'a mut Vec<u8>,
 
     provide_scope: &'a ProvideScope,
     build_scope: &'a BuildScope,
@@ -28,7 +28,7 @@ pub struct UpdateCtx<'a> {
 impl<'a> UpdateCtx<'a> {
     pub fn new(
         scheduler: &'a mut dyn TaskScheduler,
-        routing_path: &'a mut Vec<RoutingId>,
+        routing_path: &'a mut Vec<u8>,
         provide_scope: &'a ProvideScope,
         build_scope: &'a BuildScope,
         layout: &'a LayoutPipeline,
@@ -49,9 +49,10 @@ impl<'a> UpdateCtx<'a> {
         }
     }
 
-    /// The path that addresses the current point in the build walk: its boundary and the ids within it.
-    pub fn routing_path(&self) -> RoutingPath {
-        RoutingPath::new(
+    /// The target that addresses the current point in the build walk: its boundary and the ids within it.
+    pub fn routing_target(&self) -> RoutingTarget {
+        // The accumulator only ever holds whole encoded ids, so it is well-formed by construction.
+        RoutingTarget::new_unchecked(
             self.build_scope.boundary().unwrap_or_default(),
             self.routing_path.clone(),
         )
@@ -67,15 +68,15 @@ impl<'a> UpdateCtx<'a> {
     where
         T: Any,
     {
-        self.provide_scope.get_and_depend(&self.routing_path())
+        self.provide_scope.get_and_depend(&self.routing_target())
     }
 
-    /// Marks the element at `path` for a dependency-change rebuild on the next flush. A [`Provide`] calls
-    /// this for each reader of a value it changed.
+    /// Marks the element at `target` for a dependency-change rebuild on the next flush. A [`Provide`]
+    /// calls this for each reader of a value it changed.
     ///
     /// [`Provide`]: crate::provide::Provide
-    pub(crate) fn mark_dependency_changed(&self, path: &RoutingPath) {
-        self.build_scope.mark_dependency_changed(path);
+    pub(crate) fn mark_dependency_changed(&self, target: &RoutingTarget) {
+        self.build_scope.mark_dependency_changed(target);
     }
 
     /// An owned scheduler handle that outlives this build.
@@ -90,7 +91,7 @@ impl<'a> UpdateCtx<'a> {
         F: FnOnce(TaskCtx) -> Fut + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        let task_ctx = TaskCtx::new(self.scheduler.event_tx(), self.routing_path());
+        let task_ctx = TaskCtx::new(self.scheduler.event_tx(), self.routing_target());
 
         self.scheduler.spawn(Box::pin(func(task_ctx)))
     }
@@ -100,11 +101,12 @@ impl<'a> UpdateCtx<'a> {
         id: RoutingId,
         func: impl FnOnce(&mut UpdateCtx) -> T,
     ) -> T {
-        self.routing_path.push(id);
+        let mark = self.routing_path.len();
+        id.encode(self.routing_path);
 
         let ret = func(self);
 
-        self.routing_path.pop();
+        self.routing_path.truncate(mark);
 
         ret
     }
@@ -179,7 +181,7 @@ impl<'a> UpdateCtx<'a> {
 
     /// Mounts `render_object`, the root of a subtree just built during reconcile, into the pipeline
     /// under the enclosing boundary.
-    pub fn mount(&mut self, render_object: &mut impl RenderObject) {
+    pub fn mount<R: RenderObject + ?Sized>(&mut self, render_object: &mut R) {
         render_object.mount(&mut MountCtx::new(
             self.layout,
             self.paint,

@@ -8,7 +8,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 #[derive(Default)]
 struct ProbeState {
-    path: Option<RoutingPath>,
+    target: Option<RoutingTarget>,
     constraints: Option<BoxConstraints>,
     size: Option<Size>,
     offset: Option<Offset>,
@@ -89,15 +89,15 @@ impl Probe {
             .expect("the probed widget has not been painted")
     }
 
-    /// The routing path that addresses the probed widget for dispatch.
+    /// The routing target that addresses the probed widget for dispatch.
     ///
     /// # Panics
     ///
     /// Panics if the probed widget has not been mounted.
-    pub fn path(&self) -> RoutingPath {
+    pub fn target(&self) -> RoutingTarget {
         self.state
             .borrow()
-            .path
+            .target
             .clone()
             .expect("the probed widget has not been mounted")
     }
@@ -120,7 +120,7 @@ where
     type Render = RenderSpy<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        self.state.borrow_mut().path = Some(ctx.routing_path());
+        self.state.borrow_mut().target = Some(ctx.routing_target());
 
         let (element, child_render) = SingleChildElement::new(self.child, ctx);
 

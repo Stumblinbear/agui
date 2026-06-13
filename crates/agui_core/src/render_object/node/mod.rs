@@ -16,12 +16,15 @@ mod relayout_node;
 
 pub use relayout_node::*;
 
-pub struct RenderNode<R, P = ()> {
-    pub object: R,
+pub struct RenderNode<R: ?Sized, P = ()> {
     pub parent_data: P,
 
     parent_uses_size: bool,
     needs_compositing: bool,
+
+    // Last and unsized-capable, so `&mut RenderNode<Concrete, P>` coerces to
+    // `&mut RenderNode<dyn RenderBox, P>` for a parent to drive a child it does not name.
+    pub object: R,
 }
 
 impl<R, P: Default> RenderNode<R, P> {
@@ -48,7 +51,7 @@ impl<R, P> RenderNode<R, P> {
     }
 }
 
-impl<R: RenderObject, P> RenderNode<R, P> {
+impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
     pub fn mount(&mut self, ctx: &mut MountCtx) {
         self.object.mount(ctx);
     }
@@ -76,7 +79,7 @@ impl<R: RenderObject, P> RenderNode<R, P> {
     }
 }
 
-impl<R: RenderBox, P> RenderNode<R, P> {
+impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.object.min_intrinsic_width(height)
     }
@@ -135,13 +138,13 @@ impl<R: RenderBox, P> RenderNode<R, P> {
     }
 }
 
-impl<R, P> AsRef<R> for RenderNode<R, P> {
+impl<R: ?Sized, P> AsRef<R> for RenderNode<R, P> {
     fn as_ref(&self) -> &R {
         &self.object
     }
 }
 
-impl<R, P> AsMut<R> for RenderNode<R, P> {
+impl<R: ?Sized, P> AsMut<R> for RenderNode<R, P> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.object
     }

@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::{
     context::Dispatch,
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{Element, RoutingId},
+    element::{Element, RoutingPath},
     render_object::AnyRenderObject,
 };
 
@@ -18,7 +18,7 @@ pub trait AnyElement {
     fn dyn_dispatch(
         &mut self,
         render: &mut dyn AnyRenderObject,
-        path: &[RoutingId],
+        path: &RoutingPath,
         action: Dispatch,
     );
 
@@ -45,7 +45,7 @@ where
     fn dyn_dispatch(
         &mut self,
         render: &mut dyn AnyRenderObject,
-        path: &[RoutingId],
+        path: &RoutingPath,
         action: Dispatch,
     ) {
         let render = render
@@ -67,7 +67,7 @@ impl Element for Box<dyn AnyElement> {
     fn dispatch(
         &mut self,
         render: &mut (dyn AnyRenderObject + 'static),
-        path: &[RoutingId],
+        path: &RoutingPath,
         action: Dispatch,
     ) {
         (**self).dyn_dispatch(render, path, action);

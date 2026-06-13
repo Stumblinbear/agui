@@ -2,7 +2,7 @@ use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
     context::{Dispatch, LayoutCtx, MessageCtx, MountCtx, PaintCtx, UpdateCtx},
-    element::{Element, MultiChildElement, RoutingId},
+    element::{Element, RoutingPath},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
@@ -11,7 +11,7 @@ use crate::{
         node::RenderNode,
     },
     text::TextBaseline,
-    widget::Widget,
+    widget::{ChildrenElement, Widget},
 };
 
 type OnMount = Box<dyn Fn(&mut UpdateCtx<'_>)>;
@@ -74,7 +74,7 @@ pub struct LeafElement {
 impl Element for LeafElement {
     type Render = ();
 
-    fn dispatch(&mut self, (): &mut (), path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&mut self, (): &mut (), path: &RoutingPath, action: Dispatch) {
         debug_assert!(path.is_empty(), "Leaf has no children");
 
         if !path.is_empty() {
@@ -141,23 +141,11 @@ pub struct MultiChildRenderList<C> {
     pub children: Vec<RenderNode<C>>,
 }
 
-impl<C> MultiChildRenderObject for MultiChildRenderList<C> {
-    type Child = C;
+impl<C: RenderBox> MultiChildRenderObject for MultiChildRenderList<C> {
+    type Children = Vec<RenderNode<C>>;
 
-    fn take_children(&mut self) -> Vec<RenderNode<C>> {
-        std::mem::take(&mut self.children)
-    }
-
-    fn set_children(&mut self, children: Vec<RenderNode<C>>) {
-        self.children = children;
-    }
-
-    fn with_child<R>(&self, index: usize, f: impl FnOnce(&C) -> R) -> R {
-        f(&self.children[index].object)
-    }
-
-    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
-        f(&mut self.children[index].object)
+    fn children_mut(&mut self) -> &mut Vec<RenderNode<C>> {
+        &mut self.children
     }
 }
 
@@ -238,20 +226,16 @@ pub struct MultiChild<Child> {
 impl<Child> Widget for MultiChild<Child>
 where
     Child: Widget + 'static,
-    Child::Render: RenderObject,
+    Child::Render: RenderBox,
 {
-    type Element = MultiChildElement<Child::Element, MultiChildRenderList<Child::Render>>;
+    type Element = ChildrenElement<Vec<Child>, MultiChildRenderList<Child::Render>>;
 
     type Render = MultiChildRenderList<Child::Render>;
 
     fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let mut render = MultiChildRenderList {
-            children: Vec::new(),
-        };
+        let (element, children) = ChildrenElement::new(self.children, ctx);
 
-        let element = MultiChildElement::new(self.children, &mut render, ctx);
-
-        (element, render)
+        (element, MultiChildRenderList { children })
     }
 
     fn update(

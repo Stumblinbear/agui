@@ -13,36 +13,46 @@ impl<Children> RichText<Children> {
     }
 }
 
-/// The element of a [`RichText`].
-pub struct RichTextElement<C: Element, R> {
+/// The element of a [`RichText`], holding its inline child elements in span order.
+pub struct RichTextElement<C> {
     fonts: Option<Rc<Fonts>>,
-    children: MultiChildElement<C, R>,
+    children: Vec<ElementNode<C>>,
 }
 
-impl<C, R> Element for RichTextElement<C, R>
+impl<C> Element for RichTextElement<C>
 where
     C: Element,
-    R: MultiChildRenderObject<Child = C::Render> + RenderObject,
+    C::Render: Sized,
 {
-    type Render = R;
+    type Render = RenderParagraph<C::Render>;
 
-    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
-        self.children.dispatch(render, path, action);
-    }
+    fn dispatch(
+        &mut self,
+        render: &mut RenderParagraph<C::Render>,
+        path: &RoutingPath,
+        action: Dispatch,
+    ) {
+        let Some((head, rest)) = path.decode() else {
+            return;
+        };
 
-    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
-        d.node_for::<Self>()
-            .child(|d| self.children.describe(d))
-            .finish()
+        let index = head.get() as usize;
+        let renders = render.children_mut();
+
+        if index < self.children.len() && index < renders.len() {
+            self.children[index]
+                .element
+                .dispatch(&mut renders[index].object, rest, action);
+        }
     }
 }
 
 impl<Children> Widget for RichText<Children>
 where
     Children: Widget + 'static,
-    Children::Render: RenderObject,
+    Children::Render: RenderBox,
 {
-    type Element = RichTextElement<Children::Element, RenderParagraph<Children::Render>>;
+    type Element = RichTextElement<Children::Element>;
 
     type Render = RenderParagraph<Children::Render>;
 
@@ -54,7 +64,19 @@ where
         let fonts = ctx.depend_on_provided::<Fonts>();
         render_object.set_fonts(fonts.clone());
 
-        let children = MultiChildElement::new(widgets, &mut render_object, ctx);
+        let mut children = Vec::with_capacity(widgets.len());
+        let mut render_children = Vec::with_capacity(widgets.len());
+
+        for (index, widget) in widgets.into_iter().enumerate() {
+            let (element, child_render) = ctx
+                .with_routing_id(RoutingId::new(u32::try_from(index).unwrap()), |ctx| {
+                    widget.create(ctx)
+                });
+            children.push(ElementNode::new(element));
+            render_children.push(RenderNode::new(child_render));
+        }
+
+        render_object.set_children(render_children);
 
         (RichTextElement { fonts, children }, render_object)
     }
@@ -72,7 +94,33 @@ where
         element.fonts = ctx.depend_on_provided::<Fonts>();
         render_object.set_fonts(element.fonts.clone());
 
-        element.children.update(widgets, render_object, ctx);
+        let mut old_children = std::mem::take(&mut element.children).into_iter();
+        let mut old_render = render_object.take_children().into_iter();
+
+        let mut new_children = Vec::with_capacity(widgets.len());
+        let mut new_render = Vec::with_capacity(widgets.len());
+
+        for (index, widget) in widgets.into_iter().enumerate() {
+            ctx.with_routing_id(RoutingId::new(u32::try_from(index).unwrap()), |ctx| match (
+                old_children.next(),
+                old_render.next(),
+            ) {
+                (Some(mut child), Some(mut render)) => {
+                    widget.update(&mut child.element, &mut render.object, ctx);
+                    new_children.push(child);
+                    new_render.push(render);
+                }
+                _ => {
+                    let (child, mut render) = widget.create(ctx);
+                    ctx.mount(&mut render);
+                    new_children.push(ElementNode::new(child));
+                    new_render.push(RenderNode::new(render));
+                }
+            });
+        }
+
+        element.children = new_children;
+        render_object.set_children(new_render);
     }
 }
 

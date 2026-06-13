@@ -6,7 +6,7 @@ use std::{
 use crate::{
     context::{Dispatch, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{AnyElement, Element, RoutingId, node::ElementNode},
+    element::{AnyElement, Element, RoutingId, RoutingPath, node::ElementNode},
     key::AnyKeyable,
     render_object::AnyRenderObject,
     render_object::box_layout::{AnyRenderBox, RenderBox},
@@ -100,15 +100,15 @@ where
 {
     type Render = R;
 
-    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
-        let Some((head, rest)) = path.split_first() else {
+    fn dispatch(&mut self, render: &mut R, path: &RoutingPath, action: Dispatch) {
+        let Some((head, rest)) = path.decode() else {
             // I'm not certain this is actually unreachable, but I can't prove it.
             unreachable!("the erasure seam pushes its generation as a leading routing id");
         };
 
         // A dispatch addressed to an older generation targeted an inner that has since been
         // replaced, so it is dropped rather than delivered to the replacement.
-        if head.get() != self.generation {
+        if head.get() != u32::from(self.generation) {
             return;
         }
 
@@ -159,7 +159,7 @@ where
         let new_type = (*self).dyn_widget_type_id();
 
         if new_type == element.type_id {
-            ctx.with_routing_id(RoutingId::new(element.generation), |ctx| {
+            ctx.with_routing_id(RoutingId::new(u32::from(element.generation)), |ctx| {
                 self.dyn_update(&mut element.child.element, render_object, ctx);
             });
         } else {
@@ -169,7 +169,7 @@ where
             element.type_id = new_type;
 
             let (child, new_render) = ctx
-                .with_routing_id(RoutingId::new(element.generation), |ctx| {
+                .with_routing_id(RoutingId::new(u32::from(element.generation)), |ctx| {
                     self.dyn_create(ctx)
                 });
 
@@ -284,7 +284,7 @@ where
     fn dispatch(
         &mut self,
         render: &mut Box<dyn AnyRenderBox>,
-        path: &[RoutingId],
+        path: &RoutingPath,
         action: Dispatch,
     ) {
         let render = (**render)
@@ -360,7 +360,7 @@ where
     fn dispatch(
         &mut self,
         render: &mut Box<dyn AnyRenderSliver>,
-        path: &[RoutingId],
+        path: &RoutingPath,
         action: Dispatch,
     ) {
         let render = (**render)
@@ -410,7 +410,7 @@ mod tests {
 
     use crate::{
         context::{Dispatch, MessageCtx, UpdateCtx},
-        element::{Element, RoutingId},
+        element::{Element, RoutingId, RoutingPath},
         test_fixtures::Leaf,
         test_harness::TestCtx,
     };
@@ -589,7 +589,7 @@ mod tests {
         let mut msg = MessageCtx::new(Box::new(123_u32) as Box<dyn Any>);
         element.dispatch(
             &mut render,
-            &[RoutingId::new(0)],
+            RoutingPath::new(&RoutingId::encode_path([RoutingId::new(0)])),
             Dispatch::Message(&mut msg),
         );
 
@@ -606,7 +606,7 @@ mod tests {
         let mut msg = MessageCtx::new(Box::new(7_u32) as Box<dyn Any>);
         element.dispatch(
             &mut render,
-            &[RoutingId::new(1)],
+            RoutingPath::new(&RoutingId::encode_path([RoutingId::new(1)])),
             Dispatch::Message(&mut msg),
         );
 
@@ -626,7 +626,7 @@ mod tests {
         let mut msg = MessageCtx::new(Box::new(42_u32) as Box<dyn Any>);
         element.dispatch(
             &mut render,
-            &[RoutingId::new(0)],
+            RoutingPath::new(&RoutingId::encode_path([RoutingId::new(0)])),
             Dispatch::Message(&mut msg),
         );
 

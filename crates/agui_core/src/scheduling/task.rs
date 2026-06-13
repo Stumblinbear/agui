@@ -1,10 +1,10 @@
 use std::{any::Any, future::Future, pin::Pin, sync::mpsc};
 
-use crate::element::RoutingPath;
+use crate::element::RoutingTarget;
 
 /// A message addressed to an element, queued on the event channel and routed to that element on the
 /// next drain.
-pub type TaskEventMessage = (RoutingPath, Box<dyn Any>);
+pub type TaskEventMessage = (RoutingTarget, Box<dyn Any>);
 
 /// Sender half of the event channel, cloned into a [`TaskCtx`] so a running task can post a message
 /// back to its element.

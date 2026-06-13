@@ -168,8 +168,9 @@ impl WidgetTester {
     /// Dispatches `message` to the element at `path`, marking it to rebuild on the next pump if it asks
     /// to.
     pub fn send<M: 'static>(&mut self, path: &[RoutingId], message: M) {
-        let path = RoutingPath::new(self.owner.root_id(), path.to_vec());
-        self.owner.dispatch_message(&path, Box::new(message));
+        let bytes = RoutingId::encode_path(path.iter().copied());
+        let target = RoutingTarget::new(self.owner.root_id(), bytes);
+        self.owner.dispatch_message(&target, Box::new(message));
     }
 
     /// A clone of the frame-callback registry the tester ticks each pump, for handing to a render

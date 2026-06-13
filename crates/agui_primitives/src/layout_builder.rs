@@ -77,7 +77,7 @@ where
 {
     type Render = RenderLayoutBuilder<Child::Render>;
 
-    fn dispatch(&mut self, render: &mut Self::Render, path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&mut self, render: &mut Self::Render, path: &RoutingPath, action: Dispatch) {
         let mut child_widget = self.child_widget.borrow_mut();
 
         let Some(retained) = child_widget.as_mut() else {
@@ -190,7 +190,7 @@ where
     let child_widget = Rc::clone(child_widget);
 
     let scheduler = ctx.deferred_scheduler();
-    let routing_path = ctx.routing_path();
+    let routing_target = ctx.routing_target();
     let provide_scope = ctx.provide_scope().clone();
     let build_scope = ctx.build_scope().clone();
 
@@ -204,7 +204,7 @@ where
             // Layout runs outside the build frame, so the element built or reconciled here borrows an
             // owned scheduler handle, derived from the one captured at build, to keep spawning tasks.
             let mut scheduler = scheduler.deferred();
-            let mut routing_path = routing_path.within().to_vec();
+            let mut routing_path = routing_target.path().as_bytes().to_vec();
             // This build runs during layout and mounts the child it produces explicitly through the
             // layout-time mount below, not through the reconcile path, so it carries its own pipeline.
             let mut build_paint = PaintPipeline::default();

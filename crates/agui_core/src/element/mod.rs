@@ -23,7 +23,7 @@ pub trait Element {
 
     /// Routes `action` along `path` to the destination element, relative to this one, threading
     /// `render` so the destination can reconcile it.
-    fn dispatch(&mut self, render: &mut Self::Render, path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&mut self, render: &mut Self::Render, path: &RoutingPath, action: Dispatch) {
         debug_assert!(path.is_empty(), "leaf element has nothing to route to");
         let _ = (render, action);
     }

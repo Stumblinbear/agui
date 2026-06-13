@@ -1,17 +1,17 @@
 use std::any::Any;
 
-use crate::{element::RoutingPath, scheduling::EventSender};
+use crate::{element::RoutingTarget, scheduling::EventSender};
 
 pub struct TaskCtx {
     event_tx: EventSender,
-    routing_path: RoutingPath,
+    routing_target: RoutingTarget,
 }
 
 impl TaskCtx {
-    pub fn new(event_tx: EventSender, routing_path: RoutingPath) -> Self {
+    pub fn new(event_tx: EventSender, routing_target: RoutingTarget) -> Self {
         Self {
             event_tx,
-            routing_path,
+            routing_target,
         }
     }
 
@@ -24,6 +24,6 @@ impl TaskCtx {
         // A closed channel means the tree is gone; dropping the message is the right thing.
         let _ = self
             .event_tx
-            .send((self.routing_path.clone(), Box::new(message)));
+            .send((self.routing_target.clone(), Box::new(message)));
     }
 }

@@ -11,7 +11,7 @@ use rustc_hash::FxHashSet;
 use crate::{
     context::{Dispatch, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{Element, RoutingId, RoutingPath, node::ElementNode},
+    element::{Element, RoutingPath, RoutingTarget, node::ElementNode},
     widget::Widget,
 };
 
@@ -38,7 +38,7 @@ struct ProvideNode {
 pub(crate) struct ProvideCell {
     type_id: TypeId,
     value: RefCell<Rc<dyn Any>>,
-    dependents: RefCell<FxHashSet<RoutingPath>>,
+    dependents: RefCell<FxHashSet<RoutingTarget>>,
 }
 
 impl ProvideCell {
@@ -54,13 +54,13 @@ impl ProvideCell {
         Rc::clone(&self.value.borrow())
     }
 
-    fn depend(&self, dependent: &RoutingPath) {
+    fn depend(&self, dependent: &RoutingTarget) {
         self.dependents.borrow_mut().insert(dependent.clone());
     }
 
     /// Replaces the held value and returns the readers to notify, clearing them so they re-record
     /// themselves as they rebuild.
-    fn replace(&self, value: Rc<dyn Any>) -> Vec<RoutingPath> {
+    fn replace(&self, value: Rc<dyn Any>) -> Vec<RoutingTarget> {
         *self.value.borrow_mut() = value;
         self.dependents.borrow_mut().drain().collect()
     }
@@ -79,7 +79,7 @@ impl ProvideScope {
 
     /// Reads the nearest value of type `T` and records `dependent` against it, so a later change to
     /// that value marks `dependent` for a dependency-change rebuild.
-    pub(crate) fn get_and_depend<T: Any>(&self, dependent: &RoutingPath) -> Option<Rc<T>> {
+    pub(crate) fn get_and_depend<T: Any>(&self, dependent: &RoutingTarget) -> Option<Rc<T>> {
         let cell = self.find(TypeId::of::<T>())?;
         cell.depend(dependent);
 
@@ -202,7 +202,7 @@ where
 {
     type Render = C::Render;
 
-    fn dispatch(&mut self, render: &mut C::Render, path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&mut self, render: &mut C::Render, path: &RoutingPath, action: Dispatch) {
         match action {
             Dispatch::Rebuild(ctx) => {
                 ctx.with_provided(Rc::clone(&self.cell), |ctx| {
@@ -241,7 +241,7 @@ mod tests {
 
     use crate::{
         context::{Dispatch, MessageCtx, UpdateCtx},
-        element::{BuildBoundaryId, Element, RebuildBoundary, RoutingPath},
+        element::{BuildBoundaryId, Element, RebuildBoundary, RoutingPath, RoutingTarget},
         pipeline::PipelineOwner,
         provide::ProvideScope,
         test_fixtures::{Leaf, Transparent},
@@ -344,7 +344,9 @@ mod tests {
             }));
 
         // The transparent single child pushes no routing id, so the leaf sits at the empty path.
-        TestCtx::new().run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
+        TestCtx::new().run(|ctx| {
+            element.dispatch(&mut render, RoutingPath::new(&[]), Dispatch::Rebuild(ctx));
+        });
 
         assert_eq!(
             seen.get(),
@@ -367,8 +369,13 @@ mod tests {
 
         // A dependency-changed dispatch must re-thread the ancestor's provided value just like a
         // plain rebuild, so the woken descendant still reads it.
-        TestCtx::new()
-            .run(|ctx| element.dispatch(&mut render, &[], Dispatch::DependencyChanged(ctx)));
+        TestCtx::new().run(|ctx| {
+            element.dispatch(
+                &mut render,
+                RoutingPath::new(&[]),
+                Dispatch::DependencyChanged(ctx),
+            );
+        });
 
         assert_eq!(
             seen.get(),
@@ -406,7 +413,7 @@ mod tests {
 
         // The Provide sits above the boundary, so the value lives in the scope the boundary captured
         // at registration; a targeted rebuild into the boundary must re-enter with that scope.
-        owner.dispatch_message(&RoutingPath::new(boundary, Vec::new()), Box::new(()));
+        owner.dispatch_message(&RoutingTarget::new(boundary, Vec::new()), Box::new(()));
         assert!(owner.flush_build(&mut tasks.scheduler()));
 
         assert_eq!(
@@ -427,9 +434,9 @@ mod tests {
             }),
         });
 
-        TestCtx::new()
-            .with_provided(7_usize)
-            .run(|ctx| element.dispatch(&mut render, &[], Dispatch::Rebuild(ctx)));
+        TestCtx::new().with_provided(7_usize).run(|ctx| {
+            element.dispatch(&mut render, RoutingPath::new(&[]), Dispatch::Rebuild(ctx));
+        });
 
         assert_eq!(
             seen.get(),

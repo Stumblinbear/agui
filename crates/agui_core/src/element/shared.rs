@@ -5,11 +5,9 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 use crate::{
     context::{Dispatch, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{Element, RoutingId, node::ElementNode},
+    element::{Element, RoutingId, RoutingPath, node::ElementNode},
     key::AnyKeyable,
-    render_object::{
-        MultiChildRenderObject, RenderObject, SingleChildRenderObject, node::RenderNode,
-    },
+    render_object::{RenderObject, SingleChildRenderObject, node::RenderNode},
     widget::Widget,
 };
 
@@ -26,7 +24,7 @@ where
 {
     type Render = R;
 
-    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&mut self, render: &mut R, path: &RoutingPath, action: Dispatch) {
         let child = &mut self.child.element;
         render.with_child_mut(|child_render| child.dispatch(child_render, path, action));
     }
@@ -63,79 +61,31 @@ impl<C: Element, R: ?Sized> SingleChildElement<C, R> {
     }
 }
 
-/// The [`Element`] of a widget with a flat, keyed list of children, threading the widget's render `R`
-/// to each child.
-pub struct MultiChildElement<C, R: ?Sized> {
-    children: Vec<KeyedNode<C>>,
+/// A flat, list of child elements with a routing id per child that stays with the child it
+/// addresses. Reconciling reuses, drops, and creates children while keeping each survivor's id,
+/// so a dispatch captured before a reorder still reaches the same element. Both the [`WidgetSequence`]
+/// `Vec` and a widget that manages its own children (a paragraph laying out inline spans) hold one of
+/// these.
+///
+/// [`WidgetSequence`]: crate::widget::WidgetSequence
+pub struct MultiChildElement<C> {
+    nodes: Vec<KeyedNode<C>>,
     next_id: RoutingId,
-    _render: PhantomData<fn() -> R>,
 }
 
-/// A child element paired with the type and key its widget reported at build, and the routing id
-/// that addresses it for as long as it lives.
+/// A child element paired with the type and key its widget reported at build, and the routing id that
+/// addresses it for as long as it lives.
 struct KeyedNode<C> {
-    node: ElementNode<C>,
+    pub(crate) node: ElementNode<C>,
     type_id: TypeId,
     key: Option<Box<dyn AnyKeyable>>,
     id: RoutingId,
 }
 
-impl<C, R> Element for MultiChildElement<C, R>
-where
-    C: Element,
-    R: MultiChildRenderObject<Child = C::Render>,
-{
-    type Render = R;
-
-    fn dispatch(&mut self, render: &mut R, path: &[RoutingId], action: Dispatch) {
-        let Some((head, rest)) = path.split_first() else {
-            // I'm not certain this is actually unreachable, but I can't prove it.
-            unreachable!("multi-child element addresses one of its children");
-        };
-
-        // The addressed child may have been removed since the path was captured; drop the dispatch.
-        let Some(index) = self.child_index(*head) else {
-            return;
-        };
-
-        render.with_child_mut(index, |child_render| {
-            self.children[index]
-                .node
-                .element
-                .dispatch(child_render, rest, action);
-        });
-    }
-
-    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
-        let mut builder = d.node_for::<Self>();
-
-        for keyed in &self.children {
-            builder = builder.child(|d| keyed.node.element.describe(d));
-        }
-
-        builder.finish()
-    }
-}
-
-impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
-    /// The current index of the child addressed by `id`, if it is still present.
-    fn child_index(&self, id: RoutingId) -> Option<usize> {
-        // Ids are issued in order, so a child that has never moved sits at the index matching its id.
-        let guess = id.get() as usize;
-
-        if self.children.get(guess).is_some_and(|keyed| keyed.id == id) {
-            return Some(guess);
-        }
-
-        self.children.iter().position(|keyed| keyed.id == id)
-    }
-
-    /// Builds an element per child and installs each child's render object into `render`.
-    pub fn new<CV>(
-        children: Vec<CV>,
-        render: &mut impl MultiChildRenderObject<Child = CV::Render>,
-        ctx: &mut UpdateCtx,
-    ) -> Self
+impl<C: Element> MultiChildElement<C> {
+    /// Builds an element and render object per child, returning the storage and the parallel render
+    /// nodes.
+    pub fn build<CV>(children: Vec<CV>, ctx: &mut UpdateCtx) -> (Self, Vec<RenderNode<CV::Render>>)
     where
         CV: Widget<Element = C> + 'static,
     {
@@ -160,38 +110,70 @@ impl<C: Element, R: ?Sized> MultiChildElement<C, R> {
             render_children.push(RenderNode::new(render_object));
         }
 
-        render.set_children(render_children);
-
-        Self {
-            children: nodes,
-            next_id,
-            _render: PhantomData,
-        }
+        (Self { nodes, next_id }, render_children)
     }
 
-    /// Reconciles the child elements and `render`'s child render objects against `children`.
-    pub fn update<CV>(
+    /// Reconciles the stored elements and `old_render` against `new`, returning the new render nodes in
+    /// matching order. A child created here is grafted onto the mounted tree and mounted at once.
+    pub fn reconcile<CV>(
         &mut self,
-        children: Vec<CV>,
-        render: &mut impl MultiChildRenderObject<Child = CV::Render>,
+        new: Vec<CV>,
+        old_render: Vec<RenderNode<CV::Render>>,
         ctx: &mut UpdateCtx,
-    ) where
+    ) -> Vec<RenderNode<CV::Render>>
+    where
         CV: Widget<Element = C> + 'static,
         CV::Render: RenderObject,
     {
-        let old_render = render.take_children();
-        let old = std::mem::take(&mut self.children);
+        let old = std::mem::take(&mut self.nodes);
 
         let (nodes, render_children) =
-            reconcile::<C, CV>(old, old_render, children, &mut self.next_id, ctx);
+            reconcile::<C, CV>(old, old_render, new, &mut self.next_id, ctx);
 
-        self.children = nodes;
-        render.set_children(render_children);
+        self.nodes = nodes;
+        render_children
+    }
+
+    /// The current index of the child addressed by `id`, if it is still present.
+    fn child_index(&self, id: RoutingId) -> Option<usize> {
+        // Ids are issued in order, so a child that has never moved sits at the index matching its id.
+        let guess = id.get() as usize;
+
+        if self.nodes.get(guess).is_some_and(|keyed| keyed.id == id) {
+            return Some(guess);
+        }
+
+        self.nodes.iter().position(|keyed| keyed.id == id)
+    }
+
+    /// Routes `action` along `path` to the child the leading id names, threading the matching render
+    /// node. A path addressing a child that has since been removed is dropped.
+    pub fn dispatch(
+        &mut self,
+        renders: &mut [RenderNode<C::Render>],
+        path: &RoutingPath,
+        action: Dispatch,
+    ) where
+        C::Render: Sized,
+    {
+        let Some((head, rest)) = path.decode() else {
+            unreachable!("multi-child element addresses one of its children");
+        };
+
+        // The addressed child may have been removed since the path was captured; drop the dispatch.
+        let Some(index) = self.child_index(head) else {
+            return;
+        };
+
+        self.nodes[index]
+            .node
+            .element
+            .dispatch(&mut renders[index].object, rest, action);
     }
 }
 
-/// Reconciles `new` against the old child elements and their render objects, returning the new
-/// element list and render-object list in matching order. Old children left unmatched are dropped.
+/// Reconciles `new` against the old child elements and their render objects, returning the new element
+/// list and render-object list in matching order. Old children left unmatched are dropped.
 fn reconcile<C, CV>(
     old: Vec<KeyedNode<C>>,
     old_render: Vec<RenderNode<CV::Render>>,
@@ -255,8 +237,8 @@ where
         new_bottom -= 1;
     }
 
-    // Plan the keyed middle while `new` can still be borrowed; the loops below then move each child
-    // out in ascending order, which is the only order they are consumed.
+    // Plan the keyed middle while `new` can still be borrowed; the loops below then move each child out
+    // in ascending order, which is the only order they are consumed.
     let plan = (prefix < old_bottom && prefix < new_bottom)
         .then(|| match_keyed_middle(&old_slots, &new, prefix..old_bottom, prefix..new_bottom));
 
@@ -341,8 +323,8 @@ where
     node_can_update(keyed, &new[new_index])
 }
 
-/// Whether the old `keyed` child can be reconciled in place by the new `child` widget: same widget
-/// type and same key.
+/// Whether the old `keyed` child can be reconciled in place by the new `child` widget: same widget type
+/// and same key.
 fn node_can_update<C, CV>(keyed: &KeyedNode<C>, child: &CV) -> bool
 where
     C: Element,
@@ -351,8 +333,8 @@ where
     keyed.type_id == child.widget_type_id() && key_eq(child.key(), keyed.key.as_deref())
 }
 
-/// Reuses the old child at `old_index` for the next new slot, reconciling it in place under its
-/// existing routing id and appending it to the result lists.
+/// Reuses the old child at `old_index` for the next new slot, reconciling it in place under its existing
+/// routing id and appending it to the result lists.
 fn reuse<C, CV>(
     out_nodes: &mut Vec<KeyedNode<C>>,
     out_render: &mut Vec<RenderNode<CV::Render>>,
@@ -366,8 +348,8 @@ fn reuse<C, CV>(
 {
     let (mut keyed, mut render) = old_slots[old_index].take().expect("reused a slot twice");
 
-    // The stored key already equals the new child's: reuse is gated on `node_can_update`, which
-    // compares them. So there is nothing to re-store here.
+    // The stored key already equals the new child's: reuse is gated on `node_can_update`, which compares
+    // them. So there is nothing to re-store here.
     ctx.with_routing_id(keyed.id, |ctx| {
         child.update(&mut keyed.node.element, &mut render.object, ctx);
     });
@@ -377,8 +359,8 @@ fn reuse<C, CV>(
 }
 
 /// Reconciles every new child against the old child at the same index, reusing the old element and
-/// render-object vectors as the result. The caller guarantees equal length and that each position
-/// passes [`node_can_update`].
+/// render-object vectors as the result. The caller guarantees equal length and that each position passes
+/// [`node_can_update`].
 fn reuse_all_in_place<C, CV>(
     mut out_nodes: Vec<KeyedNode<C>>,
     mut out_render: Vec<RenderNode<CV::Render>>,
@@ -435,8 +417,8 @@ fn create<C, CV>(
     out_render.push(RenderNode::new(render_object));
 }
 
-/// For each keyed new child in `new_range`, the old index in `old_range` it reuses by key, or `None`
-/// to create one.
+/// For each keyed new child in `new_range`, the old index in `old_range` it reuses by key, or `None` to
+/// create one.
 fn match_keyed_middle<C, CV>(
     old_slots: &OldSlots<C, CV::Render>,
     new: &[CV],
@@ -479,15 +461,14 @@ mod tests {
 
     use crate::{
         context::{Dispatch, MessageCtx, MountCtx, UpdateCtx},
-        element::Element,
+        element::{Element, RoutingId, RoutingPath},
         key::AnyKeyable,
-        render_object::RenderObject,
-        test_fixtures::MultiChildRenderList,
+        render_object::{RenderObject, node::RenderNode},
         test_harness::TestCtx,
         widget::Widget,
     };
 
-    use super::{MultiChildElement, RoutingId, SingleChildElement};
+    use super::{MultiChildElement, SingleChildElement};
 
     struct Probe {
         id: u32,
@@ -510,7 +491,7 @@ mod tests {
     impl Element for ProbeElement {
         type Render = ProbeRender;
 
-        fn dispatch(&mut self, _: &mut ProbeRender, path: &[RoutingId], action: Dispatch) {
+        fn dispatch(&mut self, _: &mut ProbeRender, path: &RoutingPath, action: Dispatch) {
             assert!(path.is_empty(), "probe is a leaf");
 
             if let Dispatch::Message(ctx) = action {
@@ -591,34 +572,47 @@ mod tests {
             .collect()
     }
 
-    /// An empty render container for a list of probe children.
-    fn render_list() -> MultiChildRenderList<ProbeRender> {
-        MultiChildRenderList {
-            children: Vec::new(),
+    /// A keyed child list and its parallel render nodes, the pair a multi-child element holds.
+    struct Children {
+        elements: MultiChildElement<ProbeElement>,
+        render: Vec<RenderNode<ProbeRender>>,
+    }
+
+    impl Children {
+        fn new(children: Vec<Probe>, ctx: &mut UpdateCtx) -> Self {
+            let (elements, render) = MultiChildElement::build(children, ctx);
+            Self { elements, render }
+        }
+
+        fn update(&mut self, children: Vec<Probe>, ctx: &mut UpdateCtx) {
+            let old_render = std::mem::take(&mut self.render);
+            self.render = self.elements.reconcile(children, old_render, ctx);
         }
     }
 
-    fn child_ids(
-        element: &MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
-    ) -> Vec<u32> {
-        element.children.iter().map(|n| n.node.element.id).collect()
+    fn child_ids(children: &Children) -> Vec<u32> {
+        children
+            .elements
+            .nodes
+            .iter()
+            .map(|n| n.node.element.id)
+            .collect()
     }
 
     /// The mount-stamped identities in order, showing which element instance sits at each position.
-    fn mounted_ids(
-        element: &MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
-    ) -> Vec<u32> {
-        element
-            .children
+    fn mounted_ids(children: &Children) -> Vec<u32> {
+        children
+            .elements
+            .nodes
             .iter()
             .map(|n| n.node.element.mounted_id)
             .collect()
     }
 
     /// The mount-stamped identities of the render children, to check render/element lockstep.
-    fn render_mounted_ids(render: &MultiChildRenderList<ProbeRender>) -> Vec<u32> {
-        render
-            .children
+    fn render_mounted_ids(children: &Children) -> Vec<u32> {
+        children
+            .render
             .iter()
             .map(|n| n.object.mounted_id)
             .collect()
@@ -627,104 +621,77 @@ mod tests {
     #[test]
     fn mount_materializes_each_child() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[10, 20, 30], &m, &u), &mut render, ctx));
+        let children = TestCtx::new().run(|ctx| Children::new(probes(&[10, 20, 30], &m, &u), ctx));
 
         assert_eq!(m.get(), 3);
         assert_eq!(u.get(), 0);
-        assert_eq!(child_ids(&element), vec![10, 20, 30]);
-        assert_eq!(render_mounted_ids(&render), vec![10, 20, 30]);
+        assert_eq!(child_ids(&children), vec![10, 20, 30]);
+        assert_eq!(render_mounted_ids(&children), vec![10, 20, 30]);
     }
 
     #[test]
     fn update_same_length_reuses_each_child_in_place() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let mut element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        let mut children = TestCtx::new().run(|ctx| Children::new(probes(&[1, 2, 3], &m, &u), ctx));
 
-        TestCtx::new().run(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(probes(&[4, 5, 6], &m, &u), ctx));
 
         assert_eq!(m.get(), 3, "no children remounted");
         assert_eq!(u.get(), 3, "each child reconciled in place");
-        assert_eq!(child_ids(&element), vec![4, 5, 6]);
-    }
-
-    #[test]
-    fn same_length_update_keeps_elements_and_render_in_place() {
-        let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let mut element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
-
-        // A same-length update reconciles each child where it sits: no child changes position, and
-        // the render children stay in lockstep with their elements.
-        TestCtx::new().run(|ctx| element.update(probes(&[4, 5, 6], &m, &u), &mut render, ctx));
-
-        assert_eq!(m.get(), 3, "nothing remounted");
-        assert_eq!(mounted_ids(&element), vec![1, 2, 3]);
-        assert_eq!(render_mounted_ids(&render), vec![1, 2, 3]);
-        assert_eq!(child_ids(&element), vec![4, 5, 6]);
+        assert_eq!(child_ids(&children), vec![4, 5, 6]);
+        assert_eq!(mounted_ids(&children), vec![1, 2, 3]);
+        assert_eq!(render_mounted_ids(&children), vec![1, 2, 3]);
     }
 
     #[test]
     fn appending_only_mounts_the_new_tail() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let mut element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[1, 2], &m, &u), &mut render, ctx));
+        let mut children = TestCtx::new().run(|ctx| Children::new(probes(&[1, 2], &m, &u), ctx));
 
-        TestCtx::new().run(|ctx| element.update(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(probes(&[1, 2, 3], &m, &u), ctx));
 
         assert_eq!(m.get(), 3, "two initial mounts plus one appended");
         assert_eq!(u.get(), 2, "the two retained children updated");
-        assert_eq!(child_ids(&element), vec![1, 2, 3]);
-        assert_eq!(render_mounted_ids(&render), vec![1, 2, 3]);
+        assert_eq!(child_ids(&children), vec![1, 2, 3]);
+        assert_eq!(render_mounted_ids(&children), vec![1, 2, 3]);
     }
 
     #[test]
     fn truncating_drops_the_extra_tail() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let mut element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[1, 2, 3], &m, &u), &mut render, ctx));
+        let mut children = TestCtx::new().run(|ctx| Children::new(probes(&[1, 2, 3], &m, &u), ctx));
 
-        TestCtx::new().run(|ctx| element.update(probes(&[1, 2], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(probes(&[1, 2], &m, &u), ctx));
 
         assert_eq!(m.get(), 3, "nothing new mounted");
         assert_eq!(u.get(), 2, "the two survivors updated");
-        assert_eq!(child_ids(&element), vec![1, 2]);
-        assert_eq!(render_mounted_ids(&render), vec![1, 2]);
+        assert_eq!(child_ids(&children), vec![1, 2]);
+        assert_eq!(render_mounted_ids(&children), vec![1, 2]);
     }
 
     #[test]
     fn updating_to_empty_clears_children() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let mut element = TestCtx::new()
-            .run(|ctx| MultiChildElement::new(probes(&[1, 2], &m, &u), &mut render, ctx));
+        let mut children = TestCtx::new().run(|ctx| Children::new(probes(&[1, 2], &m, &u), ctx));
 
-        TestCtx::new().run(|ctx| element.update(probes(&[], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(probes(&[], &m, &u), ctx));
 
-        assert!(child_ids(&element).is_empty());
-        assert!(render.children.is_empty());
+        assert!(child_ids(&children).is_empty());
+        assert!(children.render.is_empty());
     }
 
     #[test]
     fn updating_from_empty_materializes_children() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
-        let mut element =
-            TestCtx::new().run(|ctx| MultiChildElement::new(probes(&[], &m, &u), &mut render, ctx));
-        assert!(child_ids(&element).is_empty());
+        let mut children = TestCtx::new().run(|ctx| Children::new(probes(&[], &m, &u), ctx));
+        assert!(child_ids(&children).is_empty());
 
-        TestCtx::new().run(|ctx| element.update(probes(&[7, 8], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(probes(&[7, 8], &m, &u), ctx));
 
         assert_eq!(m.get(), 2, "fresh children are mounted");
         assert_eq!(u.get(), 0, "none are updated");
-        assert_eq!(child_ids(&element), vec![7, 8]);
-        assert_eq!(render_mounted_ids(&render), vec![7, 8]);
+        assert_eq!(child_ids(&children), vec![7, 8]);
+        assert_eq!(render_mounted_ids(&children), vec![7, 8]);
     }
 
     #[test]
@@ -768,52 +735,38 @@ mod tests {
     #[test]
     fn keyed_children_swap_carries_state_with_the_key() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
 
         // Two same-type keyed children: id 10 keyed 0, id 20 keyed 1.
-        let mut element = TestCtx::new().run(|ctx| {
-            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
-        });
-        assert_eq!(mounted_ids(&element), vec![10, 20]);
-        assert_eq!(render_mounted_ids(&render), vec![10, 20]);
+        let mut children =
+            TestCtx::new().run(|ctx| Children::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), ctx));
+        assert_eq!(mounted_ids(&children), vec![10, 20]);
+        assert_eq!(render_mounted_ids(&children), vec![10, 20]);
 
         // Reorder to [key 1, key 0] with fresh config ids, so we can see which element moved.
-        TestCtx::new()
-            .run(|ctx| element.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), ctx));
 
         assert_eq!(m.get(), 2, "both elements reused, neither remounted");
         // State moved with the key: key 1 (mounted_id 20) to position 0, key 0 (mounted_id 10) to 1.
-        assert_eq!(mounted_ids(&element), vec![20, 10]);
+        assert_eq!(mounted_ids(&children), vec![20, 10]);
         // Config (new widget ids) lands in the new order.
-        assert_eq!(child_ids(&element), vec![98, 99]);
+        assert_eq!(child_ids(&children), vec![98, 99]);
         // The render children reordered in lockstep with the elements.
-        assert_eq!(render_mounted_ids(&render), vec![20, 10]);
+        assert_eq!(render_mounted_ids(&children), vec![20, 10]);
     }
 
     #[test]
     fn keyed_reorder_reuses_drops_and_creates_together() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
 
         // Keys 0,1,2 mounted as ids 10,20,30.
-        let mut element = TestCtx::new().run(|ctx| {
-            MultiChildElement::new(
-                keyed_probes(&[(10, 0), (20, 1), (30, 2)], &m, &u),
-                &mut render,
-                ctx,
-            )
-        });
-        assert_eq!(mounted_ids(&element), vec![10, 20, 30]);
+        let mut children = TestCtx::new()
+            .run(|ctx| Children::new(keyed_probes(&[(10, 0), (20, 1), (30, 2)], &m, &u), ctx));
+        assert_eq!(mounted_ids(&children), vec![10, 20, 30]);
 
-        // New order [key 2, key 5 (new), key 0]: key 2 and key 0 reuse, key 5 is created, key 1
-        // has no new home and is dropped.
-        TestCtx::new().run(|ctx| {
-            element.update(
-                keyed_probes(&[(91, 2), (92, 5), (93, 0)], &m, &u),
-                &mut render,
-                ctx,
-            );
-        });
+        // New order [key 2, key 5 (new), key 0]: key 2 and key 0 reuse, key 5 is created, key 1 has no
+        // new home and is dropped.
+        TestCtx::new()
+            .run(|ctx| children.update(keyed_probes(&[(91, 2), (92, 5), (93, 0)], &m, &u), ctx));
 
         assert_eq!(
             m.get(),
@@ -822,23 +775,24 @@ mod tests {
         );
         // Reused elements followed their keys; the created child carries its own mounted id; key 1
         // (mounted_id 20) is gone.
-        assert_eq!(mounted_ids(&element), vec![30, 92, 10]);
-        assert_eq!(child_ids(&element), vec![91, 92, 93]);
+        assert_eq!(mounted_ids(&children), vec![30, 92, 10]);
+        assert_eq!(child_ids(&children), vec![91, 92, 93]);
         // The render children match the element reorder, including the newly created child.
-        assert_eq!(render_mounted_ids(&render), vec![30, 92, 10]);
+        assert_eq!(render_mounted_ids(&children), vec![30, 92, 10]);
     }
 
-    /// Delivers a message addressed by `id` into `element`, returning the `mounted_id` of the probe
+    /// Delivers a message addressed by `id` into `children`, returning the `mounted_id` of the probe
     /// that received it, if any did.
-    fn deliver(
-        element: &mut MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
-        render: &mut MultiChildRenderList<ProbeRender>,
-        id: u16,
-    ) -> Option<u32> {
+    fn deliver(children: &mut Children, id: u32) -> Option<u32> {
         let received = Rc::new(Cell::new(None));
         let mut ctx = MessageCtx::new(Box::new(Rc::clone(&received)));
 
-        element.dispatch(render, &[RoutingId::new(id)], Dispatch::Message(&mut ctx));
+        let path = RoutingId::encode_path([RoutingId::new(id)]);
+        children.elements.dispatch(
+            &mut children.render,
+            RoutingPath::new(&path),
+            Dispatch::Message(&mut ctx),
+        );
 
         received.get()
     }
@@ -846,149 +800,47 @@ mod tests {
     #[test]
     fn dispatch_after_keyed_reorder_reaches_the_moved_element() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
 
         // Ids are allocated in mount order, so key 0's element holds id 0 and key 1's holds id 1.
-        let mut element = TestCtx::new().run(|ctx| {
-            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
-        });
+        let mut children =
+            TestCtx::new().run(|ctx| Children::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), ctx));
 
-        TestCtx::new()
-            .run(|ctx| element.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(keyed_probes(&[(98, 1), (99, 0)], &m, &u), ctx));
 
         // Each id still reaches the element it was issued to, not whoever sits at that index now.
-        assert_eq!(deliver(&mut element, &mut render, 1), Some(20));
-        assert_eq!(deliver(&mut element, &mut render, 0), Some(10));
+        assert_eq!(deliver(&mut children, 1), Some(20));
+        assert_eq!(deliver(&mut children, 0), Some(10));
     }
 
     #[test]
     fn dispatch_to_a_removed_child_is_dropped() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
 
-        let mut element = TestCtx::new().run(|ctx| {
-            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
-        });
+        let mut children =
+            TestCtx::new().run(|ctx| Children::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), ctx));
 
-        TestCtx::new()
-            .run(|ctx| element.update(keyed_probes(&[(99, 1)], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(keyed_probes(&[(99, 1)], &m, &u), ctx));
 
         assert_eq!(
-            deliver(&mut element, &mut render, 0),
+            deliver(&mut children, 0),
             None,
             "the dropped child's id no longer delivers"
         );
-        assert_eq!(deliver(&mut element, &mut render, 1), Some(20));
+        assert_eq!(deliver(&mut children, 1), Some(20));
     }
 
     #[test]
     fn created_child_gets_a_fresh_id() {
         let (m, u) = (counter(), counter());
-        let mut render = render_list();
 
-        let mut element = TestCtx::new().run(|ctx| {
-            MultiChildElement::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), &mut render, ctx)
-        });
+        let mut children =
+            TestCtx::new().run(|ctx| Children::new(keyed_probes(&[(10, 0), (20, 1)], &m, &u), ctx));
 
         // Key 5 is new: it is created under the next id, 2, never one freed by the dropped children.
-        TestCtx::new()
-            .run(|ctx| element.update(keyed_probes(&[(91, 5)], &m, &u), &mut render, ctx));
+        TestCtx::new().run(|ctx| children.update(keyed_probes(&[(91, 5)], &m, &u), ctx));
 
-        assert_eq!(deliver(&mut element, &mut render, 0), None);
-        assert_eq!(deliver(&mut element, &mut render, 1), None);
-        assert_eq!(deliver(&mut element, &mut render, 2), Some(91));
-    }
-
-    /// A keyed widget whose element is itself a [`MultiChildElement`], so nesting two of them lets a
-    /// reorder of the outer list recurse into a reorder of an inner list.
-    struct Group {
-        key: u32,
-        children: Vec<Probe>,
-    }
-
-    impl Widget for Group {
-        type Element = MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>;
-
-        type Render = MultiChildRenderList<ProbeRender>;
-
-        fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-            let mut render = render_list();
-            let element = MultiChildElement::new(self.children, &mut render, ctx);
-
-            (element, render)
-        }
-
-        fn update(
-            self,
-            element: &mut Self::Element,
-            render: &mut Self::Render,
-            ctx: &mut UpdateCtx,
-        ) {
-            element.update(self.children, render, ctx);
-        }
-
-        fn key(&self) -> Option<&dyn AnyKeyable> {
-            Some(&self.key)
-        }
-    }
-
-    #[test]
-    fn nested_reorder_does_not_reentrantly_borrow_the_keyed_map() {
-        let (m, u) = (counter(), counter());
-        let group = |key, items: &[(u32, u32)]| Group {
-            key,
-            children: keyed_probes(items, &m, &u),
-        };
-
-        let mut render = MultiChildRenderList::<MultiChildRenderList<ProbeRender>> {
-            children: Vec::new(),
-        };
-
-        // Two keyed groups, each a keyed child list.
-        let mut element: MultiChildElement<
-            MultiChildElement<ProbeElement, MultiChildRenderList<ProbeRender>>,
-            MultiChildRenderList<MultiChildRenderList<ProbeRender>>,
-        > = TestCtx::new().run(|ctx| {
-            MultiChildElement::new(
-                vec![
-                    group(0, &[(100, 0), (101, 1)]),
-                    group(1, &[(200, 0), (201, 1)]),
-                ],
-                &mut render,
-                ctx,
-            )
-        });
-        assert_eq!(m.get(), 4, "four leaf probes mounted across the two groups");
-
-        // Reorder the groups (key 1 first) AND reorder the probes inside each group. The outer
-        // reorder recurses into each inner reorder while applying its plan.
-        TestCtx::new().run(|ctx| {
-            element.update(
-                vec![
-                    group(1, &[(210, 1), (211, 0)]),
-                    group(0, &[(110, 1), (111, 0)]),
-                ],
-                &mut render,
-                ctx,
-            );
-        });
-
-        assert_eq!(m.get(), 4, "everything reused by key, nothing remounted");
-
-        // Each element instance followed its key down both levels: group key 1 to outer index 0
-        // with its probes reordered key-1-first, group key 0 to index 1.
-        let nested: Vec<Vec<u32>> = element
-            .children
-            .iter()
-            .map(|g| {
-                g.node
-                    .element
-                    .children
-                    .iter()
-                    .map(|n| n.node.element.mounted_id)
-                    .collect()
-            })
-            .collect();
-        assert_eq!(nested, vec![vec![201, 200], vec![101, 100]]);
+        assert_eq!(deliver(&mut children, 0), None);
+        assert_eq!(deliver(&mut children, 1), None);
+        assert_eq!(deliver(&mut children, 2), Some(91));
     }
 }

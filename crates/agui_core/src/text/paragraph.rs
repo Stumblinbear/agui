@@ -15,7 +15,7 @@ use crate::{
     paint::{Canvas, command::GlyphInstance},
     pipeline::{layout::LayoutScope, paint::PaintScope},
     render_object::{
-        MultiChildRenderObject, RenderObject,
+        RenderObject,
         box_layout::{BoxConstraints, RenderBox},
         node::RenderNode,
     },
@@ -114,6 +114,24 @@ impl<C> RenderParagraph<C> {
         self.layout_scope.mark_needs_layout();
     }
 
+    /// Takes the inline child render objects out, for a reconcile that hands back the reordered set.
+    pub fn take_children(&mut self) -> Vec<RenderNode<C>> {
+        std::mem::take(&mut self.children)
+    }
+
+    /// Installs the inline child render objects, resizing the per-child layout data to match and
+    /// marking the paragraph for reshape.
+    pub fn set_children(&mut self, children: Vec<RenderNode<C>>) {
+        self.child_data = vec![InlineChildData::default(); children.len()];
+        self.children = children;
+        self.mark_needs_reshape();
+    }
+
+    /// The inline child render objects, for routing a dispatch into one of them.
+    pub fn children_mut(&mut self) -> &mut [RenderNode<C>] {
+        &mut self.children
+    }
+
     /// The maximum advance to break against: the finite max width, or `None` when unbounded.
     fn max_advance(constraints: BoxConstraints) -> Option<f32> {
         constraints
@@ -200,28 +218,6 @@ fn excerpt(text: &str) -> String {
     match text.char_indices().nth(LIMIT) {
         Some((cut, _)) => format!("{}…", &text[..cut]),
         None => text.to_owned(),
-    }
-}
-
-impl<C> MultiChildRenderObject for RenderParagraph<C> {
-    type Child = C;
-
-    fn take_children(&mut self) -> Vec<RenderNode<C>> {
-        std::mem::take(&mut self.children)
-    }
-
-    fn set_children(&mut self, children: Vec<RenderNode<C>>) {
-        self.child_data = vec![InlineChildData::default(); children.len()];
-        self.children = children;
-        self.mark_needs_reshape();
-    }
-
-    fn with_child<R>(&self, index: usize, f: impl FnOnce(&C) -> R) -> R {
-        f(&self.children[index].object)
-    }
-
-    fn with_child_mut<R>(&mut self, index: usize, f: impl FnOnce(&mut C) -> R) -> R {
-        f(&mut self.children[index].object)
     }
 }
 

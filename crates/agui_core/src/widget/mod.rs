@@ -3,8 +3,10 @@ use std::any::TypeId;
 use crate::{context::UpdateCtx, element::Element, key::AnyKeyable};
 
 mod any_widget;
+mod list;
 
 pub use any_widget::*;
+pub use list::*;
 
 /// The immutable description of a piece of the tree. A `Widget` is consumed to build its persistent
 /// [`Element`], which holds state and children, together with its render object; it is consumed
@@ -63,7 +65,7 @@ mod tests {
 
     use crate::{
         context::{Dispatch, MessageCtx},
-        element::{Element, RoutingId},
+        element::{Element, RoutingId, RoutingPath},
         test_fixtures::{Leaf, MultiChild, Transparent},
         test_harness::TestCtx,
     };
@@ -107,12 +109,15 @@ mod tests {
         payload: Box<dyn Any>,
     ) -> MessageCtx {
         let mut ctx = MessageCtx::new(payload);
-        element.dispatch(render, path, Dispatch::Message(&mut ctx));
+        let path = RoutingId::encode_path(path.iter().copied());
+        element.dispatch(render, RoutingPath::new(&path), Dispatch::Message(&mut ctx));
         ctx
     }
 
     fn rebuild<E: Element>(element: &mut E, render: &mut E::Render, path: &[RoutingId]) {
-        TestCtx::new().run(|ctx| element.dispatch(render, path, Dispatch::Rebuild(ctx)));
+        let path = RoutingId::encode_path(path.iter().copied());
+        TestCtx::new()
+            .run(|ctx| element.dispatch(render, RoutingPath::new(&path), Dispatch::Rebuild(ctx)));
     }
 
     #[test]

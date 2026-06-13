@@ -9,7 +9,7 @@ use slotmap::SlotMap;
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{AnyElement, Element, RoutingId, RoutingPath},
+    element::{AnyElement, Element, RoutingPath, RoutingTarget},
     pipeline::{
         layout::LayoutPipeline,
         paint::{PaintPipeline, PaintScope},
@@ -69,21 +69,25 @@ impl BuildState {
         self.boundaries.get(id).and_then(Weak::upgrade)
     }
 
-    /// Marks the element at `path` to rebuild on the next flush.
-    pub(crate) fn mark_rebuild(&mut self, path: &RoutingPath) {
-        self.mark(path, MarkKind::Rebuild);
+    /// Marks the element at `target` to rebuild on the next flush.
+    pub(crate) fn mark_rebuild(&mut self, target: &RoutingTarget) {
+        self.mark(target, MarkKind::Rebuild);
     }
 
-    /// Marks the element at `path` to rebuild on the next flush because a provided value it depends
+    /// Marks the element at `target` to rebuild on the next flush because a provided value it depends
     /// on changed, so its dependency-change hook runs.
-    pub(crate) fn mark_dependency_changed(&mut self, path: &RoutingPath) {
-        self.mark(path, MarkKind::DependencyChanged);
+    pub(crate) fn mark_dependency_changed(&mut self, target: &RoutingTarget) {
+        self.mark(target, MarkKind::DependencyChanged);
     }
 
-    /// Queues the boundary owning `path` for the next flush, recording the within-path and why. A
-    /// path whose boundary is gone is dropped.
-    fn mark(&mut self, path: &RoutingPath, kind: MarkKind) {
-        let Some(cell) = self.boundaries.get(path.boundary()).and_then(Weak::upgrade) else {
+    /// Queues the boundary owning `target` for the next flush, recording the within-path and why. A
+    /// target whose boundary is gone is dropped.
+    fn mark(&mut self, target: &RoutingTarget, kind: MarkKind) {
+        let Some(cell) = self
+            .boundaries
+            .get(target.boundary())
+            .and_then(Weak::upgrade)
+        else {
             return;
         };
 
@@ -94,7 +98,7 @@ impl BuildState {
 
         cell.suffixes
             .borrow_mut()
-            .push((path.within().into(), kind));
+            .push((target.path().as_bytes().into(), kind));
     }
 
     /// Drains the marked boundaries into their owning `Rc`s, ordered shallowest-depth first so that
@@ -121,17 +125,17 @@ impl BuildState {
     /// A path whose boundary is gone (unmounted, or its inner replaced) is dropped.
     pub(crate) fn deliver_message(
         state: &Rc<RefCell<Self>>,
-        path: &RoutingPath,
+        target: &RoutingTarget,
         ctx: &mut MessageCtx,
     ) {
-        let Some(cell) = state.borrow().lookup(path.boundary()) else {
+        let Some(cell) = state.borrow().lookup(target.boundary()) else {
             return;
         };
 
-        cell.dispatch_within(path.within(), Dispatch::Message(ctx));
+        cell.dispatch_within(target.path(), Dispatch::Message(ctx));
 
         if ctx.rebuild_requested() {
-            state.borrow_mut().mark_rebuild(path);
+            state.borrow_mut().mark_rebuild(target);
         }
     }
 
@@ -199,9 +203,9 @@ impl BuildScope {
 
     /// Marks the element at `path` for a dependency-change rebuild on the next flush. A detached scope
     /// reaches no registry, so the mark is dropped.
-    pub(crate) fn mark_dependency_changed(&self, path: &RoutingPath) {
+    pub(crate) fn mark_dependency_changed(&self, target: &RoutingTarget) {
         if let Some(state) = self.state.upgrade() {
-            state.borrow_mut().mark_dependency_changed(path);
+            state.borrow_mut().mark_dependency_changed(target);
         }
     }
 }
@@ -224,9 +228,9 @@ struct BuildBoundaryCell {
     /// pipeline that owns the subtree attaches it.
     render: RefCell<Option<SharedRenderObject>>,
 
-    /// The descendants marked since the last flush: each path relative to the inner element, tagged
-    /// with why it was marked.
-    suffixes: RefCell<Vec<(Box<[RoutingId]>, MarkKind)>>,
+    /// The descendants marked since the last flush: each encoded path relative to the inner element,
+    /// tagged with why it was marked.
+    suffixes: RefCell<Vec<(Box<[u8]>, MarkKind)>>,
 
     /// Whether this boundary is currently in the registry's dirty list, guarding a double-mark from
     /// queueing it twice.
@@ -290,7 +294,7 @@ impl Drop for BuildBoundaryCell {
 }
 
 impl BuildBoundaryCell {
-    fn dispatch_within(&self, within: &[RoutingId], action: Dispatch) {
+    fn dispatch_within(&self, within: &RoutingPath, action: Dispatch) {
         let render = self.render.borrow();
         let Some(render) = render.as_ref() else {
             return;
@@ -342,7 +346,7 @@ impl BuildBoundaryCell {
             };
 
             let mut child = self.child.borrow_mut();
-            child.dyn_dispatch(&mut *render, &suffix, action);
+            child.dyn_dispatch(&mut *render, RoutingPath::new(&suffix), action);
         }
     }
 }
@@ -428,7 +432,7 @@ impl BuildBoundaryElement {
     }
 
     /// Routes `action` along `within` to the inner element. The path is relative to this boundary.
-    pub fn dispatch(&mut self, within: &[RoutingId], action: Dispatch) {
+    pub fn dispatch(&mut self, within: &RoutingPath, action: Dispatch) {
         self.cell.dispatch_within(within, action);
     }
 }
@@ -504,7 +508,7 @@ where
 {
     type Render = R;
 
-    fn dispatch(&mut self, _render: &mut R, path: &[RoutingId], action: Dispatch) {
+    fn dispatch(&mut self, _render: &mut R, path: &RoutingPath, action: Dispatch) {
         // The boundary holds its own render, so a dispatch routes through it rather than through the
         // parent-threaded render.
         self.boundary.dispatch(path, action);
@@ -524,14 +528,14 @@ mod tests {
 
     use crate::{
         context::{MessageCtx, UpdateCtx},
-        element::RoutingPath,
+        element::{RoutingId, RoutingTarget},
         pipeline::PipelineOwner,
         scheduling::TaskHandle,
         test_fixtures::{Leaf, MultiChild},
         test_harness::TestCtx,
     };
 
-    use super::{BuildBoundaryId, RebuildBoundary, RoutingId};
+    use super::{BuildBoundaryId, RebuildBoundary};
 
     /// A leaf that records the boundary it mounts under and counts the rebuilds delivered to it.
     fn probe(boundary: &Rc<Cell<Option<BuildBoundaryId>>>, rebuilds: &Rc<Cell<usize>>) -> Leaf {
@@ -592,12 +596,12 @@ mod tests {
 
         // Each leaf sits at the empty path within its own boundary, reached by that boundary's id; a
         // message there asks it to rebuild, the way a set-state would.
-        owner.dispatch_message(&RoutingPath::new(a, Vec::new()), Box::new(()));
+        owner.dispatch_message(&RoutingTarget::new(a, Vec::new()), Box::new(()));
         assert!(owner.flush_build(&mut tasks.scheduler()));
         assert_eq!(a_rebuilds.get(), 1);
         assert_eq!(b_rebuilds.get(), 0, "the sibling boundary was not rebuilt");
 
-        owner.dispatch_message(&RoutingPath::new(b, Vec::new()), Box::new(()));
+        owner.dispatch_message(&RoutingTarget::new(b, Vec::new()), Box::new(()));
         assert!(owner.flush_build(&mut tasks.scheduler()));
         assert_eq!(
             a_rebuilds.get(),
@@ -649,7 +653,8 @@ mod tests {
         let mut tasks = TestCtx::new();
         let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
 
-        let target = RoutingPath::new(owner.root_id(), vec![RoutingId::new(1)]);
+        let target =
+            RoutingTarget::new(owner.root_id(), RoutingId::encode_path([RoutingId::new(1)]));
         owner.dispatch_message(&target, Box::new(42_u32));
         assert!(
             owner.is_dirty(),
@@ -694,11 +699,11 @@ mod tests {
 
         let root = owner.root_id();
         owner.dispatch_message(
-            &RoutingPath::new(root, vec![RoutingId::new(0)]),
+            &RoutingTarget::new(root, RoutingId::encode_path([RoutingId::new(0)])),
             Box::new(1_u32),
         );
         owner.dispatch_message(
-            &RoutingPath::new(root, vec![RoutingId::new(2)]),
+            &RoutingTarget::new(root, RoutingId::encode_path([RoutingId::new(2)])),
             Box::new(2_u32),
         );
 

@@ -3,7 +3,7 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     context::{MessageCtx, MountCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingPath},
+    element::{BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingTarget},
     pipeline::{
         layout::LayoutPipeline,
         paint::{PaintPipeline, PaintScope},
@@ -107,10 +107,10 @@ impl PipelineOwner {
 
     /// Delivers `message` to the element at `path`. If that element asks to rebuild, its boundary is
     /// marked for the next [`flush_build`](Self::flush_build).
-    pub fn dispatch_message(&mut self, path: &RoutingPath, message: Box<dyn Any>) {
+    pub fn dispatch_message(&mut self, target: &RoutingTarget, message: Box<dyn Any>) {
         let mut ctx = MessageCtx::new(message);
 
-        BuildState::deliver_message(&self.build_state, path, &mut ctx);
+        BuildState::deliver_message(&self.build_state, target, &mut ctx);
     }
 
     /// Rebuilds every build boundary marked since the last flush. Returns whether anything rebuilt, so
