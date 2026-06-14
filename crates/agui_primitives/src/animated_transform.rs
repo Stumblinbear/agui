@@ -584,7 +584,7 @@ mod tests {
 #[cfg(test)]
 mod harness {
     use agui_core::paint::peniko::kurbo::Affine;
-    use agui_test::prelude::*;
+    use agui_test::sizing::BoxSizingCheck;
 
     use super::AnimatedTransform;
     use crate::sized_box::SizedBox;

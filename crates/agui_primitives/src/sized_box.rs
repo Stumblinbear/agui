@@ -597,7 +597,11 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_test::prelude::*;
+
+    use std::time::Duration;
+
+    use agui_core::prelude::{element::Size, render_object::BoxConstraints};
+    use agui_test::{Probe, WidgetTester, sizing::BoxSizingCheck};
 
     use super::SizedBox;
 

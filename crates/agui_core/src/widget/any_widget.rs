@@ -8,9 +8,9 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element, RoutingId, RoutingPath, node::ElementNode},
     key::AnyKeyable,
-    render_object::AnyRenderObject,
     render_object::box_layout::{AnyRenderBox, RenderBox},
     render_object::sliver::{AnyRenderSliver, RenderSliver},
+    render_object::{AnyRenderObject, RenderObject},
     widget::Widget,
 };
 
@@ -125,7 +125,7 @@ where
 
 impl<R> Widget for Box<dyn AnyWidget<Render = R>>
 where
-    R: AnyRenderObject + 'static,
+    R: RenderObject,
 {
     type Element = ErasedElement<R>;
 
@@ -164,9 +164,11 @@ where
             });
         } else {
             // Type swap: bump the generation so events queued for the old inner are dropped, then
-            // rebuild the inner element and its render object.
+            // unmount the old inner and build a fresh element and render object in its place.
             element.generation = element.generation.wrapping_add(1);
             element.type_id = new_type;
+
+            ctx.unmount(render_object);
 
             let (child, new_render) = ctx
                 .with_routing_id(RoutingId::new(u32::from(element.generation)), |ctx| {
@@ -175,6 +177,8 @@ where
 
             element.child = ElementNode::new(child);
             *render_object = new_render;
+
+            ctx.mount(render_object);
         }
     }
 
@@ -249,12 +253,16 @@ where
         ctx: &mut UpdateCtx,
     ) {
         // deref past the Box to the concrete object; same type -> reuse, else replace
-        if let Some(render_object) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
-            self.inner.update(&mut element.inner, render_object, ctx);
+        if let Some(inner_render) = (**render_object).as_any_mut().downcast_mut::<T::Render>() {
+            self.inner.update(&mut element.inner, inner_render, ctx);
         } else {
+            ctx.unmount(render_object);
+
             let (inner, render) = self.inner.create(ctx);
             element.inner = inner;
             *render_object = Box::new(render);
+
+            ctx.mount(render_object);
         }
     }
 
@@ -406,11 +414,12 @@ impl<T: 'static> AsAnyWidget for T where T: Widget {}
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, cell::Cell, rc::Rc};
+    use std::{any::Any, cell::Cell, marker::PhantomData, rc::Rc};
 
     use crate::{
-        context::{Dispatch, MessageCtx, UpdateCtx},
+        context::{Dispatch, MessageCtx, MountCtx, UpdateCtx},
         element::{Element, RoutingId, RoutingPath},
+        render_object::RenderObject,
         test_fixtures::Leaf,
         test_harness::TestCtx,
     };
@@ -634,6 +643,98 @@ mod tests {
             messages.get(),
             0,
             "the replaced inner must not receive messages addressed to the old generation"
+        );
+    }
+
+    /// A render object that tallies its own mounts and unmounts, to observe the lifecycle across a
+    /// type swap at the erased boundary.
+    struct CountingRender {
+        mounts: Rc<Cell<usize>>,
+        unmounts: Rc<Cell<usize>>,
+    }
+
+    impl RenderObject for CountingRender {
+        fn mount(&mut self, _: &mut MountCtx) {
+            self.mounts.set(self.mounts.get() + 1);
+        }
+
+        fn unmount(&mut self, _: &mut MountCtx) {
+            self.unmounts.set(self.unmounts.get() + 1);
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+    }
+
+    /// A leaf widget distinguished by `T`, so a `CountingWidget<usize>` and a `CountingWidget<u8>` are
+    /// different concrete types and swapping one for the other crosses the boundary's type check.
+    struct CountingWidget<T> {
+        _value: PhantomData<T>,
+        mounts: Rc<Cell<usize>>,
+        unmounts: Rc<Cell<usize>>,
+    }
+
+    struct CountingElement;
+
+    impl Element for CountingElement {
+        type Render = CountingRender;
+    }
+
+    impl<T: 'static> Widget for CountingWidget<T> {
+        type Element = CountingElement;
+
+        type Render = CountingRender;
+
+        fn create(self, _: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+            (
+                CountingElement,
+                CountingRender {
+                    mounts: self.mounts,
+                    unmounts: self.unmounts,
+                },
+            )
+        }
+
+        fn update(self, _: &mut Self::Element, _: &mut Self::Render, _: &mut UpdateCtx) {}
+    }
+
+    /// A `CountingWidget` plus the cells tracking its render object's mount and unmount counts.
+    fn counting_widget<T>() -> (CountingWidget<T>, Rc<Cell<usize>>, Rc<Cell<usize>>) {
+        let mounts = Rc::new(Cell::new(0));
+        let unmounts = Rc::new(Cell::new(0));
+
+        let widget = CountingWidget {
+            _value: PhantomData,
+            mounts: Rc::clone(&mounts),
+            unmounts: Rc::clone(&unmounts),
+        };
+
+        (widget, mounts, unmounts)
+    }
+
+    #[test]
+    fn replacing_a_dyn_widget_unmounts_the_old_render_and_mounts_the_new() {
+        let (widget, _, old_unmounts) = counting_widget::<usize>();
+        let (mut element, mut render) =
+            TestCtx::new().create(Box::new(widget) as Box<dyn AnyWidget<Render = CountingRender>>);
+
+        let (new_widget, new_mounts, _) = counting_widget::<u8>();
+        TestCtx::new().update(
+            Box::new(new_widget) as Box<dyn AnyWidget<Render = CountingRender>>,
+            &mut element,
+            &mut render,
+        );
+
+        assert_eq!(
+            old_unmounts.get(),
+            1,
+            "the replaced render object is unmounted"
+        );
+        assert_eq!(
+            new_mounts.get(),
+            1,
+            "the fresh render object is mounted in its place"
         );
     }
 }

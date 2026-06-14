@@ -218,7 +218,8 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_test::prelude::*;
+
+    use agui_test::sizing::BoxSizingCheck;
 
     use super::SingleChildScrollView;
     use crate::sized_box::SizedBox;

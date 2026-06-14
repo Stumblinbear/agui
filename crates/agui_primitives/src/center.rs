@@ -234,7 +234,10 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_test::prelude::*;
+    use std::time::Duration;
+
+    use agui_core::{paint::peniko::Color, prelude::element::*};
+    use agui_test::{Probe, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck};
 
     use super::Center;
     use crate::sized_box::SizedBox;

@@ -179,10 +179,16 @@ impl<'a> UpdateCtx<'a> {
         func(&mut update_ctx);
     }
 
-    /// Mounts `render_object`, the root of a subtree just built during reconcile, into the pipeline
-    /// under the enclosing boundary.
     pub fn mount<R: RenderObject + ?Sized>(&mut self, render_object: &mut R) {
         render_object.mount(&mut MountCtx::new(
+            self.layout,
+            self.paint,
+            self.paint_scope,
+        ));
+    }
+
+    pub fn unmount<R: RenderObject + ?Sized>(&mut self, render_object: &mut R) {
+        render_object.unmount(&mut MountCtx::new(
             self.layout,
             self.paint,
             self.paint_scope,

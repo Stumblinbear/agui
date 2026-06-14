@@ -159,6 +159,10 @@ impl<C: WidgetSequence> WidgetSequence for Option<C> {
                 *renders = Some(r);
             }
         } else {
+            if let Some(renders) = renders.as_mut() {
+                renders.for_each_mut(&mut |child| ctx.unmount(&mut child.object));
+            }
+
             *elements = None;
             *renders = None;
         }
@@ -516,9 +520,10 @@ mod tests {
         assert_eq!(container.children.len(), 3);
     }
 
-    /// A render object that records its mounts and is otherwise layout-inert.
+    /// A render object that records its mounts and unmounts and is otherwise layout-inert.
     struct MountSpy {
         mounts: Rc<Cell<usize>>,
+        unmounts: Rc<Cell<usize>>,
     }
 
     impl RenderObject for MountSpy {
@@ -526,7 +531,9 @@ mod tests {
             self.mounts.set(self.mounts.get() + 1);
         }
 
-        fn unmount(&mut self, _: &mut MountCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {
+            self.unmounts.set(self.unmounts.get() + 1);
+        }
 
         fn update_compositing_bits(&mut self) -> bool {
             false
@@ -580,6 +587,7 @@ mod tests {
     /// A leaf widget whose render object is a [`MountSpy`].
     struct SpyWidget {
         mounts: Rc<Cell<usize>>,
+        unmounts: Rc<Cell<usize>>,
     }
 
     impl Widget for SpyWidget {
@@ -591,6 +599,7 @@ mod tests {
                 LeafElement::new(),
                 MountSpy {
                     mounts: self.mounts,
+                    unmounts: self.unmounts,
                 },
             )
         }
@@ -614,11 +623,39 @@ mod tests {
             probe::<u8>(1, &mounts, &sink),
             Some(SpyWidget {
                 mounts: Rc::clone(&spy_mounts),
+                unmounts: Rc::new(Cell::new(0)),
             }),
         );
         TestCtx::new().run(|ctx| element.update(next, &mut container, ctx));
 
         assert_eq!(container.children.len(), 2);
         assert_eq!(spy_mounts.get(), 1, "the toggled-in subtree was mounted");
+    }
+
+    #[test]
+    fn option_toggled_out_unmounts_the_subtree() {
+        let mounts = Rc::new(Cell::new(0));
+        let sink = Rc::new(Cell::new(None));
+        let spy_unmounts = Rc::new(Cell::new(0));
+
+        let children = (
+            probe::<u8>(1, &mounts, &sink),
+            Some(SpyWidget {
+                mounts: Rc::new(Cell::new(0)),
+                unmounts: Rc::clone(&spy_unmounts),
+            }),
+        );
+        let (mut element, renders) = TestCtx::new().run(|ctx| ChildrenElement::new(children, ctx));
+        let mut container = Container { children: renders };
+
+        let next = (probe::<u8>(1, &mounts, &sink), Option::<SpyWidget>::None);
+        TestCtx::new().run(|ctx| element.update(next, &mut container, ctx));
+
+        assert_eq!(container.children.len(), 1);
+        assert_eq!(
+            spy_unmounts.get(),
+            1,
+            "the toggled-out subtree was unmounted"
+        );
     }
 }

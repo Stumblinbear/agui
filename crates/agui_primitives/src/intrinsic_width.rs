@@ -196,7 +196,7 @@ where
 
 #[cfg(test)]
 mod harness {
-    use agui_test::prelude::*;
+    use agui_test::sizing::BoxSizingCheck;
 
     use super::IntrinsicWidth;
     use crate::sized_box::SizedBox;

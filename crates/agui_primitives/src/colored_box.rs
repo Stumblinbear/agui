@@ -271,7 +271,8 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_test::prelude::*;
+    use agui_core::paint::peniko::Color;
+    use agui_test::sizing::BoxSizingCheck;
 
     use super::ColoredBox;
     use crate::sized_box::SizedBox;

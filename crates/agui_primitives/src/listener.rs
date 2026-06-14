@@ -254,9 +254,13 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use std::{cell::Cell, rc::Rc};
+    use std::{cell::Cell, rc::Rc, time::Duration};
 
-    use agui_test::prelude::*;
+    use agui_core::{
+        input::pointer::PointerHandler,
+        prelude::element::{HitTestBehavior, Offset, PointerEvent, Size},
+    };
+    use agui_test::{WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck};
 
     use super::Listener;
     use crate::sized_box::SizedBox;

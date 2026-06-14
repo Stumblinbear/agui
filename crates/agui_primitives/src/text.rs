@@ -127,10 +127,15 @@ impl Widget for Text {
 
 #[cfg(test)]
 mod harness {
-    use agui_core::prelude::render_object::Fonts;
-    use agui_test::prelude::*;
+    use std::time::Duration;
+
+    use agui_core::prelude::{
+        element::Size,
+        render_object::{BoxConstraints, Fonts},
+    };
 
     use agui_core::provide::Provide;
+    use agui_test::{Probe, WidgetTester};
 
     use super::Text;
 

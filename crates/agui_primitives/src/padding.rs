@@ -327,8 +327,8 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_core::geometry::EdgeInsets;
-    use agui_test::prelude::*;
+    use agui_core::{geometry::EdgeInsets, prelude::element::Size};
+    use agui_test::{fixtures::IntrinsicBox, sizing::BoxSizingCheck};
 
     use super::Padding;
     use crate::sized_box::SizedBox;

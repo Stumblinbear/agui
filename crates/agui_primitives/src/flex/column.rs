@@ -353,3 +353,17 @@ mod tests {
         assert_eq!(render.children.len(), 3);
     }
 }
+
+#[cfg(test)]
+mod element_contract {
+
+    use agui_test::ElementLifecycleCheck;
+
+    use super::Column;
+
+    #[test]
+    fn obeys_the_element_contracts() {
+        ElementLifecycleCheck::new()
+            .multi_child(|children| Column::builder().children(children).build());
+    }
+}

@@ -192,8 +192,12 @@ where
     let mut out_nodes = Vec::with_capacity(new_len);
     let mut out_render = Vec::with_capacity(new_len);
 
-    // No children now: drop everything.
+    // No children now: unmount every old child before it drops.
     if new_len == 0 {
+        for mut render in old_render {
+            ctx.unmount(&mut render.object);
+        }
+
         return (out_nodes, out_render);
     }
 
@@ -258,7 +262,7 @@ where
     }
 
     // The middle is matched by key: a matched new child reuses its old one, an unmatched new child is
-    // created, and an old child no entry claims is left in `old_slots` to drop.
+    // created, and an old child no entry claims is left in `old_slots` to unmount below.
     if let Some(plan) = plan {
         for matched in plan {
             let child = new.next().expect("middle child");
@@ -295,6 +299,11 @@ where
             child,
             ctx,
         );
+    }
+
+    // Any old child no new child claimed is leaving the tree; unmount it before it drops.
+    for (_, mut render) in old_slots.into_iter().flatten() {
+        ctx.unmount(&mut render.object);
     }
 
     (out_nodes, out_render)
@@ -475,6 +484,7 @@ mod tests {
         key: Option<u32>,
         mounts: Rc<Cell<usize>>,
         updates: Rc<Cell<usize>>,
+        unmounts: Rc<Cell<usize>>,
     }
 
     struct ProbeElement {
@@ -486,6 +496,7 @@ mod tests {
     /// against the render tree as well as the element tree.
     struct ProbeRender {
         mounted_id: u32,
+        unmounts: Rc<Cell<usize>>,
     }
 
     impl Element for ProbeElement {
@@ -504,7 +515,9 @@ mod tests {
     impl RenderObject for ProbeRender {
         fn mount(&mut self, _: &mut MountCtx) {}
 
-        fn unmount(&mut self, _: &mut MountCtx) {}
+        fn unmount(&mut self, _: &mut MountCtx) {
+            self.unmounts.set(self.unmounts.get() + 1);
+        }
 
         fn update_compositing_bits(&mut self) -> bool {
             false
@@ -526,6 +539,7 @@ mod tests {
                 },
                 ProbeRender {
                     mounted_id: self.id,
+                    unmounts: self.unmounts,
                 },
             )
         }
@@ -551,6 +565,7 @@ mod tests {
                 key: None,
                 mounts: Rc::clone(mounts),
                 updates: Rc::clone(updates),
+                unmounts: Rc::new(Cell::new(0)),
             })
             .collect()
     }
@@ -568,6 +583,26 @@ mod tests {
                 key: Some(key),
                 mounts: Rc::clone(mounts),
                 updates: Rc::clone(updates),
+                unmounts: Rc::new(Cell::new(0)),
+            })
+            .collect()
+    }
+
+    /// Build probes that tally their render objects' unmounts into `unmounts`, so a removal can be
+    /// observed on the render side.
+    fn tracked_probes(
+        ids: &[u32],
+        mounts: &Rc<Cell<usize>>,
+        updates: &Rc<Cell<usize>>,
+        unmounts: &Rc<Cell<usize>>,
+    ) -> Vec<Probe> {
+        ids.iter()
+            .map(|&id| Probe {
+                id,
+                key: None,
+                mounts: Rc::clone(mounts),
+                updates: Rc::clone(updates),
+                unmounts: Rc::clone(unmounts),
             })
             .collect()
     }
@@ -681,6 +716,38 @@ mod tests {
     }
 
     #[test]
+    fn truncating_unmounts_the_dropped_tail() {
+        let (m, u, un) = (counter(), counter(), counter());
+        let mut children =
+            TestCtx::new().run(|ctx| Children::new(tracked_probes(&[1, 2, 3], &m, &u, &un), ctx));
+
+        TestCtx::new().run(|ctx| children.update(tracked_probes(&[1, 2], &m, &u, &un), ctx));
+
+        assert_eq!(
+            un.get(),
+            1,
+            "the dropped child is unmounted, not merely released"
+        );
+        assert_eq!(child_ids(&children), vec![1, 2]);
+    }
+
+    #[test]
+    fn updating_to_empty_unmounts_every_child() {
+        let (m, u, un) = (counter(), counter(), counter());
+        let mut children =
+            TestCtx::new().run(|ctx| Children::new(tracked_probes(&[1, 2, 3], &m, &u, &un), ctx));
+
+        TestCtx::new().run(|ctx| children.update(tracked_probes(&[], &m, &u, &un), ctx));
+
+        assert_eq!(
+            un.get(),
+            3,
+            "every child is unmounted before the list is cleared"
+        );
+        assert!(children.render.is_empty());
+    }
+
+    #[test]
     fn updating_from_empty_materializes_children() {
         let (m, u) = (counter(), counter());
         let mut children = TestCtx::new().run(|ctx| Children::new(probes(&[], &m, &u), ctx));
@@ -707,6 +774,7 @@ mod tests {
                     key: None,
                     mounts: Rc::clone(&m),
                     updates: Rc::clone(&u),
+                    unmounts: Rc::new(Cell::new(0)),
                 },
                 ctx,
             )
@@ -721,6 +789,7 @@ mod tests {
                     key: None,
                     mounts: Rc::clone(&m),
                     updates: Rc::clone(&u),
+                    unmounts: Rc::new(Cell::new(0)),
                 },
                 &mut render,
                 ctx,

@@ -126,10 +126,15 @@ where
 
 #[cfg(test)]
 mod harness {
-    use agui_core::prelude::render_object::{Fonts, InlineSpan, TextSpan, TextStyle};
-    use agui_test::prelude::*;
+    use std::time::Duration;
+
+    use agui_core::prelude::{
+        element::Size,
+        render_object::{BoxConstraints, Fonts, InlineSpan, TextSpan, TextStyle},
+    };
 
     use agui_core::provide::Provide;
+    use agui_test::{Probe, WidgetTester};
 
     use super::RichText;
     use crate::sized_box::SizedBox;
