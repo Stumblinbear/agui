@@ -760,20 +760,20 @@ impl PositionedLayer for SurfaceTransformLayer {
     }
 }
 
-/// A layer that applies a reduced opacity to its children.
+/// A layer that fades its children to a reduced opacity, compositing them as a group so overlapping
+/// content does not double-blend. It applies no clip, so a transformed child that paints beyond its
+/// bounds is faded, not cut off.
 pub struct OpacityLayer {
     alpha: f32,
-    clip: PaintShape,
     offset: Offset,
     dirty: bool,
     children: ChildLayers,
 }
 
 impl OpacityLayer {
-    pub fn new(alpha: f32, clip: PaintShape) -> Self {
+    pub fn new(alpha: f32) -> Self {
         Self {
             alpha,
-            clip,
             offset: Offset::ZERO,
             dirty: true,
             children: ChildLayers::new(),
@@ -790,7 +790,7 @@ impl OpacityLayer {
 impl Layer for OpacityLayer {
     fn compose(&mut self, compositor: &mut Compositor) {
         let children = self.children.compose_frame();
-        compositor.push_opacity(self.offset, self.alpha, Some(self.clip.clone()), &children);
+        compositor.push_opacity(self.offset, self.alpha, None, &children);
 
         self.dirty = false;
     }
@@ -1026,10 +1026,6 @@ mod tests {
 
     fn picture(color: Color) -> LayerHandle<PictureLayer> {
         LayerHandle::new(PictureLayer::new(solid_fill(color)))
-    }
-
-    fn unit_clip() -> PaintShape {
-        PaintShape::from_shape(&Rect::from(Size::new(1.0, 1.0)))
     }
 
     fn external(id: u64) -> LayerHandle<ExternalSurfaceLayer> {
@@ -1405,11 +1401,11 @@ mod tests {
         }
     }
 
-    /// An enclosing opacity puts the external on a faded, clipped visual rather than rasterizing over
-    /// it.
+    /// An enclosing opacity puts the external on a faded visual rather than rasterizing over it, and
+    /// imposes no clip of its own.
     #[test]
     fn an_opacity_over_an_external_takes_a_surface() {
-        let mut opacity = OpacityLayer::new(0.5, unit_clip());
+        let mut opacity = OpacityLayer::new(0.5);
         opacity.append(external(2).into());
 
         let frame = Compositor::compose(&LayerHandle::new(opacity));
@@ -1422,10 +1418,7 @@ mod tests {
                 },
             ] => {
                 assert!((placement.opacity - 0.5).abs() < 1e-9);
-                assert!(
-                    placement.clip.is_some(),
-                    "the opacity's clip reaches the visual"
-                );
+                assert!(placement.clip.is_none(), "an opacity does not clip");
                 assert!(matches!(
                     children.nodes(),
                     [CompositedNode::External { .. }]

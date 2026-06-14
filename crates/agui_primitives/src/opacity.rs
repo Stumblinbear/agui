@@ -1,11 +1,7 @@
 use typed_floats::{Positive, PositiveFinite};
 
 use agui_core::{
-    paint::{
-        command::PaintShape,
-        compositing::{LayerHandle, OpacityLayer},
-        peniko::kurbo,
-    },
+    paint::compositing::{LayerHandle, OpacityLayer},
     prelude::{element::*, render_object::*},
 };
 
@@ -95,7 +91,7 @@ pub struct RenderOpacity<Child> {
     /// partial can recomposite it at the new alpha without repainting the subtree.
     layer: Option<LayerHandle<OpacityLayer>>,
 
-    child: RenderNode<Child, Option<Size>>,
+    child: RenderNode<Child>,
 }
 
 impl<Child> SingleChildRenderObject for RenderOpacity<Child> {
@@ -169,9 +165,7 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        let size = self.child.layout_and_get_size(ctx, constraints);
-        self.child.parent_data = Some(size);
-        size
+        self.child.layout_and_get_size(ctx, constraints)
     }
 
     fn measure_baseline(
@@ -203,20 +197,11 @@ where
             return;
         }
 
-        let size = self
-            .child
-            .parent_data
-            .expect("opacity has not been laid out");
-        // The clip is in the layer's own coordinates, since `push_layer` positions the layer at `offset`.
-        let clip = PaintShape::Rect(kurbo::Rect::new(
-            0.0,
-            0.0,
-            f64::from(f32::from(size.width)),
-            f64::from(f32::from(size.height)),
-        ));
-
+        // A reduced opacity fades its subtree without clipping it, so a transformed descendant that
+        // paints outside the box stays visible.
+        //
         // Retain the layer so a later partial-to-partial opacity change can recomposite it in place.
-        let layer = LayerHandle::new(OpacityLayer::new(self.opacity, clip));
+        let layer = LayerHandle::new(OpacityLayer::new(self.opacity));
         self.layer = Some(layer.clone());
 
         ctx.push_layer(layer, offset, |ctx| self.child.paint(ctx, Offset::ZERO));
