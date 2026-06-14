@@ -4,7 +4,7 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
     context::{Dispatch, UpdateCtx},
-    diagnostics::{Diagnostics, DiagnosticsNode},
+    diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::{Element, RoutingId, RoutingPath, node::ElementNode},
     key::AnyKeyable,
     render_object::{RenderObject, SingleChildRenderObject, node::RenderNode},
@@ -169,6 +169,17 @@ impl<C: Element> MultiChildElement<C> {
             .node
             .element
             .dispatch(&mut renders[index].object, rest, action);
+    }
+
+    /// Threads `node` through each child element's diagnostics, attaching one child per element in
+    /// order.
+    pub(crate) fn describe_children<'a>(
+        &self,
+        node: DiagnosticsNodeBuilder<'a>,
+    ) -> DiagnosticsNodeBuilder<'a> {
+        self.nodes.iter().fold(node, |node, keyed| {
+            node.child(|d| keyed.node.element.describe(d))
+        })
     }
 }
 

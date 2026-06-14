@@ -601,9 +601,15 @@ mod harness {
     use std::time::Duration;
 
     use agui_core::prelude::{element::Size, render_object::BoxConstraints};
-    use agui_test::{Probe, WidgetTester, sizing::BoxSizingCheck};
+    use agui_test::{ElementLifecycleCheck, Probe, WidgetTester, sizing::BoxSizingCheck};
 
     use super::SizedBox;
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new()
+            .single_child(|child| SizedBox::new().width(16).height(48).child(child));
+    }
 
     #[test]
     fn obeys_the_box_sizing_contracts() {

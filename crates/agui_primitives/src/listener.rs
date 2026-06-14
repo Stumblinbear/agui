@@ -260,7 +260,9 @@ mod harness {
         input::pointer::PointerHandler,
         prelude::element::{HitTestBehavior, Offset, PointerEvent, Size},
     };
-    use agui_test::{WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck};
+    use agui_test::{
+        ElementLifecycleCheck, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck,
+    };
 
     use super::Listener;
     use crate::sized_box::SizedBox;
@@ -287,6 +289,11 @@ mod harness {
         tester.tap_at(Offset::new(25, 25));
 
         assert_eq!(taps.get(), 1);
+    }
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new().single_child(|child| Listener::builder().child(child));
     }
 
     #[test]

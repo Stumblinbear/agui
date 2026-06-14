@@ -135,9 +135,14 @@ mod harness {
     };
 
     use agui_core::provide::Provide;
-    use agui_test::{Probe, WidgetTester};
+    use agui_test::{ElementLifecycleCheck, Probe, WidgetTester};
 
     use super::Text;
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new().leaf(|| Text::new("hello"));
+    }
 
     #[test]
     fn produces_a_finite_size() {

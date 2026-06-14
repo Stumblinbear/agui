@@ -237,7 +237,9 @@ mod harness {
     use std::time::Duration;
 
     use agui_core::{paint::peniko::Color, prelude::element::*};
-    use agui_test::{Probe, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck};
+    use agui_test::{
+        ElementLifecycleCheck, Probe, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck,
+    };
 
     use super::Center;
     use crate::sized_box::SizedBox;
@@ -255,6 +257,11 @@ mod harness {
         assert_eq!(probe.size(), Size::new(20, 20));
         assert_eq!(probe.offset(), Offset::new(40, 40));
         assert_eq!(probe.paints(), 1);
+    }
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new().single_child(|child| Center::new().child(child));
     }
 
     #[test]

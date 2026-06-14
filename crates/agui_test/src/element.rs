@@ -368,6 +368,15 @@ impl ElementLifecycleCheck {
             assert_eq!(ledger.unmounts(id), 0);
         }
 
+        element.describe(&mut Diagnostics::new());
+        for id in [1, 2, 3] {
+            assert_eq!(
+                ledger.describes(id),
+                1,
+                "describe must recurse into every child, not stop at the element"
+            );
+        }
+
         ctx.run(|ctx| make(unkeyed(&[1, 2, 3, 4])).update(&mut element, &mut render, ctx));
         assert_eq!(ledger.mounts(4), 1, "the appended child mounts");
         for id in [1, 2, 3] {

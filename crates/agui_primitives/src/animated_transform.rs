@@ -584,10 +584,16 @@ mod tests {
 #[cfg(test)]
 mod harness {
     use agui_core::paint::peniko::kurbo::Affine;
-    use agui_test::sizing::BoxSizingCheck;
+    use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
 
     use super::AnimatedTransform;
     use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new()
+            .single_child(|child| AnimatedTransform::new(|_| Affine::IDENTITY).child(child));
+    }
 
     #[test]
     fn obeys_the_box_sizing_contracts() {

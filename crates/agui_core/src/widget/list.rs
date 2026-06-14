@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{
     context::{Dispatch, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::{Element, MultiChildElement, RoutingId, RoutingPath, node::ElementNode},
     render_object::{
         MultiChildRenderObject, RenderChildren, box_layout::RenderBox, node::RenderNode,
@@ -46,6 +47,10 @@ pub trait ElementSequence {
     /// Routes `action` along `path` to the addressed child, threading its render object. A dispatch
     /// to an absent sub-sequence is dropped.
     fn dispatch(&mut self, renders: &mut Self::Renders, path: &RoutingPath, action: Dispatch);
+
+    /// Threads `node` through each present child element's diagnostics, so a parent shows its children
+    /// in the element tree.
+    fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a>;
 }
 
 /// The [`Element`] of a widget whose children are a [`WidgetSequence`], holding the child elements and
@@ -87,6 +92,10 @@ where
     fn dispatch(&mut self, render: &mut R, path: &RoutingPath, action: Dispatch) {
         self.children.dispatch(render.children_mut(), path, action);
     }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.children.describe(d.node_for::<Self>()).finish()
+    }
 }
 
 impl<W> WidgetSequence for W
@@ -126,6 +135,10 @@ where
         action: Dispatch,
     ) {
         self.element.dispatch(&mut render.object, path, action);
+    }
+
+    fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a> {
+        node.child(|d| self.element.describe(d))
     }
 }
 
@@ -177,6 +190,13 @@ impl<E: ElementSequence> ElementSequence for Option<E> {
             elements.dispatch(renders, path, action);
         }
     }
+
+    fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a> {
+        match self.as_ref() {
+            Some(elements) => elements.describe(node),
+            None => node,
+        }
+    }
 }
 
 impl<W> WidgetSequence for Vec<W>
@@ -216,6 +236,10 @@ where
         action: Dispatch,
     ) {
         MultiChildElement::dispatch(self, renders, path, action);
+    }
+
+    fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a> {
+        self.describe_children(node)
     }
 }
 
@@ -273,6 +297,12 @@ macro_rules! impl_sequence_tuple {
                     $($i => self.$i.dispatch(&mut renders.$i, rest, action),)+
                     _ => unreachable!("routing id addresses no tuple slot"),
                 }
+            }
+
+            #[allow(non_snake_case)]
+            fn describe<'a>(&self, node: DiagnosticsNodeBuilder<'a>) -> DiagnosticsNodeBuilder<'a> {
+                $(let node = self.$i.describe(node);)+
+                node
             }
         }
     };

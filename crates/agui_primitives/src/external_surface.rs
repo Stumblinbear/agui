@@ -183,8 +183,14 @@ mod tests {
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
     };
+    use agui_test::ElementLifecycleCheck;
 
     use super::*;
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new().leaf(|| ExternalSurface::new(ExternalSurfaceId(42)));
+    }
 
     #[test]
     fn places_a_surface_filling_its_bounds() {

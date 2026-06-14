@@ -328,10 +328,16 @@ mod tests {
 #[cfg(test)]
 mod harness {
     use agui_core::{geometry::EdgeInsets, prelude::element::Size};
-    use agui_test::{fixtures::IntrinsicBox, sizing::BoxSizingCheck};
+    use agui_test::{ElementLifecycleCheck, fixtures::IntrinsicBox, sizing::BoxSizingCheck};
 
     use super::Padding;
     use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new()
+            .single_child(|child| Padding::new(EdgeInsets::all(8)).child(child));
+    }
 
     #[test]
     fn obeys_the_box_sizing_contracts() {

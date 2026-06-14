@@ -219,10 +219,15 @@ mod tests {
 #[cfg(test)]
 mod harness {
 
-    use agui_test::sizing::BoxSizingCheck;
+    use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
 
     use super::SingleChildScrollView;
     use crate::sized_box::SizedBox;
+
+    #[test]
+    fn obeys_the_element_lifecycle() {
+        ElementLifecycleCheck::new().single_child(SingleChildScrollView::new);
+    }
 
     #[test]
     fn obeys_the_box_sizing_contracts() {
