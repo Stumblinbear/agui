@@ -4,7 +4,7 @@ use crate::{
     context::{MountCtx, TaskCtx},
     element::{BuildScope, RoutingId, RoutingTarget},
     pipeline::{
-        layout::LayoutPipeline,
+        layout::{LayoutPipeline, LayoutScope},
         paint::{PaintPipeline, PaintScope},
     },
     provide::{ProvideCell, ProvideScope},
@@ -177,6 +177,27 @@ impl<'a> UpdateCtx<'a> {
         };
 
         func(&mut update_ctx);
+    }
+
+    /// Marks `scope`'s boundary for re-layout on the next frame.
+    pub fn mark_needs_layout(&self, scope: LayoutScope) {
+        self.layout.mark_needs_layout(scope);
+    }
+
+    /// Marks `scope`'s boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
+        self.paint.mark_needs_paint(scope);
+    }
+
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        self.paint.mark_needs_compositing_bits_update(scope);
+    }
+
+    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
+    pub fn mark_needs_composite(&self, scope: PaintScope) {
+        self.paint.mark_needs_composite(scope);
     }
 
     pub fn mount<R: RenderObject + ?Sized>(&mut self, render_object: &mut R) {

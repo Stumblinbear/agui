@@ -71,7 +71,7 @@ where
         if render_object.padding != new_padding {
             render_object.padding = new_padding;
 
-            render_object.layout_scope.mark_needs_layout();
+            ctx.mark_needs_layout(render_object.layout_scope);
         }
 
         element.update(self.child, &mut render_object.child.object, ctx);
@@ -192,7 +192,7 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.layout_scope = ctx.scope().clone();
+        self.layout_scope = *ctx.scope();
 
         let inner_constraints = constraints.deflate(&self.padding);
         let child_size = self.child.layout_and_get_size(ctx, inner_constraints);

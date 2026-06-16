@@ -62,7 +62,7 @@ where
         if render_object.color != self.color {
             render_object.color = self.color;
 
-            render_object.paint_scope.mark_needs_paint();
+            ctx.mark_needs_paint(render_object.paint_scope);
         }
 
         element.update(self.child, &mut render_object.child.object, ctx);
@@ -94,7 +94,7 @@ where
     Child: RenderBox,
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = ctx.paint_scope().clone();
+        self.paint_scope = *ctx.paint_scope();
 
         self.child.mount(ctx);
     }

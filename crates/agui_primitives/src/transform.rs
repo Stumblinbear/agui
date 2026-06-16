@@ -89,7 +89,7 @@ where
             render_object.alignment = self.alignment;
 
             // A transform is paint-only and never alters compositing, so a plain repaint suffices.
-            render_object.paint_scope.mark_needs_paint();
+            ctx.mark_needs_paint(render_object.paint_scope);
         }
 
         element.update(self.child, &mut render_object.child.object, ctx);
@@ -153,7 +153,7 @@ where
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
         // Capture the enclosing boundary so a later transform change can mark it.
-        self.paint_scope = ctx.paint_scope().clone();
+        self.paint_scope = *ctx.paint_scope();
 
         self.child.mount(ctx);
     }

@@ -3,10 +3,12 @@
 
 use std::{
     cell::{Cell, RefCell},
+    ptr::NonNull,
     rc::{Rc, Weak},
 };
 
 use intrusive_collections::{LinkedList, LinkedListLink, UnsafeRef, intrusive_adapter};
+use slotmap::{Key, SlotMap};
 
 use crate::{
     context::LayoutCtx,
@@ -16,6 +18,11 @@ use crate::{
     },
     render_object::box_layout::{BoxConstraints, RenderBox},
 };
+
+slotmap::new_key_type! {
+    /// Identifies a registered relayout boundary within one [`LayoutPipeline`].
+    pub(crate) struct LayoutBoundaryId;
+}
 
 /// Lays out the relayout boundaries of one subtree, re-laying only the ones that changed.
 ///
@@ -40,7 +47,9 @@ impl Default for LayoutPipeline {
     fn default() -> Self {
         Self {
             state: Rc::new(RefCell::new(LayoutPipelineState {
+                boundaries: SlotMap::with_key(),
                 dirty: LinkedList::new(LayoutCellAdapter::new()),
+                deferred: Rc::new(RefCell::new(Vec::new())),
 
                 notify: Box::new(noop),
 
@@ -65,6 +74,31 @@ impl LayoutPipeline {
         self.insert(root, 0, paint)
     }
 
+    /// Registers `content` as a relayout boundary nested under `enclosing`, enclosed by `paint`, and
+    /// returns the handle that owns and marks it. A boundary established during layout is registered this
+    /// way so its descendants mark it rather than the boundary above. A detached or removed enclosing
+    /// scope registers at depth zero.
+    pub fn register_under(
+        &self,
+        enclosing: LayoutScope,
+        content: BoundaryContent,
+        paint: PaintScope,
+    ) -> RegisteredLayoutBoundary {
+        let depth = {
+            let state = self.state.borrow();
+
+            match state.boundaries.get(enclosing.0) {
+                // SAFETY: the resolver holds this pointer only while the boundary's
+                // `RegisteredLayoutBoundary` is alive, and that handle removes the entry before its `Rc`
+                // frees the cell, so it is live here.
+                Some(cell) => unsafe { cell.as_ref() }.depth + 1,
+                None => 0,
+            }
+        };
+
+        self.insert(content, depth, paint)
+    }
+
     /// Registers `content` as a boundary at `depth`, enclosed by `paint`, and returns the handle that
     /// owns and marks it.
     fn insert(
@@ -82,9 +116,48 @@ impl LayoutPipeline {
             paint,
             is_dirty: Cell::new(false),
             needs_layout: Cell::new(false),
+            id: Cell::new(LayoutBoundaryId::null()),
         });
 
+        let mut state = self.state.borrow_mut();
+        cell.id.set(state.boundaries.insert(NonNull::from(&*cell)));
+
         RegisteredLayoutBoundary { cell }
+    }
+
+    /// Marks `scope`'s boundary for re-layout before the next frame.
+    pub fn mark_needs_layout(&self, scope: LayoutScope) {
+        let mut state = self.state.borrow_mut();
+
+        let Some(cell) = state.boundaries.get(scope.0).copied() else {
+            return;
+        };
+
+        // SAFETY: the resolver holds this pointer only while the boundary's `RegisteredLayoutBoundary` is
+        // alive, and that handle removes the entry before its `Rc` frees the cell, so it is live here.
+        let cell = unsafe { cell.as_ref() };
+
+        state.mark_needs_layout(cell);
+    }
+
+    /// A deferred handle to `scope`'s boundary, for marking it from a callback that runs with no pipeline
+    /// in hand, such as a reconcile.
+    pub fn deferred_scope(&self, scope: LayoutScope) -> DeferredLayoutScope {
+        DeferredLayoutScope {
+            queue: Some(Rc::clone(&self.state.borrow().deferred)),
+            id: scope.0,
+        }
+    }
+
+    /// Applies every out-of-band mark queued since the last drain. Called once at the start of a frame,
+    /// before the dirty list is flushed.
+    pub fn drain_deferred(&mut self) {
+        let queue = Rc::clone(&self.state.borrow().deferred);
+        let drained: Vec<LayoutBoundaryId> = queue.borrow_mut().drain(..).collect();
+
+        for id in drained {
+            self.mark_needs_layout(LayoutScope(id));
+        }
     }
 
     /// Re-lays every marked boundary from the constraints it last took, leaving the rest untouched.
@@ -106,7 +179,7 @@ impl LayoutPipeline {
                 continue;
             };
 
-            let scope = LayoutScope(Rc::downgrade(&cell));
+            let scope = LayoutScope(cell.id.get());
 
             let mut ctx = LayoutCtx::new(self, &mut *paint_pipeline, scope);
 
@@ -114,7 +187,7 @@ impl LayoutPipeline {
             content.layout(&mut ctx, constraints);
 
             // The boundary's painting is now stale; repaint the boundary that encloses it.
-            cell.paint.mark_needs_paint();
+            paint_pipeline.mark_needs_paint(cell.paint);
         }
 
         self.state.borrow_mut().in_layout = false;
@@ -193,13 +266,21 @@ struct LayoutCell {
     /// Whether this boundary is awaiting re-layout. Outlives the cell's place in the dirty list, and
     /// clears when the boundary is re-laid, whether by the flush or in place by the boundary above it.
     needs_layout: Cell<bool>,
+
+    /// This cell's key in the registry, carried by an inert [`LayoutScope`] to reach it.
+    id: Cell<LayoutBoundaryId>,
 }
 
 intrusive_adapter!(LayoutCellAdapter = UnsafeRef<LayoutCell>: LayoutCell { link => LinkedListLink });
 
 /// The layout dirty state, shared so a [`LayoutScope`] can mark a boundary out of band.
 struct LayoutPipelineState {
+    boundaries: SlotMap<LayoutBoundaryId, NonNull<LayoutCell>>,
+
     dirty: LinkedList<LayoutCellAdapter>,
+
+    /// The out-of-band marks queued by [`DeferredLayoutScope`]s since the last drain.
+    deferred: Rc<RefCell<Vec<LayoutBoundaryId>>>,
 
     notify: Box<dyn Fn()>,
 
@@ -217,7 +298,7 @@ impl LayoutPipelineState {
     /// # Panics
     ///
     /// Panics if called during a layout pass, since the dirty list is being flushed.
-    fn mark_needs_layout(&mut self, cell: &Rc<LayoutCell>) {
+    fn mark_needs_layout(&mut self, cell: &LayoutCell) {
         assert!(
             !self.in_layout,
             "cannot request layout while layout is in progress"
@@ -229,7 +310,7 @@ impl LayoutPipelineState {
             return;
         }
 
-        tracing::trace!(boundary = ?Rc::as_ptr(cell), "marked boundary for re-layout");
+        tracing::trace!(boundary = ?cell.id.get(), "marked boundary for re-layout");
 
         let was_clean = self.is_clean();
 
@@ -238,7 +319,7 @@ impl LayoutPipelineState {
         // registered, and that handle unlinks it before the `Rc` is dropped; the dirty flag guards it
         // against being linked into the list more than once.
         self.dirty
-            .push_back(unsafe { UnsafeRef::from_raw(Rc::as_ptr(cell)) });
+            .push_back(unsafe { UnsafeRef::from_raw(std::ptr::from_ref(cell)) });
 
         if was_clean {
             (self.notify)();
@@ -261,9 +342,8 @@ pub struct RegisteredLayoutBoundary {
 }
 
 impl RegisteredLayoutBoundary {
-    /// A clone-able scope that marks this boundary and registers descendants under it.
     pub fn scope(&self) -> LayoutScope {
-        LayoutScope(Rc::downgrade(&self.cell))
+        LayoutScope(self.cell.id.get())
     }
 
     /// Records the constraints this boundary is re-laid under, without marking it. A boundary re-laid in
@@ -300,91 +380,71 @@ impl Drop for RegisteredLayoutBoundary {
         // its cell must skip it rather than replay its stale constraints.
         self.cell.needs_layout.set(false);
 
-        if !self.cell.is_dirty.get() {
-            return;
-        }
-
         let Some(state) = self.cell.state.upgrade() else {
             return;
         };
 
         let mut state = state.borrow_mut();
 
-        // SAFETY: the cell is linked into this list and stays live behind its `Rc` until this handle's
-        // `Rc` frees it after this method returns, so the pointer the cursor recovers is valid.
-        let mut cursor = unsafe { state.dirty.cursor_mut_from_ptr(Rc::as_ptr(&self.cell)) };
-        cursor.remove();
-        self.cell.is_dirty.set(false);
+        if self.cell.is_dirty.get() {
+            // SAFETY: the cell is linked into this list and stays live behind its `Rc` until this
+            // handle's `Rc` frees it after this method returns, so the pointer the cursor recovers is
+            // valid.
+            let mut cursor = unsafe { state.dirty.cursor_mut_from_ptr(Rc::as_ptr(&self.cell)) };
+            cursor.remove();
+            self.cell.is_dirty.set(false);
+        }
+
+        let id = self.cell.id.get();
+        state.boundaries.remove(id);
+        state.deferred.borrow_mut().retain(|queued| *queued != id);
     }
 }
 
-/// The relayout boundary a render object is laid out under. Unlike a paint scope, which a node captures
-/// once at mount, a layout scope is threaded through layout, because which node bounds a relayout is
-/// decided during layout from the constraints in force. A node forwards it to each child it lays out,
-/// and a node that can change its own layout out of band marks it to request a relayout. Cloning shares
-/// the same target, so the scope can be marked from anywhere, including a reconcile or a per-frame
-/// callback.
-#[derive(Clone)]
-pub struct LayoutScope(Weak<LayoutCell>);
+/// Names the relayout boundary a render object is laid out under. Unlike a paint scope, which a node
+/// captures once at mount, a layout scope is threaded through layout, because which node bounds a
+/// relayout is decided during layout from the constraints in force. A node forwards it to each child it
+/// lays out, presents it to a context to register a nested boundary or request a relayout, and hands it
+/// to a [`DeferredLayoutScope`] to mark from a reconcile.
+#[derive(Clone, Copy)]
+pub struct LayoutScope(LayoutBoundaryId);
 
 impl LayoutScope {
-    /// A scope detached from any pipeline, whose marks reach nothing.
+    /// A scope detached from any pipeline, which names no boundary.
     pub fn detached() -> Self {
-        Self(Weak::new())
+        Self(LayoutBoundaryId::null())
     }
 
-    /// Whether this scope reaches no live boundary, because it was created detached or its boundary
-    /// has since been freed, so registering under it would do nothing.
+    /// Whether this scope names no boundary, because it was created detached, so registering under it
+    /// would register at the root.
     pub fn is_detached(&self) -> bool {
-        Weak::strong_count(&self.0) == 0
+        self.0.is_null()
+    }
+}
+
+/// A [`LayoutScope`] paired with the route to mark it from outside a pipeline pass, such as a reconcile
+/// that changes a layout property. The request is applied on the pipeline's next frame; a detached
+/// marker, or one whose boundary is gone, marks nothing.
+#[derive(Clone)]
+pub struct DeferredLayoutScope {
+    id: LayoutBoundaryId,
+    queue: Option<Rc<RefCell<Vec<LayoutBoundaryId>>>>,
+}
+
+impl DeferredLayoutScope {
+    /// A marker detached from any pipeline, whose marks reach nothing.
+    pub fn detached() -> Self {
+        Self {
+            id: LayoutBoundaryId::null(),
+            queue: None,
+        }
     }
 
-    /// Registers `content` as a relayout boundary nested under this one and returns the handle that owns
-    /// and marks it. A boundary established during layout calls this so its descendants mark it rather
-    /// than the boundary above. A detached scope registers nothing and hands back a handle whose marks
-    /// reach nothing.
-    pub fn register(
-        &self,
-        content: BoundaryContent,
-        paint: PaintScope,
-    ) -> RegisteredLayoutBoundary {
-        let (state, depth) = match self.0.upgrade() {
-            Some(enclosing) => (Weak::clone(&enclosing.state), enclosing.depth + 1),
-            // A detached handle reaches no pipeline, so its cell is never marked or linked.
-            None => (Weak::new(), 0),
-        };
-
-        let cell = Rc::new(LayoutCell {
-            link: LinkedListLink::new(),
-            state,
-            depth,
-            content,
-            constraints: Cell::new(None),
-            paint,
-            is_dirty: Cell::new(false),
-            needs_layout: Cell::new(false),
-        });
-
-        RegisteredLayoutBoundary { cell }
-    }
-
-    /// Requests that this boundary be re-laid-out before the next frame. On the clean-to-dirty edge of
-    /// the layout channel, the schedule hook fires so the driver schedules a frame. A detached scope
-    /// marks nothing.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called during a layout pass, since the dirty list is being flushed.
+    /// Queues this boundary to be re-laid-out on the pipeline's next frame.
     pub fn mark_needs_layout(&self) {
-        let Some(cell) = self.0.upgrade() else {
-            return;
-        };
-
-        let Some(state) = cell.state.upgrade() else {
-            return;
-        };
-
-        state.borrow_mut().mark_needs_layout(&cell);
+        if let Some(queue) = &self.queue {
+            queue.borrow_mut().push(self.id);
+        }
     }
 }
 
@@ -408,8 +468,9 @@ mod tests {
 
     use super::*;
 
-    /// The scope a [`LayoutProbe`] was last laid out under, shared back to the test.
-    type Captured = Rc<RefCell<Option<LayoutScope>>>;
+    /// The deferred handle to the boundary a [`LayoutProbe`] was last laid out under, shared back to the
+    /// test.
+    type Captured = Rc<RefCell<Option<DeferredLayoutScope>>>;
 
     /// A leaf that counts its layouts and hands the scope it was laid out under back to the test, so
     /// the test can request a relayout the way a reconcile would.
@@ -445,10 +506,10 @@ mod tests {
         }
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            *self.captured.borrow_mut() = Some(ctx.scope().clone());
+            *self.captured.borrow_mut() = Some(ctx.deferred_layout_scope());
 
             if self.marks_during_layout {
-                ctx.scope().mark_needs_layout();
+                ctx.mark_needs_layout(*ctx.scope());
             }
 
             constraints.smallest()
@@ -481,12 +542,13 @@ mod tests {
         (layouts, captured, render)
     }
 
-    /// A scope is cloned onto every node that can mark its boundary, so it stays one pointer wide.
+    /// A scope is stored on every node laid out under a boundary, so it stays a single key wide, an inert
+    /// id with no pointer or refcount.
     #[test]
-    fn a_layout_scope_is_one_pointer() {
+    fn a_layout_scope_is_one_key() {
         assert_eq!(
             std::mem::size_of::<LayoutScope>(),
-            std::mem::size_of::<usize>()
+            std::mem::size_of::<u64>()
         );
     }
 
@@ -519,20 +581,19 @@ mod tests {
 
     #[test]
     fn a_relayout_request_schedules_a_frame_on_the_clean_to_dirty_edge() {
-        let (_layouts, captured, render) = probe(false);
+        let (_layouts, _captured, render) = probe(false);
 
         let (mut owner, view) = TestCtx::new().mount_view(RawWidget::new(render));
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
-        let captured = captured.borrow().clone().expect("laid out once");
 
         // Set the hook after the seeding layout so only the marks below count.
         let frames = Rc::new(Cell::new(0));
         let scheduled = Rc::clone(&frames);
         owner.on_needs_layout(Box::new(move || scheduled.set(scheduled.get() + 1)));
 
-        captured.mark_needs_layout();
-        captured.mark_needs_layout();
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         assert_eq!(
             frames.get(),
             1,
@@ -540,7 +601,7 @@ mod tests {
         );
 
         owner.flush_layout();
-        captured.mark_needs_layout();
+        view.resize(BoxConstraints::new(0, 100, 0, 100));
         assert_eq!(
             frames.get(),
             2,

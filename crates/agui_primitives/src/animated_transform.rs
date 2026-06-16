@@ -111,7 +111,7 @@ where
 
         // The transform or subtree may have changed, so the subtree repaints. An animating transform
         // already marks this every frame; this covers a rebuild while idle.
-        render_object.scope.mark_needs_paint();
+        ctx.mark_needs_paint(render_object.scope);
     }
 }
 
@@ -126,6 +126,10 @@ pub struct RenderAnimatedTransform<Child> {
     now: Rc<Cell<Duration>>,
 
     scope: PaintScope,
+
+    /// The deferred handle the animation marks each frame, captured at mount alongside the scope.
+    deferred: DeferredPaintScope,
+
     vsync: Option<Vsync>,
     animation: Option<VsyncHandle>,
 
@@ -167,6 +171,7 @@ impl<Child: RenderBox> RenderAnimatedTransform<Child> {
 
             now: Rc::new(Cell::new(Duration::ZERO)),
             scope: PaintScope::detached(),
+            deferred: DeferredPaintScope::detached(),
             vsync: None,
             animation: None,
 
@@ -189,13 +194,16 @@ impl<Child: RenderBox> RenderAnimatedTransform<Child> {
 
 impl<Child: RenderBox> RenderObject for RenderAnimatedTransform<Child> {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.scope = ctx.paint_scope().clone();
+        self.scope = *ctx.paint_scope();
+        self.deferred = ctx.deferred_paint_scope();
         self.child.mount(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.animation = None;
         self.layer = None;
+        self.scope = PaintScope::detached();
+        self.deferred = DeferredPaintScope::detached();
         self.child.unmount(ctx);
     }
 
@@ -295,7 +303,7 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
             let origin = self.origin;
             let alignment = self.alignment;
             let layer = layer.clone();
-            let scope = self.scope.clone();
+            let deferred = self.deferred.clone();
 
             self.animation = Some(vsync.on_frame(move |frame| {
                 now.set(frame);
@@ -306,7 +314,7 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
                     alignment,
                     size,
                 )) {
-                    scope.mark_needs_composite();
+                    deferred.mark_needs_composite();
                 }
             }));
         }

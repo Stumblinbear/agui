@@ -117,7 +117,7 @@ impl<Child: RenderBox> SingleChildRenderObject for RenderRepaintBoundary<Child> 
 
 impl<Child: RenderBox> RenderObject for RenderRepaintBoundary<Child> {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        let handle = ctx.register_boundary(Rc::clone(&self.content), self.layer.clone());
+        let handle = ctx.register_paint_boundary(Rc::clone(&self.content), self.layer.clone());
 
         // Descendants repaint into this boundary, not into the one above it.
         let mut content = Rc::clone(&self.content);
@@ -131,7 +131,7 @@ impl<Child: RenderBox> RenderObject for RenderRepaintBoundary<Child> {
         self.content.unmount(ctx);
 
         if let Some(handle) = self.handle.take() {
-            ctx.unregister_boundary(handle);
+            ctx.unregister_paint_boundary(handle);
         }
     }
 
@@ -216,7 +216,7 @@ mod tests {
     /// A widget that counts its paints, so a test can see which boundaries repaint.
     struct Counter<Child> {
         paints: Rc<Cell<usize>>,
-        capture: Option<Rc<RefCell<Option<PaintScope>>>>,
+        capture: Option<Rc<RefCell<Option<DeferredPaintScope>>>>,
         child: Child,
     }
 
@@ -239,8 +239,8 @@ mod tests {
             }
         }
 
-        /// Records this node's enclosing paint scope at mount, so a test can mark that boundary.
-        fn capture(mut self, slot: Rc<RefCell<Option<PaintScope>>>) -> Self {
+        /// Records a deferred handle to this node's enclosing boundary at mount, so a test can mark it.
+        fn capture(mut self, slot: Rc<RefCell<Option<DeferredPaintScope>>>) -> Self {
             self.capture = Some(slot);
             self
         }
@@ -276,7 +276,7 @@ mod tests {
 
     struct RenderCounter<C> {
         paints: Rc<Cell<usize>>,
-        capture: Option<Rc<RefCell<Option<PaintScope>>>>,
+        capture: Option<Rc<RefCell<Option<DeferredPaintScope>>>>,
         child: RenderNode<C>,
     }
 
@@ -295,7 +295,7 @@ mod tests {
     impl<C: RenderBox> RenderObject for RenderCounter<C> {
         fn mount(&mut self, ctx: &mut MountCtx) {
             if let Some(slot) = &self.capture {
-                *slot.borrow_mut() = Some(ctx.paint_scope().clone());
+                *slot.borrow_mut() = Some(ctx.deferred_paint_scope());
             }
             self.child.mount(ctx);
         }

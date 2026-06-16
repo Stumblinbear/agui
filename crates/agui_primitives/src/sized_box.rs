@@ -168,7 +168,7 @@ where
             render_object.width = self.width;
             render_object.height = self.height;
 
-            render_object.layout_scope.mark_needs_layout();
+            ctx.mark_needs_layout(render_object.layout_scope);
         }
 
         render_object
@@ -265,7 +265,7 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.layout_scope = ctx.scope().clone();
+        self.layout_scope = *ctx.scope();
 
         let child_size = self.child.layout_and_get_size(
             ctx,
@@ -327,7 +327,7 @@ mod tests {
 
     use super::*;
 
-    type Captured = Rc<RefCell<Option<LayoutScope>>>;
+    type Captured = Rc<RefCell<Option<DeferredLayoutScope>>>;
 
     /// A single-child wrapper that counts its layouts, so a test can confirm it is not re-laid when only
     /// a boundary below it changes.
@@ -487,7 +487,7 @@ mod tests {
         }
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            *self.captured.borrow_mut() = Some(ctx.scope().clone());
+            *self.captured.borrow_mut() = Some(ctx.deferred_layout_scope());
 
             constraints.smallest()
         }

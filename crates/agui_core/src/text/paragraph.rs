@@ -13,7 +13,7 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     paint::{Canvas, command::GlyphInstance},
-    pipeline::{layout::LayoutScope, paint::PaintScope},
+    pipeline::{layout::DeferredLayoutScope, paint::PaintScope},
     render_object::{
         RenderObject,
         box_layout::{BoxConstraints, RenderBox},
@@ -58,7 +58,7 @@ pub struct RenderParagraph<C = ()> {
 
     memo: RefCell<QueryMemo>,
 
-    layout_scope: LayoutScope,
+    layout_scope: DeferredLayoutScope,
     paint_scope: PaintScope,
 }
 
@@ -79,7 +79,7 @@ impl<C> RenderParagraph<C> {
 
             memo: RefCell::new(QueryMemo::default()),
 
-            layout_scope: LayoutScope::detached(),
+            layout_scope: DeferredLayoutScope::detached(),
             paint_scope: PaintScope::detached(),
         }
     }
@@ -183,7 +183,7 @@ impl<C: RenderBox> RenderParagraph<C> {
 
 impl<C: RenderObject> RenderObject for RenderParagraph<C> {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = ctx.paint_scope().clone();
+        self.paint_scope = *ctx.paint_scope();
 
         for child in &mut self.children {
             child.mount(ctx);
@@ -257,7 +257,7 @@ impl<C: RenderBox> RenderBox for RenderParagraph<C> {
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.layout_scope = ctx.scope().clone();
+        self.layout_scope = ctx.deferred_layout_scope();
 
         if self.fonts.is_none() {
             return constraints.smallest();
@@ -489,7 +489,10 @@ mod tests {
             compositing::{Compositor, LayerHandle, OffsetLayer},
             scene::Scene,
         },
-        pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
+        pipeline::{
+            layout::{LayoutPipeline, LayoutScope},
+            paint::PaintPipeline,
+        },
         prelude::render_object::{InlineSpan, TextSpan},
         text::{Fonts, TextBaseline, TextStyle},
     };

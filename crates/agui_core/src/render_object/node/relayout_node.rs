@@ -7,11 +7,7 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
-    pipeline::{
-        BoundaryContent,
-        layout::{LayoutScope, RegisteredLayoutBoundary},
-        paint::PaintScope,
-    },
+    pipeline::{BoundaryContent, layout::RegisteredLayoutBoundary, paint::PaintScope},
     render_object::{
         LayoutCtx, MountCtx,
         box_layout::{BoxConstraints, RenderBox},
@@ -81,7 +77,7 @@ impl<R, P: Default> RelayoutRenderNode<R, P> {
 
 impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     pub fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint = ctx.paint_scope().clone();
+        self.paint = *ctx.paint_scope();
 
         match &mut self.child {
             RelayoutChild::Inline(child) => child.mount(ctx),
@@ -223,7 +219,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     }
 
     fn layout_inner(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.reshape(constraints.is_tight(), ctx.scope());
+        self.reshape(constraints.is_tight(), ctx);
 
         match &mut self.child {
             RelayoutChild::Inline(child) => child.layout(ctx, constraints),
@@ -254,10 +250,10 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
     /// Moves the child between its inline and boundary forms to match whether it is now constrained
     /// tightly, recovering it to the inline form only after it has stayed loosely constrained for
     /// [`UNBOX_AFTER_LOOSE_LAYOUTS`](Self::UNBOX_AFTER_LOOSE_LAYOUTS) layouts in a row.
-    fn reshape(&mut self, tight: bool, scope: &LayoutScope) {
+    fn reshape(&mut self, tight: bool, ctx: &mut LayoutCtx) {
         // A detached scope cannot register a boundary, so the child stays inline; this also keeps an
         // unmounted layout (a measurement or a test) from needing a paint scope it has not captured.
-        let registrable = tight && !scope.is_detached();
+        let registrable = tight && !ctx.scope().is_detached();
 
         if tight {
             self.loose_streak = 0;
@@ -290,7 +286,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                     "child must be mounted before it is laid out"
                 );
 
-                let paint = self.paint.clone();
+                let paint = self.paint;
 
                 take(&mut self.child, |child| {
                     let RelayoutChild::Inline(child) = child else {
@@ -301,7 +297,7 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                     };
 
                     let content = Rc::new(RefCell::new(child));
-                    let boundary = scope.register(erase(Rc::clone(&content)), paint);
+                    let boundary = ctx.register_boundary(erase(Rc::clone(&content)), paint);
 
                     RelayoutChild::Boxed {
                         content,
@@ -316,10 +312,10 @@ impl<R: RenderBox, P> RelayoutRenderNode<R, P> {
                     "child must be mounted before it is laid out"
                 );
 
-                let paint = self.paint.clone();
+                let paint = self.paint;
 
                 if let RelayoutChild::Boxed { content, boundary } = &mut self.child {
-                    *boundary = Some(scope.register(erase(Rc::clone(content)), paint));
+                    *boundary = Some(ctx.register_boundary(erase(Rc::clone(content)), paint));
                 }
             }
 
@@ -455,8 +451,9 @@ mod tests {
     };
 
     use super::*;
+    use crate::pipeline::layout::DeferredLayoutScope;
 
-    type Captured = Rc<RefCell<Option<LayoutScope>>>;
+    type Captured = Rc<RefCell<Option<DeferredLayoutScope>>>;
 
     /// A leaf that counts its layouts and paints and captures the scope and constraints it was laid
     /// out under, so a test can re-lay it the way a change inside it would.
@@ -498,7 +495,7 @@ mod tests {
 
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
-            *self.captured.borrow_mut() = Some(ctx.scope().clone());
+            *self.captured.borrow_mut() = Some(ctx.deferred_layout_scope());
             self.constraints_seen.set(Some(constraints));
 
             constraints.smallest()

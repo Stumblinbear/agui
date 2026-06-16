@@ -68,7 +68,10 @@ pub mod prelude {
         pub use crate::{
             context::{LayoutCtx, MountCtx, PaintCtx},
             input::hit_test::{HitTest, HitTestResult},
-            pipeline::{layout::LayoutScope, paint::PaintScope},
+            pipeline::{
+                layout::{DeferredLayoutScope, LayoutScope},
+                paint::{DeferredPaintScope, PaintScope},
+            },
             render_object::{
                 AnyRenderObject, MultiChildRenderObject, RenderChildren, RenderObject,
                 SingleChildRenderObject,

@@ -169,7 +169,7 @@ where
         render_object.builder = Rc::clone(&element.builder);
 
         render_object.needs_build = true;
-        render_object.layout_scope.mark_needs_layout();
+        ctx.mark_needs_layout(render_object.layout_scope);
     }
 }
 
@@ -253,7 +253,7 @@ where
 
             // The fresh subtree's compositing bits sit at their defaults; schedule a recompute so a
             // compositing descendant paints into its layer rather than as flat drawing.
-            paint_scope.mark_needs_compositing_bits_update();
+            ctx.mark_needs_compositing_bits_update(*paint_scope);
 
             *slot = Some(child_render);
             *retained = Some(RetainedNode {
@@ -293,7 +293,7 @@ where
     Child: RenderBox,
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = ctx.paint_scope().clone();
+        self.paint_scope = *ctx.paint_scope();
     }
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
@@ -348,7 +348,7 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.layout_scope = ctx.scope().clone();
+        self.layout_scope = *ctx.scope();
 
         if self.child_render.is_none() || self.needs_build || self.old_constraints != constraints {
             self.old_constraints = constraints;
@@ -396,9 +396,11 @@ mod tests {
     use std::cell::Cell;
 
     use agui_core::{
+        element::BuildScope,
         paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::{BoundaryContent, PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
         prelude::{element::*, render_object::*},
+        provide::ProvideScope,
         test_harness::TestCtx,
         view::ViewHandle,
     };
@@ -728,7 +730,24 @@ mod tests {
                 .downcast_mut::<RenderLayoutBuilder<Box<dyn AnyRenderBox>>>()
                 .expect("the root is the layout builder");
 
-            TestCtx::new().run(|ctx| widget_b.update(&mut element, render, ctx));
+            // Reconcile over the same pipelines the boundary is registered in, so the relayout mark
+            // routed through the context reaches it.
+            let mut tasks = TestCtx::new();
+            let mut scheduler = tasks.scheduler();
+            let mut path = Vec::new();
+            let provide = ProvideScope::new();
+            let build = BuildScope::detached();
+            let paint_scope = paint_boundary.scope();
+            let mut ctx = UpdateCtx::new(
+                &mut scheduler,
+                &mut path,
+                &provide,
+                &build,
+                &layout,
+                &mut paint,
+                &paint_scope,
+            );
+            widget_b.update(&mut element, render, &mut ctx);
         }
 
         layout.flush(&mut paint);

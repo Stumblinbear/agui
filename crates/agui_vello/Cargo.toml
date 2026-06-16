@@ -28,3 +28,33 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 typed_floats.workspace = true
 winit.workspace = true
+
+# The DirectComposition golden test and the Windows GPU spike examples drive the Windows APIs directly
+# (graphics capture, D3D12/DXGI, DirectComposition, Media Foundation). The library itself no longer
+# uses `windows`, so these stay dev-only. Pinned to the `windows` version wgpu-hal links so the raw
+# D3D types match.
+[target.'cfg(windows)'.dev-dependencies]
+windows-core = "0.58"
+windows = { version = "0.58", features = [
+    "implement",
+    "Foundation",
+    "Foundation_Numerics",
+    "Graphics",
+    "Graphics_Capture",
+    "Graphics_DirectX",
+    "Graphics_DirectX_Direct3D11",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_DirectComposition",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Capture",
+] }

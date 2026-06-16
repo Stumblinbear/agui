@@ -73,7 +73,7 @@ where
             render_object.vertical_direction = self.vertical_direction;
             render_object.text_direction = self.text_direction;
 
-            render_object.layout_scope.mark_needs_layout();
+            ctx.mark_needs_layout(render_object.layout_scope);
         }
 
         element.update(self.children, render_object, ctx);
@@ -145,7 +145,7 @@ impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
-        self.layout_scope = ctx.scope().clone();
+        self.layout_scope = *ctx.scope();
 
         Size::ZERO
     }

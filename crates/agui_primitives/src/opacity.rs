@@ -69,12 +69,10 @@ where
                 }
             } else if was_layer == now_layer {
                 // Both fully transparent or fully opaque: a visibility flip still repaints.
-                render_object.paint_scope.mark_needs_paint();
+                ctx.mark_needs_paint(render_object.paint_scope);
             } else {
                 // Crossing the threshold where a layer is needed changes the compositing bits.
-                render_object
-                    .paint_scope
-                    .mark_needs_compositing_bits_update();
+                ctx.mark_needs_compositing_bits_update(render_object.paint_scope);
             }
         }
 
@@ -119,7 +117,7 @@ where
 {
     fn mount(&mut self, ctx: &mut MountCtx) {
         // Capture the enclosing boundary so a later opacity change can mark it.
-        self.paint_scope = ctx.paint_scope().clone();
+        self.paint_scope = *ctx.paint_scope();
         self.child.mount(ctx);
     }
 

@@ -160,7 +160,7 @@ impl BuildState {
         let detached = PaintScope::detached();
 
         for cell in ordered {
-            cell.flush_rebuilds(scheduler, paint, layout, &detached);
+            cell.flush_rebuilds(scheduler, paint, layout, detached);
         }
 
         true
@@ -314,7 +314,7 @@ impl BuildBoundaryCell {
         scheduler: &mut dyn TaskScheduler,
         paint: &mut PaintPipeline,
         layout: &LayoutPipeline,
-        scope: &PaintScope,
+        scope: PaintScope,
     ) {
         let suffixes = std::mem::take(&mut *self.suffixes.borrow_mut());
         let child_scope = self.child_scope();
@@ -331,7 +331,7 @@ impl BuildBoundaryCell {
                 &child_scope,
                 layout,
                 paint,
-                scope,
+                &scope,
             );
 
             let render = self.render.borrow();

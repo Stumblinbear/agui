@@ -1,7 +1,8 @@
 use crate::{
     context::MountCtx,
     pipeline::{
-        layout::{LayoutPipeline, LayoutScope},
+        BoundaryContent,
+        layout::{DeferredLayoutScope, LayoutPipeline, LayoutScope, RegisteredLayoutBoundary},
         paint::{PaintPipeline, PaintScope},
     },
 };
@@ -49,6 +50,43 @@ impl<'a> LayoutCtx<'a> {
         };
 
         f(&mut child)
+    }
+
+    /// Registers `content` as a relayout boundary nested under the boundary in force, enclosed by
+    /// `paint`, and returns the handle that owns and marks it. A node that establishes a nested relayout
+    /// boundary during layout registers it this way.
+    pub fn register_boundary(
+        &self,
+        content: BoundaryContent,
+        paint: PaintScope,
+    ) -> RegisteredLayoutBoundary {
+        self.layout.register_under(self.scope, content, paint)
+    }
+
+    /// A deferred handle to the boundary in force, for marking it from a reconcile that holds no context.
+    pub fn deferred_layout_scope(&self) -> DeferredLayoutScope {
+        self.layout.deferred_scope(self.scope)
+    }
+
+    /// Marks `scope`'s boundary for re-layout on the next frame.
+    pub fn mark_needs_layout(&self, scope: LayoutScope) {
+        self.layout.mark_needs_layout(scope);
+    }
+
+    /// Marks `scope`'s boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
+        self.paint.mark_needs_paint(scope);
+    }
+
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        self.paint.mark_needs_compositing_bits_update(scope);
+    }
+
+    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
+    pub fn mark_needs_composite(&self, scope: PaintScope) {
+        self.paint.mark_needs_composite(scope);
     }
 
     /// Mounts a subtree built during this layout, painting into `paint_scope`, the boundary the

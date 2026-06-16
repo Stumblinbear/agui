@@ -122,11 +122,15 @@ impl PipelineOwner {
 
     /// Lays out any boundary that has been marked for layout since the last flush.
     pub fn flush_layout(&mut self) {
+        self.layout.drain_deferred();
+
         self.layout.flush(&mut self.paint);
     }
 
     /// Repaints any boundary that has been marked for paint since the last flush.
     pub fn flush_paint(&mut self) {
+        self.paint.drain_deferred();
+
         self.paint.flush_compositing_bits();
 
         self.paint.flush_paint();

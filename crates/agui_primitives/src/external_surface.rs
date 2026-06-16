@@ -78,17 +78,17 @@ impl Widget for ExternalSurface {
         )
     }
 
-    fn update(self, _: &mut Self::Element, render_object: &mut Self::Render, _: &mut UpdateCtx) {
+    fn update(self, _: &mut Self::Element, render_object: &mut Self::Render, ctx: &mut UpdateCtx) {
         if render_object.surface != self.surface {
             render_object.surface = self.surface;
             render_object.layer.borrow_mut().set_surface(self.surface);
-            render_object.paint_scope.mark_needs_paint();
+            ctx.mark_needs_paint(render_object.paint_scope);
         }
 
         if render_object.width != self.width || render_object.height != self.height {
             render_object.width = self.width;
             render_object.height = self.height;
-            render_object.layout_scope.mark_needs_layout();
+            ctx.mark_needs_layout(render_object.layout_scope);
         }
     }
 }
@@ -106,7 +106,7 @@ pub struct RenderExternalSurface {
 
 impl RenderObject for RenderExternalSurface {
     fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = ctx.paint_scope().clone();
+        self.paint_scope = *ctx.paint_scope();
     }
 
     fn unmount(&mut self, _: &mut MountCtx) {}
@@ -149,7 +149,7 @@ impl RenderBox for RenderExternalSurface {
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
-        self.layout_scope = ctx.scope().clone();
+        self.layout_scope = *ctx.scope();
 
         let size = BoxConstraints::tight_for(self.width, self.height)
             .enforce(constraints)

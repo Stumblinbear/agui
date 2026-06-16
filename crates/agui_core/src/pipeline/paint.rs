@@ -3,10 +3,12 @@
 
 use std::{
     cell::{Cell, RefCell},
+    ptr::NonNull,
     rc::{Rc, Weak},
 };
 
 use intrusive_collections::{LinkedList, LinkedListLink, UnsafeRef, intrusive_adapter};
+use slotmap::{Key, SlotMap};
 
 use crate::{
     context::PaintCtx,
@@ -16,6 +18,11 @@ use crate::{
     pipeline::BoundaryContent,
     render_object::{RenderObject, box_layout::RenderBox},
 };
+
+slotmap::new_key_type! {
+    /// Identifies a registered repaint boundary within one [`PaintPipeline`].
+    pub(crate) struct PaintBoundaryId;
+}
 
 /// Owns the repaint boundaries of one subtree and repaints the ones that have changed.
 ///
@@ -33,9 +40,11 @@ impl Default for PaintPipeline {
     fn default() -> Self {
         Self {
             pending: Rc::new(RefCell::new(PaintPipelineState {
+                boundaries: SlotMap::with_key(),
                 needs_paint: LinkedList::new(PaintLinkAdapter::new()),
                 needs_compositing: LinkedList::new(CompositingLinkAdapter::new()),
                 needs_composite: false,
+                deferred: Rc::new(RefCell::new(Vec::new())),
                 notify: Box::new(noop),
 
                 phase: PaintPipelinePhase::Idle,
@@ -93,16 +102,19 @@ impl PaintPipeline {
             paint_capacity: Cell::new(SceneCapacity::default()),
             needs_paint: Cell::new(false),
             needs_compositing: Cell::new(false),
+            id: Cell::new(PaintBoundaryId::null()),
         });
 
         // A fresh boundary has never been painted and its bits have never been computed.
         {
             let mut pending = self.pending.borrow_mut();
+            cell.id
+                .set(pending.boundaries.insert(NonNull::from(&*cell)));
             pending.link_paint(&cell);
             pending.link_compositing(&cell);
         }
 
-        tracing::debug!(boundary = ?Rc::as_ptr(&cell), "registered repaint boundary");
+        tracing::debug!(boundary = ?cell.id.get(), "registered repaint boundary");
 
         PaintBoundaryHandle { cell }
     }
@@ -129,6 +141,63 @@ impl PaintPipeline {
 
         // Unregistration is the handle's `Drop`; the explicit drop keeps that load-bearing step visible.
         drop(handle);
+    }
+
+    /// Marks `scope`'s boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
+        let mut pending = self.pending.borrow_mut();
+
+        let Some(cell) = pending.boundaries.get(scope.0).copied() else {
+            return;
+        };
+
+        // SAFETY: the resolver holds this pointer only while the boundary's `PaintBoundaryHandle` is
+        // alive, and that handle removes the entry before its `Rc` frees the cell, so it is live here.
+        let cell = unsafe { cell.as_ref() };
+
+        pending.mark_needs_paint(cell);
+    }
+
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        let mut pending = self.pending.borrow_mut();
+        let Some(cell) = pending.boundaries.get(scope.0).copied() else {
+            return;
+        };
+        // SAFETY: as in `mark_needs_paint` — the handle removes the entry before the cell is freed.
+        let cell = unsafe { cell.as_ref() };
+        pending.mark_needs_compositing_bits_update(cell);
+    }
+
+    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
+    pub fn mark_needs_composite(&self, _scope: PaintScope) {
+        self.pending.borrow_mut().mark_needs_composite();
+    }
+
+    /// A deferred handle to `scope`'s boundary, for marking it from a callback that runs with no
+    /// pipeline in hand, such as a per-frame animation.
+    pub fn deferred_scope(&self, scope: PaintScope) -> DeferredPaintScope {
+        DeferredPaintScope {
+            queue: Some(Rc::clone(&self.pending.borrow().deferred)),
+            id: scope.0,
+        }
+    }
+
+    /// Applies every out-of-band mark queued since the last drain. Called once at the start of a frame,
+    /// before the channels are flushed.
+    pub fn drain_deferred(&mut self) {
+        let queue = Rc::clone(&self.pending.borrow().deferred);
+        let drained: Vec<(PaintBoundaryId, DeferredKind)> = queue.borrow_mut().drain(..).collect();
+
+        for (id, kind) in drained {
+            let scope = PaintScope(id);
+            match kind {
+                DeferredKind::Paint => self.mark_needs_paint(scope),
+                DeferredKind::CompositingBits => self.mark_needs_compositing_bits_update(scope),
+                DeferredKind::Composite => self.mark_needs_composite(scope),
+            }
+        }
     }
 
     /// Recomputes the compositing bits of every marked inner boundary, settling them before any repaint
@@ -277,6 +346,9 @@ struct PaintCell {
     /// Whether this cell is currently in the compositing-bits channel, guarding a double-mark from linking
     /// it twice.
     needs_compositing: Cell<bool>,
+
+    /// This cell's key in the registry, carried by an inert [`PaintScope`] to reach it.
+    id: Cell<PaintBoundaryId>,
 }
 
 intrusive_adapter!(PaintLinkAdapter = UnsafeRef<PaintCell>: PaintCell { paint_link => LinkedListLink });
@@ -297,6 +369,8 @@ fn recover_owner(popped: UnsafeRef<PaintCell>) -> Rc<PaintCell> {
 
 /// The boundaries awaiting repaint or a bit recompute, and the hook that schedules a frame.
 struct PaintPipelineState {
+    boundaries: SlotMap<PaintBoundaryId, NonNull<PaintCell>>,
+
     needs_compositing: LinkedList<CompositingLinkAdapter>,
     needs_paint: LinkedList<PaintLinkAdapter>,
 
@@ -304,6 +378,9 @@ struct PaintPipelineState {
     /// repaint. Set out of band by an animation that moves a retained layer; cleared when the frame
     /// composites.
     needs_composite: bool,
+
+    /// The out-of-band marks queued by [`DeferredPaintScope`]s since the last drain.
+    deferred: Rc<RefCell<Vec<(PaintBoundaryId, DeferredKind)>>>,
 
     notify: Box<dyn Fn()>,
 
@@ -316,7 +393,7 @@ impl PaintPipelineState {
         self.needs_paint.is_empty() && self.needs_compositing.is_empty() && !self.needs_composite
     }
 
-    fn link_paint(&mut self, cell: &Rc<PaintCell>) {
+    fn link_paint(&mut self, cell: &PaintCell) {
         if cell.needs_paint.get() {
             return;
         }
@@ -326,22 +403,25 @@ impl PaintPipelineState {
         // is unlinked before that `Rc` is dropped in `unregister`; the per-channel flag guards it
         // against being linked into this channel more than once.
         self.needs_paint
-            .push_back(unsafe { UnsafeRef::from_raw(Rc::as_ptr(cell)) });
+            .push_back(unsafe { UnsafeRef::from_raw(std::ptr::from_ref(cell)) });
     }
 
-    fn unlink_paint(&mut self, cell: &Rc<PaintCell>) {
+    fn unlink_paint(&mut self, cell: &PaintCell) {
         if !cell.needs_paint.get() {
             return;
         }
 
         // SAFETY: the cell is linked into this channel and stays live behind its `Rc` until removed
         // here, so the pointer the cursor recovers is valid.
-        let mut cursor = unsafe { self.needs_paint.cursor_mut_from_ptr(Rc::as_ptr(cell)) };
+        let mut cursor = unsafe {
+            self.needs_paint
+                .cursor_mut_from_ptr(std::ptr::from_ref(cell))
+        };
         cursor.remove();
         cell.needs_paint.set(false);
     }
 
-    fn link_compositing(&mut self, cell: &Rc<PaintCell>) {
+    fn link_compositing(&mut self, cell: &PaintCell) {
         if cell.needs_compositing.get() {
             return;
         }
@@ -351,22 +431,25 @@ impl PaintPipelineState {
         // is unlinked before that `Rc` is dropped in `unregister`; the per-channel flag guards it
         // against being linked into this channel more than once.
         self.needs_compositing
-            .push_back(unsafe { UnsafeRef::from_raw(Rc::as_ptr(cell)) });
+            .push_back(unsafe { UnsafeRef::from_raw(std::ptr::from_ref(cell)) });
     }
 
-    fn unlink_compositing(&mut self, cell: &Rc<PaintCell>) {
+    fn unlink_compositing(&mut self, cell: &PaintCell) {
         if !cell.needs_compositing.get() {
             return;
         }
 
         // SAFETY: the cell is linked into this channel and stays live behind its `Rc` until removed
         // here, so the pointer the cursor recovers is valid.
-        let mut cursor = unsafe { self.needs_compositing.cursor_mut_from_ptr(Rc::as_ptr(cell)) };
+        let mut cursor = unsafe {
+            self.needs_compositing
+                .cursor_mut_from_ptr(std::ptr::from_ref(cell))
+        };
         cursor.remove();
         cell.needs_compositing.set(false);
     }
 
-    fn mark_needs_paint(&mut self, cell: &Rc<PaintCell>) {
+    fn mark_needs_paint(&mut self, cell: &PaintCell) {
         match self.phase {
             PaintPipelinePhase::Idle => {}
 
@@ -379,7 +462,7 @@ impl PaintPipelineState {
             }
         }
 
-        tracing::trace!(boundary = ?Rc::as_ptr(cell), "marked boundary for repaint");
+        tracing::trace!(boundary = ?cell.id.get(), "marked boundary for repaint");
 
         let was_clean = self.is_clean();
 
@@ -390,7 +473,7 @@ impl PaintPipelineState {
         }
     }
 
-    fn mark_needs_compositing_bits_update(&mut self, cell: &Rc<PaintCell>) {
+    fn mark_needs_compositing_bits_update(&mut self, cell: &PaintCell) {
         match self.phase {
             PaintPipelinePhase::Idle => {}
 
@@ -407,7 +490,7 @@ impl PaintPipelineState {
             }
         }
 
-        tracing::trace!(boundary = ?Rc::as_ptr(cell), "marked boundary for compositing bits update");
+        tracing::trace!(boundary = ?cell.id.get(), "marked boundary for compositing bits update");
 
         let was_clean = self.is_clean();
 
@@ -443,69 +526,69 @@ impl PaintPipelineState {
     }
 }
 
-/// The boundary a render object repaints into. A node deep in a subtree holds the scope of its nearest
-/// enclosing boundary and marks it when its painting goes stale; the boundary then repaints on the next
-/// frame, leaving every other boundary untouched. Cloning shares the same target, so the scope can be
-/// marked from anywhere, including a per-frame callback. A scope can only mark its boundary, never
-/// remove it, so it is safe to hand down a subtree.
-#[derive(Clone)]
-pub struct PaintScope(Weak<PaintCell>);
+/// Names the repaint boundary a render object paints into. A node holds the scope of its nearest
+/// enclosing boundary and presents it to a context, or a [`DeferredPaintScope`], to repaint that
+/// boundary when its painting goes stale.
+#[derive(Clone, Copy)]
+pub struct PaintScope(PaintBoundaryId);
 
 impl PaintScope {
-    /// A scope detached from any pipeline, whose marks reach nothing.
+    /// A scope detached from any pipeline, which names no boundary.
     pub fn detached() -> Self {
-        Self(Weak::new())
+        Self(PaintBoundaryId::null())
     }
 
-    /// Whether marks through this scope reach nothing, because the scope was created detached or its
-    /// boundary has since been freed.
+    /// Whether this scope names no boundary, because it was created detached.
     pub fn is_detached(&self) -> bool {
-        Weak::strong_count(&self.0) == 0
+        self.0.is_null()
+    }
+}
+
+/// The kind of out-of-band mark queued for a boundary.
+enum DeferredKind {
+    Paint,
+    CompositingBits,
+    Composite,
+}
+
+/// A [`PaintScope`] paired with the route to mark it from outside a pipeline pass, such as a per-frame
+/// animation callback that holds no context. Each request is applied on the pipeline's next frame; a
+/// detached marker, or one whose boundary is gone, marks nothing.
+#[derive(Clone)]
+pub struct DeferredPaintScope {
+    id: PaintBoundaryId,
+    queue: Option<Rc<RefCell<Vec<(PaintBoundaryId, DeferredKind)>>>>,
+}
+
+impl DeferredPaintScope {
+    /// A marker detached from any pipeline, whose marks reach nothing.
+    pub fn detached() -> Self {
+        Self {
+            id: PaintBoundaryId::null(),
+            queue: None,
+        }
     }
 
-    /// Marks the boundary to be repainted on the next frame. If this is the first mark on an otherwise
-    /// clean pipeline, the schedule hook fires so the driver schedules a frame.
+    /// Queues this boundary to be repainted on the pipeline's next frame.
     pub fn mark_needs_paint(&self) {
-        let Some(cell) = self.0.upgrade() else {
-            return;
-        };
-
-        let Some(pending) = cell.pending.upgrade() else {
-            return;
-        };
-
-        pending.borrow_mut().mark_needs_paint(&cell);
+        self.push(DeferredKind::Paint);
     }
 
-    /// Marks the boundary's compositing bits for recomputation before its next repaint, and the
-    /// boundary for repaint. Only an inner boundary tracks its bits this way.
+    /// Queues this boundary's compositing bits to be recomputed, and the boundary repainted, on the
+    /// next frame.
     pub fn mark_needs_compositing_bits_update(&self) {
-        let Some(cell) = self.0.upgrade() else {
-            return;
-        };
-
-        let Some(pending) = cell.pending.upgrade() else {
-            return;
-        };
-
-        pending
-            .borrow_mut()
-            .mark_needs_compositing_bits_update(&cell);
+        self.push(DeferredKind::CompositingBits);
     }
 
-    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary. Use
-    /// it when only a retained layer's placement changed, as a per-frame animation of a transform or
-    /// offset does.
+    /// Queues a recomposite of the subtree for the next frame, without repainting this boundary.
     pub fn mark_needs_composite(&self) {
-        let Some(cell) = self.0.upgrade() else {
-            return;
-        };
+        self.push(DeferredKind::Composite);
+    }
 
-        let Some(pending) = cell.pending.upgrade() else {
-            return;
-        };
-
-        pending.borrow_mut().mark_needs_composite();
+    fn push(&self, kind: DeferredKind) {
+        if let Some(queue) = &self.queue {
+            queue.borrow_mut().push((self.id, kind));
+        }
     }
 }
 
@@ -520,22 +603,30 @@ pub struct PaintBoundaryHandle {
 impl PaintBoundaryHandle {
     /// A mark-only handle to this boundary, for descendants to repaint into it.
     pub fn scope(&self) -> PaintScope {
-        PaintScope(Rc::downgrade(&self.cell))
+        PaintScope(self.cell.id.get())
     }
 
     /// Marks this boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self) {
-        self.scope().mark_needs_paint();
+        if let Some(pending) = self.cell.pending.upgrade() {
+            pending.borrow_mut().mark_needs_paint(&self.cell);
+        }
     }
 
     /// Marks this boundary's compositing bits for recomputation before its next repaint.
     pub fn mark_needs_compositing_bits_update(&self) {
-        self.scope().mark_needs_compositing_bits_update();
+        if let Some(pending) = self.cell.pending.upgrade() {
+            pending
+                .borrow_mut()
+                .mark_needs_compositing_bits_update(&self.cell);
+        }
     }
 
     /// Schedules a recomposite of the subtree on the next frame, without repainting this boundary.
     pub fn mark_needs_composite(&self) {
-        self.scope().mark_needs_composite();
+        if let Some(pending) = self.cell.pending.upgrade() {
+            pending.borrow_mut().mark_needs_composite();
+        }
     }
 }
 
@@ -549,6 +640,13 @@ impl Drop for PaintBoundaryHandle {
         let mut pending = pending.borrow_mut();
         pending.unlink_paint(&self.cell);
         pending.unlink_compositing(&self.cell);
+
+        let id = self.cell.id.get();
+        pending.boundaries.remove(id);
+        pending
+            .deferred
+            .borrow_mut()
+            .retain(|(queued, _)| *queued != id);
     }
 }
 
@@ -727,16 +825,18 @@ mod tests {
     /// Flushes the inner channels and clears the root, as a frame with a painted root does, against a
     /// freestanding pipeline.
     fn flush_paint(pipeline: &mut PaintPipeline) {
+        pipeline.drain_deferred();
         pipeline.flush_compositing_bits();
         pipeline.flush_paint();
     }
 
-    /// A scope is cloned onto every node that can mark its boundary, so it stays one pointer wide.
+    /// A scope is stored on every node that paints into a boundary, so it stays a single key wide, with
+    /// no pointer or refcount.
     #[test]
-    fn a_paint_scope_is_one_pointer() {
+    fn a_paint_scope_is_one_key() {
         assert_eq!(
             std::mem::size_of::<PaintScope>(),
-            std::mem::size_of::<usize>()
+            std::mem::size_of::<u64>()
         );
     }
 
@@ -960,7 +1060,7 @@ mod tests {
         assert_eq!(animated_paints.get(), 1);
 
         // The animation marks its own boundary each frame, exactly as a driver would from `on_frame`.
-        let scope = animated.scope();
+        let scope = pipeline.deferred_scope(animated.scope());
         let _subscription = vsync.on_frame(move |_| scope.mark_needs_paint());
 
         for _ in 0..3 {
