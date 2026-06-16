@@ -22,7 +22,9 @@ fn main() {
         fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
         listener::Listener, opacity::Opacity, text::Text,
     };
-    use agui_vello::dcomp::DcompWindowRenderer;
+    use agui_render::dcomp::Dcomp;
+    use agui_render::wgpu::Backends;
+    use agui_vello::VelloRenderer;
     use agui_winit::{WindowOptions, run_app};
 
     tracing_subscriber::fmt()
@@ -38,7 +40,7 @@ fn main() {
             width: 800,
             height: 600,
         },
-        DcompWindowRenderer::new(),
+        Dcomp::new(VelloRenderer::with_backends(Backends::DX12).expect("a DX12 adapter")),
         |vsync| {
             ColoredBox::new(Color::from_rgb8(30, 30, 30)).child(Provide::new(Fonts::new()).child(
                 LayoutBuilder::new(move |constraints| {

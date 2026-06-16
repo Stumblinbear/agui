@@ -1,29 +1,29 @@
-use std::{
-    fs::File,
-    io::{BufReader, BufWriter},
-    num::NonZeroUsize,
-    path::Path,
-};
+use std::num::NonZeroUsize;
 
-use vello::{
-    AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
-    peniko::Color,
-    wgpu::{
-        self, Extent3d, MapMode, Origin3d, PollType, TextureAspect, TextureDescriptor,
-        TextureDimension, TextureFormat, TextureUsages,
-    },
-};
+use agui_core::paint::peniko::Color;
+use agui_core::paint::scene::Scene;
+use agui_render::TextureRenderer;
+use agui_render::wgpu;
+use vello::kurbo::Affine;
+use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions};
 
-/// Renders scenes to off-screen RGBA8 images using Vello, with no window or surface.
-pub struct HeadlessRenderer {
+use crate::append_scene_with_transform;
+
+/// A [`TextureRenderer`] that rasterizes a frame with Vello and draws it into a caller-provided
+/// texture, holding its own GPU context with no window or surface.
+///
+/// It rasterizes the whole frame into one scene, so a frame placing a system-owned
+/// [`External`](agui_core::paint::compositing::CompositedNode::External) surface, which has no
+/// rasterization, has nothing to draw for that surface.
+pub struct VelloRenderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     renderer: Renderer,
 }
 
-impl HeadlessRenderer {
+impl VelloRenderer {
     /// Creates a renderer on a default GPU adapter, or `None` if none is available, so a caller on a
-    /// machine without a GPU can skip golden tests rather than fail.
+    /// machine without a GPU can skip rather than fail.
     pub fn new() -> Option<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
 
@@ -32,6 +32,27 @@ impl HeadlessRenderer {
         ))
         .ok()?;
 
+        Self::from_adapter(&adapter)
+    }
+
+    /// Creates a renderer on a high-performance adapter restricted to `backends`, or `None` if none is
+    /// available. A consumer that requires a specific backend, such as a DirectComposition compositor
+    /// requiring `Backends::DX12`, selects it here instead of accepting the default adapter.
+    pub fn with_backends(backends: wgpu::Backends) -> Option<Self> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends,
+            ..Default::default()
+        });
+
+        let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
+            &instance, None,
+        ))
+        .ok()?;
+
+        Self::from_adapter(&adapter)
+    }
+
+    fn from_adapter(adapter: &wgpu::Adapter) -> Option<Self> {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: None,
             required_features: adapter.features() & wgpu::Features::CLEAR_TEXTURE,
@@ -59,242 +80,49 @@ impl HeadlessRenderer {
             renderer,
         })
     }
+}
 
-    /// Renders `scene` into a `width` by `height` [`Image`], cleared to `base_color`.
-    pub fn render(
+impl TextureRenderer for VelloRenderer {
+    const NAME: &'static str = "vello";
+
+    fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    fn render(
         &mut self,
-        scene: &vello::Scene,
+        scene: &Scene,
+        target: &wgpu::TextureView,
         width: u32,
         height: u32,
-        base_color: Color,
-    ) -> Image {
-        let target = self.device.create_texture(&TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        scale: f64,
+    ) {
+        let mut vello_scene = vello::Scene::new();
+        append_scene_with_transform(scene, &mut vello_scene, Affine::scale(scale));
 
         self.renderer
             .render_to_texture(
                 &self.device,
                 &self.queue,
-                scene,
-                &view,
+                &vello_scene,
+                target,
                 &RenderParams {
-                    base_color,
+                    base_color: Color::TRANSPARENT,
                     width,
                     height,
                     antialiasing_method: AaConfig::Area,
                 },
             )
             .expect("render to texture");
-
-        self.read_back(&target, width, height)
-    }
-
-    fn read_back(&self, texture: &wgpu::Texture, width: u32, height: u32) -> Image {
-        // A texture-to-buffer copy requires each row's stride to be a multiple of 256 bytes.
-        let padded_row = (width * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-
-        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: u64::from(padded_row) * u64::from(height),
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded_row),
-                    rows_per_image: Some(height),
-                },
-            },
-            Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-        );
-        self.queue.submit([encoder.finish()]);
-
-        let slice = buffer.slice(..);
-        slice.map_async(MapMode::Read, |_| {});
-        self.device
-            .poll(PollType::wait_indefinitely())
-            .expect("poll device");
-        let mapped = slice.get_mapped_range();
-
-        let row = width as usize * 4;
-        let mut rgba = Vec::with_capacity(row * height as usize);
-        for y in 0..height as usize {
-            let start = y * padded_row as usize;
-            rgba.extend_from_slice(&mapped[start..start + row]);
-        }
-
-        drop(mapped);
-        buffer.unmap();
-
-        Image {
-            width,
-            height,
-            rgba,
-        }
     }
 }
 
-/// An RGBA8 image, row-major, four bytes per pixel.
-pub struct Image {
-    pub width: u32,
-    pub height: u32,
-    pub rgba: Vec<u8>,
-}
-
-impl Image {
-    /// Writes the image as an RGBA PNG.
-    pub fn save_png(&self, path: impl AsRef<Path>) -> Result<(), png::EncodingError> {
-        let mut encoder =
-            png::Encoder::new(BufWriter::new(File::create(path)?), self.width, self.height);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-
-        let mut writer = encoder.write_header()?;
-        writer.write_image_data(&self.rgba)
+impl Default for VelloRenderer {
+    fn default() -> Self {
+        Self::new().expect("a GPU adapter is required")
     }
-
-    /// Reads an RGBA8 PNG written by [`Image::save_png`].
-    pub fn load_png(path: impl AsRef<Path>) -> Result<Self, png::DecodingError> {
-        let mut reader = png::Decoder::new(BufReader::new(File::open(path)?)).read_info()?;
-
-        let mut rgba = vec![0; reader.output_buffer_size().expect("output buffer size")];
-        let info = reader.next_frame(&mut rgba)?;
-        rgba.truncate(info.buffer_size());
-
-        Ok(Self {
-            width: info.width,
-            height: info.height,
-            rgba,
-        })
-    }
-
-    /// The number of pixels differing from `other` by more than `tolerance` in any channel.
-    /// Differing dimensions count as every pixel.
-    pub fn diff_pixels(&self, other: &Self, tolerance: u8) -> usize {
-        if self.width != other.width || self.height != other.height {
-            return (self.width * self.height).max(other.width * other.height) as usize;
-        }
-
-        self.rgba
-            .chunks_exact(4)
-            .zip(other.rgba.chunks_exact(4))
-            .filter(|(a, b)| {
-                a.iter()
-                    .zip(b.iter())
-                    .any(|(x, y)| x.abs_diff(*y) > tolerance)
-            })
-            .count()
-    }
-
-    /// A visualization of where this image differs from `other` by more than `tolerance`: each
-    /// differing pixel is solid red, each matching pixel a dim grey ghost of this image, so the
-    /// mismatch stands out over the original. `None` when the dimensions differ, since there is no
-    /// per-pixel overlay to draw.
-    pub fn diff_image(&self, other: &Self, tolerance: u8) -> Option<Image> {
-        if self.width != other.width || self.height != other.height {
-            return None;
-        }
-
-        let mut rgba = Vec::with_capacity(self.rgba.len());
-        for (a, b) in self.rgba.chunks_exact(4).zip(other.rgba.chunks_exact(4)) {
-            let differs = a
-                .iter()
-                .zip(b.iter())
-                .any(|(x, y)| x.abs_diff(*y) > tolerance);
-
-            if differs {
-                rgba.extend_from_slice(&[255, 0, 0, 255]);
-            } else {
-                let ghost = ((u16::from(a[0]) + u16::from(a[1]) + u16::from(a[2])) / 6) as u8;
-                rgba.extend_from_slice(&[ghost, ghost, ghost, 255]);
-            }
-        }
-
-        Some(Image {
-            width: self.width,
-            height: self.height,
-            rgba,
-        })
-    }
-}
-
-/// Compares `actual` against the golden PNG at `path`, panicking on a mismatch.
-///
-/// Writes the golden instead when it is missing or the `AGUI_UPDATE_GOLDEN` environment variable is
-/// set, so goldens are generated on first run and refreshed on demand. Generate them on the machine
-/// the tests run on, since GPU output varies between drivers.
-///
-/// `tolerance` is the fraction of pixels, between 0 and 1, allowed to differ before the comparison
-/// fails: 0 demands an exact match, 0.01 permits up to 1% of pixels to differ. Each pixel is judged
-/// by exact channel equality, so the tolerance bounds how many pixels may differ, not by how much.
-///
-/// On a mismatch it writes the rendered image to `<golden>.actual.png` and a red-on-grey diff to
-/// `<golden>.diff.png` beside the golden, then names both in the panic, so the failure can be inspected
-/// without re-running with an updated golden.
-pub fn assert_golden(actual: &Image, path: impl AsRef<Path>, tolerance: f32) {
-    let path = path.as_ref();
-
-    if std::env::var_os("AGUI_UPDATE_GOLDEN").is_some() || !path.exists() {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).expect("create golden dir");
-        }
-        actual.save_png(path).expect("write golden");
-        return;
-    }
-
-    let expected = Image::load_png(path).expect("read golden");
-    let diff = actual.diff_pixels(&expected, 0);
-
-    let total = (actual.width * actual.height) as f32;
-    let allowed = (total * tolerance) as usize;
-    if diff <= allowed {
-        return;
-    }
-
-    let actual_path = path.with_extension("actual.png");
-    actual.save_png(&actual_path).expect("write actual image");
-
-    let mut message = format!(
-        "{diff} pixels differ from golden {}\n  actual: {}",
-        path.display(),
-        actual_path.display(),
-    );
-
-    if let Some(diff_image) = actual.diff_image(&expected, 0) {
-        let diff_path = path.with_extension("diff.png");
-        diff_image.save_png(&diff_path).expect("write diff image");
-        message.push_str(&format!("\n  diff:   {}", diff_path.display()));
-    }
-
-    panic!("{message}");
 }

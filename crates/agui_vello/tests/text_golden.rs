@@ -1,112 +1,69 @@
-use agui_core::{prelude::render_object::*, provide::Provide, test_harness::TestCtx};
+use agui_core::{
+    paint::peniko::Color,
+    prelude::{element::Widget, render_object::*},
+    provide::Provide,
+};
 use agui_primitives::{
     colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
 };
-use agui_vello::{
-    headless::{HeadlessRenderer, assert_golden},
-    to_vello_scene,
-};
-use vello::peniko::Color;
+use agui_test::golden;
+use agui_test::golden::VelloHeadless;
 
 /// The bundled Cantarell font (SIL Open Font License), so text shapes against a known font rather
 /// than whatever the host system provides, keeping the golden deterministic across machines.
 const FONT: &[u8] = include_bytes!("fonts/Cantarell-Regular.ttf");
 
-#[test]
-fn text_renders_glyphs_matching_golden() {
-    let Some(mut headless) = HeadlessRenderer::new() else {
-        eprintln!("no GPU adapter available; skipping golden test");
-        return;
-    };
+/// A dark background the text reads against, filling the frame so the golden has no transparent gaps.
+const BACKGROUND: Color = Color::from_rgb8(30, 30, 30);
 
-    let (width, height) = (220_u32, 60_u32);
-
-    // White text on the dark base; the registered family forces the bundled font.
-    let text = Text::new("Agui")
-        .font_size(40.0)
-        .family("Cantarell")
-        .brush(Color::WHITE);
-
+#[golden(renderers(VelloHeadless), width = 220, height = 60, tolerance = 0.01)]
+fn text_agui() -> impl Widget<Render: RenderBox> {
     // Provide the fonts above the text so its render captures the handle, just as the tree does.
     let fonts = Fonts::new();
     fonts.register(FONT.to_vec());
-    let widget = Provide::new(fonts).child(text);
-
-    let (mut owner, view) = TestCtx::new().mount_view(widget);
-
-    view.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
-    owner.flush_layout();
-    owner.flush_paint();
-
-    let scene = view.composite_frame().rasterize();
-    let vello_scene = to_vello_scene(&scene);
-
-    let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
-
-    assert_golden(
-        &image,
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens/text_agui.png"),
-        0.01,
-    );
+    Provide::new(fonts).child(
+        ColoredBox::new(BACKGROUND).child(
+            Text::new("Agui")
+                .font_size(40.0)
+                .family("Cantarell")
+                .brush(Color::WHITE),
+        ),
+    )
 }
 
-#[test]
-fn rich_text_renders_styled_runs_matching_golden() {
-    let Some(mut headless) = HeadlessRenderer::new() else {
-        eprintln!("no GPU adapter available; skipping golden test");
-        return;
-    };
-
-    let (width, height) = (360_u32, 80_u32);
-
-    // A base style every run inherits, with each child overriding only what it changes: a bold red
-    // run, an underlined run, a highlighted run, and an inline colored box.
-    let base = TextStyle::new().font_size(28.0).family("Cantarell");
-    let span = TextSpan::new("").style(base).children([
-        InlineSpan::Text(
-            TextSpan::new("Bold ").style(
-                TextStyle::new()
-                    .color(Color::from_rgb8(255, 80, 80))
-                    .weight(FontWeight::BOLD),
-            ),
-        ),
-        InlineSpan::Text(
-            TextSpan::new("under ").style(TextStyle::new().color(Color::WHITE).underline(true)),
-        ),
-        InlineSpan::Text(
-            TextSpan::new("mark ").style(
-                TextStyle::new()
-                    .color(Color::BLACK)
-                    .background(Color::from_rgb8(255, 235, 59)),
-            ),
-        ),
-        InlineSpan::Widget(
-            ColoredBox::new(Color::from_rgb8(80, 200, 120))
-                .child(SizedBox::new().width(30).height(30)),
-        ),
-    ]);
-
+#[golden(renderers(VelloHeadless), width = 360, height = 80, tolerance = 0.01)]
+fn rich_text_agui() -> impl Widget<Render: RenderBox> {
     let fonts = Fonts::new();
     fonts.register(FONT.to_vec());
-    let widget = Provide::new(fonts).child(RichText::new(span));
 
-    let (mut owner, view) = TestCtx::new().mount_view(widget);
-
-    view.resize(BoxConstraints::new(0.0, width as f32, 0.0, height as f32));
-    owner.flush_layout();
-    owner.flush_paint();
-
-    let scene = view.composite_frame().rasterize();
-    let vello_scene = to_vello_scene(&scene);
-
-    let image = headless.render(&vello_scene, width, height, Color::from_rgb8(30, 30, 30));
-
-    assert_golden(
-        &image,
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/goldens/rich_text_agui.png"
-        ),
-        0.01,
-    );
+    Provide::new(fonts).child(
+        ColoredBox::new(BACKGROUND).child(RichText::new(
+            TextSpan::new("")
+                .style(TextStyle::new().font_size(28.0).family("Cantarell"))
+                .children([
+                    InlineSpan::Text(
+                        TextSpan::new("Bold ").style(
+                            TextStyle::new()
+                                .color(Color::from_rgb8(255, 80, 80))
+                                .weight(FontWeight::BOLD),
+                        ),
+                    ),
+                    InlineSpan::Text(
+                        TextSpan::new("under ")
+                            .style(TextStyle::new().color(Color::WHITE).underline(true)),
+                    ),
+                    InlineSpan::Text(
+                        TextSpan::new("mark ").style(
+                            TextStyle::new()
+                                .color(Color::BLACK)
+                                .background(Color::from_rgb8(255, 235, 59)),
+                        ),
+                    ),
+                    InlineSpan::Widget(
+                        ColoredBox::new(Color::from_rgb8(80, 200, 120))
+                            .child(SizedBox::new().width(30).height(30)),
+                    ),
+                ]),
+        )),
+    )
 }

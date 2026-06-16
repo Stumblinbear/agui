@@ -19,6 +19,7 @@ winit.workspace = true
 
 [dev-dependencies]
 agui_primitives.workspace = true
+agui_render = { workspace = true, features = ["gpu"] }
 agui_vello.workspace = true
 tracing-subscriber.workspace = true
 typed_floats.workspace = true

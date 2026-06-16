@@ -1,4 +1,5 @@
 #![warn(clippy::all, clippy::pedantic, clippy::cargo)]
+#![warn(clippy::undocumented_unsafe_blocks)]
 #![allow(clippy::cargo_common_metadata)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]

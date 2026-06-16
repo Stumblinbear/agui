@@ -1,0 +1,44 @@
+[package]
+name = "agui_render"
+version = "0.1.0"
+edition = "2024"
+resolver = "2"
+description = "Renderer abstraction for Agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui", "graphics", "rendering"]
+categories = ["gui", "graphics", "rendering"]
+license = "MIT OR Apache-2.0"
+
+[features]
+# A backend targeting a GPU texture, via `wgpu`. On Windows it also pulls the DirectComposition
+# compositor (`dcomp`), which presents through `windows`/`agui_window`.
+gpu = ["dep:wgpu", "dep:windows", "dep:agui_window", "dep:raw-window-handle", "dep:rustc-hash"]
+# A backend producing a pixel buffer on the CPU.
+cpu = []
+
+[dependencies]
+agui_core.workspace = true
+
+wgpu = { workspace = true, optional = true }
+
+# The DirectComposition compositor is Windows-only; its deps stay off every other target so a
+# non-Windows `gpu` build pulls only `wgpu`.
+[target.'cfg(windows)'.dependencies]
+agui_window = { workspace = true, optional = true }
+raw-window-handle = { workspace = true, optional = true }
+rustc-hash = { workspace = true, optional = true }
+# Pinned to the `windows` version wgpu-hal links, so the raw D3D12 objects pulled out of wgpu are the
+# same types DirectComposition and DXGI expect.
+windows = { version = "0.58", optional = true, features = [
+    "Foundation",
+    "Foundation_Numerics",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_DirectComposition",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+] }

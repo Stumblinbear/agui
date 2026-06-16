@@ -28,9 +28,11 @@ agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
 # agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
 
 agui_test = { path = "crates/agui_test", version = "0.1" }
+agui_test_macros = { path = "crates/agui_test_macros", version = "0.1" }
 
 agui_window = { path = "crates/agui_window", version = "0.1" }
 agui_winit = { path = "crates/agui_winit", version = "0.1" }
+agui_render = { path = "crates/agui_render", version = "0.1" }
 agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
 bon = "3.3.2"
@@ -67,12 +69,17 @@ lyon = "1.0"
 parley = "0.10"
 peniko = "0.6"
 vello = "0.7"
+wgpu = "27"
 png = "0.18"
 
 raw-window-handle = "0.6"
 
 winit = "0.30"
 pollster = "0.4"
+
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
 
 [features]
 # default = ["primitives", "widgets", "macros"]

@@ -1,0 +1,19 @@
+[package]
+name = "agui_test_macros"
+version = "0.1.0"
+edition = "2024"
+resolver = "2"
+description = "Test macros for Agui"
+homepage = "https://github.com/Stumblinbear/agui"
+repository = "https://github.com/Stumblinbear/agui"
+keywords = ["gui", "testing"]
+categories = ["gui"]
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true

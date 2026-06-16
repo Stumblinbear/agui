@@ -4,11 +4,10 @@ use agui_core::paint::{
 };
 use vello::kurbo::Affine;
 
-pub mod headless;
+mod headless;
 pub mod renderer;
 
-#[cfg(windows)]
-pub mod dcomp;
+pub use headless::VelloRenderer;
 
 pub fn append_scene(scene: &Scene, target: &mut vello::Scene) {
     append_scene_with_transform(scene, target, Affine::IDENTITY);

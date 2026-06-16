@@ -1,34 +1,30 @@
-//! A [`WindowRenderer`] that composites an agui frame through DirectComposition (Windows).
+//! A [`WindowRenderer`] that composites an agui frame through `DirectComposition` (Windows).
 //!
-//! It walks the [`CompositedFrame`] tree into a DirectComposition visual tree: a
+//! It walks the [`CompositedFrame`] tree into a `DirectComposition` visual tree: a
 //! [`Surface`](CompositedNode::Surface) becomes a visual with its transform and opacity, with its
 //! children nested beneath it, and its [`SurfacePlacement`] handles are filled with a visual-backed
 //! [`CompositorVisual`] so a layer drives the visual off the scene; a [`Raster`](CompositedNode::Raster)
-//! is rendered by vello into a composition swapchain reused across frames by scene identity, so an
-//! animating transform does not re-rasterize its content; an [`External`](CompositedNode::External)
-//! becomes a sibling visual holding a placeholder swapchain in lieu of a decoded surface.
-
-#![allow(
-    unsafe_op_in_unsafe_fn,
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
-)]
+//! is rasterized by the wrapped [`TextureRenderer`] into a composition swapchain reused across frames by
+//! scene identity, so an animating transform does not re-rasterize its content; an
+//! [`External`](CompositedNode::External) becomes a sibling visual holding a placeholder swapchain in
+//! lieu of a decoded surface.
+//!
+//! The compositor owns no rasterizer of its own. It hands each raster node to `R`, which renders into a
+//! storage target the compositor then premultiplies into the node's swapchain, so any backend that
+//! implements [`TextureRenderer`] on a `DirectX 12` device gains `DirectComposition` presentation.
 
 use std::sync::Arc;
-use std::{ffi::c_void, mem::ManuallyDrop, num::NonZeroUsize, rc::Rc};
+use std::{ffi::c_void, mem::ManuallyDrop, rc::Rc};
 
 use agui_core::paint::command::PaintShape;
 use agui_core::paint::compositing::{
     CompositedFrame, CompositedNode, CompositorVisual, SurfacePlacement,
 };
+use agui_core::paint::peniko::kurbo::Affine;
+use agui_core::paint::scene::Scene;
 use agui_window::WindowRenderer;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use rustc_hash::FxHashMap;
-use vello::{
-    AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, kurbo::Affine, peniko::Color,
-    wgpu,
-};
 use windows::Foundation::Numerics::Matrix3x2;
 use windows::Win32::{
     Foundation::{CloseHandle, HWND},
@@ -46,28 +42,30 @@ use windows::Win32::{
             ID3D12GraphicsCommandList, ID3D12Resource,
         },
         DirectComposition::{
-            DCompositionCreateDevice, IDCompositionDevice, IDCompositionRectangleClip,
+            DCompositionCreateDevice2, IDCompositionDesktopDevice, IDCompositionRectangleClip,
             IDCompositionTarget, IDCompositionVisual, IDCompositionVisual3,
         },
         Dxgi::{
             Common::{DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC},
             CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_PRESENT, DXGI_SCALING_STRETCH,
             DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
-            DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIDevice, IDXGIFactory2, IDXGISwapChain3,
+            DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2, IDXGISwapChain3,
         },
     },
     System::Threading::{CreateEventW, INFINITE, WaitForSingleObject},
 };
-use windows::core::Interface;
+use windows::core::{IUnknown, Interface};
 
-use crate::append_scene_with_transform;
+use crate::TextureRenderer;
 
 /// Identifies a retained raster swapchain by the identity of the scene it holds, so an unchanged
 /// scene reuses its swapchain rather than re-rasterizing.
 type SceneId = *const ();
 
-/// A [`WindowRenderer`] that composites a frame through DirectComposition.
-pub struct DcompWindowRenderer {
+/// A [`WindowRenderer`] that composites a frame through `DirectComposition`, rasterizing each raster
+/// node with the wrapped renderer `R`, whose device must be `DirectX 12`.
+pub struct Dcomp<R> {
+    renderer: R,
     inner: Option<Inner>,
 }
 
@@ -76,10 +74,9 @@ struct Inner {
     queue: wgpu::Queue,
     raw_device: ID3D12Device,
     raw_queue: ID3D12CommandQueue,
-    renderer: Renderer,
     factory: IDXGIFactory2,
 
-    dcomp: IDCompositionDevice,
+    dcomp: IDCompositionDesktopDevice,
     _target: IDCompositionTarget,
     root: IDCompositionVisual,
 
@@ -100,84 +97,77 @@ struct Inner {
     structure: Vec<usize>,
 }
 
-impl DcompWindowRenderer {
-    pub fn new() -> Self {
-        Self { inner: None }
+impl<R> Dcomp<R> {
+    pub fn new(renderer: R) -> Self {
+        Self {
+            renderer,
+            inner: None,
+        }
     }
 }
 
-impl Default for DcompWindowRenderer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl WindowRenderer for DcompWindowRenderer {
+impl<R: TextureRenderer> WindowRenderer for Dcomp<R> {
     fn attach<W>(&mut self, window: Arc<W>, width: u32, height: u32)
     where
         W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static,
     {
         let hwnd = hwnd_of(&*window);
-        self.inner = Some(unsafe { Inner::new(hwnd, width.max(1), height.max(1)) });
+        self.inner = Some(Inner::new(
+            &self.renderer,
+            hwnd,
+            width.max(1),
+            height.max(1),
+        ));
     }
 
     fn resize(&mut self, width: u32, height: u32) {
         if let Some(inner) = self.inner.as_mut() {
-            unsafe { inner.resize(width.max(1), height.max(1)) };
+            inner.resize(width.max(1), height.max(1));
         }
     }
 
     fn present(&mut self, frame: &CompositedFrame, scale_factor: f64) {
         if let Some(inner) = self.inner.as_mut() {
-            unsafe { inner.present(frame, scale_factor) };
+            inner.present(&mut self.renderer, frame, scale_factor);
         }
     }
 }
 
 impl Inner {
-    unsafe fn new(hwnd: HWND, width: u32, height: u32) -> Self {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::DX12,
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            ..Default::default()
-        }))
-        .expect("a DX12 adapter");
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-                .expect("a DX12 device");
+    #[allow(clippy::undocumented_unsafe_blocks)]
+    fn new<R: TextureRenderer>(renderer: &R, hwnd: HWND, width: u32, height: u32) -> Self {
+        let device = renderer.device().clone();
+        let queue = renderer.queue().clone();
 
-        let raw_device = device
-            .as_hal::<wgpu::hal::api::Dx12>()
-            .expect("dx12 device")
-            .raw_device()
-            .clone();
-        let raw_queue = queue
-            .as_hal::<wgpu::hal::api::Dx12>()
-            .expect("dx12 queue")
-            .as_raw()
-            .clone();
-
-        let renderer = Renderer::new(
-            &device,
-            RendererOptions {
-                use_cpu: false,
-                antialiasing_support: AaSupport::area_only(),
-                num_init_threads: NonZeroUsize::new(1),
-                pipeline_cache: None,
-            },
-        )
-        .expect("vello renderer");
+        let raw_device = unsafe {
+            device
+                .as_hal::<wgpu::hal::api::Dx12>()
+                .expect("Dcomp requires a DX12-backed TextureRenderer")
+                .raw_device()
+                .clone()
+        };
+        let raw_queue = unsafe {
+            queue
+                .as_hal::<wgpu::hal::api::Dx12>()
+                .expect("Dcomp requires a DX12-backed TextureRenderer")
+                .as_raw()
+                .clone()
+        };
 
         let factory: IDXGIFactory2 =
-            CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS(0)).expect("dxgi factory");
-        let dcomp: IDCompositionDevice =
-            DCompositionCreateDevice(None::<&IDXGIDevice>).expect("dcomp device");
-        let target = dcomp.CreateTargetForHwnd(hwnd, true).expect("dcomp target");
-        let root = dcomp.CreateVisual().expect("root visual");
-        target.SetRoot(&root).expect("set root");
+            unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS(0)).expect("dxgi factory") };
+        let dcomp: IDCompositionDesktopDevice =
+            unsafe { DCompositionCreateDevice2(None::<&IUnknown>).expect("dcomp device") };
+        let target = unsafe { dcomp.CreateTargetForHwnd(hwnd, true).expect("dcomp target") };
+        let root: IDCompositionVisual = unsafe {
+            dcomp
+                .CreateVisual()
+                .expect("root visual")
+                .cast()
+                .expect("root visual cast")
+        };
+
+        unsafe { target.SetRoot(&root).expect("set root") };
 
         let (target_view, blitter) = make_target(&device, width, height);
 
@@ -186,7 +176,6 @@ impl Inner {
             queue,
             raw_device,
             raw_queue,
-            renderer,
             factory,
             dcomp,
             _target: target,
@@ -200,10 +189,11 @@ impl Inner {
         }
     }
 
-    unsafe fn resize(&mut self, width: u32, height: u32) {
+    fn resize(&mut self, width: u32, height: u32) {
         if (width, height) == (self.width, self.height) {
             return;
         }
+
         self.width = width;
         self.height = height;
         let (target_view, blitter) = make_target(&self.device, width, height);
@@ -215,34 +205,46 @@ impl Inner {
         self.structure.clear();
     }
 
-    unsafe fn present(&mut self, frame: &CompositedFrame, scale_factor: f64) {
+    #[allow(clippy::undocumented_unsafe_blocks)]
+    fn present<R: TextureRenderer>(
+        &mut self,
+        renderer: &mut R,
+        frame: &CompositedFrame,
+        scale_factor: f64,
+    ) {
         // When the structure is unchanged the visuals already exist and the off-thread pokes have set
         // their transforms, so commit those without rebuilding.
         let structure = structure_of(frame);
+
         if structure == self.structure {
-            self.dcomp.Commit().expect("commit");
+            unsafe { self.dcomp.Commit().expect("commit") };
 
             return;
         }
 
         // Rebuild the visual tree, reusing a scene's retained swapchain so unchanged content is not
         // re-rasterized. Swapchains not used this frame are dropped at the end.
-        self.root.RemoveAllVisuals().expect("clear root");
+        unsafe { self.root.RemoveAllVisuals().expect("clear root") };
+
         let mut retained: FxHashMap<SceneId, IDXGISwapChain3> = FxHashMap::default();
 
         let root = self.root.clone();
-        self.add_nodes(&root, frame, scale_factor, &mut retained);
+
+        self.add_nodes(renderer, &root, frame, scale_factor, &mut retained);
 
         self.swapchains = retained;
         self.structure = structure;
-        self.dcomp.Commit().expect("commit");
+
+        unsafe { self.dcomp.Commit().expect("commit") };
     }
 
     /// Adds `frame`'s nodes as children of `parent`, in order. Rasterized content is rendered at
     /// physical resolution (scaled by `scale`); a surface's transform is conjugated into physical
-    /// space and placed on its visual, which DirectComposition composes beneath `parent`.
-    unsafe fn add_nodes(
+    /// space and placed on its visual, which `DirectComposition` composes beneath `parent`.
+    #[allow(clippy::undocumented_unsafe_blocks)]
+    fn add_nodes<R: TextureRenderer>(
         &mut self,
+        renderer: &mut R,
         parent: &IDCompositionVisual,
         frame: &CompositedFrame,
         scale: f64,
@@ -252,30 +254,31 @@ impl Inner {
             match node {
                 CompositedNode::Raster { scene } => {
                     let id = Rc::as_ptr(scene).cast::<()>();
-                    let swapchain = match self.swapchains.remove(&id) {
-                        Some(swapchain) => swapchain,
-                        None => {
-                            let swapchain = make_composition_swapchain(
-                                &self.factory,
-                                &self.raw_queue,
-                                self.width,
-                                self.height,
-                            );
-                            let mut vello_scene = vello::Scene::new();
-                            append_scene_with_transform(
-                                scene,
-                                &mut vello_scene,
-                                Affine::scale(scale),
-                            );
-                            self.render_into_swapchain(&swapchain, &vello_scene);
-                            swapchain
-                        }
+
+                    let swapchain = if let Some(swapchain) = self.swapchains.remove(&id) {
+                        swapchain
+                    } else {
+                        let swapchain = make_composition_swapchain(
+                            &self.factory,
+                            &self.raw_queue,
+                            self.width,
+                            self.height,
+                        );
+                        self.render_into_swapchain(renderer, &swapchain, scene, scale);
+                        swapchain
                     };
 
                     // The content is already at its physical position in the window-sized swapchain.
-                    let visual = self.dcomp.CreateVisual().expect("raster visual");
-                    visual.SetContent(&swapchain).expect("raster content");
-                    parent.AddVisual(&visual, false, None).expect("add raster");
+                    let visual: IDCompositionVisual = unsafe {
+                        self.dcomp
+                            .CreateVisual()
+                            .expect("raster visual")
+                            .cast()
+                            .expect("raster visual cast")
+                    };
+
+                    unsafe { visual.SetContent(&swapchain).expect("raster content") };
+                    unsafe { parent.AddVisual(&visual, false, None).expect("add raster") };
 
                     retained.insert(id, swapchain);
                 }
@@ -284,13 +287,21 @@ impl Inner {
                     placement,
                     children,
                 } => {
-                    let visual = self.dcomp.CreateVisual().expect("surface visual");
+                    let visual: IDCompositionVisual = unsafe {
+                        self.dcomp
+                            .CreateVisual()
+                            .expect("surface visual")
+                            .cast()
+                            .expect("surface visual cast")
+                    };
+
                     apply_placement(&self.dcomp, &visual, placement, scale);
-                    parent.AddVisual(&visual, false, None).expect("add surface");
+
+                    unsafe { parent.AddVisual(&visual, false, None).expect("add surface") };
 
                     fill_handles(&visual, placement, scale);
 
-                    self.add_nodes(&visual, children, scale, retained);
+                    self.add_nodes(renderer, &visual, children, scale, retained);
                 }
 
                 CompositedNode::External {
@@ -299,9 +310,10 @@ impl Inner {
                     let swapchain = make_composition_swapchain(
                         &self.factory,
                         &self.raw_queue,
-                        ((size.width.get() as f64 * scale) as u32).max(1),
-                        ((size.height.get() as f64 * scale) as u32).max(1),
+                        as_u32(f64::from(size.width.get()) * scale).max(1),
+                        as_u32(f64::from(size.height.get()) * scale).max(1),
                     );
+
                     clear_swapchain(
                         &self.raw_device,
                         &self.raw_queue,
@@ -309,37 +321,42 @@ impl Inner {
                         [0.1, 0.7, 0.4, 1.0],
                     );
 
-                    let visual = self.dcomp.CreateVisual().expect("external visual");
+                    let visual: IDCompositionVisual = unsafe {
+                        self.dcomp
+                            .CreateVisual()
+                            .expect("external visual")
+                            .cast()
+                            .expect("external visual cast")
+                    };
+
                     apply_transform(&visual, physical(*t, scale));
-                    visual.SetContent(&swapchain).expect("external content");
-                    parent
-                        .AddVisual(&visual, false, None)
-                        .expect("add external");
+
+                    unsafe { visual.SetContent(&swapchain).expect("external content") };
+
+                    unsafe {
+                        parent
+                            .AddVisual(&visual, false, None)
+                            .expect("add external");
+                    };
                 }
             }
         }
     }
 
-    /// Renders `scene` with vello and blits it into `swapchain`'s backbuffer, then presents it.
-    unsafe fn render_into_swapchain(&mut self, swapchain: &IDXGISwapChain3, scene: &vello::Scene) {
-        self.renderer
-            .render_to_texture(
-                &self.device,
-                &self.queue,
-                scene,
-                &self.target_view,
-                &RenderParams {
-                    // Transparent so anything not drawn lets the visuals beneath show through.
-                    base_color: Color::TRANSPARENT,
-                    width: self.width,
-                    height: self.height,
-                    antialiasing_method: AaConfig::Area,
-                },
-            )
-            .expect("vello render");
+    /// Rasterizes one raster node's `scene` with the renderer into the shared target, blits it into
+    /// `swapchain`'s backbuffer premultiplied, then presents it.
+    #[allow(clippy::undocumented_unsafe_blocks)]
+    fn render_into_swapchain<R: TextureRenderer>(
+        &mut self,
+        renderer: &mut R,
+        swapchain: &IDXGISwapChain3,
+        scene: &Rc<Scene>,
+        scale: f64,
+    ) {
+        renderer.render(scene, &self.target_view, self.width, self.height, scale);
 
-        let index = swapchain.GetCurrentBackBufferIndex();
-        let backbuffer: ID3D12Resource = swapchain.GetBuffer(index).expect("backbuffer");
+        let index = unsafe { swapchain.GetCurrentBackBufferIndex() };
+        let backbuffer: ID3D12Resource = unsafe { swapchain.GetBuffer(index).expect("backbuffer") };
         let wrapped = wrap_backbuffer(&self.device, &backbuffer, self.width, self.height);
         let wrapped_view = wrapped.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -361,7 +378,7 @@ impl Inner {
     }
 }
 
-/// A DirectComposition visual a layer drives off the scene. It holds the scale factor so a logical
+/// A `DirectComposition` visual a layer drives off the scene. It holds the scale factor so a logical
 /// transform poked from a layer is conjugated into the visual's physical space, matching how the
 /// visual was placed.
 struct DcompVisual {
@@ -371,28 +388,27 @@ struct DcompVisual {
 
 impl CompositorVisual for DcompVisual {
     fn set_transform(&self, transform: Affine) {
-        unsafe {
-            apply_transform(&self.visual, physical(transform, self.scale));
-        }
+        apply_transform(&self.visual, physical(transform, self.scale));
     }
 
+    #[allow(clippy::undocumented_unsafe_blocks)]
     fn set_opacity(&self, opacity: f32) {
         unsafe {
-            if let Ok(visual) = self.visual.cast::<IDCompositionVisual3>() {
-                visual.SetOpacity2(opacity).expect("set opacity");
-            }
+            let visual: IDCompositionVisual3 = self.visual.cast().expect("a v3 visual for opacity");
+            visual.SetOpacity2(opacity).expect("set opacity");
         }
     }
 }
 
 /// Fills `placement`'s handles with a visual-backed driver, so a layer moves `visual` off the scene.
-unsafe fn fill_handles(visual: &IDCompositionVisual, placement: &SurfacePlacement, scale: f64) {
+fn fill_handles(visual: &IDCompositionVisual, placement: &SurfacePlacement, scale: f64) {
     if let Some(handle) = &placement.transform_handle {
         handle.surface().fill(Rc::new(DcompVisual {
             visual: visual.clone(),
             scale,
         }));
     }
+
     if let Some(handle) = &placement.opacity_handle {
         handle.surface().fill(Rc::new(DcompVisual {
             visual: visual.clone(),
@@ -412,13 +428,16 @@ fn structure_of(frame: &CompositedFrame) -> Vec<usize> {
                     out.push(1);
                     out.push(Rc::as_ptr(scene) as usize);
                 }
+
                 CompositedNode::Surface { children, .. } => {
                     out.push(2);
                     walk(children, out);
                     out.push(0);
                 }
+
                 CompositedNode::External { surface, .. } => {
                     out.push(3);
+                    #[allow(clippy::cast_possible_truncation)]
                     out.push(surface.0 as usize);
                 }
             }
@@ -433,51 +452,72 @@ fn structure_of(frame: &CompositedFrame) -> Vec<usize> {
 /// Conjugates a logical-pixel transform into physical-pixel space: a uniform scale leaves the linear
 /// part unchanged and scales only the translation.
 fn physical(transform: Affine, scale: f64) -> Affine {
-    let [a, b, c, d, e, f] = transform.as_coeffs();
-    Affine::new([a, b, c, d, e * scale, f * scale])
+    let coeffs = transform.as_coeffs();
+
+    Affine::new([
+        coeffs[0],
+        coeffs[1],
+        coeffs[2],
+        coeffs[3],
+        coeffs[4] * scale,
+        coeffs[5] * scale,
+    ])
 }
 
 /// Applies `transform` to `visual` as its static 2D transform.
-unsafe fn apply_transform(visual: &IDCompositionVisual, transform: Affine) {
-    let [a, b, c, d, e, f] = transform.as_coeffs().map(|v| v as f32);
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn apply_transform(visual: &IDCompositionVisual, transform: Affine) {
+    let coeffs = transform.as_coeffs().map(as_f32);
+
     let matrix = Matrix3x2 {
-        M11: a,
-        M12: b,
-        M21: c,
-        M22: d,
-        M31: e,
-        M32: f,
+        M11: coeffs[0],
+        M12: coeffs[1],
+        M21: coeffs[2],
+        M22: coeffs[3],
+        M31: coeffs[4],
+        M32: coeffs[5],
     };
-    visual.SetTransform2(&matrix).expect("set transform");
+
+    unsafe {
+        visual
+            .SetTransform2(std::ptr::from_ref(&matrix))
+            .expect("set transform");
+    }
 }
 
 /// Applies a surface placement to its visual: transform, opacity, and clip. A rect, rounded-rect, or
 /// circle clip maps onto a visual; an arbitrary path cannot, so the compositor bakes those when the
 /// subtree is rasterizable and one over a system surface reaches here and is left unclipped.
-unsafe fn apply_placement(
-    dcomp: &IDCompositionDevice,
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn apply_placement(
+    dcomp: &IDCompositionDesktopDevice,
     visual: &IDCompositionVisual,
     placement: &SurfacePlacement,
     scale: f64,
 ) {
     apply_transform(visual, physical(placement.transform, scale));
 
-    if placement.opacity < 1.0
-        && let Ok(visual) = visual.cast::<IDCompositionVisual3>()
-    {
-        visual.SetOpacity2(placement.opacity).expect("set opacity");
+    if placement.opacity < 1.0 {
+        let visual: IDCompositionVisual3 = visual.cast().expect("a v3 visual for opacity");
+        unsafe { visual.SetOpacity2(placement.opacity).expect("set opacity") };
     }
 
     match &placement.clip {
         Some(PaintShape::Rect(rect)) => {
             let clip = D2D_RECT_F {
-                left: (rect.x0 * scale) as f32,
-                top: (rect.y0 * scale) as f32,
-                right: (rect.x1 * scale) as f32,
-                bottom: (rect.y1 * scale) as f32,
+                left: as_f32(rect.x0 * scale),
+                top: as_f32(rect.y0 * scale),
+                right: as_f32(rect.x1 * scale),
+                bottom: as_f32(rect.y1 * scale),
             };
-            visual.SetClip2(&clip).expect("set clip");
+
+            unsafe {
+                visual
+                    .SetClip2(std::ptr::from_ref(&clip))
+                    .expect("set clip");
+            }
         }
+
         Some(PaintShape::RoundedRect(rounded)) => {
             let rect = rounded.rect();
             let radii = rounded.radii();
@@ -492,51 +532,59 @@ unsafe fn apply_placement(
                 ],
                 scale,
             );
-            visual.SetClip(&clip).expect("set clip");
+
+            unsafe { visual.SetClip(&clip).expect("set clip") };
         }
+
         Some(PaintShape::Circle(circle)) => {
             let (c, r) = (circle.center, circle.radius);
+
             let clip = rounded_clip(
                 dcomp,
                 [c.x - r, c.y - r, c.x + r, c.y + r],
                 [r, r, r, r],
                 scale,
             );
-            visual.SetClip(&clip).expect("set clip");
+
+            unsafe { visual.SetClip(&clip).expect("set clip") };
         }
+
         Some(PaintShape::Path(_)) | None => {}
     }
 }
 
 /// Builds a rounded-rectangle clip from `edges` (left, top, right, bottom) and per-corner `radii`
 /// (top-left, top-right, bottom-right, bottom-left), scaled to physical pixels.
-unsafe fn rounded_clip(
-    dcomp: &IDCompositionDevice,
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn rounded_clip(
+    dcomp: &IDCompositionDesktopDevice,
     edges: [f64; 4],
     radii: [f64; 4],
     scale: f64,
 ) -> IDCompositionRectangleClip {
-    let [left, top, right, bottom] = edges.map(|v| (v * scale) as f32);
-    let [tl, tr, br, bl] = radii.map(|v| (v * scale) as f32);
+    let [left, top, right, bottom] = edges.map(|edge| as_f32(edge * scale));
+    let [tl, tr, br, bl] = radii.map(|radius| as_f32(radius * scale));
 
-    let clip = dcomp.CreateRectangleClip().expect("rectangle clip");
-    clip.SetLeft2(left).expect("left");
-    clip.SetTop2(top).expect("top");
-    clip.SetRight2(right).expect("right");
-    clip.SetBottom2(bottom).expect("bottom");
-    clip.SetTopLeftRadiusX2(tl).expect("tl x");
-    clip.SetTopLeftRadiusY2(tl).expect("tl y");
-    clip.SetTopRightRadiusX2(tr).expect("tr x");
-    clip.SetTopRightRadiusY2(tr).expect("tr y");
-    clip.SetBottomRightRadiusX2(br).expect("br x");
-    clip.SetBottomRightRadiusY2(br).expect("br y");
-    clip.SetBottomLeftRadiusX2(bl).expect("bl x");
-    clip.SetBottomLeftRadiusY2(bl).expect("bl y");
-    clip
+    unsafe {
+        let clip = dcomp.CreateRectangleClip().expect("rectangle clip");
+        clip.SetLeft2(left).expect("left");
+        clip.SetTop2(top).expect("top");
+        clip.SetRight2(right).expect("right");
+        clip.SetBottom2(bottom).expect("bottom");
+        clip.SetTopLeftRadiusX2(tl).expect("tl x");
+        clip.SetTopLeftRadiusY2(tl).expect("tl y");
+        clip.SetTopRightRadiusX2(tr).expect("tr x");
+        clip.SetTopRightRadiusY2(tr).expect("tr y");
+        clip.SetBottomRightRadiusX2(br).expect("br x");
+        clip.SetBottomRightRadiusY2(br).expect("br y");
+        clip.SetBottomLeftRadiusX2(bl).expect("bl x");
+        clip.SetBottomLeftRadiusY2(bl).expect("bl y");
+        clip
+    }
 }
 
-/// Copies a straight-alpha texture into a render target, premultiplying as it goes, so vello's output
-/// lands correctly in a premultiplied-alpha composition swapchain.
+/// Copies a straight-alpha texture into a render target, premultiplying as it goes, so the renderer's
+/// output lands correctly in a premultiplied-alpha composition swapchain.
 struct PremultBlit {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
@@ -650,6 +698,7 @@ impl PremultBlit {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.draw(0..3, 0..1);
@@ -674,10 +723,10 @@ fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
 }
 ";
 
-/// Builds the window-sized vello render target and the blitter that copies it into a swapchain.
+/// Builds the window-sized render target and the blitter that copies it into a swapchain.
 fn make_target(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::TextureView, PremultBlit) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("vello target"),
+        label: Some("dcomp target"),
         size: wgpu::Extent3d {
             width,
             height,
@@ -690,9 +739,23 @@ fn make_target(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture
         usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
+
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let blitter = PremultBlit::new(device, wgpu::TextureFormat::Bgra8Unorm);
+
     (view, blitter)
+}
+
+/// Narrows a logical-pixel coordinate to the `f32` the Windows graphics APIs expect.
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+fn as_f32(value: f64) -> f32 {
+    value as f32
+}
+
+/// Narrows a physical-pixel extent to `u32`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn as_u32(value: f64) -> u32 {
+    value as u32
 }
 
 fn hwnd_of(window: &(impl HasWindowHandle + ?Sized)) -> HWND {
@@ -702,10 +765,9 @@ fn hwnd_of(window: &(impl HasWindowHandle + ?Sized)) -> HWND {
     }
 }
 
-// ── proven COM helpers (from the dcomp_present spike) ──────────────────────────────────────────────
-
 /// Creates a flip-model composition swapchain on the command `queue`.
-unsafe fn make_composition_swapchain(
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn make_composition_swapchain(
     factory: &IDXGIFactory2,
     queue: &ID3D12CommandQueue,
     width: u32,
@@ -727,15 +789,19 @@ unsafe fn make_composition_swapchain(
         AlphaMode: DXGI_ALPHA_MODE_PREMULTIPLIED,
         Flags: 0,
     };
-    factory
-        .CreateSwapChainForComposition(queue, &desc, None)
-        .expect("composition swapchain")
-        .cast()
-        .expect("swapchain3")
+
+    unsafe {
+        factory
+            .CreateSwapChainForComposition(queue, std::ptr::from_ref(&desc), None)
+            .expect("composition swapchain")
+            .cast()
+            .expect("swapchain3")
+    }
 }
 
 /// Wraps a swapchain backbuffer as a wgpu texture so wgpu can render into it.
-unsafe fn wrap_backbuffer(
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn wrap_backbuffer(
     device: &wgpu::Device,
     backbuffer: &ID3D12Resource,
     width: u32,
@@ -746,110 +812,127 @@ unsafe fn wrap_backbuffer(
         height,
         depth_or_array_layers: 1,
     };
-    let hal_texture = wgpu::hal::dx12::Device::texture_from_raw(
-        backbuffer.clone(),
-        wgpu::TextureFormat::Bgra8Unorm,
-        wgpu::TextureDimension::D2,
-        size,
-        1,
-        1,
-    );
-    device.create_texture_from_hal::<wgpu::hal::api::Dx12>(
-        hal_texture,
-        &wgpu::TextureDescriptor {
-            label: Some("composition backbuffer"),
+
+    let hal_texture = unsafe {
+        wgpu::hal::dx12::Device::texture_from_raw(
+            backbuffer.clone(),
+            wgpu::TextureFormat::Bgra8Unorm,
+            wgpu::TextureDimension::D2,
             size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Bgra8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        },
-    )
+            1,
+            1,
+        )
+    };
+
+    unsafe {
+        device.create_texture_from_hal::<wgpu::hal::api::Dx12>(
+            hal_texture,
+            &wgpu::TextureDescriptor {
+                label: Some("composition backbuffer"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Bgra8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            },
+        )
+    }
 }
 
 /// Transitions the current backbuffer from `from` to PRESENT and presents.
-unsafe fn transition_and_present(
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn transition_and_present(
     device: &ID3D12Device,
     queue: &ID3D12CommandQueue,
     swapchain: &IDXGISwapChain3,
     backbuffer: &ID3D12Resource,
     from: D3D12_RESOURCE_STATES,
 ) {
-    let allocator: ID3D12CommandAllocator = device
-        .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
-        .expect("allocator");
-    let list: ID3D12GraphicsCommandList = device
-        .CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &allocator, None)
-        .expect("command list");
-    list.ResourceBarrier(&[transition(backbuffer, from, D3D12_RESOURCE_STATE_PRESENT)]);
-    list.Close().expect("close list");
-    execute_and_wait(device, queue, &list);
+    unsafe {
+        let allocator: ID3D12CommandAllocator = device
+            .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+            .expect("allocator");
+        let list: ID3D12GraphicsCommandList = device
+            .CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &allocator, None)
+            .expect("command list");
+        list.ResourceBarrier(&[transition(backbuffer, from, D3D12_RESOURCE_STATE_PRESENT)]);
+        list.Close().expect("close list");
+        execute_and_wait(device, queue, &list);
 
-    swapchain.Present(1, DXGI_PRESENT(0)).ok().expect("present");
+        swapchain.Present(1, DXGI_PRESENT(0)).ok().expect("present");
+    }
 }
 
 /// Clears a swapchain's backbuffer to `color` and presents it.
-unsafe fn clear_swapchain(
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn clear_swapchain(
     device: &ID3D12Device,
     queue: &ID3D12CommandQueue,
     swapchain: &IDXGISwapChain3,
     color: [f32; 4],
 ) {
-    let index = swapchain.GetCurrentBackBufferIndex();
-    let backbuffer: ID3D12Resource = swapchain.GetBuffer(index).expect("backbuffer");
+    unsafe {
+        let index = swapchain.GetCurrentBackBufferIndex();
+        let backbuffer: ID3D12Resource = swapchain.GetBuffer(index).expect("backbuffer");
 
-    let heap: ID3D12DescriptorHeap = device
-        .CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
-            Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            NumDescriptors: 1,
-            Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            NodeMask: 0,
-        })
-        .expect("rtv heap");
-    let rtv = heap.GetCPUDescriptorHandleForHeapStart();
-    device.CreateRenderTargetView(&backbuffer, None, rtv);
+        let heap: ID3D12DescriptorHeap = device
+            .CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
+                Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                NumDescriptors: 1,
+                Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                NodeMask: 0,
+            })
+            .expect("rtv heap");
+        let rtv = heap.GetCPUDescriptorHandleForHeapStart();
 
-    let allocator: ID3D12CommandAllocator = device
-        .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
-        .expect("allocator");
-    let list: ID3D12GraphicsCommandList = device
-        .CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &allocator, None)
-        .expect("command list");
-    list.ResourceBarrier(&[transition(
-        &backbuffer,
-        D3D12_RESOURCE_STATE_PRESENT,
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-    )]);
-    list.ClearRenderTargetView(rtv, &color, None);
-    list.ResourceBarrier(&[transition(
-        &backbuffer,
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PRESENT,
-    )]);
-    list.Close().expect("close list");
-    execute_and_wait(device, queue, &list);
+        device.CreateRenderTargetView(&backbuffer, None, rtv);
 
-    swapchain.Present(1, DXGI_PRESENT(0)).ok().expect("present");
+        let allocator: ID3D12CommandAllocator = device
+            .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+            .expect("allocator");
+        let list: ID3D12GraphicsCommandList = device
+            .CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &allocator, None)
+            .expect("command list");
+        list.ResourceBarrier(&[transition(
+            &backbuffer,
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+        )]);
+        list.ClearRenderTargetView(rtv, &color, None);
+        list.ResourceBarrier(&[transition(
+            &backbuffer,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PRESENT,
+        )]);
+        list.Close().expect("close list");
+        execute_and_wait(device, queue, &list);
+
+        swapchain.Present(1, DXGI_PRESENT(0)).ok().expect("present");
+    }
 }
 
 /// Executes one command list on the queue and blocks until the GPU finishes it.
-unsafe fn execute_and_wait(
+#[allow(clippy::undocumented_unsafe_blocks)]
+fn execute_and_wait(
     device: &ID3D12Device,
     queue: &ID3D12CommandQueue,
     list: &ID3D12GraphicsCommandList,
 ) {
-    let command_list: ID3D12CommandList = list.cast().expect("command list cast");
-    queue.ExecuteCommandLists(&[Some(command_list)]);
+    unsafe {
+        let command_list: ID3D12CommandList = list.cast().expect("command list cast");
+        queue.ExecuteCommandLists(&[Some(command_list)]);
 
-    let fence: ID3D12Fence = device.CreateFence(0, D3D12_FENCE_FLAG_NONE).expect("fence");
-    queue.Signal(&fence, 1).expect("signal");
-    if fence.GetCompletedValue() < 1 {
-        let event = CreateEventW(None, false, false, None).expect("event");
-        fence.SetEventOnCompletion(1, event).expect("set event");
-        WaitForSingleObject(event, INFINITE);
-        CloseHandle(event).expect("close event");
+        let fence: ID3D12Fence = device.CreateFence(0, D3D12_FENCE_FLAG_NONE).expect("fence");
+        queue.Signal(&fence, 1).expect("signal");
+
+        if fence.GetCompletedValue() < 1 {
+            let event = CreateEventW(None, false, false, None).expect("event");
+            fence.SetEventOnCompletion(1, event).expect("set event");
+            WaitForSingleObject(event, INFINITE);
+            CloseHandle(event).expect("close event");
+        }
     }
 }
 
