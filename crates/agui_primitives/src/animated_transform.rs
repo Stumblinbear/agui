@@ -207,14 +207,6 @@ impl<Child: RenderBox> RenderObject for RenderAnimatedTransform<Child> {
         self.child.unmount(ctx);
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        self.child.update_compositing_bits();
-
-        // An animated transform always composites its child as a group, so it can move the group by
-        // recompositing instead of repainting.
-        true
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("origin", self.origin)
@@ -272,6 +264,14 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
         result.with_transform(self.effective(size), position, |result, local| {
             self.child.hit_test(result, local)
         })
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits();
+
+        // An animated transform always composites its child as a group, so it can move the group by
+        // recompositing instead of repainting.
+        true
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -380,9 +380,6 @@ mod tests {
     impl RenderObject for RenderCounter {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for RenderCounter {
@@ -424,6 +421,10 @@ mod tests {
 
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
         }
 
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

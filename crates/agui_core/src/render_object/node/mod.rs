@@ -60,11 +60,6 @@ impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
         self.object.unmount(ctx);
     }
 
-    pub fn update_compositing_bits(&mut self) -> bool {
-        self.needs_compositing = self.object.update_compositing_bits();
-        self.needs_compositing
-    }
-
     /// Whether this child's subtree contributes a compositing layer, as of the last recompute.
     pub fn needs_compositing(&self) -> bool {
         self.needs_compositing
@@ -133,6 +128,11 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
         self.object.hit_test(result, position)
     }
 
+    pub fn update_compositing_bits(&mut self) -> bool {
+        self.needs_compositing = self.object.update_compositing_bits();
+        self.needs_compositing
+    }
+
     pub fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.object.paint(ctx, offset);
     }
@@ -191,10 +191,6 @@ mod tests {
         fn mount(&mut self, _: &mut MountCtx) {}
 
         fn unmount(&mut self, _: &mut MountCtx) {}
-
-        fn update_compositing_bits(&mut self) -> bool {
-            self.child.update_compositing_bits()
-        }
     }
 
     impl<C: RenderBox> RenderBox for RenderPad<C> {
@@ -236,6 +232,10 @@ mod tests {
 
         fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
             self.child.hit_test(result, position)
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
         }
 
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -376,10 +376,6 @@ mod tests {
         fn mount(&mut self, _: &mut MountCtx) {}
 
         fn unmount(&mut self, _: &mut MountCtx) {}
-
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for RenderOther {
@@ -421,6 +417,10 @@ mod tests {
 
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
         }
 
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}

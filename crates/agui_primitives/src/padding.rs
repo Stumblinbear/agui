@@ -116,10 +116,6 @@ where
         self.child.unmount(ctx);
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        self.child.update_compositing_bits()
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("padding", self.padding)
@@ -249,6 +245,10 @@ where
         result.with_offset(*offset, position, |result, transformed| {
             self.child.hit_test(result, transformed)
         })
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

@@ -62,10 +62,6 @@ impl RenderObject for RenderTestBox {
     fn mount(&mut self, _: &mut MountCtx) {}
 
     fn unmount(&mut self, _: &mut MountCtx) {}
-
-    fn update_compositing_bits(&mut self) -> bool {
-        false
-    }
 }
 
 impl RenderBox for RenderTestBox {
@@ -110,6 +106,10 @@ impl RenderBox for RenderTestBox {
         } else {
             HitTest::Pass
         }
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        false
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -195,10 +195,6 @@ impl RenderObject for RenderIntrinsicBox {
     fn mount(&mut self, _: &mut MountCtx) {}
 
     fn unmount(&mut self, _: &mut MountCtx) {}
-
-    fn update_compositing_bits(&mut self) -> bool {
-        false
-    }
 }
 
 impl RenderBox for RenderIntrinsicBox {
@@ -236,6 +232,10 @@ impl RenderBox for RenderIntrinsicBox {
 
     fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
         HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        false
     }
 
     fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}

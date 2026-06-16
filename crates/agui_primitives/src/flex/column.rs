@@ -112,15 +112,6 @@ impl<Children: RenderChildren + 'static> RenderObject for RenderFlex<Children> {
 
         self.children.for_each_mut(&mut |child| child.unmount(ctx));
     }
-
-    fn update_compositing_bits(&mut self) -> bool {
-        let mut needs = false;
-
-        self.children
-            .for_each_mut(&mut |child| needs |= child.update_compositing_bits());
-
-        needs
-    }
 }
 
 impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
@@ -168,6 +159,15 @@ impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
         }
 
         HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        let mut needs = false;
+
+        self.children
+            .for_each_mut(&mut |child| needs |= child.update_compositing_bits());
+
+        needs
     }
 
     fn paint(&mut self, _ctx: &mut PaintCtx, _offset: Offset) {}

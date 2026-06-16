@@ -36,6 +36,8 @@ impl TaskHandle {
 
 impl Drop for TaskHandle {
     fn drop(&mut self) {
+        // SAFETY: the closure is filled in by `TaskHandle::new`, so we know it is `Some`. We only take it
+        // here, so the `unwrap_unchecked` is safe.
         unsafe {
             self.drop.take().unwrap_unchecked()();
         }

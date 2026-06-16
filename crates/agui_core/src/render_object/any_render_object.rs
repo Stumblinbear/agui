@@ -17,8 +17,6 @@ pub trait AnyRenderObject {
 
     fn dyn_unmount(&mut self, ctx: &mut MountCtx);
 
-    fn dyn_update_compositing_bits(&mut self) -> bool;
-
     fn dyn_describe(&self, d: &mut Diagnostics) -> DiagnosticsNode;
 }
 
@@ -47,10 +45,6 @@ where
         self.unmount(ctx);
     }
 
-    fn dyn_update_compositing_bits(&mut self) -> bool {
-        self.update_compositing_bits()
-    }
-
     fn dyn_describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         self.describe(d)
     }
@@ -68,10 +62,6 @@ where
         (**self).dyn_unmount(ctx);
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        (**self).dyn_update_compositing_bits()
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         (**self).dyn_describe(d)
     }
@@ -87,10 +77,6 @@ where
 
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.borrow_mut().dyn_unmount(ctx);
-    }
-
-    fn update_compositing_bits(&mut self) -> bool {
-        self.borrow_mut().dyn_update_compositing_bits()
     }
 
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {

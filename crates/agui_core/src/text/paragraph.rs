@@ -196,14 +196,6 @@ impl<C: RenderObject> RenderObject for RenderParagraph<C> {
         }
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        let mut needs = false;
-        for child in &mut self.children {
-            needs |= child.update_compositing_bits();
-        }
-        needs
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("text", excerpt(&self.content.text))
@@ -373,6 +365,16 @@ impl<C: RenderBox> RenderBox for RenderParagraph<C> {
         }
 
         HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        let mut needs = false;
+
+        for child in &mut self.children {
+            needs |= child.update_compositing_bits();
+        }
+
+        needs
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

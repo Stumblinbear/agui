@@ -225,10 +225,6 @@ impl<S: RenderSliver> RenderObject for RenderViewport<S> {
 
     fn unmount(&mut self, _: &mut MountCtx) {}
 
-    fn update_compositing_bits(&mut self) -> bool {
-        self.sliver.update_compositing_bits()
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child_in(Some(ProtocolTag::SLIVER), |d| self.sliver.describe(d))
@@ -308,6 +304,11 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
         )
     }
 
+    fn update_compositing_bits(&mut self) -> bool {
+        // self.sliver.update_compositing_bits()
+        false
+    }
+
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.sliver.object.paint(ctx, offset);
     }
@@ -336,10 +337,6 @@ mod tests {
         fn mount(&mut self, _: &mut MountCtx) {}
 
         fn unmount(&mut self, _: &mut MountCtx) {}
-
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderSliver for RenderSliverFixed {

@@ -196,10 +196,6 @@ where
         self.child.unmount(ctx);
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        self.child.update_compositing_bits()
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property_opt("width_factor", self.width_factor)
@@ -276,6 +272,10 @@ where
         result.with_offset(offset, position, |result, transformed| {
             self.child.hit_test(result, transformed)
         })
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -366,11 +366,9 @@ mod tests {
         fn mount(&mut self, ctx: &mut MountCtx) {
             self.child.mount(ctx);
         }
+
         fn unmount(&mut self, ctx: &mut MountCtx) {
             self.child.unmount(ctx);
-        }
-        fn update_compositing_bits(&mut self) -> bool {
-            self.child.update_compositing_bits()
         }
     }
 
@@ -378,22 +376,28 @@ mod tests {
         fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
             self.child.min_intrinsic_width(height)
         }
+
         fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
             self.child.max_intrinsic_width(height)
         }
+
         fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
             self.child.min_intrinsic_height(width)
         }
+
         fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
             self.child.max_intrinsic_height(width)
         }
+
         fn measure(&self, constraints: BoxConstraints) -> Size {
             self.child.measure(constraints)
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             self.child.layout_and_get_size(ctx, constraints)
         }
+
         fn measure_baseline(
             &self,
             constraints: BoxConstraints,
@@ -401,12 +405,19 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             self.child.measure_baseline(constraints, baseline)
         }
+
         fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
             self.child.distance_to_baseline(baseline)
         }
+
         fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
             self.child.hit_test(result, position)
         }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
+        }
+
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.child.paint(ctx, offset);
         }
@@ -444,33 +455,36 @@ mod tests {
     impl RenderObject for RenderProbe {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for RenderProbe {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 0.0))
         }
+
         fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.deferred_layout_scope());
 
             constraints.smallest()
         }
+
         fn measure_baseline(
             &self,
             _: BoxConstraints,
@@ -478,12 +492,19 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
     }
 

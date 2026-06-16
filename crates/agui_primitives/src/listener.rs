@@ -121,10 +121,6 @@ where
         self.child.unmount(ctx);
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        self.child.update_compositing_bits()
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("behavior", self.behavior)
@@ -193,6 +189,10 @@ where
         }
 
         if hit { HitTest::Absorb } else { HitTest::Pass }
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

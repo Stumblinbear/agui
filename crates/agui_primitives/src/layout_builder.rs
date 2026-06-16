@@ -304,14 +304,6 @@ where
         self.paint_scope = PaintScope::detached();
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        if let Some(child_render) = self.child_render.as_mut() {
-            child_render.update_compositing_bits()
-        } else {
-            false
-        }
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         let mut node = d.node_for::<Self>();
 
@@ -381,6 +373,14 @@ where
             child_render.hit_test(result, offset)
         } else {
             HitTest::Pass
+        }
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        if let Some(child_render) = self.child_render.as_mut() {
+            child_render.update_compositing_bits()
+        } else {
+            false
         }
     }
 
@@ -544,10 +544,6 @@ mod tests {
         fn unmount(&mut self, _: &mut MountCtx) {
             self.counts.unmounts.set(self.counts.unmounts.get() + 1);
         }
-
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for MountProbeRender {
@@ -589,6 +585,10 @@ mod tests {
 
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
         }
 
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}

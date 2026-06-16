@@ -23,11 +23,6 @@ pub trait RenderObject: 'static {
 
     fn unmount(&mut self, ctx: &mut MountCtx);
 
-    /// Recomputes whether this subtree contributes a compositing layer, and returns it. An
-    /// implementation must fold in every child's bit; a node that reads its own bit while painting
-    /// caches it here.
-    fn update_compositing_bits(&mut self) -> bool;
-
     /// Captures this render object's subtree as a diagnostics snapshot.
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
@@ -38,8 +33,4 @@ impl RenderObject for () {
     fn mount(&mut self, _: &mut MountCtx) {}
 
     fn unmount(&mut self, _: &mut MountCtx) {}
-
-    fn update_compositing_bits(&mut self) -> bool {
-        false
-    }
 }

@@ -169,10 +169,6 @@ impl<Child: RenderBox> RenderObject for RenderSpy<Child> {
     fn unmount(&mut self, ctx: &mut MountCtx) {
         self.child.unmount(ctx);
     }
-
-    fn update_compositing_bits(&mut self) -> bool {
-        self.child.update_compositing_bits()
-    }
 }
 
 impl<Child: RenderBox> RenderBox for RenderSpy<Child> {
@@ -221,6 +217,10 @@ impl<Child: RenderBox> RenderBox for RenderSpy<Child> {
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.child.hit_test(result, position)
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

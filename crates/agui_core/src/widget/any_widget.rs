@@ -661,10 +661,6 @@ mod tests {
         fn unmount(&mut self, _: &mut MountCtx) {
             self.unmounts.set(self.unmounts.get() + 1);
         }
-
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     /// A leaf widget distinguished by `T`, so a `CountingWidget<usize>` and a `CountingWidget<u8>` are

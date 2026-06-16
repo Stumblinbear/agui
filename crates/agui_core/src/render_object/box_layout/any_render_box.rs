@@ -36,6 +36,8 @@ pub trait AnyRenderBox: AnyRenderObject {
 
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
+    fn dyn_update_compositing_bits(&mut self) -> bool;
+
     fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
 }
 
@@ -82,6 +84,10 @@ where
 
     fn dyn_hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.hit_test(result, position)
+    }
+
+    fn dyn_update_compositing_bits(&mut self) -> bool {
+        self.update_compositing_bits()
     }
 
     fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -133,6 +139,10 @@ where
         (**self).dyn_hit_test(result, position)
     }
 
+    fn update_compositing_bits(&mut self) -> bool {
+        (**self).dyn_update_compositing_bits()
+    }
+
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         (**self).dyn_paint(ctx, offset);
     }
@@ -180,6 +190,10 @@ where
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.borrow().dyn_hit_test(result, position)
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.borrow_mut().dyn_update_compositing_bits()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

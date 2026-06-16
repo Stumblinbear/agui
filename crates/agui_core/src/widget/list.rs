@@ -564,10 +564,6 @@ mod tests {
         fn unmount(&mut self, _: &mut MountCtx) {
             self.unmounts.set(self.unmounts.get() + 1);
         }
-
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for MountSpy {
@@ -609,6 +605,10 @@ mod tests {
 
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
         }
 
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}

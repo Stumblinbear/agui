@@ -222,11 +222,6 @@ impl<Child: RenderBox> RenderObject for RenderView<Child> {
         *self.surface.borrow_mut() = None;
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        // A view contributes no rendering of its own.
-        false
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child_in(Some(ProtocolTag::BOX), |d| {

@@ -55,6 +55,7 @@ impl Size {
     ///
     /// The caller must ensure that neither width nor height is NaN.
     pub unsafe fn new_unchecked(width: f32, height: f32) -> Self {
+        // SAFETY: see safety note above.
         unsafe {
             Self {
                 width: NonNaN::<f32>::new_unchecked(width),

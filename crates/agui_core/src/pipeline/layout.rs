@@ -483,27 +483,29 @@ mod tests {
     impl RenderObject for LayoutProbe {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for LayoutProbe {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn measure(&self, constraints: BoxConstraints) -> Size {
             constraints.smallest()
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.layouts.set(self.layouts.get() + 1);
             *self.captured.borrow_mut() = Some(ctx.deferred_layout_scope());
@@ -514,6 +516,7 @@ mod tests {
 
             constraints.smallest()
         }
+
         fn measure_baseline(
             &self,
             _: BoxConstraints,
@@ -521,12 +524,19 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
     }
 

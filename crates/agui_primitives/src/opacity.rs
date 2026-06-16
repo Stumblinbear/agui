@@ -125,11 +125,6 @@ where
         self.child.unmount(ctx);
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        let child = self.child.update_compositing_bits();
-        self.needs_layer() || child
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("opacity", self.opacity)
@@ -180,6 +175,11 @@ where
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.child.hit_test(result, position)
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        let child = self.child.update_compositing_bits();
+        self.needs_layer() || child
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -293,30 +293,33 @@ mod tests {
     impl RenderObject for RenderCounter {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for RenderCounter {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
+
         fn layout(&mut self, _: &mut LayoutCtx, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
+
         fn measure_baseline(
             &self,
             _: BoxConstraints,
@@ -324,12 +327,19 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
             let mut canvas = ctx.canvas();

@@ -111,11 +111,6 @@ impl RenderObject for RenderExternalSurface {
 
     fn unmount(&mut self, _: &mut MountCtx) {}
 
-    fn update_compositing_bits(&mut self) -> bool {
-        // A placed surface is its own compositing boundary, so ancestors composite it as a layer.
-        true
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("surface", self.surface.0)
@@ -169,6 +164,11 @@ impl RenderBox for RenderExternalSurface {
 
     fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
         HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        // A placed surface is its own compositing boundary, so ancestors composite it as a layer.
+        true
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {

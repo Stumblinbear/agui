@@ -135,11 +135,6 @@ impl<Child: RenderBox> RenderObject for RenderRepaintBoundary<Child> {
         }
     }
 
-    fn update_compositing_bits(&mut self) -> bool {
-        // A boundary always composites into its own layer; its subtree recomputes on its own repaint.
-        true
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.content.borrow().dyn_describe(d))
@@ -186,6 +181,11 @@ impl<Child: RenderBox> RenderBox for RenderRepaintBoundary<Child> {
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         self.content.hit_test(result, position)
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        // A boundary always composites into its own layer; its subtree recomputes on its own repaint.
+        true
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -303,32 +303,34 @@ mod tests {
         fn unmount(&mut self, ctx: &mut MountCtx) {
             self.child.unmount(ctx);
         }
-
-        fn update_compositing_bits(&mut self) -> bool {
-            self.child.update_compositing_bits()
-        }
     }
 
     impl<C: RenderBox> RenderBox for RenderCounter<C> {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 10.0))
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 10.0))
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 10.0))
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             Some(as_const!(PositiveFinite, f32, 10.0))
         }
+
         fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             self.child.layout(ctx, constraints);
             Size::new(10.0, 10.0)
         }
+
         fn measure_baseline(
             &self,
             _: BoxConstraints,
@@ -336,12 +338,19 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
+        }
+
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
 

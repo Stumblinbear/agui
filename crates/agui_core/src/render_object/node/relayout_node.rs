@@ -467,9 +467,6 @@ mod tests {
     impl RenderObject for Probe {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for Probe {
@@ -517,6 +514,10 @@ mod tests {
             HitTest::Pass
         }
 
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
+
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {
             self.paints.set(self.paints.get() + 1);
         }
@@ -536,10 +537,6 @@ mod tests {
 
         fn unmount(&mut self, ctx: &mut MountCtx) {
             self.child.unmount(ctx);
-        }
-
-        fn update_compositing_bits(&mut self) -> bool {
-            self.child.update_compositing_bits()
         }
 
         fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
@@ -592,6 +589,10 @@ mod tests {
 
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
+        }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
         }
 
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
@@ -702,11 +703,9 @@ mod tests {
         fn mount(&mut self, ctx: &mut MountCtx) {
             self.child.mount(ctx);
         }
+
         fn unmount(&mut self, ctx: &mut MountCtx) {
             self.child.unmount(ctx);
-        }
-        fn update_compositing_bits(&mut self) -> bool {
-            self.child.update_compositing_bits()
         }
     }
 
@@ -714,18 +713,23 @@ mod tests {
         fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn measure(&self, _: BoxConstraints) -> Size {
             Size::new(10.0, 10.0)
         }
+
         fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
             let size = Size::new(10.0, 10.0);
 
@@ -741,6 +745,7 @@ mod tests {
 
             size
         }
+
         fn measure_baseline(
             &self,
             _: BoxConstraints,
@@ -748,12 +753,19 @@ mod tests {
         ) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
             None
         }
+
         fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
             HitTest::Pass
         }
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.child.update_compositing_bits()
+        }
+
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.child.paint(ctx, offset);
         }

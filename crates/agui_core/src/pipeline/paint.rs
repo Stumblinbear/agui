@@ -16,7 +16,7 @@ use crate::{
     paint::compositing::{LayerHandle, OffsetLayer},
     paint::scene::SceneCapacity,
     pipeline::BoundaryContent,
-    render_object::{RenderObject, box_layout::RenderBox},
+    render_object::box_layout::RenderBox,
 };
 
 slotmap::new_key_type! {
@@ -740,13 +740,14 @@ mod tests {
     impl RenderObject for Counter {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for Counter {
         trivial_box_layout!();
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
 
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
@@ -760,13 +761,14 @@ mod tests {
     impl RenderObject for Embedder {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
     }
 
     impl RenderBox for Embedder {
         trivial_box_layout!();
+
+        fn update_compositing_bits(&mut self) -> bool {
+            false
+        }
 
         fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
             self.paints.set(self.paints.get() + 1);
@@ -791,14 +793,15 @@ mod tests {
     impl RenderObject for Probe {
         fn mount(&mut self, _: &mut MountCtx) {}
         fn unmount(&mut self, _: &mut MountCtx) {}
-        fn update_compositing_bits(&mut self) -> bool {
-            self.bits.set(self.bits.get() + 1);
-            false
-        }
     }
 
     impl RenderBox for Probe {
         trivial_box_layout!();
+
+        fn update_compositing_bits(&mut self) -> bool {
+            self.bits.set(self.bits.get() + 1);
+            false
+        }
 
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {
             self.paints.set(self.paints.get() + 1);

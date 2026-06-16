@@ -142,6 +142,11 @@ pub trait RenderBox: RenderObject {
     /// [`RenderBox::layout`] having been called, but not on [`RenderBox::paint`].
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest;
 
+    /// Recomputes whether this subtree contributes a compositing layer, and returns it. An
+    /// implementation must fold in every child's bit; a node that reads its own bit while painting
+    /// caches it here.
+    fn update_compositing_bits(&mut self) -> bool;
+
     /// Paints this box and its descendants. `offset` is this box's top-left in the coordinate space of
     /// the enclosing boundary's layer. A box draws its own geometry at `offset` and paints each child at
     /// `offset` plus that child's layout position.
@@ -183,6 +188,10 @@ impl RenderBox for () {
 
     fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
         HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        false
     }
 
     fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
