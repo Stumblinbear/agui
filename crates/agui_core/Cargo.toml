@@ -13,7 +13,6 @@ readme = "README.md"
 
 [dependencies]
 bon.workspace = true
-intrusive-collections.workspace = true
 parley.workspace = true
 peniko.workspace = true
 rustc-hash.workspace = true

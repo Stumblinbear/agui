@@ -1,21 +1,19 @@
-// The intrusive-collections adapter macro emits a manual `Clone` on a zero-sized `Copy` adapter.
-#![allow(clippy::expl_impl_clone_on_copy)]
-
 use std::{
-    cell::{Cell, RefCell},
-    ptr::NonNull,
+    cell::RefCell,
     rc::{Rc, Weak},
 };
 
-use intrusive_collections::{LinkedList, LinkedListLink, UnsafeRef, intrusive_adapter};
-use slotmap::{Key, SlotMap};
+use slotmap::Key;
 
 use crate::{
     context::PaintCtx,
     geometry::Offset,
     paint::compositing::{LayerHandle, OffsetLayer},
     paint::scene::SceneCapacity,
-    pipeline::BoundaryContent,
+    pipeline::{
+        BoundaryContent,
+        boundary::{BoundaryRegistry, DirtyQueue},
+    },
     render_object::box_layout::RenderBox,
 };
 
@@ -40,9 +38,10 @@ impl Default for PaintPipeline {
     fn default() -> Self {
         Self {
             pending: Rc::new(RefCell::new(PaintPipelineState {
-                boundaries: SlotMap::with_key(),
-                needs_paint: LinkedList::new(PaintLinkAdapter::new()),
-                needs_compositing: LinkedList::new(CompositingLinkAdapter::new()),
+                boundaries: BoundaryRegistry::default(),
+                needs_paint: DirtyQueue::new(),
+                needs_compositing: DirtyQueue::new(),
+                scratch: Vec::new(),
                 needs_composite: false,
                 deferred: Rc::new(RefCell::new(Vec::new())),
                 notify: Box::new(noop),
@@ -93,30 +92,29 @@ impl PaintPipeline {
             }
         }
 
-        let cell = Rc::new(PaintCell {
-            paint_link: LinkedListLink::new(),
-            compositing_link: LinkedListLink::new(),
-            pending: Rc::downgrade(&self.pending),
+        let cell = PaintCell {
             content,
             layer,
-            paint_capacity: Cell::new(SceneCapacity::default()),
-            needs_paint: Cell::new(false),
-            needs_compositing: Cell::new(false),
-            id: Cell::new(PaintBoundaryId::null()),
-        });
+            paint_capacity: SceneCapacity::default(),
+            needs_paint: false,
+            needs_compositing: false,
+        };
 
         // A fresh boundary has never been painted and its bits have never been computed.
-        {
+        let key = {
             let mut pending = self.pending.borrow_mut();
-            cell.id
-                .set(pending.boundaries.insert(NonNull::from(&*cell)));
-            pending.link_paint(&cell);
-            pending.link_compositing(&cell);
+            let key = pending.boundaries.insert(cell);
+            pending.mark_paint(key);
+            pending.mark_compositing(key);
+            key
+        };
+
+        tracing::debug!(boundary = ?key, "registered repaint boundary");
+
+        PaintBoundaryHandle {
+            key,
+            pending: Rc::downgrade(&self.pending),
         }
-
-        tracing::debug!(boundary = ?cell.id.get(), "registered repaint boundary");
-
-        PaintBoundaryHandle { cell }
     }
 
     /// Removes a boundary, discarding its layer and clearing any pending mark. The handle is spent.
@@ -145,29 +143,15 @@ impl PaintPipeline {
 
     /// Marks `scope`'s boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self, scope: PaintScope) {
-        let mut pending = self.pending.borrow_mut();
-
-        let Some(cell) = pending.boundaries.get(scope.0).copied() else {
-            return;
-        };
-
-        // SAFETY: the resolver holds this pointer only while the boundary's `PaintBoundaryHandle` is
-        // alive, and that handle removes the entry before its `Rc` frees the cell, so it is live here.
-        let cell = unsafe { cell.as_ref() };
-
-        pending.mark_needs_paint(cell);
+        self.pending.borrow_mut().mark_needs_paint(scope.0);
     }
 
     /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
     /// repaint.
     pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        let mut pending = self.pending.borrow_mut();
-        let Some(cell) = pending.boundaries.get(scope.0).copied() else {
-            return;
-        };
-        // SAFETY: as in `mark_needs_paint` — the handle removes the entry before the cell is freed.
-        let cell = unsafe { cell.as_ref() };
-        pending.mark_needs_compositing_bits_update(cell);
+        self.pending
+            .borrow_mut()
+            .mark_needs_compositing_bits_update(scope.0);
     }
 
     /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
@@ -227,25 +211,33 @@ impl PaintPipeline {
             }
         }
 
-        self.pending.borrow_mut().phase = PaintPipelinePhase::UpdateCompositingBits;
+        let mut scratch = {
+            let mut pending = self.pending.borrow_mut();
+            pending.phase = PaintPipelinePhase::UpdateCompositingBits;
 
-        loop {
-            let cell = {
+            let mut scratch = std::mem::take(&mut pending.scratch);
+            pending.needs_compositing.drain_into(&mut scratch);
+            scratch
+        };
+
+        for &key in &scratch {
+            let mut content = {
                 let mut pending = self.pending.borrow_mut();
 
-                let Some(unlinked) = pending.needs_compositing.pop_front() else {
-                    break;
+                let Some(cell) = pending.boundaries.get_mut(key) else {
+                    continue;
                 };
-
-                unlinked.needs_compositing.set(false);
-                recover_owner(unlinked)
+                cell.needs_compositing = false;
+                Rc::clone(&cell.content)
             };
 
-            let mut content = Rc::clone(&cell.content);
             content.update_compositing_bits();
         }
 
-        self.pending.borrow_mut().phase = PaintPipelinePhase::Idle;
+        let mut pending = self.pending.borrow_mut();
+        scratch.clear();
+        pending.scratch = scratch;
+        pending.phase = PaintPipelinePhase::Idle;
     }
 
     /// Repaints every marked inner boundary into its own layer, leaving the rest as they are.
@@ -278,44 +270,48 @@ impl PaintPipeline {
             }
         }
 
-        self.pending.borrow_mut().phase = PaintPipelinePhase::Paint;
+        let mut scratch = {
+            let mut pending = self.pending.borrow_mut();
+            pending.phase = PaintPipelinePhase::Paint;
 
-        loop {
-            let cell = {
+            let mut scratch = std::mem::take(&mut pending.scratch);
+            pending.needs_paint.drain_into(&mut scratch);
+            scratch
+        };
+
+        for &key in &scratch {
+            let (layer, mut content, capacity) = {
                 let mut pending = self.pending.borrow_mut();
 
-                let Some(unlinked) = pending.needs_paint.pop_front() else {
-                    break;
+                let Some(cell) = pending.boundaries.get_mut(key) else {
+                    continue;
                 };
+                cell.needs_paint = false;
 
-                unlinked.needs_paint.set(false);
-                recover_owner(unlinked)
+                (
+                    cell.layer.clone(),
+                    Rc::clone(&cell.content),
+                    cell.paint_capacity,
+                )
             };
 
-            tracing::debug!(boundary = ?Rc::as_ptr(&cell), "repainting boundary");
-
-            let layer = &cell.layer;
+            tracing::debug!(boundary = ?key, "repainting boundary");
 
             layer.borrow_mut().clear();
 
-            let mut content = Rc::clone(&cell.content);
-            let recorded = PaintCtx::paint_with_capacity(layer, cell.paint_capacity.get(), |ctx| {
+            let recorded = PaintCtx::paint_with_capacity(&layer, capacity, |ctx| {
                 content.paint(ctx, Offset::ZERO);
             });
-            cell.paint_capacity.set(recorded);
+
+            if let Some(cell) = self.pending.borrow_mut().boundaries.get_mut(key) {
+                cell.paint_capacity = recorded;
+            }
         }
 
-        self.pending.borrow_mut().phase = PaintPipelinePhase::Idle;
-    }
-}
-
-impl Drop for PaintPipeline {
-    fn drop(&mut self) {
-        // The channels hold non-owning references into cells the registry is about to free; empty them
-        // first so no link outlives its cell.
         let mut pending = self.pending.borrow_mut();
-        pending.needs_paint.fast_clear();
-        pending.needs_compositing.fast_clear();
+        scratch.clear();
+        pending.scratch = scratch;
+        pending.phase = PaintPipelinePhase::Idle;
     }
 }
 
@@ -325,54 +321,35 @@ enum PaintPipelinePhase {
     Paint,
 }
 
-/// A registered repaint boundary, owned by the pipeline registry for as long as it is registered and
-/// linked into the paint or compositing channel while it awaits work on that channel.
+/// A registered repaint boundary, owned by the [`Registry`] and reached by the key its
+/// [`PaintBoundaryHandle`] holds.
 struct PaintCell {
-    paint_link: LinkedListLink,
-    compositing_link: LinkedListLink,
-
-    /// The pipeline state this cell's marks are linked into.
-    pending: Weak<RefCell<PaintPipelineState>>,
-
     content: BoundaryContent,
     layer: LayerHandle<OffsetLayer>,
 
     /// The buffer lengths the last repaint recorded, sizing the next repaint's buffers.
-    paint_capacity: Cell<SceneCapacity>,
+    paint_capacity: SceneCapacity,
 
-    /// Whether this cell is currently in the paint channel, guarding a double-mark from linking it twice.
-    needs_paint: Cell<bool>,
-
-    /// Whether this cell is currently in the compositing-bits channel, guarding a double-mark from linking
+    /// Whether this boundary's key is currently in the paint queue, guarding a double-mark from queueing
     /// it twice.
-    needs_compositing: Cell<bool>,
+    needs_paint: bool,
 
-    /// This cell's key in the registry, carried by an inert [`PaintScope`] to reach it.
-    id: Cell<PaintBoundaryId>,
-}
-
-intrusive_adapter!(PaintLinkAdapter = UnsafeRef<PaintCell>: PaintCell { paint_link => LinkedListLink });
-intrusive_adapter!(CompositingLinkAdapter = UnsafeRef<PaintCell>: PaintCell { compositing_link => LinkedListLink });
-
-/// Recovers a counted owning `Rc` from a non-owning ref popped off a channel.
-fn recover_owner(popped: UnsafeRef<PaintCell>) -> Rc<PaintCell> {
-    let ptr = UnsafeRef::into_raw(popped);
-
-    // SAFETY: the ref was created with `UnsafeRef::from_raw(Rc::as_ptr(&cell))`, so `ptr` carries the
-    // whole-allocation provenance of a live `Rc<PaintCell>` whose owner outlives this call. Bumping the
-    // strong count before reconstructing balances the `Rc` this produces against that still-live owner.
-    unsafe {
-        Rc::increment_strong_count(ptr);
-        Rc::from_raw(ptr)
-    }
+    /// Whether this boundary's key is currently in the compositing-bits queue, guarding a double-mark
+    /// from queueing it twice.
+    needs_compositing: bool,
 }
 
 /// The boundaries awaiting repaint or a bit recompute, and the hook that schedules a frame.
 struct PaintPipelineState {
-    boundaries: SlotMap<PaintBoundaryId, NonNull<PaintCell>>,
+    boundaries: BoundaryRegistry<PaintBoundaryId, PaintCell>,
 
-    needs_compositing: LinkedList<CompositingLinkAdapter>,
-    needs_paint: LinkedList<PaintLinkAdapter>,
+    needs_compositing: DirtyQueue<PaintBoundaryId>,
+    needs_paint: DirtyQueue<PaintBoundaryId>,
+
+    /// Reused across flushes to hold the keys drained from a channel, kept so its capacity survives
+    /// between frames. The compositing-bits and paint flushes run sequentially, so one buffer serves
+    /// both.
+    scratch: Vec<PaintBoundaryId>,
 
     /// Whether a layer's placement changed and the subtree must recomposite, with no boundary to
     /// repaint. Set out of band by an animation that moves a retained layer; cleared when the frame
@@ -393,63 +370,37 @@ impl PaintPipelineState {
         self.needs_paint.is_empty() && self.needs_compositing.is_empty() && !self.needs_composite
     }
 
-    fn link_paint(&mut self, cell: &PaintCell) {
-        if cell.needs_paint.get() {
+    /// Queues the boundary at `key` for repaint, unless its key is already queued or its boundary is
+    /// gone.
+    fn mark_paint(&mut self, key: PaintBoundaryId) {
+        let Some(cell) = self.boundaries.get_mut(key) else {
             return;
-        }
-
-        cell.needs_paint.set(true);
-        // SAFETY: the cell is owned by an `Rc` in the registry for as long as it is registered, and it
-        // is unlinked before that `Rc` is dropped in `unregister`; the per-channel flag guards it
-        // against being linked into this channel more than once.
-        self.needs_paint
-            .push_back(unsafe { UnsafeRef::from_raw(std::ptr::from_ref(cell)) });
-    }
-
-    fn unlink_paint(&mut self, cell: &PaintCell) {
-        if !cell.needs_paint.get() {
-            return;
-        }
-
-        // SAFETY: the cell is linked into this channel and stays live behind its `Rc` until removed
-        // here, so the pointer the cursor recovers is valid.
-        let mut cursor = unsafe {
-            self.needs_paint
-                .cursor_mut_from_ptr(std::ptr::from_ref(cell))
         };
-        cursor.remove();
-        cell.needs_paint.set(false);
-    }
 
-    fn link_compositing(&mut self, cell: &PaintCell) {
-        if cell.needs_compositing.get() {
+        if cell.needs_paint {
             return;
         }
 
-        cell.needs_compositing.set(true);
-        // SAFETY: the cell is owned by an `Rc` in the registry for as long as it is registered, and it
-        // is unlinked before that `Rc` is dropped in `unregister`; the per-channel flag guards it
-        // against being linked into this channel more than once.
-        self.needs_compositing
-            .push_back(unsafe { UnsafeRef::from_raw(std::ptr::from_ref(cell)) });
+        cell.needs_paint = true;
+        self.needs_paint.mark(key);
     }
 
-    fn unlink_compositing(&mut self, cell: &PaintCell) {
-        if !cell.needs_compositing.get() {
+    /// Queues the boundary at `key` for a compositing-bits recompute, unless its key is already queued or
+    /// its boundary is gone.
+    fn mark_compositing(&mut self, key: PaintBoundaryId) {
+        let Some(cell) = self.boundaries.get_mut(key) else {
             return;
-        }
-
-        // SAFETY: the cell is linked into this channel and stays live behind its `Rc` until removed
-        // here, so the pointer the cursor recovers is valid.
-        let mut cursor = unsafe {
-            self.needs_compositing
-                .cursor_mut_from_ptr(std::ptr::from_ref(cell))
         };
-        cursor.remove();
-        cell.needs_compositing.set(false);
+
+        if cell.needs_compositing {
+            return;
+        }
+
+        cell.needs_compositing = true;
+        self.needs_compositing.mark(key);
     }
 
-    fn mark_needs_paint(&mut self, cell: &PaintCell) {
+    fn mark_needs_paint(&mut self, key: PaintBoundaryId) {
         match self.phase {
             PaintPipelinePhase::Idle => {}
 
@@ -462,18 +413,18 @@ impl PaintPipelineState {
             }
         }
 
-        tracing::trace!(boundary = ?cell.id.get(), "marked boundary for repaint");
+        tracing::trace!(boundary = ?key, "marked boundary for repaint");
 
         let was_clean = self.is_clean();
 
-        self.link_paint(cell);
+        self.mark_paint(key);
 
         if was_clean {
             (self.notify)();
         }
     }
 
-    fn mark_needs_compositing_bits_update(&mut self, cell: &PaintCell) {
+    fn mark_needs_compositing_bits_update(&mut self, key: PaintBoundaryId) {
         match self.phase {
             PaintPipelinePhase::Idle => {}
 
@@ -490,13 +441,13 @@ impl PaintPipelineState {
             }
         }
 
-        tracing::trace!(boundary = ?cell.id.get(), "marked boundary for compositing bits update");
+        tracing::trace!(boundary = ?key, "marked boundary for compositing bits update");
 
         let was_clean = self.is_clean();
 
-        self.link_compositing(cell);
+        self.mark_compositing(key);
         // A changed compositing bit changes how the boundary paints, so it must also repaint.
-        self.link_paint(cell);
+        self.mark_paint(key);
 
         if was_clean {
             (self.notify)();
@@ -597,34 +548,35 @@ impl DeferredPaintScope {
 /// hands out mark-only [`PaintScope`]s for the subtree. Keeping removal here, off the scope, stops a
 /// descendant that was handed a scope to mark with from unregistering the boundary it lives under.
 pub struct PaintBoundaryHandle {
-    cell: Rc<PaintCell>,
+    key: PaintBoundaryId,
+    pending: Weak<RefCell<PaintPipelineState>>,
 }
 
 impl PaintBoundaryHandle {
     /// A mark-only handle to this boundary, for descendants to repaint into it.
     pub fn scope(&self) -> PaintScope {
-        PaintScope(self.cell.id.get())
+        PaintScope(self.key)
     }
 
     /// Marks this boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self) {
-        if let Some(pending) = self.cell.pending.upgrade() {
-            pending.borrow_mut().mark_needs_paint(&self.cell);
+        if let Some(pending) = self.pending.upgrade() {
+            pending.borrow_mut().mark_needs_paint(self.key);
         }
     }
 
     /// Marks this boundary's compositing bits for recomputation before its next repaint.
     pub fn mark_needs_compositing_bits_update(&self) {
-        if let Some(pending) = self.cell.pending.upgrade() {
+        if let Some(pending) = self.pending.upgrade() {
             pending
                 .borrow_mut()
-                .mark_needs_compositing_bits_update(&self.cell);
+                .mark_needs_compositing_bits_update(self.key);
         }
     }
 
     /// Schedules a recomposite of the subtree on the next frame, without repainting this boundary.
     pub fn mark_needs_composite(&self) {
-        if let Some(pending) = self.cell.pending.upgrade() {
+        if let Some(pending) = self.pending.upgrade() {
             pending.borrow_mut().mark_needs_composite();
         }
     }
@@ -632,21 +584,24 @@ impl PaintBoundaryHandle {
 
 impl Drop for PaintBoundaryHandle {
     fn drop(&mut self) {
-        // The channels hold non-owning refs into this cell; unlink it before its `Rc` frees it.
-        let Some(pending) = self.cell.pending.upgrade() else {
+        let Some(pending) = self.pending.upgrade() else {
             return;
         };
 
-        let mut pending = pending.borrow_mut();
-        pending.unlink_paint(&self.cell);
-        pending.unlink_compositing(&self.cell);
+        // The removed cell owns the boundary's render content, whose own drop can unregister a nested
+        // boundary and so re-enter this borrow. Hold the cell until the borrow is released, then let it
+        // drop. Removing it makes the boundary absent: a flush that already drained its key skips it.
+        let removed = {
+            let mut pending = pending.borrow_mut();
+            let removed = pending.boundaries.remove(self.key);
+            pending
+                .deferred
+                .borrow_mut()
+                .retain(|(queued, _)| *queued != self.key);
+            removed
+        };
 
-        let id = self.cell.id.get();
-        pending.boundaries.remove(id);
-        pending
-            .deferred
-            .borrow_mut()
-            .retain(|(queued, _)| *queued != id);
+        drop(removed);
     }
 }
 

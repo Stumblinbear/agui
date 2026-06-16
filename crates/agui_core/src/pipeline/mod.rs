@@ -15,6 +15,7 @@ use crate::{
     widget::Widget,
 };
 
+pub mod boundary;
 pub mod layout;
 pub mod paint;
 
