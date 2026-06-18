@@ -3,7 +3,7 @@ use std::rc::Rc;
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     input::pointer::PointerHandler,
     prelude::{element::*, render_object::*},
 };
@@ -204,7 +204,7 @@ where
 mod tests {
     use std::cell::Cell;
 
-    use agui_core::{
+    use agui_render::{
         input::pointer::PointerDispatcher,
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
@@ -256,7 +256,7 @@ mod tests {
 mod harness {
     use std::{cell::Cell, rc::Rc, time::Duration};
 
-    use agui_core::{
+    use agui_render::{
         input::pointer::PointerHandler,
         prelude::element::{HitTestBehavior, Offset, PointerEvent, Size},
     };

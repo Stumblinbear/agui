@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use agui_core::{
+use agui_render::{
     paint::scene::Scene,
     pipeline::PipelineOwner,
     prelude::{

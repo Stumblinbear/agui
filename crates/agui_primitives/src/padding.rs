@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]
@@ -261,7 +261,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{geometry::EdgeInsets, test_harness::TestCtx};
+    use agui_render::{geometry::EdgeInsets, test_harness::TestCtx};
 
     use super::*;
     use crate::sized_box::SizedBox;
@@ -327,7 +327,7 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_core::{geometry::EdgeInsets, prelude::element::Size};
+    use agui_render::{geometry::EdgeInsets, prelude::element::Size};
     use agui_test::{ElementLifecycleCheck, fixtures::IntrinsicBox, sizing::BoxSizingCheck};
 
     use super::Padding;

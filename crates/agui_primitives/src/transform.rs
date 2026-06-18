@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     paint::peniko::kurbo::Affine,
     prelude::{element::*, render_object::*},
 };
@@ -258,7 +258,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{
+    use agui_render::{
         paint::{
             command::{PaintCommand, PaintShape},
             compositing::{Compositor, LayerHandle, OffsetLayer},
@@ -443,7 +443,7 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_core::paint::peniko::kurbo::Affine;
+    use agui_render::paint::peniko::kurbo::Affine;
     use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
 
     use super::Transform;

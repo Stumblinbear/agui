@@ -1,10 +1,10 @@
-use agui_core::{
+use agui_primitives::{
+    colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
+};
+use agui_render::{
     paint::peniko::Color,
     prelude::{element::Widget, render_object::*},
     provide::Provide,
-};
-use agui_primitives::{
-    colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
 };
 use agui_test::golden;
 use agui_test::golden::VelloHeadless;

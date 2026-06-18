@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite, as_const};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 pub struct SizedBox<Child> {
     width: Option<Positive<f32>>,
@@ -318,7 +318,7 @@ mod tests {
         rc::Rc,
     };
 
-    use agui_core::{
+    use agui_render::{
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
     };
@@ -621,7 +621,7 @@ mod harness {
 
     use std::time::Duration;
 
-    use agui_core::prelude::{element::Size, render_object::BoxConstraints};
+    use agui_render::prelude::{element::Size, render_object::BoxConstraints};
     use agui_test::{ElementLifecycleCheck, Probe, WidgetTester, sizing::BoxSizingCheck};
 
     use super::SizedBox;

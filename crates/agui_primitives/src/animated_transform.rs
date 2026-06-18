@@ -2,7 +2,7 @@ use std::{cell::Cell, rc::Rc, time::Duration};
 
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     paint::{
         compositing::{LayerHandle, SurfaceTransformLayer},
         peniko::kurbo::Affine,
@@ -327,7 +327,7 @@ impl<Child: RenderBox> RenderBox for RenderAnimatedTransform<Child> {
 mod tests {
     use std::{cell::Cell, rc::Rc, time::Duration};
 
-    use agui_core::{
+    use agui_render::{
         paint::{
             command::PaintCommand,
             peniko::{Color, Fill, kurbo::Affine},
@@ -592,7 +592,7 @@ mod tests {
 
 #[cfg(test)]
 mod harness {
-    use agui_core::paint::peniko::kurbo::Affine;
+    use agui_render::paint::peniko::kurbo::Affine;
     use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
 
     use super::AnimatedTransform;

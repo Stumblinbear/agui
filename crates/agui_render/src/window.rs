@@ -1,10 +1,11 @@
-//! The seam between a windowing backend and a renderer: a windowing crate drives any
-//! [`WindowRenderer`], and a rendering backend implements one, so neither depends on the other.
+//! The seam a windowing backend drives to present rendered frames: a windowing crate calls a
+//! [`WindowRenderer`], and a rendering backend implements one.
 
 use std::sync::Arc;
 
-use agui_core::paint::compositing::CompositedFrame;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+
+use crate::paint::compositing::CompositedFrame;
 
 /// Presents composed frames to a single window's surface.
 pub trait WindowRenderer {

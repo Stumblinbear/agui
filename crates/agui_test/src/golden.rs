@@ -13,7 +13,7 @@ use std::{
     path::Path,
 };
 
-use agui_core::{
+use agui_render::{
     paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
     prelude::{element::*, render_object::*},
     test_harness::TestCtx,
@@ -275,8 +275,8 @@ impl Image {
 /// Adapts a GPU [`TextureRenderer`] to the golden seam, available under the `gpu` feature.
 #[cfg(feature = "gpu")]
 mod gpu {
-    use agui_core::paint::compositing::CompositedFrame;
     use agui_render::TextureRenderer;
+    use agui_render::paint::compositing::CompositedFrame;
     use agui_render::wgpu;
 
     use super::{GoldenRenderer, Image};
@@ -412,8 +412,8 @@ mod gpu {
 /// Adapts a CPU [`BufferRenderer`] to the golden seam, available under the `cpu` feature.
 #[cfg(feature = "cpu")]
 mod cpu {
-    use agui_core::paint::compositing::CompositedFrame;
     use agui_render::BufferRenderer;
+    use agui_render::paint::compositing::CompositedFrame;
 
     use super::{GoldenRenderer, Image};
 

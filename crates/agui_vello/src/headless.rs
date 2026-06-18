@@ -1,8 +1,8 @@
 use std::num::NonZeroUsize;
 
-use agui_core::paint::peniko::Color;
-use agui_core::paint::scene::Scene;
 use agui_render::TextureRenderer;
+use agui_render::paint::peniko::Color;
+use agui_render::paint::scene::Scene;
 use agui_render::wgpu;
 use vello::kurbo::Affine;
 use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions};
@@ -13,7 +13,7 @@ use crate::append_scene_with_transform;
 /// texture, holding its own GPU context with no window or surface.
 ///
 /// It rasterizes the whole frame into one scene, so a frame placing a system-owned
-/// [`External`](agui_core::paint::compositing::CompositedNode::External) surface, which has no
+/// [`External`](agui_render::paint::compositing::CompositedNode::External) surface, which has no
 /// rasterization, has nothing to draw for that surface.
 pub struct VelloRenderer {
     device: wgpu::Device,

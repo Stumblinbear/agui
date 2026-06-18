@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 /// A leaf widget that shapes and sizes a single styled run of text.
 pub struct Text {
@@ -129,12 +129,12 @@ impl Widget for Text {
 mod harness {
     use std::time::Duration;
 
-    use agui_core::prelude::{
+    use agui_render::prelude::{
         element::Size,
         render_object::{BoxConstraints, Fonts},
     };
 
-    use agui_core::provide::Provide;
+    use agui_render::provide::Provide;
     use agui_test::{ElementLifecycleCheck, Probe, WidgetTester};
 
     use super::Text;

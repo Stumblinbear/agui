@@ -1,4 +1,4 @@
-use agui_core::paint::scene::Scene;
+use crate::paint::scene::Scene;
 
 /// A backend that composes a scene into a `wgpu` texture.
 pub trait TextureRenderer {

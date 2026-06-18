@@ -11,8 +11,7 @@ categories = ["gui", "graphics", "rendering"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-agui_core.workspace = true
-agui_window.workspace = true
+agui_render.workspace = true
 async-executor.workspace = true
 tracing.workspace = true
 winit.workspace = true

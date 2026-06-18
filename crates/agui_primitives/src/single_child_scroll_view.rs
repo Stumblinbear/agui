@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]
@@ -156,7 +156,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::TestCtx;
+    use agui_render::test_harness::TestCtx;
 
     use crate::sized_box::SizedBox;
 

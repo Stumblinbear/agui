@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     paint::compositing::{LayerHandle, OpacityLayer},
     prelude::{element::*, render_object::*},
 };
@@ -210,7 +210,7 @@ where
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use agui_core::{
+    use agui_render::{
         paint::{command::PaintCommand, compositing::OffsetLayer, peniko::Color},
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
@@ -345,7 +345,7 @@ mod tests {
             let mut canvas = ctx.canvas();
             let brush = canvas.brush(Color::BLACK);
             canvas.fill(
-                agui_core::paint::peniko::Fill::NonZero,
+                agui_render::paint::peniko::Fill::NonZero,
                 brush,
                 &(offset & Size::new(10.0, 10.0)),
             );
@@ -358,7 +358,7 @@ mod tests {
     fn a_partial_opacity_change_recomposites_without_repainting() {
         use std::cell::Cell;
 
-        use agui_core::{
+        use agui_render::{
             context::MountCtx,
             paint::compositing::Compositor,
             pipeline::{BoundaryContent, layout::LayoutPipeline, paint::PaintPipeline},

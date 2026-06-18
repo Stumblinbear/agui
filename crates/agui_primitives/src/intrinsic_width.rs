@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]

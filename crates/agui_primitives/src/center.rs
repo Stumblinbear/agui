@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 /// A widget that centers its child within the space it is given.
 ///
@@ -201,7 +201,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use agui_core::test_harness::TestCtx;
+    use agui_render::test_harness::TestCtx;
 
     use crate::sized_box::SizedBox;
 
@@ -236,7 +236,7 @@ mod tests {
 mod harness {
     use std::time::Duration;
 
-    use agui_core::{paint::peniko::Color, prelude::element::*};
+    use agui_render::{paint::peniko::Color, prelude::element::*};
     use agui_test::{
         ElementLifecycleCheck, Probe, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck,
     };

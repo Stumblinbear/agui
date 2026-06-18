@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     paint::compositing::{ExternalSurfaceId, ExternalSurfaceLayer, LayerHandle},
     prelude::{element::*, render_object::*},
 };
@@ -178,7 +178,7 @@ impl RenderBox for RenderExternalSurface {
 
 #[cfg(test)]
 mod tests {
-    use agui_core::{
+    use agui_render::{
         paint::compositing::{CompositedNode, Compositor, LayerHandle, OffsetLayer},
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,

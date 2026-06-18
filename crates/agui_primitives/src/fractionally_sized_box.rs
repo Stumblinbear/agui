@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 /// A widget that sizes its child to a fraction of the space it is given, then positions it within.
 ///
@@ -296,7 +296,7 @@ mod tests {
         rc::Rc,
     };
 
-    use agui_core::{
+    use agui_render::{
         prelude::{element::*, render_object::*},
         test_harness::TestCtx,
     };

@@ -1,4 +1,4 @@
-use agui_core::paint::{
+use agui_render::paint::{
     command::{PaintCommand, PaintShape},
     scene::Scene,
 };

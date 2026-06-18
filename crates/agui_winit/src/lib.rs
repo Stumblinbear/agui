@@ -4,11 +4,11 @@
 mod app;
 mod driver;
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 use winit::event_loop::EventLoop;
 
-pub use agui_core::scheduling::Vsync;
-pub use agui_window::WindowRenderer;
+pub use agui_render::WindowRenderer;
+pub use agui_render::scheduling::Vsync;
 
 use crate::{app::App, driver::WakeUp, driver::WindowDriver};
 

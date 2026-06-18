@@ -12,41 +12,4 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
-bon.workspace = true
-parley.workspace = true
-peniko.workspace = true
-rustc-hash.workspace = true
 slotmap.workspace = true
-smallbox.workspace = true
-typed_floats.workspace = true
-
-# agui_sync.workspace = true
-
-tracing.workspace = true
-
-thiserror.workspace = true
-
-# rand.workspace = true
-# slotmap.workspace = true
-# parking_lot = { workspace = true, optional = true }
-# im-rc.workspace = true
-# bitflags.workspace = true
-# url.workspace = true
-# smallbox.workspace = true
-
-# futures-util = { workspace = true, features = ["std", "channel"] }
-
-# lyon.workspace = true
-
-# mockall = { workspace = true, optional = true }
-
-[dev-dependencies]
-# agui_macros.workspace = true
-
-# parking_lot.workspace = true
-
-# mockall.workspace = true
-criterion.workspace = true
-
-# fnv = "1.0"
-# concurrent-queue = "2.4"

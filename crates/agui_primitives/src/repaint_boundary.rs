@@ -2,7 +2,7 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     paint::compositing::{LayerHandle, OffsetLayer},
     pipeline::{BoundaryContent, paint::PaintBoundaryHandle},
     prelude::{element::*, render_object::*},
@@ -197,7 +197,7 @@ impl<Child: RenderBox> RenderBox for RenderRepaintBoundary<Child> {
 mod tests {
     use std::cell::{Cell, RefCell};
 
-    use agui_core::{
+    use agui_render::{
         paint::{
             command::PaintCommand,
             compositing::{Compositor, LayerHandle, OffsetLayer},

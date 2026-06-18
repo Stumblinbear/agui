@@ -16,13 +16,6 @@
 use std::sync::Arc;
 use std::{ffi::c_void, mem::ManuallyDrop, rc::Rc};
 
-use agui_core::paint::command::PaintShape;
-use agui_core::paint::compositing::{
-    CompositedFrame, CompositedNode, CompositorVisual, SurfacePlacement,
-};
-use agui_core::paint::peniko::kurbo::Affine;
-use agui_core::paint::scene::Scene;
-use agui_window::WindowRenderer;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use rustc_hash::FxHashMap;
 use windows::Foundation::Numerics::Matrix3x2;
@@ -56,7 +49,13 @@ use windows::Win32::{
 };
 use windows::core::{IUnknown, Interface};
 
-use crate::TextureRenderer;
+use crate::{
+    TextureRenderer, WindowRenderer,
+    paint::command::PaintShape,
+    paint::compositing::{CompositedFrame, CompositedNode, CompositorVisual, SurfacePlacement},
+    paint::peniko::kurbo::Affine,
+    paint::scene::Scene,
+};
 
 /// Identifies a retained raster swapchain by the identity of the scene it holds, so an unchanged
 /// scene reuses its swapchain rather than re-rasterizing.

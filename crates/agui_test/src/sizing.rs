@@ -1,6 +1,6 @@
 //! Conformance checks for the box-sizing contracts every [`RenderBox`] must satisfy.
 
-use agui_core::{
+use agui_render::{
     paint::{
         command::{PaintCommand, PaintShape},
         compositing::{Compositor, LayerHandle, OffsetLayer},
@@ -669,7 +669,7 @@ fn same(a: f32, b: f32) -> bool {
 mod tests {
     use std::cell::Cell;
 
-    use agui_core::{
+    use agui_render::{
         paint::peniko::{Color, Fill},
         prelude::{element::*, render_object::*},
     };

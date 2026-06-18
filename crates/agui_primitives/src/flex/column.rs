@@ -1,6 +1,6 @@
 use bon::Builder;
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -177,7 +177,7 @@ impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
 mod tests {
     use std::cell::RefCell;
 
-    use agui_core::{
+    use agui_render::{
         key::Key, render_object::RenderChildren, test_harness::TestCtx, widget::AsAnyWidget,
     };
 

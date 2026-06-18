@@ -1,10 +1,10 @@
 use std::{sync::Arc, time::Instant};
 
-use agui_core::{
+use agui_render::WindowRenderer;
+use agui_render::{
     input::pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId},
     prelude::{element::*, render_object::*},
 };
-use agui_window::WindowRenderer;
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,

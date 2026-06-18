@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use agui_core::prelude::{element::*, render_object::*};
+use agui_render::prelude::{element::*, render_object::*};
 
 /// A widget that lays out a tree of styled spans, with inline widgets flowing alongside the text.
 pub struct RichText<Children = ()> {
@@ -128,12 +128,12 @@ where
 mod harness {
     use std::time::Duration;
 
-    use agui_core::prelude::{
+    use agui_render::prelude::{
         element::Size,
         render_object::{BoxConstraints, Fonts, InlineSpan, TextSpan, TextStyle},
     };
 
-    use agui_core::provide::Provide;
+    use agui_render::provide::Provide;
     use agui_test::{Probe, WidgetTester};
 
     use super::RichText;

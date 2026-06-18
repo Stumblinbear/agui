@@ -12,16 +12,15 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [features]
-gpu = ["dep:agui_render", "agui_render/gpu"]
-cpu = ["dep:agui_render", "agui_render/cpu"]
+gpu = ["agui_render/gpu"]
+cpu = ["agui_render/cpu"]
 vello = ["gpu", "dep:agui_vello"]
 
 [dependencies]
-agui_core.workspace = true
+agui_render.workspace = true
 agui_test_macros.workspace = true
 
 png.workspace = true
 typed_floats.workspace = true
 
-agui_render = { workspace = true, optional = true }
 agui_vello = { workspace = true, optional = true }

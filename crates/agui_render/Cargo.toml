@@ -12,22 +12,30 @@ license = "MIT OR Apache-2.0"
 
 [features]
 # A backend targeting a GPU texture, via `wgpu`. On Windows it also pulls the DirectComposition
-# compositor (`dcomp`), which presents through `windows`/`agui_window`.
-gpu = ["dep:wgpu", "dep:windows", "dep:agui_window", "dep:raw-window-handle", "dep:rustc-hash"]
+# compositor (`dcomp`), which presents through `windows`.
+gpu = ["dep:wgpu", "dep:windows"]
 # A backend producing a pixel buffer on the CPU.
 cpu = []
 
 [dependencies]
 agui_core.workspace = true
 
+bon.workspace = true
+parley.workspace = true
+peniko.workspace = true
+raw-window-handle.workspace = true
+rustc-hash.workspace = true
+slotmap.workspace = true
+smallbox.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+typed_floats.workspace = true
+
 wgpu = { workspace = true, optional = true }
 
 # The DirectComposition compositor is Windows-only; its deps stay off every other target so a
 # non-Windows `gpu` build pulls only `wgpu`.
 [target.'cfg(windows)'.dependencies]
-agui_window = { workspace = true, optional = true }
-raw-window-handle = { workspace = true, optional = true }
-rustc-hash = { workspace = true, optional = true }
 # Pinned to the `windows` version wgpu-hal links, so the raw D3D12 objects pulled out of wgpu are the
 # same types DirectComposition and DXGI expect.
 windows = { version = "0.58", optional = true, features = [

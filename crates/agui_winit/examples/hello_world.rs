@@ -1,15 +1,15 @@
 use std::rc::Rc;
 
-use agui_core::{
-    input::pointer::PointerHandler,
-    paint::peniko::{Color, kurbo::Affine},
-    prelude::{element::*, render_object::*},
-    provide::Provide,
-};
 use agui_primitives::{
     animated_transform::AnimatedTransform, colored_box::ColoredBox,
     fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
     listener::Listener, opacity::Opacity, text::Text,
+};
+use agui_render::{
+    input::pointer::PointerHandler,
+    paint::peniko::{Color, kurbo::Affine},
+    prelude::{element::*, render_object::*},
+    provide::Provide,
 };
 use agui_vello::renderer::VelloWindowRenderer;
 use agui_winit::{WindowOptions, run_app};
@@ -18,7 +18,7 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "hello_world=info,agui_core=debug".into()),
+                .unwrap_or_else(|_| "hello_world=info,agui_render=debug".into()),
         )
         .init();
 

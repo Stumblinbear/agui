@@ -2,7 +2,7 @@ use std::{any::TypeId, cell::RefCell, marker::PhantomData, rc::Rc};
 
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_core::{
+use agui_render::{
     key::AnyKeyable,
     pipeline::{layout::LayoutPipeline, paint::PaintPipeline},
     prelude::{element::*, render_object::*},
@@ -18,7 +18,7 @@ use agui_core::{
 ///
 /// The closure may return a different child for different constraints, including a different concrete
 /// widget type, so the return type is typically a boxed widget such as the one produced by
-/// [`into_boxed_render_box`](agui_core::widget::AsAnyWidget::into_boxed_render_box).
+/// [`into_boxed_render_box`](agui_render::widget::AsAnyWidget::into_boxed_render_box).
 pub struct LayoutBuilder<F, Child> {
     builder: F,
 
@@ -395,7 +395,7 @@ where
 mod tests {
     use std::cell::Cell;
 
-    use agui_core::{
+    use agui_render::{
         paint::compositing::{LayerHandle, OffsetLayer},
         pipeline::{
             BoundaryContent, PipelineOwner, build::BuildScope, layout::LayoutPipeline,
