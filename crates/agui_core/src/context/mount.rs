@@ -7,6 +7,7 @@ use crate::{
         layout::LayoutPipeline,
         paint::{DeferredPaintScope, PaintBoundaryHandle, PaintPipeline, PaintScope},
     },
+    prelude::render_object::LayoutScope,
     view::ViewHandle,
 };
 
@@ -36,7 +37,8 @@ impl<'a> MountCtx<'a> {
         content: BoundaryContent,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
-        self.paint.register(content, layer)
+        self.paint
+            .register_boundary(*self.paint_scope, content, layer)
     }
 
     /// Removes a paint boundary that is leaving the tree.
@@ -72,11 +74,15 @@ impl<'a> MountCtx<'a> {
         content: BoundaryContent,
         layer: LayerHandle<OffsetLayer>,
     ) -> ViewHandle {
-        let paint = self.paint.register(Rc::clone(&content), layer.clone());
+        let paint =
+            self.paint
+                .register_boundary(*self.paint_scope, Rc::clone(&content), layer.clone());
 
-        let layout = self
-            .layout
-            .register_root(Rc::clone(&content), paint.scope());
+        let layout = self.layout.register_boundary(
+            LayoutScope::detached(),
+            Rc::clone(&content),
+            paint.scope(),
+        );
 
         ViewHandle::new(content, paint, layout, layer)
     }

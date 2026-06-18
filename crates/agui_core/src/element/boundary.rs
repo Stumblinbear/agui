@@ -4,17 +4,17 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use slotmap::SlotMap;
-
 use crate::{
     context::{Dispatch, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element, RoutingPath, RoutingTarget},
     pipeline::{
+        FramePhase, enter_phase,
         layout::LayoutPipeline,
         paint::{PaintPipeline, PaintScope},
     },
     provide::ProvideScope,
+    reactor::{Node, NodeId, Reactor},
     render_object::{AnyRenderObject, RenderObject},
     scheduling::TaskScheduler,
     widget::Widget,
@@ -22,37 +22,44 @@ use crate::{
 
 type SharedRenderObject = Rc<RefCell<dyn AnyRenderObject>>;
 
-/// Why a descendant was marked: a plain rebuild, or a change in a provided value it depends on. The
-/// kind selects which dispatch the flush delivers, so a dependency change runs the element's
-/// dependency-change hook.
-#[derive(Clone, Copy)]
-enum MarkKind {
-    Rebuild,
-    DependencyChanged,
-}
+/// Identifies a registered build boundary. Each boundary is a node in the build [`Reactor`], so its id is
+/// the reactor's [`NodeId`].
+#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+pub struct BuildBoundaryId(NodeId);
 
-slotmap::new_key_type! {
-    /// Identifies a registered build boundary within one [`BuildState`].
-    pub struct BuildBoundaryId;
+/// A build boundary as the reactor sees it. The boundary's state lives in an `Rc<BuildBoundaryCell>` owned
+/// by its element; the reactor holds only a [`Weak`] to it, so a dropped boundary is skipped at the next
+/// flush.
+struct BuildNode(Weak<BuildBoundaryCell>);
+
+impl Node for BuildNode {
+    type Reaction = ();
+
+    fn depth(&self) -> usize {
+        self.0.upgrade().map_or(0, |cell| cell.depth)
+    }
 }
 
 /// The registry of build boundaries, shared between the owner that flushes them, the boundaries that mark
 /// themselves, and the routing paths that address them.
 ///
 /// Every element lives under exactly one boundary; the root is the outermost, registered like any other.
-/// A boundary is addressed by its [`BoundaryId`], so a message or rebuild reaches it without walking from
-/// the root.
+/// A boundary is addressed by its [`BuildBoundaryId`], so a message or rebuild reaches it without walking
+/// from the root.
 pub struct BuildState {
-    boundaries: SlotMap<BuildBoundaryId, Weak<BuildBoundaryCell>>,
-    dirty: Vec<BuildBoundaryId>,
+    reactor: Reactor<BuildNode, 1>,
+
+    /// Reused across flushes to hold the drained ids, so its capacity survives between frames.
+    scratch: Vec<NodeId>,
 }
 
 impl BuildState {
     /// A fresh registry, shared so boundaries can register and mark themselves into it.
     pub fn new() -> (Rc<RefCell<Self>>, BuildScope) {
         let state = Rc::new(RefCell::new(Self {
-            boundaries: SlotMap::with_key(),
-            dirty: Vec::new(),
+            reactor: Reactor::default(),
+            scratch: Vec::new(),
         }));
 
         let root_scope = BuildScope::new_root(&state);
@@ -62,11 +69,11 @@ impl BuildState {
 
     /// Whether any boundary is waiting to rebuild.
     pub fn is_dirty(&self) -> bool {
-        !self.dirty.is_empty()
+        !self.reactor.is_clean()
     }
 
     fn lookup(&self, id: BuildBoundaryId) -> Option<Rc<BuildBoundaryCell>> {
-        self.boundaries.get(id).and_then(Weak::upgrade)
+        self.reactor.get(id.0).and_then(|node| node.0.upgrade())
     }
 
     /// Marks the element at `target` to rebuild on the next flush.
@@ -83,42 +90,17 @@ impl BuildState {
     /// Queues the boundary owning `target` for the next flush, recording the within-path and why. A
     /// target whose boundary is gone is dropped.
     fn mark(&mut self, target: &RoutingTarget, kind: MarkKind) {
-        let Some(cell) = self
-            .boundaries
-            .get(target.boundary())
-            .and_then(Weak::upgrade)
-        else {
+        FramePhase::assert_can_mark(FramePhase::Build);
+
+        let Some(cell) = self.lookup(target.boundary()) else {
             return;
         };
-
-        if !cell.is_dirty.get() {
-            cell.is_dirty.set(true);
-            self.dirty.push(cell.id.get());
-        }
 
         cell.suffixes
             .borrow_mut()
             .push((target.path().as_bytes().into(), kind));
-    }
 
-    /// Drains the marked boundaries into their owning `Rc`s, ordered shallowest-depth first so that
-    /// re-dispatching an outer boundary, which reconciles the boundaries nested in it, lets the inner ones
-    /// be skipped rather than rebuilt twice.
-    fn drain_rootmost_first(&mut self) -> Vec<Rc<BuildBoundaryCell>> {
-        let ids: Vec<BuildBoundaryId> = self.dirty.drain(..).collect();
-
-        let mut ordered: Vec<Rc<BuildBoundaryCell>> = ids
-            .into_iter()
-            .filter_map(|id| self.boundaries.get(id).and_then(Weak::upgrade))
-            .collect();
-
-        for cell in &ordered {
-            cell.clear_dirty();
-        }
-
-        ordered.sort_by_key(|cell| cell.depth);
-
-        ordered
+        self.reactor.mark(target.boundary().0, ());
     }
 
     /// Delivers `ctx` to the element at `path`, marking its boundary for rebuild if the element asks.
@@ -149,9 +131,20 @@ impl BuildState {
         layout: &LayoutPipeline,
         paint: &mut PaintPipeline,
     ) -> bool {
-        let ordered = state.borrow_mut().drain_rootmost_first();
+        let _phase = enter_phase(FramePhase::Build);
 
-        if ordered.is_empty() {
+        // Drain the marked boundaries rootmost-first, so re-dispatching an outer boundary, which
+        // reconciles the boundaries nested in it, lets the inner ones be skipped rather than rebuilt
+        // twice.
+        let mut scratch = {
+            let mut state = state.borrow_mut();
+            let mut scratch = std::mem::take(&mut state.scratch);
+            state.reactor.take_dirty((), &mut scratch);
+            scratch
+        };
+
+        if scratch.is_empty() {
+            state.borrow_mut().scratch = scratch;
             return false;
         }
 
@@ -159,12 +152,31 @@ impl BuildState {
         // views and repaint boundaries it crosses replace the scope as it descends.
         let detached = PaintScope::detached();
 
-        for cell in ordered {
+        for &id in &scratch {
+            // Resolve each boundary as the loop reaches it, not up front, so one removed by an earlier
+            // rebuild is skipped rather than rebuilt from a stale handle.
+            let Some(cell) = state.borrow().lookup(BuildBoundaryId(id)) else {
+                continue;
+            };
+
             cell.flush_rebuilds(scheduler, paint, layout, detached);
         }
 
+        let mut state = state.borrow_mut();
+        scratch.clear();
+        state.scratch = scratch;
+
         true
     }
+}
+
+/// Why a descendant was marked: a plain rebuild, or a change in a provided value it depends on. The
+/// kind selects which dispatch the flush delivers, so a dependency change runs the element's
+/// dependency-change hook.
+#[derive(Clone, Copy)]
+enum MarkKind {
+    Rebuild,
+    DependencyChanged,
 }
 
 /// The enclosing build boundary a subtree is reconciled under, threaded through the build walk so a
@@ -232,10 +244,6 @@ struct BuildBoundaryCell {
     /// tagged with why it was marked.
     suffixes: RefCell<Vec<(Box<[u8]>, MarkKind)>>,
 
-    /// Whether this boundary is currently in the registry's dirty list, guarding a double-mark from
-    /// queueing it twice.
-    is_dirty: Cell<bool>,
-
     /// The provided-value scope captured when this boundary was reconciled, so a targeted flush
     /// re-enters the subtree with the values an ancestor put in scope above it.
     provide: RefCell<ProvideScope>,
@@ -258,13 +266,16 @@ impl BuildBoundaryCell {
             child: RefCell::new(Box::new(())),
             render: RefCell::new(None),
             suffixes: RefCell::new(Vec::new()),
-            is_dirty: Cell::new(false),
             provide: RefCell::new(provide.clone()),
         });
 
         if let Some(state) = scope.state.upgrade() {
-            cell.id
-                .set(state.borrow_mut().boundaries.insert(Rc::downgrade(&cell)));
+            cell.id.set(BuildBoundaryId(
+                state
+                    .borrow_mut()
+                    .reactor
+                    .register(BuildNode(Rc::downgrade(&cell))),
+            ));
         }
 
         cell
@@ -286,10 +297,7 @@ impl Drop for BuildBoundaryCell {
             return;
         };
 
-        let mut state = state.borrow_mut();
-        let id = self.id.get();
-        state.boundaries.remove(id);
-        state.dirty.retain(|&dirty| dirty != id);
+        state.borrow_mut().reactor.remove(self.id.get().0);
     }
 }
 
@@ -303,10 +311,6 @@ impl BuildBoundaryCell {
 
         let mut child = self.child.borrow_mut();
         child.dyn_dispatch(&mut *render, within, action);
-    }
-
-    fn clear_dirty(&self) {
-        self.is_dirty.set(false);
     }
 
     fn flush_rebuilds(

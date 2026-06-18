@@ -60,7 +60,7 @@ impl<'a> LayoutCtx<'a> {
         content: BoundaryContent,
         paint: PaintScope,
     ) -> RegisteredLayoutBoundary {
-        self.layout.register_under(self.scope, content, paint)
+        self.layout.register_boundary(self.scope, content, paint)
     }
 
     /// A deferred handle to the boundary in force, for marking it from a reconcile that holds no context.

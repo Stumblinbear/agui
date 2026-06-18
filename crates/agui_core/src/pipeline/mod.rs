@@ -19,6 +19,10 @@ pub mod boundary;
 pub mod layout;
 pub mod paint;
 
+mod phase;
+
+pub(crate) use phase::{FramePhase, enter_phase};
+
 /// A render object shared between the layout and paint registries, so a node that is both a relayout
 /// and a repaint boundary is held in one place.
 pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
@@ -132,9 +136,7 @@ impl PipelineOwner {
     pub fn flush_paint(&mut self) {
         self.paint.drain_deferred();
 
-        self.paint.flush_compositing_bits();
-
-        self.paint.flush_paint();
+        self.paint.flush();
     }
 
     /// Captures the element tree under the root boundary as a diagnostics snapshot.

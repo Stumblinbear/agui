@@ -392,8 +392,7 @@ mod tests {
         PaintCtx::paint(&host, |ctx| render.paint(ctx, Offset::ZERO));
         assert_eq!(paints.get(), 1, "the subtree paints once");
 
-        pipeline.flush_compositing_bits();
-        pipeline.flush_paint();
+        pipeline.flush();
 
         // A partial-to-partial change pokes the retained layer's alpha in place, with no repaint.
         let next = Opacity::new(0.25).child(Counter {

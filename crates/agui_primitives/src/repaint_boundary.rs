@@ -449,8 +449,7 @@ mod tests {
             BoxConstraints::new(0, 100, 0, 100),
         );
 
-        pipeline.flush_compositing_bits();
-        pipeline.flush_paint();
+        pipeline.flush();
         let _ = Compositor::compose(&layer);
         assert_eq!(inner_paints.get(), 1);
 
@@ -462,8 +461,7 @@ mod tests {
             widget.update(&mut element, &mut render, ctx);
         });
 
-        pipeline.flush_compositing_bits();
-        pipeline.flush_paint();
+        pipeline.flush();
         let _ = Compositor::compose(&layer);
 
         assert_eq!(

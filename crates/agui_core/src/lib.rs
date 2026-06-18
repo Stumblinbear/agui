@@ -18,6 +18,7 @@ pub mod key;
 pub mod paint;
 pub mod pipeline;
 pub mod provide;
+pub mod reactor;
 pub mod render_object;
 pub mod scheduling;
 pub mod stateful;

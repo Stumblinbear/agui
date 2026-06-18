@@ -706,7 +706,11 @@ mod tests {
         let layer = LayerHandle::new(OffsetLayer::new());
         let (mut paint, paint_boundary) = PaintPipeline::new(Rc::clone(&content), layer);
         let layout = LayoutPipeline::default();
-        let layout_boundary = layout.register_root(Rc::clone(&content), paint_boundary.scope());
+        let layout_boundary = layout.register_boundary(
+            LayoutScope::detached(),
+            Rc::clone(&content),
+            paint_boundary.scope(),
+        );
         {
             let scope = paint_boundary.scope();
             let mut ctx = MountCtx::new(&layout, &mut paint, &scope);
