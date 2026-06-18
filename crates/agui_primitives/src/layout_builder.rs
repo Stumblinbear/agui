@@ -396,9 +396,11 @@ mod tests {
     use std::cell::Cell;
 
     use agui_core::{
-        element::BuildScope,
         paint::compositing::{LayerHandle, OffsetLayer},
-        pipeline::{BoundaryContent, PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
+        pipeline::{
+            BoundaryContent, PipelineOwner, build::BuildScope, layout::LayoutPipeline,
+            paint::PaintPipeline,
+        },
         prelude::{element::*, render_object::*},
         provide::ProvideScope,
         test_harness::TestCtx,

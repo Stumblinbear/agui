@@ -115,10 +115,12 @@ mod tests {
     use crate::{
         context::{Dispatch, LayoutCtx, MountCtx, PaintCtx},
         diagnostics::{Diagnostics, DiagnosticsNodeBuilder},
-        element::{Element, LeafElement, RebuildBoundary, RoutingPath, RoutingTarget},
+        element::{Element, LeafElement, RoutingPath, RoutingTarget},
         geometry::{Offset, Size},
         input::hit_test::{HitTest, HitTestResult},
-        pipeline::{PipelineOwner, layout::LayoutPipeline, paint::PaintPipeline},
+        pipeline::{
+            PipelineOwner, build::RebuildBoundary, layout::LayoutPipeline, paint::PaintPipeline,
+        },
         prelude::{element::UpdateCtx, render_object::LayoutScope},
         provide::Provide,
         render_object::{

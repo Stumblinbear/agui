@@ -2,8 +2,9 @@ use std::{any::Any, future::Future, rc::Rc};
 
 use crate::{
     context::{MountCtx, TaskCtx},
-    element::{BuildScope, RoutingId, RoutingTarget},
+    element::{RoutingId, RoutingTarget},
     pipeline::{
+        build::BuildScope,
         layout::{LayoutPipeline, LayoutScope},
         paint::{PaintPipeline, PaintScope},
     },

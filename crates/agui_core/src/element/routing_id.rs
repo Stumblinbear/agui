@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::element::BuildBoundaryId;
+use crate::pipeline::build::BuildBoundaryId;
 
 /// Addresses one dispatch destination of a routing widget.
 ///
@@ -185,7 +185,7 @@ impl RoutingTarget {
 
 #[cfg(test)]
 mod tests {
-    use crate::element::BuildBoundaryId;
+    use crate::pipeline::build::BuildBoundaryId;
 
     use super::{RoutingId, RoutingPath, RoutingTarget};
 

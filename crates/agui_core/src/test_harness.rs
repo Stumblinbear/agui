@@ -8,9 +8,10 @@ use std::{
 
 use crate::{
     context::{LayoutCtx, UpdateCtx},
-    element::{BuildScope, LeafElement},
+    element::LeafElement,
     pipeline::{
         PipelineOwner,
+        build::BuildScope,
         layout::{LayoutPipeline, LayoutScope},
         paint::{PaintPipeline, PaintScope},
     },

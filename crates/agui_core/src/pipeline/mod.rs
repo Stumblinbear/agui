@@ -3,8 +3,9 @@ use std::{any::Any, cell::RefCell, rc::Rc};
 use crate::{
     context::{MessageCtx, MountCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{BuildBoundaryElement, BuildBoundaryId, BuildState, RoutingTarget},
+    element::RoutingTarget,
     pipeline::{
+        build::{BuildBoundaryElement, BuildBoundaryId, BuildState},
         layout::LayoutPipeline,
         paint::{PaintPipeline, PaintScope},
     },
@@ -16,6 +17,7 @@ use crate::{
 };
 
 pub mod boundary;
+pub mod build;
 pub mod layout;
 pub mod paint;
 

@@ -241,8 +241,11 @@ mod tests {
 
     use crate::{
         context::{Dispatch, MessageCtx, UpdateCtx},
-        element::{BuildBoundaryId, Element, RebuildBoundary, RoutingPath, RoutingTarget},
-        pipeline::PipelineOwner,
+        element::{Element, RoutingPath, RoutingTarget},
+        pipeline::{
+            PipelineOwner,
+            build::{BuildBoundaryId, RebuildBoundary},
+        },
         provide::ProvideScope,
         test_fixtures::{Leaf, Transparent},
         test_harness::TestCtx,
