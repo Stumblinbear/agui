@@ -10,3 +10,4 @@
 pub mod diagnostics;
 pub mod key;
 pub mod reactor;
+pub mod tree;
