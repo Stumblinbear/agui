@@ -4,7 +4,11 @@ use bon::Builder;
 
 pub use agui_core::key::{AnyKeyable, Keyable};
 
-use crate::{context::UpdateCtx, render_object::box_layout::RenderBox, widget::Widget};
+use crate::{
+    context::{CreateCtx, UpdateCtx},
+    render_object::box_layout::RenderBox,
+    widget::Widget,
+};
 
 #[derive(Builder, Debug)]
 #[builder(start_fn = value)]
@@ -33,17 +37,12 @@ where
 
     type Render = Child::Render;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         self.child.create(ctx)
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        self.child.update(element, render_object, ctx);
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        self.child.update(ctx, element);
     }
 
     fn key(&self) -> Option<&dyn AnyKeyable> {

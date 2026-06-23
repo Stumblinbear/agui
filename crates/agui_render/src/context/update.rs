@@ -1,219 +1,225 @@
-use std::{any::Any, future::Future, rc::Rc};
+use std::any::Any;
+use std::future::Future;
+use std::ptr::NonNull;
+use std::rc::Rc;
 
-use crate::{
-    context::{MountCtx, TaskCtx},
-    element::{RoutingId, RoutingTarget},
-    pipeline::{
-        build::BuildScope,
-        layout::{LayoutPipeline, LayoutScope},
-        paint::{PaintPipeline, PaintScope},
-    },
-    provide::{ProvideCell, ProvideScope},
-    render_object::RenderObject,
-    scheduling::{TaskHandle, TaskScheduler},
-};
+use agui_core::tree::{Cursor, NodeContainer, NodeHandle};
 
+use crate::context::{BuildCtx, CreateCtx, TaskCtx};
+use crate::element::Element;
+use crate::pipeline::build_tree::{Build, BuildQueue, run};
+use crate::pipeline::render_pipeline::{LayoutScope, PaintScope, RenderPipeline};
+use crate::provide::ProvideScope;
+use crate::render_object::node::MountedChild;
+use crate::scheduling::{TaskHandle, TaskScheduler};
+
+/// The context passed to an element during a cursor-bearing lifecycle hook: mount, unmount, rebuild, or a
+/// dependency change. It carries a cursor to edit the element's children, the values in scope, the dirty
+/// set, and the scheduler the element spawns tasks on.
 pub struct UpdateCtx<'a> {
+    cursor: Cursor<'a, Build>,
+    provide: ProvideScope,
+    queue: &'a mut BuildQueue,
+    pipeline: &'a RenderPipeline,
     scheduler: &'a mut dyn TaskScheduler,
-
-    routing_path: &'a mut Vec<u8>,
-
-    provide_scope: &'a ProvideScope,
-    build_scope: &'a BuildScope,
-
-    layout: &'a LayoutPipeline,
-    paint: &'a mut PaintPipeline,
-    paint_scope: &'a PaintScope,
 }
 
 impl<'a> UpdateCtx<'a> {
+    /// Wraps a cursor positioned at an element with the scope it builds under, the dirty set, the render
+    /// pipeline, and the task scheduler. The driver builds one to mount the root or to dispatch a rebuild to
+    /// an element by handle.
     pub fn new(
+        cursor: Cursor<'a, Build>,
+        provide: ProvideScope,
+        queue: &'a mut BuildQueue,
+        pipeline: &'a RenderPipeline,
         scheduler: &'a mut dyn TaskScheduler,
-        routing_path: &'a mut Vec<u8>,
-        provide_scope: &'a ProvideScope,
-        build_scope: &'a BuildScope,
-        layout: &'a LayoutPipeline,
-        paint: &'a mut PaintPipeline,
-        paint_scope: &'a PaintScope,
     ) -> Self {
         Self {
+            cursor,
+            provide,
+            queue,
+            pipeline,
             scheduler,
-
-            routing_path,
-
-            provide_scope,
-            build_scope,
-
-            layout,
-            paint,
-            paint_scope,
         }
     }
 
-    /// The target that addresses the current point in the build walk: its boundary and the ids within it.
-    pub fn routing_target(&self) -> RoutingTarget {
-        // The accumulator only ever holds whole encoded ids, so it is well-formed by construction.
-        RoutingTarget::new_unchecked(
-            self.build_scope.boundary().unwrap_or_default(),
-            self.routing_path.clone(),
-        )
+    /// Marks `scope`'s relayout boundary for re-layout on the next frame, as a reconcile does when it changes
+    /// a layout-affecting property of a render object.
+    pub fn mark_needs_layout(&self, scope: LayoutScope) {
+        self.pipeline.mark_needs_layout(scope);
     }
 
-    pub fn provide_scope(&self) -> &ProvideScope {
-        self.provide_scope
+    /// Marks `scope`'s repaint boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
+        self.pipeline.mark_needs_paint(scope);
     }
 
-    /// Reads the nearest provided value of type `T`, recording this element as a dependent so a later
-    /// change to that value rebuilds it with its dependency-change hook run.
-    pub fn depend_on_provided<T>(&self) -> Option<Rc<T>>
-    where
-        T: Any,
-    {
-        self.provide_scope.get_and_depend(&self.routing_target())
-    }
-
-    /// Marks the element at `target` for a dependency-change rebuild on the next flush. A [`Provide`]
-    /// calls this for each reader of a value it changed.
+    /// Queues the element at `dependent` to rebuild on the next flush, running its dependency-change hook
+    /// first. A [`Provide`] calls this for each reader of a value it changed.
     ///
     /// [`Provide`]: crate::provide::Provide
-    pub(crate) fn mark_dependency_changed(&self, target: &RoutingTarget) {
-        self.build_scope.mark_dependency_changed(target);
+    pub(crate) fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
+        self.queue.mark_dependency_changed(dependent);
     }
 
-    /// An owned scheduler handle that outlives this build.
-    pub fn deferred_scheduler(&self) -> Box<dyn TaskScheduler> {
-        self.scheduler.deferred()
+    /// This element's handle.
+    pub fn handle(&self) -> NodeHandle {
+        self.cursor.handle()
     }
 
-    /// Spawn a task tied to this element. `func` receives a [`TaskCtx`] it can use to post messages
-    /// back to this element.
+    /// Spawns a task tied to this element. `func` receives a [`TaskCtx`] it can use to post a message back to
+    /// this element, delivered on the next event drain. Hold the returned [`TaskHandle`] for as long as the
+    /// task should run; dropping it cancels the task.
     pub fn spawn<F, Fut>(&mut self, func: F) -> Result<TaskHandle, Box<dyn std::error::Error>>
     where
         F: FnOnce(TaskCtx) -> Fut + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        let task_ctx = TaskCtx::new(self.scheduler.event_tx(), self.routing_target());
-
+        let task_ctx = TaskCtx::new(self.scheduler.event_tx(), self.cursor.handle());
         self.scheduler.spawn(Box::pin(func(task_ctx)))
     }
 
-    pub fn with_routing_id<T>(
+    /// An owned scheduler handle that outlives this build, for spawning a task once the cursor is gone, such
+    /// as from a layout-time builder.
+    pub fn deferred_scheduler(&self) -> Box<dyn TaskScheduler> {
+        self.scheduler.deferred()
+    }
+
+    /// Re-bases the cursor onto `this`, the element behind a heap indirection (a `Box<dyn AnyElement>`), so its
+    /// inline children register against its real address. The boxed-element boundary calls this before
+    /// forwarding a cursor-bearing hook.
+    ///
+    /// # Safety
+    /// As [`Cursor::rebase`](agui_core::tree::Cursor::rebase): `this` is the positioned element's address,
+    /// with whole-allocation provenance.
+    pub(crate) unsafe fn rebase(&mut self, this: NonNull<()>) {
+        // SAFETY: the caller upholds `Cursor::rebase`'s contract.
+        unsafe { self.cursor.rebase(this) };
+    }
+
+    /// The nearest provided value of type `T` in scope, or `None`.
+    pub fn get_provided<T: Any>(&self) -> Option<Rc<T>> {
+        self.provide.get::<T>()
+    }
+
+    /// Runs `f` with the restricted [`BuildCtx`] for a widget's `build`, which composes a child widget but
+    /// does not edit the tree (no cursor). The context lives only for the call.
+    pub fn build<R>(&self, f: impl FnOnce(&mut BuildCtx) -> R) -> R {
+        f(&mut BuildCtx::new(self.provide, self.cursor.handle()))
+    }
+
+    /// Runs `f` with a [`CreateCtx`] for grafting a fresh child during this reconcile: it carries the scope
+    /// and the pipeline, so a boundary built here registers its render tree, but registers no element-tree
+    /// node (mount does that). The context lives only for the call.
+    pub fn inflate<R>(&self, f: impl FnOnce(&mut CreateCtx) -> R) -> R {
+        f(&mut CreateCtx::new(self.provide, self.pipeline.clone()))
+    }
+
+    /// The values currently in scope.
+    pub fn provide(&self) -> ProvideScope {
+        self.provide
+    }
+
+    /// Runs `func` with `scope` in scope, restoring the previous scope afterward. A [`Provide`] extends the
+    /// scope for its child this way, and an element reached by a direct rebuild re-enters the scope it
+    /// captured at mount.
+    ///
+    /// [`Provide`]: crate::provide::Provide
+    pub fn with_scope<R>(
         &mut self,
-        id: RoutingId,
-        func: impl FnOnce(&mut UpdateCtx) -> T,
-    ) -> T {
-        let mark = self.routing_path.len();
-        id.encode(self.routing_path);
-
-        let ret = func(self);
-
-        self.routing_path.truncate(mark);
-
-        ret
+        scope: ProvideScope,
+        func: impl FnOnce(&mut UpdateCtx<'_>) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.provide, scope);
+        let result = func(self);
+        self.provide = previous;
+        result
     }
 
-    pub(crate) fn with_provided<T>(
+    /// Mounts `child` under this element and hands back an edge to its render object, now that it is registered
+    /// and pinned. A render-bearing element passes the result to its render object's `adopt_child`; a
+    /// transparent element ignores it.
+    ///
+    /// # Safety
+    /// `child` must be one of this element's own slots.
+    pub unsafe fn mount<S: NodeContainer>(
         &mut self,
-        cell: Rc<ProvideCell>,
-        func: impl FnOnce(&mut UpdateCtx) -> T,
-    ) -> T {
-        let scope = self.provide_scope.with_cell(cell);
+        child: &mut S,
+    ) -> MountedChild<<S::Node as Element>::Render>
+    where
+        S::Node: Element,
+    {
+        // SAFETY: the caller guarantees `child` is this element's, register's precondition; `run::<S::Node>`
+        // dispatches it, and its unmount deregisters it.
+        let cursor = unsafe { self.cursor.register(child, run::<S::Node>) };
+        child.node_mut().mount(&mut UpdateCtx {
+            cursor,
+            provide: self.provide,
+            queue: &mut *self.queue,
+            pipeline: self.pipeline,
+            scheduler: &mut *self.scheduler,
+        });
 
-        let mut update_ctx = UpdateCtx {
-            scheduler: self.scheduler,
-            routing_path: self.routing_path,
-
-            provide_scope: &scope,
-            build_scope: self.build_scope,
-
-            layout: self.layout,
-            paint: &mut *self.paint,
-            paint_scope: self.paint_scope,
-        };
-
-        func(&mut update_ctx)
+        // SAFETY: the child is registered and pinned now, so its render object is live and stays put, and the
+        // layout and paint walk reach it only through this edge.
+        unsafe { MountedChild::new(child.node_mut().render_object_mut()) }
     }
 
-    /// The build boundary the current subtree is reconciled under.
-    pub fn build_scope(&self) -> &BuildScope {
-        self.build_scope
+    /// Unmounts `child` and removes it from the tree. The caller still owns `child` and drops it to free it.
+    ///
+    /// # Safety
+    /// `child` must be one of this element's own slots.
+    pub unsafe fn unmount<S: NodeContainer>(&mut self, child: &mut S)
+    where
+        S::Node: Element,
+    {
+        let provide = self.provide;
+        let queue = &mut *self.queue;
+        let pipeline = self.pipeline;
+        let scheduler = &mut *self.scheduler;
+        // SAFETY: the caller guarantees `child` is this element's, with_child's precondition.
+        unsafe {
+            self.cursor.with_child(child, move |node, cursor| {
+                node.unmount(&mut UpdateCtx {
+                    cursor,
+                    provide,
+                    queue,
+                    pipeline,
+                    scheduler,
+                });
+            });
+        }
+        self.cursor.deregister(child);
     }
 
-    /// Runs `func` under `scope`, with the within-boundary routing path reset, so ids pushed inside address
-    /// relative to the entered boundary rather than to the parent.
-    pub fn with_build_scope<T>(
+    /// Reconciles an existing `child` in place: hands `func` the child and an [`UpdateCtx`] positioned at it.
+    ///
+    /// # Safety
+    /// `child` must be one of this element's own slots.
+    pub unsafe fn with_child<S: NodeContainer, R>(
         &mut self,
-        scope: &BuildScope,
-        func: impl FnOnce(&mut UpdateCtx) -> T,
-    ) -> T {
-        let mut routing_path = Vec::new();
-
-        let mut update_ctx = UpdateCtx {
-            scheduler: self.scheduler,
-            routing_path: &mut routing_path,
-            provide_scope: self.provide_scope,
-            build_scope: scope,
-
-            layout: self.layout,
-            paint: &mut *self.paint,
-            paint_scope: self.paint_scope,
-        };
-
-        func(&mut update_ctx)
-    }
-
-    /// Reconciles a subtree with `scope` as its enclosing boundary, restoring the previous scope
-    /// afterward. A boundary calls this so a render object grafted during the rebuild mounts under it.
-    pub fn with_paint_scope(&mut self, scope: &PaintScope, func: impl FnOnce(&mut UpdateCtx)) {
-        let mut update_ctx = UpdateCtx {
-            scheduler: self.scheduler,
-            routing_path: self.routing_path,
-
-            provide_scope: self.provide_scope,
-            build_scope: self.build_scope,
-
-            paint: &mut *self.paint,
-            layout: self.layout,
-            paint_scope: scope,
-        };
-
-        func(&mut update_ctx);
-    }
-
-    /// Marks `scope`'s boundary for re-layout on the next frame.
-    pub fn mark_needs_layout(&self, scope: LayoutScope) {
-        self.layout.mark_needs_layout(scope);
-    }
-
-    /// Marks `scope`'s boundary to be repainted on the next frame.
-    pub fn mark_needs_paint(&self, scope: PaintScope) {
-        self.paint.mark_needs_paint(scope);
-    }
-
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
-    /// repaint.
-    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        self.paint.mark_needs_compositing_bits_update(scope);
-    }
-
-    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
-    pub fn mark_needs_composite(&self, scope: PaintScope) {
-        self.paint.mark_needs_composite(scope);
-    }
-
-    pub fn mount<R: RenderObject + ?Sized>(&mut self, render_object: &mut R) {
-        render_object.mount(&mut MountCtx::new(
-            self.layout,
-            self.paint,
-            self.paint_scope,
-        ));
-    }
-
-    pub fn unmount<R: RenderObject + ?Sized>(&mut self, render_object: &mut R) {
-        render_object.unmount(&mut MountCtx::new(
-            self.layout,
-            self.paint,
-            self.paint_scope,
-        ));
+        child: &mut S,
+        func: impl FnOnce(&mut S::Node, &mut UpdateCtx<'_>) -> R,
+    ) -> R {
+        let provide = self.provide;
+        let queue = &mut *self.queue;
+        let pipeline = self.pipeline;
+        let scheduler = &mut *self.scheduler;
+        // SAFETY: the caller guarantees `child` is this element's, with_child's precondition.
+        unsafe {
+            self.cursor.with_child(child, move |child_element, cursor| {
+                func(
+                    child_element,
+                    &mut UpdateCtx {
+                        cursor,
+                        provide,
+                        queue,
+                        pipeline,
+                        scheduler,
+                    },
+                )
+            })
+        }
     }
 }

@@ -5,8 +5,14 @@ use crate::{
     paint::{
         Canvas,
         command::PaintCommand,
-        compositing::{ContainerLayer, LayerHandle, PictureLayer, PositionedLayer, TransformLayer},
+        compositing::{
+            ContainerLayer, LayerHandle, OffsetLayer, PictureLayer, PositionedLayer, TransformLayer,
+        },
         scene::{Scene, SceneCapacity},
+    },
+    pipeline::{
+        BoundaryContent,
+        render_pipeline::{DeferredPaintScope, PaintBoundaryHandle, PaintScope, RenderPipeline},
     },
 };
 
@@ -32,22 +38,34 @@ pub struct PaintCtx<'a> {
     picture: Scene,
     /// The capacity budget shared with any nested context of the same paint.
     budget: &'a mut PaintBudget,
+    /// The boundary registry, to register a repaint boundary discovered during paint and to mark one.
+    pipeline: &'a RenderPipeline,
+    /// The repaint boundary this paint is drawing into. A node stores it to repaint that boundary when its
+    /// painting goes stale, and forwards it to the children it paints.
+    scope: PaintScope,
 }
 
 impl PaintCtx<'_> {
-    /// Paints `build` into `root`.
-    pub fn paint(root: &LayerHandle<impl ContainerLayer>, build: impl FnOnce(&mut PaintCtx)) {
-        Self::paint_with_capacity(root, SceneCapacity::default(), build);
+    /// Paints `build` into `root` as the content of repaint boundary `scope`, against `pipeline`.
+    pub fn paint(
+        root: &LayerHandle<impl ContainerLayer>,
+        pipeline: &RenderPipeline,
+        scope: PaintScope,
+        build: impl FnOnce(&mut PaintCtx),
+    ) {
+        Self::paint_with_capacity(root, SceneCapacity::default(), pipeline, scope, build);
     }
 
-    /// Paints `build` into `root`, sizing the recording buffers from `capacity`, and returns the
-    /// lengths actually recorded.
+    /// Paints `build` into `root` as the content of repaint boundary `scope`, sizing the recording buffers
+    /// from `capacity`, and returns the lengths recorded.
     ///
     /// A caller that repaints the same content passes the lengths returned by the previous paint,
     /// so a recording of similar size fills pre-sized buffers instead of growing them.
     pub fn paint_with_capacity(
         root: &LayerHandle<impl ContainerLayer>,
         capacity: SceneCapacity,
+        pipeline: &RenderPipeline,
+        scope: PaintScope,
         build: impl FnOnce(&mut PaintCtx),
     ) -> SceneCapacity {
         let mut root = root.borrow_mut();
@@ -61,6 +79,8 @@ impl PaintCtx<'_> {
             container: &mut *root,
             picture: Scene::new(),
             budget: &mut budget,
+            pipeline,
+            scope,
         };
 
         build(&mut ctx);
@@ -100,6 +120,8 @@ impl PaintCtx<'_> {
                     container: &mut *guard,
                     picture: Scene::new(),
                     budget: &mut *self.budget,
+                    pipeline: self.pipeline,
+                    scope: self.scope,
                 };
 
                 f(&mut ctx);
@@ -138,6 +160,8 @@ impl PaintCtx<'_> {
                 container: &mut *guard,
                 picture: Scene::new(),
                 budget: &mut *self.budget,
+                pipeline: self.pipeline,
+                scope: self.scope,
             };
             paint_into(&mut ctx);
             ctx.flush();
@@ -157,6 +181,47 @@ impl PaintCtx<'_> {
 
         layer.borrow_mut().set_offset(offset);
         self.container.append(layer.into());
+    }
+
+    /// The repaint boundary this paint is drawing into. A node forwards it to the children it paints and
+    /// stores it to repaint that boundary when its own painting goes stale.
+    pub fn scope(&self) -> PaintScope {
+        self.scope
+    }
+
+    /// Registers `content` as a repaint boundary nested under the boundary in force, painting into `layer`,
+    /// and returns the handle that owns and marks it. A node that becomes a repaint boundary registers itself
+    /// this way during paint, then embeds `layer` with [`add_layer`](Self::add_layer); the driver paints the
+    /// boundary's content into `layer` on its own pass.
+    pub fn register_paint_boundary(
+        &self,
+        content: BoundaryContent,
+        layer: LayerHandle<OffsetLayer>,
+    ) -> PaintBoundaryHandle {
+        self.pipeline
+            .register_paint_boundary(self.scope, content, layer)
+    }
+
+    /// A deferred handle to the boundary in force, for marking it from a per-frame animation callback that
+    /// holds no context.
+    pub fn deferred_paint_scope(&self) -> DeferredPaintScope {
+        self.pipeline.deferred_paint_scope(self.scope)
+    }
+
+    /// Marks `scope`'s boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
+        self.pipeline.mark_needs_paint(scope);
+    }
+
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        self.pipeline.mark_needs_compositing_bits_update(scope);
+    }
+
+    /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
+    pub fn mark_needs_composite(&self) {
+        self.pipeline.mark_needs_composite();
     }
 
     /// Appends the flat drawing accumulated so far as a [`PictureLayer`], then starts a fresh picture.
@@ -195,13 +260,38 @@ mod tests {
         LayerHandle::new(OffsetLayer::new())
     }
 
+    // Paints `build` into `root` against a throwaway pipeline and a detached scope; these tests exercise
+    // drawing and layering, not boundary registration.
+    fn paint(root: &LayerHandle<OffsetLayer>, build: impl FnOnce(&mut PaintCtx)) {
+        PaintCtx::paint(
+            root,
+            &RenderPipeline::default(),
+            PaintScope::detached(),
+            build,
+        );
+    }
+
+    fn paint_with_capacity(
+        root: &LayerHandle<OffsetLayer>,
+        capacity: SceneCapacity,
+        build: impl FnOnce(&mut PaintCtx),
+    ) -> SceneCapacity {
+        PaintCtx::paint_with_capacity(
+            root,
+            capacity,
+            &RenderPipeline::default(),
+            PaintScope::detached(),
+            build,
+        )
+    }
+
     fn fill(ctx: &mut PaintCtx) {
         let mut canvas = ctx.canvas();
         let brush = canvas.brush(Color::BLACK);
         canvas.fill(Fill::NonZero, brush, &Rect::from(Size::new(1.0, 1.0)));
     }
 
-    /// A pre-built retained layer holding a single fill, for [`add_layer`](PaintContext::add_layer).
+    /// A pre-built retained layer holding a single fill, for [`add_layer`](PaintCtx::add_layer).
     fn fill_layer() -> LayerHandle<OffsetLayer> {
         let picture = Canvas::record(|canvas| {
             let brush = canvas.brush(Color::BLACK);
@@ -237,7 +327,7 @@ mod tests {
     #[test]
     fn flat_drawing_seals_into_one_picture() {
         let root = root();
-        PaintCtx::paint(&root, fill);
+        paint(&root, fill);
 
         assert_eq!(fill_transforms(&root), vec![Affine::IDENTITY]);
     }
@@ -245,7 +335,7 @@ mod tests {
     #[test]
     fn a_flat_transform_places_drawing_under_it() {
         let root = root();
-        PaintCtx::paint(&root, |ctx| {
+        paint(&root, |ctx| {
             ctx.with_transform(false, Affine::translate((5.0, 7.0)), fill);
         });
 
@@ -255,7 +345,7 @@ mod tests {
     #[test]
     fn a_pushed_layer_carries_its_content() {
         let root = root();
-        PaintCtx::paint(&root, |ctx| {
+        paint(&root, |ctx| {
             ctx.push_layer(LayerHandle::new(OffsetLayer::new()), Offset::ZERO, fill);
         });
 
@@ -267,7 +357,7 @@ mod tests {
     #[test]
     fn a_layer_added_at_an_offset_is_positioned_there() {
         let root = root();
-        PaintCtx::paint(&root, |ctx| {
+        paint(&root, |ctx| {
             ctx.add_layer(fill_layer(), Offset::new(3.0, 0.0));
         });
 
@@ -278,18 +368,18 @@ mod tests {
     /// layer, and a repaint primed with it records the same content.
     #[test]
     fn a_repaint_primed_with_the_recorded_capacity_paints_identically() {
-        let paint = |ctx: &mut PaintCtx| {
+        let content = |ctx: &mut PaintCtx| {
             fill(ctx);
             ctx.push_layer(LayerHandle::new(OffsetLayer::new()), Offset::ZERO, fill);
             ctx.with_transform(false, Affine::translate((5.0, 0.0)), fill);
         };
 
         let first_root = root();
-        let recorded = PaintCtx::paint_with_capacity(&first_root, SceneCapacity::default(), paint);
+        let recorded = paint_with_capacity(&first_root, SceneCapacity::default(), content);
         assert_ne!(recorded, SceneCapacity::default());
 
         let second_root = root();
-        let second = PaintCtx::paint_with_capacity(&second_root, recorded, paint);
+        let second = paint_with_capacity(&second_root, recorded, content);
 
         assert_eq!(second, recorded);
         assert_eq!(fill_transforms(&second_root), fill_transforms(&first_root));
@@ -300,7 +390,7 @@ mod tests {
     #[test]
     fn drawing_resumes_under_the_same_bracket_after_a_layer() {
         let root = root();
-        PaintCtx::paint(&root, |ctx| {
+        paint(&root, |ctx| {
             ctx.with_transform(true, Affine::translate((2.0, 0.0)), |ctx| {
                 fill(ctx);
                 ctx.add_layer(fill_layer(), Offset::ZERO);

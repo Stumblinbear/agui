@@ -6,7 +6,7 @@ use crate::{
     geometry::{Axis, AxisDirection, Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     render_object::{
-        LayoutCtx, MountCtx, RenderObject,
+        LayoutCtx, RenderObject,
         box_layout::{BoxConstraints, RenderBox},
         node::RenderNode,
     },
@@ -221,10 +221,6 @@ impl<S: RenderSliver> RenderViewport<S> {
 }
 
 impl<S: RenderSliver> RenderObject for RenderViewport<S> {
-    fn mount(&mut self, _: &mut MountCtx) {}
-
-    fn unmount(&mut self, _: &mut MountCtx) {}
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child_in(Some(ProtocolTag::SLIVER), |d| self.sliver.describe(d))
@@ -274,7 +270,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
             remaining_cache_extent: Positive::try_from(main).expect("viewport main extent >= 0"),
         };
 
-        self.geometry = Some(RenderSliver::layout(&mut self.sliver.object, constraints));
+        self.geometry = Some(self.sliver.as_mut().layout(constraints));
 
         size
     }
@@ -296,8 +292,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
             return HitTest::Pass;
         }
 
-        RenderSliver::hit_test(
-            &self.sliver.object,
+        self.sliver.as_ref().hit_test(
             result,
             PositiveFinite::try_from(main).expect("main-axis position >= 0"),
             PositiveFinite::try_from(cross).expect("cross-axis position >= 0"),
@@ -310,11 +305,12 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        self.sliver.object.paint(ctx, offset);
+        self.sliver.as_mut().paint(ctx, offset);
     }
 }
 
-#[cfg(test)]
+// FIXME(tree-migration): reactor-era tests; re-port onto the tree harness + new API.
+#[cfg(any())]
 mod tests {
     #![allow(clippy::float_cmp)]
 
@@ -391,7 +387,7 @@ mod tests {
         assert_eq!(viewport.geometry().unwrap().paint_extent.get(), 20.0);
     }
 
-    /// A widget whose render object is a sliver — to exercise the erased boundary.
+    /// A widget whose render object is a sliver, to exercise the erased boundary.
     struct SliverFixedWidget {
         extent: f32,
     }

@@ -1,13 +1,13 @@
 use std::{any::Any, future::Future, pin::Pin, sync::mpsc};
 
-use crate::element::RoutingTarget;
+use agui_core::tree::NodeHandle;
 
-/// A message addressed to an element, queued on the event channel and routed to that element on the
-/// next drain.
-pub type TaskEventMessage = (RoutingTarget, Box<dyn Any>);
+/// A message addressed to an element by handle, queued on the event channel and delivered to that element
+/// on the next drain.
+pub type TaskEventMessage = (NodeHandle, Box<dyn Any>);
 
-/// Sender half of the event channel, cloned into a [`TaskCtx`] so a running task can post a message
-/// back to its element.
+/// Sender half of the event channel, cloned into a [`TaskCtx`](crate::context::TaskCtx) so a running task
+/// can post a message back to its element.
 pub type EventSender = mpsc::Sender<TaskEventMessage>;
 
 pub type TaskFuture = Pin<Box<dyn Future<Output = ()>>>;

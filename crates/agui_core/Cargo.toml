@@ -13,3 +13,6 @@ readme = "README.md"
 
 [dependencies]
 slotmap.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true

@@ -1,7 +1,7 @@
-use crate::{
-    context::{LayoutCtx, MountCtx},
-    diagnostics::{Diagnostics, DiagnosticsNode},
-};
+use crate::diagnostics::{Diagnostics, DiagnosticsNode};
+
+// Render-object modules reach the layout context through this module.
+pub(crate) use crate::context::LayoutCtx;
 
 mod any_render_object;
 pub mod box_layout;
@@ -19,18 +19,10 @@ pub use children::*;
 /// Cartesian coordinates, and [`RenderSliver`](crate::render_object::sliver::RenderSliver), which
 /// lays out along a scroll axis.
 pub trait RenderObject: 'static {
-    fn mount(&mut self, ctx: &mut MountCtx);
-
-    fn unmount(&mut self, ctx: &mut MountCtx);
-
     /// Captures this render object's subtree as a diagnostics snapshot.
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
 }
 
-impl RenderObject for () {
-    fn mount(&mut self, _: &mut MountCtx) {}
-
-    fn unmount(&mut self, _: &mut MountCtx) {}
-}
+impl RenderObject for () {}

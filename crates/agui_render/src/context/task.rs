@@ -1,29 +1,24 @@
 use std::any::Any;
 
-use crate::{element::RoutingTarget, scheduling::EventSender};
+use agui_core::tree::NodeHandle;
 
+use crate::scheduling::EventSender;
+
+/// The context a spawned task receives, for posting a message back to the element that spawned it.
 pub struct TaskCtx {
     event_tx: EventSender,
-    routing_target: RoutingTarget,
+    target: NodeHandle,
 }
 
 impl TaskCtx {
-    pub fn new(event_tx: EventSender, routing_target: RoutingTarget) -> Self {
-        Self {
-            event_tx,
-            routing_target,
-        }
+    pub(crate) fn new(event_tx: EventSender, target: NodeHandle) -> Self {
+        Self { event_tx, target }
     }
 
-    /// Post a message back to the element that spawned this task. It is delivered on the next event
-    /// drain and routed to that element.
-    pub fn send<M>(&self, message: M)
-    where
-        M: Any,
-    {
-        // A closed channel means the tree is gone; dropping the message is the right thing.
-        let _ = self
-            .event_tx
-            .send((self.routing_target.clone(), Box::new(message)));
+    /// Posts `message` back to the element that spawned this task, delivered on the next event drain. A
+    /// message to an element that has since been removed is dropped.
+    pub fn send<M: Any>(&self, message: M) {
+        // A closed channel means the tree is gone, so dropping the message is correct.
+        let _ = self.event_tx.send((self.target, Box::new(message)));
     }
 }

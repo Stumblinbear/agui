@@ -8,12 +8,12 @@ use peniko::{
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
-    context::{LayoutCtx, MountCtx, PaintCtx},
+    context::{LayoutCtx, PaintCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     paint::{Canvas, command::GlyphInstance},
-    pipeline::{layout::DeferredLayoutScope, paint::PaintScope},
+    pipeline::render_pipeline::DeferredLayoutScope,
     render_object::{
         RenderObject,
         box_layout::{BoxConstraints, RenderBox},
@@ -59,7 +59,7 @@ pub struct RenderParagraph<C = ()> {
     memo: RefCell<QueryMemo>,
 
     layout_scope: DeferredLayoutScope,
-    paint_scope: PaintScope,
+    // paint_scope: PaintScope, // re-add when paint-scope capture re-homes to paint time
 }
 
 impl<C> RenderParagraph<C> {
@@ -80,7 +80,7 @@ impl<C> RenderParagraph<C> {
             memo: RefCell::new(QueryMemo::default()),
 
             layout_scope: DeferredLayoutScope::detached(),
-            paint_scope: PaintScope::detached(),
+            // paint_scope: PaintScope::detached(),
         }
     }
 
@@ -182,20 +182,6 @@ impl<C: RenderBox> RenderParagraph<C> {
 }
 
 impl<C: RenderObject> RenderObject for RenderParagraph<C> {
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = *ctx.paint_scope();
-
-        for child in &mut self.children {
-            child.mount(ctx);
-        }
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        for child in &mut self.children {
-            child.unmount(ctx);
-        }
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("text", excerpt(&self.content.text))
@@ -481,7 +467,10 @@ fn paint_decoration(
     canvas.stroke(stroke, brush, &line);
 }
 
+// These tests shape real text through the platform font backend (DirectWrite on Windows), which Miri cannot
+// call, so the module is excluded under Miri.
 #[cfg(test)]
+#[cfg(not(miri))]
 mod tests {
     use peniko::Color;
 
@@ -491,20 +480,29 @@ mod tests {
             compositing::{Compositor, LayerHandle, OffsetLayer},
             scene::Scene,
         },
-        pipeline::{
-            layout::{LayoutPipeline, LayoutScope},
-            paint::PaintPipeline,
-        },
+        pipeline::render_pipeline::{LayoutScope, PaintScope, RenderPipeline},
         prelude::render_object::{InlineSpan, TextSpan},
         text::{Fonts, TextBaseline, TextStyle},
     };
 
     use super::*;
 
+    /// Lays `paragraph` out under a detached scope, returning the size it took.
+    fn layout(paragraph: &mut RenderParagraph, constraints: BoxConstraints) -> Size {
+        let pipeline = RenderPipeline::default();
+        paragraph.layout(
+            &mut LayoutCtx::new(&pipeline, LayoutScope::detached()),
+            constraints,
+        )
+    }
+
     /// Paints `paragraph` and returns the flattened scene, for inspecting the recorded commands.
     fn paint_scene(paragraph: &mut RenderParagraph) -> Scene {
         let root = LayerHandle::new(OffsetLayer::new());
-        PaintCtx::paint(&root, |ctx| paragraph.paint(ctx, Offset::ZERO));
+        let pipeline = RenderPipeline::default();
+        PaintCtx::paint(&root, &pipeline, PaintScope::detached(), |ctx| {
+            paragraph.paint(ctx, Offset::ZERO);
+        });
         Compositor::compose(&root).rasterize()
     }
 
@@ -521,12 +519,7 @@ mod tests {
     /// A paragraph sized through a detached layout pass.
     fn shaped(content: ParagraphContent, constraints: BoxConstraints) -> RenderParagraph {
         let mut paragraph = with_fonts(content);
-        let layout = LayoutPipeline::default();
-        let mut paint = PaintPipeline::default();
-        paragraph.layout(
-            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
-            constraints,
-        );
+        layout(&mut paragraph, constraints);
         paragraph
     }
 
@@ -544,12 +537,7 @@ mod tests {
         let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
 
         let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
-        let layout = LayoutPipeline::default();
-        let mut paint = PaintPipeline::default();
-        let laid_out = paragraph.layout(
-            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
-            constraints,
-        );
+        let laid_out = layout(&mut paragraph, constraints);
 
         assert_eq!(paragraph.measure(constraints), laid_out);
     }
@@ -560,14 +548,8 @@ mod tests {
 
         let mut paragraph = with_fonts(styled("no prior layout", TextStyle::new().font_size(20.0)));
 
-        let layout = LayoutPipeline::default();
-        let mut paint = PaintPipeline::default();
-
         let measured = paragraph.measure(constraints);
-        let laid_out = paragraph.layout(
-            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
-            constraints,
-        );
+        let laid_out = layout(&mut paragraph, constraints);
         assert_eq!(measured, laid_out);
     }
 
@@ -577,14 +559,8 @@ mod tests {
 
         let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
 
-        let layout = LayoutPipeline::default();
-        let mut paint = PaintPipeline::default();
-
         let measured = paragraph.measure(constraints);
-        let laid_out = paragraph.layout(
-            &mut LayoutCtx::new(&layout, &mut paint, LayoutScope::detached()),
-            constraints,
-        );
+        let laid_out = layout(&mut paragraph, constraints);
 
         assert_eq!(laid_out, measured);
         assert!(laid_out.height.get() > 0.0, "the text occupies a line");

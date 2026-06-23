@@ -8,6 +8,6 @@
 #![warn(clippy::clone_on_ref_ptr)]
 
 pub mod diagnostics;
+pub mod dirty;
 pub mod key;
-pub mod reactor;
 pub mod tree;

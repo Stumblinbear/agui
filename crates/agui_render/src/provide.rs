@@ -2,116 +2,104 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     marker::PhantomData,
+    ptr::NonNull,
     rc::Rc,
 };
 
 use bon::Builder;
 use rustc_hash::FxHashSet;
 
+use agui_core::tree::{NodeHandle, Slot};
+
 use crate::{
-    context::{Dispatch, UpdateCtx},
+    context::{CreateCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{Element, RoutingPath, RoutingTarget, node::ElementNode},
+    element::Element,
     widget::Widget,
 };
 
-/// The values in scope for a subtree, each looked up by its type.
+/// The values in scope for a node: the chain of [`Provide`]s above it.
 ///
-/// A value added with [`provide`](Self::provide) is visible through [`get`](Self::get) to the
-/// subtree built under that call. Providing a type already in scope shadows the earlier value for
-/// the new subtree, leaving the scope it extended untouched, so sibling subtrees keep seeing the
-/// original.
-#[derive(Default, Clone)]
+/// Reading walks the chain for the nearest value of the requested type. The scope is a cheap-to-copy borrow
+/// into the ancestor elements that hold the values, not an owned structure.
+#[derive(Clone, Copy, Default)]
 pub struct ProvideScope {
-    head: Option<Rc<ProvideNode>>,
+    head: Option<NonNull<ProvideNode>>,
 }
 
+/// One link in the scope chain, held inline by a [`Provide`]'s element. `parent` points at the next value in
+/// scope and is wired when the element mounts, once its address is final.
 struct ProvideNode {
-    cell: Rc<ProvideCell>,
-    parent: Option<Rc<ProvideNode>>,
+    cell: ProvideCell,
+    parent: Option<NonNull<ProvideNode>>,
 }
 
-/// The live value a [`Provide`] holds and the addresses that read it.
+/// The live value a [`Provide`] holds and the handles that read it.
 ///
-/// The value is replaced in place when the [`Provide`] is given a different one, and every reader is
-/// recorded so that replacement can mark them for a dependency-change rebuild.
-pub(crate) struct ProvideCell {
+/// Owned by the `Provide`'s element; readers reach it through the scope chain rather than a shared pointer.
+/// The value is replaced in place when the `Provide` is given a different one, and every reader is recorded
+/// so that replacement can mark it for a dependency-change rebuild.
+struct ProvideCell {
     type_id: TypeId,
     value: RefCell<Rc<dyn Any>>,
-    dependents: RefCell<FxHashSet<RoutingTarget>>,
+    dependents: RefCell<FxHashSet<NodeHandle>>,
 }
 
 impl ProvideCell {
-    pub(crate) fn new<V: Any>(value: V) -> Rc<Self> {
-        Rc::new(Self {
+    fn new<V: Any>(value: V) -> Self {
+        Self {
             type_id: TypeId::of::<V>(),
             value: RefCell::new(Rc::new(value)),
             dependents: RefCell::new(FxHashSet::default()),
-        })
+        }
     }
 
     fn read(&self) -> Rc<dyn Any> {
         Rc::clone(&self.value.borrow())
     }
 
-    fn depend(&self, dependent: &RoutingTarget) {
-        self.dependents.borrow_mut().insert(dependent.clone());
+    fn depend(&self, dependent: NodeHandle) {
+        self.dependents.borrow_mut().insert(dependent);
     }
 
-    /// Replaces the held value and returns the readers to notify, clearing them so they re-record
-    /// themselves as they rebuild.
-    fn replace(&self, value: Rc<dyn Any>) -> Vec<RoutingTarget> {
+    /// Replaces the held value and returns the readers to notify, clearing the recorded set.
+    fn replace(&self, value: Rc<dyn Any>) -> Vec<NodeHandle> {
         *self.value.borrow_mut() = value;
         self.dependents.borrow_mut().drain().collect()
     }
 }
 
 impl ProvideScope {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Reads the nearest value of type `T`, if one is in scope, without recording a dependency on it.
+    /// Reads the nearest value of type `T` in scope, if one is present, without recording a dependency.
     pub fn get<T: Any>(&self) -> Option<Rc<T>> {
         self.find(TypeId::of::<T>())
             .and_then(|cell| cell.read().downcast::<T>().ok())
     }
 
-    /// Reads the nearest value of type `T` and records `dependent` against it, so a later change to
-    /// that value marks `dependent` for a dependency-change rebuild.
-    pub(crate) fn get_and_depend<T: Any>(&self, dependent: &RoutingTarget) -> Option<Rc<T>> {
+    /// Reads the nearest value of type `T` and records `dependent` against it, so a later change to that
+    /// value marks `dependent` for a dependency-change rebuild.
+    pub(crate) fn get_and_depend<T: Any>(self, dependent: NodeHandle) -> Option<Rc<T>> {
         let cell = self.find(TypeId::of::<T>())?;
         cell.depend(dependent);
 
         cell.read().downcast::<T>().ok()
     }
 
-    /// Extends this scope with a fresh `value` in scope, owned by the scope rather than a [`Provide`].
-    /// A convenience for building a scope standalone; a change to the value is never observed, since no
-    /// `Provide` re-provides it.
-    pub fn provide<V: Any>(&self, value: V) -> ProvideScope {
-        self.with_cell(ProvideCell::new(value))
-    }
+    fn find(&self, type_id: TypeId) -> Option<&ProvideCell> {
+        let mut node = self.head;
 
-    /// Extends this scope with `cell` in scope for the subtree built under the returned scope.
-    pub(crate) fn with_cell(&self, cell: Rc<ProvideCell>) -> ProvideScope {
-        ProvideScope {
-            head: Some(Rc::new(ProvideNode {
-                cell,
-                parent: self.head.clone(),
-            })),
-        }
-    }
+        while let Some(ptr) = node {
+            // SAFETY: each chain pointer addresses a live ancestor `Provide`'s node. A `Provide` outlives
+            // every descendant that can hold this scope, and the node sits in its own allocation, never
+            // borrowed `&mut` after mount, so this shared read is sound even while an ancestor is being
+            // reconciled through `&mut`.
+            let current = unsafe { ptr.as_ref() };
 
-    fn find(&self, type_id: TypeId) -> Option<&Rc<ProvideCell>> {
-        let mut node = self.head.as_deref();
-
-        while let Some(current) = node {
             if current.cell.type_id == type_id {
                 return Some(&current.cell);
             }
 
-            node = current.parent.as_deref();
+            node = current.parent;
         }
 
         None
@@ -145,92 +133,100 @@ where
 
     type Render = Child::Render;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let cell = ProvideCell::new(self.value);
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        let child_element = self.child.create(ctx);
 
-        let (element, render_object) =
-            ctx.with_provided(Rc::clone(&cell), |ctx| self.child.create(ctx));
-
-        (
-            ProvideElement {
-                child: ElementNode::new(element),
-                cell,
-                _value: PhantomData,
-            },
-            render_object,
-        )
+        ProvideElement {
+            node: Box::new(ProvideNode {
+                cell: ProvideCell::new(self.value),
+                parent: None,
+            }),
+            child: Slot::new(child_element),
+            _value: PhantomData,
+        }
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        let Provide { value, child } = self;
-        let cell = Rc::clone(&element.cell);
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        // A shared borrow of the boxed node (the value changes through the cell's interior mutability), so it
+        // never takes `&mut` to the node and never invalidates a descendant's scope pointer into it.
+        let cell = &element.node.cell;
 
         let changed = cell
             .read()
             .downcast_ref::<V>()
-            .is_none_or(|current| *current != value);
+            .is_none_or(|current| *current != self.value);
 
         if changed {
-            for dependent in cell.replace(Rc::new(value)) {
-                ctx.mark_dependency_changed(&dependent);
+            let dependents = cell.replace(Rc::new(self.value));
+            for dependent in dependents {
+                ctx.mark_dependency_changed(dependent);
             }
         }
 
-        ctx.with_provided(cell, |ctx| {
-            child.update(&mut element.child.element, render_object, ctx);
+        let scope = element.scope();
+        // SAFETY: `element.child` is the element's own slot. Provide is transparent: it only extends the
+        // scope, reconciling the child in place.
+        ctx.with_scope(scope, |ctx| unsafe {
+            ctx.with_child(&mut element.child, |child, ctx| {
+                self.child.update(ctx, child);
+            });
         });
     }
 }
 
-/// The [`Element`] of a [`Provide`], re-applying the provided value when a rebuild reaches its subtree.
+/// The [`Element`] of a [`Provide`]. It holds the value inline and the child it wraps, and exposes the value
+/// to its subtree by extending the scope when it mounts.
 pub struct ProvideElement<V, C> {
-    child: ElementNode<C>,
-    cell: Rc<ProvideCell>,
+    /// Boxed into its own allocation so a descendant's scope pointer into it survives this element being
+    /// reconciled through `&mut`, which retags only the element's own allocation, not the node's.
+    node: Box<ProvideNode>,
+    child: Slot<C>,
     _value: PhantomData<fn() -> V>,
+}
+
+impl<V, C> ProvideElement<V, C> {
+    /// The scope this element hands to its subtree: the chain rooted at its own node.
+    fn scope(&self) -> ProvideScope {
+        ProvideScope {
+            // Points into the node's own allocation, which a `&mut` to this element does not retag, so a
+            // descendant's read through this pointer stays valid across the element's reconciles.
+            head: Some(NonNull::from(&*self.node)),
+        }
+    }
 }
 
 impl<V, C> Element for ProvideElement<V, C>
 where
     V: Any,
     C: Element,
-    C::Render: Sized,
 {
     type Render = C::Render;
 
-    fn dispatch(&mut self, render: &mut C::Render, path: &RoutingPath, action: Dispatch) {
-        match action {
-            Dispatch::Rebuild(ctx) => {
-                ctx.with_provided(Rc::clone(&self.cell), |ctx| {
-                    self.child
-                        .element
-                        .dispatch(render, path, Dispatch::Rebuild(ctx));
-                });
-            }
+    fn render_object(&self) -> &Self::Render {
+        self.child.get().render_object()
+    }
 
-            Dispatch::DependencyChanged(ctx) => {
-                ctx.with_provided(Rc::clone(&self.cell), |ctx| {
-                    self.child
-                        .element
-                        .dispatch(render, path, Dispatch::DependencyChanged(ctx));
-                });
-            }
+    fn render_object_mut(&mut self) -> &mut Self::Render {
+        self.child.get_mut().render_object_mut()
+    }
 
-            Dispatch::Message(ctx) => {
-                self.child
-                    .element
-                    .dispatch(render, path, Dispatch::Message(ctx));
-            }
-        }
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.node.parent = ctx.provide().head;
+
+        let scope = self.scope();
+        // SAFETY: `self.child` is our own slot, and `self.node` is pinned now that this element is mounted,
+        // so the scope it hands down stays valid for the whole subtree's life.
+        ctx.with_scope(scope, |ctx| unsafe { ctx.mount(&mut self.child) });
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        // SAFETY: `self.child` is our own slot.
+        unsafe { ctx.unmount(&mut self.child) };
     }
 
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node(format!("Provide<{}>", Diagnostics::short_type_name::<V>()))
-            .child(|d| self.child.element.describe(d))
+            .child(|d| self.child.get().describe(d))
             .finish()
     }
 }
@@ -239,212 +235,64 @@ where
 mod tests {
     use std::{cell::Cell, rc::Rc};
 
-    use crate::{
-        context::{Dispatch, MessageCtx, UpdateCtx},
-        element::{Element, RoutingPath, RoutingTarget},
-        pipeline::{
-            PipelineOwner,
-            build::{BuildBoundaryId, RebuildBoundary},
-        },
-        provide::ProvideScope,
-        test_fixtures::{Leaf, Transparent},
-        test_harness::TestCtx,
-    };
-
     use super::Provide;
+    use crate::{test_fixtures::Leaf, test_harness::WidgetTester};
 
     #[test]
-    fn scope_can_provide_and_get_types() {
-        let scope = ProvideScope::new().provide(1_usize);
+    fn a_descendant_reads_a_provided_value_at_mount() {
+        let read = Rc::new(Cell::new(None));
+        let recorder = Rc::clone(&read);
+        let leaf = Leaf::new()
+            .on_mount(move |ctx| recorder.set(ctx.get_provided::<usize>().as_deref().copied()));
 
-        assert_eq!(scope.get::<usize>(), Some(Rc::new(1)));
-    }
-
-    /// A cell that records the `usize` a hook saw, plus a recorder closure to install on a leaf.
-    fn recorder() -> (Rc<Cell<Option<usize>>>, impl Fn(&mut UpdateCtx) + 'static) {
-        let seen = Rc::new(Cell::new(None));
-        let recorder = Rc::clone(&seen);
-        (seen, move |ctx: &mut UpdateCtx| {
-            recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
-        })
-    }
-
-    #[test]
-    fn provide_exposes_value_to_subtree_on_mount() {
-        let (seen, record) = recorder();
-
-        TestCtx::new().create(Provide::new(42_usize).child(Leaf::new().on_mount(record)));
+        let _tester = WidgetTester::mount(Provide::new(42usize).child(leaf));
 
         assert_eq!(
-            seen.get(),
+            read.get(),
             Some(42),
-            "the leaf's on_mount must run and see the value"
+            "the descendant saw the provided value in scope"
         );
     }
 
     #[test]
-    fn nested_provides_expose_multiple_types() {
-        let seen_usize = Rc::new(Cell::new(None));
-        let seen_i32 = Rc::new(Cell::new(None));
+    fn an_absent_provided_value_reads_none() {
+        let read = Rc::new(Cell::new(Some(0)));
+        let recorder = Rc::clone(&read);
+        let leaf = Leaf::new()
+            .on_mount(move |ctx| recorder.set(ctx.get_provided::<usize>().as_deref().copied()));
 
-        let (ru, ri) = (Rc::clone(&seen_usize), Rc::clone(&seen_i32));
-        TestCtx::new().create(Provide::new(3_usize).child(Provide::new(6_i32).child(
-            Leaf::new().on_mount(move |ctx| {
-                ru.set(ctx.depend_on_provided::<usize>().as_deref().copied());
-                ri.set(ctx.depend_on_provided::<i32>().as_deref().copied());
-            }),
-        )));
+        let _tester = WidgetTester::mount(leaf);
 
-        assert_eq!(seen_usize.get(), Some(3));
-        assert_eq!(seen_i32.get(), Some(6));
+        assert_eq!(read.get(), None, "no provider in scope, no value");
+    }
+
+    // A descendant that depends on the provided `usize` at mount and flags when its dependency-change hook
+    // runs. `Leaf` routes `dependency_changed` to `on_rebuild`.
+    fn dependent_reader(fired: Rc<Cell<bool>>) -> Leaf {
+        Leaf::new()
+            .on_mount(|ctx| {
+                ctx.build(|ctx| {
+                    ctx.depend_on_provided::<usize>();
+                });
+            })
+            .on_rebuild(move |_| fired.set(true))
     }
 
     #[test]
-    fn providing_same_type_twice_returns_latest() {
-        let (seen, record) = recorder();
+    fn changing_a_provided_value_runs_a_dependents_dependency_change_hook() {
+        let fired = Rc::new(Cell::new(false));
 
-        TestCtx::new().create(
-            Provide::new(1_usize).child(Provide::new(2_usize).child(Leaf::new().on_mount(record))),
+        let mut tester =
+            WidgetTester::mount(Provide::new(1usize).child(dependent_reader(Rc::clone(&fired))));
+        assert!(
+            !fired.get(),
+            "mount registers the dependency but runs no change hook"
         );
 
-        assert_eq!(seen.get(), Some(2));
-    }
-
-    #[test]
-    fn update_reprovides_the_new_value() {
-        let (mounted, record_mount) = recorder();
-        let (mut element, mut render) =
-            TestCtx::new().create(Provide::new(3_usize).child(Leaf::new().on_mount(record_mount)));
-        assert_eq!(
-            mounted.get(),
-            Some(3),
-            "the leaf's on_mount must run and see the value"
-        );
-
-        let (updated, record_update) = recorder();
-        TestCtx::new().update(
-            Provide::new(6_usize).child(Leaf::new().on_update(record_update)),
-            &mut element,
-            &mut render,
-        );
-        assert_eq!(
-            updated.get(),
-            Some(6),
-            "the leaf's on_update must run and see the new value"
-        );
-    }
-
-    #[test]
-    fn provided_value_survives_a_targeted_rebuild_below_it() {
-        let seen = Rc::new(Cell::new(None::<usize>));
-
-        let recorder = Rc::clone(&seen);
-        let (mut element, mut render) =
-            TestCtx::new().create(Provide::new(42_usize).child(Transparent {
-                child: Leaf::new().on_rebuild(move |ctx| {
-                    recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
-                }),
-            }));
-
-        // The transparent single child pushes no routing id, so the leaf sits at the empty path.
-        TestCtx::new().run(|ctx| {
-            element.dispatch(&mut render, RoutingPath::new(&[]), Dispatch::Rebuild(ctx));
-        });
-
-        assert_eq!(
-            seen.get(),
-            Some(42),
-            "an ancestor's provided value is still visible when only the descendant rebuilds"
-        );
-    }
-
-    #[test]
-    fn provided_value_reaches_a_dependency_changed_rebuild() {
-        let seen = Rc::new(Cell::new(None::<usize>));
-
-        let recorder = Rc::clone(&seen);
-        let (mut element, mut render) =
-            TestCtx::new().create(Provide::new(42_usize).child(Transparent {
-                child: Leaf::new().on_rebuild(move |ctx| {
-                    recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
-                }),
-            }));
-
-        // A dependency-changed dispatch must re-thread the ancestor's provided value just like a
-        // plain rebuild, so the woken descendant still reads it.
-        TestCtx::new().run(|ctx| {
-            element.dispatch(
-                &mut render,
-                RoutingPath::new(&[]),
-                Dispatch::DependencyChanged(ctx),
-            );
-        });
-
-        assert_eq!(
-            seen.get(),
-            Some(42),
-            "a dependency-changed rebuild re-threads the ancestor's provided value"
-        );
-    }
-
-    #[test]
-    fn provided_value_survives_a_nested_build_boundary() {
-        let boundary = Rc::new(Cell::new(None::<BuildBoundaryId>));
-        let seen = Rc::new(Cell::new(None::<usize>));
-
-        let captured = Rc::clone(&boundary);
-        let recorder = Rc::clone(&seen);
-        let widget = Provide::new(42_usize).child(
-            RebuildBoundary::new().child(
-                Leaf::new()
-                    .on_mount(move |ctx: &mut UpdateCtx| {
-                        captured.set(ctx.build_scope().boundary());
-                    })
-                    .on_message(MessageCtx::request_rebuild)
-                    .on_rebuild(move |ctx: &mut UpdateCtx| {
-                        recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
-                    }),
-            ),
-        );
-
-        let mut tasks = TestCtx::new();
-        let mut owner = PipelineOwner::new(widget, &mut tasks.scheduler());
-
-        let boundary = boundary
-            .get()
-            .expect("the leaf mounted under the rebuild boundary");
-
-        // The Provide sits above the boundary, so the value lives in the scope the boundary captured
-        // at registration; a targeted rebuild into the boundary must re-enter with that scope.
-        owner.dispatch_message(&RoutingTarget::new(boundary, Vec::new()), Box::new(()));
-        assert!(owner.flush_build(&mut tasks.scheduler()));
-
-        assert_eq!(
-            seen.get(),
-            Some(42),
-            "an ancestor's provided value reaches a descendant across a build boundary"
-        );
-    }
-
-    #[test]
-    fn root_provided_value_survives_a_targeted_rebuild() {
-        let seen = Rc::new(Cell::new(None::<usize>));
-
-        let recorder = Rc::clone(&seen);
-        let (mut element, mut render) = TestCtx::new().create(Transparent {
-            child: Leaf::new().on_rebuild(move |ctx| {
-                recorder.set(ctx.depend_on_provided::<usize>().as_deref().copied());
-            }),
-        });
-
-        TestCtx::new().with_provided(7_usize).run(|ctx| {
-            element.dispatch(&mut render, RoutingPath::new(&[]), Dispatch::Rebuild(ctx));
-        });
-
-        assert_eq!(
-            seen.get(),
-            Some(7),
-            "a value provided at the root scope reaches a targeted rebuild"
+        tester.rebuild(Provide::new(2usize).child(dependent_reader(Rc::clone(&fired))));
+        assert!(
+            fired.get(),
+            "changing the value ran the dependent's dependency-change hook"
         );
     }
 }

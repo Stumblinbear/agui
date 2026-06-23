@@ -1,4 +1,7 @@
-use crate::render_object::{box_layout::RenderBox, node::RenderNode};
+use crate::render_object::{
+    box_layout::RenderBox,
+    node::{MountedChild, RenderNode},
+};
 
 /// A visitor over the children of a [`RenderChildren`], by shared reference.
 pub type Visitor<'a, P> = dyn FnMut(&RenderNode<dyn RenderBox, P>) + 'a;
@@ -6,19 +9,18 @@ pub type Visitor<'a, P> = dyn FnMut(&RenderNode<dyn RenderBox, P>) + 'a;
 /// A visitor over the children of a [`RenderChildren`], by mutable reference.
 pub type VisitorMut<'a, P> = dyn FnMut(&mut RenderNode<dyn RenderBox, P>) + 'a;
 
-/// A render object that owns a single child render object.
+/// A render object that drives a single child render object, held by an edge.
 ///
-/// The render of every single-child widget implements this so its element can reach the child's
-/// render to reconcile it in place.
+/// The render object of every single-child widget implements this so its element can give it the child to
+/// drive at mount, once that child is registered and pinned. The element calls
+/// [`adopt_child`](Self::adopt_child) from its own `mount`, after mounting the child.
 pub trait SingleChildRenderObject {
     /// The child's render object type.
     type Child: ?Sized;
 
-    /// Runs `f` on the child render object.
-    fn with_child<R>(&self, f: impl FnOnce(&Self::Child) -> R) -> R;
-
-    /// Runs `f` on the child render object.
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Self::Child) -> R) -> R;
+    /// Adopts `child` as the render object this one drives during layout and paint. The child render object is
+    /// owned by the child element; this holds only the edge to it.
+    fn adopt_child(&mut self, child: MountedChild<Self::Child>);
 }
 
 /// The render object of a widget whose children are a [`RenderChildren`] list, giving its element
@@ -32,9 +34,9 @@ pub trait MultiChildRenderObject {
 }
 
 /// A flattened, ordered view of the child render objects a [`MultiChildRenderObject`] holds. The
-/// storage keeps the shape of the widget sequence that built it — a single [`RenderNode`], an
-/// [`Option`], a [`Vec`], or a tuple of those — and this trait presents the leaves it contains as one
-/// flat run, addressable by index and walkable in order.
+/// storage keeps the shape of the widget sequence that built it: a single [`RenderNode`], an [`Option`], a
+/// [`Vec`], or a tuple of those. This trait presents the leaves it contains as one flat run, addressable by
+/// index and walkable in order.
 ///
 /// The count splits into [`STATIC_LEN`](Self::STATIC_LEN), the children a value contributes regardless
 /// of its runtime contents (folded at compile time), and [`dynamic_len`](Self::dynamic_len), the
@@ -81,8 +83,9 @@ pub trait RenderChildren {
     fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ParentData>);
 }
 
-// A single render object: the leaf of a sequence, one child.
-impl<R: RenderBox, P> RenderChildren for RenderNode<R, P> {
+// A single child: the leaf of a sequence. Its edge is already `dyn RenderBox`, so the flatten needs no
+// coercion — every leaf in a mixed sequence is one uniform holder type.
+impl<P> RenderChildren for RenderNode<dyn RenderBox, P> {
     type ParentData = P;
 
     const STATIC_LEN: usize = 1;
@@ -93,12 +96,12 @@ impl<R: RenderBox, P> RenderChildren for RenderNode<R, P> {
 
     fn get(&self, index: usize) -> &RenderNode<dyn RenderBox, P> {
         assert_eq!(index, 0, "child index {index} out of bounds");
-        self as &RenderNode<dyn RenderBox, P>
+        self
     }
 
     fn get_mut(&mut self, index: usize) -> &mut RenderNode<dyn RenderBox, P> {
         assert_eq!(index, 0, "child index {index} out of bounds");
-        self as &mut RenderNode<dyn RenderBox, P>
+        self
     }
 
     fn for_each(&self, f: &mut Visitor<P>) {
@@ -246,3 +249,84 @@ impl_render_children_tuple!(A => 0, B => 1, C => 2, D => 3, E => 4, F => 5, G =>
 impl_render_children_tuple!(A => 0, B => 1, C => 2, D => 3, E => 4, F => 5, G => 6, H => 7);
 impl_render_children_tuple!(A => 0, B => 1, C => 2, D => 3, E => 4, F => 5, G => 6, H => 7, I => 8);
 impl_render_children_tuple!(A => 0, B => 1, C => 2, D => 3, E => 4, F => 5, G => 6, H => 7, I => 8, J => 9);
+
+#[cfg(test)]
+mod tests {
+    use crate::render_object::{RenderChildren, box_layout::RenderBox, node::RenderNode};
+
+    // A leaf edge tagged by its `parent_data`, so the flatten's order and indexing are observable without
+    // wiring a real child render.
+    type Leaf = RenderNode<dyn RenderBox, usize>;
+
+    fn leaf(tag: usize) -> Leaf {
+        RenderNode::new(tag)
+    }
+
+    fn tags(children: &impl RenderChildren<ParentData = usize>) -> Vec<usize> {
+        let mut out = Vec::new();
+        children.for_each(&mut |node| out.push(node.parent_data));
+        out
+    }
+
+    #[test]
+    fn leaf_is_a_single_child() {
+        let c = leaf(7);
+        assert_eq!(Leaf::STATIC_LEN, 1);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c.dynamic_len(), 0);
+        assert_eq!(c.get(0).parent_data, 7);
+        assert_eq!(tags(&c), vec![7]);
+    }
+
+    #[test]
+    fn vec_flattens_in_order() {
+        let c: Vec<Leaf> = vec![leaf(1), leaf(2), leaf(3)];
+        assert_eq!(<Vec<Leaf>>::STATIC_LEN, 0);
+        assert_eq!(c.len(), 3);
+        assert_eq!(c.dynamic_len(), 3);
+        assert_eq!(c.get(1).parent_data, 2);
+        assert_eq!(tags(&c), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn option_contributes_its_child_only_when_present() {
+        let some: Option<Leaf> = Some(leaf(9));
+        assert_eq!(some.len(), 1);
+        assert_eq!(tags(&some), vec![9]);
+
+        let none: Option<Leaf> = None;
+        assert_eq!(none.len(), 0);
+        assert!(none.is_empty());
+        assert_eq!(tags(&none), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn tuple_concatenates_static_and_dynamic_parts() {
+        let c: (Leaf, Option<Leaf>, Vec<Leaf>) = (leaf(0), Some(leaf(1)), vec![leaf(2), leaf(3)]);
+        assert_eq!(<(Leaf, Option<Leaf>, Vec<Leaf>)>::STATIC_LEN, 1);
+        assert_eq!(c.len(), 4);
+        assert_eq!(c.get(2).parent_data, 2);
+        assert_eq!(tags(&c), vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn tuple_skips_an_absent_option() {
+        let c: (Leaf, Option<Leaf>) = (leaf(5), None);
+        assert_eq!(c.len(), 1);
+        assert_eq!(tags(&c), vec![5]);
+    }
+
+    #[test]
+    fn for_each_mut_visits_every_child() {
+        let mut c: Vec<Leaf> = vec![leaf(1), leaf(2)];
+        c.for_each_mut(&mut |node| node.parent_data *= 10);
+        assert_eq!(tags(&c), vec![10, 20]);
+    }
+
+    #[test]
+    #[should_panic(expected = "out of bounds")]
+    fn get_past_the_end_panics() {
+        let c: Vec<Leaf> = vec![leaf(1)];
+        let _ = c.get(1);
+    }
+}

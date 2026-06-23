@@ -1,43 +1,42 @@
 use std::any::Any;
 
-pub struct MessageCtx {
+use agui_core::tree::NodeHandle;
+
+use crate::pipeline::build_tree::BuildQueue;
+
+/// The context passed to an element while it handles a message: the payload and the build queue. It has no
+/// cursor, so a message cannot restructure the tree.
+pub struct MessageCtx<'a> {
     message: Option<Box<dyn Any>>,
-    rebuild_requested: bool,
+    handle: NodeHandle,
+    queue: &'a mut BuildQueue,
 }
 
-impl MessageCtx {
-    pub fn new(message: Box<dyn Any>) -> Self {
+impl<'a> MessageCtx<'a> {
+    /// Wraps `message` for delivery to the element at `handle`, with the build queue the element marks itself
+    /// in if it requests a rebuild. The driver builds one to dispatch a message by handle.
+    pub fn new(message: Box<dyn Any>, handle: NodeHandle, queue: &'a mut BuildQueue) -> Self {
         Self {
             message: Some(message),
-            rebuild_requested: false,
+            handle,
+            queue,
         }
     }
 
-    /// Take the message payload, downcasting to the expected type.
+    /// Takes the message payload as a `T`.
     ///
     /// # Panics
-    ///
-    /// Panics if the payload has already been consumed or is not of type `T`.
-    pub fn consume<T>(&mut self) -> T
-    where
-        T: Any,
-    {
-        let msg = self
+    /// If the payload was already taken, or is not a `T`.
+    pub fn consume<T: Any>(&mut self) -> T {
+        let message = self
             .message
             .take()
             .expect("message has already been consumed");
-
-        *msg.downcast::<T>().expect("message downcast failed")
+        *message.downcast::<T>().expect("message was not a T")
     }
 
-    /// Mark the dispatched element as needing a rebuild. The dispatcher reads this
-    /// after `dispatch` returns and queues the dispatched path for reconciliation.
+    /// Queues this element to rebuild on the next flush.
     pub fn request_rebuild(&mut self) {
-        self.rebuild_requested = true;
-    }
-
-    /// Whether `request_rebuild` was called during the dispatch.
-    pub fn rebuild_requested(&self) -> bool {
-        self.rebuild_requested
+        self.queue.mark_rebuild(self.handle);
     }
 }
