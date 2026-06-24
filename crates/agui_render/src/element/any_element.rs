@@ -5,6 +5,7 @@ use crate::{
     context::{MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::Element,
+    render_object::node::RenderObjectPtr,
 };
 
 /// The type-erased, object-safe form of [`Element`], used at heterogeneous-children boundaries. Each method
@@ -18,9 +19,9 @@ pub trait AnyElement {
 
     fn element_name(&self) -> &str;
 
-    fn dyn_render_object(&self) -> &Self::Render;
-
     fn dyn_render_object_mut(&mut self) -> &mut Self::Render;
+
+    fn dyn_render_object_ptr(&self) -> RenderObjectPtr<Self::Render>;
 
     fn dyn_mount(&mut self, ctx: &mut UpdateCtx<'_>);
 
@@ -53,12 +54,12 @@ where
         std::any::type_name::<T>()
     }
 
-    fn dyn_render_object(&self) -> &T::Render {
-        self.render_object()
-    }
-
     fn dyn_render_object_mut(&mut self) -> &mut T::Render {
         self.render_object_mut()
+    }
+
+    fn dyn_render_object_ptr(&self) -> RenderObjectPtr<T::Render> {
+        self.render_object_ptr()
     }
 
     fn dyn_mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -102,12 +103,12 @@ fn rebase_to_boxed<R: ?Sized>(
 impl<R: ?Sized> Element for Box<dyn AnyElement<Render = R>> {
     type Render = R;
 
-    fn render_object(&self) -> &R {
-        (**self).dyn_render_object()
-    }
-
     fn render_object_mut(&mut self) -> &mut R {
         (**self).dyn_render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+        (**self).dyn_render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {

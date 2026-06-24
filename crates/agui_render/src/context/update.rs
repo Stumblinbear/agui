@@ -10,7 +10,7 @@ use crate::element::Element;
 use crate::pipeline::build_tree::{Build, BuildQueue, run};
 use crate::pipeline::render_pipeline::{LayoutScope, PaintScope, RenderPipeline};
 use crate::provide::ProvideScope;
-use crate::render_object::node::MountedChild;
+use crate::render_object::node::{MountedChild, RenderObjectPtr};
 use crate::scheduling::{TaskHandle, TaskScheduler};
 
 /// The context passed to an element during a cursor-bearing lifecycle hook: mount, unmount, rebuild, or a
@@ -137,9 +137,9 @@ impl<'a> UpdateCtx<'a> {
         result
     }
 
-    /// Mounts `child` under this element and hands back an edge to its render object, now that it is registered
-    /// and pinned. A render-bearing element passes the result to its render object's `adopt_child`; a
-    /// transparent element ignores it.
+    /// Mounts `child` under this element and hands back the [`MountedChild`] pointing at its render object, now
+    /// that it is registered and pinned. A render-bearing element passes the result to its render object's
+    /// `adopt_child`; a transparent element ignores it.
     ///
     /// # Safety
     /// `child` must be one of this element's own slots.
@@ -153,6 +153,11 @@ impl<'a> UpdateCtx<'a> {
         // SAFETY: the caller guarantees `child` is this element's, register's precondition; `run::<S::Node>`
         // dispatches it, and its unmount deregisters it.
         let cursor = unsafe { self.cursor.register(child, run::<S::Node>) };
+
+        // The child node's address, taken as a value (not dereferenced), so it cannot conflict with the
+        // protected `child` borrow. The render object is resolved from it later, at pass time.
+        let address = cursor.this();
+
         child.node_mut().mount(&mut UpdateCtx {
             cursor,
             provide: self.provide,
@@ -161,9 +166,9 @@ impl<'a> UpdateCtx<'a> {
             scheduler: &mut *self.scheduler,
         });
 
-        // SAFETY: the child is registered and pinned now, so its render object is live and stays put, and the
-        // layout and paint walk reach it only through this edge.
-        unsafe { MountedChild::new(child.node_mut().render_object_mut()) }
+        // SAFETY: `address` is the now-mounted, pinned child node, and `resolve_render_object::<S::Node>`
+        // projects it to that child's render object pointer when a pass dereferences it.
+        unsafe { MountedChild::new(address, resolve_render_object::<S::Node>) }
     }
 
     /// Unmounts `child` and removes it from the tree. The caller still owns `child` and drops it to free it.
@@ -222,4 +227,17 @@ impl<'a> UpdateCtx<'a> {
             })
         }
     }
+}
+
+/// Resolves a mounted child node's address to its render object pointer. A [`MountedChild`] pairs this with
+/// the address so a parent's `RenderNode` can resolve the render object fresh each pass.
+///
+/// # Safety
+///
+/// `address` must be a live mounted child node of type `E`, reached during a layout or paint pass with no
+/// element hook on the call stack.
+unsafe fn resolve_render_object<E: Element>(address: NonNull<()>) -> RenderObjectPtr<E::Render> {
+    // SAFETY: the caller guarantees a live `E` at `address` and no `&mut element` on the stack, so this shared
+    // view is sound; it reads only the element's render object pointer.
+    unsafe { address.cast::<E>().as_ref() }.render_object_ptr()
 }

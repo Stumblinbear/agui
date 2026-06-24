@@ -13,12 +13,12 @@ use crate::{
     paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
     pipeline::{
         BoundaryContent,
-        render_pipeline::{PaintBoundaryHandle, PaintScope, RegisteredLayoutBoundary},
+        render_pipeline::{LayoutBoundary, LayoutBoundaryHandle, PaintBoundaryHandle},
     },
     render_object::{
         LayoutCtx, RenderObject, SingleChildRenderObject,
         box_layout::{BoxConstraints, RenderBox},
-        node::{MountedChild, RenderNode},
+        node::{MountedChild, RenderNode, RenderObjectPtr},
     },
     text::TextBaseline,
     widget::{RenderBoxElement, RenderBoxWrapper, Widget},
@@ -33,39 +33,37 @@ pub struct ViewHandle {
 }
 
 struct ViewInner {
-    content: BoundaryContent,
+    content: Rc<RefCell<RenderView>>,
+    layout: LayoutBoundaryHandle,
+    /// Held for its `Drop`, which unregisters the view's repaint boundary and discards its layer; nothing
+    /// reads it.
+    #[allow(dead_code)]
     paint: PaintBoundaryHandle,
-    layout: RegisteredLayoutBoundary,
     layer: LayerHandle<OffsetLayer>,
 }
 
 impl ViewHandle {
     pub(crate) fn new(
-        content: BoundaryContent,
+        content: Rc<RefCell<RenderView>>,
+        layout: LayoutBoundaryHandle,
         paint: PaintBoundaryHandle,
-        layout: RegisteredLayoutBoundary,
         layer: LayerHandle<OffsetLayer>,
     ) -> Self {
         Self {
             inner: Rc::new(ViewInner {
                 content,
-                paint,
                 layout,
+                paint,
                 layer,
             }),
         }
     }
 
-    /// The paint scope of the view's boundary, for its subtree to repaint into.
-    pub fn scope(&self) -> PaintScope {
-        self.inner.paint.scope()
-    }
-
     /// Lays the view out under `constraints` and repaints it. A driver calls this on the first frame and
     /// whenever the surface backing the view changes size.
     pub fn resize(&self, constraints: BoxConstraints) {
-        self.inner.layout.set_constraints(constraints);
-        self.inner.paint.mark_needs_paint();
+        self.inner.content.borrow_mut().set_constraints(constraints);
+        self.inner.layout.mark_needs_layout();
     }
 
     /// Hit-tests the view at `position`, in the view's coordinate space, returning the handlers under it
@@ -88,7 +86,7 @@ impl ViewHandle {
         self.inner
             .content
             .borrow()
-            .dyn_describe(&mut Diagnostics::new())
+            .describe(&mut Diagnostics::new())
     }
 }
 
@@ -132,17 +130,25 @@ where
         let layer = LayerHandle::new(OffsetLayer::new());
 
         let content = Rc::new(RefCell::new(RenderView::new()));
-        // `Rc::clone` would pin the source type and fail to unsize; the method form clones and coerces to the
-        // erased `BoundaryContent`.
+        // The repaint boundary holds the render object through the erased shared cell; `Rc::clone` would pin
+        // the source type and fail to unsize, so the method form clones and coerces.
         #[allow(clippy::clone_on_ref_ptr)]
-        let boundary: BoundaryContent = content.clone();
+        let paint_content: BoundaryContent = content.clone();
+        let paint = ctx.register_paint_boundary(paint_content, layer.clone());
 
-        let paint = ctx.register_paint_boundary(Rc::clone(&boundary), layer.clone());
-        let layout = ctx.register_layout_boundary(Rc::clone(&boundary), paint.scope());
+        // The relayout boundary re-lays the view through the shared cell at flush, never through the element.
+        // Re-borrowing the cell each flush (rather than caching a pointer into it) is what keeps it sound.
+        let mut layout = ctx.register_layout_boundary(Box::new(ViewBoundary {
+            content: Rc::clone(&content),
+        }));
+
+        // The view is its own repaint boundary, so it can record its paint scope now.
+        layout.set_paint_scope(paint.scope());
 
         // The surface holds the handle for the view's life, keeping its boundaries registered until the view
         // unmounts and clears it; the driver reads a clone to drive frames.
-        *self.surface.borrow_mut() = Some(ViewHandle::new(boundary, paint, layout, layer));
+        *self.surface.borrow_mut() =
+            Some(ViewHandle::new(Rc::clone(&content), layout, paint, layer));
 
         ViewElement {
             child: Slot::new(Widget::create(RenderBoxWrapper::new(self.child), ctx)),
@@ -185,12 +191,12 @@ where
 {
     type Render = ();
 
-    fn render_object(&self) -> &() {
-        &self.render
-    }
-
     fn render_object_mut(&mut self) -> &mut () {
         &mut self.render
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -217,22 +223,52 @@ where
     }
 }
 
+/// The view's entry in the relayout registry, owned by it: at flush it re-borrows the shared cell and re-lays
+/// the [`RenderView`]. Holding an `Rc` clone (rather than a pointer into the cell) is what keeps it sound, and
+/// keeps the render object alive as long as the registration.
+struct ViewBoundary {
+    content: Rc<RefCell<RenderView>>,
+}
+
+impl LayoutBoundary for ViewBoundary {
+    fn relayout(&mut self, ctx: &mut LayoutCtx) {
+        self.content.borrow_mut().relayout(ctx);
+    }
+}
+
 /// The render object of a [`View`]: the relayout and repaint boundary at the root of the view's render tree.
 /// It holds an edge to the view's root render, which the [`View`]'s child element owns, and forwards layout,
-/// paint, and hit-testing through it.
+/// paint, and hit-testing through it. It is re-laid from the constraints the driver set, reached through the
+/// shared cell the [`ViewHandle`] holds, never the element.
 pub struct RenderView {
     child: RenderNode<dyn RenderBox>,
+    /// The constraints the driver last sized the view under, re-laid from on an isolated relayout. `None`
+    /// until the first `resize`.
+    constraints: Option<BoxConstraints>,
 }
 
 impl RenderView {
     fn new() -> Self {
         Self {
             child: RenderNode::new(()),
+            constraints: None,
         }
+    }
+
+    fn set_constraints(&mut self, constraints: BoxConstraints) {
+        self.constraints = Some(constraints);
     }
 
     fn clear_child(&mut self) {
         self.child.clear();
+    }
+}
+
+impl LayoutBoundary for RenderView {
+    fn relayout(&mut self, ctx: &mut LayoutCtx) {
+        if let Some(constraints) = self.constraints {
+            self.child.layout_and_get_size(ctx, constraints);
+        }
     }
 }
 
@@ -359,6 +395,31 @@ mod tests {
     }
 
     #[test]
+    fn resizing_repaints_through_the_layout_coupling() {
+        let render = RecordingBox::new();
+        let paints = Rc::clone(&render.paints);
+
+        let mut ctx = TestCtx::new();
+        let (owner, view) = ctx.mount_view(RawWidget::new(render));
+
+        view.resize(BoxConstraints::tight(Size::new(100.0_f32, 100.0)));
+        owner.flush_layout();
+        owner.flush_paint();
+        let after_first = paints.get();
+        assert!(after_first >= 1, "the first frame painted the child");
+
+        // A later resize marks only layout; re-laying the view must mark its own repaint boundary, so the
+        // child repaints without `resize` touching paint.
+        view.resize(BoxConstraints::tight(Size::new(50.0_f32, 200.0)));
+        owner.flush_layout();
+        owner.flush_paint();
+        assert!(
+            paints.get() > after_first,
+            "re-laying the view repainted it via the layout-to-paint coupling"
+        );
+    }
+
+    #[test]
     fn hit_testing_an_empty_view_is_harmless() {
         let mut ctx = TestCtx::new();
         let (owner, view) = ctx.mount_view(RawWidget::new(RecordingBox::new()));
@@ -369,5 +430,33 @@ mod tests {
         // `RecordingBox` passes hits through, so nothing absorbs; the call must still resolve cleanly.
         let result = view.hit_test(crate::geometry::Offset::new(10.0_f32, 10.0));
         assert!(result.path().is_empty());
+    }
+
+    #[test]
+    fn marking_a_child_boundary_relays_only_it() {
+        let render = RecordingBox::new();
+        let layouts = Rc::clone(&render.layouts);
+        let boundary = Rc::clone(&render.boundary);
+
+        let mut ctx = TestCtx::new();
+        let (owner, view) = ctx.mount_view(RawWidget::new(render));
+
+        view.resize(BoxConstraints::tight(Size::new(40.0_f32, 40.0)));
+        owner.flush_layout();
+        assert_eq!(layouts.get(), 1, "the first frame laid the child out once");
+
+        // The child is under tight constraints, so it is its own relayout boundary. Marking that boundary and
+        // flushing re-lays it without resizing the view above it.
+        boundary
+            .borrow()
+            .as_ref()
+            .expect("the child captured its boundary during layout")
+            .mark_needs_layout();
+        owner.flush_layout();
+        assert_eq!(
+            layouts.get(),
+            2,
+            "marking the child's own boundary re-laid it in isolation"
+        );
     }
 }

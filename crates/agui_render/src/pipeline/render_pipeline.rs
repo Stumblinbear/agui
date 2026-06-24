@@ -21,7 +21,6 @@ use crate::{
         scene::SceneCapacity,
     },
     pipeline::{BoundaryContent, FramePhase},
-    render_object::box_layout::BoxConstraints,
 };
 
 new_key_type! {
@@ -29,6 +28,16 @@ new_key_type! {
     pub struct LayoutBoundaryId;
     /// Identifies a repaint boundary within one pipeline.
     pub struct PaintBoundaryId;
+}
+
+/// A relayout boundary the pipeline re-lays on its own. The pipeline drives it from
+/// [`flush_layout`](RenderPipeline::flush_layout) knowing nothing of the layout protocol behind it: the
+/// implementor owns the render object and the constraints to re-lay it from, so a box boundary re-lays under
+/// the box constraints it recorded and another protocol does the analogous thing for its own.
+pub trait LayoutBoundary {
+    /// Re-lays this boundary's subtree from the constraints it last recorded. `ctx` is scoped to this
+    /// boundary, so a later change within the subtree marks it again.
+    fn relayout(&mut self, ctx: &mut LayoutCtx);
 }
 
 /// The relayout and repaint boundaries of one widget tree. Shared so a render object can reach it to
@@ -39,7 +48,7 @@ pub struct RenderPipeline {
 }
 
 struct Inner {
-    layout: SlotMap<LayoutBoundaryId, LayoutBoundary>,
+    layout: SlotMap<LayoutBoundaryId, LayoutBoundaryCell>,
     /// The relayout boundaries waiting to be re-laid, with a per-boundary `enrolled` flag preventing a
     /// second mark from enrolling one twice.
     layout_dirty: Vec<LayoutBoundaryId>,
@@ -62,18 +71,16 @@ struct Inner {
     notify: Box<dyn Fn()>,
 }
 
-struct LayoutBoundary {
+struct LayoutBoundaryCell {
     /// Depth in the boundary nesting, so a drain re-enters rootmost-first.
     depth: usize,
-    content: BoundaryContent,
-    /// The constraints this boundary was last laid out under, replayed to re-lay it on its own. A boundary
-    /// constrained from outside the tree has them written by the owner.
-    constraints: Option<BoxConstraints>,
+    /// The boundary, owned here. Taken out for the duration of its own re-lay, so the re-lay can re-enter the
+    /// pipeline to register nested boundaries, and put back after.
+    boundary: Option<Box<dyn LayoutBoundary>>,
     /// The repaint boundary enclosing this one, marked when this boundary re-lays so the re-laid subtree
     /// repaints.
     paint: PaintScope,
-    /// Awaiting re-layout; cleared when the boundary is re-laid, whether by the flush or in place by the
-    /// boundary above it.
+    /// Awaiting re-layout; cleared when the boundary is re-laid.
     needs_layout: bool,
     /// In `layout_dirty`, so a second mark does not enroll it twice.
     enrolled: bool,
@@ -144,30 +151,30 @@ impl RenderPipeline {
         }
     }
 
-    /// Registers `content` as a relayout boundary nested under `enclosing`, enclosed by repaint boundary
-    /// `paint`, and returns the handle that owns and unregisters it. A render object registers its boundary
-    /// this way the first time it is laid out under tight constraints.
+    /// Registers `boundary` as a relayout boundary nested under `enclosing`, and returns the handle that owns
+    /// and unregisters it. A render object registers its boundary this way the first time it is laid out as
+    /// one. Its enclosing repaint boundary is recorded later, at paint, through
+    /// [`set_paint_scope`](LayoutBoundaryHandle::set_paint_scope).
     pub fn register_layout_boundary(
         &self,
         enclosing: LayoutScope,
-        content: BoundaryContent,
-        paint: PaintScope,
-    ) -> RegisteredLayoutBoundary {
+        boundary: Box<dyn LayoutBoundary>,
+    ) -> LayoutBoundaryHandle {
         let mut inner = self.inner.borrow_mut();
 
         let depth = inner.layout.get(enclosing.0).map_or(0, |b| b.depth + 1);
-        let id = inner.layout.insert(LayoutBoundary {
+        let id = inner.layout.insert(LayoutBoundaryCell {
             depth,
-            content,
-            constraints: None,
-            paint,
+            boundary: Some(boundary),
+            paint: PaintScope::detached(),
             needs_layout: false,
             enrolled: false,
         });
 
-        RegisteredLayoutBoundary {
+        LayoutBoundaryHandle {
             id,
             inner: Rc::downgrade(&self.inner),
+            paint: PaintScope::detached(),
         }
     }
 
@@ -207,15 +214,6 @@ impl RenderPipeline {
     /// Marks `scope`'s boundary for re-layout before the next frame.
     pub fn mark_needs_layout(&self, scope: LayoutScope) {
         self.inner.borrow_mut().mark_layout(scope.0);
-    }
-
-    /// Records the constraints `scope`'s boundary is re-laid under, without marking it. A boundary re-laid in
-    /// place by its parent keeps its cached constraints current this way.
-    pub fn update_layout_constraints(&self, scope: LayoutScope, constraints: BoxConstraints) {
-        if let Some(boundary) = self.inner.borrow_mut().layout.get_mut(scope.0) {
-            boundary.constraints = Some(constraints);
-            boundary.needs_layout = false;
-        }
     }
 
     /// Marks `scope`'s boundary to be repainted on the next frame.
@@ -307,27 +305,31 @@ impl RenderPipeline {
         };
 
         for &id in &scratch {
-            let (constraints, content, paint) = {
+            let (boundary, paint) = {
                 let mut inner = self.inner.borrow_mut();
 
-                // A boundary dropped since it was drained is absent, so skip it rather than replay stale
-                // constraints; an enclosing boundary's relayout may also have covered this one, clearing its
-                // pending mark in place.
-                let Some(boundary) = inner.layout.get_mut(id) else {
+                // A boundary dropped since it was drained is absent, so skip it; an enclosing boundary's
+                // relayout may also have covered this one, clearing its pending mark in place.
+                let Some(cell) = inner.layout.get_mut(id) else {
                     continue;
                 };
-                if !std::mem::replace(&mut boundary.needs_layout, false) {
+                if !std::mem::replace(&mut cell.needs_layout, false) {
                     continue;
                 }
-                let Some(constraints) = boundary.constraints else {
-                    continue;
-                };
 
-                (constraints, Rc::clone(&boundary.content), boundary.paint)
+                (cell.boundary.take(), cell.paint)
+            };
+            let Some(mut boundary) = boundary else {
+                continue;
             };
 
             let mut ctx = LayoutCtx::new(self, LayoutScope(id));
-            content.borrow_mut().dyn_layout(&mut ctx, constraints);
+            boundary.relayout(&mut ctx);
+
+            // Put the boundary back, unless its own re-lay unregistered it.
+            if let Some(cell) = self.inner.borrow_mut().layout.get_mut(id) {
+                cell.boundary = Some(boundary);
+            }
 
             // The boundary's painting is now stale, so repaint the boundary that encloses it.
             self.mark_needs_paint(paint);
@@ -513,7 +515,7 @@ impl Inner {
 
 /// Names the relayout boundary a render object is laid out under: an id into the pipeline, threaded down
 /// through layout. A node forwards it to the children it lays out and stores it to request a relayout later.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct LayoutScope(pub(crate) LayoutBoundaryId);
 
 impl LayoutScope {
@@ -532,7 +534,7 @@ impl LayoutScope {
 /// Names the repaint boundary a render object paints into: an id into the pipeline, threaded down through
 /// paint. A node holds the scope of its nearest enclosing boundary to repaint it when its painting goes
 /// stale.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PaintScope(pub(crate) PaintBoundaryId);
 
 impl PaintScope {
@@ -548,40 +550,46 @@ impl PaintScope {
 }
 
 /// The sole owner of a registered relayout boundary, held by the render object that established it. Dropping
-/// it unregisters the boundary and clears any pending re-layout. Hand descendants the [`scope`](Self::scope)
-/// to mark, and record the constraints the boundary takes with [`update_constraints`](Self::update_constraints).
-pub struct RegisteredLayoutBoundary {
+/// it unregisters the boundary. Hand descendants the [`scope`](Self::scope) to mark, and request a re-layout
+/// of the boundary itself with [`mark_needs_layout`](Self::mark_needs_layout).
+pub struct LayoutBoundaryHandle {
     id: LayoutBoundaryId,
     inner: Weak<RefCell<Inner>>,
+    /// The enclosing repaint boundary last written to the cell, so a repeated [`set_paint_scope`] with the
+    /// same value (the steady state every paint) skips the upgrade and write.
+    paint: PaintScope,
 }
 
-impl RegisteredLayoutBoundary {
+impl LayoutBoundaryHandle {
     pub fn scope(&self) -> LayoutScope {
         LayoutScope(self.id)
     }
 
-    /// Records the constraints this boundary is re-laid under, without marking it.
-    pub fn update_constraints(&self, constraints: BoxConstraints) {
-        let Some(inner) = self.inner.upgrade() else {
-            return;
-        };
-        if let Some(boundary) = inner.borrow_mut().layout.get_mut(self.id) {
-            boundary.constraints = Some(constraints);
-            boundary.needs_layout = false;
+    /// Swaps the boundary's content while keeping its id, so the constraints it re-lays from stay current
+    /// without re-registering (which would change the scope descendants captured). The render object replaces
+    /// it on each layout that finds it still a boundary.
+    pub fn replace(&mut self, boundary: Box<dyn LayoutBoundary>) {
+        if let Some(inner) = self.inner.upgrade()
+            && let Some(cell) = inner.borrow_mut().layout.get_mut(self.id)
+        {
+            cell.boundary = Some(boundary);
         }
     }
 
-    /// Records the constraints this boundary is re-laid under and marks it. A boundary constrained from
-    /// outside the tree is sized this way.
-    pub fn set_constraints(&self, constraints: BoxConstraints) {
-        let Some(inner) = self.inner.upgrade() else {
+    /// Records the repaint boundary enclosing this one, so a re-lay can mark it for repaint. The render object
+    /// that established this boundary calls it during paint, where the enclosing repaint boundary is known.
+    pub fn set_paint_scope(&mut self, paint: PaintScope) {
+        if self.paint == paint {
             return;
-        };
-        let mut inner = inner.borrow_mut();
-        if let Some(boundary) = inner.layout.get_mut(self.id) {
-            boundary.constraints = Some(constraints);
         }
-        inner.mark_layout(self.id);
+
+        self.paint = paint;
+
+        if let Some(inner) = self.inner.upgrade()
+            && let Some(cell) = inner.borrow_mut().layout.get_mut(self.id)
+        {
+            cell.paint = paint;
+        }
     }
 
     /// Requests that this boundary be re-laid before the next frame.
@@ -592,14 +600,12 @@ impl RegisteredLayoutBoundary {
     }
 }
 
-impl Drop for RegisteredLayoutBoundary {
+impl Drop for LayoutBoundaryHandle {
     fn drop(&mut self) {
         let Some(inner) = self.inner.upgrade() else {
             return;
         };
 
-        // The removed boundary owns its render content, whose own drop can unregister a nested boundary and
-        // so re-enter this borrow. Hold the content until the borrow is released, then let it drop.
         let removed = {
             let mut inner = inner.borrow_mut();
             inner
@@ -608,6 +614,9 @@ impl Drop for RegisteredLayoutBoundary {
                 .retain(|queued| *queued != self.id);
             inner.layout.remove(self.id)
         };
+
+        // Drop the removed cell only after the borrow is released: it may own a nested boundary (a child
+        // render object's), whose own drop re-borrows the pipeline to unregister.
         drop(removed);
     }
 }

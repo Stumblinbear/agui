@@ -9,6 +9,7 @@ use crate::{
     element::{AnyElement, Element},
     key::AnyKeyable,
     render_object::box_layout::RenderBox,
+    render_object::node::RenderObjectPtr,
     render_object::sliver::RenderSliver,
     widget::Widget,
 };
@@ -94,12 +95,12 @@ pub struct ErasedElement<R: ?Sized> {
 impl<R: ?Sized + 'static> Element for ErasedElement<R> {
     type Render = R;
 
-    fn render_object(&self) -> &R {
-        self.child.get().render_object()
-    }
-
     fn render_object_mut(&mut self) -> &mut R {
         self.child.get_mut().render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+        self.child.get().render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -250,12 +251,12 @@ where
 {
     type Render = dyn RenderBox;
 
-    fn render_object(&self) -> &dyn RenderBox {
-        self.inner.render_object()
-    }
-
     fn render_object_mut(&mut self) -> &mut dyn RenderBox {
         self.inner.render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderBox> {
+        self.inner.render_object_ptr().into_box()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -332,12 +333,12 @@ where
 {
     type Render = dyn RenderSliver;
 
-    fn render_object(&self) -> &dyn RenderSliver {
-        self.inner.render_object()
-    }
-
     fn render_object_mut(&mut self) -> &mut dyn RenderSliver {
         self.inner.render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderSliver> {
+        self.inner.render_object_ptr().into_sliver()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {

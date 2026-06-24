@@ -14,7 +14,11 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::Element,
     key::AnyKeyable,
-    render_object::{SingleChildRenderObject, box_layout::RenderBox, node::RenderNode},
+    render_object::{
+        SingleChildRenderObject,
+        box_layout::RenderBox,
+        node::{RenderNode, RenderObjectCell, RenderObjectPtr},
+    },
     widget::Widget,
 };
 
@@ -22,7 +26,7 @@ use crate::{
 /// render `R` to the child. It holds the child inline and forwards its own lifecycle straight to it.
 pub struct SingleChildElement<C, R> {
     child: Slot<C>,
-    render: R,
+    render: RenderObjectCell<R>,
 }
 
 impl<C: Element, R> SingleChildElement<C, R> {
@@ -33,7 +37,7 @@ impl<C: Element, R> SingleChildElement<C, R> {
 
         SingleChildElement {
             child: Slot::new(child_element),
-            render,
+            render: RenderObjectCell::new(render),
         }
     }
 
@@ -58,18 +62,18 @@ where
 {
     type Render = R;
 
-    fn render_object(&self) -> &R {
-        &self.render
+    fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
     }
 
-    fn render_object_mut(&mut self) -> &mut R {
-        &mut self.render
+    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+        self.render.render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
         // SAFETY: `self.child` is our own slot.
         let child = unsafe { ctx.mount(&mut self.child) };
-        self.render.adopt_child(child);
+        self.render.get_mut().adopt_child(child);
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {

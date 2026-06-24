@@ -8,22 +8,22 @@ pub use shared::*;
 use crate::{
     context::{MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
+    render_object::node::{RenderObjectCell, RenderObjectPtr},
 };
 
-/// A persistent node in the element tree, holding a widget's state and its child slots across rebuilds. The
-/// framework reaches an element only through these lifecycle hooks; a type implements the ones it needs and
-/// inherits a no-op for the rest.
+/// A persistent node in the element tree, holding a widget's state and its child slots across rebuilds.
 pub trait Element {
     /// The render object this element owns and presents to its parent.
     type Render: ?Sized;
 
-    /// This element's render object, by shared reference. A transparent element, which has no render object
-    /// of its own, forwards to its child's.
-    fn render_object(&self) -> &Self::Render;
-
-    /// This element's render object. A parent wires its own render object's child edge to this at mount; a
-    /// transparent element forwards to its child's.
+    /// This element's render object, by exclusive reference, for the element's own writes (a widget updating
+    /// its render props). A transparent element forwards to its child's.
     fn render_object_mut(&mut self) -> &mut Self::Render;
+
+    /// A pointer to this element's render object, for a parent to hold and resolve each pass. A render-bearing
+    /// element hands back its cell's; a transparent element forwards its child's; a render-less one returns a
+    /// placeholder.
+    fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render>;
 
     /// Registers this element's children as it enters the tree.
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -60,34 +60,36 @@ pub trait Element {
 impl Element for () {
     type Render = ();
 
-    fn render_object(&self) -> &() {
+    fn render_object_mut(&mut self) -> &mut () {
         self
     }
 
-    fn render_object_mut(&mut self) -> &mut () {
-        self
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
     }
 }
 
 /// A leaf element with no children, owning the render object its widget produced.
 pub struct LeafElement<R> {
-    render: R,
+    render: RenderObjectCell<R>,
 }
 
 impl<R> LeafElement<R> {
     pub fn new(render: R) -> Self {
-        Self { render }
+        Self {
+            render: RenderObjectCell::new(render),
+        }
     }
 }
 
 impl<R> Element for LeafElement<R> {
     type Render = R;
 
-    fn render_object(&self) -> &R {
-        &self.render
+    fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
     }
 
-    fn render_object_mut(&mut self) -> &mut R {
-        &mut self.render
+    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+        self.render.render_object_ptr()
     }
 }

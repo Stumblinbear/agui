@@ -7,7 +7,8 @@ use crate::context::BuildCtx;
 use crate::paint::compositing::{LayerHandle, OffsetLayer};
 use crate::pipeline::BoundaryContent;
 use crate::pipeline::render_pipeline::{
-    LayoutScope, PaintBoundaryHandle, PaintScope, RegisteredLayoutBoundary, RenderPipeline,
+    LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, PaintScope,
+    RenderPipeline,
 };
 use crate::provide::ProvideScope;
 
@@ -41,16 +42,16 @@ impl CreateCtx {
         f(&mut BuildCtx::new(self.provide, NodeHandle::default()))
     }
 
-    /// Registers `content` as the relayout boundary at the root of a view's render tree, enclosed by repaint
-    /// boundary `paint`, and returns the handle that owns it. A [`View`](crate::view::View) plants its tree's
-    /// relayout root this way at `create`; it is a forest root, so its enclosing layout scope is detached.
+    /// Registers `boundary` as the relayout boundary at the root of a view's render tree, and returns the
+    /// handle that owns it. A [`View`](crate::view::View) plants its tree's relayout root this way at `create`;
+    /// it is a forest root, so its enclosing layout scope is detached. Its enclosing repaint boundary is
+    /// recorded through [`set_paint_scope`](crate::pipeline::render_pipeline::LayoutBoundaryHandle::set_paint_scope).
     pub fn register_layout_boundary(
         &self,
-        content: BoundaryContent,
-        paint: PaintScope,
-    ) -> RegisteredLayoutBoundary {
+        boundary: Box<dyn LayoutBoundary>,
+    ) -> LayoutBoundaryHandle {
         self.pipeline
-            .register_layout_boundary(LayoutScope::detached(), content, paint)
+            .register_layout_boundary(LayoutScope::detached(), boundary)
     }
 
     /// Registers `content` as the repaint boundary at the root of a view's render tree, painting into

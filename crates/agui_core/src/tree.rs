@@ -208,6 +208,13 @@ impl<N: NodeDispatch> Cursor<'_, N> {
         self.handle
     }
 
+    /// The address of the node this cursor is positioned at, carrying provenance over its allocation. A
+    /// consumer mints a long-lived pointer into the node from this (rather than from a `&mut` to the node),
+    /// so it survives the node's later reborrows.
+    pub fn this(&self) -> NonNull<()> {
+        self.this
+    }
+
     /// Re-bases this cursor onto `this`, the real address of the node it is positioned at, so the node's
     /// inline children register against `this`. Call it for a node reached through a heap indirection (a
     /// `Box<dyn …>`), whose registered pointer is the box rather than the node behind it.

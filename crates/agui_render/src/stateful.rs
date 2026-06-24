@@ -5,6 +5,7 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::Element,
     provide::ProvideScope,
+    render_object::node::RenderObjectPtr,
     widget::Widget,
 };
 
@@ -83,12 +84,12 @@ where
 {
     type Render = <S::Child as Widget>::Render;
 
-    fn render_object(&self) -> &Self::Render {
-        self.child().get().render_object()
-    }
-
     fn render_object_mut(&mut self) -> &mut Self::Render {
         self.child_mut().get_mut().render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
+        self.child().get().render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {

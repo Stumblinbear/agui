@@ -1,8 +1,6 @@
-use crate::pipeline::{
-    BoundaryContent,
-    render_pipeline::{
-        DeferredLayoutScope, LayoutScope, PaintScope, RegisteredLayoutBoundary, RenderPipeline,
-    },
+use crate::pipeline::render_pipeline::{
+    DeferredLayoutScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintScope,
+    RenderPipeline,
 };
 
 /// The context threaded through a layout pass: the pipeline to register and mark boundaries against, and the
@@ -38,16 +36,14 @@ impl<'a> LayoutCtx<'a> {
         f(&mut child)
     }
 
-    /// Registers `content` as a relayout boundary nested under the boundary in force, enclosed by `paint`,
-    /// and returns the handle that owns and marks it. A node that establishes a nested relayout boundary
-    /// during layout registers it this way.
+    /// Registers `boundary` as a relayout boundary nested under the boundary in force, and returns the handle
+    /// that owns and marks it. A node that establishes a nested relayout boundary during layout registers it
+    /// this way; its enclosing repaint boundary is recorded later during paint.
     pub fn register_layout_boundary(
         &self,
-        content: BoundaryContent,
-        paint: PaintScope,
-    ) -> RegisteredLayoutBoundary {
-        self.pipeline
-            .register_layout_boundary(self.scope, content, paint)
+        boundary: Box<dyn LayoutBoundary>,
+    ) -> LayoutBoundaryHandle {
+        self.pipeline.register_layout_boundary(self.scope, boundary)
     }
 
     /// A deferred handle to the boundary in force, for marking it from a reconcile that holds no context.

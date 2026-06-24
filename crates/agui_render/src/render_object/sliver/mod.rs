@@ -270,7 +270,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
             remaining_cache_extent: Positive::try_from(main).expect("viewport main extent >= 0"),
         };
 
-        self.geometry = Some(self.sliver.as_mut().layout(constraints));
+        self.geometry = Some(self.sliver.borrow_mut().layout(constraints));
 
         size
     }
@@ -292,7 +292,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
             return HitTest::Pass;
         }
 
-        self.sliver.as_ref().hit_test(
+        self.sliver.borrow().hit_test(
             result,
             PositiveFinite::try_from(main).expect("main-axis position >= 0"),
             PositiveFinite::try_from(cross).expect("cross-axis position >= 0"),
@@ -305,7 +305,7 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        self.sliver.as_mut().paint(ctx, offset);
+        self.sliver.borrow_mut().paint(ctx, offset);
     }
 }
 

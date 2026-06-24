@@ -15,6 +15,7 @@ use crate::{
     context::{CreateCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::Element,
+    render_object::node::RenderObjectPtr,
     widget::Widget,
 };
 
@@ -202,12 +203,12 @@ where
 {
     type Render = C::Render;
 
-    fn render_object(&self) -> &Self::Render {
-        self.child.get().render_object()
-    }
-
     fn render_object_mut(&mut self) -> &mut Self::Render {
         self.child.get_mut().render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
+        self.child.get().render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {

@@ -1,4 +1,7 @@
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -10,10 +13,11 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     key::AnyKeyable,
+    pipeline::render_pipeline::DeferredLayoutScope,
     render_object::{
         MultiChildRenderObject, RenderObject, SingleChildRenderObject,
         box_layout::{BoxConstraints, RenderBox},
-        node::{MountedChild, RenderNode},
+        node::{MountedChild, RenderNode, RenderObjectPtr},
     },
     text::TextBaseline,
     widget::{AnyWidget, ChildrenElement, Widget},
@@ -82,12 +86,12 @@ pub struct LeafElement {
 impl Element for LeafElement {
     type Render = ();
 
-    fn render_object(&self) -> &() {
-        &self.render
-    }
-
     fn render_object_mut(&mut self) -> &mut () {
         &mut self.render
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -284,12 +288,12 @@ pub struct ProbeElement {
 impl Element for ProbeElement {
     type Render = ();
 
-    fn render_object(&self) -> &() {
-        &self.render
-    }
-
     fn render_object_mut(&mut self) -> &mut () {
         &mut self.render
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -334,14 +338,20 @@ impl Widget for Probe {
 /// observe it.
 pub struct RecordingBox {
     pub laid_out: Rc<Cell<Option<Size>>>,
+    pub layouts: Rc<Cell<usize>>,
     pub paints: Rc<Cell<usize>>,
+    /// A handle to this render object's enclosing relayout boundary, captured each layout, so a test can mark
+    /// it and drive an isolated re-lay.
+    pub boundary: Rc<RefCell<Option<DeferredLayoutScope>>>,
 }
 
 impl RecordingBox {
     pub fn new() -> Self {
         Self {
             laid_out: Rc::new(Cell::new(None)),
+            layouts: Rc::new(Cell::new(0)),
             paints: Rc::new(Cell::new(0)),
+            boundary: Rc::new(RefCell::new(None)),
         }
     }
 }
@@ -375,9 +385,11 @@ impl RenderBox for RecordingBox {
         constraints.smallest()
     }
 
-    fn layout(&mut self, _ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let size = constraints.smallest();
         self.laid_out.set(Some(size));
+        self.layouts.set(self.layouts.get() + 1);
+        *self.boundary.borrow_mut() = Some(ctx.deferred_layout_scope());
         size
     }
 

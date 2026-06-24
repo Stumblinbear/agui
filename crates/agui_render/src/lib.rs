@@ -27,6 +27,7 @@ pub mod test_harness;
 pub mod text;
 pub mod view;
 pub mod widget;
+pub mod widgets;
 pub mod window;
 
 pub use window::WindowRenderer;
@@ -55,7 +56,7 @@ pub mod prelude {
 
     pub mod element {
         pub use crate::{
-            context::{BuildCtx, MessageCtx, UpdateCtx},
+            context::{BuildCtx, CreateCtx, MessageCtx, UpdateCtx},
             element::{AnyElement, Element, LeafElement, SingleChildElement, node::ElementNode},
             scheduling::TaskHandle,
             widget::{ChildrenElement, Widget, WidgetSequence},
@@ -75,7 +76,7 @@ pub mod prelude {
                 AnyRenderObject, MultiChildRenderObject, RenderChildren, RenderObject,
                 SingleChildRenderObject,
                 box_layout::{AnyRenderBox, BoxConstraints, RenderBox},
-                node::{MountedChild, RenderNode},
+                node::{MountedChild, RenderNode, RenderObjectCell, RenderObjectPtr},
                 sliver::{AnyRenderSliver, RenderSliver},
             },
             text::{

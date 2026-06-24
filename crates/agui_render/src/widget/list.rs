@@ -5,7 +5,9 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::{Element, MultiChildElement},
     render_object::{
-        MultiChildRenderObject, RenderChildren, box_layout::RenderBox, node::RenderNode,
+        MultiChildRenderObject, RenderChildren,
+        box_layout::RenderBox,
+        node::{RenderNode, RenderObjectCell, RenderObjectPtr},
     },
     widget::{AnyWidget, Widget, any_widget::RenderBoxElement, any_widget::RenderBoxWrapper},
 };
@@ -71,7 +73,7 @@ pub trait ElementSequence {
 /// widget's render object `R`.
 pub struct ChildrenElement<L: WidgetSequence, R> {
     children: L::Elements,
-    render: R,
+    render: RenderObjectCell<R>,
 }
 
 impl<L: WidgetSequence, R> ChildrenElement<L, R> {
@@ -86,7 +88,7 @@ impl<L: WidgetSequence, R> ChildrenElement<L, R> {
 
         Self {
             children: elements,
-            render: build_render(renders),
+            render: RenderObjectCell::new(build_render(renders)),
         }
     }
 }
@@ -98,7 +100,13 @@ where
     /// Reconciles the child elements and the render object's child edges against `children`, in lockstep.
     pub fn update(&mut self, ctx: &mut UpdateCtx<'_>, children: L) {
         // SAFETY: `self.children` is our own sequence and the edges belong to our render object.
-        unsafe { children.update(ctx, &mut self.children, self.render.children_mut()) };
+        unsafe {
+            children.update(
+                ctx,
+                &mut self.children,
+                self.render.get_mut().children_mut(),
+            );
+        };
     }
 }
 
@@ -108,18 +116,21 @@ where
 {
     type Render = R;
 
-    fn render_object(&self) -> &R {
-        &self.render
+    fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
     }
 
-    fn render_object_mut(&mut self) -> &mut R {
-        &mut self.render
+    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+        self.render.render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
         // SAFETY: `self.children` is our own sequence, so its slots belong to us; the edges are our render
         // object's.
-        unsafe { self.children.mount(ctx, self.render.children_mut()) };
+        unsafe {
+            self.children
+                .mount(ctx, self.render.get_mut().children_mut());
+        };
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {

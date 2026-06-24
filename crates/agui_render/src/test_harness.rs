@@ -18,7 +18,10 @@ use crate::{
         render_pipeline::{LayoutScope, RenderPipeline},
     },
     provide::ProvideScope,
-    render_object::box_layout::{BoxConstraints, RenderBox},
+    render_object::{
+        box_layout::{BoxConstraints, RenderBox},
+        node::RenderObjectPtr,
+    },
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
     view::{View, ViewHandle},
     widget::Widget,
@@ -486,19 +489,19 @@ where
 {
     type Render = ();
 
-    fn render_object(&self) -> &() {
-        &self.render
-    }
-
     fn render_object_mut(&mut self) -> &mut () {
         &mut self.render
     }
 
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
+    }
+
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        // The tester does not lay out, so the child's render has no parent edge to wire into; mounting it for
-        // its own subtree is all that is needed, and the returned edge is dropped.
+        // The tester does not lay out, so the child's render has no parent pointer to wire into; mounting it
+        // for its own subtree is all that is needed, and the returned handle is dropped.
         // SAFETY: `self.child` is our own slot.
-        let _edge = unsafe { ctx.mount(&mut self.child) };
+        let _mounted = unsafe { ctx.mount(&mut self.child) };
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
