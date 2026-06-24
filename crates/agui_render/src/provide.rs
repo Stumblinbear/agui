@@ -196,7 +196,9 @@ impl<V, C> ProvideElement<V, C> {
     }
 }
 
-impl<V, C> Element for ProvideElement<V, C>
+// SAFETY: reconciles its single child only through the cursor child operations and forwards render resolution
+// to it.
+unsafe impl<V, C> Element for ProvideElement<V, C>
 where
     V: Any,
     C: Element,

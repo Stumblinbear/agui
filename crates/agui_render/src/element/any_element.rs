@@ -100,7 +100,8 @@ fn rebase_to_boxed<R: ?Sized>(
     unsafe { ctx.rebase(NonNull::new_unchecked(inner)) };
 }
 
-impl<R: ?Sized> Element for Box<dyn AnyElement<Render = R>> {
+// SAFETY: forwards every operation to the inner erased `Element`, which upholds the contract.
+unsafe impl<R: ?Sized> Element for Box<dyn AnyElement<Render = R>> {
     type Render = R;
 
     fn render_object_mut(&mut self) -> &mut R {

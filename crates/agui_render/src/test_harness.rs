@@ -482,7 +482,9 @@ struct TestRoot<W: Widget> {
     render: (),
 }
 
-impl<W> Element for TestRoot<W>
+// SAFETY: mounts and unmounts its single child through the cursor child operations; its own render is `()` and
+// never dereferenced.
+unsafe impl<W> Element for TestRoot<W>
 where
     W: Widget + 'static,
     W::Element: 'static,

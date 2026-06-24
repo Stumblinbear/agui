@@ -110,7 +110,9 @@ where
     }
 }
 
-impl<L: WidgetSequence, R> Element for ChildrenElement<L, R>
+// SAFETY: reconciles its child list only through the cursor child operations — balanced registration, slots
+// reused only on `can_update` — and resolves its render object from its own `RenderObjectCell`.
+unsafe impl<L: WidgetSequence, R> Element for ChildrenElement<L, R>
 where
     R: MultiChildRenderObject<Children = L::Renders>,
 {

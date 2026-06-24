@@ -78,7 +78,9 @@ where
     }
 }
 
-impl<S> Element for StatefulElement<S>
+// SAFETY: builds and reconciles its single child only through the cursor child operations and forwards render
+// resolution to it.
+unsafe impl<S> Element for StatefulElement<S>
 where
     S: WidgetState + 'static,
 {

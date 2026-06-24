@@ -12,7 +12,24 @@ use crate::{
 };
 
 /// A persistent node in the element tree, holding a widget's state and its child slots across rebuilds.
-pub trait Element {
+///
+/// # Safety
+/// An element co-maintains the tree and the addresses other components resolve from it as raw pointers, so a
+/// wrong implementation causes undefined behavior in other safe code, not only its own: the parent that lays
+/// out a child render object, a descendant reading a provided value, the driver dispatching a message. An
+/// implementor must uphold:
+///
+/// - Each child is registered once through the [`UpdateCtx`] child operations and deregistered once when it
+///   leaves. Leaving a child mounted, or unmounting it twice, corrupts the tree every other element walks.
+/// - A child slot is reused in place only for a child that `can_update` the previous one (same type and key);
+///   otherwise the old child is unmounted and the new one mounted. Reusing a slot across types is a
+///   type-confused read of the render object.
+/// - A render object's edge to a child is cleared when that child unmounts, so a later layout or paint
+///   resolves no freed node.
+/// - [`render_object_ptr`](Self::render_object_ptr) returns a pointer to this element's live render object,
+///   valid for as long as the element is mounted. A render-less element (`Render = ()`) returns a placeholder,
+///   sound only because that pointer is never dereferenced.
+pub unsafe trait Element {
     /// The render object this element owns and presents to its parent.
     type Render: ?Sized;
 
@@ -57,7 +74,8 @@ pub trait Element {
 }
 
 /// The leaf element with a unit render: no children, no state.
-impl Element for () {
+// SAFETY: no children to register, and the `()` render object's pointer is never dereferenced.
+unsafe impl Element for () {
     type Render = ();
 
     fn render_object_mut(&mut self) -> &mut () {
@@ -82,7 +100,9 @@ impl<R> LeafElement<R> {
     }
 }
 
-impl<R> Element for LeafElement<R> {
+// SAFETY: no children to register; `render_object_ptr` returns the cell's pointer, valid for the element's
+// mounted life.
+unsafe impl<R> Element for LeafElement<R> {
     type Render = R;
 
     fn render_object_mut(&mut self) -> &mut R {

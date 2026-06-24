@@ -185,7 +185,9 @@ impl<C: Element> ViewElement<C> {
     }
 }
 
-impl<C> Element for ViewElement<C>
+// SAFETY: mounts and unmounts its single child through the cursor child operations, clearing the render edge
+// on unmount; its own render is `()` and never dereferenced.
+unsafe impl<C> Element for ViewElement<C>
 where
     C: Element<Render = dyn RenderBox>,
 {

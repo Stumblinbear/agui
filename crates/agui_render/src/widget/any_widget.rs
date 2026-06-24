@@ -92,7 +92,9 @@ pub struct ErasedElement<R: ?Sized> {
     _render: PhantomData<fn() -> R>,
 }
 
-impl<R: ?Sized + 'static> Element for ErasedElement<R> {
+// SAFETY: forwards child management and render resolution to its single inner element, which upholds the
+// contract.
+unsafe impl<R: ?Sized + 'static> Element for ErasedElement<R> {
     type Render = R;
 
     fn render_object_mut(&mut self) -> &mut R {
@@ -244,7 +246,9 @@ pub struct RenderBoxElement<E> {
     inner: E,
 }
 
-impl<E> Element for RenderBoxElement<E>
+// SAFETY: forwards child management to its inner element; `render_object_ptr` is the inner's, erased to
+// `dyn RenderBox`, valid for the element's mounted life.
+unsafe impl<E> Element for RenderBoxElement<E>
 where
     E: Element,
     E::Render: RenderBox + Sized,
@@ -326,7 +330,9 @@ struct RenderSliverElement<E> {
     inner: E,
 }
 
-impl<E> Element for RenderSliverElement<E>
+// SAFETY: forwards child management to its inner element; `render_object_ptr` is the inner's, erased to
+// `dyn RenderSliver`, valid for the element's mounted life.
+unsafe impl<E> Element for RenderSliverElement<E>
 where
     E: Element,
     E::Render: RenderSliver + Sized,

@@ -83,7 +83,8 @@ pub struct LeafElement {
     render: (),
 }
 
-impl Element for LeafElement {
+// SAFETY: a leaf with no children; its `()` render object is never dereferenced.
+unsafe impl Element for LeafElement {
     type Render = ();
 
     fn render_object_mut(&mut self) -> &mut () {
@@ -285,7 +286,8 @@ pub struct ProbeElement {
     render: (),
 }
 
-impl Element for ProbeElement {
+// SAFETY: a leaf with no children; its `()` render object is never dereferenced.
+unsafe impl Element for ProbeElement {
     type Render = ();
 
     fn render_object_mut(&mut self) -> &mut () {

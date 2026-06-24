@@ -55,7 +55,9 @@ impl<C: Element, R> SingleChildElement<C, R> {
     }
 }
 
-impl<C, R> Element for SingleChildElement<C, R>
+// SAFETY: manages its single child only through the cursor child operations, and resolves its render object
+// from its own `RenderObjectCell`.
+unsafe impl<C, R> Element for SingleChildElement<C, R>
 where
     C: Element,
     R: SingleChildRenderObject<Child = C::Render>,
