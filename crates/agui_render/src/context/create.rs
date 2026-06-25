@@ -7,8 +7,8 @@ use crate::context::BuildCtx;
 use crate::paint::compositing::{LayerHandle, OffsetLayer};
 use crate::pipeline::BoundaryContent;
 use crate::pipeline::render_pipeline::{
-    LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, PaintScope,
-    RenderPipeline,
+    LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, PaintContent,
+    PaintScope, RenderPipeline,
 };
 use crate::provide::ProvideScope;
 
@@ -62,7 +62,15 @@ impl CreateCtx {
         content: BoundaryContent,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
-        self.pipeline
-            .register_paint_boundary(PaintScope::detached(), content, layer)
+        let handle = self.pipeline.register_paint_boundary(
+            PaintScope::detached(),
+            PaintContent::Root(content),
+            layer,
+        );
+
+        // The root paints through the flush, so mark it for an initial bits settle and paint.
+        handle.mark_needs_compositing_bits_update();
+
+        handle
     }
 }

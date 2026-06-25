@@ -171,9 +171,9 @@ impl<R: ?Sized> MountedChild<R> {
         }
     }
 
-    /// Resolves and exclusively borrows the child render object, for a relayout boundary holding this handle to
-    /// re-lay it. As with [`RenderNode::borrow_mut`], call only during a pass.
-    fn borrow_mut(&self) -> RenderObjectMut<'_, R> {
+    /// Resolves and exclusively borrows the child render object, for a boundary holding this handle to re-lay or
+    /// repaint it. As with [`RenderNode::borrow_mut`], call only during a pass.
+    pub fn borrow_mut(&self) -> RenderObjectMut<'_, R> {
         // SAFETY: as `RenderNode::resolve` — pass time, no element hook on the stack.
         let inner = unsafe { (self.resolve)(self.node) }.0;
         debug_mark_borrowed(inner);
@@ -271,6 +271,24 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     pub fn clear(&mut self) {
         self.child = None;
         self.boundary = None;
+    }
+
+    /// The deferred handle to the wired child, copied out, so a render object can register the child as a
+    /// repaint boundary. Reached only after mount.
+    ///
+    /// # Safety
+    /// The handle resolves a raw pointer to the child render object. The caller must resolve it only during a
+    /// layout or paint pass, and must not keep it, or a boundary registered with it, past the child's unmount
+    /// or replacement. `RenderNode` drops its own boundary in [`set`](Self::set) and [`clear`](Self::clear)
+    /// for this reason.
+    ///
+    /// # Panics
+    /// If the child is unwired (reached before mount).
+    pub unsafe fn child_handle(&self) -> MountedChild<R> {
+        *self
+            .child
+            .as_ref()
+            .expect("child render node used before it was wired at mount")
     }
 
     /// Resolves the child's render object pointer, fresh, from its mounted address.

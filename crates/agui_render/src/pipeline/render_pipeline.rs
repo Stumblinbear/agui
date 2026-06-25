@@ -21,6 +21,7 @@ use crate::{
         scene::SceneCapacity,
     },
     pipeline::{BoundaryContent, FramePhase},
+    render_object::{box_layout::RenderBox, node::MountedChild},
 };
 
 new_key_type! {
@@ -88,12 +89,41 @@ struct LayoutBoundaryCell {
 
 struct PaintBoundary {
     depth: usize,
-    content: BoundaryContent,
+    content: PaintContent,
     layer: LayerHandle<OffsetLayer>,
     /// The buffer lengths the last repaint recorded, sizing the next repaint's buffers.
     paint_capacity: SceneCapacity,
     /// Bit 0: in `paint_bits_dirty`. Bit 1: in `paint_dirty`. Keeps a second mark from enrolling twice.
     enrolled: u8,
+}
+
+/// What a repaint boundary recomputes its compositing bits and repaints: the root view's render object, held
+/// in a shared cell, or an inline boundary's child, reached by deferred handle. Both resolve to a
+/// `&mut dyn RenderBox` the driver calls the two phase methods on, in their two separate passes.
+#[derive(Clone)]
+pub(crate) enum PaintContent {
+    Root(BoundaryContent),
+    Inline(MountedChild<dyn RenderBox>),
+}
+
+impl PaintContent {
+    fn update_compositing_bits(&self) {
+        match self {
+            Self::Root(content) => {
+                content.borrow_mut().dyn_update_compositing_bits();
+            }
+            Self::Inline(handle) => {
+                handle.borrow_mut().update_compositing_bits();
+            }
+        }
+    }
+
+    fn paint(&self, ctx: &mut PaintCtx, offset: Offset) {
+        match self {
+            Self::Root(content) => content.borrow_mut().dyn_paint(ctx, offset),
+            Self::Inline(handle) => handle.borrow_mut().paint(ctx, offset),
+        }
+    }
 }
 
 /// The work a repaint boundary owes, which are also the flush phases, in order: compositing bits settle
@@ -155,7 +185,7 @@ impl RenderPipeline {
     /// and unregisters it. A render object registers its boundary this way the first time it is laid out as
     /// one. Its enclosing repaint boundary is recorded later, at paint, through
     /// [`set_paint_scope`](LayoutBoundaryHandle::set_paint_scope).
-    pub fn register_layout_boundary(
+    pub(crate) fn register_layout_boundary(
         &self,
         enclosing: LayoutScope,
         boundary: Box<dyn LayoutBoundary>,
@@ -179,12 +209,12 @@ impl RenderPipeline {
     }
 
     /// Registers `content` as a repaint boundary nested under `enclosing`, painting into `layer`, and
-    /// returns the handle that owns and unregisters it. The new boundary is marked for an initial
-    /// compositing-bits settle and paint.
-    pub fn register_paint_boundary(
+    /// returns the handle that owns and unregisters it. The new boundary is left unmarked: the caller either
+    /// marks it (the root view) or paints it in the same pass it registers in (an inline boundary).
+    pub(crate) fn register_paint_boundary(
         &self,
         enclosing: PaintScope,
-        content: BoundaryContent,
+        content: PaintContent,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
         let mut inner = self.inner.borrow_mut();
@@ -197,13 +227,6 @@ impl RenderPipeline {
             paint_capacity: SceneCapacity::default(),
             enrolled: 0,
         });
-
-        let was_clean = inner.is_clean();
-        inner.mark_paint(id, PaintPhase::CompositingBits);
-        inner.mark_paint(id, PaintPhase::Paint);
-        if was_clean {
-            (inner.notify)();
-        }
 
         PaintBoundaryHandle {
             id,
@@ -367,11 +390,11 @@ impl RenderPipeline {
 
         for &id in &*scratch {
             let content = match self.inner.borrow().paint.get(id) {
-                Some(boundary) => Rc::clone(&boundary.content),
+                Some(boundary) => boundary.content.clone(),
                 None => continue,
             };
 
-            content.borrow_mut().dyn_update_compositing_bits();
+            content.update_compositing_bits();
         }
     }
 
@@ -385,7 +408,7 @@ impl RenderPipeline {
         for &id in &*scratch {
             let (content, layer, capacity) = match self.inner.borrow().paint.get(id) {
                 Some(boundary) => (
-                    Rc::clone(&boundary.content),
+                    boundary.content.clone(),
                     boundary.layer.clone(),
                     boundary.paint_capacity,
                 ),
@@ -396,7 +419,7 @@ impl RenderPipeline {
 
             let recorded =
                 PaintCtx::paint_with_capacity(&layer, capacity, self, PaintScope(id), |ctx| {
-                    content.borrow_mut().dyn_paint(ctx, Offset::ZERO);
+                    content.paint(ctx, Offset::ZERO);
                 });
 
             if let Some(boundary) = self.inner.borrow_mut().paint.get_mut(id) {

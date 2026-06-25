@@ -10,10 +10,10 @@ use crate::{
         },
         scene::{Scene, SceneCapacity},
     },
-    pipeline::{
-        BoundaryContent,
-        render_pipeline::{DeferredPaintScope, PaintBoundaryHandle, PaintScope, RenderPipeline},
+    pipeline::render_pipeline::{
+        DeferredPaintScope, PaintBoundaryHandle, PaintContent, PaintScope, RenderPipeline,
     },
+    render_object::{box_layout::RenderBox, node::MountedChild},
 };
 
 /// A paint's remaining buffer capacity and the lengths recorded so far, shared by every picture
@@ -189,17 +189,32 @@ impl PaintCtx<'_> {
         self.scope
     }
 
-    /// Registers `content` as a repaint boundary nested under the boundary in force, painting into `layer`,
-    /// and returns the handle that owns and marks it. A node that becomes a repaint boundary registers itself
-    /// this way during paint, then embeds `layer` with [`add_layer`](Self::add_layer); the driver paints the
-    /// boundary's content into `layer` on its own pass.
+    /// Registers the child reached by `content` as a repaint boundary nested under the boundary in force,
+    /// painting into `layer`, and returns the handle that owns and marks it. A node that becomes a repaint
+    /// boundary registers itself this way during paint, fills `layer` in the same pass with
+    /// [`push_boundary_layer`](Self::push_boundary_layer), and on later frames embeds it with
+    /// [`add_layer`](Self::add_layer); the driver repaints its content into `layer` on its own pass.
     pub fn register_paint_boundary(
         &self,
-        content: BoundaryContent,
+        content: MountedChild<dyn RenderBox>,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
         self.pipeline
-            .register_paint_boundary(self.scope, content, layer)
+            .register_paint_boundary(self.scope, PaintContent::Inline(content), layer)
+    }
+
+    /// Paints `content` into `layer` as repaint boundary `scope`, then embeds the layer here at `offset`. A
+    /// node that just registered itself as a repaint boundary uses this to fill its layer in the same pass, so
+    /// the layer is not blank until the boundary's first isolated repaint.
+    pub fn push_boundary_layer(
+        &mut self,
+        scope: PaintScope,
+        layer: LayerHandle<OffsetLayer>,
+        offset: Offset,
+        content: impl FnOnce(&mut PaintCtx),
+    ) {
+        PaintCtx::paint(&layer, self.pipeline, scope, content);
+        self.add_layer(layer, offset);
     }
 
     /// A deferred handle to the boundary in force, for marking it from a per-frame animation callback that

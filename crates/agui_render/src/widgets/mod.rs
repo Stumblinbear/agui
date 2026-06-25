@@ -9,6 +9,7 @@ pub mod intrinsic_width;
 pub mod listener;
 pub mod opacity;
 pub mod padding;
+pub mod repaint_boundary;
 pub mod rich_text;
 pub mod sized_box;
 pub mod text;
