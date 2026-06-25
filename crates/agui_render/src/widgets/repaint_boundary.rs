@@ -268,7 +268,7 @@ mod tests {
             scope: Rc::clone(&scope),
         });
 
-        let (owner, view) = TestCtx::new().mount_view(widget);
+        let (mut owner, view) = TestCtx::new().mount_view(widget);
         view.resize(BoxConstraints::new(0, 100, 0, 100));
         owner.flush_layout();
         owner.flush_paint();

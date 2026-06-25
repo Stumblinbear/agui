@@ -239,7 +239,7 @@ impl TestCtx {
 
     /// A [`LayoutCtx`] over this context's pipeline with a detached relayout scope, for laying a
     /// render object out in isolation. Reuse it to lay the same render object out more than once.
-    pub fn layout_ctx(&self) -> LayoutCtx<'_> {
+    pub fn layout_ctx(&self) -> LayoutCtx<'_, '_> {
         LayoutCtx::new(&self.pipeline, LayoutScope::detached())
     }
 

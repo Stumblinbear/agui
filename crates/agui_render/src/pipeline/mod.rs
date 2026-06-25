@@ -31,6 +31,38 @@ pub(crate) use phase::FramePhase;
 /// and a repaint boundary is held in one place.
 pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
 
+/// The element-tree access a layout-time build needs, lent to the layout pass by the owner: the tree to
+/// re-enter at a node, the dirty set, and the scope in force. A `LayoutBuilder` reaches it through
+/// [`LayoutCtx::build_child`](crate::context::LayoutCtx::build_child) to build its child for the constraints it
+/// was just handed. The scheduler comes separately, from the `LayoutBuilder`, which captured a deferred one at
+/// mount.
+pub struct LayoutBuildHost<'a> {
+    tree: &'a mut Tree<RootElement, Build>,
+    queue: &'a mut BuildQueue,
+    provide: ProvideScope,
+}
+
+impl LayoutBuildHost<'_> {
+    /// Hands `f` an [`UpdateCtx`] positioned at the element `handle` names, returning `f`'s result, or `None`
+    /// if the element is gone.
+    pub(crate) fn build<R>(
+        &mut self,
+        handle: NodeHandle,
+        pipeline: &RenderPipeline,
+        scheduler: &mut dyn TaskScheduler,
+        f: impl FnOnce(&mut UpdateCtx) -> R,
+    ) -> Option<R> {
+        let provide = self.provide;
+        let queue = &mut *self.queue;
+        // `with_cursor`, not a dispatch op: the element is not reborrowed as `&mut`, so a render object's
+        // in-flight layout borrow on it stands.
+        self.tree.with_cursor(handle, |cursor| {
+            let mut ctx = UpdateCtx::new(cursor, provide, queue, pipeline, scheduler);
+            f(&mut ctx)
+        })
+    }
+}
+
 /// Drives one widget tree: it builds and rebuilds the element tree, and lays out and paints the render
 /// boundaries the tree's [`View`](crate::view::View)s plant in its [`RenderPipeline`]. The root renders
 /// nothing; each `View` retains and presents its own render subtree through the pipeline.
@@ -110,9 +142,23 @@ impl PipelineOwner {
     }
 
     /// Re-lays every relayout boundary marked since the last frame, applying any out-of-band marks first.
-    pub fn flush_layout(&self) {
-        self.pipeline.drain_deferred();
-        self.pipeline.flush_layout();
+    pub fn flush_layout(&mut self) {
+        let Self {
+            tree,
+            queue,
+            provide,
+            pipeline,
+        } = self;
+        let pipeline = pipeline.clone();
+
+        pipeline.drain_deferred();
+
+        let host = RefCell::new(LayoutBuildHost {
+            tree,
+            queue,
+            provide: *provide,
+        });
+        pipeline.flush_layout(&host);
     }
 
     /// Repaints every repaint boundary marked since the last frame.

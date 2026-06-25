@@ -20,7 +20,7 @@ use crate::{
         compositing::{LayerHandle, OffsetLayer},
         scene::SceneCapacity,
     },
-    pipeline::{BoundaryContent, FramePhase},
+    pipeline::{BoundaryContent, FramePhase, LayoutBuildHost},
     render_object::{box_layout::RenderBox, node::MountedChild},
 };
 
@@ -319,7 +319,7 @@ impl RenderPipeline {
 
     /// Re-lays every marked relayout boundary from the constraints it last took, rootmost-first, leaving the
     /// rest untouched.
-    pub fn flush_layout(&self) {
+    pub(crate) fn flush_layout(&self, host: &RefCell<LayoutBuildHost>) {
         let _phase = self.enter_phase(FramePhase::Layout);
 
         let mut scratch = {
@@ -346,7 +346,7 @@ impl RenderPipeline {
                 continue;
             };
 
-            let mut ctx = LayoutCtx::new(self, LayoutScope(id));
+            let mut ctx = LayoutCtx::with_host(self, LayoutScope(id), host);
             boundary.relayout(&mut ctx);
 
             // Put the boundary back, unless its own re-lay unregistered it.

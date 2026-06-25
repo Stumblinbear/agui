@@ -362,6 +362,26 @@ impl<R, N: NodeDispatch> Tree<R, N> {
         true
     }
 
+    /// Vends a cursor at the node `h` names to `f`, returning its result, or `None` if the node is gone. `f`
+    /// registers and reconciles children through the cursor. Unlike [`dispatch_with_cursor`](Self::dispatch_with_cursor)
+    /// it runs no dispatch fn and so does not reborrow the node as `&mut`; a caller already holding a borrow
+    /// into the node may reconcile its children through this.
+    pub fn with_cursor<'a, Ret>(
+        &'a mut self,
+        h: NodeHandle,
+        f: impl FnOnce(Cursor<'a, N>) -> Ret,
+    ) -> Option<Ret> {
+        let entry = self.reg.heads.get(h)?;
+        let (node, depth) = (entry.node, entry.depth);
+        let cursor = Cursor {
+            reg: &mut self.reg,
+            this: node,
+            handle: h,
+            depth,
+        };
+        Some(f(cursor))
+    }
+
     /// Dispatches a cursorless operation (no structural changes) to the node `h` names. Returns `false` if
     /// the node is gone.
     pub fn dispatch(&mut self, h: NodeHandle, operation: N::Operation<'_>) -> bool {

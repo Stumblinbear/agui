@@ -358,7 +358,7 @@ mod tests {
         let paints = Rc::clone(&render.paints);
 
         let mut ctx = TestCtx::new();
-        let (owner, view) = ctx.mount_view(RawWidget::new(render));
+        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
 
         view.resize(BoxConstraints::tight(Size::new(120.0_f32, 80.0)));
         owner.flush_layout();
@@ -381,7 +381,7 @@ mod tests {
         let laid_out = Rc::clone(&render.laid_out);
 
         let mut ctx = TestCtx::new();
-        let (owner, view) = ctx.mount_view(RawWidget::new(render));
+        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
 
         view.resize(BoxConstraints::tight(Size::new(100.0_f32, 100.0)));
         owner.flush_layout();
@@ -402,7 +402,7 @@ mod tests {
         let paints = Rc::clone(&render.paints);
 
         let mut ctx = TestCtx::new();
-        let (owner, view) = ctx.mount_view(RawWidget::new(render));
+        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
 
         view.resize(BoxConstraints::tight(Size::new(100.0_f32, 100.0)));
         owner.flush_layout();
@@ -424,7 +424,7 @@ mod tests {
     #[test]
     fn hit_testing_an_empty_view_is_harmless() {
         let mut ctx = TestCtx::new();
-        let (owner, view) = ctx.mount_view(RawWidget::new(RecordingBox::new()));
+        let (mut owner, view) = ctx.mount_view(RawWidget::new(RecordingBox::new()));
 
         view.resize(BoxConstraints::tight(Size::new(64.0_f32, 64.0)));
         owner.flush_layout();
@@ -441,7 +441,7 @@ mod tests {
         let boundary = Rc::clone(&render.boundary);
 
         let mut ctx = TestCtx::new();
-        let (owner, view) = ctx.mount_view(RawWidget::new(render));
+        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
 
         view.resize(BoxConstraints::tight(Size::new(40.0_f32, 40.0)));
         owner.flush_layout();
