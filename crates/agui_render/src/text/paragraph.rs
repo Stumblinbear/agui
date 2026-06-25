@@ -386,7 +386,7 @@ impl<C: RenderBox + ?Sized> RenderBox for RenderParagraph<C> {
     }
 }
 
-/// A box render object that shapes, sizes, and paints a single run of text with no inline children — the
+/// A box render object that shapes, sizes, and paints a single run of text with no inline children. It is the
 /// fast path for plain text, without the inline-placeholder machinery of [`RenderParagraph`].
 pub struct RenderText {
     content: ParagraphContent,

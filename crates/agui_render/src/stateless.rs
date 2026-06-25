@@ -11,7 +11,7 @@ use crate::{
 
 /// A widget with no state of its own: it builds a subtree from its own fields and the values in scope.
 ///
-/// Implement this for a widget that is pure configuration but still needs to read provided values — which a
+/// Implement this for a widget that is pure configuration but still needs to read provided values, which a
 /// leaf render-object widget cannot. [`build`](Self::build) runs at mount and on every rebuild: a reconcile
 /// with new fields, or a change to a provided value it read.
 pub trait StatelessWidget {

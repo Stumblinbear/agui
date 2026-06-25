@@ -5,7 +5,7 @@ use crate::{
     prelude::{element::*, render_object::*},
 };
 
-/// A widget that composites its subtree at a reduced `opacity` — `0.0` fully transparent, `1.0` fully
+/// A widget that composites its subtree at a reduced `opacity`, from `0.0` fully transparent to `1.0` fully
 /// opaque.
 pub struct Opacity<Child> {
     opacity: f32,
@@ -96,7 +96,7 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderOpacity<Child>
 }
 
 impl<Child: ?Sized> RenderOpacity<Child> {
-    /// Whether the current opacity needs a compositing layer — only a partial opacity does.
+    /// Whether the current opacity needs a compositing layer. Only a partial opacity does.
     fn needs_layer(&self) -> bool {
         self.opacity > 0.0 && self.opacity < 1.0
     }
