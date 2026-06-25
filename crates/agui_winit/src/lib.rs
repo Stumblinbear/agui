@@ -27,7 +27,8 @@ pub struct WindowOptions {
 pub fn run_app<V, R>(options: WindowOptions, renderer: R, build: impl FnOnce(Vsync) -> V)
 where
     V: Widget + 'static,
-    V::Render: RenderBox,
+    V::Element: 'static,
+    V::Render: RenderBox + Sized,
     R: WindowRenderer + 'static,
 {
     let vsync = Vsync::new();

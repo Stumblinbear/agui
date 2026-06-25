@@ -82,7 +82,8 @@ impl WindowDriver {
     pub(crate) fn new<V>(widget: V, vsync: Vsync, proxy: EventLoopProxy<WakeUp>) -> Self
     where
         V: Widget + 'static,
-        V::Render: RenderBox,
+        V::Element: 'static,
+        V::Render: RenderBox + Sized,
     {
         let executor = Rc::new(LocalExecutor::new());
         let waker = Waker::from(Arc::new(ProxyWaker(proxy)));
@@ -146,7 +147,7 @@ impl WindowDriver {
             let messages = self.events_rx.try_iter().collect::<Vec<_>>();
             let delivered = !messages.is_empty();
             for (path, message) in messages {
-                self.owner.dispatch_message(&path, message);
+                self.owner.dispatch_message(path, message);
             }
 
             if !ran && !delivered {
