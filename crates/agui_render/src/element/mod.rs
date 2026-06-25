@@ -73,20 +73,6 @@ pub unsafe trait Element {
     }
 }
 
-/// The leaf element with a unit render: no children, no state.
-// SAFETY: no children to register, and the `()` render object's pointer is never dereferenced.
-unsafe impl Element for () {
-    type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        self
-    }
-
-    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
-        RenderObjectPtr::dangling()
-    }
-}
-
 /// A leaf element with no children, owning the render object its widget produced.
 pub struct LeafElement<R> {
     render: RenderObjectCell<R>,

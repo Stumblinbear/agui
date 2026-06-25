@@ -344,4 +344,15 @@ mod tests {
             "should expand to the largest size possible within the constraints"
         );
     }
+
+    #[test]
+    fn a_childless_box_lays_out_and_paints() {
+        // A childless `SizedBox` has a `()` child render object; laying it out and painting it must run
+        // `()`'s no-op `RenderBox` through its real (zero-sized) storage, not dereference an absent one.
+        let (mut owner, view) = TestCtx::new().mount_view(SizedBox::new().width(16).height(48));
+        view.resize(BoxConstraints::new(0, 128, 0, 128));
+        owner.flush_layout();
+        owner.flush_paint();
+        let _frame = view.composite_frame();
+    }
 }

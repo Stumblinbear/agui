@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use crate::{
     context::{CreateCtx, UpdateCtx},
-    element::Element,
+    element::{Element, LeafElement},
     key::AnyKeyable,
 };
 
@@ -49,11 +49,13 @@ pub trait Widget {
 }
 
 impl Widget for () {
-    type Element = ();
+    type Element = LeafElement<()>;
 
     type Render = ();
 
-    fn create(self, _ctx: &mut CreateCtx) {}
+    fn create(self, _ctx: &mut CreateCtx) -> LeafElement<()> {
+        LeafElement::new(())
+    }
 
-    fn update(self, _ctx: &mut UpdateCtx<'_>, (): &mut ()) {}
+    fn update(self, _ctx: &mut UpdateCtx<'_>, _element: &mut LeafElement<()>) {}
 }
