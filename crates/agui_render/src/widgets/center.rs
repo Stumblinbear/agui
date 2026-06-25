@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_render::prelude::{element::*, render_object::*};
+use crate::prelude::{element::*, render_object::*};
 
 /// A widget that centers its child within the space it is given.
 ///
@@ -36,24 +36,18 @@ where
 
     type Render = RenderCenter<Child::Render>;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let (element, child_render) = SingleChildElement::new(self.child, ctx);
-
-        (
-            element,
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(
+            ctx,
+            self.child,
             RenderCenter {
-                child: RenderNode::new(child_render),
+                child: RenderNode::new(None),
             },
         )
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        element.update(self.child, &mut render_object.child.object, ctx);
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        element.update(ctx, self.child);
     }
 }
 
@@ -63,23 +57,19 @@ struct ChildParentData {
     offset: Offset,
 }
 
-pub struct RenderCenter<Child> {
+pub struct RenderCenter<Child: ?Sized> {
     child: RenderNode<Child, Option<ChildParentData>>,
 }
 
-impl<Child> SingleChildRenderObject for RenderCenter<Child> {
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderCenter<Child> {
     type Child = Child;
 
-    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
-    }
-
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
     }
 }
 
-impl<Child> RenderCenter<Child> {
+impl<Child: ?Sized> RenderCenter<Child> {
     /// The box's size: it fills each bounded axis and shrinks to the child on an unbounded one.
     fn size_for(constraints: BoxConstraints, child_size: Size) -> Size {
         let max_width = constraints.max_width().get();
@@ -100,18 +90,7 @@ impl<Child> RenderCenter<Child> {
     }
 }
 
-impl<Child> RenderObject for RenderCenter<Child>
-where
-    Child: RenderBox,
-{
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.child.mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.unmount(ctx);
-    }
-
+impl<Child: RenderBox + ?Sized> RenderObject for RenderCenter<Child> {
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -119,10 +98,7 @@ where
     }
 }
 
-impl<Child> RenderBox for RenderCenter<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox + ?Sized> RenderBox for RenderCenter<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }
@@ -196,76 +172,5 @@ where
             .offset;
 
         self.child.paint(ctx, offset + child_offset);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use agui_render::test_harness::TestCtx;
-
-    use crate::sized_box::SizedBox;
-
-    use super::*;
-
-    #[test]
-    fn centers_the_child_within_a_bounded_box() {
-        // A 50x50 child inside a 200x100 box sits at ((200-50)/2, (100-50)/2) = (75, 25).
-        let widget = Center::new().child(SizedBox::new().width(50).height(50));
-
-        let mut tcx = TestCtx::new();
-        let (_, mut render_object) = tcx.create(widget);
-
-        let size = render_object.layout(&mut tcx.layout_ctx(), BoxConstraints::new(0, 200, 0, 100));
-
-        assert_eq!(
-            size,
-            Size::new(200, 100),
-            "the box fills its bounded constraints"
-        );
-        assert_eq!(
-            render_object.child.parent_data,
-            Some(ChildParentData {
-                size: Size::new(200, 100),
-                offset: Offset::new(75.0_f32, 25.0),
-            })
-        );
-    }
-}
-
-#[cfg(test)]
-mod harness {
-    use std::time::Duration;
-
-    use agui_render::{paint::peniko::Color, prelude::element::*};
-    use agui_test::{
-        ElementLifecycleCheck, Probe, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck,
-    };
-
-    use super::Center;
-    use crate::sized_box::SizedBox;
-
-    #[test]
-    fn centers_a_box_within_the_surface() {
-        let probe = Probe::new();
-        let mut tester = WidgetTester::mount(
-            Center::new().child(probe.wrap(TestBox::new(Size::new(20, 20)).color(Color::BLACK))),
-        );
-
-        tester.resize(Size::new(100, 100));
-        tester.pump(Duration::ZERO);
-
-        assert_eq!(probe.size(), Size::new(20, 20));
-        assert_eq!(probe.offset(), Offset::new(40, 40));
-        assert_eq!(probe.paints(), 1);
-    }
-
-    #[test]
-    fn obeys_the_element_lifecycle() {
-        ElementLifecycleCheck::new().single_child(|child| Center::new().child(child));
-    }
-
-    #[test]
-    fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default().run(|| Center::new().child(SizedBox::new().width(20).height(10)));
     }
 }

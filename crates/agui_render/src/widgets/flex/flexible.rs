@@ -1,6 +1,6 @@
 use bon::Builder;
 
-use crate::flex::FlexFit;
+use super::FlexFit;
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]

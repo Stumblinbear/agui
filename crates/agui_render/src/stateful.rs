@@ -78,6 +78,25 @@ where
     }
 }
 
+impl<S> StatefulElement<S>
+where
+    S: WidgetState + 'static,
+{
+    /// Reconciles this element against new `widget` props: applies [`WidgetState::did_update_widget`],
+    /// rebuilds, and reconciles the child in place. A stateful widget's [`Widget::update`] forwards here.
+    pub fn update_widget(&mut self, ctx: &mut UpdateCtx<'_>, widget: S::Widget) {
+        let scope = self.scope;
+        ctx.with_scope(scope, |ctx| {
+            ctx.build(|ctx| self.state.did_update_widget(ctx, widget));
+            let child = ctx.build(|ctx| self.state.build(ctx));
+            // SAFETY: `self.child` is our own slot, built at mount.
+            unsafe {
+                ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
+            }
+        });
+    }
+}
+
 // SAFETY: builds and reconciles its single child only through the cursor child operations and forwards render
 // resolution to it.
 unsafe impl<S> Element for StatefulElement<S>

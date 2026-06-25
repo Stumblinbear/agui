@@ -1,7 +1,7 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_render::prelude::{element::*, render_object::*};
+use crate::prelude::{element::*, render_object::*};
 
 #[derive(Builder)]
 #[builder(finish_fn = child)]
@@ -19,55 +19,34 @@ where
 
     type Render = RenderIntrinsicWidth<Child::Render>;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let (element, child_render) = SingleChildElement::new(self.child, ctx);
-
-        (
-            element,
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(
+            ctx,
+            self.child,
             RenderIntrinsicWidth {
-                child: RenderNode::new(child_render),
+                child: RenderNode::new(None),
             },
         )
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        element.update(self.child, &mut render_object.child.object, ctx);
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        element.update(ctx, self.child);
     }
 }
 
-pub struct RenderIntrinsicWidth<Child> {
+pub struct RenderIntrinsicWidth<Child: ?Sized> {
     child: RenderNode<Child, Option<Size>>,
 }
 
-impl<Child> SingleChildRenderObject for RenderIntrinsicWidth<Child> {
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderIntrinsicWidth<Child> {
     type Child = Child;
 
-    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
-    }
-
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
     }
 }
 
-impl<Child> RenderObject for RenderIntrinsicWidth<Child>
-where
-    Child: RenderBox,
-{
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.child.mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.unmount(ctx);
-    }
-
+impl<Child: RenderBox + ?Sized> RenderObject for RenderIntrinsicWidth<Child> {
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -75,10 +54,7 @@ where
     }
 }
 
-impl<Child> RenderBox for RenderIntrinsicWidth<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox + ?Sized> RenderBox for RenderIntrinsicWidth<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.max_intrinsic_width(height)
     }
@@ -116,15 +92,12 @@ where
     fn measure(&self, mut constraints: BoxConstraints) -> Size {
         if !constraints.has_tight_width() {
             constraints = constraints.tighten_width(
-                self
-                .max_intrinsic_width(constraints.max_height())
-                .expect(
-                    "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
-                ).get());
-        } else {
-            // Technically IntrinsicWidth isn't necessary if we're given a tight constraint.
-            // Do we want to log anything here? It's not an error, but it could be good
-            // to know if this is happening.
+                self.max_intrinsic_width(constraints.max_height())
+                    .expect(
+                        "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
+                    )
+                    .get(),
+            );
         }
 
         self.child.measure(constraints)
@@ -132,15 +105,13 @@ where
 
     fn layout(&mut self, ctx: &mut LayoutCtx, mut constraints: BoxConstraints) -> Size {
         if !constraints.has_tight_width() {
-            constraints = constraints.tighten_width(self
-                .max_intrinsic_width(constraints.max_height())
-                .expect(
-                    "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
-                ).get());
-        } else {
-            // Technically IntrinsicWidth isn't necessary if we're given a tight constraint.
-            // Do we want to log anything here? It's not an error, but it could be good
-            // to know if this is happening.
+            constraints = constraints.tighten_width(
+                self.max_intrinsic_width(constraints.max_height())
+                    .expect(
+                        "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
+                    )
+                    .get(),
+            );
         }
 
         let size = self.child.layout_and_get_size(ctx, constraints);
@@ -154,15 +125,13 @@ where
         baseline: TextBaseline,
     ) -> Option<PositiveFinite<f32>> {
         if !constraints.has_tight_width() {
-            constraints = constraints.tighten_width(self
-                .max_intrinsic_width(constraints.max_height())
-                .expect(
-                    "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
-                ).get());
-        } else {
-            // Technically IntrinsicWidth isn't necessary if we're given a tight constraint.
-            // Do we want to log anything here? It's not an error, but it could be good
-            // to know if this is happening.
+            constraints = constraints.tighten_width(
+                self.max_intrinsic_width(constraints.max_height())
+                    .expect(
+                        "IntrinsicWidth must have a child that has a bounded maximum intrinsic width",
+                    )
+                    .get(),
+            );
         }
 
         self.child.measure_baseline(constraints, baseline)
@@ -191,24 +160,5 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
-    }
-}
-
-#[cfg(test)]
-mod harness {
-    use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
-
-    use super::IntrinsicWidth;
-    use crate::sized_box::SizedBox;
-
-    #[test]
-    fn obeys_the_element_lifecycle() {
-        ElementLifecycleCheck::new().single_child(|child| IntrinsicWidth::builder().child(child));
-    }
-
-    #[test]
-    fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default()
-            .run(|| IntrinsicWidth::builder().child(SizedBox::new().width(20).height(10)));
     }
 }

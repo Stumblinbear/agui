@@ -4,6 +4,7 @@
 #![allow(clippy::cargo_common_metadata)]
 #![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::struct_field_names)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
@@ -21,6 +22,7 @@ pub mod provide;
 pub mod render_object;
 pub mod scheduling;
 pub mod stateful;
+pub mod stateless;
 #[cfg(test)]
 pub mod test_fixtures;
 pub mod test_harness;
@@ -81,7 +83,7 @@ pub mod prelude {
             },
             text::{
                 FontStyle, FontWeight, FontWidth, Fonts, InlineSpan, LineHeight, ParagraphContent,
-                RenderParagraph, TextBrush, TextSpan, TextStyle,
+                RenderParagraph, RenderText, TextBrush, TextSpan, TextStyle,
             },
         };
 

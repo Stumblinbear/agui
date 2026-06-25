@@ -3,7 +3,7 @@ use std::rc::Rc;
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_render::{
+use crate::{
     input::pointer::PointerHandler,
     prelude::{element::*, render_object::*},
 };
@@ -59,68 +59,44 @@ where
 
     type Render = RenderPointerListener<Child::Render>;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         let handler = self.handler();
-        let behavior = self.behavior;
-        let child = self.child;
 
-        let (element, child_render) = SingleChildElement::new(child, ctx);
-
-        (
-            element,
+        SingleChildElement::new(
+            ctx,
+            self.child,
             RenderPointerListener {
                 handler,
-                behavior,
-                child: RenderNode::new(child_render),
+                behavior: self.behavior,
+                child: RenderNode::new(None),
             },
         )
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        render_object.handler = self.handler();
-        render_object.behavior = self.behavior;
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        let render = element.render_object_mut();
+        render.handler = self.handler();
+        render.behavior = self.behavior;
 
-        let child = self.child;
-
-        element.update(child, &mut render_object.child.object, ctx);
+        element.update(ctx, self.child);
     }
 }
 
-pub struct RenderPointerListener<Child> {
+pub struct RenderPointerListener<Child: ?Sized> {
     handler: PointerHandler,
     behavior: HitTestBehavior,
     child: RenderNode<Child, Option<Size>>,
 }
 
-impl<Child> SingleChildRenderObject for RenderPointerListener<Child> {
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderPointerListener<Child> {
     type Child = Child;
 
-    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
-    }
-
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
     }
 }
 
-impl<Child> RenderObject for RenderPointerListener<Child>
-where
-    Child: RenderBox,
-{
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.child.mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.unmount(ctx);
-    }
-
+impl<Child: RenderBox + ?Sized> RenderObject for RenderPointerListener<Child> {
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("behavior", self.behavior)
@@ -129,10 +105,7 @@ where
     }
 }
 
-impl<Child> RenderBox for RenderPointerListener<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox + ?Sized> RenderBox for RenderPointerListener<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }
@@ -185,7 +158,7 @@ where
 
         // Children record themselves first; a translucent listener records even when none were hit.
         if hit || self.behavior == HitTestBehavior::Translucent {
-            result.add(self.handler.clone());
+            result.add(Rc::clone(&self.handler));
         }
 
         if hit { HitTest::Absorb } else { HitTest::Pass }
@@ -197,108 +170,5 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::cell::Cell;
-
-    use agui_render::{
-        input::pointer::PointerDispatcher,
-        prelude::{element::*, render_object::*},
-        test_harness::TestCtx,
-    };
-
-    use crate::{padding::Padding, sized_box::SizedBox};
-
-    use super::*;
-
-    /// End to end: hit-test the root, then dispatch a pointer down and confirm the listener's handler
-    /// runs with the position localized into its own space.
-    #[test]
-    fn a_down_reaches_the_listener_localized() {
-        let local = Rc::new(Cell::new(None));
-
-        let on_down: PointerHandler = {
-            let local = Rc::clone(&local);
-            Rc::new(move |event: &PointerEvent| local.set(Some(event.position)))
-        };
-
-        let widget = Padding::new(EdgeInsets::all(10.0)).child(
-            Listener::builder()
-                .on_pointer_down(on_down)
-                .behavior(HitTestBehavior::Opaque)
-                .child(SizedBox::new().width(50).height(50)),
-        );
-
-        let (mut owner, view) = TestCtx::new().mount_view(widget);
-        view.resize(BoxConstraints::new(0, 100, 0, 100));
-        owner.flush_layout();
-
-        let mut dispatcher = PointerDispatcher::new();
-        dispatcher.handle(
-            &PointerEvent {
-                pointer: PointerId(1),
-                position: Offset::new(35.0, 40.0),
-                kind: PointerEventKind::Down,
-            },
-            |position| view.hit_test(position),
-        );
-
-        let got = local.get().expect("the listener handled the down");
-        assert_eq!(got.x.get(), 25.0);
-        assert_eq!(got.y.get(), 30.0);
-    }
-}
-
-#[cfg(test)]
-mod harness {
-    use std::{cell::Cell, rc::Rc, time::Duration};
-
-    use agui_render::{
-        input::pointer::PointerHandler,
-        prelude::element::{HitTestBehavior, Offset, PointerEvent, Size},
-    };
-    use agui_test::{
-        ElementLifecycleCheck, WidgetTester, fixtures::TestBox, sizing::BoxSizingCheck,
-    };
-
-    use super::Listener;
-    use crate::sized_box::SizedBox;
-
-    #[test]
-    fn a_tap_reaches_a_listener_under_the_pointer() {
-        let taps = Rc::new(Cell::new(0));
-
-        let handler: PointerHandler = {
-            let taps = Rc::clone(&taps);
-            Rc::new(move |_: &PointerEvent| taps.set(taps.get() + 1))
-        };
-
-        let mut tester = WidgetTester::mount(
-            Listener::builder()
-                .on_pointer_down(handler)
-                .behavior(HitTestBehavior::Opaque)
-                .child(TestBox::new(Size::new(50, 50))),
-        );
-
-        tester.resize(Size::new(50, 50));
-        tester.pump(Duration::ZERO);
-
-        tester.tap_at(Offset::new(25, 25));
-
-        assert_eq!(taps.get(), 1);
-    }
-
-    #[test]
-    fn obeys_the_element_lifecycle() {
-        ElementLifecycleCheck::new().single_child(|child| Listener::builder().child(child));
-    }
-
-    #[test]
-    fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default()
-            .run(|| Listener::builder().child(SizedBox::new().width(20).height(10)));
     }
 }

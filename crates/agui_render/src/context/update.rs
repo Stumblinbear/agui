@@ -55,6 +55,12 @@ impl<'a> UpdateCtx<'a> {
         self.pipeline.mark_needs_paint(scope);
     }
 
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint, as a reconcile does when it changes a render object's compositing need.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        self.pipeline.mark_needs_compositing_bits_update(scope);
+    }
+
     /// Queues the element at `dependent` to rebuild on the next flush, running its dependency-change hook
     /// first. A [`Provide`] calls this for each reader of a value it changed.
     ///

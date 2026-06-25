@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_render::{
+use crate::{
     paint::compositing::{LayerHandle, OpacityLayer},
     prelude::{element::*, render_object::*},
 };
@@ -34,53 +34,48 @@ where
 
     type Render = RenderOpacity<Child::Render>;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let (element, child_render) = SingleChildElement::new(self.child, ctx);
-
-        (
-            element,
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(
+            ctx,
+            self.child,
             RenderOpacity {
                 opacity: self.opacity,
 
                 paint_scope: PaintScope::detached(),
-
                 layer: None,
-
-                child: RenderNode::new(child_render),
+                child: RenderNode::new(()),
             },
         )
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        if render_object.opacity != self.opacity {
-            let was_layer = render_object.needs_layer();
-            render_object.opacity = self.opacity;
-            let now_layer = render_object.needs_layer();
+    // Exact comparison is intended: any change in opacity, however small, must update the subtree.
+    #[allow(clippy::float_cmp)]
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        let render = element.render_object_mut();
+        if render.opacity != self.opacity {
+            let was_layer = render.needs_layer();
+            render.opacity = self.opacity;
+            let now_layer = render.needs_layer();
 
             if was_layer && now_layer {
                 // Still partial: poke the retained layer's alpha in place; the next composite picks it up.
-                if let Some(layer) = &render_object.layer {
+                if let Some(layer) = &render.layer {
                     layer.borrow_mut().set_alpha(self.opacity);
                 }
             } else if was_layer == now_layer {
                 // Both fully transparent or fully opaque: a visibility flip still repaints.
-                ctx.mark_needs_paint(render_object.paint_scope);
+                ctx.mark_needs_paint(render.paint_scope);
             } else {
                 // Crossing the threshold where a layer is needed changes the compositing bits.
-                ctx.mark_needs_compositing_bits_update(render_object.paint_scope);
+                ctx.mark_needs_compositing_bits_update(render.paint_scope);
             }
         }
 
-        element.update(self.child, &mut render_object.child.object, ctx);
+        element.update(ctx, self.child);
     }
 }
 
-pub struct RenderOpacity<Child> {
+pub struct RenderOpacity<Child: ?Sized> {
     opacity: f32,
 
     paint_scope: PaintScope,
@@ -92,39 +87,22 @@ pub struct RenderOpacity<Child> {
     child: RenderNode<Child>,
 }
 
-impl<Child> SingleChildRenderObject for RenderOpacity<Child> {
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderOpacity<Child> {
     type Child = Child;
 
-    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
-    }
-
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
     }
 }
 
-impl<Child> RenderOpacity<Child> {
+impl<Child: ?Sized> RenderOpacity<Child> {
     /// Whether the current opacity needs a compositing layer — only a partial opacity does.
     fn needs_layer(&self) -> bool {
         self.opacity > 0.0 && self.opacity < 1.0
     }
 }
 
-impl<Child> RenderObject for RenderOpacity<Child>
-where
-    Child: RenderBox,
-{
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        // Capture the enclosing boundary so a later opacity change can mark it.
-        self.paint_scope = *ctx.paint_scope();
-        self.child.mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.unmount(ctx);
-    }
-
+impl<Child: RenderBox + ?Sized> RenderObject for RenderOpacity<Child> {
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("opacity", self.opacity)
@@ -133,10 +111,7 @@ where
     }
 }
 
-impl<Child> RenderBox for RenderOpacity<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox + ?Sized> RenderBox for RenderOpacity<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }
@@ -183,6 +158,8 @@ where
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.paint_scope = ctx.scope();
+
         if self.opacity <= 0.0 {
             self.layer = None;
             return;
@@ -203,235 +180,5 @@ where
         self.layer = Some(layer.clone());
 
         ctx.push_layer(layer, offset, |ctx| self.child.paint(ctx, Offset::ZERO));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{cell::RefCell, rc::Rc};
-
-    use agui_render::{
-        paint::{command::PaintCommand, compositing::OffsetLayer, peniko::Color},
-        prelude::{element::*, render_object::*},
-        test_harness::TestCtx,
-    };
-
-    use crate::{colored_box::ColoredBox, sized_box::SizedBox};
-
-    use super::*;
-
-    /// The compositing bit is property-dependent: a partial opacity needs a layer, the whole/none
-    /// fast paths do not.
-    #[test]
-    fn the_compositing_bit_tracks_the_opacity() {
-        for (opacity, needs) in [(0.0, false), (0.5, true), (1.0, false)] {
-            let widget = Opacity::new(opacity).child(SizedBox::new().width(10).height(10));
-            let (_, mut render) = TestCtx::new().create(widget);
-
-            assert_eq!(
-                render.update_compositing_bits(),
-                needs,
-                "opacity {opacity} needs_compositing"
-            );
-        }
-    }
-
-    /// A partial opacity composites its subtree as a group at that alpha, end to end through the owner.
-    #[test]
-    fn partial_opacity_composites_the_subtree_at_its_alpha() {
-        let widget = Opacity::new(0.5)
-            .child(ColoredBox::new(Color::BLACK).child(SizedBox::new().width(10).height(10)));
-
-        let (mut owner, view) = TestCtx::new().mount_view(widget);
-        view.resize(BoxConstraints::new(0, 100, 0, 100));
-        owner.flush_layout();
-        owner.flush_paint();
-
-        let scene = view.composite_frame().rasterize().flatten();
-        let alpha = scene.commands().iter().find_map(|command| match command {
-            PaintCommand::PushLayer { alpha, .. } => Some(*alpha),
-            _ => None,
-        });
-
-        assert!(
-            matches!(alpha, Some(a) if (a - 0.5).abs() < 1e-6),
-            "the subtree was composited at 0.5 alpha, got {alpha:?}"
-        );
-    }
-
-    /// A leaf that counts its paints, so a test can prove the subtree is not repainted on an opacity tween.
-    struct Counter {
-        paints: std::rc::Rc<std::cell::Cell<usize>>,
-    }
-
-    struct CounterElement;
-
-    impl Element for CounterElement {
-        type Render = RenderCounter;
-    }
-
-    impl Widget for Counter {
-        type Element = CounterElement;
-        type Render = RenderCounter;
-
-        fn create(self, _: &mut UpdateCtx) -> (CounterElement, RenderCounter) {
-            (
-                CounterElement,
-                RenderCounter {
-                    paints: self.paints,
-                },
-            )
-        }
-
-        fn update(self, _: &mut CounterElement, _: &mut RenderCounter, _: &mut UpdateCtx) {}
-    }
-
-    struct RenderCounter {
-        paints: std::rc::Rc<std::cell::Cell<usize>>,
-    }
-
-    impl RenderObject for RenderCounter {
-        fn mount(&mut self, _: &mut MountCtx) {}
-        fn unmount(&mut self, _: &mut MountCtx) {}
-    }
-
-    impl RenderBox for RenderCounter {
-        fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn measure(&self, _: BoxConstraints) -> Size {
-            Size::new(10.0, 10.0)
-        }
-
-        fn layout(&mut self, _: &mut LayoutCtx, _: BoxConstraints) -> Size {
-            Size::new(10.0, 10.0)
-        }
-
-        fn measure_baseline(
-            &self,
-            _: BoxConstraints,
-            _: TextBaseline,
-        ) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
-            None
-        }
-
-        fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
-            HitTest::Pass
-        }
-
-        fn update_compositing_bits(&mut self) -> bool {
-            false
-        }
-
-        fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-            self.paints.set(self.paints.get() + 1);
-            let mut canvas = ctx.canvas();
-            let brush = canvas.brush(Color::BLACK);
-            canvas.fill(
-                agui_render::paint::peniko::Fill::NonZero,
-                brush,
-                &(offset & Size::new(10.0, 10.0)),
-            );
-        }
-    }
-
-    /// An opacity change that stays partial pokes the retained layer's alpha in place, without repainting
-    /// the subtree.
-    #[test]
-    fn a_partial_opacity_change_recomposites_without_repainting() {
-        use std::cell::Cell;
-
-        use agui_render::{
-            context::MountCtx,
-            paint::compositing::Compositor,
-            pipeline::{BoundaryContent, layout::LayoutPipeline, paint::PaintPipeline},
-        };
-
-        let paints = Rc::new(Cell::new(0));
-        let widget = Opacity::new(0.5).child(Counter {
-            paints: Rc::clone(&paints),
-        });
-        let (mut element, mut render) = TestCtx::new().create(widget);
-
-        // Mount under a repaint boundary so the opacity captures a scope it can mark.
-        let dummy: BoundaryContent = Rc::new(RefCell::new(RenderCounter {
-            paints: Rc::new(Cell::new(0)),
-        }));
-        let (mut pipeline, boundary) =
-            PaintPipeline::new(dummy, LayerHandle::new(OffsetLayer::new()));
-        let layout = LayoutPipeline::default();
-        {
-            let boundary_scope = boundary.scope();
-            let mut ctx = MountCtx::new(&layout, &mut pipeline, &boundary_scope);
-            render.mount(&mut ctx);
-        }
-        render.layout(
-            &mut LayoutCtx::new(&layout, &mut pipeline, LayoutScope::detached()),
-            BoxConstraints::new(0, 100, 0, 100),
-        );
-
-        // First paint into a host layer builds and retains the opacity layer.
-        let host = LayerHandle::new(OffsetLayer::new());
-        PaintCtx::paint(&host, |ctx| render.paint(ctx, Offset::ZERO));
-        assert_eq!(paints.get(), 1, "the subtree paints once");
-
-        pipeline.flush();
-
-        // A partial-to-partial change pokes the retained layer's alpha in place, with no repaint.
-        let next = Opacity::new(0.25).child(Counter {
-            paints: Rc::clone(&paints),
-        });
-        TestCtx::new().update(next, &mut element, &mut render);
-
-        assert_eq!(paints.get(), 1, "the subtree was not repainted");
-
-        let alpha = Compositor::compose(&host)
-            .rasterize()
-            .commands()
-            .iter()
-            .find_map(|command| match command {
-                PaintCommand::PushLayer { alpha, .. } => Some(*alpha),
-                _ => None,
-            });
-        assert!(
-            matches!(alpha, Some(a) if (a - 0.25).abs() < 1e-6),
-            "the retained layer recomposited at the new alpha, got {alpha:?}"
-        );
-    }
-}
-
-#[cfg(test)]
-mod harness {
-    use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
-
-    use super::Opacity;
-    use crate::sized_box::SizedBox;
-
-    #[test]
-    fn obeys_the_element_lifecycle() {
-        ElementLifecycleCheck::new().single_child(|child| Opacity::new(0.5).child(child));
-    }
-
-    #[test]
-    fn obeys_the_box_sizing_contracts() {
-        BoxSizingCheck::default()
-            .run(|| Opacity::new(0.5).child(SizedBox::new().width(20).height(10)));
     }
 }

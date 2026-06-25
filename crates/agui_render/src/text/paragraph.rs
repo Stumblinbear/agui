@@ -15,7 +15,7 @@ use crate::{
     paint::{Canvas, command::GlyphInstance},
     pipeline::render_pipeline::DeferredLayoutScope,
     render_object::{
-        RenderObject,
+        MultiChildRenderObject, RenderObject,
         box_layout::{BoxConstraints, RenderBox},
         node::RenderNode,
     },
@@ -41,7 +41,7 @@ struct QueryMemo {
 
 /// A box render object that shapes, sizes, and paints rich text, laying out any inline child widgets
 /// in line with it.
-pub struct RenderParagraph<C = ()> {
+pub struct RenderParagraph<C: ?Sized = ()> {
     content: ParagraphContent,
 
     fonts: Option<Rc<Fonts>>,
@@ -62,7 +62,7 @@ pub struct RenderParagraph<C = ()> {
     // paint_scope: PaintScope, // re-add when paint-scope capture re-homes to paint time
 }
 
-impl<C> RenderParagraph<C> {
+impl<C: ?Sized> RenderParagraph<C> {
     pub fn new(content: impl Into<ParagraphContent>) -> Self {
         Self {
             content: content.into(),
@@ -114,22 +114,12 @@ impl<C> RenderParagraph<C> {
         self.layout_scope.mark_needs_layout();
     }
 
-    /// Takes the inline child render objects out, for a reconcile that hands back the reordered set.
-    pub fn take_children(&mut self) -> Vec<RenderNode<C>> {
-        std::mem::take(&mut self.children)
-    }
-
     /// Installs the inline child render objects, resizing the per-child layout data to match and
     /// marking the paragraph for reshape.
     pub fn set_children(&mut self, children: Vec<RenderNode<C>>) {
         self.child_data = vec![InlineChildData::default(); children.len()];
         self.children = children;
         self.mark_needs_reshape();
-    }
-
-    /// The inline child render objects, for routing a dispatch into one of them.
-    pub fn children_mut(&mut self) -> &mut [RenderNode<C>] {
-        &mut self.children
     }
 
     /// The maximum advance to break against: the finite max width, or `None` when unbounded.
@@ -156,7 +146,7 @@ impl<C> RenderParagraph<C> {
     }
 }
 
-impl<C: RenderBox> RenderParagraph<C> {
+impl<C: RenderBox + ?Sized> RenderParagraph<C> {
     fn measured_placeholder_sizes(&self, constraints: BoxConstraints) -> Vec<Size> {
         let child_constraints = BoxConstraints::loose(constraints.biggest());
         self.children
@@ -181,11 +171,19 @@ impl<C: RenderBox> RenderParagraph<C> {
     }
 }
 
-impl<C: RenderObject> RenderObject for RenderParagraph<C> {
+impl<C: RenderObject + ?Sized> RenderObject for RenderParagraph<C> {
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("text", excerpt(&self.content.text))
             .finish()
+    }
+}
+
+impl MultiChildRenderObject for RenderParagraph<dyn RenderBox> {
+    type Children = Vec<RenderNode<dyn RenderBox>>;
+
+    fn children_mut(&mut self) -> &mut Vec<RenderNode<dyn RenderBox>> {
+        &mut self.children
     }
 }
 
@@ -199,7 +197,7 @@ fn excerpt(text: &str) -> String {
     }
 }
 
-impl<C: RenderBox> RenderBox for RenderParagraph<C> {
+impl<C: RenderBox + ?Sized> RenderBox for RenderParagraph<C> {
     fn measure(&self, constraints: BoxConstraints) -> Size {
         if self.fonts.is_none() {
             return constraints.smallest();
@@ -240,6 +238,11 @@ impl<C: RenderBox> RenderBox for RenderParagraph<C> {
         if self.fonts.is_none() {
             return constraints.smallest();
         }
+
+        // Reconcile installs the inline children directly through `children_mut`, not `set_children`, so keep
+        // the per-child layout data the placement loop indexes in step with the children.
+        self.child_data
+            .resize(self.children.len(), InlineChildData::default());
 
         // Inline children must be sized before shaping, since their dimensions feed the line breaker.
         let placeholder_sizes = self.measured_placeholder_sizes(constraints);
@@ -380,6 +383,218 @@ impl<C: RenderBox> RenderBox for RenderParagraph<C> {
         for (child, data) in self.children.iter_mut().zip(&self.child_data) {
             child.paint(ctx, offset + data.offset);
         }
+    }
+}
+
+/// A box render object that shapes, sizes, and paints a single run of text with no inline children — the
+/// fast path for plain text, without the inline-placeholder machinery of [`RenderParagraph`].
+pub struct RenderText {
+    content: ParagraphContent,
+    fonts: Option<Rc<Fonts>>,
+
+    layout: Option<Layout<TextBrush>>,
+    dirty: bool,
+    /// The width the committed layout was last broken to, so a re-layout at the same width is reused.
+    broken_width: Option<f32>,
+
+    memo: RefCell<QueryMemo>,
+
+    layout_scope: DeferredLayoutScope,
+}
+
+impl RenderText {
+    pub fn new(content: impl Into<ParagraphContent>) -> Self {
+        Self {
+            content: content.into(),
+            fonts: None,
+
+            layout: None,
+            dirty: true,
+            broken_width: None,
+
+            memo: RefCell::new(QueryMemo::default()),
+
+            layout_scope: DeferredLayoutScope::detached(),
+        }
+    }
+
+    pub fn set_content(&mut self, content: impl Into<ParagraphContent>) {
+        let content = content.into();
+        if self.content != content {
+            self.content = content;
+            self.mark_needs_reshape();
+        }
+    }
+
+    /// Captures the font database to shape against. A change of handle identity dirties the cache.
+    pub fn set_fonts(&mut self, fonts: Option<Rc<Fonts>>) {
+        let same = match (&self.fonts, &fonts) {
+            (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+
+        if !same {
+            self.fonts = fonts;
+            self.mark_needs_reshape();
+        }
+    }
+
+    fn mark_needs_reshape(&mut self) {
+        self.dirty = true;
+        let memo = self.memo.get_mut();
+        memo.shaped = None;
+        memo.broken = None;
+        self.layout_scope.mark_needs_layout();
+    }
+
+    /// A fresh shaped layout for the current content and fonts, reusing the memo. Leaves `self` untouched.
+    fn shaped(&self) -> Option<Layout<TextBrush>> {
+        let fonts = self.fonts.as_ref()?;
+        let mut memo = self.memo.borrow_mut();
+        if memo.shaped.is_none() {
+            memo.shaped = Some(fonts.shape(&self.content, &[]));
+        }
+        memo.shaped.clone()
+    }
+
+    /// The maximum advance to break against: the finite max width, or `None` when unbounded.
+    fn max_advance(constraints: BoxConstraints) -> Option<f32> {
+        constraints
+            .has_bounded_width()
+            .then(|| constraints.max_width().get())
+    }
+}
+
+impl RenderObject for RenderText {
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .property("text", excerpt(&self.content.text))
+            .finish()
+    }
+}
+
+impl RenderBox for RenderText {
+    fn measure(&self, constraints: BoxConstraints) -> Size {
+        if self.fonts.is_none() {
+            return constraints.smallest();
+        }
+
+        let max_advance = Self::max_advance(constraints);
+
+        if let Some((width, size)) = self.memo.borrow().broken
+            && width == max_advance
+        {
+            return constraints.constrain(size);
+        }
+
+        let Some(mut layout) = self.shaped() else {
+            return constraints.smallest();
+        };
+        layout.break_all_lines(max_advance);
+        let size = Size::new(layout.width(), layout.height());
+
+        self.memo.borrow_mut().broken = Some((max_advance, size));
+
+        constraints.constrain(size)
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        self.layout_scope = ctx.deferred_layout_scope();
+
+        if self.fonts.is_none() {
+            return constraints.smallest();
+        }
+
+        let reshaped = self.dirty || self.layout.is_none();
+
+        if reshaped {
+            self.layout = self
+                .fonts
+                .as_ref()
+                .map(|fonts| fonts.shape(&self.content, &[]));
+            self.dirty = false;
+            self.broken_width = None;
+        }
+
+        let max_advance = Self::max_advance(constraints);
+
+        let Some(layout) = self.layout.as_mut() else {
+            return constraints.smallest();
+        };
+
+        if reshaped || self.broken_width != max_advance {
+            layout.break_all_lines(max_advance);
+            layout.align(Alignment::Start, AlignmentOptions::default());
+        }
+
+        let size = Size::new(layout.width(), layout.height());
+        self.broken_width = max_advance;
+
+        constraints.constrain(size)
+    }
+
+    fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        let layout = self.shaped()?;
+        let width = measure_clone(&layout, None).width.get();
+        PositiveFinite::try_from(width).ok()
+    }
+
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.max_intrinsic_height(width)
+    }
+
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        let layout = self.shaped()?;
+        let max_advance = (width.get() < f32::INFINITY).then(|| width.get());
+        let height = measure_clone(&layout, max_advance).height.get();
+        PositiveFinite::try_from(height).ok()
+    }
+
+    fn measure_baseline(
+        &self,
+        constraints: BoxConstraints,
+        _: TextBaseline,
+    ) -> Option<PositiveFinite<f32>> {
+        let mut layout = self.shaped()?;
+        layout.break_all_lines(Self::max_advance(constraints));
+        let baseline = layout.lines().next()?.metrics().baseline;
+        PositiveFinite::try_from(baseline).ok()
+    }
+
+    fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        let layout = self.layout.as_ref()?;
+        let baseline = layout.lines().next()?.metrics().baseline;
+        PositiveFinite::try_from(baseline).ok()
+    }
+
+    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+        HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        false
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        let Some(layout) = self.layout.as_ref() else {
+            return;
+        };
+
+        let mut canvas = ctx.canvas();
+        canvas.with_offset(offset, |canvas| {
+            for line in layout.lines() {
+                for item in line.items() {
+                    if let PositionedLayoutItem::GlyphRun(glyph_run) = item {
+                        paint_glyph_run(canvas, &glyph_run);
+                    }
+                }
+            }
+        });
     }
 }
 

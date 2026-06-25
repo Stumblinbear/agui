@@ -1,8 +1,14 @@
 use std::rc::Rc;
 
-use agui_render::prelude::{element::*, render_object::*};
+use crate::{
+    prelude::{element::*, render_object::*},
+    stateless::{StatelessElement, StatelessWidget},
+};
 
 /// A leaf widget that shapes and sizes a single styled run of text.
+///
+/// It reads the ambient [`Fonts`] from scope, so wrap it (directly or above) in a
+/// [`Provide`](crate::provide::Provide) of a `Fonts` for it to shape against.
 pub struct Text {
     text: String,
     font_size: f32,
@@ -57,107 +63,58 @@ impl Text {
     }
 }
 
-pub struct TextElement {
-    fonts: Option<Rc<Fonts>>,
-    text: String,
-    font_size: f32,
-    brush: TextBrush,
-    family: Option<String>,
-}
-
-impl Element for TextElement {
-    type Render = RenderParagraph;
-}
-
 impl Widget for Text {
-    type Element = TextElement;
+    type Element = StatelessElement<Text>;
 
-    type Render = RenderParagraph;
+    type Render = RenderText;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let element = TextElement {
-            fonts: ctx.depend_on_provided::<Fonts>(),
-            text: self.text,
-            font_size: self.font_size,
-            brush: self.brush,
-            family: self.family,
-        };
-
-        let mut paragraph = RenderParagraph::new(Self::content(
-            &element.text,
-            element.font_size,
-            &element.brush,
-            element.family.as_deref(),
-        ));
-
-        paragraph.set_fonts(element.fonts.clone());
-
-        (element, paragraph)
+    fn create(self, _ctx: &mut CreateCtx) -> Self::Element {
+        StatelessElement::new(self)
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        element.fonts = ctx.depend_on_provided::<Fonts>();
-
-        if element.text != self.text
-            || element.font_size != self.font_size
-            || element.brush != self.brush
-            || element.family != self.family
-        {
-            element.text = self.text;
-            element.font_size = self.font_size;
-            element.brush = self.brush;
-            element.family = self.family;
-
-            render_object.set_content(Self::content(
-                &element.text,
-                element.font_size,
-                &element.brush,
-                element.family.as_deref(),
-            ));
-        }
-
-        render_object.set_fonts(element.fonts.clone());
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        element.update_widget(ctx, self);
     }
 }
 
-#[cfg(test)]
-mod harness {
-    use std::time::Duration;
+impl StatelessWidget for Text {
+    type Child = RawText;
 
-    use agui_render::prelude::{
-        element::Size,
-        render_object::{BoxConstraints, Fonts},
-    };
+    fn build(&self, ctx: &mut BuildCtx) -> RawText {
+        RawText {
+            content: Text::content(
+                &self.text,
+                self.font_size,
+                &self.brush,
+                self.family.as_deref(),
+            ),
+            fonts: ctx.depend_on_provided::<Fonts>(),
+        }
+    }
+}
 
-    use agui_render::provide::Provide;
-    use agui_test::{ElementLifecycleCheck, Probe, WidgetTester};
+/// A leaf widget that renders pre-built paragraph content into a [`RenderText`]. Its fonts are supplied by
+/// the parent that resolved them; `RawText` reads no provided values itself.
+pub struct RawText {
+    content: ParagraphContent,
+    fonts: Option<Rc<Fonts>>,
+}
 
-    use super::Text;
+impl Widget for RawText {
+    type Element = LeafElement<RenderText>;
 
-    #[test]
-    fn obeys_the_element_lifecycle() {
-        ElementLifecycleCheck::new().leaf(|| Text::new("hello"));
+    type Render = RenderText;
+
+    fn create(self, _ctx: &mut CreateCtx) -> Self::Element {
+        let mut render = RenderText::new(self.content);
+        render.set_fonts(self.fonts);
+
+        LeafElement::new(render)
     }
 
-    #[test]
-    fn produces_a_finite_size() {
-        let probe = Probe::new();
-        let fonts = Fonts::new();
-
-        let mut tester = WidgetTester::mount(
-            probe.wrap(Provide::new(fonts).child(Text::new("hello").font_size(20.0))),
-        );
-
-        tester.resize_with(BoxConstraints::loose(Size::new(300, 300)));
-        tester.pump(Duration::ZERO);
-
-        let size = probe.size();
-        assert!(size.width.get().is_finite());
-        assert!(size.height.get().is_finite());
+    fn update(self, _ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        let render = element.render_object_mut();
+        render.set_content(self.content);
+        render.set_fonts(self.fonts);
     }
 }

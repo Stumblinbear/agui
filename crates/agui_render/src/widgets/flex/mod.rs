@@ -1,4 +1,4 @@
-use agui_render::text::TextBaseline;
+use crate::text::TextBaseline;
 
 mod column;
 mod flexible;
@@ -8,23 +8,11 @@ pub use flexible::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum MainAxisSize {
-    /// Minimize the amount of free space along the main axis, subject to the incoming layout constraints.
-    ///
-    /// If the incoming layout constraints have a large enough minimum width or minimum height, there might
-    /// still be a non-zero amount of free space.
-    ///
-    /// If the incoming layout constraints are unbounded, and any children have a non-zero [FlexParentData.flex]
-    /// and a [FlexFit.tight] fit (as applied by [Expanded]), the [RenderFlex] will assert, because there would
-    /// be infinite remaining free space and boxes cannot be given infinite size.
+    /// Shrink to fit the children along the main axis, within the incoming constraints. A non-zero minimum
+    /// extent can still leave free space.
     Min,
 
-    /// Maximize the amount of free space along the main axis, subject to the incoming layout constraints.
-    ///
-    /// If the incoming layout constraints have a small enough [BoxConstraints.maxWidth] or [BoxConstraints.maxHeight],
-    /// there might still be no free space.
-    ///
-    /// If the incoming layout constraints are unbounded, the widget will assert during layout, because there would be
-    /// infinite remaining free space and boxes cannot be given infinite size.
+    /// Expand to fill the available main-axis space, within the incoming constraints.
     #[default]
     Max,
 }

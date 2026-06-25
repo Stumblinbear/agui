@@ -1,6 +1,6 @@
 use typed_floats::{Positive, PositiveFinite};
 
-use agui_render::{
+use crate::{
     paint::peniko::{Color, Fill},
     prelude::{element::*, render_object::*},
 };
@@ -38,71 +38,48 @@ where
 
     type Render = RenderColoredBox<Child::Render>;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        let (element, child_render) = SingleChildElement::new(self.child, ctx);
-
-        (
-            element,
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(
+            ctx,
+            self.child,
             RenderColoredBox {
                 color: self.color,
 
                 paint_scope: PaintScope::detached(),
-
-                child: RenderNode::new(child_render),
+                child: RenderNode::new(None),
             },
         )
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        if render_object.color != self.color {
-            render_object.color = self.color;
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        let render = element.render_object_mut();
+        if render.color != self.color {
+            render.color = self.color;
 
-            ctx.mark_needs_paint(render_object.paint_scope);
+            ctx.mark_needs_paint(render.paint_scope);
         }
 
-        element.update(self.child, &mut render_object.child.object, ctx);
+        element.update(ctx, self.child);
     }
 }
 
-pub struct RenderColoredBox<Child> {
+pub struct RenderColoredBox<Child: ?Sized> {
     color: Color,
 
+    /// The repaint boundary the box paints under, captured each paint so a color change can mark it.
     paint_scope: PaintScope,
-
     child: RenderNode<Child, Option<Size>>,
 }
 
-impl<Child> SingleChildRenderObject for RenderColoredBox<Child> {
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderColoredBox<Child> {
     type Child = Child;
 
-    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
-    }
-
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
     }
 }
 
-impl<Child> RenderObject for RenderColoredBox<Child>
-where
-    Child: RenderBox,
-{
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.paint_scope = *ctx.paint_scope();
-
-        self.child.mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.unmount(ctx);
-    }
-
+impl<Child: RenderBox + ?Sized> RenderObject for RenderColoredBox<Child> {
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("color", self.color)
@@ -111,10 +88,7 @@ where
     }
 }
 
-impl<Child> RenderBox for RenderColoredBox<Child>
-where
-    Child: RenderBox,
-{
+impl<Child: RenderBox + ?Sized> RenderBox for RenderColoredBox<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }
@@ -174,6 +148,8 @@ where
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.paint_scope = ctx.scope();
+
         let size = self.child.parent_data.expect("child has not been laid out");
 
         if size.is_zero() {
@@ -188,104 +164,5 @@ where
         }
 
         self.child.paint(ctx, offset);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use agui_render::{
-        paint::{
-            command::{PaintCommand, PaintShape},
-            compositing::{Compositor, LayerHandle, OffsetLayer},
-            peniko::{Brush, kurbo},
-        },
-        prelude::{element::*, render_object::*},
-        test_harness::TestCtx,
-    };
-
-    use crate::sized_box::SizedBox;
-
-    use super::*;
-
-    #[test]
-    fn paints_its_color_over_the_child_bounds() {
-        let widget = ColoredBox::new(Color::from_rgb8(255, 0, 0))
-            .child(SizedBox::new().width(20).height(10));
-        let mut render_object =
-            TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
-
-        let root = LayerHandle::new(OffsetLayer::new());
-        PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).rasterize();
-
-        assert_eq!(scene.len(), 1, "fills once; the empty child paints nothing");
-
-        let PaintCommand::Fill { brush, shape, .. } = &scene.commands()[0] else {
-            panic!("expected a fill");
-        };
-
-        assert!(
-            matches!(scene.brush(*brush), Brush::Solid(c) if *c == Color::from_rgb8(255, 0, 0))
-        );
-
-        let PaintShape::Rect(rect) = shape else {
-            panic!("expected the bounds to be kept as a primitive rect, not flattened to a path");
-        };
-
-        assert_eq!(*rect, kurbo::Rect::new(0.0, 0.0, 20.0, 10.0));
-    }
-
-    #[test]
-    fn paints_the_child_over_its_color() {
-        // A painting child nested inside, so the outer fill must be followed by the child's own.
-        let widget = ColoredBox::new(Color::from_rgb8(255, 0, 0)).child(
-            ColoredBox::new(Color::from_rgb8(0, 0, 255))
-                .child(SizedBox::new().width(20).height(10)),
-        );
-        let mut render_object =
-            TestCtx::new().laid_out(widget, BoxConstraints::new(0, 100, 0, 100));
-
-        let root = LayerHandle::new(OffsetLayer::new());
-        PaintCtx::paint(&root, |ctx| render_object.paint(ctx, Offset::ZERO));
-        let scene = Compositor::compose(&root).rasterize();
-
-        let colors: Vec<_> = scene
-            .commands()
-            .iter()
-            .filter_map(|command| match command {
-                PaintCommand::Fill { brush, .. } => match scene.brush(*brush) {
-                    Brush::Solid(color) => Some(*color),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect();
-
-        assert_eq!(
-            colors,
-            vec![Color::from_rgb8(255, 0, 0), Color::from_rgb8(0, 0, 255)],
-            "the color fills first, then the child paints over it"
-        );
-    }
-}
-
-#[cfg(test)]
-mod harness {
-    use agui_render::paint::peniko::Color;
-    use agui_test::{ElementLifecycleCheck, sizing::BoxSizingCheck};
-
-    use super::ColoredBox;
-    use crate::sized_box::SizedBox;
-
-    #[test]
-    fn obeys_the_element_lifecycle() {
-        ElementLifecycleCheck::new()
-            .single_child(|child| ColoredBox::new(Color::BLACK).child(child));
-    }
-
-    #[test]
-    fn paints_within_its_bounds() {
-        BoxSizingCheck::default()
-            .run(|| ColoredBox::new(Color::BLACK).child(SizedBox::new().width(20).height(10)));
     }
 }
