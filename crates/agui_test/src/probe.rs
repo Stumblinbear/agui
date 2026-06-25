@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use agui_render::{
+use agui::{
     geometry::{Offset, Size},
     prelude::{element::*, render_object::*},
 };

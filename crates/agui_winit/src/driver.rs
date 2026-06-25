@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use agui_render::{
+use agui::{
     paint::compositing::CompositedFrame,
     pipeline::PipelineOwner,
     prelude::{element::*, render_object::*},
@@ -64,7 +64,7 @@ impl TaskScheduler for ExecutorScheduler {
 /// Drives one window's render subtree from the event loop through a [`PipelineOwner`], which rebuilds
 /// what was dirtied and brings layout and paint up to date each frame.
 ///
-/// The widget is wrapped in a [`View`](agui_render::view::View), whose [`ViewHandle`] sizes, hit-tests,
+/// The widget is wrapped in a [`View`](agui::view::View), whose [`ViewHandle`] sizes, hit-tests,
 /// and composites the subtree the window presents. Spawned tasks run on a single-threaded executor
 /// whose wakeups return to the event loop through a proxy waker.
 pub struct WindowDriver {
@@ -95,7 +95,7 @@ impl WindowDriver {
 
         let surface = Rc::new(RefCell::new(None));
         let owner = PipelineOwner::new(
-            agui_render::view::View::new(Rc::clone(&surface)).child(widget),
+            agui::view::View::new(Rc::clone(&surface)).child(widget),
             &mut scheduler,
         );
         let view = surface

@@ -11,14 +11,14 @@ fn main() {
 fn main() {
     use std::rc::Rc;
 
-    use agui_primitives::{
+    use agui::dcomp::Dcomp;
+    use agui::wgpu::Backends;
+    use agui::widgets::{
         animated_transform::AnimatedTransform, colored_box::ColoredBox,
         fractionally_sized_box::FractionallySizedBox, layout_builder::LayoutBuilder,
         listener::Listener, opacity::Opacity, text::Text,
     };
-    use agui_render::dcomp::Dcomp;
-    use agui_render::wgpu::Backends;
-    use agui_render::{
+    use agui::{
         input::pointer::PointerHandler,
         paint::peniko::{Color, kurbo::Affine},
         prelude::{element::*, render_object::*},
@@ -30,7 +30,7 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "hello_world_dcomp=info,agui_render=debug".into()),
+                .unwrap_or_else(|_| "hello_world_dcomp=info,agui=debug".into()),
         )
         .init();
 

@@ -1,8 +1,8 @@
-use agui_primitives::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
-use agui_render::prelude::{
+use agui::prelude::{
     element::{Alignment, Widget},
     render_object::RenderBox,
 };
+use agui::widgets::{colored_box::ColoredBox, fractionally_sized_box::FractionallySizedBox};
 use agui_test::golden;
 use agui_test::golden::VelloHeadless;
 use vello::peniko::Color;

@@ -1,7 +1,7 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
-use agui_render::WindowRenderer;
-use agui_render::paint::compositing::CompositedFrame;
+use agui::WindowRenderer;
+use agui::paint::compositing::CompositedFrame;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use vello::{
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions,
@@ -16,7 +16,7 @@ use crate::append_scene_with_transform;
 /// A [`WindowRenderer`] that rasterizes a composed frame with vello and presents it to a wgpu surface.
 ///
 /// It rasterizes the whole frame into one scene, so it presents content without a system compositor;
-/// a frame that places a system-owned [`External`](agui_render::paint::compositing::CompositedNode::External)
+/// a frame that places a system-owned [`External`](agui::paint::compositing::CompositedNode::External)
 /// surface needs a compositing renderer instead.
 pub struct VelloWindowRenderer {
     context: RenderContext,

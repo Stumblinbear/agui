@@ -11,7 +11,7 @@ categories = ["gui", "graphics", "rendering"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-agui_render = { workspace = true, features = ["gpu"] }
+agui = { workspace = true, features = ["gpu"] }
 png.workspace = true
 pollster.workspace = true
 raw-window-handle.workspace = true
@@ -19,7 +19,6 @@ slotmap.workspace = true
 vello.workspace = true
 
 [dev-dependencies]
-agui_primitives.workspace = true
 agui_test = { workspace = true, features = ["vello"] }
 async-executor.workspace = true
 tracing.workspace = true

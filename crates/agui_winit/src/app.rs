@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Instant};
 
-use agui_render::WindowRenderer;
-use agui_render::{
+use agui::WindowRenderer;
+use agui::{
     input::pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId},
     prelude::{element::*, render_object::*},
 };

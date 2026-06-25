@@ -1,8 +1,6 @@
-use agui_render::geometry::Offset;
+use agui::geometry::Offset;
 
-pub use agui_render::input::pointer::{
-    PointerDispatcher, PointerEvent, PointerEventKind, PointerId,
-};
+pub use agui::input::pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId};
 
 use crate::tester::WidgetTester;
 

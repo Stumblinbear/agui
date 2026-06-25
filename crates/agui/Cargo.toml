@@ -1,14 +1,15 @@
 [package]
-name = "agui_render"
-version = "0.1.0"
+name = "agui"
+version = "0.3.0"
 edition = "2024"
 resolver = "2"
-description = "Renderer abstraction for Agui"
+description = "A reactive GUI project"
 homepage = "https://github.com/Stumblinbear/agui"
 repository = "https://github.com/Stumblinbear/agui"
-keywords = ["gui", "graphics", "rendering"]
+keywords = ["gui", "graphics"]
 categories = ["gui", "graphics", "rendering"]
 license = "MIT OR Apache-2.0"
+readme = "../../README.md"
 
 [features]
 # A backend targeting a GPU texture, via `wgpu`. On Windows it also pulls the DirectComposition

@@ -1,4 +1,4 @@
-use agui_render::{
+use agui::{
     paint::peniko::{Color, Fill},
     prelude::{element::*, render_object::*},
 };

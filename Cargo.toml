@@ -1,38 +1,16 @@
-[package]
-name = "agui"
-version = "0.3.0"
-edition = "2024"
-resolver = "2"
-description = "A reactive GUI project"
-exclude = [".github/**/*", "crates/**/*"]
-homepage = "https://github.com/Stumblinbear/agui"
-repository = "https://github.com/Stumblinbear/agui"
-keywords = ["gui", "graphics"]
-categories = ["gui", "graphics", "rendering"]
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-
 [workspace]
 members = ["crates/*"]
+resolver = "2"
 
 [workspace.dependencies]
-# agui_sync = { path = "crates/agui_sync", version = "0.3" }
 agui_core = { path = "crates/agui_core", version = "0.3" }
-# agui_executor = { path = "crates/agui_executor", version = "0.3" }
-# agui_macros = { path = "crates/agui_macros", version = "0.3" }
-
-# agui_elements = { path = "crates/agui_elements", version = "0.3" }
-# agui_gestures = { path = "crates/agui_gestures", version = "0.3" }
-
-agui_primitives = { path = "crates/agui_primitives", version = "0.3" }
-# agui_widgets = { path = "crates/agui_widgets", version = "0.3" }
+agui = { path = "crates/agui", version = "0.3" }
 
 agui_test = { path = "crates/agui_test", version = "0.1" }
 agui_test_macros = { path = "crates/agui_test_macros", version = "0.1" }
 
 agui_window = { path = "crates/agui_window", version = "0.1" }
 agui_winit = { path = "crates/agui_winit", version = "0.1" }
-agui_render = { path = "crates/agui_render", version = "0.1" }
 agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
 bon = "3.3.2"
@@ -81,53 +59,6 @@ proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }
 
-[features]
-# default = ["primitives", "widgets", "macros"]
-# primitives = ["agui_primitives"]
-# widgets = ["primitives", "agui_widgets"]
-# macros = ["agui_macros"]
-
-# app = ["rustc-hash", "parking_lot"]
-# multi-threaded = ["agui_executor/multi-threaded"]
-
-# winit = ["agui_window/window", "agui_winit", "dep:winit"]
-# vello = ["agui_window/window", "agui_vello", "dep:vello"]
-# winit-vello = ["winit", "vello", "agui_vello/window"]
-
-# mocks = ["agui_core/mocks"]
-
-[dependencies]
-# agui_sync.workspace = true
-# agui_core.workspace = true
-# agui_executor.workspace = true
-# agui_macros = { workspace = true, optional = true }
-
-# agui_elements.workspace = true
-# agui_primitives = { workspace = true, optional = true }
-# agui_widgets = { workspace = true, optional = true }
-
-# agui_window = { workspace = true, optional = true }
-# agui_winit = { workspace = true, optional = true }
-# agui_vello = { workspace = true, optional = true }
-
-# tracing.workspace = true
-
-# rustc-hash = { workspace = true, optional = true }
-# parking_lot = { workspace = true, optional = true }
-
-# winit = { workspace = true, optional = true }
-# vello = { workspace = true, optional = true }
-
-[dev-dependencies]
-agui = { path = "." }
-
-# tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-futures-timer = "3.0"
-sysinfo = "0.29"
-
-slotmap.workspace = true
-
 [profile.release]
 debug = true
 
@@ -136,46 +67,3 @@ debug = true
 
 [profile.dev.package."*"]
 opt-level = 3
-
-# [profile.dev.package.agui_core]
-# opt-level = 1
-
-# [profile.dev.package.agui_primitives]
-# opt-level = 1
-
-# [profile.dev.package.agui_widgets]
-# opt-level = 1
-
-# [profile.dev.package.agui_vello]
-# opt-level = 1
-
-# [profile.dev.package.agui_winit]
-# opt-level = 1
-
-# [[example]]
-# name = "clipping"
-# required-features = ["app", "winit-vello"]
-
-# [[example]]
-# name = "current_window"
-# required-features = ["app", "winit-vello"]
-
-# [[example]]
-# name = "flexbox"
-# required-features = ["app", "winit-vello"]
-
-# [[example]]
-# name = "hello_world"
-# required-features = ["app", "winit-vello"]
-
-# [[example]]
-# name = "multiple_windows"
-# required-features = ["app", "winit-vello"]
-
-# [[example]]
-# name = "responsive_widgets"
-# required-features = ["app", "winit-vello"]
-
-# [[example]]
-# name = "system_info"
-# required-features = ["app", "winit-vello"]

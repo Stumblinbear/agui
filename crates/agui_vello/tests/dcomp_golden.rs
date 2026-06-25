@@ -4,16 +4,16 @@ use std::ffi::c_void;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use agui_render::WindowRenderer;
-use agui_render::dcomp::Dcomp;
-use agui_render::geometry::{Rect, Size};
-use agui_render::paint::Canvas;
-use agui_render::paint::compositing::{
+use agui::WindowRenderer;
+use agui::dcomp::Dcomp;
+use agui::geometry::{Rect, Size};
+use agui::paint::Canvas;
+use agui::paint::compositing::{
     CompositedFrame, Compositor, ContainerLayer, LayerHandle, OffsetLayer, OpacityLayer,
     PictureLayer, SurfaceTransformLayer,
 };
-use agui_render::paint::peniko::{Color, Fill, kurbo::Affine};
-use agui_render::wgpu::Backends;
+use agui::paint::peniko::{Color, Fill, kurbo::Affine};
+use agui::wgpu::Backends;
 use agui_test::golden::{Image, render_to_image};
 use agui_vello::VelloRenderer;
 
@@ -211,7 +211,7 @@ fn render_vello(renderer: &mut VelloRenderer, frame: &CompositedFrame, capture: 
 /// in any channel. On a mismatch it writes `<label>.vello.png`, `<label>.dcomp.png`, and
 /// `<label>.diff.png` for inspection.
 ///
-/// `frame` must not contain an [`External`](agui_render::paint::compositing::CompositedNode::External)
+/// `frame` must not contain an [`External`](agui::paint::compositing::CompositedNode::External)
 /// node, which Vello cannot rasterize.
 fn assert_renderers_match(
     frame: &CompositedFrame,

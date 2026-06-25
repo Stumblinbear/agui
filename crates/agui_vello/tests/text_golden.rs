@@ -1,7 +1,7 @@
-use agui_primitives::{
+use agui::widgets::{
     colored_box::ColoredBox, rich_text::RichText, sized_box::SizedBox, text::Text,
 };
-use agui_render::{
+use agui::{
     paint::peniko::Color,
     prelude::{element::Widget, render_object::*},
     provide::Provide,

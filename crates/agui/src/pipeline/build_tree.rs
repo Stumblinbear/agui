@@ -1,7 +1,7 @@
 //! The tree-based build phase. Every element implements [`Element`] and lives in
 //! an [`agui_core::tree::Tree`] keyed by [`Build`]; this module defines that dispatch binding and the glue
 //! the tree stores. The glue unwraps [`Operation`] onto the matching element method, and the core tree names
-//! no node trait, so `Element` is wholly `agui_render`'s. The per-hook contexts live in [`crate::context`].
+//! no node trait, so `Element` is wholly `agui`'s. The per-hook contexts live in [`crate::context`].
 
 use std::ptr::NonNull;
 

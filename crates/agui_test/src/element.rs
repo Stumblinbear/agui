@@ -2,7 +2,7 @@
 
 use std::{any::Any, cell::RefCell, rc::Rc};
 
-use agui_render::{
+use agui::{
     key::AnyKeyable,
     prelude::{element::*, render_object::*},
     test_harness::TestCtx,
@@ -476,7 +476,7 @@ fn assert_balanced(ledger: &Ledger) {
 
 #[cfg(test)]
 mod tests {
-    use agui_render::prelude::{element::*, render_object::*};
+    use agui::prelude::{element::*, render_object::*};
     use typed_floats::{Positive, PositiveFinite};
 
     use super::{ElementLifecycleCheck, Tracked};
