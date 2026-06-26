@@ -4,6 +4,7 @@ use crate::{
     context::{BuildCtx, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::Element,
+    pipeline::render_pipeline::SemanticsScope,
     provide::ProvideScope,
     render_object::node::RenderObjectPtr,
     widget::Widget,
@@ -51,7 +52,8 @@ where
     S: WidgetState,
 {
     state: S,
-    scope: ProvideScope,
+    provide_scope: ProvideScope,
+    semantics: SemanticsScope,
     child: Option<Slot<<S::Child as Widget>::Element>>,
 }
 
@@ -64,7 +66,8 @@ where
     pub fn new(state: S) -> Self {
         Self {
             state,
-            scope: ProvideScope::default(),
+            provide_scope: ProvideScope::default(),
+            semantics: SemanticsScope::default(),
             child: None,
         }
     }
@@ -85,14 +88,20 @@ where
     /// Reconciles this element against new `widget` props: applies [`WidgetState::did_update_widget`],
     /// rebuilds, and reconciles the child in place. A stateful widget's [`Widget::update`] forwards here.
     pub fn update_widget(&mut self, ctx: &mut UpdateCtx<'_>, widget: S::Widget) {
-        let scope = self.scope;
-        ctx.with_scope(scope, |ctx| {
-            ctx.build(|ctx| self.state.did_update_widget(ctx, widget));
-            let child = ctx.build(|ctx| self.state.build(ctx));
-            // SAFETY: `self.child` is our own slot, built at mount.
-            unsafe {
-                ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
-            }
+        let scope = self.provide_scope;
+        let semantics = self.semantics;
+
+        ctx.with_provide_scope(scope, |ctx| {
+            ctx.with_semantics_scope(semantics, |ctx| {
+                ctx.build(|ctx| self.state.did_update_widget(ctx, widget));
+
+                let child = ctx.build(|ctx| self.state.build(ctx));
+
+                // SAFETY: `self.child` is our own slot, built at mount.
+                unsafe {
+                    ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
+                }
+            });
         });
     }
 }
@@ -114,15 +123,22 @@ where
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        self.scope = ctx.provide();
+        self.provide_scope = ctx.provide_scope();
+        self.semantics = ctx.semantics_scope();
 
-        let scope = self.scope;
-        ctx.with_scope(scope, |ctx| {
-            let child = ctx.build(|ctx| self.state.build(ctx));
-            let element = ctx.inflate(|ctx| child.create(ctx));
-            self.child = Some(Slot::new(element));
-            // SAFETY: `self.child` is our own slot, just built.
-            unsafe { ctx.mount(self.child.as_mut().expect("just built")) };
+        let scope = self.provide_scope;
+        let semantics = self.semantics;
+
+        ctx.with_provide_scope(scope, |ctx| {
+            ctx.with_semantics_scope(semantics, |ctx| {
+                let child = ctx.build(|ctx| self.state.build(ctx));
+                let element = ctx.inflate(|ctx| child.create(ctx));
+
+                self.child = Some(Slot::new(element));
+
+                // SAFETY: `self.child` is our own slot, just built.
+                unsafe { ctx.mount(self.child.as_mut().expect("just built")) };
+            });
         });
     }
 
@@ -132,25 +148,33 @@ where
     }
 
     fn rebuild(&mut self, ctx: &mut UpdateCtx<'_>) {
-        let scope = self.scope;
-        ctx.with_scope(scope, |ctx| {
-            let child = ctx.build(|ctx| self.state.build(ctx));
-            // SAFETY: `self.child` is our own slot.
-            unsafe {
-                ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
-            }
+        let scope = self.provide_scope;
+        let semantics = self.semantics;
+
+        ctx.with_provide_scope(scope, |ctx| {
+            ctx.with_semantics_scope(semantics, |ctx| {
+                let child = ctx.build(|ctx| self.state.build(ctx));
+                // SAFETY: `self.child` is our own slot.
+                unsafe {
+                    ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
+                }
+            });
         });
     }
 
     fn dependency_changed(&mut self, ctx: &mut UpdateCtx<'_>) {
-        let scope = self.scope;
-        ctx.with_scope(scope, |ctx| {
-            ctx.build(|ctx| self.state.did_change_dependencies(ctx));
-            let child = ctx.build(|ctx| self.state.build(ctx));
-            // SAFETY: `self.child` is our own slot.
-            unsafe {
-                ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
-            }
+        let scope = self.provide_scope;
+        let semantics = self.semantics;
+
+        ctx.with_provide_scope(scope, |ctx| {
+            ctx.with_semantics_scope(semantics, |ctx| {
+                ctx.build(|ctx| self.state.did_change_dependencies(ctx));
+                let child = ctx.build(|ctx| self.state.build(ctx));
+                // SAFETY: `self.child` is our own slot.
+                unsafe {
+                    ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
+                }
+            });
         });
     }
 
@@ -226,8 +250,9 @@ mod tests {
         }
 
         fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
-            let scope = element.scope;
-            ctx.with_scope(scope, |ctx| {
+            let scope = element.provide_scope;
+
+            ctx.with_provide_scope(scope, |ctx| {
                 ctx.build(|ctx| element.state.did_update_widget(ctx, self));
                 let child = ctx.build(|ctx| element.state.build(ctx));
                 // SAFETY: `element.child` is the stateful element's own slot.
@@ -312,8 +337,9 @@ mod tests {
         }
 
         fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
-            let scope = element.scope;
-            ctx.with_scope(scope, |ctx| {
+            let scope = element.provide_scope;
+
+            ctx.with_provide_scope(scope, |ctx| {
                 ctx.build(|ctx| element.state.did_update_widget(ctx, self));
                 let child = ctx.build(|ctx| element.state.build(ctx));
                 // SAFETY: `element.child` is the stateful element's own slot.

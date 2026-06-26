@@ -21,6 +21,7 @@ cpu = []
 [dependencies]
 agui_core.workspace = true
 
+accesskit.workspace = true
 bon.workspace = true
 parley.workspace = true
 peniko.workspace = true

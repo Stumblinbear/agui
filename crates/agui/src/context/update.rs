@@ -8,7 +8,9 @@ use agui_core::tree::{Cursor, NodeContainer, NodeHandle};
 use crate::context::{BuildCtx, CreateCtx, TaskCtx};
 use crate::element::Element;
 use crate::pipeline::build_tree::{Build, BuildQueue, run};
-use crate::pipeline::render_pipeline::{LayoutScope, PaintScope, RenderPipeline};
+use crate::pipeline::render_pipeline::{
+    DeferredSemanticsScope, LayoutScope, PaintScope, RenderPipeline, SemanticsScope,
+};
 use crate::provide::ProvideScope;
 use crate::render_object::node::{MountedChild, RenderObjectPtr};
 use crate::scheduling::{TaskHandle, TaskScheduler};
@@ -18,7 +20,10 @@ use crate::scheduling::{TaskHandle, TaskScheduler};
 /// set, and the scheduler the element spawns tasks on.
 pub struct UpdateCtx<'a> {
     cursor: Cursor<'a, Build>,
-    provide: ProvideScope,
+
+    provide_scope: ProvideScope,
+    semantics_scope: SemanticsScope,
+
     queue: &'a mut BuildQueue,
     pipeline: &'a RenderPipeline,
     scheduler: &'a mut dyn TaskScheduler,
@@ -30,48 +35,46 @@ impl<'a> UpdateCtx<'a> {
     /// an element by handle.
     pub fn new(
         cursor: Cursor<'a, Build>,
-        provide: ProvideScope,
+        provide_scope: ProvideScope,
         queue: &'a mut BuildQueue,
         pipeline: &'a RenderPipeline,
         scheduler: &'a mut dyn TaskScheduler,
     ) -> Self {
         Self {
             cursor,
-            provide,
+            provide_scope,
+            semantics_scope: SemanticsScope::detached(),
             queue,
             pipeline,
             scheduler,
         }
     }
 
-    /// Marks `scope`'s relayout boundary for re-layout on the next frame, as a reconcile does when it changes
-    /// a layout-affecting property of a render object.
-    pub fn mark_needs_layout(&self, scope: LayoutScope) {
-        self.pipeline.mark_needs_layout(scope);
-    }
-
-    /// Marks `scope`'s repaint boundary to be repainted on the next frame.
-    pub fn mark_needs_paint(&self, scope: PaintScope) {
-        self.pipeline.mark_needs_paint(scope);
-    }
-
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
-    /// repaint, as a reconcile does when it changes a render object's compositing need.
-    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        self.pipeline.mark_needs_compositing_bits_update(scope);
-    }
-
-    /// Queues the element at `dependent` to rebuild on the next flush, running its dependency-change hook
-    /// first. A [`Provide`] calls this for each reader of a value it changed.
-    ///
-    /// [`Provide`]: crate::provide::Provide
-    pub(crate) fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
-        self.queue.mark_dependency_changed(dependent);
-    }
-
     /// This element's handle.
     pub fn handle(&self) -> NodeHandle {
         self.cursor.handle()
+    }
+
+    /// The values currently in scope.
+    pub fn provide_scope(&self) -> ProvideScope {
+        self.provide_scope
+    }
+
+    /// The nearest provided value of type `T` in scope, or `None`.
+    pub fn get_provided<T: Any>(&self) -> Option<Rc<T>> {
+        self.provide_scope.get::<T>()
+    }
+
+    /// The nearest provided value of type `T`, recording this element as a dependent so a later change to
+    /// that value reruns its `dependency_changed`.
+    pub fn depend_on_provided<T: Any>(&self) -> Option<Rc<T>> {
+        self.provide_scope.get_and_depend::<T>(self.cursor.handle())
+    }
+
+    /// An owned scheduler handle that outlives this build, for spawning a task once the cursor is gone, such
+    /// as from a layout-time builder.
+    pub fn deferred_scheduler(&self) -> Box<dyn TaskScheduler> {
+        self.scheduler.deferred()
     }
 
     /// Spawns a task tied to this element. `func` receives a [`TaskCtx`] it can use to post a message back to
@@ -86,61 +89,68 @@ impl<'a> UpdateCtx<'a> {
         self.scheduler.spawn(Box::pin(func(task_ctx)))
     }
 
-    /// An owned scheduler handle that outlives this build, for spawning a task once the cursor is gone, such
-    /// as from a layout-time builder.
-    pub fn deferred_scheduler(&self) -> Box<dyn TaskScheduler> {
-        self.scheduler.deferred()
-    }
-
-    /// Re-bases the cursor onto `this`, the element behind a heap indirection (a `Box<dyn AnyElement>`), so its
-    /// inline children register against its real address. The boxed-element boundary calls this before
-    /// forwarding a cursor-bearing hook.
+    /// Runs `func` with `scope` in scope, restoring the previous scope afterward. A [`Provide`] extends the
+    /// scope for its child this way, and an element reached by a direct rebuild re-enters the scope it
+    /// captured at mount.
     ///
-    /// # Safety
-    /// As [`Cursor::rebase`](agui_core::tree::Cursor::rebase): `this` is the positioned element's address,
-    /// with whole-allocation provenance.
-    pub(crate) unsafe fn rebase(&mut self, this: NonNull<()>) {
-        // SAFETY: the caller upholds `Cursor::rebase`'s contract.
-        unsafe { self.cursor.rebase(this) };
+    /// [`Provide`]: crate::provide::Provide
+    pub fn with_provide_scope<R>(
+        &mut self,
+        scope: ProvideScope,
+        func: impl FnOnce(&mut UpdateCtx<'_>) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.provide_scope, scope);
+        let result = func(self);
+        self.provide_scope = previous;
+        result
     }
 
-    /// The nearest provided value of type `T` in scope, or `None`.
-    pub fn get_provided<T: Any>(&self) -> Option<Rc<T>> {
-        self.provide.get::<T>()
+    /// The enclosing semantics boundary, captured by a build-boundary element to re-enter on a later rebuild.
+    #[must_use]
+    pub fn semantics_scope(&self) -> SemanticsScope {
+        self.semantics_scope
+    }
+
+    /// A deferred marker for the enclosing semantics boundary, for a render object to mark from outside a
+    /// pass, such as an animation.
+    #[must_use]
+    pub fn deferred_semantics_scope(&self) -> DeferredSemanticsScope {
+        self.pipeline.deferred_semantics_scope(self.semantics_scope)
+    }
+
+    /// Runs `func` with `semantics` as the enclosing semantics boundary, restoring the previous one
+    /// afterward. A boundary widget extends it for its subtree, and an element reached by a direct rebuild
+    /// re-enters the boundary it captured at mount.
+    pub fn with_semantics_scope<R>(
+        &mut self,
+        semantics: SemanticsScope,
+        func: impl FnOnce(&mut UpdateCtx<'_>) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.semantics_scope, semantics);
+        let result = func(self);
+        self.semantics_scope = previous;
+        result
+    }
+
+    /// Marks the enclosing semantics boundary changed, so the driver re-reads this view's semantics. A
+    /// reconcile calls this when it changes a render object's semantics.
+    pub fn mark_needs_semantics_update(&self) {
+        self.pipeline
+            .mark_needs_semantics_update(self.semantics_scope);
     }
 
     /// Runs `f` with the restricted [`BuildCtx`] for a widget's `build`, which composes a child widget but
     /// does not edit the tree (no cursor). The context lives only for the call.
     pub fn build<R>(&self, f: impl FnOnce(&mut BuildCtx) -> R) -> R {
-        f(&mut BuildCtx::new(self.provide, self.cursor.handle()))
+        f(&mut BuildCtx::new(self.provide_scope, self.cursor.handle()))
     }
 
     /// Runs `f` with a [`CreateCtx`] for grafting a fresh child during this reconcile: it carries the scope
     /// and the pipeline, so a boundary built here registers its render tree, but registers no element-tree
     /// node (mount does that). The context lives only for the call.
     pub fn inflate<R>(&self, f: impl FnOnce(&mut CreateCtx) -> R) -> R {
-        f(&mut CreateCtx::new(self.provide, self.pipeline.clone()))
-    }
-
-    /// The values currently in scope.
-    pub fn provide(&self) -> ProvideScope {
-        self.provide
-    }
-
-    /// Runs `func` with `scope` in scope, restoring the previous scope afterward. A [`Provide`] extends the
-    /// scope for its child this way, and an element reached by a direct rebuild re-enters the scope it
-    /// captured at mount.
-    ///
-    /// [`Provide`]: crate::provide::Provide
-    pub fn with_scope<R>(
-        &mut self,
-        scope: ProvideScope,
-        func: impl FnOnce(&mut UpdateCtx<'_>) -> R,
-    ) -> R {
-        let previous = std::mem::replace(&mut self.provide, scope);
-        let result = func(self);
-        self.provide = previous;
-        result
+        let mut ctx = CreateCtx::new(self.provide_scope, self.pipeline.clone());
+        ctx.with_semantics_scope(self.semantics_scope, f)
     }
 
     /// Mounts `child` under this element and hands back the [`MountedChild`] pointing at its render object, now
@@ -166,7 +176,8 @@ impl<'a> UpdateCtx<'a> {
 
         child.node_mut().mount(&mut UpdateCtx {
             cursor,
-            provide: self.provide,
+            provide_scope: self.provide_scope,
+            semantics_scope: self.semantics_scope,
             queue: &mut *self.queue,
             pipeline: self.pipeline,
             scheduler: &mut *self.scheduler,
@@ -185,7 +196,8 @@ impl<'a> UpdateCtx<'a> {
     where
         S::Node: Element,
     {
-        let provide = self.provide;
+        let provide = self.provide_scope;
+        let semantics = self.semantics_scope;
         let queue = &mut *self.queue;
         let pipeline = self.pipeline;
         let scheduler = &mut *self.scheduler;
@@ -194,7 +206,8 @@ impl<'a> UpdateCtx<'a> {
             self.cursor.with_child(child, move |node, cursor| {
                 node.unmount(&mut UpdateCtx {
                     cursor,
-                    provide,
+                    provide_scope: provide,
+                    semantics_scope: semantics,
                     queue,
                     pipeline,
                     scheduler,
@@ -213,10 +226,12 @@ impl<'a> UpdateCtx<'a> {
         child: &mut S,
         func: impl FnOnce(&mut S::Node, &mut UpdateCtx<'_>) -> R,
     ) -> R {
-        let provide = self.provide;
+        let provide = self.provide_scope;
+        let semantics = self.semantics_scope;
         let queue = &mut *self.queue;
         let pipeline = self.pipeline;
         let scheduler = &mut *self.scheduler;
+
         // SAFETY: the caller guarantees `child` is this element's, with_child's precondition.
         unsafe {
             self.cursor.with_child(child, move |child_element, cursor| {
@@ -224,7 +239,8 @@ impl<'a> UpdateCtx<'a> {
                     child_element,
                     &mut UpdateCtx {
                         cursor,
-                        provide,
+                        provide_scope: provide,
+                        semantics_scope: semantics,
                         queue,
                         pipeline,
                         scheduler,
@@ -232,6 +248,43 @@ impl<'a> UpdateCtx<'a> {
                 )
             })
         }
+    }
+
+    /// Marks `scope`'s relayout boundary for re-layout on the next frame, as a reconcile does when it changes
+    /// a layout-affecting property of a render object.
+    pub fn mark_needs_layout(&self, scope: LayoutScope) {
+        self.pipeline.mark_needs_layout(scope);
+    }
+
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint, as a reconcile does when it changes a render object's compositing need.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        self.pipeline.mark_needs_compositing_bits_update(scope);
+    }
+
+    /// Marks `scope`'s repaint boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
+        self.pipeline.mark_needs_paint(scope);
+    }
+
+    /// Queues the element at `dependent` to rebuild on the next flush, running its dependency-change hook
+    /// first. A [`Provide`] calls this for each reader of a value it changed.
+    ///
+    /// [`Provide`]: crate::provide::Provide
+    pub(crate) fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
+        self.queue.mark_dependency_changed(dependent);
+    }
+
+    /// Re-bases the cursor onto `this`, the element behind a heap indirection (a `Box<dyn AnyElement>`), so its
+    /// inline children register against its real address. The boxed-element boundary calls this before
+    /// forwarding a cursor-bearing hook.
+    ///
+    /// # Safety
+    /// As [`Cursor::rebase`](agui_core::tree::Cursor::rebase): `this` is the positioned element's address,
+    /// with whole-allocation provenance.
+    pub(crate) unsafe fn rebase(&mut self, this: NonNull<()>) {
+        // SAFETY: the caller upholds `Cursor::rebase`'s contract.
+        unsafe { self.cursor.rebase(this) };
     }
 }
 

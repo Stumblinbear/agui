@@ -13,13 +13,17 @@ use crate::{
     paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
     pipeline::{
         BoundaryContent,
-        render_pipeline::{LayoutBoundary, LayoutBoundaryHandle, PaintBoundaryHandle},
+        render_pipeline::{
+            LayoutBoundary, LayoutBoundaryHandle, PaintBoundaryHandle, SemanticsBoundaryHandle,
+            SemanticsScope,
+        },
     },
     render_object::{
         LayoutCtx, RenderObject, SingleChildRenderObject,
         box_layout::{BoxConstraints, RenderBox},
         node::{MountedChild, RenderNode, RenderObjectPtr},
     },
+    semantics::{SemanticsTree, SemanticsTreeBuilder},
     text::TextBaseline,
     widget::{RenderBoxElement, RenderBoxWrapper, Widget},
 };
@@ -34,12 +38,16 @@ pub struct ViewHandle {
 
 struct ViewInner {
     content: Rc<RefCell<RenderView>>,
+
     layout: LayoutBoundaryHandle,
+
     /// Held for its `Drop`, which unregisters the view's repaint boundary and discards its layer; nothing
     /// reads it.
     #[allow(dead_code)]
     paint: PaintBoundaryHandle,
     layer: LayerHandle<OffsetLayer>,
+
+    semantics: SemanticsBoundaryHandle,
 }
 
 impl ViewHandle {
@@ -48,6 +56,7 @@ impl ViewHandle {
         layout: LayoutBoundaryHandle,
         paint: PaintBoundaryHandle,
         layer: LayerHandle<OffsetLayer>,
+        semantics: SemanticsBoundaryHandle,
     ) -> Self {
         Self {
             inner: Rc::new(ViewInner {
@@ -55,6 +64,7 @@ impl ViewHandle {
                 layout,
                 paint,
                 layer,
+                semantics,
             }),
         }
     }
@@ -87,6 +97,21 @@ impl ViewHandle {
             .content
             .borrow()
             .describe(&mut Diagnostics::new())
+    }
+
+    /// Captures the view's subtree as a semantics tree, for assistive technology and tests.
+    pub fn semantics(&self) -> SemanticsTree {
+        let nodes = self.inner.semantics.with_counter(|counter| {
+            let mut builder = SemanticsTreeBuilder::new(counter);
+            self.inner
+                .content
+                .borrow_mut()
+                .child
+                .build_semantics(&mut builder);
+            builder.finish()
+        });
+
+        SemanticsTree::new(nodes)
     }
 }
 
@@ -145,15 +170,31 @@ where
         // The view is its own repaint boundary, so it can record its paint scope now.
         layout.set_paint_scope(paint.scope());
 
+        #[allow(clippy::clone_on_ref_ptr)]
+        let semantics_content: BoundaryContent = content.clone();
+        let semantics = ctx.register_semantics_boundary(semantics_content);
+        let semantics_scope = semantics.scope();
+
         // The surface holds the handle for the view's life, keeping its boundaries registered until the view
         // unmounts and clears it; the driver reads a clone to drive frames.
-        *self.surface.borrow_mut() =
-            Some(ViewHandle::new(Rc::clone(&content), layout, paint, layer));
+        *self.surface.borrow_mut() = Some(ViewHandle::new(
+            Rc::clone(&content),
+            layout,
+            paint,
+            layer,
+            semantics,
+        ));
+
+        // The subtree is created under the view's semantics boundary, so its render objects capture it.
+        let child = ctx.with_semantics_scope(semantics_scope, |ctx| {
+            Widget::create(RenderBoxWrapper::new(self.child), ctx)
+        });
 
         ViewElement {
-            child: Slot::new(Widget::create(RenderBoxWrapper::new(self.child), ctx)),
+            child: Slot::new(child),
             content,
             surface: self.surface,
+            semantics: semantics_scope,
             render: (),
         }
     }
@@ -170,6 +211,7 @@ pub struct ViewElement<C> {
     child: Slot<C>,
     content: Rc<RefCell<RenderView>>,
     surface: Rc<RefCell<Option<ViewHandle>>>,
+    semantics: SemanticsScope,
     render: (),
 }
 
@@ -178,10 +220,14 @@ impl<C: Element> ViewElement<C> {
     where
         CV: Widget<Element = C>,
     {
-        // SAFETY: `self.child` is our own slot.
-        unsafe {
-            ctx.with_child(&mut self.child, |element, ctx| child.update(ctx, element));
-        }
+        let semantics = self.semantics;
+
+        ctx.with_semantics_scope(semantics, |ctx| {
+            // SAFETY: `self.child` is our own slot.
+            unsafe {
+                ctx.with_child(&mut self.child, |element, ctx| child.update(ctx, element));
+            }
+        });
     }
 }
 
@@ -202,8 +248,13 @@ where
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        // SAFETY: `self.child` is our own slot.
-        let mounted = unsafe { ctx.mount(&mut self.child) };
+        let semantics = self.semantics;
+
+        let mounted = ctx.with_semantics_scope(semantics, |ctx| {
+            // SAFETY: `self.child` is our own slot.
+            unsafe { ctx.mount(&mut self.child) }
+        });
+
         self.content.borrow_mut().adopt_child(mounted);
     }
 
@@ -283,6 +334,10 @@ impl SingleChildRenderObject for RenderView {
 }
 
 impl RenderObject for RenderView {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))

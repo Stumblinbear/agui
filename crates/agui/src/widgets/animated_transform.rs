@@ -84,6 +84,8 @@ where
     type Render = RenderAnimatedTransform<Child::Render>;
 
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        let semantics_scope = ctx.deferred_semantics_scope();
+
         SingleChildElement::new(
             ctx,
             self.child,
@@ -94,7 +96,8 @@ where
 
                 now: Rc::new(Cell::new(Duration::ZERO)),
                 paint_scope: PaintScope::detached(),
-                deferred: DeferredPaintScope::detached(),
+                deferred_paint_scope: DeferredPaintScope::detached(),
+                semantics: semantics_scope,
                 vsync: self.vsync,
                 animation: None,
 
@@ -142,7 +145,10 @@ pub struct RenderAnimatedTransform<Child: ?Sized> {
     paint_scope: PaintScope,
 
     /// The deferred handle the animation marks each frame, captured during paint alongside the scope.
-    deferred: DeferredPaintScope,
+    deferred_paint_scope: DeferredPaintScope,
+
+    /// The semantics boundary captured at create, marked by the animation when a tick moves the layer.
+    semantics: DeferredSemanticsScope,
 
     vsync: Option<Vsync>,
     animation: Option<VsyncHandle>,
@@ -185,6 +191,14 @@ impl<Child: ?Sized> RenderAnimatedTransform<Child> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderAnimatedTransform<Child> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let size = self.child.parent_data.unwrap_or(Size::ZERO);
+
+        s.with_transform(self.effective(size), |s| {
+            self.child.build_semantics(s);
+        });
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("origin", self.origin)
@@ -254,7 +268,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderAnimatedTransform<Child> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.paint_scope = ctx.scope();
-        self.deferred = ctx.deferred_paint_scope();
+        self.deferred_paint_scope = ctx.deferred_paint_scope();
 
         let size = self
             .child
@@ -284,7 +298,8 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderAnimatedTransform<Child> {
             let origin = self.origin;
             let alignment = self.alignment;
             let layer = layer.clone();
-            let deferred = self.deferred.clone();
+            let deferred = self.deferred_paint_scope.clone();
+            let semantics = self.semantics.clone();
 
             self.animation = Some(vsync.on_frame(move |frame| {
                 now.set(frame);
@@ -295,7 +310,10 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderAnimatedTransform<Child> {
                     alignment,
                     size,
                 )) {
+                    // The layer moved by recompositing without a repaint, so the subtree's semantics
+                    // geometry moved with it. Ask the view to re-read it.
                     deferred.mark_needs_composite();
+                    semantics.mark_needs_semantics_update();
                 }
             }));
         }
@@ -318,6 +336,7 @@ mod tests {
         pipeline::PipelineOwner,
         prelude::{element::*, render_object::*},
         scheduling::Vsync,
+        semantics::{Role, Semantics},
         test_harness::TestCtx,
         view::ViewHandle,
         widgets::{listener::Listener, repaint_boundary::RepaintBoundary, sized_box::SizedBox},
@@ -350,6 +369,8 @@ mod tests {
     }
 
     impl RenderObject for RenderCounter {
+        fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
+
         fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
             d.node_for::<Self>().finish()
         }
@@ -476,6 +497,75 @@ mod tests {
             1,
             "the subtree was painted once and replayed at each transform"
         );
+    }
+
+    /// Moving the layer by recompositing, with no repaint, still asks the view to re-read semantics because
+    /// the subtree's geometry moved with it.
+    #[test]
+    fn moving_the_layer_marks_the_view_semantics() {
+        let vsync = Vsync::new();
+
+        let widget = AnimatedTransform::new(|now| Affine::translate((now.as_millis() as f64, 0.0)))
+            .vsync(vsync.clone())
+            .child(Counter {
+                paints: Rc::new(Cell::new(0)),
+            });
+
+        let (mut owner, _view) = mount(widget);
+        owner.flush_layout();
+        owner.flush_paint();
+
+        let fired = Rc::new(Cell::new(false));
+        let flag = Rc::clone(&fired);
+        owner.on_needs_semantics_update(Box::new(move || flag.set(true)));
+
+        vsync.tick(Duration::from_millis(16));
+        owner.flush_layout();
+
+        assert!(
+            fired.get(),
+            "recompositing the moved layer asked the view to re-read semantics"
+        );
+    }
+
+    /// A flush re-walks each boundary marked since the last frame, hands its rebuilt tree to the closure,
+    /// and clears the dirty set so the next change fires again.
+    #[test]
+    fn flushing_semantics_rewalks_the_marked_boundary() {
+        let vsync = Vsync::new();
+
+        let widget = AnimatedTransform::new(|now| Affine::translate((now.as_millis() as f64, 0.0)))
+            .vsync(vsync.clone())
+            .child(
+                Semantics::new()
+                    .role(Role::Button)
+                    .label("Submit")
+                    .child(Counter {
+                        paints: Rc::new(Cell::new(0)),
+                    }),
+            );
+
+        let (mut owner, _view) = mount(widget);
+        owner.flush_layout();
+        owner.flush_paint();
+
+        // Moving the layer marks the view's semantics boundary. `flush_layout` drains that mark into the
+        // dirty set the next flush reads.
+        vsync.tick(Duration::from_millis(16));
+        owner.flush_layout();
+
+        let mut trees = Vec::new();
+        owner.flush_semantics(|_id, tree| trees.push(tree));
+
+        assert_eq!(trees.len(), 1, "the one marked boundary was re-walked");
+        assert!(
+            trees[0].find_by_name("Submit").is_some(),
+            "the re-walk captured the subtree's semantics"
+        );
+
+        let mut again = 0;
+        owner.flush_semantics(|_, _| again += 1);
+        assert_eq!(again, 0, "the flush cleared the dirty set");
     }
 
     /// Wrapping the subtree in a repaint boundary reuses its painting: the transform animates while the

@@ -133,9 +133,13 @@ where
             self.children
                 .mount(ctx, self.render.get_mut().children_mut());
         };
+
+        self.render.get_mut().attach(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
+
         // SAFETY: as `mount`.
         unsafe { self.children.unmount(ctx) };
     }

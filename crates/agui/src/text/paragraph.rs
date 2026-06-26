@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, ops::Range, rc::Rc};
 
 use parley::{Alignment, AlignmentOptions, Decoration, GlyphRun, Layout, PositionedLayoutItem};
 use peniko::{
@@ -8,7 +8,7 @@ use peniko::{
 use typed_floats::{Positive, PositiveFinite};
 
 use crate::{
-    context::{LayoutCtx, PaintCtx},
+    context::{LayoutCtx, PaintCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
@@ -19,6 +19,7 @@ use crate::{
         box_layout::{BoxConstraints, RenderBox},
         node::RenderNode,
     },
+    semantics::{Role, SemanticsConfig, SemanticsNodeId, SemanticsTreeBuilder},
     text::{Fonts, ParagraphContent, TextBaseline, TextBrush},
 };
 
@@ -46,6 +47,9 @@ pub struct RenderParagraph<C: ?Sized = ()> {
 
     fonts: Option<Rc<Fonts>>,
 
+    group_id: Option<SemanticsNodeId>,
+    run_ids: Vec<Option<SemanticsNodeId>>,
+
     children: Vec<RenderNode<C>>,
     child_data: Vec<InlineChildData>,
 
@@ -69,6 +73,9 @@ impl<C: ?Sized> RenderParagraph<C> {
 
             fonts: None,
 
+            group_id: None,
+            run_ids: Vec::new(),
+
             children: Vec::new(),
             child_data: Vec::new(),
 
@@ -84,12 +91,18 @@ impl<C: ?Sized> RenderParagraph<C> {
         }
     }
 
-    pub fn set_content(&mut self, content: impl Into<ParagraphContent>) {
+    /// Replaces the content, returning whether it changed so the caller can mark semantics for update.
+    pub fn set_content(&mut self, content: impl Into<ParagraphContent>) -> bool {
         let content = content.into();
-        if self.content != content {
+
+        let changed = self.content != content;
+
+        if changed {
             self.content = content;
             self.mark_needs_reshape();
         }
+
+        changed
     }
 
     /// Captures the font database to shape against. A change of handle identity dirties the cache.
@@ -144,6 +157,38 @@ impl<C: ?Sized> RenderParagraph<C> {
             Some(fonts.shape(&self.content, placeholder_sizes))
         }
     }
+
+    /// The bounding box of the glyph runs whose text falls in `range`, or `None` when there is no layout or
+    /// `range` covers no run.
+    fn run_segment_rect(&self, range: Range<usize>) -> Option<crate::geometry::Rect> {
+        let layout = self.layout.as_ref()?;
+
+        let mut bounds: Option<crate::geometry::Rect> = None;
+        for line in layout.lines() {
+            for item in line.items() {
+                let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
+                    continue;
+                };
+
+                let run = glyph_run.run();
+                let run_range = run.text_range();
+                if run_range.start >= range.end || range.start >= run_range.end {
+                    continue;
+                }
+
+                let metrics = run.metrics();
+                let rect = crate::geometry::Rect::new(
+                    glyph_run.offset(),
+                    glyph_run.baseline() - metrics.ascent,
+                    glyph_run.advance(),
+                    metrics.ascent + metrics.descent,
+                );
+                bounds = Some(bounds.map_or(rect, |existing| existing.union(rect)));
+            }
+        }
+
+        bounds
+    }
 }
 
 impl<C: RenderBox + ?Sized> RenderParagraph<C> {
@@ -172,6 +217,103 @@ impl<C: RenderBox + ?Sized> RenderParagraph<C> {
 }
 
 impl<C: RenderObject + ?Sized> RenderObject for RenderParagraph<C> {
+    fn attach(&mut self, ctx: &mut UpdateCtx<'_>) {
+        ctx.mark_needs_semantics_update();
+    }
+
+    fn detach(&mut self, ctx: &mut UpdateCtx<'_>) {
+        ctx.mark_needs_semantics_update();
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let group_size = self.layout.as_ref().map_or(Size::ZERO, |layout| {
+            Size::new(layout.width(), layout.height())
+        });
+
+        let text = &self.content.text;
+
+        if self.content.placeholders.is_empty() {
+            if !text.is_empty() {
+                s.node(&mut self.group_id, text_label(text), group_size, |_| {});
+            }
+
+            return;
+        }
+
+        // The run rects read self.layout, so compute them before the closure mutably borrows run_ids.
+        let mut run_rects = Vec::new();
+        let mut start = 0;
+
+        for &offset in &self.content.placeholders {
+            if start < offset {
+                run_rects.push(self.run_segment_rect(start..offset).unwrap_or_default());
+            }
+
+            start = offset;
+        }
+
+        if start < text.len() {
+            run_rects.push(self.run_segment_rect(start..text.len()).unwrap_or_default());
+        }
+
+        // Interleave the text runs and the inline widgets in reading order, so a screen reader meets
+        // each widget where it sits in the text rather than after all of it.
+        s.node(
+            &mut self.group_id,
+            SemanticsConfig::new(Role::Paragraph),
+            group_size,
+            |s| {
+                let mut start = 0;
+                let mut run = 0;
+
+                for (index, &offset) in self.content.placeholders.iter().enumerate() {
+                    if start < offset {
+                        if run >= self.run_ids.len() {
+                            self.run_ids.push(None);
+                        }
+
+                        let rect = run_rects[run];
+
+                        s.with_offset(rect.origin(), |s| {
+                            s.node(
+                                &mut self.run_ids[run],
+                                text_label(&text[start..offset]),
+                                rect.size(),
+                                |_| {},
+                            );
+                        });
+
+                        run += 1;
+                    }
+
+                    if let Some(child) = self.children.get_mut(index) {
+                        let child_offset = self.child_data[index].offset;
+                        s.with_offset(child_offset, |s| child.build_semantics(s));
+                    }
+
+                    start = offset;
+                }
+
+                if start < text.len() {
+                    if run >= self.run_ids.len() {
+                        self.run_ids.push(None);
+                    }
+
+                    let rect = run_rects[run];
+
+                    s.with_offset(rect.origin(), |s| {
+                        s.node(
+                            &mut self.run_ids[run],
+                            text_label(&text[start..]),
+                            rect.size(),
+                            |_| {},
+                        );
+                    });
+                }
+            },
+        );
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("text", excerpt(&self.content.text))
@@ -392,6 +534,8 @@ pub struct RenderText {
     content: ParagraphContent,
     fonts: Option<Rc<Fonts>>,
 
+    semantics_id: Option<SemanticsNodeId>,
+
     layout: Option<Layout<TextBrush>>,
     dirty: bool,
     /// The width the committed layout was last broken to, so a re-layout at the same width is reused.
@@ -408,6 +552,8 @@ impl RenderText {
             content: content.into(),
             fonts: None,
 
+            semantics_id: None,
+
             layout: None,
             dirty: true,
             broken_width: None,
@@ -418,12 +564,18 @@ impl RenderText {
         }
     }
 
-    pub fn set_content(&mut self, content: impl Into<ParagraphContent>) {
+    /// Replaces the content, returning whether it changed so the caller can mark semantics.
+    pub fn set_content(&mut self, content: impl Into<ParagraphContent>) -> bool {
         let content = content.into();
-        if self.content != content {
+
+        let changed = self.content != content;
+
+        if changed {
             self.content = content;
             self.mark_needs_reshape();
         }
+
+        changed
     }
 
     /// Captures the font database to shape against. A change of handle identity dirties the cache.
@@ -467,6 +619,31 @@ impl RenderText {
 }
 
 impl RenderObject for RenderText {
+    fn attach(&mut self, ctx: &mut UpdateCtx<'_>) {
+        ctx.mark_needs_semantics_update();
+    }
+
+    fn detach(&mut self, ctx: &mut UpdateCtx<'_>) {
+        ctx.mark_needs_semantics_update();
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        if self.content.text.is_empty() {
+            return;
+        }
+
+        let size = self.layout.as_ref().map_or(Size::ZERO, |layout| {
+            Size::new(layout.width(), layout.height())
+        });
+
+        s.node(
+            &mut self.semantics_id,
+            text_label(&self.content.text),
+            size,
+            |_| {},
+        );
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("text", excerpt(&self.content.text))
@@ -596,6 +773,12 @@ impl RenderBox for RenderText {
             }
         });
     }
+}
+
+fn text_label(text: &str) -> SemanticsConfig {
+    let mut config = SemanticsConfig::new(Role::Label);
+    config.node.set_label(text);
+    config
 }
 
 fn unbounded() -> Positive<f32> {

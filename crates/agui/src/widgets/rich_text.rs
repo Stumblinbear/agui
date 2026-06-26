@@ -39,8 +39,13 @@ where
     fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
         let (content, widgets) = self.span.flatten();
 
-        element.inner.render_object_mut().set_content(content);
+        let changed = element.inner.render_object_mut().set_content(content);
+
         element.inner.update(ctx, widgets);
+
+        if changed {
+            ctx.mark_needs_semantics_update();
+        }
     }
 }
 
@@ -74,7 +79,7 @@ where
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        let fonts = ctx.build(|ctx| ctx.depend_on_provided::<Fonts>());
+        let fonts = ctx.depend_on_provided::<Fonts>();
         self.inner.render_object_mut().set_fonts(fonts);
 
         Element::mount(&mut self.inner, ctx);
@@ -85,7 +90,7 @@ where
     }
 
     fn dependency_changed(&mut self, ctx: &mut UpdateCtx<'_>) {
-        let fonts = ctx.build(|ctx| ctx.depend_on_provided::<Fonts>());
+        let fonts = ctx.depend_on_provided::<Fonts>();
         self.inner.render_object_mut().set_fonts(fonts);
     }
 

@@ -9,6 +9,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
+pub use accesskit;
 pub use agui_core::diagnostics;
 
 pub mod context;
@@ -21,6 +22,7 @@ pub mod pipeline;
 pub mod provide;
 pub mod render_object;
 pub mod scheduling;
+pub mod semantics;
 pub mod stateful;
 pub mod stateless;
 #[cfg(test)]
@@ -72,7 +74,8 @@ pub mod prelude {
             context::{LayoutCtx, PaintCtx},
             input::hit_test::{HitTest, HitTestResult},
             pipeline::render_pipeline::{
-                DeferredLayoutScope, DeferredPaintScope, LayoutScope, PaintScope,
+                DeferredLayoutScope, DeferredPaintScope, DeferredSemanticsScope, LayoutScope,
+                PaintScope,
             },
             render_object::{
                 AnyRenderObject, MultiChildRenderObject, RenderChildren, RenderObject,
@@ -81,6 +84,7 @@ pub mod prelude {
                 node::{MountedChild, RenderNode, RenderObjectCell, RenderObjectPtr},
                 sliver::{AnyRenderSliver, RenderSliver},
             },
+            semantics::{SemanticsNodeId, SemanticsTreeBuilder},
             text::{
                 FontStyle, FontWeight, FontWidth, Fonts, InlineSpan, LineHeight, ParagraphContent,
                 RenderParagraph, RenderText, TextBrush, TextSpan, TextStyle,

@@ -88,7 +88,7 @@ pub struct RenderFlex<Children> {
     size: Size,
 }
 
-impl<Children: RenderChildren> MultiChildRenderObject for RenderFlex<Children> {
+impl<Children: RenderChildren + 'static> MultiChildRenderObject for RenderFlex<Children> {
     type Children = Children;
 
     fn children_mut(&mut self) -> &mut Children {
@@ -96,7 +96,17 @@ impl<Children: RenderChildren> MultiChildRenderObject for RenderFlex<Children> {
     }
 }
 
-impl<Children: RenderChildren + 'static> RenderObject for RenderFlex<Children> {}
+impl<Children: RenderChildren + 'static> RenderObject for RenderFlex<Children> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.children
+            .for_each_mut(&mut |child| child.build_semantics(s));
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        // TODO(trevin): I think we need to add an iterator to RenderChildren to make this work
+        d.node_for::<Self>().finish()
+    }
+}
 
 impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
     fn min_intrinsic_width(&self, _height: Positive<f32>) -> Option<PositiveFinite<f32>> {

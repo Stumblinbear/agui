@@ -69,6 +69,10 @@ impl SingleChildRenderObject for RenderRepaintBoundary {
 }
 
 impl RenderObject for RenderRepaintBoundary {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -188,6 +192,8 @@ mod tests {
     }
 
     impl RenderObject for RenderPainter {
+        fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
+
         fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
             d.node_for::<Self>().finish()
         }

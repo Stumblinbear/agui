@@ -9,10 +9,11 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element},
     pipeline::build_tree::{Build, BuildQueue, Operation, run},
-    pipeline::render_pipeline::RenderPipeline,
+    pipeline::render_pipeline::{RenderPipeline, SemanticsBoundaryId},
     provide::ProvideScope,
     render_object::box_layout::AnyRenderBox,
     scheduling::TaskScheduler,
+    semantics::SemanticsTree,
     widget::Widget,
 };
 
@@ -103,16 +104,15 @@ impl PipelineOwner {
         }
     }
 
-    /// Registers `f` to fire when the pipeline goes from idle to having pending layout or paint work, so a
-    /// driver schedules a frame. A frame runs `flush_build` + `flush_layout` + `flush_paint`; the dirty
-    /// channels decide what reruns, so scheduling is idempotent.
-    pub fn on_needs_frame(&self, f: Box<dyn Fn()>) {
-        self.pipeline.on_needs_frame(f);
-    }
-
     /// Whether any element is waiting to rebuild.
     pub fn is_dirty(&self) -> bool {
         !self.queue.is_empty()
+    }
+
+    /// Registers `f` to fire when a view's semantics change, so the driver re-reads them through the view's
+    /// [`ViewHandle::semantics`](crate::view::ViewHandle::semantics).
+    pub fn on_needs_semantics_update(&self, f: Box<dyn Fn()>) {
+        self.pipeline.on_needs_semantics_update(f);
     }
 
     /// Rebuilds every element marked since the last flush, shallowest first. An element marked during the
@@ -164,6 +164,12 @@ impl PipelineOwner {
     /// Repaints every repaint boundary marked since the last frame.
     pub fn flush_paint(&self) {
         self.pipeline.flush_paint();
+    }
+
+    /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
+    /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
+    pub fn flush_semantics(&self, update: impl FnMut(SemanticsBoundaryId, SemanticsTree)) {
+        self.pipeline.flush_semantics(update);
     }
 
     /// Delivers `message` to the element at `handle`. If it requests a rebuild, it marks itself for the next

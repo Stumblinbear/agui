@@ -75,10 +75,13 @@ where
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
         // SAFETY: `self.child` is our own slot.
         let child = unsafe { ctx.mount(&mut self.child) };
-        self.render.get_mut().adopt_child(child);
+        let render = self.render.get_mut();
+        render.adopt_child(child);
+        render.attach(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
         // SAFETY: `self.child` is our own slot.
         unsafe { ctx.unmount(&mut self.child) };
     }
@@ -232,6 +235,9 @@ where
     {
         return split(reuse_all_in_place(ctx, old, new));
     }
+
+    // Mark the enclosing boundary here so the new sibling order is re-walked into the semantics tree.
+    ctx.mark_needs_semantics_update();
 
     let mut old_slots: Vec<Option<Pair<C>>> = old.into_iter().map(Some).collect();
 

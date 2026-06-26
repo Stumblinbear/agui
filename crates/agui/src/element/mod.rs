@@ -8,6 +8,7 @@ pub use shared::*;
 use crate::{
     context::{MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
+    render_object::RenderObject,
     render_object::node::{RenderObjectCell, RenderObjectPtr},
 };
 
@@ -88,7 +89,7 @@ impl<R> LeafElement<R> {
 
 // SAFETY: no children to register; `render_object_ptr` returns the cell's pointer, valid for the element's
 // mounted life.
-unsafe impl<R> Element for LeafElement<R> {
+unsafe impl<R: RenderObject> Element for LeafElement<R> {
     type Render = R;
 
     fn render_object_mut(&mut self) -> &mut R {
@@ -97,5 +98,13 @@ unsafe impl<R> Element for LeafElement<R> {
 
     fn render_object_ptr(&self) -> RenderObjectPtr<R> {
         self.render.render_object_ptr()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().attach(ctx);
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
     }
 }

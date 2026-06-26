@@ -13,6 +13,7 @@ agui_window = { path = "crates/agui_window", version = "0.1" }
 agui_winit = { path = "crates/agui_winit", version = "0.1" }
 agui_vello = { path = "crates/agui_vello", version = "0.1" }
 
+accesskit = "0.24"
 bon = "3.3.2"
 intrusive-collections = "0.10"
 smallbox = "0.8"

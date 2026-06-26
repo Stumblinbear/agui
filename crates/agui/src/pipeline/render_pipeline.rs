@@ -22,6 +22,7 @@ use crate::{
     },
     pipeline::{BoundaryContent, FramePhase, LayoutBuildHost},
     render_object::{box_layout::RenderBox, node::MountedChild},
+    semantics::{SemanticsTree, SemanticsTreeBuilder},
 };
 
 new_key_type! {
@@ -29,6 +30,8 @@ new_key_type! {
     pub struct LayoutBoundaryId;
     /// Identifies a repaint boundary within one pipeline.
     pub struct PaintBoundaryId;
+    /// Identifies a semantics boundary within one pipeline.
+    pub struct SemanticsBoundaryId;
 }
 
 /// A relayout boundary the pipeline re-lays on its own. The pipeline drives it from
@@ -49,6 +52,9 @@ pub struct RenderPipeline {
 }
 
 struct Inner {
+    /// The phase of the frame now running, so a mark whose pipeline already ran this frame is rejected.
+    phase: FramePhase,
+
     layout: SlotMap<LayoutBoundaryId, LayoutBoundaryCell>,
     /// The relayout boundaries waiting to be re-laid, with a per-boundary `enrolled` flag preventing a
     /// second mark from enrolling one twice.
@@ -59,17 +65,27 @@ struct Inner {
     paint: SlotMap<PaintBoundaryId, PaintBoundary>,
     paint_bits_dirty: Vec<PaintBoundaryId>,
     paint_dirty: Vec<PaintBoundaryId>,
-    /// A layer's placement changed and the subtree must recomposite, with no boundary to repaint.
-    needs_composite: bool,
     paint_deferred: Rc<RefCell<Vec<(PaintBoundaryId, PaintPhase)>>>,
     paint_scratch: Vec<PaintBoundaryId>,
 
-    /// The phase of the frame now running, so a mark whose pipeline already ran this frame is rejected.
-    phase: FramePhase,
+    /// A layer's placement changed and the subtree must recomposite, with no boundary to repaint.
+    needs_composite: bool,
 
     /// Fired when the pipeline goes from fully clean to having any pending layout or paint work, so the
     /// driver schedules a frame. One callback: the driver runs a whole frame, the channels decide what reruns.
-    notify: Box<dyn Fn()>,
+    notify_needs_frame: Box<dyn Fn()>,
+
+    semantics: SlotMap<SemanticsBoundaryId, SemanticsBoundaryCell>,
+    semantics_dirty: Vec<SemanticsBoundaryId>,
+    semantics_deferred: Rc<RefCell<Vec<SemanticsBoundaryId>>>,
+    semantics_scratch: Vec<SemanticsBoundaryId>,
+    /// The monotonic source of semantics node ids for this pipeline. A node minted on any walk takes the next
+    /// value, so ids stay unique across boundaries and across walks.
+    semantics_counter: u64,
+
+    /// Fired when the semantics go from clean to having a marked boundary, so the driver re-reads them. One
+    /// pipeline callback. The dirty set names which boundaries changed.
+    notify_semantics_update: Box<dyn Fn()>,
 }
 
 struct LayoutBoundaryCell {
@@ -95,6 +111,13 @@ struct PaintBoundary {
     paint_capacity: SceneCapacity,
     /// Bit 0: in `paint_bits_dirty`. Bit 1: in `paint_dirty`. Keeps a second mark from enrolling twice.
     enrolled: u8,
+}
+
+struct SemanticsBoundaryCell {
+    content: BoundaryContent,
+
+    /// In `semantics_dirty`, so a second mark does not enroll it twice.
+    enrolled: bool,
 }
 
 /// What a repaint boundary recomputes its compositing bits and repaints: the root view's render object, held
@@ -152,7 +175,16 @@ impl Default for RenderPipeline {
                 paint_scratch: Vec::new(),
 
                 phase: FramePhase::Idle,
-                notify: Box::new(|| {}),
+
+                notify_needs_frame: Box::new(|| {}),
+
+                semantics: SlotMap::with_key(),
+                semantics_dirty: Vec::new(),
+                semantics_deferred: Rc::new(RefCell::new(Vec::new())),
+                semantics_scratch: Vec::new(),
+                semantics_counter: 0,
+
+                notify_semantics_update: Box::new(|| {}),
             })),
         }
     }
@@ -162,13 +194,13 @@ impl RenderPipeline {
     /// Registers `f` to fire when the pipeline goes from fully clean to having pending work, so the driver
     /// schedules a frame.
     pub fn on_needs_frame(&self, f: Box<dyn Fn()>) {
-        self.inner.borrow_mut().notify = f;
+        self.inner.borrow_mut().notify_needs_frame = f;
     }
 
     /// Fires the needs-frame callback directly, for work that does not go through the pipeline's own
     /// channels: a build-only dirty the owner wants to wake the driver for.
     pub fn request_frame(&self) {
-        (self.inner.borrow().notify)();
+        (self.inner.borrow().notify_needs_frame)();
     }
 
     /// Sets `phase` as the frame phase now running until the returned guard drops, which restores the
@@ -178,6 +210,57 @@ impl RenderPipeline {
         PhaseGuard {
             pipeline: self.clone(),
             previous,
+        }
+    }
+
+    /// Registers `f` to fire when a view's semantics change, so the driver re-reads them.
+    pub fn on_needs_semantics_update(&self, f: Box<dyn Fn()>) {
+        self.inner.borrow_mut().notify_semantics_update = f;
+    }
+
+    /// A deferred marker for `scope`'s boundary, for a render object to mark it from outside a pass.
+    #[must_use]
+    pub fn deferred_semantics_scope(&self, scope: SemanticsScope) -> DeferredSemanticsScope {
+        DeferredSemanticsScope {
+            id: scope.0,
+            queue: Some(Rc::clone(&self.inner.borrow().semantics_deferred)),
+        }
+    }
+
+    /// Registers a semantics boundary, returning the handle that owns and unregisters it. A
+    /// [`View`](crate::view::View) registers its root boundary this way; render objects under it mark it
+    /// through a scope the handle hands out.
+    pub(crate) fn register_semantics_boundary(
+        &self,
+        content: BoundaryContent,
+    ) -> SemanticsBoundaryHandle {
+        let id = self
+            .inner
+            .borrow_mut()
+            .semantics
+            .insert(SemanticsBoundaryCell {
+                content,
+                enrolled: false,
+            });
+
+        SemanticsBoundaryHandle {
+            id,
+            inner: Rc::downgrade(&self.inner),
+        }
+    }
+
+    /// Marks `scope`'s boundary's semantics changed, firing the pipeline's semantics callback. A reconcile
+    /// calls this through [`UpdateCtx`](crate::context::UpdateCtx) when it changes a render object's semantics.
+    pub fn mark_needs_semantics_update(&self, scope: SemanticsScope) {
+        self.inner.borrow_mut().mark_needs_semantics_update(scope.0);
+    }
+
+    /// A deferred handle to `scope`'s boundary, for marking it from a callback that holds no pipeline, such
+    /// as a reconcile or a per-frame animation.
+    pub fn deferred_layout_scope(&self, scope: LayoutScope) -> DeferredLayoutScope {
+        DeferredLayoutScope {
+            id: scope.0,
+            queue: Some(Rc::clone(&self.inner.borrow().layout_deferred)),
         }
     }
 
@@ -208,6 +291,19 @@ impl RenderPipeline {
         }
     }
 
+    /// Marks `scope`'s boundary for re-layout before the next frame.
+    pub fn mark_needs_layout(&self, scope: LayoutScope) {
+        self.inner.borrow_mut().mark_needs_layout(scope.0);
+    }
+
+    /// A deferred handle to `scope`'s repaint boundary.
+    pub fn deferred_paint_scope(&self, scope: PaintScope) -> DeferredPaintScope {
+        DeferredPaintScope {
+            id: scope.0,
+            queue: Some(Rc::clone(&self.inner.borrow().paint_deferred)),
+        }
+    }
+
     /// Registers `content` as a repaint boundary nested under `enclosing`, painting into `layer`, and
     /// returns the handle that owns and unregisters it. The new boundary is left unmarked: the caller either
     /// marks it (the root view) or paints it in the same pass it registers in (an inline boundary).
@@ -234,30 +330,25 @@ impl RenderPipeline {
         }
     }
 
-    /// Marks `scope`'s boundary for re-layout before the next frame.
-    pub fn mark_needs_layout(&self, scope: LayoutScope) {
-        self.inner.borrow_mut().mark_layout(scope.0);
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
+    /// repaint.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        let mut inner = self.inner.borrow_mut();
+        let was_clean = inner.is_clean();
+        inner.mark_needs_paint(scope.0, PaintPhase::CompositingBits);
+        inner.mark_needs_paint(scope.0, PaintPhase::Paint);
+        if was_clean {
+            (inner.notify_needs_frame)();
+        }
     }
 
     /// Marks `scope`'s boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self, scope: PaintScope) {
         let mut inner = self.inner.borrow_mut();
         let was_clean = inner.is_clean();
-        inner.mark_paint(scope.0, PaintPhase::Paint);
+        inner.mark_needs_paint(scope.0, PaintPhase::Paint);
         if was_clean {
-            (inner.notify)();
-        }
-    }
-
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
-    /// repaint.
-    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        let mut inner = self.inner.borrow_mut();
-        let was_clean = inner.is_clean();
-        inner.mark_paint(scope.0, PaintPhase::CompositingBits);
-        inner.mark_paint(scope.0, PaintPhase::Paint);
-        if was_clean {
-            (inner.notify)();
+            (inner.notify_needs_frame)();
         }
     }
 
@@ -267,24 +358,7 @@ impl RenderPipeline {
         let was_clean = inner.is_clean();
         inner.needs_composite = true;
         if was_clean {
-            (inner.notify)();
-        }
-    }
-
-    /// A deferred handle to `scope`'s boundary, for marking it from a callback that holds no pipeline, such
-    /// as a reconcile or a per-frame animation.
-    pub fn deferred_layout_scope(&self, scope: LayoutScope) -> DeferredLayoutScope {
-        DeferredLayoutScope {
-            id: scope.0,
-            queue: Some(Rc::clone(&self.inner.borrow().layout_deferred)),
-        }
-    }
-
-    /// A deferred handle to `scope`'s repaint boundary.
-    pub fn deferred_paint_scope(&self, scope: PaintScope) -> DeferredPaintScope {
-        DeferredPaintScope {
-            id: scope.0,
-            queue: Some(Rc::clone(&self.inner.borrow().paint_deferred)),
+            (inner.notify_needs_frame)();
         }
     }
 
@@ -301,7 +375,7 @@ impl RenderPipeline {
 
         let layout: Vec<LayoutBoundaryId> = layout_queue.borrow_mut().drain(..).collect();
         for id in layout {
-            self.inner.borrow_mut().mark_layout(id);
+            self.inner.borrow_mut().mark_needs_layout(id);
         }
 
         let paint: Vec<(PaintBoundaryId, PaintPhase)> =
@@ -314,6 +388,12 @@ impl RenderPipeline {
                 }
                 PaintPhase::Composite => self.mark_needs_composite(),
             }
+        }
+
+        let semantics_queue = Rc::clone(&self.inner.borrow().semantics_deferred);
+        let semantics: Vec<SemanticsBoundaryId> = semantics_queue.borrow_mut().drain(..).collect();
+        for id in semantics {
+            self.inner.borrow_mut().mark_needs_semantics_update(id);
         }
     }
 
@@ -342,6 +422,7 @@ impl RenderPipeline {
 
                 (cell.boundary.take(), cell.paint)
             };
+
             let Some(mut boundary) = boundary else {
                 continue;
             };
@@ -361,6 +442,32 @@ impl RenderPipeline {
         let mut inner = self.inner.borrow_mut();
         scratch.clear();
         inner.layout_scratch = scratch;
+    }
+
+    /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
+    /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
+    pub fn flush_semantics(&self, mut update: impl FnMut(SemanticsBoundaryId, SemanticsTree)) {
+        let mut scratch = self.inner.borrow_mut().take_semantics_dirty();
+
+        let mut counter = self.inner.borrow().semantics_counter;
+
+        for &id in &scratch {
+            let content = match self.inner.borrow().semantics.get(id) {
+                Some(boundary) => Rc::clone(&boundary.content),
+                None => continue,
+            };
+
+            let mut builder = SemanticsTreeBuilder::new(&mut counter);
+            content.borrow_mut().dyn_build_semantics(&mut builder);
+            let tree = SemanticsTree::new(builder.finish());
+
+            update(id, tree);
+        }
+
+        self.inner.borrow_mut().semantics_counter = counter;
+
+        scratch.clear();
+        self.inner.borrow_mut().semantics_scratch = scratch;
     }
 
     /// Recomputes compositing bits, repaints, and recomposites the marked repaint boundaries.
@@ -442,7 +549,15 @@ impl Drop for PhaseGuard {
 }
 
 impl Inner {
-    fn mark_layout(&mut self, id: LayoutBoundaryId) {
+    /// Whether the pipeline has no pending work on any channel.
+    fn is_clean(&self) -> bool {
+        self.layout_dirty.is_empty()
+            && self.paint_bits_dirty.is_empty()
+            && self.paint_dirty.is_empty()
+            && !self.needs_composite
+    }
+
+    fn mark_needs_layout(&mut self, id: LayoutBoundaryId) {
         self.phase.assert_can_mark(FramePhase::Layout);
 
         let was_clean = self.is_clean();
@@ -450,15 +565,19 @@ impl Inner {
         let Some(boundary) = self.layout.get_mut(id) else {
             return;
         };
+
         boundary.needs_layout = true;
+
         if boundary.enrolled {
             return;
         }
+
         boundary.enrolled = true;
 
         self.layout_dirty.push(id);
+
         if was_clean {
-            (self.notify)();
+            (self.notify_needs_frame)();
         }
     }
 
@@ -479,15 +598,42 @@ impl Inner {
         out
     }
 
-    /// Whether the pipeline has no pending work on any channel.
-    fn is_clean(&self) -> bool {
-        self.layout_dirty.is_empty()
-            && self.paint_bits_dirty.is_empty()
-            && self.paint_dirty.is_empty()
-            && !self.needs_composite
+    fn mark_needs_semantics_update(&mut self, id: SemanticsBoundaryId) {
+        let was_clean = self.semantics_dirty.is_empty();
+
+        let Some(boundary) = self.semantics.get_mut(id) else {
+            return;
+        };
+
+        if boundary.enrolled {
+            return;
+        }
+
+        boundary.enrolled = true;
+
+        self.semantics_dirty.push(id);
+
+        if was_clean {
+            (self.notify_semantics_update)();
+        }
     }
 
-    fn mark_paint(&mut self, id: PaintBoundaryId, phase: PaintPhase) {
+    /// Drains the semantics boundaries marked, clearing their enrollment.
+    fn take_semantics_dirty(&mut self) -> Vec<SemanticsBoundaryId> {
+        let mut out = std::mem::take(&mut self.semantics_scratch);
+        out.clear();
+        std::mem::swap(&mut self.semantics_dirty, &mut out);
+
+        for &id in &out {
+            if let Some(boundary) = self.semantics.get_mut(id) {
+                boundary.enrolled = false;
+            }
+        }
+
+        out
+    }
+
+    fn mark_needs_paint(&mut self, id: PaintBoundaryId, phase: PaintPhase) {
         self.phase.assert_can_mark(match phase {
             PaintPhase::CompositingBits => FramePhase::CompositingBits,
             PaintPhase::Paint => FramePhase::Paint,
@@ -503,9 +649,11 @@ impl Inner {
         let Some(boundary) = self.paint.get_mut(id) else {
             return;
         };
+
         if boundary.enrolled & bit != 0 {
             return;
         }
+
         boundary.enrolled |= bit;
 
         match phase {
@@ -618,7 +766,7 @@ impl LayoutBoundaryHandle {
     /// Requests that this boundary be re-laid before the next frame.
     pub fn mark_needs_layout(&self) {
         if let Some(inner) = self.inner.upgrade() {
-            inner.borrow_mut().mark_layout(self.id);
+            inner.borrow_mut().mark_needs_layout(self.id);
         }
     }
 }
@@ -657,28 +805,28 @@ impl PaintBoundaryHandle {
         PaintScope(self.id)
     }
 
-    /// Marks this boundary to be repainted on the next frame.
-    pub fn mark_needs_paint(&self) {
-        if let Some(inner) = self.inner.upgrade() {
-            let mut inner = inner.borrow_mut();
-            let was_clean = inner.is_clean();
-            inner.mark_paint(self.id, PaintPhase::Paint);
-            if was_clean {
-                (inner.notify)();
-            }
-        }
-    }
-
     /// Marks this boundary's compositing bits for recomputation before its next repaint, and the boundary
     /// for repaint.
     pub fn mark_needs_compositing_bits_update(&self) {
         if let Some(inner) = self.inner.upgrade() {
             let mut inner = inner.borrow_mut();
             let was_clean = inner.is_clean();
-            inner.mark_paint(self.id, PaintPhase::CompositingBits);
-            inner.mark_paint(self.id, PaintPhase::Paint);
+            inner.mark_needs_paint(self.id, PaintPhase::CompositingBits);
+            inner.mark_needs_paint(self.id, PaintPhase::Paint);
             if was_clean {
-                (inner.notify)();
+                (inner.notify_needs_frame)();
+            }
+        }
+    }
+
+    /// Marks this boundary to be repainted on the next frame.
+    pub fn mark_needs_paint(&self) {
+        if let Some(inner) = self.inner.upgrade() {
+            let mut inner = inner.borrow_mut();
+            let was_clean = inner.is_clean();
+            inner.mark_needs_paint(self.id, PaintPhase::Paint);
+            if was_clean {
+                (inner.notify_needs_frame)();
             }
         }
     }
@@ -690,7 +838,7 @@ impl PaintBoundaryHandle {
             let was_clean = inner.is_clean();
             inner.needs_composite = true;
             if was_clean {
-                (inner.notify)();
+                (inner.notify_needs_frame)();
             }
         }
     }
@@ -713,6 +861,132 @@ impl Drop for PaintBoundaryHandle {
             inner.paint.remove(self.id)
         };
         drop(removed);
+    }
+}
+
+/// The sole owner of a registered semantics boundary, held by whatever established it. Dropping it
+/// unregisters the boundary. Hand descendants the [`scope`](Self::scope) to mark it, and mark the boundary
+/// itself through [`mark_needs_semantics_update`](Self::mark_needs_semantics_update).
+pub struct SemanticsBoundaryHandle {
+    id: SemanticsBoundaryId,
+    inner: Weak<RefCell<Inner>>,
+}
+
+impl SemanticsBoundaryHandle {
+    /// Marks this boundary's semantics changed, firing the pipeline's semantics callback so the driver
+    /// re-reads this view.
+    pub fn mark_needs_semantics_update(&self) {
+        if let Some(inner) = self.inner.upgrade() {
+            inner.borrow_mut().mark_needs_semantics_update(self.id);
+        }
+    }
+
+    /// This boundary's scope, for the view to thread down its subtree so descendants can mark it.
+    #[must_use]
+    pub fn scope(&self) -> SemanticsScope {
+        SemanticsScope(self.id)
+    }
+
+    /// A deferred marker for this boundary, captured by a descendant render object to request a re-read
+    /// when its semantics later change.
+    #[must_use]
+    pub fn deferred_scope(&self) -> DeferredSemanticsScope {
+        let queue = self
+            .inner
+            .upgrade()
+            .map(|inner| Rc::clone(&inner.borrow().semantics_deferred));
+
+        DeferredSemanticsScope { id: self.id, queue }
+    }
+
+    /// Runs `f` with the pipeline's semantics id counter, so a full walk through the view mints from the same
+    /// source as the per-boundary flush. The counter is copied out and written back, so the pipeline is not
+    /// borrowed while `f` runs.
+    pub(crate) fn with_counter<R>(&self, f: impl FnOnce(&mut u64) -> R) -> R {
+        let inner = self
+            .inner
+            .upgrade()
+            .expect("the pipeline outlives the view");
+
+        let mut counter = inner.borrow().semantics_counter;
+        let result = f(&mut counter);
+        inner.borrow_mut().semantics_counter = counter;
+
+        result
+    }
+}
+
+impl Drop for SemanticsBoundaryHandle {
+    fn drop(&mut self) {
+        let Some(inner) = self.inner.upgrade() else {
+            return;
+        };
+
+        let removed = {
+            let mut inner = inner.borrow_mut();
+            inner
+                .semantics_deferred
+                .borrow_mut()
+                .retain(|id| *id != self.id);
+            inner.semantics_dirty.retain(|id| *id != self.id);
+            inner.semantics.remove(self.id)
+        };
+
+        // Drop the removed cell only after the borrow is released: it holds the boundary's render object,
+        // whose drop may re-borrow the pipeline to unregister nested boundaries.
+        drop(removed);
+    }
+}
+
+/// Names the semantics boundary a render object marks: an id into the pipeline, threaded down through build.
+/// A node holds the scope of its enclosing boundary to mark it during a reconcile.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SemanticsScope(pub(crate) SemanticsBoundaryId);
+
+impl Default for SemanticsScope {
+    fn default() -> Self {
+        Self::detached()
+    }
+}
+
+impl SemanticsScope {
+    /// A scope that names no boundary.
+    #[must_use]
+    pub fn detached() -> Self {
+        Self(SemanticsBoundaryId::null())
+    }
+}
+
+/// A captured route to mark a semantics boundary from outside a pipeline pass, such as a property setter or
+/// an animation tick. The request is applied on the pipeline's next frame. A detached scope, or one whose
+/// boundary is gone, marks nothing.
+#[derive(Clone)]
+pub struct DeferredSemanticsScope {
+    id: SemanticsBoundaryId,
+    queue: Option<Rc<RefCell<Vec<SemanticsBoundaryId>>>>,
+}
+
+impl Default for DeferredSemanticsScope {
+    fn default() -> Self {
+        Self::detached()
+    }
+}
+
+impl DeferredSemanticsScope {
+    /// A scope that marks no boundary.
+    #[must_use]
+    pub fn detached() -> Self {
+        Self {
+            id: SemanticsBoundaryId::null(),
+            queue: None,
+        }
+    }
+
+    /// Queues this boundary's semantics to be re-read on the pipeline's next frame.
+    pub fn mark_needs_semantics_update(&self) {
+        if let Some(queue) = &self.queue {
+            queue.borrow_mut().push(self.id);
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::render_object::{
+    RenderObject,
     box_layout::RenderBox,
     node::{MountedChild, RenderNode},
 };
@@ -14,7 +15,7 @@ pub type VisitorMut<'a, P> = dyn FnMut(&mut RenderNode<dyn RenderBox, P>) + 'a;
 /// The render object of every single-child widget implements this so its element can give it the child to
 /// drive at mount, once that child is registered and pinned. The element calls
 /// [`adopt_child`](Self::adopt_child) from its own `mount`, after mounting the child.
-pub trait SingleChildRenderObject {
+pub trait SingleChildRenderObject: RenderObject {
     /// The child's render object type.
     type Child: ?Sized;
 
@@ -25,7 +26,7 @@ pub trait SingleChildRenderObject {
 
 /// The render object of a widget whose children are a [`RenderChildren`] list, giving its element
 /// access to the child render storage so it can reconcile the list in place.
-pub trait MultiChildRenderObject {
+pub trait MultiChildRenderObject: RenderObject {
     /// The child render storage this object holds.
     type Children: RenderChildren;
 

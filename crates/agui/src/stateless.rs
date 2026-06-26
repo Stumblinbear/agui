@@ -4,6 +4,7 @@ use crate::{
     context::{BuildCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::Element,
+    pipeline::render_pipeline::SemanticsScope,
     provide::ProvideScope,
     render_object::node::RenderObjectPtr,
     widget::Widget,
@@ -36,7 +37,8 @@ where
     W: StatelessWidget,
 {
     widget: W,
-    scope: ProvideScope,
+    provide_scope: ProvideScope,
+    semantics_scope: SemanticsScope,
     child: Option<Slot<<W::Child as Widget>::Element>>,
 }
 
@@ -49,7 +51,8 @@ where
     pub fn new(widget: W) -> Self {
         Self {
             widget,
-            scope: ProvideScope::default(),
+            provide_scope: ProvideScope::default(),
+            semantics_scope: SemanticsScope::default(),
             child: None,
         }
     }
@@ -75,13 +78,18 @@ where
     }
 
     fn rebuild_child(&mut self, ctx: &mut UpdateCtx<'_>) {
-        let scope = self.scope;
-        ctx.with_scope(scope, |ctx| {
-            let child = ctx.build(|ctx| self.widget.build(ctx));
-            // SAFETY: `self.child` is our own slot, built at mount.
-            unsafe {
-                ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
-            }
+        let scope = self.provide_scope;
+        let semantics = self.semantics_scope;
+
+        ctx.with_provide_scope(scope, |ctx| {
+            ctx.with_semantics_scope(semantics, |ctx| {
+                let child = ctx.build(|ctx| self.widget.build(ctx));
+
+                // SAFETY: `self.child` is our own slot, built at mount.
+                unsafe {
+                    ctx.with_child(self.child_mut(), |element, ctx| child.update(ctx, element));
+                }
+            });
         });
     }
 }
@@ -103,15 +111,22 @@ where
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        self.scope = ctx.provide();
+        self.provide_scope = ctx.provide_scope();
+        self.semantics_scope = ctx.semantics_scope();
 
-        let scope = self.scope;
-        ctx.with_scope(scope, |ctx| {
-            let child = ctx.build(|ctx| self.widget.build(ctx));
-            let element = ctx.inflate(|ctx| child.create(ctx));
-            self.child = Some(Slot::new(element));
-            // SAFETY: `self.child` is our own slot, just built.
-            unsafe { ctx.mount(self.child.as_mut().expect("just built")) };
+        let scope = self.provide_scope;
+        let semantics = self.semantics_scope;
+
+        ctx.with_provide_scope(scope, |ctx| {
+            ctx.with_semantics_scope(semantics, |ctx| {
+                let child = ctx.build(|ctx| self.widget.build(ctx));
+                let element = ctx.inflate(|ctx| child.create(ctx));
+
+                self.child = Some(Slot::new(element));
+
+                // SAFETY: `self.child` is our own slot, just built.
+                unsafe { ctx.mount(self.child.as_mut().expect("just built")) };
+            });
         });
     }
 

@@ -181,6 +181,16 @@ impl<Child: ?Sized> RenderFractionallySizedBox<Child> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderFractionallySizedBox<Child> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let offset = self
+            .child
+            .parent_data
+            .as_ref()
+            .map_or(Offset::ZERO, |data| data.offset);
+
+        s.with_offset(offset, |s| self.child.build_semantics(s));
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property_opt("width_factor", self.width_factor)

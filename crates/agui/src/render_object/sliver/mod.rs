@@ -10,6 +10,7 @@ use crate::{
         box_layout::{BoxConstraints, RenderBox},
         node::RenderNode,
     },
+    semantics::SemanticsTreeBuilder,
     text::TextBaseline,
 };
 
@@ -221,6 +222,10 @@ impl<S: RenderSliver> RenderViewport<S> {
 }
 
 impl<S: RenderSliver> RenderObject for RenderViewport<S> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.sliver.build_semantics(s);
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child_in(Some(ProtocolTag::SLIVER), |d| self.sliver.describe(d))

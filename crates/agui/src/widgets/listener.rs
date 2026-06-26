@@ -97,6 +97,10 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderPointerListene
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderPointerListener<Child> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("behavior", self.behavior)

@@ -112,9 +112,15 @@ impl Widget for RawText {
         LeafElement::new(render)
     }
 
-    fn update(self, _ctx: &mut UpdateCtx, element: &mut Self::Element) {
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
         let render = element.render_object_mut();
-        render.set_content(self.content);
+
+        let changed = render.set_content(self.content);
+
         render.set_fonts(self.fonts);
+
+        if changed {
+            ctx.mark_needs_semantics_update();
+        }
     }
 }

@@ -1,8 +1,10 @@
 use std::fmt;
+use std::ops::Add;
 
+use peniko::kurbo::{Affine, Point};
 use typed_floats::{NonNaN, NonNaNFinite, as_const};
 
-use crate::geometry::Size;
+use crate::geometry::{Offset, Size};
 
 /// Holds exact position and size values.
 #[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
@@ -47,6 +49,126 @@ impl Rect {
         (point.0 >= self.left && point.0 <= self.left + self.width)
             && (point.1 >= self.top && point.1 <= self.top + self.height)
     }
+
+    /// The top edge, `top`.
+    pub const fn top(&self) -> NonNaNFinite<f32> {
+        self.top
+    }
+
+    /// The right edge, `left + width`.
+    pub fn right(&self) -> NonNaN<f32> {
+        self.left + self.width
+    }
+
+    /// The bottom edge, `top + height`.
+    pub fn bottom(&self) -> NonNaN<f32> {
+        self.top + self.height
+    }
+
+    /// The left edge, `left`.
+    pub const fn left(&self) -> NonNaNFinite<f32> {
+        self.left
+    }
+
+    /// The width, `width`.
+    pub const fn width(&self) -> NonNaN<f32> {
+        self.width
+    }
+
+    /// The height, `height`.
+    pub const fn height(&self) -> NonNaN<f32> {
+        self.height
+    }
+
+    /// Whether this rect and `other` overlap.
+    pub fn intersects(&self, other: Rect) -> bool {
+        self.left.get() < other.right()
+            && other.left.get() < self.right()
+            && self.top.get() < other.bottom()
+            && other.top.get() < self.bottom()
+    }
+
+    /// The overlap of this rect and `other`, or an empty rect when they do not overlap.
+    pub fn intersect(&self, other: Rect) -> Rect {
+        let left = self.left.max(other.left);
+        let top = self.top.max(other.top);
+        let right = self.right().min(other.right());
+        let bottom = self.bottom().min(other.bottom());
+
+        Rect::new(
+            left,
+            top,
+            (right - left).max(as_const!(NonNaN, f32, 0.0)),
+            (bottom - top).max(as_const!(NonNaN, f32, 0.0)),
+        )
+    }
+
+    /// The axis-aligned bounding box of this rect after `transform`.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn transform_bbox(&self, transform: Affine) -> Rect {
+        let left = f64::from(self.left.get());
+        let top = f64::from(self.top.get());
+        let right = f64::from(self.right().get());
+        let bottom = f64::from(self.bottom().get());
+
+        let corners = [
+            transform * Point::new(left, top),
+            transform * Point::new(right, top),
+            transform * Point::new(left, bottom),
+            transform * Point::new(right, bottom),
+        ];
+
+        let min_x = corners.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let min_y = corners.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        let max_x = corners
+            .iter()
+            .map(|p| p.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let max_y = corners
+            .iter()
+            .map(|p| p.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+
+        Rect::new(
+            min_x as f32,
+            min_y as f32,
+            (max_x - min_x) as f32,
+            (max_y - min_y) as f32,
+        )
+    }
+
+    /// The smallest rect containing both this rect and `other`.
+    pub fn union(&self, other: Rect) -> Rect {
+        let left = self.left.min(other.left);
+        let top = self.top.min(other.top);
+        let right = self.right().max(other.right());
+        let bottom = self.bottom().max(other.bottom());
+
+        Rect::new(left, top, right - left, bottom - top)
+    }
+
+    /// The top-left corner.
+    pub fn origin(&self) -> Offset {
+        Offset::from((self.left.get(), self.top.get()))
+    }
+
+    /// The width and height.
+    pub fn size(&self) -> Size {
+        Size::new(self.width.get(), self.height.get())
+    }
+}
+
+impl Add<Offset> for Rect {
+    type Output = Rect;
+
+    fn add(self, offset: Offset) -> Rect {
+        Rect::new(
+            self.left + offset.x,
+            self.top + offset.y,
+            self.width,
+            self.height,
+        )
+    }
 }
 
 impl From<Size> for Rect {
@@ -57,5 +179,16 @@ impl From<Size> for Rect {
             width: size.width,
             height: size.height,
         }
+    }
+}
+
+impl From<Rect> for accesskit::Rect {
+    fn from(rect: Rect) -> Self {
+        accesskit::Rect::new(
+            f64::from(rect.left.get()),
+            f64::from(rect.top.get()),
+            f64::from(rect.right().get()),
+            f64::from(rect.bottom().get()),
+        )
     }
 }

@@ -165,9 +165,10 @@ where
         }
 
         let scope = element.scope();
+
         // SAFETY: `element.child` is the element's own slot. Provide is transparent: it only extends the
         // scope, reconciling the child in place.
-        ctx.with_scope(scope, |ctx| unsafe {
+        ctx.with_provide_scope(scope, |ctx| unsafe {
             ctx.with_child(&mut element.child, |child, ctx| {
                 self.child.update(ctx, child);
             });
@@ -214,12 +215,13 @@ where
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        self.node.parent = ctx.provide().head;
+        self.node.parent = ctx.provide_scope().head;
 
         let scope = self.scope();
+
         // SAFETY: `self.child` is our own slot, and `self.node` is pinned now that this element is mounted,
         // so the scope it hands down stays valid for the whole subtree's life.
-        ctx.with_scope(scope, |ctx| unsafe { ctx.mount(&mut self.child) });
+        ctx.with_provide_scope(scope, |ctx| unsafe { ctx.mount(&mut self.child) });
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {

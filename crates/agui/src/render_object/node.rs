@@ -17,6 +17,7 @@ use crate::{
         box_layout::{BoxConstraints, RenderBox},
         sliver::RenderSliver,
     },
+    semantics::SemanticsTreeBuilder,
     text::TextBaseline,
 };
 
@@ -358,6 +359,11 @@ impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
     /// Whether this child's subtree contributes a compositing layer, as of the last recompute.
     pub fn needs_compositing(&self) -> bool {
         self.needs_compositing
+    }
+
+    /// Records the child render object's subtree into `s`.
+    pub fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.borrow_mut().build_semantics(s);
     }
 
     /// Captures the child render object's subtree, annotated with this holder's pipeline state.

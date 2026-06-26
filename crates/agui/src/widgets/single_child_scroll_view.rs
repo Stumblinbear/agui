@@ -64,6 +64,10 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderSingleChildScr
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderSingleChildScrollView<Child> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))

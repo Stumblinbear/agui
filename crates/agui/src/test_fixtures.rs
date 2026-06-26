@@ -9,6 +9,7 @@ use agui_core::tree::NodeHandle;
 
 use crate::{
     context::{CreateCtx, LayoutCtx, MessageCtx, PaintCtx, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
     element::{Element, SingleChildElement},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
@@ -19,6 +20,7 @@ use crate::{
         box_layout::{BoxConstraints, RenderBox},
         node::{MountedChild, RenderNode, RenderObjectPtr},
     },
+    semantics::SemanticsTreeBuilder,
     text::TextBaseline,
     widget::{AnyWidget, ChildrenElement, Widget},
 };
@@ -168,7 +170,22 @@ impl MultiChildRenderObject for MultiChildRenderList {
     }
 }
 
-impl RenderObject for MultiChildRenderList {}
+impl RenderObject for MultiChildRenderList {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        for child in &mut self.children {
+            child.build_semantics(s);
+        }
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.children
+            .iter()
+            .fold(d.node_for::<Self>(), |node, child| {
+                node.child(|d| child.describe(d))
+            })
+            .finish()
+    }
+}
 
 impl RenderBox for MultiChildRenderList {
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
@@ -364,7 +381,13 @@ impl Default for RecordingBox {
     }
 }
 
-impl RenderObject for RecordingBox {}
+impl RenderObject for RecordingBox {
+    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>().finish()
+    }
+}
 
 impl RenderBox for RecordingBox {
     fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
@@ -436,7 +459,19 @@ impl<C: ?Sized> Default for RenderSingle<C> {
     }
 }
 
-impl<C: ?Sized> SingleChildRenderObject for RenderSingle<C> {
+impl<C: RenderObject + ?Sized> RenderObject for RenderSingle<C> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.child.describe(d))
+            .finish()
+    }
+}
+
+impl<C: RenderObject + ?Sized> SingleChildRenderObject for RenderSingle<C> {
     type Child = C;
 
     fn adopt_child(&mut self, child: MountedChild<C>) {
@@ -449,7 +484,10 @@ pub struct Single<Child> {
     pub child: Child,
 }
 
-impl<Child: Widget> Widget for Single<Child> {
+impl<Child: Widget> Widget for Single<Child>
+where
+    Child::Render: RenderObject,
+{
     type Element = SingleChildElement<Child::Element, RenderSingle<Child::Render>>;
 
     type Render = RenderSingle<Child::Render>;

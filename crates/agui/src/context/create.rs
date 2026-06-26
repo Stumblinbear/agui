@@ -1,14 +1,11 @@
-use std::any::Any;
-use std::rc::Rc;
-
 use agui_core::tree::NodeHandle;
 
 use crate::context::BuildCtx;
 use crate::paint::compositing::{LayerHandle, OffsetLayer};
 use crate::pipeline::BoundaryContent;
 use crate::pipeline::render_pipeline::{
-    LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, PaintContent,
-    PaintScope, RenderPipeline,
+    DeferredSemanticsScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle,
+    PaintContent, PaintScope, RenderPipeline, SemanticsBoundaryHandle, SemanticsScope,
 };
 use crate::provide::ProvideScope;
 
@@ -17,29 +14,55 @@ use crate::provide::ProvideScope;
 /// node. It may plant a render tree in the forest: a [`View`](crate::view::View) registers its boundaries
 /// here. Reconcile-time grafts derive one from an [`UpdateCtx`](crate::context::UpdateCtx).
 pub struct CreateCtx {
-    provide: ProvideScope,
+    provide_scope: ProvideScope,
     pipeline: RenderPipeline,
+    semantics_scope: SemanticsScope,
 }
 
 impl CreateCtx {
     /// A create context in `scope` against `pipeline`. The driver builds one to create the root widget.
     pub fn new(scope: ProvideScope, pipeline: RenderPipeline) -> Self {
         Self {
-            provide: scope,
+            provide_scope: scope,
             pipeline,
+            semantics_scope: SemanticsScope::detached(),
         }
-    }
-
-    /// The nearest provided value of type `T` in scope, or `None`, without recording a dependency.
-    pub fn get_provided<T: Any>(&self) -> Option<Rc<T>> {
-        self.provide.get::<T>()
     }
 
     /// Runs `f` with the widget-facing [`BuildCtx`] for this scope, for a stateful widget to compose its
     /// child during `create`. No element handle exists yet, so a dependency read cannot register until mount.
     /// The context lives only for the call.
     pub fn build<R>(&self, f: impl FnOnce(&mut BuildCtx) -> R) -> R {
-        f(&mut BuildCtx::new(self.provide, NodeHandle::default()))
+        f(&mut BuildCtx::new(
+            self.provide_scope,
+            NodeHandle::default(),
+        ))
+    }
+
+    /// A deferred marker for the enclosing semantics boundary, captured by a render object that marks its
+    /// semantics from outside a pass, such as an animation.
+    #[must_use]
+    pub fn deferred_semantics_scope(&self) -> DeferredSemanticsScope {
+        self.pipeline.deferred_semantics_scope(self.semantics_scope)
+    }
+
+    /// Registers the semantics boundary at the root of a view's render tree, returning the handle that owns
+    /// it. A [`View`](crate::view::View) registers its root boundary this way at `create`.
+    pub fn register_semantics_boundary(&self, content: BoundaryContent) -> SemanticsBoundaryHandle {
+        self.pipeline.register_semantics_boundary(content)
+    }
+
+    /// Runs `f` with `semantics` as the enclosing semantics boundary, restoring the previous one afterward. A
+    /// [`View`](crate::view::View) wraps creating its subtree this way so descendants capture its boundary.
+    pub fn with_semantics_scope<R>(
+        &mut self,
+        semantics_scope: SemanticsScope,
+        f: impl FnOnce(&mut CreateCtx) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.semantics_scope, semantics_scope);
+        let result = f(self);
+        self.semantics_scope = previous;
+        result
     }
 
     /// Registers `boundary` as the relayout boundary at the root of a view's render tree, and returns the

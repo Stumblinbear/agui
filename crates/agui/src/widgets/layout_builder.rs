@@ -44,14 +44,17 @@ where
         LayoutBuilderElement {
             render: RenderObjectCell::new(RenderLayoutBuilder {
                 builder: self.builder,
-                child: None,
-                edge: RenderNode::new(None),
-                handle: NodeHandle::default(),
+
+                element_handle: NodeHandle::default(),
                 scope: ProvideScope::default(),
                 scheduler: None,
+
+                layout_scope: LayoutScope::detached(),
                 old_constraints: None,
                 needs_build: true,
-                layout_scope: LayoutScope::detached(),
+
+                child: None,
+                child_node: RenderNode::new(None),
             }),
         }
     }
@@ -91,13 +94,17 @@ where
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
         let render = self.render.get_mut();
-        render.handle = ctx.handle();
-        render.scope = ctx.provide();
+        render.element_handle = ctx.handle();
+        render.scope = ctx.provide_scope();
         // Layout runs outside the build, so capture an owned scheduler handle now for the child built then.
         render.scheduler = Some(ctx.deferred_scheduler());
+
+        render.attach(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
+
         if let Some(child) = &mut self.render.get_mut().child {
             // SAFETY: `child` is this render object's own slot.
             unsafe { ctx.unmount(child) };
@@ -113,21 +120,29 @@ where
 /// reconciles the child it returns, lays that child out, and takes its size.
 pub struct RenderLayoutBuilder<F> {
     builder: F,
-    /// The element of the child built during layout. `None` until the first build.
-    child: Option<BoxedSlot<<BoxedChild as Widget>::Element>>,
-    edge: RenderNode<dyn RenderBox, Option<Size>>,
-    handle: NodeHandle,
+
+    element_handle: NodeHandle,
     scope: ProvideScope,
     scheduler: Option<Box<dyn TaskScheduler>>,
+
+    layout_scope: LayoutScope,
+
     old_constraints: Option<BoxConstraints>,
     needs_build: bool,
-    layout_scope: LayoutScope,
+
+    /// The element of the child built during layout. `None` until the first build.
+    child: Option<BoxedSlot<<BoxedChild as Widget>::Element>>,
+    child_node: RenderNode<dyn RenderBox, Option<Size>>,
 }
 
 impl<F: 'static> RenderObject for RenderLayoutBuilder<F> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child_node.build_semantics(s);
+    }
+
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
-            .child(|d| self.edge.describe(d))
+            .child(|d| self.child_node.describe(d))
             .finish()
     }
 }
@@ -163,7 +178,7 @@ where
             self.old_constraints = Some(constraints);
             self.needs_build = false;
 
-            let handle = self.handle;
+            let handle = self.element_handle;
             let scope = self.scope;
             let builder = &self.builder;
             let child = &mut self.child;
@@ -174,7 +189,7 @@ where
 
             let mounted = ctx
                 .build_child(handle, scheduler, |ctx| {
-                    ctx.with_scope(scope, |ctx| {
+                    ctx.with_provide_scope(scope, |ctx| {
                         let widget = builder(constraints);
 
                         if let Some(slot) = child {
@@ -201,12 +216,12 @@ where
                 .expect("the layout builder is present during its own layout");
 
             if let Some(mounted) = mounted {
-                self.edge.set(mounted);
+                self.child_node.set(mounted);
             }
         }
 
-        let size = self.edge.layout_and_get_size(ctx, constraints);
-        self.edge.parent_data = Some(size);
+        let size = self.child_node.layout_and_get_size(ctx, constraints);
+        self.child_node.parent_data = Some(size);
         size
     }
 
@@ -219,7 +234,7 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        let Some(size) = self.edge.parent_data else {
+        let Some(size) = self.child_node.parent_data else {
             return HitTest::Pass;
         };
 
@@ -227,15 +242,15 @@ where
             return HitTest::Pass;
         }
 
-        self.edge.hit_test(result, position)
+        self.child_node.hit_test(result, position)
     }
 
     fn update_compositing_bits(&mut self) -> bool {
-        self.edge.update_compositing_bits()
+        self.child_node.update_compositing_bits()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        self.edge.paint(ctx, offset);
+        self.child_node.paint(ctx, offset);
     }
 }
 
@@ -278,6 +293,8 @@ mod tests {
     }
 
     impl RenderObject for RenderFixed {
+        fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
+
         fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
             d.node_for::<Self>().finish()
         }
