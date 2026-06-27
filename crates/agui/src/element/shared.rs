@@ -57,6 +57,11 @@ impl<C: Element, R> SingleChildElement<C, R> {
             });
         }
     }
+
+    /// This element's render object, by exclusive reference, for the widget's own writes during reconcile.
+    pub fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
+    }
 }
 
 // SAFETY: manages its single child only through the cursor child operations, and resolves its render object
@@ -67,10 +72,6 @@ where
     R: SingleChildRenderObject<Child = C::Render>,
 {
     type Render = R;
-
-    fn render_object_mut(&mut self) -> &mut R {
-        self.render.get_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<R> {
         self.render.render_object_ptr()

@@ -56,13 +56,6 @@ impl<R> RenderObjectCell<R> {
 }
 
 impl<R: ?Sized> RenderObjectCell<R> {
-    /// The render object, by shared reference. For reading outside a layout or paint pass, when no
-    /// [`render_object_ptr`](Self::render_object_ptr) borrow is live.
-    pub fn get(&self) -> &R {
-        // SAFETY: a shared read taken outside a pass, so it does not alias the pass-time pointer borrow.
-        unsafe { &(*self.inner.get()).value }
-    }
-
     /// The render object, by exclusive reference.
     pub fn get_mut(&mut self) -> &mut R {
         &mut self.inner.get_mut().value

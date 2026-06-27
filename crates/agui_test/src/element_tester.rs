@@ -126,7 +126,6 @@ where
             pending: None,
             root_handle: self.root_handle,
             child_handle: self.child_handle,
-            render: (),
         }
     }
 
@@ -139,7 +138,6 @@ struct ElementRootElement<W: Widget> {
     pending: Option<W>,
     root_handle: Rc<Cell<Option<NodeHandle>>>,
     child_handle: Rc<Cell<Option<NodeHandle>>>,
-    render: (),
 }
 
 // SAFETY: manages its single child only through the cursor child operations, and renders nothing of its own.
@@ -149,10 +147,6 @@ where
     W::Element: 'static,
 {
     type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        &mut self.render
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<()> {
         RenderObjectPtr::dangling()

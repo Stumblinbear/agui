@@ -331,10 +331,6 @@ where
 {
     type Render = W::Render;
 
-    fn render_object_mut(&mut self) -> &mut W::Render {
-        self.child.get_mut().render_object_mut()
-    }
-
     fn render_object_ptr(&self) -> RenderObjectPtr<W::Render> {
         self.child.get().render_object_ptr()
     }

@@ -66,7 +66,7 @@ where
 
             // The anchor outlives the swap, so its captured boundary is still valid. Mark it so the freshly
             // grafted child, which has never been laid out, is laid out next frame.
-            let scope = element.render.get().layout_scope();
+            let scope = element.render.get_mut().layout_scope();
             ctx.mark_needs_layout(scope);
 
             // SAFETY: `element.child` is the key element's own slot.
@@ -99,10 +99,6 @@ where
     C::Render: RenderBox + Sized,
 {
     type Render = RenderGraft<C::Render>;
-
-    fn render_object_mut(&mut self) -> &mut Self::Render {
-        self.render.get_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.render.render_object_ptr()

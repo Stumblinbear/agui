@@ -70,20 +70,16 @@ impl Default for Leaf {
 
 /// The element of [`Leaf`], holding the lifecycle closures moved out of the widget. `on_mount` fires
 /// from the element's `mount` hook, where a tree handle exists, rather than at create.
+#[allow(clippy::struct_field_names)]
 pub struct LeafElement {
     on_mount: OnMount,
     on_message: OnMessage,
     on_rebuild: OnRebuild,
-    render: (),
 }
 
 // SAFETY: a leaf with no children; its `()` render object is never dereferenced.
 unsafe impl Element for LeafElement {
     type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        &mut self.render
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<()> {
         RenderObjectPtr::dangling()
@@ -116,7 +112,6 @@ impl Widget for Leaf {
             on_mount: self.on_mount,
             on_message: self.on_message,
             on_rebuild: self.on_rebuild,
-            render: (),
         }
     }
 

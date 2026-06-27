@@ -19,8 +19,6 @@ pub trait AnyElement {
 
     fn element_name(&self) -> &str;
 
-    fn dyn_render_object_mut(&mut self) -> &mut Self::Render;
-
     fn dyn_render_object_ptr(&self) -> RenderObjectPtr<Self::Render>;
 
     fn dyn_mount(&mut self, ctx: &mut UpdateCtx<'_>);
@@ -52,10 +50,6 @@ where
 
     fn element_name(&self) -> &str {
         std::any::type_name::<T>()
-    }
-
-    fn dyn_render_object_mut(&mut self) -> &mut T::Render {
-        self.render_object_mut()
     }
 
     fn dyn_render_object_ptr(&self) -> RenderObjectPtr<T::Render> {
@@ -103,10 +97,6 @@ fn rebase_to_boxed<R: ?Sized>(
 // SAFETY: forwards every operation to the inner erased `Element`, which upholds the contract.
 unsafe impl<R: ?Sized> Element for Box<dyn AnyElement<Render = R>> {
     type Render = R;
-
-    fn render_object_mut(&mut self) -> &mut R {
-        (**self).dyn_render_object_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<R> {
         (**self).dyn_render_object_ptr()

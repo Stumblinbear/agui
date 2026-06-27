@@ -76,6 +76,13 @@ pub struct LayoutBuilderElement<F> {
     render: RenderObjectCell<RenderLayoutBuilder<F>>,
 }
 
+impl<F> LayoutBuilderElement<F> {
+    /// This element's render object, by exclusive reference, for the widget's own writes during reconcile.
+    pub fn render_object_mut(&mut self) -> &mut RenderLayoutBuilder<F> {
+        self.render.get_mut()
+    }
+}
+
 // SAFETY: its render object reconciles the one child only through the cursor child operations, and the element
 // resolves its render object from its own `RenderObjectCell`.
 unsafe impl<F> Element for LayoutBuilderElement<F>
@@ -83,10 +90,6 @@ where
     F: Fn(BoxConstraints) -> BoxedChild + 'static,
 {
     type Render = RenderLayoutBuilder<F>;
-
-    fn render_object_mut(&mut self) -> &mut Self::Render {
-        self.render.get_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.render.render_object_ptr()

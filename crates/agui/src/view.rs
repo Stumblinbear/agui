@@ -195,7 +195,6 @@ where
             content,
             surface: self.surface,
             semantics: semantics_scope,
-            render: (),
         }
     }
 
@@ -212,7 +211,6 @@ pub struct ViewElement<C> {
     content: Rc<RefCell<RenderView>>,
     surface: Rc<RefCell<Option<ViewHandle>>>,
     semantics: SemanticsScope,
-    render: (),
 }
 
 impl<C: Element> ViewElement<C> {
@@ -238,10 +236,6 @@ where
     C: Element<Render = dyn RenderBox>,
 {
     type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        &mut self.render
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<()> {
         RenderObjectPtr::dangling()
@@ -303,11 +297,7 @@ where
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         let (children, renders) = self.children.create(ctx);
 
-        ViewContainerElement {
-            children,
-            renders,
-            render: (),
-        }
+        ViewContainerElement { children, renders }
     }
 
     fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
@@ -329,7 +319,6 @@ where
 pub struct ViewContainerElement<L: WidgetSequence> {
     children: L::Elements,
     renders: L::Renders,
-    render: (),
 }
 
 // SAFETY: mounts and unmounts its child views through the cursor child operations of its own sequence; its own
@@ -341,10 +330,6 @@ where
     L::Renders: 'static,
 {
     type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        &mut self.render
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<()> {
         RenderObjectPtr::dangling()

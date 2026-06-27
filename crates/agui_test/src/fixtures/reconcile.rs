@@ -145,16 +145,11 @@ impl KeyedLeaf {
 /// The element of [`KeyedLeaf`].
 pub struct KeyedLeafElement {
     log: ProbeLog,
-    render: (),
 }
 
 // SAFETY: a leaf with no children; its `()` render object is never dereferenced.
 unsafe impl Element for KeyedLeafElement {
     type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        &mut self.render
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<()> {
         RenderObjectPtr::dangling()
@@ -181,10 +176,7 @@ impl Widget for KeyedLeaf {
     type Render = ();
 
     fn create(self, _ctx: &mut CreateCtx) -> Self::Element {
-        KeyedLeafElement {
-            log: self.log,
-            render: (),
-        }
+        KeyedLeafElement { log: self.log }
     }
 
     fn update(self, _ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {

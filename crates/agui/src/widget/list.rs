@@ -101,7 +101,7 @@ where
 {
     /// Reconciles the child elements and the render object's child edges against `children`, in lockstep.
     pub fn update(&mut self, ctx: &mut UpdateCtx<'_>, children: L) {
-        let layout_scope = self.render.get().layout_scope();
+        let layout_scope = self.render.get_mut().layout_scope();
         // SAFETY: `self.children` is our own sequence and the edges belong to our render object.
         unsafe {
             children.update(
@@ -112,19 +112,20 @@ where
             );
         };
     }
+
+    /// This element's render object, by exclusive reference, for the widget's own writes during reconcile.
+    pub fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
+    }
 }
 
-// SAFETY: reconciles its child list only through the cursor child operations — balanced registration, slots
-// reused only on `can_update` — and resolves its render object from its own `RenderObjectCell`.
+// SAFETY: reconciles its child list only through the cursor child operations (balanced registration, slots
+// reused only on `can_update`), and resolves its render object from its own `RenderObjectCell`.
 unsafe impl<L: WidgetSequence, R> Element for ChildrenElement<L, R>
 where
     R: MultiChildRenderObject<Children = L::Renders>,
 {
     type Render = R;
-
-    fn render_object_mut(&mut self) -> &mut R {
-        self.render.get_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<R> {
         self.render.render_object_ptr()

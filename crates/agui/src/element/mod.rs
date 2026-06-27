@@ -39,10 +39,6 @@ pub unsafe trait Element {
     /// The render object this element owns and presents to its parent.
     type Render: ?Sized;
 
-    /// This element's render object, by exclusive reference, for the element's own writes (a widget updating
-    /// its render props). A transparent element forwards to its child's.
-    fn render_object_mut(&mut self) -> &mut Self::Render;
-
     /// A pointer to this element's render object, for a parent to hold and resolve each pass. A render-bearing
     /// element hands back its cell's; a transparent element forwards its child's; a render-less one returns a
     /// placeholder.
@@ -90,16 +86,17 @@ impl<R> LeafElement<R> {
             render: RenderObjectCell::new(render),
         }
     }
+
+    /// This element's render object, by exclusive reference, for the widget's own writes during reconcile.
+    pub fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
+    }
 }
 
 // SAFETY: no children to register; `render_object_ptr` returns the cell's pointer, valid for the element's
 // mounted life.
 unsafe impl<R: RenderObject> Element for LeafElement<R> {
     type Render = R;
-
-    fn render_object_mut(&mut self) -> &mut R {
-        self.render.get_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<R> {
         self.render.render_object_ptr()

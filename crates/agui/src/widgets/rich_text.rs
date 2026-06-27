@@ -73,10 +73,6 @@ where
 {
     type Render = RenderParagraph<dyn RenderBox>;
 
-    fn render_object_mut(&mut self) -> &mut Self::Render {
-        self.inner.render_object_mut()
-    }
-
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.inner.render_object_ptr()
     }

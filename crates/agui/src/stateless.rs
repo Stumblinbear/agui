@@ -102,10 +102,6 @@ where
 {
     type Render = <W::Child as Widget>::Render;
 
-    fn render_object_mut(&mut self) -> &mut Self::Render {
-        self.child_mut().get_mut().render_object_mut()
-    }
-
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.child().get().render_object_ptr()
     }

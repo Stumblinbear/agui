@@ -101,10 +101,6 @@ pub struct ErasedBoxElement {
 unsafe impl Element for ErasedBoxElement {
     type Render = RenderGraft<dyn RenderBox>;
 
-    fn render_object_mut(&mut self) -> &mut Self::Render {
-        self.render.get_mut()
-    }
-
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.render.render_object_ptr()
     }
@@ -156,7 +152,7 @@ impl Widget for Box<dyn AnyWidget<Render = dyn RenderBox>> {
             // subtree, which has never been laid out.
             element.type_id = new_type;
 
-            let scope = element.render.get().layout_scope();
+            let scope = element.render.get_mut().layout_scope();
             ctx.mark_needs_layout(scope);
 
             // SAFETY: `element.child` is the erased element's own slot.
@@ -193,10 +189,6 @@ pub struct ErasedSliverElement {
 // contract.
 unsafe impl Element for ErasedSliverElement {
     type Render = dyn RenderSliver;
-
-    fn render_object_mut(&mut self) -> &mut dyn RenderSliver {
-        self.child.get_mut().render_object_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderSliver> {
         self.child.get().render_object_ptr()
@@ -350,10 +342,6 @@ where
 {
     type Render = dyn RenderBox;
 
-    fn render_object_mut(&mut self) -> &mut dyn RenderBox {
-        self.inner.render_object_mut()
-    }
-
     fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderBox> {
         self.inner.render_object_ptr().into_box()
     }
@@ -433,10 +421,6 @@ where
     E::Render: RenderSliver + Sized,
 {
     type Render = dyn RenderSliver;
-
-    fn render_object_mut(&mut self) -> &mut dyn RenderSliver {
-        self.inner.render_object_mut()
-    }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderSliver> {
         self.inner.render_object_ptr().into_sliver()

@@ -149,10 +149,6 @@ pub struct TrackedElement {
 unsafe impl Element for TrackedElement {
     type Render = TrackedRender;
 
-    fn render_object_mut(&mut self) -> &mut TrackedRender {
-        self.render.get_mut()
-    }
-
     fn render_object_ptr(&self) -> RenderObjectPtr<TrackedRender> {
         self.render.render_object_ptr()
     }
@@ -506,10 +502,6 @@ mod tests {
     // is sabotaged.
     unsafe impl Element for DescribeStopsElement {
         type Render = <Column<Vec<Tracked>> as Widget>::Render;
-
-        fn render_object_mut(&mut self) -> &mut Self::Render {
-            self.inner.render_object_mut()
-        }
 
         fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
             self.inner.render_object_ptr()
