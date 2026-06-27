@@ -231,8 +231,9 @@ impl<N: NodeDispatch> Cursor<'_, N> {
     /// returns its cursor. The caller mounts the child through its `get_mut`.
     ///
     /// # Safety
-    /// `child` must belong to the node at `self.this`; `glue` must dispatch the child's node type; and the
-    /// holder must deregister it with [`deregister`](Self::deregister) before it drops.
+    /// - `child` must belong to the node at `self.this`.
+    /// - `glue` must dispatch the child's node type.
+    /// - The holder must deregister `child` with [`deregister`](Self::deregister) before it drops.
     pub unsafe fn register<S: NodeContainer>(
         &mut self,
         child: &mut S,

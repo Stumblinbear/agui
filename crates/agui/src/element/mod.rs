@@ -30,6 +30,11 @@ use crate::{
 /// - [`render_object_ptr`](Self::render_object_ptr) returns a pointer to this element's live render object,
 ///   valid for as long as the element is mounted. A render-less element (`Render = ()`) returns a placeholder,
 ///   sound only because that pointer is never dereferenced.
+/// - This element owns its render object, and the render object of any child it holds inline. A borrow of the
+///   element claims all of it. That borrow must never coexist with any access to a render object it owns: it is
+///   undefined behavior to borrow the element while such a render object is being accessed, or to access one
+///   while the element is borrowed. The element is borrowed only by its own lifecycle methods, so the two never
+///   overlap.
 pub unsafe trait Element {
     /// The render object this element owns and presents to its parent.
     type Render: ?Sized;

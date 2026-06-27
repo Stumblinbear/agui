@@ -164,7 +164,7 @@ impl<R: ?Sized> Drop for RenderObjectMut<'_, R> {
 }
 
 /// A parent's deferred handle to a child render object: the child node's address plus how to resolve its
-/// render object pointer from it. Resolved fresh each pass — never dereferenced at mount, where the protected
+/// render object pointer from it. Resolved fresh each pass, never dereferenced at mount, where the protected
 /// `&mut element` mount chain would forbid reaching the child through this separate address.
 pub struct MountedChild<R: ?Sized> {
     node: NonNull<()>,
@@ -176,8 +176,11 @@ impl<R: ?Sized> MountedChild<R> {
     /// render object pointer. [`UpdateCtx::mount`](crate::context::UpdateCtx::mount) is the only caller.
     ///
     /// # Safety
-    /// `address` must be the mounted child node's address, valid for as long as the child is mounted, and
-    /// `resolve` must project it to that child's render object pointer.
+    /// - `address` must be the mounted child node's address, valid for as long as the child is mounted.
+    /// - `resolve` must project that address to the child's render object pointer.
+    /// - Resolving the returned handle accesses the child's render object, so every later resolution must
+    ///   uphold [`Element`](crate::element::Element)'s contract: it must not coexist with a borrow of the child
+    ///   element.
     pub unsafe fn new(
         address: NonNull<()>,
         resolve: unsafe fn(NonNull<()>) -> RenderObjectPtr<R>,
@@ -191,7 +194,7 @@ impl<R: ?Sized> MountedChild<R> {
     /// Resolves and exclusively borrows the child render object, for a boundary holding this handle to re-lay or
     /// repaint it. As with [`RenderNode::borrow_mut`], call only during a pass.
     pub fn borrow_mut(&self) -> RenderObjectMut<'_, R> {
-        // SAFETY: as `RenderNode::resolve` — pass time, no element hook on the stack.
+        // SAFETY: as `RenderNode::resolve`. No borrow of the child element is live, so this does not alias one.
         let inner = unsafe { (self.resolve)(self.node) }.0;
         debug_mark_exclusive(inner);
         RenderObjectMut {
@@ -294,10 +297,10 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     /// repaint boundary. Reached only after mount.
     ///
     /// # Safety
-    /// The handle resolves a raw pointer to the child render object. The caller must resolve it only during a
-    /// layout or paint pass, and must not keep it, or a boundary registered with it, past the child's unmount
-    /// or replacement. `RenderNode` drops its own boundary in [`set`](Self::set) and [`clear`](Self::clear)
-    /// for this reason.
+    /// The handle resolves a raw pointer to the child render object. Resolving it must not coexist with a
+    /// borrow of the child element, per [`Element`](crate::element::Element)'s contract, and the handle, or a
+    /// boundary registered with it, must not be kept past the child's unmount or replacement. `RenderNode`
+    /// drops its own boundary in [`set`](Self::set) and [`clear`](Self::clear) for this reason.
     ///
     /// # Panics
     /// If the child is unwired (reached before mount).
@@ -315,8 +318,8 @@ impl<R: ?Sized, P> RenderNode<R, P> {
             .as_ref()
             .expect("child render node used before it was wired at mount");
 
-        // SAFETY: reached only during a pass, with no element hook on the stack; the resolver projects the
-        // live child's address to its render object pointer, derived shared so it survives the child's rebuilds.
+        // SAFETY: no borrow of the child element is live here, so resolving its render object pointer cannot
+        // alias one. The resolver projects the live child's address, derived shared so it survives rebuilds.
         unsafe { (handle.resolve)(handle.node) }
     }
 

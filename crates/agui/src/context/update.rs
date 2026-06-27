@@ -293,10 +293,11 @@ impl<'a> UpdateCtx<'a> {
 ///
 /// # Safety
 ///
-/// `address` must be a live mounted child node of type `E`, reached during a layout or paint pass with no
-/// element hook on the call stack.
+/// `address` must point to a live mounted element of type `E`. This reads that element to reach its render
+/// object, so the call, and any access through the pointer it returns, must not coexist with a borrow of the
+/// element, per [`Element`](crate::element::Element)'s contract.
 unsafe fn resolve_render_object<E: Element>(address: NonNull<()>) -> RenderObjectPtr<E::Render> {
-    // SAFETY: the caller guarantees a live `E` at `address` and no `&mut element` on the stack, so this shared
-    // view is sound; it reads only the element's render object pointer.
+    // SAFETY: the caller guarantees a live `E` at `address` with no borrow of it live, so this shared read is
+    // sound. It reads only the element's render object pointer.
     unsafe { address.cast::<E>().as_ref() }.render_object_ptr()
 }
