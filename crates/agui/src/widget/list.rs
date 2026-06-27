@@ -4,15 +4,14 @@ use crate::{
     context::{CreateCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::{Element, MultiChildElement},
+    pipeline::render_pipeline::LayoutScope,
     render_object::{
         MultiChildRenderObject, RenderChildren,
         box_layout::RenderBox,
         node::{RenderNode, RenderObjectCell, RenderObjectPtr},
     },
-    widget::{AnyWidget, Widget, any_widget::RenderBoxElement, any_widget::RenderBoxWrapper},
+    widget::{Widget, any_widget::RenderBoxElement, any_widget::RenderBoxWrapper},
 };
-
-type BoxedRenderBoxWidget = Box<dyn AnyWidget<Render = dyn RenderBox>>;
 
 /// A statically-typed, nestable sequence of child widgets that a multi-child widget accepts. It is a widget
 /// (one child), an [`Option`] of a sequence (that one or absent), a [`Vec`] of one widget type (a keyed
@@ -33,7 +32,9 @@ pub trait WidgetSequence {
     /// hold. Ready to be mounted.
     fn create(self, ctx: &mut CreateCtx) -> (Self::Elements, Self::Renders);
 
-    /// Reconciles `elements` and `renders` against this sequence in place, in lockstep.
+    /// Reconciles `elements` and `renders` against this sequence in place, in lockstep. `layout_scope` is the
+    /// owning render object's relayout boundary, marked when the reconcile changes the run structurally so a
+    /// grafted child is laid out.
     ///
     /// # Safety
     /// `elements` must belong to the element at `ctx`'s position, and `renders` to its render object.
@@ -42,6 +43,7 @@ pub trait WidgetSequence {
         ctx: &mut UpdateCtx<'_>,
         elements: &mut Self::Elements,
         renders: &mut Self::Renders,
+        layout_scope: LayoutScope,
     );
 }
 
@@ -99,12 +101,14 @@ where
 {
     /// Reconciles the child elements and the render object's child edges against `children`, in lockstep.
     pub fn update(&mut self, ctx: &mut UpdateCtx<'_>, children: L) {
+        let layout_scope = self.render.get().layout_scope();
         // SAFETY: `self.children` is our own sequence and the edges belong to our render object.
         unsafe {
             children.update(
                 ctx,
                 &mut self.children,
                 self.render.get_mut().children_mut(),
+                layout_scope,
             );
         };
     }
@@ -175,7 +179,9 @@ where
         ctx: &mut UpdateCtx<'_>,
         element: &mut Slot<RenderBoxElement<W::Element>>,
         _renders: &mut RenderNode<dyn RenderBox>,
+        _layout_scope: LayoutScope,
     ) {
+        // A single child is reconciled in place, never grafted, so the enclosing boundary needs no mark.
         // The element owns its render object; reused in place its address holds, so the edge stays valid.
         // SAFETY: the caller guarantees `element` belongs to the element at `ctx`.
         unsafe {
@@ -209,31 +215,6 @@ where
     }
 }
 
-impl WidgetSequence for Box<dyn AnyWidget<Render = dyn RenderBox>> {
-    type Elements = Slot<<Self as Widget>::Element>;
-    type Renders = RenderNode<dyn RenderBox>;
-
-    fn create(
-        self,
-        ctx: &mut CreateCtx,
-    ) -> (Slot<<Self as Widget>::Element>, RenderNode<dyn RenderBox>) {
-        // The boxed widget already renders `dyn RenderBox`, so it is stored unwrapped.
-        let element = Widget::create(self, ctx);
-
-        (Slot::new(element), RenderNode::new(()))
-    }
-
-    unsafe fn update(
-        self,
-        ctx: &mut UpdateCtx<'_>,
-        element: &mut Slot<<Self as Widget>::Element>,
-        _renders: &mut RenderNode<dyn RenderBox>,
-    ) {
-        // SAFETY: the caller guarantees `element` belongs to the element at `ctx`.
-        unsafe { ctx.with_child(element, |el, ctx| Widget::update(self, ctx, el)) };
-    }
-}
-
 impl<C: WidgetSequence> WidgetSequence for Option<C> {
     type Elements = Option<C::Elements>;
     type Renders = Option<C::Renders>;
@@ -253,12 +234,16 @@ impl<C: WidgetSequence> WidgetSequence for Option<C> {
         ctx: &mut UpdateCtx<'_>,
         elements: &mut Option<C::Elements>,
         renders: &mut Option<C::Renders>,
+        layout_scope: LayoutScope,
     ) {
         if let Some(sequence) = self {
             if let (Some(present), Some(present_renders)) = (elements.as_mut(), renders.as_mut()) {
                 // SAFETY: `present` is the caller's sub-sequence and `present_renders` its renders.
-                unsafe { sequence.update(ctx, present, present_renders) };
+                unsafe { sequence.update(ctx, present, present_renders, layout_scope) };
             } else {
+                // Absent to present: a child appears, so re-lay the enclosing boundary.
+                ctx.mark_needs_layout(layout_scope);
+
                 let (mut built, mut built_renders) = ctx.inflate(|ctx| sequence.create(ctx));
                 // SAFETY: `built` is freshly created and owned here.
                 unsafe { built.mount(ctx, &mut built_renders) };
@@ -267,6 +252,9 @@ impl<C: WidgetSequence> WidgetSequence for Option<C> {
             }
         } else {
             if let Some(mut present) = elements.take() {
+                // Present to absent: a child leaves, so re-lay the enclosing boundary.
+                ctx.mark_needs_layout(layout_scope);
+
                 // SAFETY: `present` is this sequence's own.
                 unsafe { present.unmount(ctx) };
             }
@@ -327,36 +315,14 @@ where
         ctx: &mut UpdateCtx<'_>,
         elements: &mut MultiChildElement<RenderBoxElement<W::Element>>,
         renders: &mut Vec<RenderNode<dyn RenderBox>>,
+        layout_scope: LayoutScope,
     ) {
         elements.update(
             ctx,
             self.into_iter().map(RenderBoxWrapper::new).collect(),
             renders,
+            layout_scope,
         );
-    }
-}
-
-impl WidgetSequence for Vec<Box<dyn AnyWidget<Render = dyn RenderBox>>> {
-    type Elements = MultiChildElement<<BoxedRenderBoxWidget as Widget>::Element>;
-    type Renders = Vec<RenderNode<dyn RenderBox>>;
-
-    fn create(
-        self,
-        ctx: &mut CreateCtx,
-    ) -> (
-        MultiChildElement<<BoxedRenderBoxWidget as Widget>::Element>,
-        Vec<RenderNode<dyn RenderBox>>,
-    ) {
-        MultiChildElement::new(ctx, self)
-    }
-
-    unsafe fn update(
-        self,
-        ctx: &mut UpdateCtx<'_>,
-        elements: &mut MultiChildElement<<BoxedRenderBoxWidget as Widget>::Element>,
-        renders: &mut Vec<RenderNode<dyn RenderBox>>,
-    ) {
-        elements.update(ctx, self, renders);
     }
 }
 
@@ -405,10 +371,11 @@ macro_rules! impl_sequence_tuple {
                 ctx: &mut UpdateCtx<'_>,
                 elements: &mut Self::Elements,
                 renders: &mut Self::Renders,
+                layout_scope: LayoutScope,
             ) {
                 let ($($T,)+) = self;
                 // SAFETY: each component belongs to the element at `ctx`, its renders to the render object.
-                unsafe { $($T.update(ctx, &mut elements.$i, &mut renders.$i);)+ }
+                unsafe { $($T.update(ctx, &mut elements.$i, &mut renders.$i, layout_scope);)+ }
             }
         }
 

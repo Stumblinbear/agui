@@ -1,5 +1,4 @@
 use std::any::{Any, TypeId};
-use std::marker::PhantomData;
 
 use agui_core::tree::Slot;
 
@@ -8,9 +7,12 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element},
     key::AnyKeyable,
-    render_object::box_layout::RenderBox,
-    render_object::node::RenderObjectPtr,
-    render_object::sliver::RenderSliver,
+    render_object::{
+        RenderGraft, RenderObject, SingleChildRenderObject,
+        box_layout::RenderBox,
+        node::{RenderObjectCell, RenderObjectPtr},
+        sliver::RenderSliver,
+    },
     widget::Widget,
 };
 
@@ -81,27 +83,122 @@ where
     }
 }
 
-/// The [`Element`] of a [`Box<dyn AnyWidget>`] erasure seam, holding the boxed inner element. A type
-/// hot-swap deregisters the old inner before registering its replacement, so the old [`NodeHandle`] dies
-/// and a dispatch still addressed to it is dropped rather than delivered to the replacement.
+/// The [`Element`] of a `Box<dyn AnyWidget<Render = dyn RenderBox>>` erasure seam, holding the boxed inner
+/// element behind a [`RenderGraft`] anchor. A type hot-swap deregisters the old inner before registering its
+/// replacement, so the old [`NodeHandle`] dies and a dispatch still addressed to it is dropped rather than
+/// delivered to the replacement. The anchor stays put across the swap, so its boundary can be marked to lay
+/// the new subtree out.
 ///
 /// [`NodeHandle`]: agui_core::tree::NodeHandle
-pub struct ErasedElement<R: ?Sized> {
+pub struct ErasedBoxElement {
     type_id: TypeId,
-    child: Slot<Box<dyn AnyElement<Render = R>>>,
-    _render: PhantomData<fn() -> R>,
+    child: Slot<Box<dyn AnyElement<Render = dyn RenderBox>>>,
+    render: RenderObjectCell<RenderGraft<dyn RenderBox>>,
+}
+
+// SAFETY: manages its single inner element only through the cursor child operations, and resolves its render
+// object (the graft anchor) from its own `RenderObjectCell`.
+unsafe impl Element for ErasedBoxElement {
+    type Render = RenderGraft<dyn RenderBox>;
+
+    fn render_object_mut(&mut self) -> &mut Self::Render {
+        self.render.get_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
+        self.render.render_object_ptr()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        // SAFETY: `self.child` is our own slot.
+        let mounted = unsafe { ctx.mount(&mut self.child) };
+        let render = self.render.get_mut();
+        render.adopt_child(mounted);
+        render.attach(ctx);
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
+        // SAFETY: `self.child` is our own slot.
+        unsafe { ctx.unmount(&mut self.child) };
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.child.get().describe(d)
+    }
+}
+
+impl Widget for Box<dyn AnyWidget<Render = dyn RenderBox>> {
+    type Element = ErasedBoxElement;
+
+    type Render = RenderGraft<dyn RenderBox>;
+
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        let type_id = (*self).dyn_widget_type_id();
+        let child = self.dyn_create(ctx);
+
+        ErasedBoxElement {
+            type_id,
+            child: Slot::new(child),
+            render: RenderObjectCell::new(RenderGraft::new()),
+        }
+    }
+
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        let new_type = (*self).dyn_widget_type_id();
+
+        if new_type == element.type_id {
+            // SAFETY: `element.child` is the erased element's own slot.
+            unsafe { ctx.with_child(&mut element.child, |inner, ctx| self.dyn_update(ctx, inner)) };
+        } else {
+            // Type swap: tear the old inner down (its handle dies, so events queued for it are dropped) and
+            // mount the replacement. The anchor outlives the swap, so mark its boundary to lay out the new
+            // subtree, which has never been laid out.
+            element.type_id = new_type;
+
+            let scope = element.render.get().layout_scope();
+            ctx.mark_needs_layout(scope);
+
+            // SAFETY: `element.child` is the erased element's own slot.
+            unsafe { ctx.unmount(&mut element.child) };
+            let new_child = ctx.inflate(|ctx| self.dyn_create(ctx));
+            *element.child.get_mut() = new_child;
+            // SAFETY: `element.child` is the erased element's own slot.
+            let mounted = unsafe { ctx.mount(&mut element.child) };
+            element.render.get_mut().adopt_child(mounted);
+        }
+    }
+
+    fn widget_type_id(&self) -> TypeId
+    where
+        Self: 'static,
+    {
+        (**self).dyn_widget_type_id()
+    }
+
+    fn key(&self) -> Option<&dyn AnyKeyable> {
+        (**self).dyn_key()
+    }
+}
+
+/// The [`Element`] of a `Box<dyn AnyWidget<Render = dyn RenderSliver>>` erasure seam. It forwards its render
+/// object straight to the boxed inner element, with no graft anchor, because slivers are not yet laid out. When
+/// they are, and a type swap must re-lay, it gains a sliver graft anchor like [`ErasedBoxElement`].
+pub struct ErasedSliverElement {
+    type_id: TypeId,
+    child: Slot<Box<dyn AnyElement<Render = dyn RenderSliver>>>,
 }
 
 // SAFETY: forwards child management and render resolution to its single inner element, which upholds the
 // contract.
-unsafe impl<R: ?Sized + 'static> Element for ErasedElement<R> {
-    type Render = R;
+unsafe impl Element for ErasedSliverElement {
+    type Render = dyn RenderSliver;
 
-    fn render_object_mut(&mut self) -> &mut R {
+    fn render_object_mut(&mut self) -> &mut dyn RenderSliver {
         self.child.get_mut().render_object_mut()
     }
 
-    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+    fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderSliver> {
         self.child.get().render_object_ptr()
     }
 
@@ -120,19 +217,18 @@ unsafe impl<R: ?Sized + 'static> Element for ErasedElement<R> {
     }
 }
 
-impl<R: ?Sized + 'static> Widget for Box<dyn AnyWidget<Render = R>> {
-    type Element = ErasedElement<R>;
+impl Widget for Box<dyn AnyWidget<Render = dyn RenderSliver>> {
+    type Element = ErasedSliverElement;
 
-    type Render = R;
+    type Render = dyn RenderSliver;
 
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         let type_id = (*self).dyn_widget_type_id();
         let child = self.dyn_create(ctx);
 
-        ErasedElement {
+        ErasedSliverElement {
             type_id,
             child: Slot::new(child),
-            _render: PhantomData,
         }
     }
 
@@ -143,9 +239,8 @@ impl<R: ?Sized + 'static> Widget for Box<dyn AnyWidget<Render = R>> {
             // SAFETY: `element.child` is the erased element's own slot.
             unsafe { ctx.with_child(&mut element.child, |inner, ctx| self.dyn_update(ctx, inner)) };
         } else {
-            // Type swap: tear the old inner down (its handle dies, so events queued for it are dropped),
-            // swap in the replacement, and remount it under a fresh handle. The replacement owns its render
-            // object, so swapping the inner element swaps the render too.
+            // Type swap: tear the old inner down (its handle dies, so events queued for it are dropped) and
+            // mount the replacement. No layout mark yet, since slivers are not laid out.
             element.type_id = new_type;
 
             // SAFETY: `element.child` is the erased element's own slot.

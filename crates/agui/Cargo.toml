@@ -35,6 +35,12 @@ typed_floats.workspace = true
 
 wgpu = { workspace = true, optional = true }
 
+# Integration tests drive full frames through the harness and observe layout with its probes. It depends on
+# `agui`, so this edge is a cycle; keeping it dev-only (and the tests external in `tests/`) means both link the
+# one `agui` lib, where an in-source `#[cfg(test)]` test would instead see a second, `cfg(test)` copy.
+[dev-dependencies]
+agui_test = { path = "../agui_test" }
+
 # The DirectComposition compositor is Windows-only; its deps stay off every other target so a
 # non-Windows `gpu` build pulls only `wgpu`.
 [target.'cfg(windows)'.dependencies]

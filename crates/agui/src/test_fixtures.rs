@@ -14,7 +14,7 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     key::AnyKeyable,
-    pipeline::render_pipeline::DeferredLayoutScope,
+    pipeline::render_pipeline::{DeferredLayoutScope, LayoutScope},
     render_object::{
         MultiChildRenderObject, RenderObject, SingleChildRenderObject,
         box_layout::{BoxConstraints, RenderBox},
@@ -167,6 +167,11 @@ impl MultiChildRenderObject for MultiChildRenderList {
 
     fn children_mut(&mut self) -> &mut Vec<RenderNode<dyn RenderBox>> {
         &mut self.children
+    }
+
+    // Detached: this fixture backs reconcile tests, which do not assert on an incremental-grow re-layout.
+    fn layout_scope(&self) -> LayoutScope {
+        LayoutScope::detached()
     }
 }
 

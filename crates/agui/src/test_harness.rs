@@ -523,6 +523,96 @@ where
     }
 }
 
+/// A reconcilable, render-bearing root for a full-frame harness. It builds an initial widget as its child and
+/// forwards its render object to it, then reconciles that child against a new widget delivered as a message,
+/// so the harness can re-drive the whole tree with a fresh root widget. It captures its own handle at mount so
+/// the harness can address it for that message.
+pub struct HarnessRoot<W> {
+    initial: W,
+    handle: Rc<Cell<Option<NodeHandle>>>,
+}
+
+impl<W> HarnessRoot<W> {
+    pub fn new(initial: W, handle: Rc<Cell<Option<NodeHandle>>>) -> Self {
+        Self { initial, handle }
+    }
+}
+
+/// The element of a [`HarnessRoot`], holding the mounted child and the widget queued for the next rebuild.
+pub struct HarnessRootElement<W: Widget> {
+    child: Slot<W::Element>,
+    pending: Option<W>,
+    handle: Rc<Cell<Option<NodeHandle>>>,
+}
+
+impl<W> Widget for HarnessRoot<W>
+where
+    W: Widget + 'static,
+    W::Element: 'static,
+    W::Render: RenderBox + Sized + 'static,
+{
+    type Element = HarnessRootElement<W>;
+
+    type Render = W::Render;
+
+    fn create(self, ctx: &mut CreateCtx) -> HarnessRootElement<W> {
+        HarnessRootElement {
+            child: Slot::new(self.initial.create(ctx)),
+            pending: None,
+            handle: self.handle,
+        }
+    }
+
+    fn update(self, _ctx: &mut UpdateCtx<'_>, _element: &mut HarnessRootElement<W>) {}
+}
+
+// SAFETY: manages its single child only through the cursor child operations, and forwards render resolution
+// to it.
+unsafe impl<W> Element for HarnessRootElement<W>
+where
+    W: Widget + 'static,
+    W::Element: 'static,
+    W::Render: RenderBox + Sized + 'static,
+{
+    type Render = W::Render;
+
+    fn render_object_mut(&mut self) -> &mut W::Render {
+        self.child.get_mut().render_object_mut()
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<W::Render> {
+        self.child.get().render_object_ptr()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.handle.set(Some(ctx.handle()));
+
+        // SAFETY: `self.child` is our own slot.
+        unsafe { ctx.mount(&mut self.child) };
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        // SAFETY: `self.child` is our own slot.
+        unsafe { ctx.unmount(&mut self.child) };
+    }
+
+    fn rebuild(&mut self, ctx: &mut UpdateCtx<'_>) {
+        if let Some(widget) = self.pending.take() {
+            // SAFETY: `self.child` is our own slot.
+            unsafe { ctx.with_child(&mut self.child, |element, ctx| widget.update(ctx, element)) };
+        }
+    }
+
+    fn message(&mut self, ctx: &mut MessageCtx<'_>) {
+        self.pending = Some(ctx.consume::<W>());
+        ctx.request_rebuild();
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.child.get().describe(d)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::{Cell, RefCell};

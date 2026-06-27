@@ -8,7 +8,13 @@ pub use agui_core::key::{AnyKeyable, Keyable};
 
 use crate::{
     context::{CreateCtx, UpdateCtx},
-    prelude::{element::Element, render_object::RenderObjectPtr},
+    prelude::{
+        element::Element,
+        render_object::{
+            RenderBox, RenderObject, RenderObjectCell, RenderObjectPtr, SingleChildRenderObject,
+        },
+    },
+    render_object::RenderGraft,
     widget::Widget,
 };
 
@@ -33,32 +39,43 @@ impl<V, Child> Widget for Key<V, Child>
 where
     V: AnyKeyable,
     Child: Widget,
+    Child::Render: RenderBox + Sized,
 {
     type Element = KeyElement<V, <Child as Widget>::Element>;
 
-    type Render = <Child as Widget>::Render;
+    type Render = RenderGraft<<Child as Widget>::Render>;
 
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
-        KeyElement::new(self.value, self.child.create(ctx))
+        KeyElement {
+            value: self.value,
+            child: Slot::new(self.child.create(ctx)),
+            render: RenderObjectCell::new(RenderGraft::new()),
+        }
     }
 
     fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
         if element.value.dyn_eq(&self.value) {
-            // SAFETY: `self.child` is our own slot.
+            // SAFETY: `element.child` is the key element's own slot.
             unsafe {
-                ctx.with_child(&mut element.child, |element, ctx| {
-                    self.child.update(ctx, element);
+                ctx.with_child(&mut element.child, |child, ctx| {
+                    self.child.update(ctx, child);
                 });
             }
         } else {
             element.value = self.value;
+
+            // The anchor outlives the swap, so its captured boundary is still valid. Mark it so the freshly
+            // grafted child, which has never been laid out, is laid out next frame.
+            let scope = element.render.get().layout_scope();
+            ctx.mark_needs_layout(scope);
 
             // SAFETY: `element.child` is the key element's own slot.
             unsafe { ctx.unmount(&mut element.child) };
             let new_child = ctx.inflate(|ctx| self.child.create(ctx));
             *element.child.get_mut() = new_child;
             // SAFETY: `element.child` is the key element's own slot.
-            unsafe { ctx.mount(&mut element.child) };
+            let mounted = unsafe { ctx.mount(&mut element.child) };
+            element.render.get_mut().adopt_child(mounted);
         }
     }
 
@@ -67,43 +84,40 @@ where
     }
 }
 
-pub struct KeyElement<V, C> {
+pub struct KeyElement<V, C: Element> {
     value: V,
     child: Slot<C>,
+    render: RenderObjectCell<RenderGraft<C::Render>>,
 }
 
-impl<V, C> KeyElement<V, C> {
-    pub fn new(value: V, child: C) -> Self {
-        Self {
-            value,
-            child: Slot::new(child),
-        }
-    }
-}
-
-// SAFETY: upholds the Element lifecycle contract by only using the cursor child operations and forwarding
-// render resolution to its child.
+// SAFETY: manages its single child only through the cursor child operations, and resolves its render object
+// (the graft anchor) from its own `RenderObjectCell`.
 unsafe impl<V, C> Element for KeyElement<V, C>
 where
     V: AnyKeyable,
     C: Element,
+    C::Render: RenderBox + Sized,
 {
-    type Render = C::Render;
+    type Render = RenderGraft<C::Render>;
 
     fn render_object_mut(&mut self) -> &mut Self::Render {
-        self.child.get_mut().render_object_mut()
+        self.render.get_mut()
     }
 
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
-        self.child.get().render_object_ptr()
+        self.render.render_object_ptr()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
         // SAFETY: `self.child` is our own slot.
-        unsafe { ctx.mount(&mut self.child) };
+        let mounted = unsafe { ctx.mount(&mut self.child) };
+        let render = self.render.get_mut();
+        render.adopt_child(mounted);
+        render.attach(ctx);
     }
 
     fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
         // SAFETY: `self.child` is our own slot.
         unsafe { ctx.unmount(&mut self.child) };
     }

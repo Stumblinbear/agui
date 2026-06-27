@@ -132,7 +132,7 @@ pub struct RenderLayoutBuilder<F> {
 
     /// The element of the child built during layout. `None` until the first build.
     child: Option<BoxedSlot<<BoxedChild as Widget>::Element>>,
-    child_node: RenderNode<dyn RenderBox, Option<Size>>,
+    child_node: RenderNode<<BoxedChild as Widget>::Render, Option<Size>>,
 }
 
 impl<F: 'static> RenderObject for RenderLayoutBuilder<F> {

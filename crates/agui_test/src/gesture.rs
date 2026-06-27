@@ -1,4 +1,7 @@
-use agui::geometry::Offset;
+use agui::{
+    geometry::Offset,
+    prelude::{element::Widget, render_object::RenderBox},
+};
 
 pub use agui::input::pointer::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId};
 
@@ -10,14 +13,23 @@ use crate::tester::WidgetTester;
 /// [`move_by`](Self::move_by) or [`move_to`](Self::move_to) to drag, then [`up`](Self::up) to release
 /// or [`cancel`](Self::cancel) to abandon. While the pointer is held it keeps reaching the handlers it
 /// pressed on, even as it moves off them.
-pub struct TestGesture<'a> {
-    tester: &'a mut WidgetTester,
+pub struct TestGesture<'a, W: Widget> {
+    tester: &'a mut WidgetTester<W>,
     pointer: PointerId,
     position: Offset,
 }
 
-impl<'a> TestGesture<'a> {
-    pub(crate) fn new(tester: &'a mut WidgetTester, pointer: PointerId, position: Offset) -> Self {
+impl<'a, W> TestGesture<'a, W>
+where
+    W: Widget + 'static,
+    W::Element: 'static,
+    W::Render: RenderBox + Sized + 'static,
+{
+    pub(crate) fn new(
+        tester: &'a mut WidgetTester<W>,
+        pointer: PointerId,
+        position: Offset,
+    ) -> Self {
         Self {
             tester,
             pointer,

@@ -97,6 +97,10 @@ impl<Children: RenderChildren + 'static> MultiChildRenderObject for RenderFlex<C
     fn children_mut(&mut self) -> &mut Children {
         &mut self.children
     }
+
+    fn layout_scope(&self) -> LayoutScope {
+        self.layout_scope
+    }
 }
 
 impl<Children: RenderChildren + 'static> RenderObject for RenderFlex<Children> {
@@ -132,8 +136,13 @@ impl<Children: RenderChildren + 'static> RenderBox for RenderFlex<Children> {
         Size::ZERO
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, _: BoxConstraints) -> Size {
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.layout_scope = *ctx.scope();
+
+        // Stub: lay each child out so a structural change actually re-lays them. Real flex measurement,
+        // child constraints, and positioning are still to come (see the TODO on finishing Flex/Column/Row).
+        self.children
+            .for_each_mut(&mut |child| child.layout(ctx, constraints));
 
         Size::ZERO
     }

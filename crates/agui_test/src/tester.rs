@@ -1,3 +1,6 @@
+use std::cell::Cell;
+use std::marker::PhantomData;
+use std::rc::Rc;
 use std::time::Duration;
 
 use agui::{
@@ -8,20 +11,20 @@ use agui::{
         render_object::{BoxConstraints, HitTestResult, RenderBox},
     },
     scheduling::Vsync,
-    test_harness::TestCtx,
+    test_harness::{HarnessRoot, TestCtx},
     view::ViewHandle,
 };
 
 use crate::gesture::{PointerDispatcher, PointerEvent, PointerEventKind, PointerId, TestGesture};
 
-/// A harness for testing a widget tree.
+/// A harness for testing a widget tree rooted at a `W`.
 ///
 /// Build one with [`mount`](Self::mount), give it a surface size with [`resize`](Self::resize), then
-/// advance it with [`pump`](Self::pump). Read back the result through a [`Probe`](crate::Probe) placed
-/// in the tree or through the composited [`scene`](Self::scene), and drive pointer input by coordinate
-/// with [`tap_at`](Self::tap_at), [`drag_from`](Self::drag_from), and
-/// [`start_gesture`](Self::start_gesture).
-pub struct WidgetTester {
+/// advance it with [`pump`](Self::pump). Re-drive the whole tree against a new root widget with
+/// [`rebuild`](Self::rebuild). Read back the result through a [`Probe`](crate::Probe) placed in the tree or
+/// through the composited [`scene`](Self::scene), and drive pointer input by coordinate with
+/// [`tap_at`](Self::tap_at), [`drag_from`](Self::drag_from), and [`start_gesture`](Self::start_gesture).
+pub struct WidgetTester<W: Widget> {
     owner: PipelineOwner,
     view: ViewHandle,
 
@@ -32,19 +35,24 @@ pub struct WidgetTester {
 
     dispatcher: PointerDispatcher,
     next_pointer: u64,
+
+    /// The reconcilable root's handle, captured at mount, for re-driving it on [`rebuild`](Self::rebuild).
+    root: Rc<Cell<Option<NodeHandle>>>,
+    _root: PhantomData<fn() -> W>,
 }
 
-impl WidgetTester {
+impl<W> WidgetTester<W>
+where
+    W: Widget + 'static,
+    W::Element: 'static,
+    W::Render: RenderBox + Sized + 'static,
+{
     /// Mounts `widget` as the root of a fresh tree, ready to be sized and pumped.
-    pub fn mount<V>(widget: V) -> Self
-    where
-        V: Widget + 'static,
-        V::Element: 'static,
-        V::Render: RenderBox + Sized + 'static,
-    {
+    pub fn mount(widget: W) -> Self {
         let mut ctx = TestCtx::new();
 
-        let (owner, view) = ctx.mount_view(widget);
+        let root = Rc::new(Cell::new(None));
+        let (owner, view) = ctx.mount_view(HarnessRoot::new(widget, Rc::clone(&root)));
 
         Self {
             owner,
@@ -57,7 +65,25 @@ impl WidgetTester {
 
             dispatcher: PointerDispatcher::new(),
             next_pointer: 0,
+
+            root,
+            _root: PhantomData,
         }
+    }
+
+    /// Reconciles the tree against `widget` as a fresh root, then produces a frame, so a test can observe how
+    /// the tree responds to a rebuild.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root has not mounted, which never happens for a tester built by [`mount`](Self::mount).
+    pub fn rebuild(&mut self, widget: W) {
+        let handle = self
+            .root
+            .get()
+            .expect("the root captured its handle at mount");
+        self.owner.dispatch_message(handle, Box::new(widget));
+        self.pump(Duration::ZERO);
     }
 
     /// Lays the root out as tightly constrained to `size`, repainting it on the next pump.
@@ -159,7 +185,7 @@ impl WidgetTester {
     }
 
     /// Presses a pointer at `position` and returns a gesture that moves and releases it step by step.
-    pub fn start_gesture(&mut self, position: Offset) -> TestGesture<'_> {
+    pub fn start_gesture(&mut self, position: Offset) -> TestGesture<'_, W> {
         let pointer = self.allocate_pointer();
         self.send_pointer(pointer, PointerEventKind::Down, position);
 

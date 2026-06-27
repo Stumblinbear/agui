@@ -14,6 +14,7 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode, DiagnosticsNodeBuilder},
     element::Element,
     key::AnyKeyable,
+    pipeline::render_pipeline::LayoutScope,
     render_object::{
         SingleChildRenderObject,
         box_layout::RenderBox,
@@ -147,6 +148,7 @@ impl<C: Element<Render = dyn RenderBox>> MultiChildElement<C> {
         ctx: &mut UpdateCtx<'_>,
         new: Vec<CV>,
         render_children: &mut Vec<RenderNode<dyn RenderBox>>,
+        layout_scope: LayoutScope,
     ) where
         CV: Widget<Element = C> + 'static,
     {
@@ -154,7 +156,7 @@ impl<C: Element<Render = dyn RenderBox>> MultiChildElement<C> {
             .into_iter()
             .zip(std::mem::take(render_children))
             .collect();
-        let (elements, renders) = reconcile::<C, CV>(ctx, old, new);
+        let (elements, renders) = reconcile::<C, CV>(ctx, old, new, layout_scope);
         self.children = elements;
         *render_children = renders;
     }
@@ -200,6 +202,7 @@ fn reconcile<C, CV>(
     ctx: &mut UpdateCtx<'_>,
     old: Vec<Pair<C>>,
     new: Vec<CV>,
+    layout_scope: LayoutScope,
 ) -> (Vec<KeyedChild<C>>, Vec<RenderNode<dyn RenderBox>>)
 where
     C: Element<Render = dyn RenderBox>,
@@ -212,6 +215,8 @@ where
 
     // No children now: unmount every old child.
     if new_len == 0 {
+        ctx.mark_needs_layout(layout_scope);
+
         for mut pair in old {
             unmount_pair(ctx, &mut pair);
         }
@@ -221,6 +226,8 @@ where
 
     // No children before: materialize all of them.
     if old_len == 0 {
+        ctx.mark_needs_layout(layout_scope);
+
         for child in new {
             out.push(create(ctx, child));
         }
@@ -239,7 +246,11 @@ where
         return split(reuse_all_in_place(ctx, old, new));
     }
 
-    // Mark the enclosing boundary here so the new sibling order is re-walked into the semantics tree.
+    // The sibling list changed structurally. Re-lay the enclosing boundary (a grafted child is unlaid, and the
+    // mark must come from here because, unlike semantics, layout has no per-child `attach`/`detach` hook to do
+    // it). Then re-walk the new order into semantics; add/remove there are already marked via `attach`/`detach`,
+    // so only the reorder needs this.
+    ctx.mark_needs_layout(layout_scope);
     ctx.mark_needs_semantics_update();
 
     let mut old_slots: Vec<Option<Pair<C>>> = old.into_iter().map(Some).collect();

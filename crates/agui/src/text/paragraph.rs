@@ -13,7 +13,7 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     paint::{Canvas, command::GlyphInstance},
-    pipeline::render_pipeline::DeferredLayoutScope,
+    pipeline::render_pipeline::{DeferredLayoutScope, LayoutScope},
     render_object::{
         MultiChildRenderObject, RenderObject,
         box_layout::{BoxConstraints, RenderBox},
@@ -326,6 +326,12 @@ impl MultiChildRenderObject for RenderParagraph<dyn RenderBox> {
 
     fn children_mut(&mut self) -> &mut Vec<RenderNode<dyn RenderBox>> {
         &mut self.children
+    }
+
+    // Detached: a paragraph's inline children are reconciled by its own element, which marks its layout boundary
+    // directly, not through the generic multi-child reconcile that reads this.
+    fn layout_scope(&self) -> LayoutScope {
+        LayoutScope::detached()
     }
 }
 

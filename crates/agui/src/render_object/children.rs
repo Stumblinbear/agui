@@ -1,3 +1,4 @@
+use crate::pipeline::render_pipeline::LayoutScope;
 use crate::render_object::{
     RenderObject,
     box_layout::RenderBox,
@@ -32,6 +33,10 @@ pub trait MultiChildRenderObject: RenderObject {
 
     /// The child render storage, for the element to reconcile against a new children list.
     fn children_mut(&mut self) -> &mut Self::Children;
+
+    /// The relayout boundary this object was laid out under at its most recent layout, for the element to mark
+    /// when the child list changes structurally, since a freshly grafted child has not been laid out.
+    fn layout_scope(&self) -> LayoutScope;
 }
 
 /// A flattened, ordered view of the child render objects a [`MultiChildRenderObject`] holds. The
