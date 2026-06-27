@@ -7,6 +7,7 @@
 )]
 
 use std::fmt::Write as _;
+use std::time::Duration;
 use std::{
     fs::File,
     io::{BufReader, BufWriter},
@@ -14,10 +15,11 @@ use std::{
 };
 
 use agui::{
-    paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
+    paint::compositing::CompositedFrame,
     prelude::{element::*, render_object::*},
-    test_harness::TestCtx,
 };
+
+use crate::WidgetTester;
 
 #[cfg(feature = "gpu")]
 pub use gpu::{Texture, render_to_image};
@@ -64,8 +66,9 @@ pub fn run_golden<W>(
     widget: W,
     renderers: &mut [Box<dyn GoldenRenderer>],
 ) where
-    W: Widget,
-    W::Render: RenderBox,
+    W: Widget + 'static,
+    W::Element: 'static,
+    W::Render: RenderBox + Sized + 'static,
 {
     let frame = layout_to_frame(widget, width, height);
 
@@ -87,18 +90,20 @@ pub fn run_golden<W>(
 /// Lays `widget` out under tight `width` by `height` constraints and composes its paint into a frame.
 fn layout_to_frame<W>(widget: W, width: u32, height: u32) -> CompositedFrame
 where
-    W: Widget,
-    W::Render: RenderBox,
+    W: Widget + 'static,
+    W::Element: 'static,
+    W::Render: RenderBox + Sized + 'static,
 {
-    let mut render = TestCtx::new().laid_out(
-        widget,
-        BoxConstraints::new(width as f32, width as f32, height as f32, height as f32),
-    );
+    let mut tester = WidgetTester::mount(widget);
+    tester.resize_with(BoxConstraints::new(
+        width as f32,
+        width as f32,
+        height as f32,
+        height as f32,
+    ));
+    tester.pump(Duration::ZERO);
 
-    let root = LayerHandle::new(OffsetLayer::new());
-    PaintCtx::paint(&root, |ctx| render.paint(ctx, Offset::ZERO));
-
-    Compositor::compose(&root)
+    tester.composite_frame()
 }
 
 /// Asserts every pair of rendered images agrees within [`PARITY_FRACTION`], comparing each against the

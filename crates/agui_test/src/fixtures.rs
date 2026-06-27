@@ -31,22 +31,15 @@ impl Widget for TestBox {
 
     type Render = RenderTestBox;
 
-    fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderTestBox>, Self::Render) {
-        (
-            LeafElement::new(),
-            RenderTestBox {
-                size: self.size,
-                color: self.color,
-            },
-        )
+    fn create(self, _: &mut CreateCtx) -> LeafElement<RenderTestBox> {
+        LeafElement::new(RenderTestBox {
+            size: self.size,
+            color: self.color,
+        })
     }
 
-    fn update(
-        self,
-        _: &mut LeafElement<RenderTestBox>,
-        render_object: &mut Self::Render,
-        _: &mut UpdateCtx,
-    ) {
+    fn update(self, _: &mut UpdateCtx, element: &mut LeafElement<RenderTestBox>) {
+        let render_object = element.render_object_mut();
         render_object.size = self.size;
         render_object.color = self.color;
     }
@@ -59,9 +52,11 @@ pub struct RenderTestBox {
 }
 
 impl RenderObject for RenderTestBox {
-    fn mount(&mut self, _: &mut MountCtx) {}
+    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
 
-    fn unmount(&mut self, _: &mut MountCtx) {}
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>().finish()
+    }
 }
 
 impl RenderBox for RenderTestBox {
@@ -161,23 +156,16 @@ impl Widget for IntrinsicBox {
 
     type Render = RenderIntrinsicBox;
 
-    fn create(self, _: &mut UpdateCtx) -> (LeafElement<RenderIntrinsicBox>, Self::Render) {
-        (
-            LeafElement::new(),
-            RenderIntrinsicBox {
-                size: self.size,
-                min: self.min,
-                max: self.max,
-            },
-        )
+    fn create(self, _: &mut CreateCtx) -> LeafElement<RenderIntrinsicBox> {
+        LeafElement::new(RenderIntrinsicBox {
+            size: self.size,
+            min: self.min,
+            max: self.max,
+        })
     }
 
-    fn update(
-        self,
-        _: &mut LeafElement<RenderIntrinsicBox>,
-        render_object: &mut Self::Render,
-        _: &mut UpdateCtx,
-    ) {
+    fn update(self, _: &mut UpdateCtx, element: &mut LeafElement<RenderIntrinsicBox>) {
+        let render_object = element.render_object_mut();
         render_object.size = self.size;
         render_object.min = self.min;
         render_object.max = self.max;
@@ -192,9 +180,11 @@ pub struct RenderIntrinsicBox {
 }
 
 impl RenderObject for RenderIntrinsicBox {
-    fn mount(&mut self, _: &mut MountCtx) {}
+    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
 
-    fn unmount(&mut self, _: &mut MountCtx) {}
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>().finish()
+    }
 }
 
 impl RenderBox for RenderIntrinsicBox {

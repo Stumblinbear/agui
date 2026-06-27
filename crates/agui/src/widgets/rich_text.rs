@@ -1,4 +1,7 @@
-use crate::prelude::{element::*, render_object::*};
+use crate::{
+    prelude::{element::*, render_object::*},
+    widget::ChildrenElement,
+};
 
 /// A widget that lays out a tree of styled spans, with inline widgets flowing alongside the text.
 ///

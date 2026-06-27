@@ -59,11 +59,13 @@ pub mod prelude {
     }
 
     pub mod element {
+        pub use agui_core::tree::NodeHandle;
+
         pub use crate::{
             context::{BuildCtx, CreateCtx, MessageCtx, UpdateCtx},
             element::{AnyElement, Element, LeafElement, SingleChildElement, node::ElementNode},
             scheduling::TaskHandle,
-            widget::{ChildrenElement, Widget, WidgetSequence},
+            widget::Widget,
         };
 
         pub use super::{shared::*, unit::*};

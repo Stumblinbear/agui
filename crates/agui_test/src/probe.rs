@@ -8,7 +8,6 @@ use typed_floats::{Positive, PositiveFinite};
 
 #[derive(Default)]
 struct ProbeState {
-    target: Option<RoutingTarget>,
     constraints: Option<BoxConstraints>,
     size: Option<Size>,
     offset: Option<Offset>,
@@ -20,10 +19,9 @@ struct ProbeState {
 ///
 /// Attach it with [`wrap`](Self::wrap); it then records what its widget was asked to do: the
 /// constraints it was laid out under, the size it took, the offset it painted at, and how many times
-/// it was laid out and painted. It also captures the widget's routing path, so a test can dispatch to
-/// it without naming the path by hand. A probe reflects only what has happened so far:
-/// [`size`](Self::size), [`constraints`](Self::constraints), [`offset`](Self::offset), and
-/// [`path`](Self::path) panic when asked for something that has not happened yet.
+/// it was laid out and painted. A probe reflects only what has happened so far: [`size`](Self::size),
+/// [`constraints`](Self::constraints), and [`offset`](Self::offset) panic when asked for something that
+/// has not happened yet.
 #[derive(Clone, Default)]
 pub struct Probe {
     state: Rc<RefCell<ProbeState>>,
@@ -88,19 +86,6 @@ impl Probe {
             .offset
             .expect("the probed widget has not been painted")
     }
-
-    /// The routing target that addresses the probed widget for dispatch.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the probed widget has not been mounted.
-    pub fn target(&self) -> RoutingTarget {
-        self.state
-            .borrow()
-            .target
-            .clone()
-            .expect("the probed widget has not been mounted")
-    }
 }
 
 /// The widget a [`Probe`] splices into the tree. It presents its child unchanged and records the
@@ -113,65 +98,57 @@ pub struct Spy<Child> {
 impl<Child> Widget for Spy<Child>
 where
     Child: Widget,
-    Child::Render: RenderBox,
+    Child::Render: RenderBox + Sized,
 {
     type Element = SingleChildElement<Child::Element, RenderSpy<Child::Render>>;
 
     type Render = RenderSpy<Child::Render>;
 
-    fn create(self, ctx: &mut UpdateCtx) -> (Self::Element, Self::Render) {
-        self.state.borrow_mut().target = Some(ctx.routing_target());
-
-        let (element, child_render) = SingleChildElement::new(self.child, ctx);
-
-        (
-            element,
-            RenderSpy {
-                state: self.state,
-                child: RenderNode::new(child_render),
-            },
-        )
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(ctx, self.child, RenderSpy::new(self.state))
     }
 
-    fn update(
-        self,
-        element: &mut Self::Element,
-        render_object: &mut Self::Render,
-        ctx: &mut UpdateCtx,
-    ) {
-        element.update(self.child, &mut render_object.child.object, ctx);
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        element.update(ctx, self.child);
     }
 }
 
 /// The render object of a [`Spy`]: it lays out and paints its child unchanged, recording the result.
-pub struct RenderSpy<Child> {
+pub struct RenderSpy<Child: ?Sized> {
     state: Rc<RefCell<ProbeState>>,
     child: RenderNode<Child>,
 }
 
-impl<Child> SingleChildRenderObject for RenderSpy<Child> {
+impl<Child: ?Sized> RenderSpy<Child> {
+    fn new(state: Rc<RefCell<ProbeState>>) -> Self {
+        Self {
+            state,
+            child: RenderNode::new(()),
+        }
+    }
+}
+
+impl<Child: RenderBox + ?Sized> RenderObject for RenderSpy<Child> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.child.describe(d))
+            .finish()
+    }
+}
+
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderSpy<Child> {
     type Child = Child;
 
-    fn with_child<R>(&self, f: impl FnOnce(&Child) -> R) -> R {
-        f(&self.child.object)
-    }
-
-    fn with_child_mut<R>(&mut self, f: impl FnOnce(&mut Child) -> R) -> R {
-        f(&mut self.child.object)
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
     }
 }
 
-impl<Child: RenderBox> RenderObject for RenderSpy<Child> {
-    fn mount(&mut self, ctx: &mut MountCtx) {
-        self.child.mount(ctx);
-    }
-
-    fn unmount(&mut self, ctx: &mut MountCtx) {
-        self.child.unmount(ctx);
-    }
-}
-
-impl<Child: RenderBox> RenderBox for RenderSpy<Child> {
+impl<Child: RenderBox + ?Sized> RenderBox for RenderSpy<Child> {
     fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.child.min_intrinsic_width(height)
     }

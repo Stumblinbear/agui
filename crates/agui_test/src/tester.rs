@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use agui::{
-    paint::scene::Scene,
+    paint::compositing::CompositedFrame,
     pipeline::PipelineOwner,
     prelude::{
         element::*,
@@ -39,7 +39,8 @@ impl WidgetTester {
     pub fn mount<V>(widget: V) -> Self
     where
         V: Widget + 'static,
-        V::Render: RenderBox + 'static,
+        V::Element: 'static,
+        V::Render: RenderBox + Sized + 'static,
     {
         let mut ctx = TestCtx::new();
 
@@ -79,8 +80,8 @@ impl WidgetTester {
         self.ctx.poll();
 
         let messages = self.ctx.messages().collect::<Vec<_>>();
-        for (path, message) in messages {
-            self.owner.dispatch_message(&path, message);
+        for (handle, message) in messages {
+            self.owner.dispatch_message(handle, message);
         }
 
         self.owner.flush_build(&mut self.ctx.scheduler());
@@ -120,9 +121,9 @@ impl WidgetTester {
         self.ctx.run_tasks_to_completion();
     }
 
-    /// The scene composited from the most recent paint.
-    pub fn scene(&self) -> Scene {
-        self.view.composite_frame().rasterize()
+    /// The frame composited from the most recent paint, before rasterization.
+    pub fn composite_frame(&self) -> CompositedFrame {
+        self.view.composite_frame()
     }
 
     /// Captures the element tree as a diagnostics snapshot.
@@ -165,12 +166,10 @@ impl WidgetTester {
         TestGesture::new(self, pointer, position)
     }
 
-    /// Dispatches `message` to the element at `path`, marking it to rebuild on the next pump if it asks
-    /// to.
-    pub fn send<M: 'static>(&mut self, path: &[RoutingId], message: M) {
-        let bytes = RoutingId::encode_path(path.iter().copied());
-        let target = RoutingTarget::new(self.owner.root_id(), bytes);
-        self.owner.dispatch_message(&target, Box::new(message));
+    /// Dispatches `message` to the element at `handle`, marking it to rebuild on the next pump if it asks
+    /// to. A message addressed to a handle whose element is gone is dropped.
+    pub fn send<M: 'static>(&mut self, handle: NodeHandle, message: M) {
+        self.owner.dispatch_message(handle, Box::new(message));
     }
 
     /// A clone of the frame-callback registry the tester ticks each pump, for handing to a render

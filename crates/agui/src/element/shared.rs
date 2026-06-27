@@ -32,7 +32,10 @@ pub struct SingleChildElement<C, R> {
 impl<C: Element, R> SingleChildElement<C, R> {
     /// Builds the element from `child` and the `render` object the widget produced. The render object's child
     /// edge is left unwired until mount, when the child is pinned.
-    pub fn new<CV: Widget<Element = C>>(ctx: &mut CreateCtx, child: CV, render: R) -> Self {
+    pub fn new<Child>(ctx: &mut CreateCtx, child: Child, render: R) -> Self
+    where
+        Child: Widget<Element = C>,
+    {
         let child_element = child.create(ctx);
 
         SingleChildElement {
@@ -42,9 +45,9 @@ impl<C: Element, R> SingleChildElement<C, R> {
     }
 
     /// Reconciles the child element against `child`.
-    pub fn update<CV>(&mut self, ctx: &mut UpdateCtx<'_>, child: CV)
+    pub fn update<Child>(&mut self, ctx: &mut UpdateCtx<'_>, child: Child)
     where
-        CV: Widget<Element = C>,
+        Child: Widget<Element = C>,
     {
         // SAFETY: `self.child` is our own slot.
         unsafe {

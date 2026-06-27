@@ -1,7 +1,10 @@
 use bon::Builder;
 use typed_floats::{Positive, PositiveFinite};
 
-use crate::prelude::{element::*, render_object::*};
+use crate::{
+    prelude::{element::*, render_object::*},
+    widget::{ChildrenElement, WidgetSequence},
+};
 
 use super::{CrossAxisAlignment, MainAxisAlignment, MainAxisSize, VerticalDirection};
 
