@@ -312,9 +312,9 @@ impl CompositedFrame {
                     }
                 }
 
-                CompositedNode::External { .. } => {
-                    debug_assert!(false, "rasterize cannot place a system-owned surface");
-                }
+                // A system-owned surface composites separately, so it contributes nothing to a rasterized
+                // scene.
+                CompositedNode::External { .. } => {}
             }
         }
     }

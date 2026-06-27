@@ -1,6 +1,6 @@
 //! Conformance checks for the box-sizing contracts every [`RenderBox`] must satisfy.
 
-use std::time::Duration;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use agui::{
     paint::{
@@ -9,11 +9,10 @@ use agui::{
         scene::Scene,
     },
     prelude::{element::*, render_object::*},
-    test_harness::TestCtx,
 };
 use typed_floats::{Positive, PositiveFinite};
 
-use crate::WidgetTester;
+use crate::{WidgetTester, fixtures::IntrinsicBox};
 
 /// Checks that a widget's render object obeys the box-sizing contracts.
 ///
@@ -29,8 +28,8 @@ use crate::WidgetTester;
 /// space, and [`width_independent_of_height`](Self::width_independent_of_height) and
 /// [`height_independent_of_width`](Self::height_independent_of_width) for one whose size on one axis is
 /// unaffected by the other. Set the sampled extents and constraints with
-/// [`extents`](Self::extents) and [`constraints`](Self::constraints), then [`run`](Self::run) it
-/// against a widget.
+/// [`extents`](Self::extents) and [`constraints`](Self::constraints), then run it against a box with
+/// [`single_child`](Self::single_child) or [`leaf`](Self::leaf).
 #[allow(clippy::struct_excessive_bools)]
 pub struct BoxSizingCheck {
     extents: Vec<Positive<f32>>,
@@ -200,6 +199,27 @@ impl BoxSizingCheck {
         self
     }
 
+    /// Runs the box-sizing battery against a box whose size or intrinsics derive from a child, wrapping a
+    /// known-intrinsics [`IntrinsicBox`] the closure places inside the box.
+    pub fn single_child<W>(&self, make: impl Fn(IntrinsicBox) -> W)
+    where
+        W: Widget + 'static,
+        W::Element: 'static,
+        W::Render: RenderBox + Sized + 'static,
+    {
+        self.check(|| make(IntrinsicBox::new(Size::new(40, 30))));
+    }
+
+    /// Runs the box-sizing battery against a box that sizes from itself rather than from a child.
+    pub fn leaf<W>(&self, make: impl Fn() -> W)
+    where
+        W: Widget + 'static,
+        W::Element: 'static,
+        W::Render: RenderBox + Sized + 'static,
+    {
+        self.check(make);
+    }
+
     /// Checks the render object built by `widget` against the configured samples.
     ///
     /// `widget` is a factory called once per render object the checks need, since building a render
@@ -208,194 +228,56 @@ impl BoxSizingCheck {
     /// # Panics
     ///
     /// Panics on the first contract the render object breaks.
-    pub fn run<W>(&self, widget: impl Fn() -> W)
+    fn check<W>(&self, widget: impl Fn() -> W)
     where
         W: Widget + 'static,
         W::Element: 'static,
         W::Render: RenderBox + Sized + 'static,
     {
-        let make = || TestCtx::new().create(widget());
+        let config = Rc::new(self.config());
+        let output = Rc::new(RefCell::new(Output::default()));
 
-        {
-            let mut probe = make();
-            self.check_intrinsic_ordering(probe.render_object_mut());
-        }
-
-        for &constraints in &self.constraints {
-            let measured = make().render_object_mut().measure(constraints);
-            let laid_out = make()
-                .render_object_mut()
-                .layout(&mut TestCtx::new().layout_ctx(), constraints);
-
-            assert!(
-                measured == laid_out,
-                "measure reported {measured:?} but layout produced {laid_out:?} under {constraints:?}; \
-                 measure must report the size layout produces"
-            );
-
-            satisfies(measured, constraints);
-            satisfies(laid_out, constraints);
-        }
-
-        self.check_baselines(make);
-        self.check_stable_across_layout(make);
-        self.check_layout_idempotent(make);
+        let mut tester = WidgetTester::mount(SizingProbe {
+            config: Rc::clone(&config),
+            output: Rc::clone(&output),
+            child: widget(),
+        });
+        tester.resize_with(BoxConstraints::loose(Size::new(500, 500)));
+        tester.pump(Duration::ZERO);
 
         if !self.allow_overflow {
-            self.check_no_overflow_at_min(&widget);
-        }
-
-        if self.shrink_wraps_width {
-            self.check_shrink_wraps(make, Axis::Horizontal);
-        }
-
-        if self.shrink_wraps_height {
-            self.check_shrink_wraps(make, Axis::Vertical);
-        }
-
-        if self.width_independent_of_height {
-            let mut probe = make();
-            self.check_independent(probe.render_object_mut(), Axis::Horizontal);
-        }
-
-        if self.height_independent_of_width {
-            let mut probe = make();
-            self.check_independent(probe.render_object_mut(), Axis::Vertical);
-        }
-
-        if self.fills_width {
-            self.check_fills(make, Axis::Horizontal);
-        }
-
-        if self.fills_height {
-            self.check_fills(make, Axis::Vertical);
+            self.check_no_overflow_at_min(&output.borrow(), &widget);
         }
     }
 
-    fn check_baselines<E>(&self, make: impl Fn() -> E)
-    where
-        E: Element,
-        E::Render: RenderBox + Sized,
-    {
-        for &constraints in &self.constraints {
-            for baseline in [TextBaseline::Alphabetic, TextBaseline::Ideographic] {
-                let dry = make()
-                    .render_object_mut()
-                    .measure_baseline(constraints, baseline);
-
-                let mut element = make();
-                let render = element.render_object_mut();
-                render.layout(&mut TestCtx::new().layout_ctx(), constraints);
-                let laid_out = render.distance_to_baseline(baseline);
-
-                assert!(
-                    dry == laid_out,
-                    "measure_baseline({baseline:?}) reported {dry:?} but distance_to_baseline reported \
-                     {laid_out:?} after layout under {constraints:?}; the dry baseline must match the \
-                     laid-out baseline",
-                );
-            }
+    fn config(&self) -> Config {
+        Config {
+            extents: self.extents.clone(),
+            constraints: self.constraints.clone(),
+            shrink_wraps_width: self.shrink_wraps_width,
+            shrink_wraps_height: self.shrink_wraps_height,
+            width_independent_of_height: self.width_independent_of_height,
+            height_independent_of_width: self.height_independent_of_width,
+            fills_width: self.fills_width,
+            fills_height: self.fills_height,
         }
     }
 
-    fn check_stable_across_layout<E>(&self, make: impl Fn() -> E)
-    where
-        E: Element,
-        E::Render: RenderBox + Sized,
-    {
-        let mut element = make();
-
-        let intrinsics_before = self.intrinsic_snapshot(element.render_object_mut());
-        let measures_before = self.measure_snapshot(element.render_object_mut());
-
-        // Laying out may populate internal state; the queries above must not change because of it.
-        for &constraints in &self.constraints {
-            element
-                .render_object_mut()
-                .layout(&mut TestCtx::new().layout_ctx(), constraints);
-        }
-
-        let intrinsics_after = self.intrinsic_snapshot(element.render_object_mut());
-        let measures_after = self.measure_snapshot(element.render_object_mut());
-
-        assert!(
-            intrinsics_before == intrinsics_after,
-            "an intrinsic changed after the box was laid out: before {intrinsics_before:?}, after \
-             {intrinsics_after:?}; intrinsics must not depend on layout state",
-        );
-
-        assert!(
-            measures_before == measures_after,
-            "measure changed after the box was laid out: before {measures_before:?}, after \
-             {measures_after:?}; measure must not depend on layout state",
-        );
-    }
-
-    fn check_layout_idempotent<E>(&self, make: impl Fn() -> E)
-    where
-        E: Element,
-        E::Render: RenderBox + Sized,
-    {
-        for &constraints in &self.constraints {
-            let mut element = make();
-            let render = element.render_object_mut();
-
-            let first = render.layout(&mut TestCtx::new().layout_ctx(), constraints);
-            let second = render.layout(&mut TestCtx::new().layout_ctx(), constraints);
-
-            assert!(
-                first == second,
-                "layout produced {first:?} then {second:?} for the same constraints {constraints:?}; \
-                 laying out twice must produce the same size",
-            );
-        }
-    }
-
-    fn intrinsic_snapshot(&self, render: &impl RenderBox) -> Vec<Option<PositiveFinite<f32>>> {
-        let mut snapshot = Vec::new();
-
-        for &extent in &self.extents {
-            snapshot.push(render.min_intrinsic_width(extent));
-            snapshot.push(render.max_intrinsic_width(extent));
-            snapshot.push(render.min_intrinsic_height(extent));
-            snapshot.push(render.max_intrinsic_height(extent));
-        }
-
-        snapshot
-    }
-
-    fn measure_snapshot(&self, render: &impl RenderBox) -> Vec<Size> {
-        self.constraints
-            .iter()
-            .map(|&constraints| render.measure(constraints))
-            .collect()
-    }
-
-    fn check_no_overflow_at_min<W>(&self, make: impl Fn() -> W)
+    fn check_no_overflow_at_min<W>(&self, output: &Output, make: impl Fn() -> W)
     where
         W: Widget + 'static,
         W::Element: 'static,
         W::Render: RenderBox + Sized + 'static,
     {
-        for &extent in &self.extents {
-            if !extent.get().is_finite() {
-                continue;
-            }
-
-            if let Some(min_width) = TestCtx::new()
-                .create(make())
-                .render_object_mut()
-                .min_intrinsic_width(extent)
-            {
+        for &(extent, min_width) in &output.min_widths {
+            if let Some(min_width) = min_width {
                 let size = Size::new(min_width.get(), extent.get());
                 Self::assert_paints_within(&make, BoxConstraints::tight(size));
             }
+        }
 
-            if let Some(min_height) = TestCtx::new()
-                .create(make())
-                .render_object_mut()
-                .min_intrinsic_height(extent)
-            {
+        for &(extent, min_height) in &output.min_heights {
+            if let Some(min_height) = min_height {
                 let size = Size::new(extent.get(), min_height.get());
                 Self::assert_paints_within(&make, BoxConstraints::tight(size));
             }
@@ -439,12 +321,182 @@ impl BoxSizingCheck {
              allow_overflow()",
         );
     }
+}
 
-    fn check_intrinsic_ordering(&self, render: &impl RenderBox) {
+/// The configured samples and per-axis expectations, shared into the probe that runs the battery.
+#[allow(clippy::struct_excessive_bools)]
+struct Config {
+    extents: Vec<Positive<f32>>,
+    constraints: Vec<BoxConstraints>,
+    shrink_wraps_width: bool,
+    shrink_wraps_height: bool,
+    width_independent_of_height: bool,
+    height_independent_of_width: bool,
+    fills_width: bool,
+    fills_height: bool,
+}
+
+/// What the probe records from inside its layout for the checks that run afterward through a real paint:
+/// the minimum intrinsic on each axis at each finite extent, keyed by that extent.
+#[derive(Default)]
+struct Output {
+    min_widths: Vec<(Positive<f32>, Option<PositiveFinite<f32>>)>,
+    min_heights: Vec<(Positive<f32>, Option<PositiveFinite<f32>>)>,
+}
+
+impl Config {
+    /// Runs every layout-phase contract against `child`, the wired render object the probe holds, using
+    /// the real `ctx` the pipeline handed the probe. Records the minimum intrinsics for the overflow
+    /// check that runs later under a real paint.
+    fn run_battery<C: RenderBox + ?Sized>(
+        &self,
+        child: &mut RenderNode<C>,
+        ctx: &mut LayoutCtx,
+        output: &mut Output,
+    ) {
+        self.check_intrinsic_ordering(child);
+
+        // Snapshot the dry queries before anything is laid out, so the comparison after layout catches an
+        // intrinsic or measure that depends on layout state.
+        let intrinsics_before = self.intrinsic_snapshot(child);
+        let measures_before = self.measure_snapshot(child);
+
+        for &extent in &self.extents {
+            if extent.get().is_finite() {
+                output
+                    .min_widths
+                    .push((extent, child.min_intrinsic_width(extent)));
+                output
+                    .min_heights
+                    .push((extent, child.min_intrinsic_height(extent)));
+            }
+        }
+
+        self.check_layout_idempotent(child, ctx);
+
+        for &constraints in &self.constraints {
+            let measured = child.measure(constraints);
+            let laid_out = child.layout_and_get_size(ctx, constraints);
+
+            assert!(
+                measured == laid_out,
+                "measure reported {measured:?} but layout produced {laid_out:?} under {constraints:?}; \
+                 measure must report the size layout produces"
+            );
+
+            satisfies(measured, constraints);
+            satisfies(laid_out, constraints);
+        }
+
+        self.check_baselines(child, ctx);
+
+        let intrinsics_after = self.intrinsic_snapshot(child);
+        let measures_after = self.measure_snapshot(child);
+
+        assert!(
+            intrinsics_before == intrinsics_after,
+            "an intrinsic changed after the box was laid out: before {intrinsics_before:?}, after \
+             {intrinsics_after:?}; intrinsics must not depend on layout state",
+        );
+
+        assert!(
+            measures_before == measures_after,
+            "measure changed after the box was laid out: before {measures_before:?}, after \
+             {measures_after:?}; measure must not depend on layout state",
+        );
+
+        if self.shrink_wraps_width {
+            self.check_shrink_wraps(child, ctx, Axis::Horizontal);
+        }
+
+        if self.shrink_wraps_height {
+            self.check_shrink_wraps(child, ctx, Axis::Vertical);
+        }
+
+        if self.width_independent_of_height {
+            self.check_independent(child, Axis::Horizontal);
+        }
+
+        if self.height_independent_of_width {
+            self.check_independent(child, Axis::Vertical);
+        }
+
+        if self.fills_width {
+            self.check_fills(child, ctx, Axis::Horizontal);
+        }
+
+        if self.fills_height {
+            self.check_fills(child, ctx, Axis::Vertical);
+        }
+    }
+
+    fn check_baselines<C: RenderBox + ?Sized>(
+        &self,
+        child: &mut RenderNode<C>,
+        ctx: &mut LayoutCtx,
+    ) {
+        for &constraints in &self.constraints {
+            for baseline in [TextBaseline::Alphabetic, TextBaseline::Ideographic] {
+                let dry = child.measure_baseline(constraints, baseline);
+
+                child.layout_and_get_size(ctx, constraints);
+                let laid_out = child.distance_to_baseline(baseline);
+
+                assert!(
+                    dry == laid_out,
+                    "measure_baseline({baseline:?}) reported {dry:?} but distance_to_baseline reported \
+                     {laid_out:?} after layout under {constraints:?}; the dry baseline must match the \
+                     laid-out baseline",
+                );
+            }
+        }
+    }
+
+    fn check_layout_idempotent<C: RenderBox + ?Sized>(
+        &self,
+        child: &mut RenderNode<C>,
+        ctx: &mut LayoutCtx,
+    ) {
+        for &constraints in &self.constraints {
+            let first = child.layout_and_get_size(ctx, constraints);
+            let second = child.layout_and_get_size(ctx, constraints);
+
+            assert!(
+                first == second,
+                "layout produced {first:?} then {second:?} for the same constraints {constraints:?}; \
+                 laying out twice must produce the same size",
+            );
+        }
+    }
+
+    fn intrinsic_snapshot<C: RenderBox + ?Sized>(
+        &self,
+        child: &RenderNode<C>,
+    ) -> Vec<Option<PositiveFinite<f32>>> {
+        let mut snapshot = Vec::new();
+
+        for &extent in &self.extents {
+            snapshot.push(child.min_intrinsic_width(extent));
+            snapshot.push(child.max_intrinsic_width(extent));
+            snapshot.push(child.min_intrinsic_height(extent));
+            snapshot.push(child.max_intrinsic_height(extent));
+        }
+
+        snapshot
+    }
+
+    fn measure_snapshot<C: RenderBox + ?Sized>(&self, child: &RenderNode<C>) -> Vec<Size> {
+        self.constraints
+            .iter()
+            .map(|&constraints| child.measure(constraints))
+            .collect()
+    }
+
+    fn check_intrinsic_ordering<C: RenderBox + ?Sized>(&self, child: &RenderNode<C>) {
         for &height in &self.extents {
             if let (Some(min), Some(max)) = (
-                render.min_intrinsic_width(height),
-                render.max_intrinsic_width(height),
+                child.min_intrinsic_width(height),
+                child.max_intrinsic_width(height),
             ) {
                 assert!(
                     min <= max,
@@ -459,8 +511,8 @@ impl BoxSizingCheck {
 
         for &width in &self.extents {
             if let (Some(min), Some(max)) = (
-                render.min_intrinsic_height(width),
-                render.max_intrinsic_height(width),
+                child.min_intrinsic_height(width),
+                child.max_intrinsic_height(width),
             ) {
                 assert!(
                     min <= max,
@@ -474,11 +526,12 @@ impl BoxSizingCheck {
         }
     }
 
-    fn check_shrink_wraps<E>(&self, make: impl Fn() -> E, axis: Axis)
-    where
-        E: Element,
-        E::Render: RenderBox + Sized,
-    {
+    fn check_shrink_wraps<C: RenderBox + ?Sized>(
+        &self,
+        child: &mut RenderNode<C>,
+        ctx: &mut LayoutCtx,
+        axis: Axis,
+    ) {
         let (main, cross) = dims(axis);
 
         for &extent in &self.extents {
@@ -487,8 +540,8 @@ impl BoxSizingCheck {
             }
 
             let expected = match axis {
-                Axis::Horizontal => make().render_object_mut().max_intrinsic_width(extent),
-                Axis::Vertical => make().render_object_mut().max_intrinsic_height(extent),
+                Axis::Horizontal => child.max_intrinsic_width(extent),
+                Axis::Vertical => child.max_intrinsic_height(extent),
             };
 
             let Some(expected) = expected else {
@@ -505,10 +558,7 @@ impl BoxSizingCheck {
                 }
             };
 
-            let actual = make()
-                .render_object_mut()
-                .layout(&mut TestCtx::new().layout_ctx(), constraints)
-                .extent(axis);
+            let actual = child.layout_and_get_size(ctx, constraints).extent(axis);
 
             assert!(
                 same(actual.get(), expected.get()),
@@ -521,32 +571,33 @@ impl BoxSizingCheck {
         }
     }
 
-    fn check_independent(&self, render: &impl RenderBox, axis: Axis) {
+    fn check_independent<C: RenderBox + ?Sized>(&self, child: &RenderNode<C>, axis: Axis) {
         match axis {
             Axis::Horizontal => {
                 assert_constant(&self.extents, "min_intrinsic_width", |e| {
-                    render.min_intrinsic_width(e)
+                    child.min_intrinsic_width(e)
                 });
                 assert_constant(&self.extents, "max_intrinsic_width", |e| {
-                    render.max_intrinsic_width(e)
+                    child.max_intrinsic_width(e)
                 });
             }
             Axis::Vertical => {
                 assert_constant(&self.extents, "min_intrinsic_height", |e| {
-                    render.min_intrinsic_height(e)
+                    child.min_intrinsic_height(e)
                 });
                 assert_constant(&self.extents, "max_intrinsic_height", |e| {
-                    render.max_intrinsic_height(e)
+                    child.max_intrinsic_height(e)
                 });
             }
         }
     }
 
-    fn check_fills<E>(&self, make: impl Fn() -> E, axis: Axis)
-    where
-        E: Element,
-        E::Render: RenderBox + Sized,
-    {
+    fn check_fills<C: RenderBox + ?Sized>(
+        &self,
+        child: &mut RenderNode<C>,
+        ctx: &mut LayoutCtx,
+        axis: Axis,
+    ) {
         let main = dims(axis).0;
 
         for &constraints in &self.constraints {
@@ -556,10 +607,7 @@ impl BoxSizingCheck {
                 continue;
             }
 
-            let actual = make()
-                .render_object_mut()
-                .layout(&mut TestCtx::new().layout_ctx(), constraints)
-                .extent(axis);
+            let actual = child.layout_and_get_size(ctx, constraints).extent(axis);
 
             assert!(
                 same(actual.get(), max.get()),
@@ -569,6 +617,126 @@ impl BoxSizingCheck {
                 max = max.get(),
             );
         }
+    }
+}
+
+/// The widget the check wraps the widget-under-test in. It presents its child to the pipeline like any
+/// single-child box, and runs the box-sizing battery against it from inside its own layout.
+struct SizingProbe<Child> {
+    config: Rc<Config>,
+    output: Rc<RefCell<Output>>,
+    child: Child,
+}
+
+impl<Child> Widget for SizingProbe<Child>
+where
+    Child: Widget,
+    Child::Render: RenderBox + Sized,
+{
+    type Element = SingleChildElement<Child::Element, RenderSizingProbe<Child::Render>>;
+
+    type Render = RenderSizingProbe<Child::Render>;
+
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(
+            ctx,
+            self.child,
+            RenderSizingProbe {
+                config: self.config,
+                output: self.output,
+                ran: false,
+                child: RenderNode::new(()),
+            },
+        )
+    }
+
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        element.update(ctx, self.child);
+    }
+}
+
+/// The render object of a [`SizingProbe`]. It runs the battery against its wired child once, then forwards
+/// layout to the child so it sits in the tree as a transparent box.
+struct RenderSizingProbe<Child: ?Sized> {
+    config: Rc<Config>,
+    output: Rc<RefCell<Output>>,
+    ran: bool,
+    child: RenderNode<Child>,
+}
+
+impl<Child: RenderBox + ?Sized> RenderObject for RenderSizingProbe<Child> {
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node_for::<Self>()
+            .child(|d| self.child.describe(d))
+            .finish()
+    }
+}
+
+impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderSizingProbe<Child> {
+    type Child = Child;
+
+    fn adopt_child(&mut self, child: MountedChild<Child>) {
+        self.child.set(child);
+    }
+}
+
+impl<Child: RenderBox + ?Sized> RenderBox for RenderSizingProbe<Child> {
+    fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.min_intrinsic_width(height)
+    }
+
+    fn max_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.max_intrinsic_width(height)
+    }
+
+    fn min_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.min_intrinsic_height(width)
+    }
+
+    fn max_intrinsic_height(&self, width: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        self.child.max_intrinsic_height(width)
+    }
+
+    fn measure(&self, constraints: BoxConstraints) -> Size {
+        self.child.measure(constraints)
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        if !self.ran {
+            self.ran = true;
+            let config = Rc::clone(&self.config);
+            config.run_battery(&mut self.child, ctx, &mut self.output.borrow_mut());
+        }
+
+        self.child.layout_and_get_size(ctx, constraints)
+    }
+
+    fn measure_baseline(
+        &self,
+        constraints: BoxConstraints,
+        baseline: TextBaseline,
+    ) -> Option<PositiveFinite<f32>> {
+        self.child.measure_baseline(constraints, baseline)
+    }
+
+    fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
+        self.child.distance_to_baseline(baseline)
+    }
+
+    fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
+        self.child.hit_test(result, position)
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        self.child.update_compositing_bits()
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        self.child.paint(ctx, offset);
     }
 }
 
@@ -740,19 +908,19 @@ mod tests {
     #[should_panic(expected = "does not satisfy")]
     fn a_box_that_ignores_its_constraints_is_caught() {
         // TestBox takes its given size regardless of constraints, so a tight surface catches it.
-        BoxSizingCheck::default().run(|| TestBox::new(Size::new(20, 20)));
+        BoxSizingCheck::default().leaf(|| TestBox::new(Size::new(20, 20)));
     }
 
     #[test]
     #[should_panic(expected = "must agree")]
     fn a_wrong_max_intrinsic_is_caught_for_a_shrink_wrapping_box() {
-        BoxSizingCheck::new().shrink_wraps_width().run(|| Liar);
+        BoxSizingCheck::new().shrink_wraps_width().leaf(|| Liar);
     }
 
     #[test]
     #[should_panic(expected = "dry baseline must match")]
     fn a_dry_baseline_that_disagrees_with_the_laid_out_baseline_is_caught() {
-        BoxSizingCheck::default().run(|| Naughty {
+        BoxSizingCheck::default().leaf(|| Naughty {
             mode: Naughtiness::BadBaseline,
         });
     }
@@ -760,7 +928,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "must not depend on layout state")]
     fn an_intrinsic_that_changes_after_layout_is_caught() {
-        BoxSizingCheck::default().run(|| Naughty {
+        BoxSizingCheck::default().leaf(|| Naughty {
             mode: Naughtiness::UnstableIntrinsic,
         });
     }
@@ -768,7 +936,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "the same size")]
     fn a_layout_that_is_not_idempotent_is_caught() {
-        BoxSizingCheck::default().run(|| Naughty {
+        BoxSizingCheck::default().leaf(|| Naughty {
             mode: Naughtiness::GrowingLayout,
         });
     }
@@ -776,14 +944,14 @@ mod tests {
     #[test]
     #[should_panic(expected = "paint within itself")]
     fn a_box_that_paints_outside_its_minimum_is_caught() {
-        BoxSizingCheck::default().run(|| Naughty {
+        BoxSizingCheck::default().leaf(|| Naughty {
             mode: Naughtiness::OverflowsAtMin,
         });
     }
 
     #[test]
     fn an_overflowing_box_passes_when_overflow_is_allowed() {
-        BoxSizingCheck::new().allow_overflow().run(|| Naughty {
+        BoxSizingCheck::new().allow_overflow().leaf(|| Naughty {
             mode: Naughtiness::OverflowsAtMin,
         });
     }
@@ -940,7 +1108,8 @@ mod tests {
             }
 
             let grow = match self.mode {
-                Naughtiness::GrowingLayout if self.layouts.get() > 1 => 1.0,
+                // Alternates each layout, so re-laying under the same loose constraints is never idempotent.
+                Naughtiness::GrowingLayout if self.layouts.get() % 2 == 1 => 1.0,
                 _ => 0.0,
             };
 

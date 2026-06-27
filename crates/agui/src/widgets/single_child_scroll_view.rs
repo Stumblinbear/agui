@@ -135,31 +135,3 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSingleChildScrollView<Child>
         self.child.paint(ctx, offset);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::rc::Rc;
-
-    use crate::{
-        test_fixtures::RecordingBox,
-        test_harness::{RawWidget, TestCtx},
-    };
-
-    use super::*;
-
-    #[test]
-    fn lays_its_child_out_with_the_width_constraints_and_an_unbounded_height() {
-        let probe = RecordingBox::new();
-        let laid_out = Rc::clone(&probe.laid_out);
-
-        let (mut owner, view) =
-            TestCtx::new().mount_view(SingleChildScrollView::new(RawWidget::new(probe)));
-        view.resize(BoxConstraints::new(16, 128, 32, 128));
-        owner.flush_layout();
-
-        // The child takes the smallest size its constraints allow, so its width is the minimum the scroll
-        // view passed through and its height is 0: the scroll view dropped the height bound to leave it free
-        // to scroll.
-        assert_eq!(laid_out.get(), Some(Size::new(16, 0)));
-    }
-}

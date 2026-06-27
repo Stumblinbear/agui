@@ -5,8 +5,9 @@ use std::{cell::RefCell, rc::Rc};
 use agui::{
     key::AnyKeyable,
     prelude::{element::*, render_object::*},
-    test_harness::WidgetTester,
 };
+
+use crate::ElementTester;
 use typed_floats::{Positive, PositiveFinite};
 
 /// One tracked child's mount or unmount, logged in order so the checker can assert exactly-once
@@ -288,7 +289,7 @@ impl ElementLifecycleCheck {
         W: Widget + 'static,
         W::Element: 'static,
     {
-        let mut tester = WidgetTester::mount(make());
+        let mut tester = ElementTester::mount(make());
 
         tester.diagnostics();
 
@@ -309,7 +310,7 @@ impl ElementLifecycleCheck {
     {
         let ledger = Ledger::default();
 
-        let mut tester = WidgetTester::mount(make(ledger.tracked(1, None)));
+        let mut tester = ElementTester::mount(make(ledger.tracked(1, None)));
         assert_eq!(
             ledger.mounts(1),
             1,
@@ -362,7 +363,7 @@ impl ElementLifecycleCheck {
 
         let unkeyed = |ids: &[u32]| ids.iter().map(|&id| ledger.tracked(id, None)).collect();
 
-        let mut tester = WidgetTester::mount(make(unkeyed(&[1, 2, 3])));
+        let mut tester = ElementTester::mount(make(unkeyed(&[1, 2, 3])));
         for id in [1, 2, 3] {
             assert_eq!(ledger.mounts(id), 1, "each initial child mounts once");
             assert_eq!(ledger.unmounts(id), 0);
@@ -410,7 +411,7 @@ impl ElementLifecycleCheck {
 
         let keyed = |ids: &[u32]| ids.iter().map(|&id| ledger.tracked(id, Some(id))).collect();
 
-        let mut tester = WidgetTester::mount(make(keyed(&[1, 2, 3])));
+        let mut tester = ElementTester::mount(make(keyed(&[1, 2, 3])));
 
         // The address of key 1, captured before the reorder moves it.
         let one = ledger.handle(1);

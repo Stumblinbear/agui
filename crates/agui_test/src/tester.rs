@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::time::Duration;
 
+use crate::test_harness::{HarnessRoot, TestCtx};
 use agui::{
     paint::compositing::CompositedFrame,
     pipeline::PipelineOwner,
@@ -11,7 +12,7 @@ use agui::{
         render_object::{BoxConstraints, HitTestResult, RenderBox},
     },
     scheduling::Vsync,
-    test_harness::{HarnessRoot, TestCtx},
+    semantics::SemanticsTree,
     view::ViewHandle,
 };
 
@@ -147,6 +148,13 @@ where
         self.ctx.run_tasks_to_completion();
     }
 
+    /// Re-walks every semantics boundary marked since the last flush, the work a driver does to refresh
+    /// assistive technology after a change. A boundary left unmarked is not re-walked, so a render object's
+    /// semantics-walk count reveals which boundaries a change actually touched.
+    pub fn flush_semantics(&mut self) {
+        self.owner.flush_semantics(|_, _| {});
+    }
+
     /// The frame composited from the most recent paint, before rasterization.
     pub fn composite_frame(&self) -> CompositedFrame {
         self.view.composite_frame()
@@ -160,6 +168,12 @@ where
     /// Captures the render tree as a diagnostics snapshot.
     pub fn render_diagnostics(&self) -> DiagnosticsNode {
         self.view.diagnostics()
+    }
+
+    /// Captures the semantics tree the view exposes to assistive technology, for finding nodes by name or
+    /// role.
+    pub fn semantics(&self) -> SemanticsTree {
+        self.view.semantics()
     }
 
     /// Hit-tests the tree at `position`, in the root coordinate space, returning the handlers under it

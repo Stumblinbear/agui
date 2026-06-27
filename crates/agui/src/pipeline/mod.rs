@@ -151,8 +151,6 @@ impl PipelineOwner {
         } = self;
         let pipeline = pipeline.clone();
 
-        pipeline.drain_deferred();
-
         let host = RefCell::new(LayoutBuildHost {
             tree,
             queue,

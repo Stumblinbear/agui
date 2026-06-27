@@ -38,7 +38,7 @@ pub struct RenderObjectCell<R: ?Sized> {
 /// inside the cell so it is reachable through the same `.get()`-derived pointer as the render object.
 struct RenderObjectInner<R: ?Sized> {
     #[cfg(debug_assertions)]
-    borrowed: Cell<bool>,
+    borrows: Cell<isize>,
     // Last field, so `RenderObjectInner<Concrete>` unsizes to `RenderObjectInner<dyn …>`.
     value: R,
 }
@@ -48,7 +48,7 @@ impl<R> RenderObjectCell<R> {
         Self {
             inner: UnsafeCell::new(RenderObjectInner {
                 #[cfg(debug_assertions)]
-                borrowed: Cell::new(false),
+                borrows: Cell::new(0),
                 value,
             }),
         }
@@ -147,10 +147,19 @@ impl<R: ?Sized> DerefMut for RenderObjectMut<'_, R> {
 }
 
 #[cfg(debug_assertions)]
+impl<R: ?Sized> Drop for RenderObjectRef<'_, R> {
+    fn drop(&mut self) {
+        // SAFETY: the cell outlives the borrow held during the pass.
+        let borrows = unsafe { &(*self.inner.as_ptr()).borrows };
+        borrows.set(borrows.get() - 1);
+    }
+}
+
+#[cfg(debug_assertions)]
 impl<R: ?Sized> Drop for RenderObjectMut<'_, R> {
     fn drop(&mut self) {
         // SAFETY: the cell outlives the borrow held during the pass.
-        unsafe { (*self.inner.as_ptr()).borrowed.set(false) };
+        unsafe { (*self.inner.as_ptr()).borrows.set(0) };
     }
 }
 
@@ -184,7 +193,7 @@ impl<R: ?Sized> MountedChild<R> {
     pub fn borrow_mut(&self) -> RenderObjectMut<'_, R> {
         // SAFETY: as `RenderNode::resolve` — pass time, no element hook on the stack.
         let inner = unsafe { (self.resolve)(self.node) }.0;
-        debug_mark_borrowed(inner);
+        debug_mark_exclusive(inner);
         RenderObjectMut {
             inner,
             _marker: PhantomData,
@@ -317,11 +326,11 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     /// Borrow the child only during a layout or paint pass, with no element hook on the call stack.
     ///
     /// # Panics
-    /// If the child is unwired (reached before mount). In debug, also if the render object is already
-    /// borrowed, which is a re-entrant reach.
+    /// If the child is unwired (reached before mount). In debug, also if the render object is currently
+    /// borrowed mutably.
     pub fn borrow(&self) -> RenderObjectRef<'_, R> {
         let inner = self.resolve().0;
-        debug_mark_borrowed(inner);
+        debug_mark_shared(inner);
         RenderObjectRef {
             inner,
             _marker: PhantomData,
@@ -335,10 +344,10 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     ///
     /// # Panics
     /// If the child is unwired (reached before mount). In debug, also if the render object is already
-    /// borrowed, which is a re-entrant reach.
+    /// borrowed, mutably or shared.
     pub fn borrow_mut(&mut self) -> RenderObjectMut<'_, R> {
         let inner = self.resolve().0;
-        debug_mark_borrowed(inner);
+        debug_mark_exclusive(inner);
         RenderObjectMut {
             inner,
             _marker: PhantomData,
@@ -346,18 +355,36 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     }
 }
 
-/// In debug, asserts the render object behind `inner` is not already borrowed, then marks it borrowed. The
-/// matching [`RenderObjectMut`] clears the flag on drop. A no-op in release.
+/// In debug, registers a shared borrow of the render object behind `inner`, panicking if it is currently
+/// borrowed exclusively. The matching [`RenderObjectRef`] releases it on drop. A no-op in release.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn debug_mark_borrowed<R: ?Sized>(inner: NonNull<RenderObjectInner<R>>) {
+fn debug_mark_shared<R: ?Sized>(inner: NonNull<RenderObjectInner<R>>) {
     #[cfg(debug_assertions)]
     {
         // SAFETY: the child cell is live and pinned for as long as the pass holds it.
-        let already_borrowed = unsafe { (*inner.as_ptr()).borrowed.replace(true) };
+        let borrows = unsafe { &(*inner.as_ptr()).borrows };
         assert!(
-            !already_borrowed,
-            "render object reached while already borrowed (re-entrant access)"
+            borrows.get() >= 0,
+            "render object reached for a shared borrow while it is borrowed mutably"
         );
+        borrows.set(borrows.get() + 1);
+    }
+    let _ = inner;
+}
+
+/// In debug, registers an exclusive borrow of the render object behind `inner`, panicking if any borrow is
+/// currently live. The matching [`RenderObjectMut`] releases it on drop. A no-op in release.
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn debug_mark_exclusive<R: ?Sized>(inner: NonNull<RenderObjectInner<R>>) {
+    #[cfg(debug_assertions)]
+    {
+        // SAFETY: the child cell is live and pinned for as long as the pass holds it.
+        let borrows = unsafe { &(*inner.as_ptr()).borrows };
+        assert!(
+            borrows.get() == 0,
+            "render object reached for an exclusive borrow while it is already borrowed"
+        );
+        borrows.set(-1);
     }
     let _ = inner;
 }

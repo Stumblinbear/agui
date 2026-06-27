@@ -7,14 +7,17 @@
 #![allow(clippy::unused_self)]
 
 pub mod element;
+pub mod element_tester;
 pub mod fixtures;
 pub mod gesture;
 pub mod golden;
 pub mod probe;
 pub mod sizing;
+pub mod test_harness;
 pub mod tester;
 
 pub use agui_test_macros::golden;
 pub use element::ElementLifecycleCheck;
+pub use element_tester::ElementTester;
 pub use probe::Probe;
 pub use tester::WidgetTester;

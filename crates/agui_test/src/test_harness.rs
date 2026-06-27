@@ -1,27 +1,18 @@
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     rc::Rc,
     sync::mpsc,
     task::{Context, RawWaker, RawWakerVTable, Waker},
 };
 
-use agui_core::tree::{NodeHandle, Slot, Tree};
+use agui_core::tree::{NodeHandle, Slot};
 
-use crate::{
-    context::{CreateCtx, LayoutCtx, MessageCtx, UpdateCtx},
+use agui::{
+    context::{CreateCtx, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::{Element, LeafElement},
-    pipeline::{
-        FramePhase, PipelineOwner,
-        build_tree::{Build, BuildQueue, Operation, run},
-        render_pipeline::{LayoutScope, RenderPipeline},
-    },
-    provide::ProvideScope,
-    render_object::{
-        box_layout::{BoxConstraints, RenderBox},
-        node::RenderObjectPtr,
-    },
+    element::Element,
+    pipeline::{PipelineOwner, render_pipeline::SemanticsScope},
+    render_object::{box_layout::RenderBox, node::RenderObjectPtr},
     scheduling::{EventSender, TaskEventMessage, TaskFuture, TaskHandle, TaskScheduler},
     view::{View, ViewHandle},
     widget::Widget,
@@ -218,45 +209,13 @@ fn noop_waker() -> Waker {
 
 pub struct TestCtx {
     tasks: TestTaskRunner,
-    provide: ProvideScope,
-    pipeline: RenderPipeline,
 }
 
 impl TestCtx {
     pub fn new() -> Self {
         Self {
             tasks: TestTaskRunner::new(),
-            provide: ProvideScope::default(),
-            pipeline: RenderPipeline::default(),
         }
-    }
-
-    /// Builds `widget`'s element and render object. A provided value the widget reads must come from a
-    /// `Provide` wrapping it, since this context seeds no scope of its own.
-    pub fn create<W: Widget>(&mut self, widget: W) -> W::Element {
-        widget.create(&mut CreateCtx::new(self.provide, self.pipeline.clone()))
-    }
-
-    /// A [`LayoutCtx`] over this context's pipeline with a detached relayout scope, for laying a
-    /// render object out in isolation. Reuse it to lay the same render object out more than once.
-    pub fn layout_ctx(&self) -> LayoutCtx<'_, '_> {
-        LayoutCtx::new(&self.pipeline, LayoutScope::detached())
-    }
-
-    /// Builds `widget`'s element and lays its render object out once under `constraints`, returning the
-    /// element that owns the laid-out render object. For a render object laid out repeatedly, build it with
-    /// [`create`](Self::create) and drive [`layout_ctx`](Self::layout_ctx) directly.
-    pub fn laid_out<W>(&mut self, widget: W, constraints: BoxConstraints) -> W::Element
-    where
-        W: Widget,
-        W::Render: RenderBox,
-    {
-        let mut element = self.create(widget);
-        element
-            .render_object_mut()
-            .layout(&mut self.layout_ctx(), constraints);
-
-        element
     }
 
     /// Mounts `widget` as the child of a [`View`] and returns the owner together with the view's handle.
@@ -314,220 +273,11 @@ impl Default for TestCtx {
     }
 }
 
-/// A leaf widget that hands a pre-built render object to the pipeline unchanged, so a test can drive a
-/// hand-built render subtree that has no widget of its own. Wrap it in a [`View`] through
-/// [`TestCtx::mount_view`] to lay it out, paint it, and hit-test it.
-pub struct RawWidget<R> {
-    render: R,
-}
-
-impl<R> RawWidget<R> {
-    pub fn new(render: R) -> Self {
-        Self { render }
-    }
-}
-
-impl<R> Widget for RawWidget<R>
-where
-    R: RenderBox,
-{
-    type Element = LeafElement<R>;
-
-    type Render = R;
-
-    fn create(self, _: &mut CreateCtx) -> Self::Element {
-        LeafElement::new(self.render)
-    }
-
-    fn update(self, _: &mut UpdateCtx, _: &mut Self::Element) {}
-}
-
-/// Drives one widget through the build phase for tests: it mounts the widget under a render-less root,
-/// reconciles it against a new widget on [`rebuild`](Self::rebuild), and delivers messages by handle. It does
-/// not lay out or paint; it exercises element mount, reconcile, and dispatch.
-pub struct WidgetTester<W: Widget> {
-    tree: Tree<TestRoot<W>, Build>,
-    queue: BuildQueue,
-    provide: ProvideScope,
-    pipeline: RenderPipeline,
-    tasks: TestTaskRunner,
-}
-
-impl<W> WidgetTester<W>
-where
-    W: Widget + 'static,
-    W::Element: 'static,
-{
-    /// Mounts `widget` as the sole child of a fresh root.
-    pub fn mount(widget: W) -> Self {
-        let provide = ProvideScope::default();
-        let mut queue = BuildQueue::new();
-        let pipeline = RenderPipeline::default();
-        let mut tasks = TestTaskRunner::new();
-
-        let child = widget.create(&mut CreateCtx::new(provide, pipeline.clone()));
-        let root = TestRoot {
-            child: Slot::new(child),
-            pending: None,
-            render: (),
-        };
-
-        let tree = {
-            let mut scheduler = tasks.scheduler();
-            Tree::<TestRoot<W>, Build>::new(root, run::<TestRoot<W>>, |root, cursor| {
-                root.mount(&mut UpdateCtx::new(
-                    cursor,
-                    provide,
-                    &mut queue,
-                    &pipeline,
-                    &mut scheduler,
-                ));
-            })
-        };
-
-        Self {
-            tree,
-            queue,
-            provide,
-            pipeline,
-            tasks,
-        }
-    }
-
-    /// Reconciles the mounted widget against `widget`, then flushes any rebuilds it triggers.
-    pub fn rebuild(&mut self, widget: W) {
-        let root = self.tree.root_handle();
-        // The root reconciles its child against the widget it holds, so hand the new one over before marking
-        // the root to rebuild.
-        // SAFETY: the root node is a `TestRoot<W>`.
-        unsafe {
-            self.tree
-                .with_node::<TestRoot<W>, _>(root, |root| root.pending = Some(widget));
-        }
-        self.queue.mark_rebuild(root);
-        self.flush();
-    }
-
-    /// Delivers `message` to the element at `handle`, then flushes any rebuilds it triggers. A message to a
-    /// handle whose element is gone is dropped.
-    pub fn dispatch(&mut self, handle: NodeHandle, message: Box<dyn Any>) {
-        {
-            let Self { tree, queue, .. } = self;
-            tree.dispatch(
-                handle,
-                Operation::Message(MessageCtx::new(message, handle, queue)),
-            );
-        }
-        self.flush();
-    }
-
-    /// Runs every spawned task to completion, then delivers the messages they posted back to their elements,
-    /// flushing the rebuilds those messages trigger.
-    pub fn run_tasks(&mut self) {
-        self.tasks.run_to_completion();
-        let posted: Vec<TaskEventMessage> = self.tasks.messages().collect();
-        for (handle, message) in posted {
-            self.dispatch(handle, message);
-        }
-    }
-
-    /// The mounted widget's element, for inspecting the reconciled tree.
-    pub fn root(&self) -> &W::Element {
-        self.tree.root().child.get()
-    }
-
-    /// The handle of the mounted widget's element, for dispatching a message to it.
-    pub fn root_handle(&self) -> NodeHandle {
-        self.tree.root().child.handle()
-    }
-
-    /// A diagnostics snapshot of the mounted subtree.
-    pub fn diagnostics(&self) -> DiagnosticsNode {
-        self.tree.root().describe(&mut Diagnostics::new())
-    }
-
-    /// Drains every element marked to rebuild, shallowest-first, as a frame's build flush does.
-    fn flush(&mut self) {
-        let Self {
-            tree,
-            queue,
-            provide,
-            pipeline,
-            tasks,
-        } = self;
-        let pipeline: &RenderPipeline = pipeline;
-        let mut scheduler = tasks.scheduler();
-
-        let _phase = pipeline.enter_phase(FramePhase::Build);
-
-        while let Some((handle, is_dependency_change)) = queue.take_shallowest(tree) {
-            tree.dispatch_with_cursor(handle, |cursor| {
-                let ctx = UpdateCtx::new(cursor, *provide, queue, pipeline, &mut scheduler);
-                if is_dependency_change {
-                    Operation::DependencyChanged(ctx)
-                } else {
-                    Operation::Rebuild(ctx)
-                }
-            });
-        }
-    }
-}
-
-/// The render-less root [`WidgetTester`] mounts the widget-under-test under. It holds that widget as its one
-/// child and reconciles it with a new widget on rebuild, standing in for the parent that would otherwise
-/// drive the reconcile.
-struct TestRoot<W: Widget> {
-    child: Slot<W::Element>,
-    pending: Option<W>,
-    render: (),
-}
-
-// SAFETY: mounts and unmounts its single child through the cursor child operations; its own render is `()` and
-// never dereferenced.
-unsafe impl<W> Element for TestRoot<W>
-where
-    W: Widget + 'static,
-    W::Element: 'static,
-{
-    type Render = ();
-
-    fn render_object_mut(&mut self) -> &mut () {
-        &mut self.render
-    }
-
-    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
-        RenderObjectPtr::dangling()
-    }
-
-    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        // The tester does not lay out, so the child's render has no parent pointer to wire into; mounting it
-        // for its own subtree is all that is needed, and the returned handle is dropped.
-        // SAFETY: `self.child` is our own slot.
-        let _mounted = unsafe { ctx.mount(&mut self.child) };
-    }
-
-    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
-        // SAFETY: `self.child` is our own slot.
-        unsafe { ctx.unmount(&mut self.child) };
-    }
-
-    fn rebuild(&mut self, ctx: &mut UpdateCtx<'_>) {
-        if let Some(widget) = self.pending.take() {
-            // SAFETY: `self.child` is our own slot.
-            unsafe { ctx.with_child(&mut self.child, |element, ctx| widget.update(ctx, element)) };
-        }
-    }
-
-    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
-        self.child.get().describe(d)
-    }
-}
-
 /// A reconcilable, render-bearing root for a full-frame harness. It builds an initial widget as its child and
 /// forwards its render object to it, then reconciles that child against a new widget delivered as a message,
 /// so the harness can re-drive the whole tree with a fresh root widget. It captures its own handle at mount so
 /// the harness can address it for that message.
-pub struct HarnessRoot<W> {
+pub(crate) struct HarnessRoot<W> {
     initial: W,
     handle: Rc<Cell<Option<NodeHandle>>>,
 }
@@ -539,10 +289,14 @@ impl<W> HarnessRoot<W> {
 }
 
 /// The element of a [`HarnessRoot`], holding the mounted child and the widget queued for the next rebuild.
-pub struct HarnessRootElement<W: Widget> {
+pub(crate) struct HarnessRootElement<W: Widget> {
     child: Slot<W::Element>,
     pending: Option<W>,
     handle: Rc<Cell<Option<NodeHandle>>>,
+    /// The enclosing semantics boundary, captured at mount and re-entered on a rebuild. A directly-rebuilt
+    /// element re-establishes it the way a stateful element does, since a rebuild dispatch arrives with a
+    /// detached scope otherwise and a child's semantics mark would be dropped.
+    semantics_scope: SemanticsScope,
 }
 
 impl<W> Widget for HarnessRoot<W>
@@ -560,6 +314,7 @@ where
             child: Slot::new(self.initial.create(ctx)),
             pending: None,
             handle: self.handle,
+            semantics_scope: SemanticsScope::default(),
         }
     }
 
@@ -586,6 +341,7 @@ where
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
         self.handle.set(Some(ctx.handle()));
+        self.semantics_scope = ctx.semantics_scope();
 
         // SAFETY: `self.child` is our own slot.
         unsafe { ctx.mount(&mut self.child) };
@@ -598,8 +354,12 @@ where
 
     fn rebuild(&mut self, ctx: &mut UpdateCtx<'_>) {
         if let Some(widget) = self.pending.take() {
-            // SAFETY: `self.child` is our own slot.
-            unsafe { ctx.with_child(&mut self.child, |element, ctx| widget.update(ctx, element)) };
+            ctx.with_semantics_scope(self.semantics_scope, |ctx| {
+                // SAFETY: `self.child` is our own slot.
+                unsafe {
+                    ctx.with_child(&mut self.child, |element, ctx| widget.update(ctx, element));
+                }
+            });
         }
     }
 
@@ -610,41 +370,5 @@ where
 
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         self.child.get().describe(d)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::cell::{Cell, RefCell};
-    use std::rc::Rc;
-
-    use super::WidgetTester;
-    use crate::scheduling::TaskHandle;
-    use crate::test_fixtures::Leaf;
-
-    #[test]
-    fn a_spawned_task_posts_a_message_back_to_its_element() {
-        let received = Rc::new(Cell::new(None));
-        let recorder = Rc::clone(&received);
-
-        let widget = Leaf::new()
-            .on_mount({
-                // The element holds the task handle for its own lifetime, as a real element would; dropping
-                // it would cancel the task.
-                let handle: RefCell<Option<TaskHandle>> = RefCell::new(None);
-                move |ctx| {
-                    *handle.borrow_mut() = Some(
-                        ctx.spawn(|task| async move { task.send(42u32) })
-                            .expect("scheduler available during mount"),
-                    );
-                }
-            })
-            .on_message(move |ctx| recorder.set(Some(ctx.consume::<u32>())));
-
-        let mut tester = WidgetTester::mount(widget);
-        assert_eq!(received.get(), None);
-
-        tester.run_tasks();
-        assert_eq!(received.get(), Some(42));
     }
 }

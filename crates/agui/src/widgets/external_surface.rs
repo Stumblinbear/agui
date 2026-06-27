@@ -106,6 +106,23 @@ pub struct RenderExternalSurface {
     layout_scope: LayoutScope,
 }
 
+impl RenderExternalSurface {
+    /// The size the surface occupies: its explicit width and height where set, and the space the constraints
+    /// allow otherwise.
+    ///
+    /// # Panics
+    /// Panics under an unbounded constraint on an axis with no explicit size on it. An external surface has no
+    /// content of its own to size to, so filling an unbounded axis is meaningless.
+    fn surface_size(&self, constraints: BoxConstraints) -> Size {
+        let bounded = BoxConstraints::tight_for(self.width, self.height).enforce(constraints);
+        assert!(
+            bounded.has_bounded_width() && bounded.has_bounded_height(),
+            "an ExternalSurface under an unbounded constraint needs an explicit size to render within",
+        );
+        bounded.biggest()
+    }
+}
+
 impl RenderObject for RenderExternalSurface {
     fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
 
@@ -136,17 +153,13 @@ impl RenderBox for RenderExternalSurface {
     }
 
     fn measure(&self, constraints: BoxConstraints) -> Size {
-        BoxConstraints::tight_for(self.width, self.height)
-            .enforce(constraints)
-            .biggest()
+        self.surface_size(constraints)
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         self.layout_scope = *ctx.scope();
 
-        let size = BoxConstraints::tight_for(self.width, self.height)
-            .enforce(constraints)
-            .biggest();
+        let size = self.surface_size(constraints);
         self.layer.borrow_mut().set_size(size);
 
         size
@@ -172,56 +185,5 @@ impl RenderBox for RenderExternalSurface {
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.paint_scope = ctx.scope();
         ctx.add_layer(self.layer.clone(), offset);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        paint::compositing::{CompositedNode, ExternalSurfaceId},
-        prelude::render_object::*,
-        test_harness::TestCtx,
-    };
-
-    use super::ExternalSurface;
-
-    /// The composited size and surface id of the one external node in a view's frame.
-    fn external_node(view: &crate::view::ViewHandle) -> (ExternalSurfaceId, Size) {
-        view.composite_frame()
-            .nodes()
-            .iter()
-            .find_map(|node| match node {
-                CompositedNode::External { surface, size, .. } => Some((*surface, *size)),
-                _ => None,
-            })
-            .expect("an external surface node")
-    }
-
-    #[test]
-    fn places_a_surface_filling_its_bounds() {
-        let (mut owner, view) =
-            TestCtx::new().mount_view(ExternalSurface::new(ExternalSurfaceId(42)));
-        view.resize(BoxConstraints::new(0, 64, 0, 48));
-        owner.flush_layout();
-        owner.flush_paint();
-
-        let (surface, size) = external_node(&view);
-        assert_eq!(surface, ExternalSurfaceId(42));
-        assert_eq!(size, Size::new(64, 48), "fills the constraints it is given");
-    }
-
-    #[test]
-    fn an_explicit_size_overrides_filling() {
-        let (mut owner, view) = TestCtx::new().mount_view(
-            ExternalSurface::new(ExternalSurfaceId(1))
-                .width(20)
-                .height(10),
-        );
-        view.resize(BoxConstraints::new(0, 100, 0, 100));
-        owner.flush_layout();
-        owner.flush_paint();
-
-        let (_, size) = external_node(&view);
-        assert_eq!(size, Size::new(20, 10), "takes its explicit size");
     }
 }

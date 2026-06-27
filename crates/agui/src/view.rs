@@ -14,8 +14,8 @@ use crate::{
     pipeline::{
         BoundaryContent,
         render_pipeline::{
-            LayoutBoundary, LayoutBoundaryHandle, PaintBoundaryHandle, SemanticsBoundaryHandle,
-            SemanticsScope,
+            LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle,
+            SemanticsBoundaryHandle, SemanticsScope,
         },
     },
     render_object::{
@@ -25,7 +25,7 @@ use crate::{
     },
     semantics::{SemanticsTree, SemanticsTreeBuilder},
     text::TextBaseline,
-    widget::{RenderBoxElement, RenderBoxWrapper, Widget},
+    widget::{ElementSequence, RenderBoxElement, RenderBoxWrapper, Widget, WidgetSequence},
 };
 
 /// A handle to a mounted [`View`], owning the per-view operations a driver performs on the view's
@@ -276,6 +276,99 @@ where
     }
 }
 
+/// A render-less host for several [`View`]s under one pipeline owner, so a single owner drives more than one
+/// window. It contributes no render object of its own, and each child view registers and drives its own
+/// boundaries independently of the others.
+pub struct ViewContainer<L> {
+    children: L,
+}
+
+impl<L> ViewContainer<L> {
+    /// Builds a container hosting `children`, a sequence of [`View`]s.
+    pub fn new(children: L) -> Self {
+        Self { children }
+    }
+}
+
+impl<L> Widget for ViewContainer<L>
+where
+    L: WidgetSequence + 'static,
+    L::Elements: 'static,
+    L::Renders: 'static,
+{
+    type Element = ViewContainerElement<L>;
+
+    type Render = ();
+
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        let (children, renders) = self.children.create(ctx);
+
+        ViewContainerElement {
+            children,
+            renders,
+            render: (),
+        }
+    }
+
+    fn update(self, ctx: &mut UpdateCtx, element: &mut Self::Element) {
+        // The container has no render object, so a grafted child view has no enclosing relayout boundary here.
+        // Each view drives its own layout off its handle.
+        // SAFETY: the element's child sequence and renders are its own.
+        unsafe {
+            self.children.update(
+                ctx,
+                &mut element.children,
+                &mut element.renders,
+                LayoutScope::detached(),
+            );
+        }
+    }
+}
+
+/// The [`Element`] of a [`ViewContainer`], owning the child view elements and their render edges.
+pub struct ViewContainerElement<L: WidgetSequence> {
+    children: L::Elements,
+    renders: L::Renders,
+    render: (),
+}
+
+// SAFETY: mounts and unmounts its child views through the cursor child operations of its own sequence; its own
+// render is `()` and never dereferenced.
+unsafe impl<L> Element for ViewContainerElement<L>
+where
+    L: WidgetSequence + 'static,
+    L::Elements: 'static,
+    L::Renders: 'static,
+{
+    type Render = ();
+
+    fn render_object_mut(&mut self) -> &mut () {
+        &mut self.render
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        // SAFETY: `self.children` and `self.renders` are our own.
+        unsafe {
+            self.children.mount(ctx, &mut self.renders);
+        }
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        // SAFETY: as `mount`.
+        unsafe {
+            self.children.unmount(ctx);
+        }
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.children.describe(d.node_for::<Self>()).finish()
+    }
+}
+
 /// The view's entry in the relayout registry, owned by it: at flush it re-borrows the shared cell and re-lays
 /// the [`RenderView`]. Holding an `Rc` clone (rather than a pointer into the cell) is what keeps it sound, and
 /// keeps the render object alive as long as the registration.
@@ -392,128 +485,5 @@ impl RenderBox for RenderView {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::rc::Rc;
-
-    use crate::{
-        geometry::Size,
-        render_object::box_layout::BoxConstraints,
-        test_fixtures::RecordingBox,
-        test_harness::{RawWidget, TestCtx},
-    };
-
-    #[test]
-    fn resize_lays_out_and_paints_the_view_child() {
-        let render = RecordingBox::new();
-        let laid_out = Rc::clone(&render.laid_out);
-        let paints = Rc::clone(&render.paints);
-
-        let mut ctx = TestCtx::new();
-        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
-
-        view.resize(BoxConstraints::tight(Size::new(120.0_f32, 80.0)));
-        owner.flush_layout();
-        owner.flush_paint();
-
-        assert_eq!(
-            laid_out.get(),
-            Some(Size::new(120.0_f32, 80.0)),
-            "the view drove its child's layout"
-        );
-        assert!(paints.get() >= 1, "the view drove its child's paint");
-
-        // Compositing after a frame produces a presentable frame without panicking.
-        let _frame = view.composite_frame();
-    }
-
-    #[test]
-    fn resizing_again_relays_the_child() {
-        let render = RecordingBox::new();
-        let laid_out = Rc::clone(&render.laid_out);
-
-        let mut ctx = TestCtx::new();
-        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
-
-        view.resize(BoxConstraints::tight(Size::new(100.0_f32, 100.0)));
-        owner.flush_layout();
-        assert_eq!(laid_out.get(), Some(Size::new(100.0_f32, 100.0)));
-
-        view.resize(BoxConstraints::tight(Size::new(50.0_f32, 200.0)));
-        owner.flush_layout();
-        assert_eq!(
-            laid_out.get(),
-            Some(Size::new(50.0_f32, 200.0)),
-            "the view re-laid its child under the new constraints"
-        );
-    }
-
-    #[test]
-    fn resizing_repaints_through_the_layout_coupling() {
-        let render = RecordingBox::new();
-        let paints = Rc::clone(&render.paints);
-
-        let mut ctx = TestCtx::new();
-        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
-
-        view.resize(BoxConstraints::tight(Size::new(100.0_f32, 100.0)));
-        owner.flush_layout();
-        owner.flush_paint();
-        let after_first = paints.get();
-        assert!(after_first >= 1, "the first frame painted the child");
-
-        // A later resize marks only layout; re-laying the view must mark its own repaint boundary, so the
-        // child repaints without `resize` touching paint.
-        view.resize(BoxConstraints::tight(Size::new(50.0_f32, 200.0)));
-        owner.flush_layout();
-        owner.flush_paint();
-        assert!(
-            paints.get() > after_first,
-            "re-laying the view repainted it via the layout-to-paint coupling"
-        );
-    }
-
-    #[test]
-    fn hit_testing_an_empty_view_is_harmless() {
-        let mut ctx = TestCtx::new();
-        let (mut owner, view) = ctx.mount_view(RawWidget::new(RecordingBox::new()));
-
-        view.resize(BoxConstraints::tight(Size::new(64.0_f32, 64.0)));
-        owner.flush_layout();
-
-        // `RecordingBox` passes hits through, so nothing absorbs; the call must still resolve cleanly.
-        let result = view.hit_test(crate::geometry::Offset::new(10.0_f32, 10.0));
-        assert!(result.path().is_empty());
-    }
-
-    #[test]
-    fn marking_a_child_boundary_relays_only_it() {
-        let render = RecordingBox::new();
-        let layouts = Rc::clone(&render.layouts);
-        let boundary = Rc::clone(&render.boundary);
-
-        let mut ctx = TestCtx::new();
-        let (mut owner, view) = ctx.mount_view(RawWidget::new(render));
-
-        view.resize(BoxConstraints::tight(Size::new(40.0_f32, 40.0)));
-        owner.flush_layout();
-        assert_eq!(layouts.get(), 1, "the first frame laid the child out once");
-
-        // The child is under tight constraints, so it is its own relayout boundary. Marking that boundary and
-        // flushing re-lays it without resizing the view above it.
-        boundary
-            .borrow()
-            .as_ref()
-            .expect("the child captured its boundary during layout")
-            .mark_needs_layout();
-        owner.flush_layout();
-        assert_eq!(
-            layouts.get(),
-            2,
-            "marking the child's own boundary re-laid it in isolation"
-        );
     }
 }

@@ -362,44 +362,27 @@ impl RenderPipeline {
         }
     }
 
-    /// Applies every out-of-band mark queued since the last drain. Called once at the start of a frame,
-    /// before the boundaries are re-laid and repainted.
-    pub fn drain_deferred(&self) {
-        let (layout_queue, paint_queue) = {
-            let inner = self.inner.borrow();
-            (
-                Rc::clone(&inner.layout_deferred),
-                Rc::clone(&inner.paint_deferred),
-            )
-        };
+    /// Applies the relayout marks queued out of band since the last drain, so a `flush_layout` picks them up
+    /// on its own.
+    fn drain_layout_deferred(&self) {
+        let layout: Vec<LayoutBoundaryId> = self
+            .inner
+            .borrow()
+            .layout_deferred
+            .borrow_mut()
+            .drain(..)
+            .collect();
 
-        let layout: Vec<LayoutBoundaryId> = layout_queue.borrow_mut().drain(..).collect();
         for id in layout {
             self.inner.borrow_mut().mark_needs_layout(id);
-        }
-
-        let paint: Vec<(PaintBoundaryId, PaintPhase)> =
-            paint_queue.borrow_mut().drain(..).collect();
-        for (id, phase) in paint {
-            match phase {
-                PaintPhase::Paint => self.mark_needs_paint(PaintScope(id)),
-                PaintPhase::CompositingBits => {
-                    self.mark_needs_compositing_bits_update(PaintScope(id));
-                }
-                PaintPhase::Composite => self.mark_needs_composite(),
-            }
-        }
-
-        let semantics_queue = Rc::clone(&self.inner.borrow().semantics_deferred);
-        let semantics: Vec<SemanticsBoundaryId> = semantics_queue.borrow_mut().drain(..).collect();
-        for id in semantics {
-            self.inner.borrow_mut().mark_needs_semantics_update(id);
         }
     }
 
     /// Re-lays every marked relayout boundary from the constraints it last took, rootmost-first, leaving the
     /// rest untouched.
     pub(crate) fn flush_layout(&self, host: &RefCell<LayoutBuildHost>) {
+        self.drain_layout_deferred();
+
         let _phase = self.enter_phase(FramePhase::Layout);
 
         let mut scratch = {
@@ -444,9 +427,27 @@ impl RenderPipeline {
         inner.layout_scratch = scratch;
     }
 
+    /// Applies the semantics marks queued out of band since the last drain, so a `flush_semantics` picks them
+    /// up on its own without a preceding layout pass.
+    fn drain_semantics_deferred(&self) {
+        let semantics: Vec<SemanticsBoundaryId> = self
+            .inner
+            .borrow()
+            .semantics_deferred
+            .borrow_mut()
+            .drain(..)
+            .collect();
+
+        for id in semantics {
+            self.inner.borrow_mut().mark_needs_semantics_update(id);
+        }
+    }
+
     /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
     /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
     pub fn flush_semantics(&self, mut update: impl FnMut(SemanticsBoundaryId, SemanticsTree)) {
+        self.drain_semantics_deferred();
+
         let mut scratch = self.inner.borrow_mut().take_semantics_dirty();
 
         let mut counter = self.inner.borrow().semantics_counter;
@@ -470,8 +471,32 @@ impl RenderPipeline {
         self.inner.borrow_mut().semantics_scratch = scratch;
     }
 
+    /// Applies the repaint marks queued out of band since the last drain, so a `flush_paint` picks them up on
+    /// its own.
+    fn drain_paint_deferred(&self) {
+        let paint: Vec<(PaintBoundaryId, PaintPhase)> = self
+            .inner
+            .borrow()
+            .paint_deferred
+            .borrow_mut()
+            .drain(..)
+            .collect();
+
+        for (id, phase) in paint {
+            match phase {
+                PaintPhase::Paint => self.mark_needs_paint(PaintScope(id)),
+                PaintPhase::CompositingBits => {
+                    self.mark_needs_compositing_bits_update(PaintScope(id));
+                }
+                PaintPhase::Composite => self.mark_needs_composite(),
+            }
+        }
+    }
+
     /// Recomputes compositing bits, repaints, and recomposites the marked repaint boundaries.
     pub fn flush_paint(&self) {
+        self.drain_paint_deferred();
+
         let mut scratch = {
             let mut inner = self.inner.borrow_mut();
             std::mem::take(&mut inner.paint_scratch)

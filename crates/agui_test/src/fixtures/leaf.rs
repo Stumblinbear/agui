@@ -1,8 +1,152 @@
-use agui::{
-    paint::peniko::{Color, Fill},
-    prelude::{element::*, render_object::*},
-};
 use typed_floats::{Positive, PositiveFinite};
+
+use agui::{
+    context::{CreateCtx, LayoutCtx, MessageCtx, PaintCtx, UpdateCtx},
+    diagnostics::{Diagnostics, DiagnosticsNode},
+    element::{Element, LeafElement as LeafRenderElement},
+    geometry::{Offset, Size},
+    input::hit_test::{HitTest, HitTestResult},
+    paint::peniko::{Color, Fill},
+    render_object::{
+        RenderObject,
+        box_layout::{BoxConstraints, RenderBox},
+        node::RenderObjectPtr,
+    },
+    semantics::SemanticsTreeBuilder,
+    text::TextBaseline,
+    widget::Widget,
+};
+
+type OnMount = Box<dyn Fn(&mut UpdateCtx<'_>)>;
+type OnUpdate = Box<dyn Fn(&mut UpdateCtx<'_>)>;
+type OnMessage = Box<dyn Fn(&mut MessageCtx<'_>)>;
+type OnRebuild = Box<dyn Fn(&mut UpdateCtx<'_>)>;
+
+/// Leaf widget whose lifecycle behavior is supplied by closures, so a test can observe when each hook runs.
+#[allow(clippy::struct_field_names)]
+pub struct Leaf {
+    on_mount: OnMount,
+    on_update: OnUpdate,
+    on_message: OnMessage,
+    on_rebuild: OnRebuild,
+}
+
+impl Leaf {
+    pub fn new() -> Self {
+        Self {
+            on_mount: Box::new(|_| {}),
+            on_update: Box::new(|_| {}),
+            on_message: Box::new(|_| {}),
+            on_rebuild: Box::new(|_| {}),
+        }
+    }
+
+    pub fn on_mount(mut self, f: impl Fn(&mut UpdateCtx<'_>) + 'static) -> Self {
+        self.on_mount = Box::new(f);
+        self
+    }
+
+    pub fn on_update(mut self, f: impl Fn(&mut UpdateCtx<'_>) + 'static) -> Self {
+        self.on_update = Box::new(f);
+        self
+    }
+
+    pub fn on_message(mut self, f: impl Fn(&mut MessageCtx<'_>) + 'static) -> Self {
+        self.on_message = Box::new(f);
+        self
+    }
+
+    pub fn on_rebuild(mut self, f: impl Fn(&mut UpdateCtx<'_>) + 'static) -> Self {
+        self.on_rebuild = Box::new(f);
+        self
+    }
+}
+
+impl Default for Leaf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The element of [`Leaf`], holding the lifecycle closures moved out of the widget. `on_mount` fires
+/// from the element's `mount` hook, where a tree handle exists, rather than at create.
+pub struct LeafElement {
+    on_mount: OnMount,
+    on_message: OnMessage,
+    on_rebuild: OnRebuild,
+    render: (),
+}
+
+// SAFETY: a leaf with no children; its `()` render object is never dereferenced.
+unsafe impl Element for LeafElement {
+    type Render = ();
+
+    fn render_object_mut(&mut self) -> &mut () {
+        &mut self.render
+    }
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<()> {
+        RenderObjectPtr::dangling()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        (self.on_mount)(ctx);
+    }
+
+    fn rebuild(&mut self, ctx: &mut UpdateCtx<'_>) {
+        (self.on_rebuild)(ctx);
+    }
+
+    fn dependency_changed(&mut self, ctx: &mut UpdateCtx<'_>) {
+        (self.on_rebuild)(ctx);
+    }
+
+    fn message(&mut self, ctx: &mut MessageCtx<'_>) {
+        (self.on_message)(ctx);
+    }
+}
+
+impl Widget for Leaf {
+    type Element = LeafElement;
+
+    type Render = ();
+
+    fn create(self, _ctx: &mut CreateCtx) -> Self::Element {
+        LeafElement {
+            on_mount: self.on_mount,
+            on_message: self.on_message,
+            on_rebuild: self.on_rebuild,
+            render: (),
+        }
+    }
+
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        (self.on_update)(ctx);
+
+        element.on_mount = self.on_mount;
+        element.on_message = self.on_message;
+        element.on_rebuild = self.on_rebuild;
+    }
+}
+
+/// A widget that adds no node of its own, forwarding its element straight to its child.
+pub struct Transparent<Child> {
+    pub child: Child,
+}
+
+impl<Child: Widget> Widget for Transparent<Child> {
+    type Element = Child::Element;
+
+    type Render = Child::Render;
+
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        self.child.create(ctx)
+    }
+
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        self.child.update(ctx, element);
+    }
+}
 
 /// A leaf widget of a fixed size, optionally filling itself with a color.
 ///
@@ -27,18 +171,18 @@ impl TestBox {
 }
 
 impl Widget for TestBox {
-    type Element = LeafElement<RenderTestBox>;
+    type Element = LeafRenderElement<RenderTestBox>;
 
     type Render = RenderTestBox;
 
-    fn create(self, _: &mut CreateCtx) -> LeafElement<RenderTestBox> {
-        LeafElement::new(RenderTestBox {
+    fn create(self, _: &mut CreateCtx) -> LeafRenderElement<RenderTestBox> {
+        LeafRenderElement::new(RenderTestBox {
             size: self.size,
             color: self.color,
         })
     }
 
-    fn update(self, _: &mut UpdateCtx, element: &mut LeafElement<RenderTestBox>) {
+    fn update(self, _: &mut UpdateCtx, element: &mut LeafRenderElement<RenderTestBox>) {
         let render_object = element.render_object_mut();
         render_object.size = self.size;
         render_object.color = self.color;
@@ -152,19 +296,19 @@ impl IntrinsicBox {
 }
 
 impl Widget for IntrinsicBox {
-    type Element = LeafElement<RenderIntrinsicBox>;
+    type Element = LeafRenderElement<RenderIntrinsicBox>;
 
     type Render = RenderIntrinsicBox;
 
-    fn create(self, _: &mut CreateCtx) -> LeafElement<RenderIntrinsicBox> {
-        LeafElement::new(RenderIntrinsicBox {
+    fn create(self, _: &mut CreateCtx) -> LeafRenderElement<RenderIntrinsicBox> {
+        LeafRenderElement::new(RenderIntrinsicBox {
             size: self.size,
             min: self.min,
             max: self.max,
         })
     }
 
-    fn update(self, _: &mut UpdateCtx, element: &mut LeafElement<RenderIntrinsicBox>) {
+    fn update(self, _: &mut UpdateCtx, element: &mut LeafRenderElement<RenderIntrinsicBox>) {
         let render_object = element.render_object_mut();
         render_object.size = self.size;
         render_object.min = self.min;

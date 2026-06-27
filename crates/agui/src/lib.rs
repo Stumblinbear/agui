@@ -25,9 +25,6 @@ pub mod scheduling;
 pub mod semantics;
 pub mod stateful;
 pub mod stateless;
-#[cfg(test)]
-pub mod test_fixtures;
-pub mod test_harness;
 pub mod text;
 pub mod view;
 pub mod widget;
@@ -59,7 +56,7 @@ pub mod prelude {
     }
 
     pub mod element {
-        pub use agui_core::tree::NodeHandle;
+        pub use agui_core::tree::{NodeHandle, Slot};
 
         pub use crate::{
             context::{BuildCtx, CreateCtx, MessageCtx, UpdateCtx},
