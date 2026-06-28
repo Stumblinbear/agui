@@ -1,3 +1,4 @@
+#![feature(impl_trait_in_assoc_type)]
 #![warn(clippy::all, clippy::pedantic, clippy::cargo)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 #![warn(clippy::clone_on_ref_ptr)]

@@ -78,9 +78,9 @@ impl Widget for Text {
 }
 
 impl StatelessWidget for Text {
-    type Child = RawText;
+    type Child = impl Widget<Render = RenderText>;
 
-    fn build(&self, ctx: &mut BuildCtx) -> RawText {
+    fn build(&self, ctx: &mut BuildCtx) -> Self::Child {
         RawText {
             content: Text::content(
                 &self.text,
@@ -95,7 +95,7 @@ impl StatelessWidget for Text {
 
 /// A leaf widget that renders pre-built paragraph content into a [`RenderText`]. Its fonts are supplied by
 /// the parent that resolved them; `RawText` reads no provided values itself.
-pub struct RawText {
+struct RawText {
     content: ParagraphContent,
     fonts: Option<Rc<Fonts>>,
 }

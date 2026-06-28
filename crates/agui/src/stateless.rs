@@ -16,6 +16,8 @@ use crate::{
 /// leaf render-object widget cannot. [`build`](Self::build) runs at mount and on every rebuild: a reconcile
 /// with new fields, or a change to a provided value it read.
 pub trait StatelessWidget {
+    /// The widget [`build`](Self::build) returns. May be `impl Widget<Render = ...>` to avoid naming a
+    /// composed subtree by hand.
     type Child: Widget;
 
     /// Builds the subtree to show. Read provided values here with

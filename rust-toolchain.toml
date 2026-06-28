@@ -1,0 +1,4 @@
+[toolchain]
+# agui uses `impl_trait_in_assoc_type` so a stateless widget can build a subtree without naming its
+# type. That feature is nightly-only.
+channel = "nightly"
