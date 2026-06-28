@@ -16,5 +16,6 @@ pub mod repaint_boundary;
 pub mod rich_text;
 pub mod single_child_scroll_view;
 pub mod sized_box;
+pub mod stack;
 pub mod text;
 pub mod transform;
