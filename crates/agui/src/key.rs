@@ -14,7 +14,7 @@ use crate::{
             RenderBox, RenderObject, RenderObjectCell, RenderObjectPtr, SingleChildRenderObject,
         },
     },
-    render_object::RenderGraft,
+    render_object::RenderProxy,
     widget::Widget,
 };
 
@@ -43,13 +43,13 @@ where
 {
     type Element = KeyElement<V, <Child as Widget>::Element>;
 
-    type Render = RenderGraft<<Child as Widget>::Render>;
+    type Render = RenderProxy<<Child as Widget>::Render>;
 
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         KeyElement {
             value: self.value,
             child: Slot::new(self.child.create(ctx)),
-            render: RenderObjectCell::new(RenderGraft::new()),
+            render: RenderObjectCell::new(RenderProxy::new()),
         }
     }
 
@@ -87,7 +87,7 @@ where
 pub struct KeyElement<V, C: Element> {
     value: V,
     child: Slot<C>,
-    render: RenderObjectCell<RenderGraft<C::Render>>,
+    render: RenderObjectCell<RenderProxy<C::Render>>,
 }
 
 // SAFETY: manages its single child only through the cursor child operations, and resolves its render object
@@ -98,7 +98,7 @@ where
     C: Element,
     C::Render: RenderBox + Sized,
 {
-    type Render = RenderGraft<C::Render>;
+    type Render = RenderProxy<C::Render>;
 
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.render.render_object_ptr()

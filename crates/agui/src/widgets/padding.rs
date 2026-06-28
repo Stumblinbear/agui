@@ -97,7 +97,7 @@ impl<Child: RenderBox + ?Sized> RenderObject for RenderPadding<Child> {
     fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
         let offset = self
             .child
-            .parent_data
+            .child_data
             .as_ref()
             .map_or(Offset::ZERO, |data| data.offset);
 
@@ -178,7 +178,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPadding<Child> {
         let inner_constraints = constraints.deflate(&self.padding);
         let child_size = self.child.layout_and_get_size(ctx, inner_constraints);
 
-        self.child.parent_data = Some(ChildParentData {
+        self.child.child_data = Some(ChildParentData {
             size: child_size,
             offset: self.padding.top_left(),
         });
@@ -205,7 +205,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPadding<Child> {
     fn distance_to_baseline(&mut self, baseline: TextBaseline) -> Option<PositiveFinite<f32>> {
         let child_offset = self
             .child
-            .parent_data
+            .child_data
             .as_ref()
             .expect("child has not been laid out")
             .offset;
@@ -219,7 +219,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPadding<Child> {
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         let ChildParentData { size, offset } = self
             .child
-            .parent_data
+            .child_data
             .as_ref()
             .expect("child has not been laid out");
 

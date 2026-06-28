@@ -248,7 +248,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSizedBox<Child> {
             BoxConstraints::tight_for(self.width, self.height).enforce(constraints),
         );
 
-        self.child.parent_data = Some(child_size);
+        self.child.child_data = Some(child_size);
 
         child_size
     }
@@ -271,7 +271,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSizedBox<Child> {
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         let child_size = self
             .child
-            .parent_data
+            .child_data
             .as_ref()
             .expect("child has not been laid out");
 

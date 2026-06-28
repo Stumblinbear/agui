@@ -224,7 +224,7 @@ where
         }
 
         let size = self.child_node.layout_and_get_size(ctx, constraints);
-        self.child_node.parent_data = Some(size);
+        self.child_node.child_data = Some(size);
         size
     }
 
@@ -237,7 +237,7 @@ where
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        let Some(size) = self.child_node.parent_data else {
+        let Some(size) = self.child_node.child_data else {
             return HitTest::Pass;
         };
 

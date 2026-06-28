@@ -101,7 +101,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSingleChildScrollView<Child>
             .child
             .layout_and_get_size(ctx, constraints.only_width());
 
-        self.child.parent_data = Some(child_size);
+        self.child.child_data = Some(child_size);
 
         constraints.constrain(child_size)
     }
@@ -117,7 +117,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSingleChildScrollView<Child>
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         let child_size = self
             .child
-            .parent_data
+            .child_data
             .expect("scroll view child has not been laid out");
 
         if !child_size.contains(position) {

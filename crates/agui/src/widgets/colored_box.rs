@@ -116,7 +116,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderColoredBox<Child> {
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let child_size = self.child.layout_and_get_size(ctx, constraints);
 
-        self.child.parent_data = Some(child_size);
+        self.child.child_data = Some(child_size);
 
         child_size
     }
@@ -136,7 +136,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderColoredBox<Child> {
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         let child_size = self
             .child
-            .parent_data
+            .child_data
             .as_ref()
             .expect("child has not been laid out");
 
@@ -154,7 +154,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderColoredBox<Child> {
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.paint_scope = ctx.scope();
 
-        let size = self.child.parent_data.expect("child has not been laid out");
+        let size = self.child.child_data.expect("child has not been laid out");
 
         if size.is_zero() {
             return;

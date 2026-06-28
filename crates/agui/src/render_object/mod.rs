@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::context::UpdateCtx;
 use crate::diagnostics::{Diagnostics, DiagnosticsNode};
 use crate::semantics::SemanticsTreeBuilder;
@@ -10,11 +12,13 @@ pub mod box_layout;
 mod children;
 mod graft;
 pub mod node;
+mod proxy;
 pub mod sliver;
 
 pub use any_render_object::*;
 pub use children::*;
 pub use graft::*;
+pub use proxy::*;
 
 /// An object in the render tree.
 ///
@@ -33,6 +37,13 @@ pub trait RenderObject: 'static {
     /// new location.
     fn detach(&mut self, ctx: &mut UpdateCtx<'_>) {
         let _ = ctx;
+    }
+
+    /// Returns this render object's parent data, the layout configuration its parent reads to place it. The
+    /// parent downcasts the result to the type it expects. A render object that carries no parent data returns
+    /// a value no such downcast matches.
+    fn parent_data(&self) -> &dyn Any {
+        &()
     }
 
     /// Adds this render object's own semantic node, if any, to `s`, then recurses into each child.

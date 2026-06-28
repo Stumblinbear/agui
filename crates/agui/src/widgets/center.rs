@@ -94,7 +94,7 @@ impl<Child: RenderBox + ?Sized> RenderObject for RenderCenter<Child> {
     fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
         let offset = self
             .child
-            .parent_data
+            .child_data
             .as_ref()
             .map_or(Offset::ZERO, |data| data.offset);
 
@@ -140,7 +140,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderCenter<Child> {
             size.height.get() - child_size.height.get(),
         ));
 
-        self.child.parent_data = Some(ChildParentData { size, offset });
+        self.child.child_data = Some(ChildParentData { size, offset });
 
         size
     }
@@ -159,7 +159,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderCenter<Child> {
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         let ChildParentData { size, offset } =
-            self.child.parent_data.expect("child has not been laid out");
+            self.child.child_data.expect("child has not been laid out");
 
         if !size.contains(position) {
             return HitTest::Pass;
@@ -177,7 +177,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderCenter<Child> {
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         let child_offset = self
             .child
-            .parent_data
+            .child_data
             .expect("child has not been laid out")
             .offset;
 

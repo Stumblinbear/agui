@@ -49,8 +49,9 @@ pub trait MultiChildRenderObject: RenderObject {
 /// children from `Vec` lengths and `Option` presence. A child is handed back as a [`RenderNode`] whose
 /// render object is erased to `dyn RenderBox`; the children stay typed in storage.
 pub trait RenderChildren {
-    /// The parent data stored on each child, such as a flex slot's offset.
-    type ParentData;
+    /// The per-child data the parent keeps in each child's slot, such as a laid-out offset. Distinct from a
+    /// child's own [`parent_data`](RenderObject::parent_data), which the child reports up to its parent.
+    type ChildData;
 
     /// The number of children contributed no matter the runtime contents, folded at compile time.
     const STATIC_LEN: usize;
@@ -73,26 +74,26 @@ pub trait RenderChildren {
     /// # Panics
     ///
     /// Panics if `index` is not less than [`len`](Self::len).
-    fn get(&self, index: usize) -> &RenderNode<dyn RenderBox, Self::ParentData>;
+    fn get(&self, index: usize) -> &RenderNode<dyn RenderBox, Self::ChildData>;
 
     /// The child at flattened `index`, mutably.
     ///
     /// # Panics
     ///
     /// Panics if `index` is not less than [`len`](Self::len).
-    fn get_mut(&mut self, index: usize) -> &mut RenderNode<dyn RenderBox, Self::ParentData>;
+    fn get_mut(&mut self, index: usize) -> &mut RenderNode<dyn RenderBox, Self::ChildData>;
 
     /// Runs `f` on each child in order. O(n) for the whole run, unlike repeated [`get`](Self::get).
-    fn for_each(&self, f: &mut Visitor<Self::ParentData>);
+    fn for_each(&self, f: &mut Visitor<Self::ChildData>);
 
     /// Runs `f` on each child in order, mutably.
-    fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ParentData>);
+    fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ChildData>);
 }
 
 // A single child: the leaf of a sequence. Its edge is already `dyn RenderBox`, so the flatten needs no
 // coercion — every leaf in a mixed sequence is one uniform holder type.
 impl<P> RenderChildren for RenderNode<dyn RenderBox, P> {
-    type ParentData = P;
+    type ChildData = P;
 
     const STATIC_LEN: usize = 1;
 
@@ -121,7 +122,7 @@ impl<P> RenderChildren for RenderNode<dyn RenderBox, P> {
 
 // An optional sub-sequence: present contributes its children, absent contributes none.
 impl<S: RenderChildren> RenderChildren for Option<S> {
-    type ParentData = S::ParentData;
+    type ChildData = S::ChildData;
 
     const STATIC_LEN: usize = 0;
 
@@ -129,25 +130,25 @@ impl<S: RenderChildren> RenderChildren for Option<S> {
         self.as_ref().map_or(0, S::len)
     }
 
-    fn get(&self, index: usize) -> &RenderNode<dyn RenderBox, Self::ParentData> {
+    fn get(&self, index: usize) -> &RenderNode<dyn RenderBox, Self::ChildData> {
         self.as_ref()
             .expect("child index out of bounds: the optional sequence is absent")
             .get(index)
     }
 
-    fn get_mut(&mut self, index: usize) -> &mut RenderNode<dyn RenderBox, Self::ParentData> {
+    fn get_mut(&mut self, index: usize) -> &mut RenderNode<dyn RenderBox, Self::ChildData> {
         self.as_mut()
             .expect("child index out of bounds: the optional sequence is absent")
             .get_mut(index)
     }
 
-    fn for_each(&self, f: &mut Visitor<Self::ParentData>) {
+    fn for_each(&self, f: &mut Visitor<Self::ChildData>) {
         if let Some(inner) = self {
             inner.for_each(f);
         }
     }
 
-    fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ParentData>) {
+    fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ChildData>) {
         if let Some(inner) = self {
             inner.for_each_mut(f);
         }
@@ -156,7 +157,7 @@ impl<S: RenderChildren> RenderChildren for Option<S> {
 
 // A dynamic run of sub-sequences laid end to end.
 impl<S: RenderChildren> RenderChildren for Vec<S> {
-    type ParentData = S::ParentData;
+    type ChildData = S::ChildData;
 
     const STATIC_LEN: usize = 0;
 
@@ -164,7 +165,7 @@ impl<S: RenderChildren> RenderChildren for Vec<S> {
         self.iter().map(S::len).sum()
     }
 
-    fn get(&self, mut index: usize) -> &RenderNode<dyn RenderBox, Self::ParentData> {
+    fn get(&self, mut index: usize) -> &RenderNode<dyn RenderBox, Self::ChildData> {
         for child in self {
             let len = child.len();
             if index < len {
@@ -175,7 +176,7 @@ impl<S: RenderChildren> RenderChildren for Vec<S> {
         panic!("child index out of bounds");
     }
 
-    fn get_mut(&mut self, mut index: usize) -> &mut RenderNode<dyn RenderBox, Self::ParentData> {
+    fn get_mut(&mut self, mut index: usize) -> &mut RenderNode<dyn RenderBox, Self::ChildData> {
         for child in self {
             let len = child.len();
             if index < len {
@@ -186,13 +187,13 @@ impl<S: RenderChildren> RenderChildren for Vec<S> {
         panic!("child index out of bounds");
     }
 
-    fn for_each(&self, f: &mut Visitor<Self::ParentData>) {
+    fn for_each(&self, f: &mut Visitor<Self::ChildData>) {
         for child in self {
             child.for_each(f);
         }
     }
 
-    fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ParentData>) {
+    fn for_each_mut(&mut self, f: &mut VisitorMut<Self::ChildData>) {
         for child in self {
             child.for_each_mut(f);
         }
@@ -201,8 +202,8 @@ impl<S: RenderChildren> RenderChildren for Vec<S> {
 
 macro_rules! impl_render_children_tuple {
     ($($T:ident => $i:tt),+) => {
-        impl<P, $($T: RenderChildren<ParentData = P>,)+> RenderChildren for ($($T,)+) {
-            type ParentData = P;
+        impl<P, $($T: RenderChildren<ChildData = P>,)+> RenderChildren for ($($T,)+) {
+            type ChildData = P;
 
             const STATIC_LEN: usize = 0 $(+ $T::STATIC_LEN)+;
 
@@ -260,7 +261,7 @@ impl_render_children_tuple!(A => 0, B => 1, C => 2, D => 3, E => 4, F => 5, G =>
 mod tests {
     use crate::render_object::{RenderChildren, box_layout::RenderBox, node::RenderNode};
 
-    // A leaf edge tagged by its `parent_data`, so the flatten's order and indexing are observable without
+    // A leaf edge tagged by its `child_data`, so the flatten's order and indexing are observable without
     // wiring a real child render.
     type Leaf = RenderNode<dyn RenderBox, usize>;
 
@@ -268,9 +269,9 @@ mod tests {
         RenderNode::new(tag)
     }
 
-    fn tags(children: &impl RenderChildren<ParentData = usize>) -> Vec<usize> {
+    fn tags(children: &impl RenderChildren<ChildData = usize>) -> Vec<usize> {
         let mut out = Vec::new();
-        children.for_each(&mut |node| out.push(node.parent_data));
+        children.for_each(&mut |node| out.push(node.child_data));
         out
     }
 
@@ -280,7 +281,7 @@ mod tests {
         assert_eq!(Leaf::STATIC_LEN, 1);
         assert_eq!(c.len(), 1);
         assert_eq!(c.dynamic_len(), 0);
-        assert_eq!(c.get(0).parent_data, 7);
+        assert_eq!(c.get(0).child_data, 7);
         assert_eq!(tags(&c), vec![7]);
     }
 
@@ -290,7 +291,7 @@ mod tests {
         assert_eq!(<Vec<Leaf>>::STATIC_LEN, 0);
         assert_eq!(c.len(), 3);
         assert_eq!(c.dynamic_len(), 3);
-        assert_eq!(c.get(1).parent_data, 2);
+        assert_eq!(c.get(1).child_data, 2);
         assert_eq!(tags(&c), vec![1, 2, 3]);
     }
 
@@ -311,7 +312,7 @@ mod tests {
         let c: (Leaf, Option<Leaf>, Vec<Leaf>) = (leaf(0), Some(leaf(1)), vec![leaf(2), leaf(3)]);
         assert_eq!(<(Leaf, Option<Leaf>, Vec<Leaf>)>::STATIC_LEN, 1);
         assert_eq!(c.len(), 4);
-        assert_eq!(c.get(2).parent_data, 2);
+        assert_eq!(c.get(2).child_data, 2);
         assert_eq!(tags(&c), vec![0, 1, 2, 3]);
     }
 
@@ -325,7 +326,7 @@ mod tests {
     #[test]
     fn for_each_mut_visits_every_child() {
         let mut c: Vec<Leaf> = vec![leaf(1), leaf(2)];
-        c.for_each_mut(&mut |node| node.parent_data *= 10);
+        c.for_each_mut(&mut |node| node.child_data *= 10);
         assert_eq!(tags(&c), vec![10, 20]);
     }
 

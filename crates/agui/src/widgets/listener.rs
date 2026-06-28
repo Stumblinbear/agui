@@ -132,7 +132,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPointerListener<Child> {
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
         let size = self.child.layout_and_get_size(ctx, constraints);
-        self.child.parent_data = Some(size);
+        self.child.child_data = Some(size);
         size
     }
 
@@ -149,7 +149,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPointerListener<Child> {
     }
 
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
-        let Some(size) = self.child.parent_data else {
+        let Some(size) = self.child.child_data else {
             return HitTest::Pass;
         };
 

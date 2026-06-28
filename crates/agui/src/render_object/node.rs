@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -195,6 +196,20 @@ impl<R: ?Sized> MountedChild<R> {
             _marker: PhantomData,
         }
     }
+
+    /// Returns the child render object's parent data, the layout configuration its parent reads to place it.
+    pub fn parent_data(&self) -> &dyn Any
+    where
+        R: RenderObject,
+    {
+        // SAFETY: as `borrow_mut`, but shared. The returned reference borrows `&self`, so the borrow checker
+        // forbids a `borrow_mut` of the same node while it is held, leaving no exclusive borrow to alias.
+        let render: &R = unsafe {
+            let inner = (self.resolve)(self.node).0;
+            &(*inner.as_ptr()).value
+        };
+        render.parent_data()
+    }
 }
 
 // The node address and resolver are plain data; copying the handle just copies them.
@@ -219,7 +234,7 @@ impl<R: RenderBox + ?Sized> LayoutBoundary for InlineBoxBoundary<R> {
 }
 
 /// A parent render object's pointer to one child render object, paired with the per-child layout state the
-/// parent keeps about it (its [`parent_data`](Self::parent_data) and pipeline flags).
+/// parent keeps about it (its [`child_data`](Self::child_data) and pipeline flags).
 ///
 /// The child render object is owned by the child's element, not here; this holds only the deferred handle to
 /// it ([`MountedChild`]), [`set`](Self::set) once the child is attached. The handle is resolved fresh each
@@ -228,7 +243,7 @@ impl<R: RenderBox + ?Sized> LayoutBoundary for InlineBoxBoundary<R> {
 /// render objects that hold the node: they call the safe forwarding methods below, which borrow the child for
 /// one call.
 pub struct RenderNode<R: ?Sized, P = ()> {
-    pub parent_data: P,
+    pub child_data: P,
 
     needs_compositing: bool,
 
@@ -241,9 +256,9 @@ pub struct RenderNode<R: ?Sized, P = ()> {
 }
 
 impl<R: ?Sized, P: Default> RenderNode<R, P> {
-    pub fn new(parent_data: P) -> Self {
+    pub fn new(child_data: P) -> Self {
         Self {
-            parent_data,
+            child_data,
 
             needs_compositing: false,
 
@@ -256,7 +271,7 @@ impl<R: ?Sized, P: Default> RenderNode<R, P> {
 impl<R: ?Sized, P: Default> Default for RenderNode<R, P> {
     fn default() -> Self {
         Self {
-            parent_data: P::default(),
+            child_data: P::default(),
 
             needs_compositing: false,
 
@@ -389,6 +404,15 @@ impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
     /// Whether this child's subtree contributes a compositing layer, as of the last recompute.
     pub fn needs_compositing(&self) -> bool {
         self.needs_compositing
+    }
+
+    /// Returns the child render object's parent data, the layout configuration this node's parent reads to
+    /// place it. Returns a value no downcast matches when the node is unwired.
+    pub fn parent_data(&self) -> &dyn Any {
+        match self.child.as_ref() {
+            Some(child) => child.parent_data(),
+            None => &(),
+        }
     }
 
     /// Records the child render object's subtree into `s`.

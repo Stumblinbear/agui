@@ -354,7 +354,7 @@ macro_rules! impl_sequence_tuple {
     ($($T:ident => $i:tt),+) => {
         impl<P, $($T,)+> WidgetSequence for ($($T,)+)
         where
-            $($T: WidgetSequence, $T::Renders: RenderChildren<ParentData = P>,)+
+            $($T: WidgetSequence, $T::Renders: RenderChildren<ChildData = P>,)+
         {
             type Elements = ($($T::Elements,)+);
             type Renders = ($($T::Renders,)+);
@@ -382,7 +382,7 @@ macro_rules! impl_sequence_tuple {
 
         impl<P, $($T,)+> ElementSequence for ($($T,)+)
         where
-            $($T: ElementSequence, $T::Renders: RenderChildren<ParentData = P>,)+
+            $($T: ElementSequence, $T::Renders: RenderChildren<ChildData = P>,)+
         {
             type Renders = ($($T::Renders,)+);
 

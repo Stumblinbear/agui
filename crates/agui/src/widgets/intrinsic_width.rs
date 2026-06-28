@@ -119,7 +119,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderIntrinsicWidth<Child> {
         }
 
         let size = self.child.layout_and_get_size(ctx, constraints);
-        self.child.parent_data = Some(size);
+        self.child.child_data = Some(size);
         size
     }
 
@@ -148,7 +148,7 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderIntrinsicWidth<Child> {
     fn hit_test(&self, result: &mut HitTestResult, position: Offset) -> HitTest {
         if !self
             .child
-            .parent_data
+            .child_data
             .expect("child has not been laid out")
             .contains(position)
         {

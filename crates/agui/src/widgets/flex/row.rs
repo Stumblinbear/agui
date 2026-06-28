@@ -9,10 +9,10 @@ use super::{
     CrossAxisAlignment, FlexConfig, MainAxisAlignment, MainAxisSize, RenderFlex, VerticalDirection,
 };
 
-/// A widget that lays its children out in a vertical run, sharing the free height among its
+/// A widget that lays its children out in a horizontal run, sharing the free width among its
 /// [`Flexible`](super::Flexible) and [`Expanded`](super::Expanded) children.
 #[derive(Builder)]
-pub struct Column<Children> {
+pub struct Row<Children> {
     #[builder(default)]
     main_axis_size: MainAxisSize,
 
@@ -30,10 +30,10 @@ pub struct Column<Children> {
     children: Children,
 }
 
-impl<Children> Column<Children> {
+impl<Children> Row<Children> {
     fn config(&self) -> FlexConfig {
         FlexConfig {
-            direction: Axis::Vertical,
+            direction: Axis::Horizontal,
             main_axis_size: self.main_axis_size,
             main_axis_alignment: self.main_axis_alignment,
             cross_axis_alignment: self.cross_axis_alignment,
@@ -43,7 +43,7 @@ impl<Children> Column<Children> {
     }
 }
 
-impl<Children> Widget for Column<Children>
+impl<Children> Widget for Row<Children>
 where
     Children: WidgetSequence,
     Children::Renders: RenderChildren<ChildData = ()> + 'static,

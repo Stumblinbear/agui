@@ -8,7 +8,7 @@ use crate::{
     element::{AnyElement, Element},
     key::AnyKeyable,
     render_object::{
-        RenderGraft, RenderObject, SingleChildRenderObject,
+        RenderObject, RenderProxy, SingleChildRenderObject,
         box_layout::RenderBox,
         node::{RenderObjectCell, RenderObjectPtr},
         sliver::RenderSliver,
@@ -84,7 +84,7 @@ where
 }
 
 /// The [`Element`] of a `Box<dyn AnyWidget<Render = dyn RenderBox>>` erasure seam, holding the boxed inner
-/// element behind a [`RenderGraft`] anchor. A type hot-swap deregisters the old inner before registering its
+/// element behind a [`RenderProxy`] anchor. A type hot-swap deregisters the old inner before registering its
 /// replacement, so the old [`NodeHandle`] dies and a dispatch still addressed to it is dropped rather than
 /// delivered to the replacement. The anchor stays put across the swap, so its boundary can be marked to lay
 /// the new subtree out.
@@ -93,13 +93,13 @@ where
 pub struct ErasedBoxElement {
     type_id: TypeId,
     child: Slot<Box<dyn AnyElement<Render = dyn RenderBox>>>,
-    render: RenderObjectCell<RenderGraft<dyn RenderBox>>,
+    render: RenderObjectCell<RenderProxy<dyn RenderBox>>,
 }
 
 // SAFETY: manages its single inner element only through the cursor child operations, and resolves its render
 // object (the graft anchor) from its own `RenderObjectCell`.
 unsafe impl Element for ErasedBoxElement {
-    type Render = RenderGraft<dyn RenderBox>;
+    type Render = RenderProxy<dyn RenderBox>;
 
     fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
         self.render.render_object_ptr()
@@ -127,7 +127,7 @@ unsafe impl Element for ErasedBoxElement {
 impl Widget for Box<dyn AnyWidget<Render = dyn RenderBox>> {
     type Element = ErasedBoxElement;
 
-    type Render = RenderGraft<dyn RenderBox>;
+    type Render = RenderProxy<dyn RenderBox>;
 
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         let type_id = (*self).dyn_widget_type_id();
@@ -136,7 +136,7 @@ impl Widget for Box<dyn AnyWidget<Render = dyn RenderBox>> {
         ErasedBoxElement {
             type_id,
             child: Slot::new(child),
-            render: RenderObjectCell::new(RenderGraft::new()),
+            render: RenderObjectCell::new(RenderProxy::new()),
         }
     }
 
