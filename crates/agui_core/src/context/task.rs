@@ -1,7 +1,7 @@
 use std::any::Any;
 
-use agui_core::scheduling::EventSender;
-use agui_core::tree::NodeHandle;
+use crate::scheduling::EventSender;
+use crate::tree::NodeHandle;
 
 /// The context a spawned task receives, for posting a message back to the element that spawned it.
 pub struct TaskCtx {
@@ -10,7 +10,7 @@ pub struct TaskCtx {
 }
 
 impl TaskCtx {
-    pub(crate) fn new(event_tx: EventSender, target: NodeHandle) -> Self {
+    pub fn new(event_tx: EventSender, target: NodeHandle) -> Self {
         Self { event_tx, target }
     }
 

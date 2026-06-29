@@ -2,13 +2,14 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use agui_core::build_queue::BuildQueue;
 use agui_core::tree::{NodeHandle, Tree};
 
 use crate::{
     context::{CreateCtx, MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element},
-    pipeline::build_tree::{Build, BuildQueue, Operation, run},
+    pipeline::build_tree::{Build, Operation, run},
     pipeline::render_pipeline::{RenderPipeline, SemanticsBoundaryId},
     provide::ProvideScope,
     render_object::box_layout::AnyRenderBox,

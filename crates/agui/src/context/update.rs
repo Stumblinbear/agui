@@ -7,7 +7,9 @@ use agui_core::tree::{Cursor, NodeContainer, NodeHandle};
 
 use crate::context::{BuildCtx, CreateCtx, TaskCtx};
 use crate::element::Element;
-use crate::pipeline::build_tree::{Build, BuildQueue, run};
+use agui_core::build_queue::BuildQueue;
+
+use crate::pipeline::build_tree::{Build, run};
 use crate::pipeline::render_pipeline::{
     DeferredSemanticsScope, LayoutScope, PaintScope, RenderPipeline, SemanticsScope,
 };

@@ -1,9 +1,8 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use agui_core::tree::NodeHandle;
-
 use crate::provide::ProvideScope;
+use crate::tree::NodeHandle;
 
 /// The context passed to a widget's `build`: the values in scope, but no cursor and no pipeline. A build
 /// composes a child widget description; it cannot restructure the tree or plant render boundaries.
@@ -13,7 +12,7 @@ pub struct BuildCtx {
 }
 
 impl BuildCtx {
-    pub(crate) fn new(provide: ProvideScope, handle: NodeHandle) -> Self {
+    pub fn new(provide: ProvideScope, handle: NodeHandle) -> Self {
         Self { provide, handle }
     }
 

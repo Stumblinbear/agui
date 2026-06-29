@@ -1,8 +1,7 @@
 use std::any::Any;
 
-use agui_core::tree::NodeHandle;
-
-use crate::pipeline::build_tree::BuildQueue;
+use crate::build_queue::BuildQueue;
+use crate::tree::NodeHandle;
 
 /// The context passed to an element while it handles a message: the payload and the build queue. It has no
 /// cursor, so a message cannot restructure the tree.

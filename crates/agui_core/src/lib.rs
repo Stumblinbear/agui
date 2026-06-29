@@ -7,6 +7,8 @@
 #![allow(clippy::return_self_not_must_use)]
 #![warn(clippy::clone_on_ref_ptr)]
 
+pub mod build_queue;
+pub mod context;
 pub mod diagnostics;
 pub mod dirty;
 pub mod key;
