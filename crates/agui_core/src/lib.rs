@@ -16,4 +16,5 @@ pub mod key;
 pub mod provide;
 pub mod render_object;
 pub mod scheduling;
+pub mod scope;
 pub mod tree;

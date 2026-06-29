@@ -11,7 +11,7 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-use slotmap::{Key, SlotMap, new_key_type};
+use slotmap::{Key, SlotMap};
 
 use crate::{
     context::{LayoutCtx, PaintCtx},
@@ -25,14 +25,9 @@ use crate::{
     semantics::{SemanticsTree, SemanticsTreeBuilder},
 };
 
-new_key_type! {
-    /// Identifies a relayout boundary within one pipeline.
-    pub struct LayoutBoundaryId;
-    /// Identifies a repaint boundary within one pipeline.
-    pub struct PaintBoundaryId;
-    /// Identifies a semantics boundary within one pipeline.
-    pub struct SemanticsBoundaryId;
-}
+pub use agui_core::scope::{
+    LayoutBoundaryId, LayoutScope, PaintBoundaryId, PaintScope, SemanticsBoundaryId, SemanticsScope,
+};
 
 /// A relayout boundary the pipeline re-lays on its own. The pipeline drives it from
 /// [`flush_layout`](RenderPipeline::flush_layout) knowing nothing of the layout protocol behind it: the
@@ -709,42 +704,6 @@ impl Inner {
     }
 }
 
-/// Names the relayout boundary a render object is laid out under: an id into the pipeline, threaded down
-/// through layout. A node forwards it to the children it lays out and stores it to request a relayout later.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct LayoutScope(pub(crate) LayoutBoundaryId);
-
-impl LayoutScope {
-    /// A scope detached from any pipeline, which names no boundary, so registering under it registers at the
-    /// root and a node laid out under it is not itself a boundary.
-    pub fn detached() -> Self {
-        Self(LayoutBoundaryId::null())
-    }
-
-    /// Whether this scope names no boundary.
-    pub fn is_detached(&self) -> bool {
-        self.0.is_null()
-    }
-}
-
-/// Names the repaint boundary a render object paints into: an id into the pipeline, threaded down through
-/// paint. A node holds the scope of its nearest enclosing boundary to repaint it when its painting goes
-/// stale.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PaintScope(pub(crate) PaintBoundaryId);
-
-impl PaintScope {
-    /// A scope that names no boundary.
-    pub fn detached() -> Self {
-        Self(PaintBoundaryId::null())
-    }
-
-    /// Whether this scope names no boundary.
-    pub fn is_detached(&self) -> bool {
-        self.0.is_null()
-    }
-}
-
 /// The sole owner of a registered relayout boundary, held by the render object that established it. Dropping
 /// it unregisters the boundary. Hand descendants the [`scope`](Self::scope) to mark, and request a re-layout
 /// of the boundary itself with [`mark_needs_layout`](Self::mark_needs_layout).
@@ -960,25 +919,6 @@ impl Drop for SemanticsBoundaryHandle {
         // Drop the removed cell only after the borrow is released: it holds the boundary's render object,
         // whose drop may re-borrow the pipeline to unregister nested boundaries.
         drop(removed);
-    }
-}
-
-/// Names the semantics boundary a render object marks: an id into the pipeline, threaded down through build.
-/// A node holds the scope of its enclosing boundary to mark it during a reconcile.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct SemanticsScope(pub(crate) SemanticsBoundaryId);
-
-impl Default for SemanticsScope {
-    fn default() -> Self {
-        Self::detached()
-    }
-}
-
-impl SemanticsScope {
-    /// A scope that names no boundary.
-    #[must_use]
-    pub fn detached() -> Self {
-        Self(SemanticsBoundaryId::null())
     }
 }
 
