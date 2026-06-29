@@ -13,7 +13,7 @@ use crate::pipeline::render_pipeline::{
 };
 use crate::provide::ProvideScope;
 use crate::render_object::node::{MountedChild, RenderObjectPtr};
-use crate::scheduling::{TaskHandle, TaskScheduler};
+use agui_core::scheduling::{TaskHandle, TaskScheduler};
 
 /// The context passed to an element during a cursor-bearing lifecycle hook: mount, unmount, rebuild, or a
 /// dependency change. It carries a cursor to edit the element's children, the values in scope, the dirty

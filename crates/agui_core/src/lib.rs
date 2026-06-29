@@ -10,4 +10,6 @@
 pub mod diagnostics;
 pub mod dirty;
 pub mod key;
+pub mod provide;
+pub mod scheduling;
 pub mod tree;

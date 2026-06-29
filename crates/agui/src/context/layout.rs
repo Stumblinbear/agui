@@ -8,7 +8,7 @@ use crate::pipeline::render_pipeline::{
     DeferredLayoutScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintScope,
     RenderPipeline,
 };
-use crate::scheduling::TaskScheduler;
+use agui_core::scheduling::TaskScheduler;
 
 /// The context threaded through a layout pass: the pipeline to register and mark boundaries against, the
 /// relayout boundary in force, and, in a real frame, the element-tree access a `LayoutBuilder` needs to build

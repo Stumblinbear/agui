@@ -22,7 +22,7 @@ pub mod paint;
 pub mod pipeline;
 pub mod provide;
 pub mod render_object;
-pub mod scheduling;
+pub use agui_core::scheduling;
 pub mod semantics;
 pub mod stateful;
 pub mod stateless;

@@ -1,8 +1,7 @@
 use std::any::Any;
 
+use agui_core::scheduling::EventSender;
 use agui_core::tree::NodeHandle;
-
-use crate::scheduling::EventSender;
 
 /// The context a spawned task receives, for posting a message back to the element that spawned it.
 pub struct TaskCtx {

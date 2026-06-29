@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies]
+rustc-hash.workspace = true
 slotmap.workspace = true
 
 [dev-dependencies]
