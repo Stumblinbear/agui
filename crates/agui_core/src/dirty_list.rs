@@ -1,17 +1,13 @@
-//! A set of dirty node handles, the reactivity engine's scheduling primitive. A driver marks handles as
-//! work is requested, then drains them shallowest-first so a parent is processed before any child it might
-//! reconcile. The set lives with the driver, not on the [`Tree`], so each pass keeps its own.
-
 use crate::tree::{NodeDispatch, NodeHandle, Tree};
 
-/// A set of node handles awaiting work.
+/// A list of node handles awaiting work, drained shallowest-first. A handle marked twice is queued once.
 #[derive(Default)]
-pub struct Dirty {
+pub struct DirtyList {
     handles: Vec<NodeHandle>,
 }
 
-impl Dirty {
-    /// An empty set.
+impl DirtyList {
+    /// An empty list.
     pub fn new() -> Self {
         Self::default()
     }
@@ -59,7 +55,7 @@ mod tests {
 
     use crate::tree::{Cursor, NodeDispatch, Slot, Tree};
 
-    use super::Dirty;
+    use super::DirtyList;
 
     // A minimal consumer: mount threads a cursor; these tests never dispatch, so the glue is never called.
     struct App;
@@ -128,7 +124,7 @@ mod tests {
         let mid = tree.root().mid.handle();
         let leaf = tree.root().mid.get().leaf.handle();
 
-        let mut dirty = Dirty::new();
+        let mut dirty = DirtyList::new();
         dirty.mark(leaf);
         dirty.mark(root);
         dirty.mark(mid);
@@ -145,7 +141,7 @@ mod tests {
         let tree = tree();
         let root = tree.root_handle();
 
-        let mut dirty = Dirty::new();
+        let mut dirty = DirtyList::new();
         dirty.mark(root);
         dirty.mark(root);
 

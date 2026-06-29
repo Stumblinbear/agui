@@ -1,21 +1,20 @@
 use rustc_hash::FxHashSet;
 
-use crate::dirty::Dirty;
+use crate::dirty_list::DirtyList;
 use crate::tree::{NodeDispatch, NodeHandle, Tree};
 
-/// The build-phase work queue: the handles waiting to rebuild, plus which of them changed a provided value
-/// and so also run their dependency-change hook before rebuilding. Wraps the core [`Dirty`] set with that
-/// dependency-change distinction; held by the driver and threaded to elements through their contexts.
+/// The handles waiting to rebuild, and which of them also changed a provided value and so run their
+/// dependency-change hook before their rebuild.
 #[derive(Default)]
 pub struct BuildQueue {
-    dirty: Dirty,
+    dirty: DirtyList,
     dependency_changed: FxHashSet<NodeHandle>,
 }
 
 impl BuildQueue {
     pub fn new() -> Self {
         Self {
-            dirty: Dirty::new(),
+            dirty: DirtyList::new(),
             dependency_changed: FxHashSet::default(),
         }
     }
