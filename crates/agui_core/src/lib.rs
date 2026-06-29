@@ -11,5 +11,6 @@ pub mod diagnostics;
 pub mod dirty;
 pub mod key;
 pub mod provide;
+pub mod render_object;
 pub mod scheduling;
 pub mod tree;

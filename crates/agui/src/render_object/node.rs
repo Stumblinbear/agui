@@ -1,10 +1,10 @@
 use std::any::Any;
-use std::cell::{Cell, UnsafeCell};
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::ptr::NonNull;
 
 use typed_floats::{Positive, PositiveFinite};
+
+pub use agui_core::render_object::{
+    MountedChild, RenderObjectCell, RenderObjectMut, RenderObjectPtr, RenderObjectRef,
+};
 
 use crate::{
     context::PaintCtx,
@@ -16,209 +16,10 @@ use crate::{
     render_object::{
         LayoutCtx, RenderObject,
         box_layout::{BoxConstraints, RenderBox},
-        sliver::RenderSliver,
     },
     semantics::SemanticsTreeBuilder,
     text::TextBaseline,
 };
-
-/// Storage for an element's render object. The render object is interior-mutable, so a parent reaching it
-/// during layout and an isolated relayout can both borrow it as `&mut` across the `&mut element` retags of
-/// rebuilds without aliasing UB. Borrowed only during a layout or paint pass.
-///
-/// An element holds its render object in one of these and hands a parent a pointer to it with
-/// [`render_object_ptr`](Self::render_object_ptr). Render-object code never sees the cell: it receives a plain
-/// `&mut R`.
-///
-/// In debug it asserts no overlapping borrow; in release it is a bare [`UnsafeCell`], the same size as `R`.
-pub struct RenderObjectCell<R: ?Sized> {
-    inner: UnsafeCell<RenderObjectInner<R>>,
-}
-
-/// The interior of a [`RenderObjectCell`]: the render object plus, in debug, a borrow flag. The flag lives
-/// inside the cell so it is reachable through the same `.get()`-derived pointer as the render object.
-struct RenderObjectInner<R: ?Sized> {
-    #[cfg(debug_assertions)]
-    borrows: Cell<isize>,
-    // Last field, so `RenderObjectInner<Concrete>` unsizes to `RenderObjectInner<dyn …>`.
-    value: R,
-}
-
-impl<R> RenderObjectCell<R> {
-    pub fn new(value: R) -> Self {
-        Self {
-            inner: UnsafeCell::new(RenderObjectInner {
-                #[cfg(debug_assertions)]
-                borrows: Cell::new(0),
-                value,
-            }),
-        }
-    }
-}
-
-impl<R: ?Sized> RenderObjectCell<R> {
-    /// The render object, by exclusive reference.
-    pub fn get_mut(&mut self) -> &mut R {
-        &mut self.inner.get_mut().value
-    }
-
-    /// A pointer to the render object, taken via `.get()` so it carries interior-mutable provenance. A
-    /// parent's [`RenderNode`] resolves one of these each pass and borrows it.
-    pub fn render_object_ptr(&self) -> RenderObjectPtr<R> {
-        // SAFETY: `.get()` is the blessed interior-mutable derivation; the pointer is borrowed only at pass time.
-        RenderObjectPtr(unsafe { NonNull::new_unchecked(self.inner.get()) })
-    }
-}
-
-/// A pointer to a render object's [`RenderObjectCell`], resolved during a pass and borrowed to reach the
-/// render object. An element produces one with [`Element::render_object_ptr`]; a parent's [`RenderNode`]
-/// resolves it fresh each pass from the child's address.
-///
-/// [`Element::render_object_ptr`]: crate::element::Element::render_object_ptr
-pub struct RenderObjectPtr<R: ?Sized>(NonNull<RenderObjectInner<R>>);
-
-impl<R> RenderObjectPtr<R> {
-    /// A placeholder for a render-less element (`Render = ()`), never dereferenced.
-    pub fn dangling() -> Self {
-        RenderObjectPtr(NonNull::dangling())
-    }
-}
-
-impl<R: RenderBox> RenderObjectPtr<R> {
-    /// Erases this to the boxed protocol, for a wrapper that adapts a concrete child into `dyn RenderBox`.
-    pub fn into_box(self) -> RenderObjectPtr<dyn RenderBox> {
-        // The annotation drives the unsizing coercion; `as` could not.
-        let inner: *mut RenderObjectInner<dyn RenderBox> = self.0.as_ptr();
-        // SAFETY: non-null, since it came from a `NonNull`.
-        RenderObjectPtr(unsafe { NonNull::new_unchecked(inner) })
-    }
-}
-
-impl<R: RenderSliver> RenderObjectPtr<R> {
-    /// Erases this to the sliver protocol, for a wrapper that adapts a concrete child into `dyn RenderSliver`.
-    pub fn into_sliver(self) -> RenderObjectPtr<dyn RenderSliver> {
-        let inner: *mut RenderObjectInner<dyn RenderSliver> = self.0.as_ptr();
-        // SAFETY: non-null, since it came from a `NonNull`.
-        RenderObjectPtr(unsafe { NonNull::new_unchecked(inner) })
-    }
-}
-
-/// A scoped shared borrow of a render object reached through a [`RenderNode`].
-pub struct RenderObjectRef<'a, R: ?Sized> {
-    inner: NonNull<RenderObjectInner<R>>,
-    _marker: PhantomData<&'a R>,
-}
-
-impl<R: ?Sized> Deref for RenderObjectRef<'_, R> {
-    type Target = R;
-
-    fn deref(&self) -> &R {
-        // SAFETY: `RenderNode::borrow` established access for this guard's lifetime.
-        unsafe { &(*self.inner.as_ptr()).value }
-    }
-}
-
-/// A scoped exclusive borrow of a render object reached through a [`RenderNode`].
-pub struct RenderObjectMut<'a, R: ?Sized> {
-    inner: NonNull<RenderObjectInner<R>>,
-    _marker: PhantomData<&'a mut R>,
-}
-
-impl<R: ?Sized> Deref for RenderObjectMut<'_, R> {
-    type Target = R;
-
-    fn deref(&self) -> &R {
-        // SAFETY: `RenderNode::borrow_mut` established access for this guard's lifetime.
-        unsafe { &(*self.inner.as_ptr()).value }
-    }
-}
-
-impl<R: ?Sized> DerefMut for RenderObjectMut<'_, R> {
-    fn deref_mut(&mut self) -> &mut R {
-        // SAFETY: as `deref`.
-        unsafe { &mut (*self.inner.as_ptr()).value }
-    }
-}
-
-#[cfg(debug_assertions)]
-impl<R: ?Sized> Drop for RenderObjectRef<'_, R> {
-    fn drop(&mut self) {
-        // SAFETY: the cell outlives the borrow held during the pass.
-        let borrows = unsafe { &(*self.inner.as_ptr()).borrows };
-        borrows.set(borrows.get() - 1);
-    }
-}
-
-#[cfg(debug_assertions)]
-impl<R: ?Sized> Drop for RenderObjectMut<'_, R> {
-    fn drop(&mut self) {
-        // SAFETY: the cell outlives the borrow held during the pass.
-        unsafe { (*self.inner.as_ptr()).borrows.set(0) };
-    }
-}
-
-/// A parent's deferred handle to a child render object: the child node's address plus how to resolve its
-/// render object pointer from it. Resolved fresh each pass, never dereferenced at mount, where the protected
-/// `&mut element` mount chain would forbid reaching the child through this separate address.
-pub struct MountedChild<R: ?Sized> {
-    node: NonNull<()>,
-    resolve: unsafe fn(NonNull<()>) -> RenderObjectPtr<R>,
-}
-
-impl<R: ?Sized> MountedChild<R> {
-    /// Builds the handle from the child node's `address` and a `resolve` that projects it to the child's
-    /// render object pointer. [`UpdateCtx::mount`](crate::context::UpdateCtx::mount) is the only caller.
-    ///
-    /// # Safety
-    /// - `address` must be the mounted child node's address, valid for as long as the child is mounted.
-    /// - `resolve` must project that address to the child's render object pointer.
-    /// - Resolving the returned handle accesses the child's render object, so every later resolution must
-    ///   uphold [`Element`](crate::element::Element)'s contract: it must not coexist with a borrow of the child
-    ///   element.
-    pub unsafe fn new(
-        address: NonNull<()>,
-        resolve: unsafe fn(NonNull<()>) -> RenderObjectPtr<R>,
-    ) -> Self {
-        Self {
-            node: address,
-            resolve,
-        }
-    }
-
-    /// Resolves and exclusively borrows the child render object, for a boundary holding this handle to re-lay or
-    /// repaint it. As with [`RenderNode::borrow_mut`], call only during a pass.
-    pub fn borrow_mut(&self) -> RenderObjectMut<'_, R> {
-        // SAFETY: as `RenderNode::resolve`. No borrow of the child element is live, so this does not alias one.
-        let inner = unsafe { (self.resolve)(self.node) }.0;
-        debug_mark_exclusive(inner);
-        RenderObjectMut {
-            inner,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Returns the child render object's parent data, the layout configuration its parent reads to place it.
-    pub fn parent_data(&self) -> &dyn Any
-    where
-        R: RenderObject,
-    {
-        // SAFETY: as `borrow_mut`, but shared. The returned reference borrows `&self`, so the borrow checker
-        // forbids a `borrow_mut` of the same node while it is held, leaving no exclusive borrow to alias.
-        let render: &R = unsafe {
-            let inner = (self.resolve)(self.node).0;
-            &(*inner.as_ptr()).value
-        };
-        render.parent_data()
-    }
-}
-
-// The node address and resolver are plain data; copying the handle just copies them.
-impl<R: ?Sized> Clone for MountedChild<R> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<R: ?Sized> Copy for MountedChild<R> {}
 
 /// A relayout boundary for an inline box render object: the deferred handle to it plus the box constraints it
 /// last took. At flush it resolves the handle and re-lays the render object under those constraints.
@@ -313,22 +114,14 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     /// # Panics
     /// If the child is unwired (reached before mount).
     pub unsafe fn child_handle(&self) -> MountedChild<R> {
-        *self
-            .child
-            .as_ref()
-            .expect("child render node used before it was wired at mount")
+        *self.child()
     }
 
-    /// Resolves the child's render object pointer, fresh, from its mounted address.
-    fn resolve(&self) -> RenderObjectPtr<R> {
-        let handle = self
-            .child
+    /// The wired child handle, or a panic if reached before mount.
+    fn child(&self) -> &MountedChild<R> {
+        self.child
             .as_ref()
-            .expect("child render node used before it was wired at mount");
-
-        // SAFETY: no borrow of the child element is live here, so resolving its render object pointer cannot
-        // alias one. The resolver projects the live child's address, derived shared so it survives rebuilds.
-        unsafe { (handle.resolve)(handle.node) }
+            .expect("child render node used before it was wired at mount")
     }
 
     /// Borrows the child render object for one forwarding call, by shared reference. The typed forwarders
@@ -340,12 +133,7 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     /// If the child is unwired (reached before mount). In debug, also if the render object is currently
     /// borrowed mutably.
     pub fn borrow(&self) -> RenderObjectRef<'_, R> {
-        let inner = self.resolve().0;
-        debug_mark_shared(inner);
-        RenderObjectRef {
-            inner,
-            _marker: PhantomData,
-        }
+        self.child().borrow()
     }
 
     /// Borrows the child render object for one forwarding call, by exclusive reference. The typed forwarders
@@ -357,47 +145,8 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     /// If the child is unwired (reached before mount). In debug, also if the render object is already
     /// borrowed, mutably or shared.
     pub fn borrow_mut(&mut self) -> RenderObjectMut<'_, R> {
-        let inner = self.resolve().0;
-        debug_mark_exclusive(inner);
-        RenderObjectMut {
-            inner,
-            _marker: PhantomData,
-        }
+        self.child().borrow_mut()
     }
-}
-
-/// In debug, registers a shared borrow of the render object behind `inner`, panicking if it is currently
-/// borrowed exclusively. The matching [`RenderObjectRef`] releases it on drop. A no-op in release.
-#[cfg_attr(not(debug_assertions), inline(always))]
-fn debug_mark_shared<R: ?Sized>(inner: NonNull<RenderObjectInner<R>>) {
-    #[cfg(debug_assertions)]
-    {
-        // SAFETY: the child cell is live and pinned for as long as the pass holds it.
-        let borrows = unsafe { &(*inner.as_ptr()).borrows };
-        assert!(
-            borrows.get() >= 0,
-            "render object reached for a shared borrow while it is borrowed mutably"
-        );
-        borrows.set(borrows.get() + 1);
-    }
-    let _ = inner;
-}
-
-/// In debug, registers an exclusive borrow of the render object behind `inner`, panicking if any borrow is
-/// currently live. The matching [`RenderObjectMut`] releases it on drop. A no-op in release.
-#[cfg_attr(not(debug_assertions), inline(always))]
-fn debug_mark_exclusive<R: ?Sized>(inner: NonNull<RenderObjectInner<R>>) {
-    #[cfg(debug_assertions)]
-    {
-        // SAFETY: the child cell is live and pinned for as long as the pass holds it.
-        let borrows = unsafe { &(*inner.as_ptr()).borrows };
-        assert!(
-            borrows.get() == 0,
-            "render object reached for an exclusive borrow while it is already borrowed"
-        );
-        borrows.set(-1);
-    }
-    let _ = inner;
 }
 
 impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
@@ -410,7 +159,9 @@ impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
     /// place it. Returns a value no downcast matches when the node is unwired.
     pub fn parent_data(&self) -> &dyn Any {
         match self.child.as_ref() {
-            Some(child) => child.parent_data(),
+            // SAFETY: a pass-time shared read bound to `&self`, so the borrow checker forbids a `borrow_mut`
+            // of the same node while it is held, leaving no exclusive borrow to alias.
+            Some(child) => unsafe { child.value_ref() }.parent_data(),
             None => &(),
         }
     }
@@ -490,10 +241,7 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
     /// later isolated re-lay uses the latest. An existing boundary is updated in place: re-registering would
     /// hand out a new scope, stranding the one descendants captured.
     fn register_boundary(&mut self, ctx: &LayoutCtx, constraints: BoxConstraints) -> LayoutScope {
-        let handle = *self
-            .child
-            .as_ref()
-            .expect("child render node used before it was wired at mount");
+        let handle = *self.child();
 
         let boundary = Box::new(InlineBoxBoundary {
             handle,

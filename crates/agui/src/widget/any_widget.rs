@@ -1,5 +1,7 @@
 use std::any::{Any, TypeId};
+use std::ptr::NonNull;
 
+use agui_core::render_object::RenderObjectInner;
 use agui_core::tree::Slot;
 
 use crate::{
@@ -327,6 +329,21 @@ where
     }
 }
 
+/// Erases a concrete render-box pointer into the boxed `dyn RenderBox` protocol form, the unsizing step that
+/// lets a typed render object sit in a heterogeneous child list.
+fn erase_to_box<R: RenderBox>(ptr: RenderObjectPtr<R>) -> RenderObjectPtr<dyn RenderBox> {
+    let inner: NonNull<RenderObjectInner<dyn RenderBox>> = ptr.as_inner();
+    // SAFETY: the same live cell, its `R` coerced to `dyn RenderBox`.
+    unsafe { RenderObjectPtr::from_inner(inner) }
+}
+
+/// Erases a concrete render-sliver pointer into the boxed `dyn RenderSliver` protocol form.
+fn erase_to_sliver<R: RenderSliver>(ptr: RenderObjectPtr<R>) -> RenderObjectPtr<dyn RenderSliver> {
+    let inner: NonNull<RenderObjectInner<dyn RenderSliver>> = ptr.as_inner();
+    // SAFETY: the same live cell, its `R` coerced to `dyn RenderSliver`.
+    unsafe { RenderObjectPtr::from_inner(inner) }
+}
+
 /// The [`Element`] of a [`RenderBoxWrapper`]: the same node as its inner element, re-typed to the erased
 /// box render. Every lifecycle hook forwards to the inner.
 pub struct RenderBoxElement<E> {
@@ -343,7 +360,7 @@ where
     type Render = dyn RenderBox;
 
     fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderBox> {
-        self.inner.render_object_ptr().into_box()
+        erase_to_box(self.inner.render_object_ptr())
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
@@ -423,7 +440,7 @@ where
     type Render = dyn RenderSliver;
 
     fn render_object_ptr(&self) -> RenderObjectPtr<dyn RenderSliver> {
-        self.inner.render_object_ptr().into_sliver()
+        erase_to_sliver(self.inner.render_object_ptr())
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
