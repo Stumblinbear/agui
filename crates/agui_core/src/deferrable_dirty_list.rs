@@ -4,10 +4,11 @@ use std::rc::Rc;
 /// A list of ids marked dirty, drained as a batch. Marks may also be deferred and applied on the next drain.
 pub struct DeferrableDirtyList<K> {
     dirty: Vec<K>,
-    /// Marks deferred through [`deferred_queue`](Self::deferred_queue), applied by
-    /// [`drain_deferred`](Self::drain_deferred).
+    /// Marks deferred through [`deferred_queue`](Self::deferred_queue), applied by the next
+    /// [`take_dirty`](Self::take_dirty).
     deferred: Rc<RefCell<Vec<K>>>,
-    /// A drained list retained for the next [`take_dirty`](Self::take_dirty) to reuse.
+    /// Holds the ids from the last [`take_dirty`](Self::take_dirty) for reading through
+    /// [`drained`](Self::drained), and is reused as the next drain's buffer.
     scratch: Vec<K>,
 }
 
@@ -34,33 +35,27 @@ impl<K> DeferrableDirtyList<K> {
         self.dirty.is_empty()
     }
 
-    /// Drains the marked ids, leaving the list clean. The batch is unordered and may contain an id more than
-    /// once.
-    pub fn take_dirty(&mut self) -> Vec<K> {
-        let mut out = std::mem::take(&mut self.scratch);
-        out.clear();
-        std::mem::swap(&mut self.dirty, &mut out);
-        out
+    /// Applies any deferred marks, then moves all marked ids into the drain buffer, leaving the list clean,
+    /// and returns the buffer to sort and dedup before reading it through [`drained`](Self::drained). The
+    /// contents are unordered and may repeat an id. A mark made before the next call lands on the now-empty
+    /// list, untouched by the drain in flight.
+    pub fn take_dirty(&mut self) -> &mut Vec<K> {
+        self.dirty.append(&mut self.deferred.borrow_mut());
+        self.scratch.clear();
+        std::mem::swap(&mut self.dirty, &mut self.scratch);
+        &mut self.scratch
     }
 
-    /// Hands a drained list back for the next [`take_dirty`](Self::take_dirty) to reuse.
-    pub fn recycle(&mut self, mut drained: Vec<K>) {
-        drained.clear();
-        self.scratch = drained;
+    /// The ids moved aside by the last [`take_dirty`](Self::take_dirty), as left by any sort or dedup applied
+    /// to them.
+    pub fn drained(&self) -> &[K] {
+        &self.scratch
     }
 
     /// The shared queue of deferred marks. Pushing an id into it marks that id on the next
-    /// [`drain_deferred`](Self::drain_deferred).
+    /// [`take_dirty`](Self::take_dirty).
     pub fn deferred_queue(&self) -> Rc<RefCell<Vec<K>>> {
         Rc::clone(&self.deferred)
-    }
-
-    /// Applies the deferred marks, moving each onto the dirty list.
-    pub fn drain_deferred(&mut self) {
-        let queued: Vec<K> = self.deferred.borrow_mut().drain(..).collect();
-        for id in queued {
-            self.mark(id);
-        }
     }
 }
 
@@ -74,7 +69,8 @@ mod tests {
         list.mark(1);
         list.mark(3);
 
-        assert_eq!(list.take_dirty(), vec![1, 3]);
+        list.take_dirty();
+        assert_eq!(list.drained(), [1, 3]);
     }
 
     #[test]
@@ -94,9 +90,8 @@ mod tests {
         let mut list = DeferrableDirtyList::<u32>::default();
 
         list.mark(1);
-        let drained = list.take_dirty();
-        assert_eq!(drained, vec![1]);
-        list.recycle(drained);
+        list.take_dirty();
+        assert_eq!(list.drained(), [1]);
 
         assert!(list.is_clean());
         assert!(list.mark(1), "clean again, so the mark transitions it");
@@ -112,7 +107,7 @@ mod tests {
             "a deferred mark does not enqueue until drained"
         );
 
-        list.drain_deferred();
-        assert_eq!(list.take_dirty(), vec![1]);
+        list.take_dirty();
+        assert_eq!(list.drained(), [1]);
     }
 }

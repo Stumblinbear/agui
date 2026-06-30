@@ -1,7 +1,7 @@
 /// Which phase of a frame the [`PipelineOwner`](super::PipelineOwner) is running, in order: build, then
 /// layout, then compositing bits, then paint, then composite. The [`RenderPipeline`] holds the current
-/// phase and rejects a mark made once a later phase is running, since the pipeline being marked already ran
-/// this frame.
+/// phase and rejects a mark whose phase is the one now running or one already past, since that phase has run
+/// this frame and cannot act on the mark.
 ///
 /// [`RenderPipeline`]: super::render_pipeline::RenderPipeline
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
@@ -17,15 +17,15 @@ pub(crate) enum FramePhase {
 }
 
 impl FramePhase {
-    /// Asserts that a pipeline whose phase is `own` may be marked while `self` is the phase now running.
+    /// Asserts that a pipeline whose phase is `own` may be marked before the current phase `self` runs.
     ///
     /// # Panics
     ///
-    /// Panics if `self` is a phase later than `own`, since that already-run pipeline cannot act on the mark
-    /// this frame.
+    /// Panics if `own` is the running phase `self` or one before it, since that phase has run this frame and
+    /// cannot act on the mark.
     pub(crate) fn assert_can_mark(self, own: FramePhase) {
         assert!(
-            self <= own,
+            self < own,
             "cannot mark {own:?} work during the {self:?} phase, which already ran this frame"
         );
     }
@@ -41,11 +41,16 @@ mod tests {
         FramePhase::Idle.assert_can_mark(FramePhase::Build);
         FramePhase::Idle.assert_can_mark(FramePhase::Paint);
 
-        // During layout, layout and every later pipeline may still be marked.
-        FramePhase::Layout.assert_can_mark(FramePhase::Layout);
+        // During layout, only a later pipeline may still be marked.
         FramePhase::Layout.assert_can_mark(FramePhase::CompositingBits);
         FramePhase::Layout.assert_can_mark(FramePhase::Paint);
         FramePhase::Layout.assert_can_mark(FramePhase::Composite);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot mark Layout work during the Layout phase")]
+    fn marking_the_running_phase_panics() {
+        FramePhase::Layout.assert_can_mark(FramePhase::Layout);
     }
 
     #[test]

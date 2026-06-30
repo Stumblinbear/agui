@@ -13,6 +13,8 @@ use std::rc::{Rc, Weak};
 
 use slotmap::{Key, SlotMap};
 
+use agui_core::deferrable_dirty_list::DeferrableDirtyList;
+
 use crate::{
     context::{LayoutCtx, PaintCtx},
     geometry::Offset,
@@ -51,17 +53,13 @@ struct Inner {
     phase: FramePhase,
 
     layout: SlotMap<LayoutBoundaryId, LayoutBoundaryCell>,
-    /// The relayout boundaries waiting to be re-laid, with a per-boundary `enrolled` flag preventing a
-    /// second mark from enrolling one twice.
-    layout_dirty: Vec<LayoutBoundaryId>,
-    layout_deferred: Rc<RefCell<Vec<LayoutBoundaryId>>>,
-    layout_scratch: Vec<LayoutBoundaryId>,
+    layout_dirty: DeferrableDirtyList<LayoutBoundaryId>,
 
     paint: SlotMap<PaintBoundaryId, PaintBoundary>,
-    paint_bits_dirty: Vec<PaintBoundaryId>,
-    paint_dirty: Vec<PaintBoundaryId>,
+    paint_bits: DeferrableDirtyList<PaintBoundaryId>,
+    paint_repaint: DeferrableDirtyList<PaintBoundaryId>,
+    /// Repaint marks made out of band, each tagged with the phase it owes, applied by `drain_paint_deferred`.
     paint_deferred: Rc<RefCell<Vec<(PaintBoundaryId, PaintPhase)>>>,
-    paint_scratch: Vec<PaintBoundaryId>,
 
     /// A layer's placement changed and the subtree must recomposite, with no boundary to repaint.
     needs_composite: bool,
@@ -71,9 +69,7 @@ struct Inner {
     notify_needs_frame: Box<dyn Fn()>,
 
     semantics: SlotMap<SemanticsBoundaryId, SemanticsBoundaryCell>,
-    semantics_dirty: Vec<SemanticsBoundaryId>,
-    semantics_deferred: Rc<RefCell<Vec<SemanticsBoundaryId>>>,
-    semantics_scratch: Vec<SemanticsBoundaryId>,
+    semantics_dirty: DeferrableDirtyList<SemanticsBoundaryId>,
     /// The monotonic source of semantics node ids for this pipeline. A node minted on any walk takes the next
     /// value, so ids stay unique across boundaries and across walks.
     semantics_counter: u64,
@@ -92,10 +88,6 @@ struct LayoutBoundaryCell {
     /// The repaint boundary enclosing this one, marked when this boundary re-lays so the re-laid subtree
     /// repaints.
     paint: PaintScope,
-    /// Awaiting re-layout; cleared when the boundary is re-laid.
-    needs_layout: bool,
-    /// In `layout_dirty`, so a second mark does not enroll it twice.
-    enrolled: bool,
 }
 
 struct PaintBoundary {
@@ -104,15 +96,10 @@ struct PaintBoundary {
     layer: LayerHandle<OffsetLayer>,
     /// The buffer lengths the last repaint recorded, sizing the next repaint's buffers.
     paint_capacity: SceneCapacity,
-    /// Bit 0: in `paint_bits_dirty`. Bit 1: in `paint_dirty`. Keeps a second mark from enrolling twice.
-    enrolled: u8,
 }
 
 struct SemanticsBoundaryCell {
     content: BoundaryContent,
-
-    /// In `semantics_dirty`, so a second mark does not enroll it twice.
-    enrolled: bool,
 }
 
 /// What a repaint boundary recomputes its compositing bits and repaints: the root view's render object, held
@@ -158,25 +145,20 @@ impl Default for RenderPipeline {
         Self {
             inner: Rc::new(RefCell::new(Inner {
                 layout: SlotMap::with_key(),
-                layout_dirty: Vec::new(),
-                layout_deferred: Rc::new(RefCell::new(Vec::new())),
-                layout_scratch: Vec::new(),
+                layout_dirty: DeferrableDirtyList::default(),
 
                 paint: SlotMap::with_key(),
-                paint_bits_dirty: Vec::new(),
-                paint_dirty: Vec::new(),
+                paint_bits: DeferrableDirtyList::default(),
+                paint_repaint: DeferrableDirtyList::default(),
                 needs_composite: false,
                 paint_deferred: Rc::new(RefCell::new(Vec::new())),
-                paint_scratch: Vec::new(),
 
                 phase: FramePhase::Idle,
 
                 notify_needs_frame: Box::new(|| {}),
 
                 semantics: SlotMap::with_key(),
-                semantics_dirty: Vec::new(),
-                semantics_deferred: Rc::new(RefCell::new(Vec::new())),
-                semantics_scratch: Vec::new(),
+                semantics_dirty: DeferrableDirtyList::default(),
                 semantics_counter: 0,
 
                 notify_semantics_update: Box::new(|| {}),
@@ -218,7 +200,7 @@ impl RenderPipeline {
     pub fn deferred_semantics_scope(&self, scope: SemanticsScope) -> DeferredSemanticsScope {
         DeferredSemanticsScope {
             id: scope.0,
-            queue: Some(Rc::clone(&self.inner.borrow().semantics_deferred)),
+            queue: Some(self.inner.borrow().semantics_dirty.deferred_queue()),
         }
     }
 
@@ -233,10 +215,7 @@ impl RenderPipeline {
             .inner
             .borrow_mut()
             .semantics
-            .insert(SemanticsBoundaryCell {
-                content,
-                enrolled: false,
-            });
+            .insert(SemanticsBoundaryCell { content });
 
         SemanticsBoundaryHandle {
             id,
@@ -255,7 +234,7 @@ impl RenderPipeline {
     pub fn deferred_layout_scope(&self, scope: LayoutScope) -> DeferredLayoutScope {
         DeferredLayoutScope {
             id: scope.0,
-            queue: Some(Rc::clone(&self.inner.borrow().layout_deferred)),
+            queue: Some(self.inner.borrow().layout_dirty.deferred_queue()),
         }
     }
 
@@ -275,8 +254,6 @@ impl RenderPipeline {
             depth,
             boundary: Some(boundary),
             paint: PaintScope::detached(),
-            needs_layout: false,
-            enrolled: false,
         });
 
         LayoutBoundaryHandle {
@@ -316,7 +293,6 @@ impl RenderPipeline {
             content,
             layer,
             paint_capacity: SceneCapacity::default(),
-            enrolled: 0,
         });
 
         PaintBoundaryHandle {
@@ -357,46 +333,28 @@ impl RenderPipeline {
         }
     }
 
-    /// Applies the relayout marks queued out of band since the last drain, so a `flush_layout` picks them up
-    /// on its own.
-    fn drain_layout_deferred(&self) {
-        let layout: Vec<LayoutBoundaryId> = self
-            .inner
-            .borrow()
-            .layout_deferred
-            .borrow_mut()
-            .drain(..)
-            .collect();
-
-        for id in layout {
-            self.inner.borrow_mut().mark_needs_layout(id);
-        }
-    }
-
     /// Re-lays every marked relayout boundary from the constraints it last took, rootmost-first, leaving the
     /// rest untouched.
     pub(crate) fn flush_layout(&self, host: &RefCell<LayoutBuildHost>) {
-        self.drain_layout_deferred();
-
         let _phase = self.enter_phase(FramePhase::Layout);
 
-        let mut scratch = {
-            let mut inner = self.inner.borrow_mut();
-            inner.take_layout_dirty()
-        };
+        self.inner.borrow_mut().take_layout_dirty();
 
-        for &id in &scratch {
+        let mut i = 0;
+        loop {
+            let id = match self.inner.borrow().layout_dirty.drained().get(i).copied() {
+                Some(id) => id,
+                None => break,
+            };
+            i += 1;
+
             let (boundary, paint) = {
                 let mut inner = self.inner.borrow_mut();
 
-                // A boundary dropped since it was drained is absent, so skip it; an enclosing boundary's
-                // relayout may also have covered this one, clearing its pending mark in place.
+                // A boundary dropped since it was drained is absent, so skip it.
                 let Some(cell) = inner.layout.get_mut(id) else {
                     continue;
                 };
-                if !std::mem::replace(&mut cell.needs_layout, false) {
-                    continue;
-                }
 
                 (cell.boundary.take(), cell.paint)
             };
@@ -416,38 +374,23 @@ impl RenderPipeline {
             // The boundary's painting is now stale, so repaint the boundary that encloses it.
             self.mark_needs_paint(paint);
         }
-
-        let mut inner = self.inner.borrow_mut();
-        scratch.clear();
-        inner.layout_scratch = scratch;
-    }
-
-    /// Applies the semantics marks queued out of band since the last drain, so a `flush_semantics` picks them
-    /// up on its own without a preceding layout pass.
-    fn drain_semantics_deferred(&self) {
-        let semantics: Vec<SemanticsBoundaryId> = self
-            .inner
-            .borrow()
-            .semantics_deferred
-            .borrow_mut()
-            .drain(..)
-            .collect();
-
-        for id in semantics {
-            self.inner.borrow_mut().mark_needs_semantics_update(id);
-        }
     }
 
     /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
     /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
     pub fn flush_semantics(&self, mut update: impl FnMut(SemanticsBoundaryId, SemanticsTree)) {
-        self.drain_semantics_deferred();
-
-        let mut scratch = self.inner.borrow_mut().take_semantics_dirty();
+        self.inner.borrow_mut().take_semantics_dirty();
 
         let mut counter = self.inner.borrow().semantics_counter;
 
-        for &id in &scratch {
+        let mut i = 0;
+        loop {
+            let id = match self.inner.borrow().semantics_dirty.drained().get(i).copied() {
+                Some(id) => id,
+                None => break,
+            };
+            i += 1;
+
             let content = match self.inner.borrow().semantics.get(id) {
                 Some(boundary) => Rc::clone(&boundary.content),
                 None => continue,
@@ -461,14 +404,10 @@ impl RenderPipeline {
         }
 
         self.inner.borrow_mut().semantics_counter = counter;
-
-        scratch.clear();
-        self.inner.borrow_mut().semantics_scratch = scratch;
     }
 
-    /// Applies the repaint marks queued out of band since the last drain, so a `flush_paint` picks them up on
-    /// its own.
-    fn drain_paint_deferred(&self) {
+    /// Recomputes compositing bits, repaints, and recomposites the marked repaint boundaries.
+    pub fn flush_paint(&self) {
         let paint: Vec<(PaintBoundaryId, PaintPhase)> = self
             .inner
             .borrow()
@@ -486,36 +425,29 @@ impl RenderPipeline {
                 PaintPhase::Composite => self.mark_needs_composite(),
             }
         }
+
+        self.flush_compositing_bits();
+        self.flush_repaint();
+
+        let _phase = self.enter_phase(FramePhase::Composite);
+        self.inner.borrow_mut().needs_composite = false;
     }
 
-    /// Recomputes compositing bits, repaints, and recomposites the marked repaint boundaries.
-    pub fn flush_paint(&self) {
-        self.drain_paint_deferred();
-
-        let mut scratch = {
-            let mut inner = self.inner.borrow_mut();
-            std::mem::take(&mut inner.paint_scratch)
-        };
-
-        self.flush_compositing_bits(&mut scratch);
-        self.flush_repaint(&mut scratch);
-
-        {
-            let _phase = self.enter_phase(FramePhase::Composite);
-            self.inner.borrow_mut().needs_composite = false;
-        }
-
-        self.inner.borrow_mut().paint_scratch = scratch;
-    }
-
-    fn flush_compositing_bits(&self, scratch: &mut Vec<PaintBoundaryId>) {
+    fn flush_compositing_bits(&self) {
         let _phase = self.enter_phase(FramePhase::CompositingBits);
 
         self.inner
             .borrow_mut()
-            .take_paint_dirty(PaintPhase::CompositingBits, scratch);
+            .take_paint_dirty(PaintPhase::CompositingBits);
 
-        for &id in &*scratch {
+        let mut i = 0;
+        loop {
+            let id = match self.inner.borrow().paint_bits.drained().get(i).copied() {
+                Some(id) => id,
+                None => break,
+            };
+            i += 1;
+
             let content = match self.inner.borrow().paint.get(id) {
                 Some(boundary) => boundary.content.clone(),
                 None => continue,
@@ -525,14 +457,19 @@ impl RenderPipeline {
         }
     }
 
-    fn flush_repaint(&self, scratch: &mut Vec<PaintBoundaryId>) {
+    fn flush_repaint(&self) {
         let _phase = self.enter_phase(FramePhase::Paint);
 
-        self.inner
-            .borrow_mut()
-            .take_paint_dirty(PaintPhase::Paint, scratch);
+        self.inner.borrow_mut().take_paint_dirty(PaintPhase::Paint);
 
-        for &id in &*scratch {
+        let mut i = 0;
+        loop {
+            let id = match self.inner.borrow().paint_repaint.drained().get(i).copied() {
+                Some(id) => id,
+                None => break,
+            };
+            i += 1;
+
             let (content, layer, capacity) = match self.inner.borrow().paint.get(id) {
                 Some(boundary) => (
                     boundary.content.clone(),
@@ -569,88 +506,58 @@ impl Drop for PhaseGuard {
 }
 
 impl Inner {
-    /// Whether the pipeline has no pending work on any channel.
+    /// Whether the pipeline has no pending layout or paint work.
     fn is_clean(&self) -> bool {
-        self.layout_dirty.is_empty()
-            && self.paint_bits_dirty.is_empty()
-            && self.paint_dirty.is_empty()
+        self.layout_dirty.is_clean()
+            && self.paint_bits.is_clean()
+            && self.paint_repaint.is_clean()
             && !self.needs_composite
     }
 
     fn mark_needs_layout(&mut self, id: LayoutBoundaryId) {
         self.phase.assert_can_mark(FramePhase::Layout);
 
-        let was_clean = self.is_clean();
-
-        let Some(boundary) = self.layout.get_mut(id) else {
-            return;
-        };
-
-        boundary.needs_layout = true;
-
-        if boundary.enrolled {
+        if !self.layout.contains_key(id) {
             return;
         }
 
-        boundary.enrolled = true;
-
-        self.layout_dirty.push(id);
+        let was_clean = self.is_clean();
+        self.layout_dirty.mark(id);
 
         if was_clean {
             (self.notify_needs_frame)();
         }
     }
 
-    /// Drains the relayout boundaries waiting, clearing their enrollment, sorted shallowest-first.
-    fn take_layout_dirty(&mut self) -> Vec<LayoutBoundaryId> {
-        let mut out = std::mem::take(&mut self.layout_scratch);
-        out.clear();
-        std::mem::swap(&mut self.layout_dirty, &mut out);
-
-        for &id in &out {
-            if let Some(boundary) = self.layout.get_mut(id) {
-                boundary.enrolled = false;
-            }
-        }
-
+    /// Drains the marked relayout boundaries into the list's buffer, deduplicated and sorted shallowest-first,
+    /// to read through `layout_dirty.drained()`.
+    fn take_layout_dirty(&mut self) {
         let cells = &self.layout;
+        let out = self.layout_dirty.take_dirty();
+        out.sort_unstable();
+        out.dedup();
         out.sort_by_key(|&id| cells.get(id).map_or(0, |b| b.depth));
-        out
     }
 
     fn mark_needs_semantics_update(&mut self, id: SemanticsBoundaryId) {
-        let was_clean = self.semantics_dirty.is_empty();
-
-        let Some(boundary) = self.semantics.get_mut(id) else {
-            return;
-        };
-
-        if boundary.enrolled {
+        if !self.semantics.contains_key(id) {
             return;
         }
 
-        boundary.enrolled = true;
-
-        self.semantics_dirty.push(id);
+        let was_clean = self.semantics_dirty.is_clean();
+        self.semantics_dirty.mark(id);
 
         if was_clean {
             (self.notify_semantics_update)();
         }
     }
 
-    /// Drains the semantics boundaries marked, clearing their enrollment.
-    fn take_semantics_dirty(&mut self) -> Vec<SemanticsBoundaryId> {
-        let mut out = std::mem::take(&mut self.semantics_scratch);
-        out.clear();
-        std::mem::swap(&mut self.semantics_dirty, &mut out);
-
-        for &id in &out {
-            if let Some(boundary) = self.semantics.get_mut(id) {
-                boundary.enrolled = false;
-            }
-        }
-
-        out
+    /// Drains the marked semantics boundaries into the list's buffer, deduplicated, to read through
+    /// `semantics_dirty.drained()`.
+    fn take_semantics_dirty(&mut self) {
+        let out = self.semantics_dirty.take_dirty();
+        out.sort_unstable();
+        out.dedup();
     }
 
     fn mark_needs_paint(&mut self, id: PaintBoundaryId, phase: PaintPhase) {
@@ -660,47 +567,33 @@ impl Inner {
             PaintPhase::Composite => FramePhase::Composite,
         });
 
-        let bit = match phase {
-            PaintPhase::CompositingBits => 0b01,
-            PaintPhase::Paint => 0b10,
-            PaintPhase::Composite => return,
-        };
-
-        let Some(boundary) = self.paint.get_mut(id) else {
-            return;
-        };
-
-        if boundary.enrolled & bit != 0 {
+        if !self.paint.contains_key(id) {
             return;
         }
 
-        boundary.enrolled |= bit;
-
         match phase {
-            PaintPhase::CompositingBits => self.paint_bits_dirty.push(id),
-            PaintPhase::Paint => self.paint_dirty.push(id),
+            PaintPhase::CompositingBits => {
+                self.paint_bits.mark(id);
+            }
+            PaintPhase::Paint => {
+                self.paint_repaint.mark(id);
+            }
             PaintPhase::Composite => {}
         }
     }
 
-    fn take_paint_dirty(&mut self, phase: PaintPhase, out: &mut Vec<PaintBoundaryId>) {
-        let (channel, bit) = match phase {
-            PaintPhase::CompositingBits => (&mut self.paint_bits_dirty, 0b01),
-            PaintPhase::Paint => (&mut self.paint_dirty, 0b10),
+    /// Drains the repaint boundaries marked for `phase` into that list's buffer, deduplicated, to read through
+    /// its `drained()`.
+    fn take_paint_dirty(&mut self, phase: PaintPhase) {
+        let list = match phase {
+            PaintPhase::CompositingBits => &mut self.paint_bits,
+            PaintPhase::Paint => &mut self.paint_repaint,
             PaintPhase::Composite => return,
         };
 
-        out.clear();
-        std::mem::swap(channel, out);
-
-        for &id in &*out {
-            if let Some(boundary) = self.paint.get_mut(id) {
-                boundary.enrolled &= !bit;
-            }
-        }
-
-        let cells = &self.paint;
-        out.sort_by_key(|&id| cells.get(id).map_or(0, |b| b.depth));
+        let out = list.take_dirty();
+        out.sort_unstable();
+        out.dedup();
     }
 }
 
@@ -761,14 +654,9 @@ impl Drop for LayoutBoundaryHandle {
             return;
         };
 
-        let removed = {
-            let mut inner = inner.borrow_mut();
-            inner
-                .layout_deferred
-                .borrow_mut()
-                .retain(|queued| *queued != self.id);
-            inner.layout.remove(self.id)
-        };
+        // A pending mark for this id is left in the dirty and deferred lists: the next flush drops it when it
+        // finds no cell.
+        let removed = inner.borrow_mut().layout.remove(self.id);
 
         // Drop the removed cell only after the borrow is released: it may own a nested boundary (a child
         // render object's), whose own drop re-borrows the pipeline to unregister.
@@ -878,7 +766,7 @@ impl SemanticsBoundaryHandle {
         let queue = self
             .inner
             .upgrade()
-            .map(|inner| Rc::clone(&inner.borrow().semantics_deferred));
+            .map(|inner| inner.borrow().semantics_dirty.deferred_queue());
 
         DeferredSemanticsScope { id: self.id, queue }
     }
@@ -906,15 +794,9 @@ impl Drop for SemanticsBoundaryHandle {
             return;
         };
 
-        let removed = {
-            let mut inner = inner.borrow_mut();
-            inner
-                .semantics_deferred
-                .borrow_mut()
-                .retain(|id| *id != self.id);
-            inner.semantics_dirty.retain(|id| *id != self.id);
-            inner.semantics.remove(self.id)
-        };
+        // A pending mark for this id is left in the dirty and deferred lists: the next flush drops it when it
+        // finds no cell.
+        let removed = inner.borrow_mut().semantics.remove(self.id);
 
         // Drop the removed cell only after the borrow is released: it holds the boundary's render object,
         // whose drop may re-borrow the pipeline to unregister nested boundaries.
