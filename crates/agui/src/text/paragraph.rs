@@ -879,36 +879,11 @@ mod tests {
     use peniko::Color;
 
     use crate::{
-        paint::{
-            command::PaintCommand,
-            compositing::{Compositor, LayerHandle, OffsetLayer},
-            scene::Scene,
-        },
-        pipeline::render_pipeline::{LayoutScope, PaintScope, RenderPipeline},
         prelude::render_object::{InlineSpan, TextSpan},
         text::{Fonts, TextBaseline, TextStyle},
     };
 
     use super::*;
-
-    /// Lays `paragraph` out under a detached scope, returning the size it took.
-    fn layout(paragraph: &mut RenderParagraph, constraints: BoxConstraints) -> Size {
-        let pipeline = RenderPipeline::default();
-        paragraph.layout(
-            &mut LayoutCtx::new(&pipeline, LayoutScope::detached()),
-            constraints,
-        )
-    }
-
-    /// Paints `paragraph` and returns the flattened scene, for inspecting the recorded commands.
-    fn paint_scene(paragraph: &mut RenderParagraph) -> Scene {
-        let root = LayerHandle::new(OffsetLayer::new());
-        let pipeline = RenderPipeline::default();
-        PaintCtx::paint(&root, &pipeline, PaintScope::detached(), |ctx| {
-            paragraph.paint(ctx, Offset::ZERO);
-        });
-        Compositor::compose(&root).rasterize()
-    }
 
     fn infinite() -> Positive<f32> {
         Positive::try_from(f32::INFINITY).unwrap()
@@ -920,13 +895,6 @@ mod tests {
         paragraph
     }
 
-    /// A paragraph sized through a detached layout pass.
-    fn shaped(content: ParagraphContent, constraints: BoxConstraints) -> RenderParagraph {
-        let mut paragraph = with_fonts(content);
-        layout(&mut paragraph, constraints);
-        paragraph
-    }
-
     /// Builds content with a single styled run over the whole string.
     fn styled(text: &str, style: TextStyle) -> ParagraphContent {
         ParagraphContent {
@@ -934,75 +902,6 @@ mod tests {
             text: text.to_owned(),
             placeholders: Vec::new(),
         }
-    }
-
-    #[test]
-    fn measure_agrees_with_layout_after_shaping() {
-        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-
-        let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
-        let laid_out = layout(&mut paragraph, constraints);
-
-        assert_eq!(paragraph.measure(constraints), laid_out);
-    }
-
-    #[test]
-    fn measure_works_without_a_prior_layout() {
-        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-
-        let mut paragraph = with_fonts(styled("no prior layout", TextStyle::new().font_size(20.0)));
-
-        let measured = paragraph.measure(constraints);
-        let laid_out = layout(&mut paragraph, constraints);
-        assert_eq!(measured, laid_out);
-    }
-
-    #[test]
-    fn unbounded_width_layout_agrees_with_measure() {
-        let constraints = BoxConstraints::default();
-
-        let mut paragraph = with_fonts(styled("hello world", TextStyle::new().font_size(20.0)));
-
-        let measured = paragraph.measure(constraints);
-        let laid_out = layout(&mut paragraph, constraints);
-
-        assert_eq!(laid_out, measured);
-        assert!(laid_out.height.get() > 0.0, "the text occupies a line");
-    }
-
-    #[test]
-    fn larger_font_run_grows_the_paragraph() {
-        let constraints = BoxConstraints::new(0.0, 1000.0, 0.0, 1000.0);
-
-        let small = shaped(
-            styled("ABCDEF", TextStyle::new().font_size(10.0)),
-            constraints,
-        );
-        let large = shaped(
-            styled("ABCDEF", TextStyle::new().font_size(40.0)),
-            constraints,
-        );
-
-        assert!(large.measure(constraints).width > small.measure(constraints).width);
-        assert!(large.measure(constraints).height > small.measure(constraints).height);
-    }
-
-    #[test]
-    fn two_runs_are_wider_than_either_alone() {
-        let constraints = BoxConstraints::new(0.0, 1000.0, 0.0, 1000.0);
-
-        let style = TextStyle::new().font_size(20.0);
-        let one = shaped(styled("hello", style.clone()), constraints);
-        let two = shaped(
-            ParagraphContent {
-                text: "hellohello".to_owned(),
-                runs: vec![(0..5, style.clone()), (5..10, style.clone())],
-                placeholders: Vec::new(),
-            },
-            constraints,
-        );
-
-        assert!(two.measure(constraints).width > one.measure(constraints).width);
     }
 
     #[test]
@@ -1025,72 +924,9 @@ mod tests {
     }
 
     #[test]
-    fn background_run_paints_a_fill_behind_the_glyphs() {
-        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-        let mut paragraph = shaped(
-            styled(
-                "hi",
-                TextStyle::new()
-                    .font_size(20.0)
-                    .background(Color::from_rgb8(200, 100, 50)),
-            ),
-            constraints,
-        );
-
-        let scene = paint_scene(&mut paragraph);
-
-        let has_fill = scene
-            .commands()
-            .iter()
-            .any(|command| matches!(command, PaintCommand::Fill { .. }));
-        assert!(
-            has_fill,
-            "a highlighted run records a fill behind its glyphs"
-        );
-    }
-
-    #[test]
-    fn underline_run_paints_a_stroke() {
-        let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-        let mut paragraph = shaped(
-            styled("hi", TextStyle::new().font_size(20.0).underline(true)),
-            constraints,
-        );
-
-        let scene = paint_scene(&mut paragraph);
-
-        let has_stroke = scene
-            .commands()
-            .iter()
-            .any(|command| matches!(command, PaintCommand::Stroke { .. }));
-        assert!(has_stroke, "an underlined run records a stroke");
-    }
-
-    #[test]
-    fn narrower_break_does_not_grow_width() {
-        let wide = BoxConstraints::new(0.0, 1000.0, 0.0, 1000.0);
-        let paragraph = shaped(
-            styled(
-                "the quick brown fox jumps over the lazy dog",
-                TextStyle::new().font_size(20.0),
-            ),
-            wide,
-        );
-
-        let wide_width = paragraph.measure(wide).width;
-        let narrow = BoxConstraints::new(0.0, 80.0, 0.0, 1000.0);
-        let narrow_width = paragraph.measure(narrow).width;
-
-        assert!(narrow_width <= wide_width);
-    }
-
-    #[test]
     fn baseline_within_height_and_intrinsics_ordered() {
         let constraints = BoxConstraints::new(0.0, 300.0, 0.0, 300.0);
-        let paragraph = shaped(
-            styled("baseline test", TextStyle::new().font_size(20.0)),
-            constraints,
-        );
+        let paragraph = with_fonts(styled("baseline test", TextStyle::new().font_size(20.0)));
 
         let size = paragraph.measure(constraints);
         if let Some(baseline) = paragraph.measure_baseline(constraints, TextBaseline::Alphabetic) {

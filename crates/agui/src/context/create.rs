@@ -1,30 +1,43 @@
+use std::rc::Rc;
+
 use agui_core::tree::NodeHandle;
 
 use crate::context::BuildCtx;
 use crate::paint::compositing::{LayerHandle, OffsetLayer};
 use crate::pipeline::BoundaryContent;
 use crate::pipeline::render_pipeline::{
-    DeferredSemanticsScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle,
-    PaintContent, PaintScope, RenderPipeline, SemanticsBoundaryHandle, SemanticsScope,
+    DeferredSemanticsScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, LayoutState,
+    PaintBoundaryHandle, PaintContent, PaintScope, PaintState, SemanticsBoundaryHandle,
+    SemanticsScope, SemanticsState,
 };
 use crate::provide::ProvideScope;
 
-/// The context passed to a widget's `create`: the values in scope and the render pipeline, but no cursor.
+/// The context passed to a widget's `create`: the values in scope and the render channels, but no cursor.
 /// `create` builds the element and its render object before the tree exists, so it registers no element-tree
 /// node. It may plant a render tree in the forest: a [`View`](crate::view::View) registers its boundaries
 /// here. Reconcile-time grafts derive one from an [`UpdateCtx`](crate::context::UpdateCtx).
-pub struct CreateCtx {
+pub struct CreateCtx<'a> {
     provide_scope: ProvideScope,
-    pipeline: RenderPipeline,
+    layout: &'a Rc<LayoutState>,
+    paint: &'a Rc<PaintState>,
+    semantics: &'a Rc<SemanticsState>,
     semantics_scope: SemanticsScope,
 }
 
-impl CreateCtx {
-    /// A create context in `scope` against `pipeline`. The driver builds one to create the root widget.
-    pub fn new(scope: ProvideScope, pipeline: RenderPipeline) -> Self {
+impl<'a> CreateCtx<'a> {
+    /// A create context in `scope` against the render channels. The driver builds one to create the root
+    /// widget.
+    pub(crate) fn new(
+        scope: ProvideScope,
+        layout: &'a Rc<LayoutState>,
+        paint: &'a Rc<PaintState>,
+        semantics: &'a Rc<SemanticsState>,
+    ) -> Self {
         Self {
             provide_scope: scope,
-            pipeline,
+            layout,
+            paint,
+            semantics,
             semantics_scope: SemanticsScope::detached(),
         }
     }
@@ -43,13 +56,13 @@ impl CreateCtx {
     /// semantics from outside a pass, such as an animation.
     #[must_use]
     pub fn deferred_semantics_scope(&self) -> DeferredSemanticsScope {
-        self.pipeline.deferred_semantics_scope(self.semantics_scope)
+        self.semantics.deferred_scope(self.semantics_scope)
     }
 
     /// Registers the semantics boundary at the root of a view's render tree, returning the handle that owns
     /// it. A [`View`](crate::view::View) registers its root boundary this way at `create`.
     pub fn register_semantics_boundary(&self, content: BoundaryContent) -> SemanticsBoundaryHandle {
-        self.pipeline.register_semantics_boundary(content)
+        self.semantics.register(content)
     }
 
     /// Runs `f` with `semantics` as the enclosing semantics boundary, restoring the previous one afterward. A
@@ -73,8 +86,7 @@ impl CreateCtx {
         &self,
         boundary: Box<dyn LayoutBoundary>,
     ) -> LayoutBoundaryHandle {
-        self.pipeline
-            .register_layout_boundary(LayoutScope::detached(), boundary)
+        self.layout.register(LayoutScope::detached(), boundary)
     }
 
     /// Registers `content` as the repaint boundary at the root of a view's render tree, painting into
@@ -85,11 +97,9 @@ impl CreateCtx {
         content: BoundaryContent,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
-        let handle = self.pipeline.register_paint_boundary(
-            PaintScope::detached(),
-            PaintContent::Root(content),
-            layer,
-        );
+        let handle =
+            self.paint
+                .register(PaintScope::detached(), PaintContent::Root(content), layer);
 
         // The root paints through the flush, so mark it for an initial bits settle and paint.
         handle.mark_needs_compositing_bits_update();

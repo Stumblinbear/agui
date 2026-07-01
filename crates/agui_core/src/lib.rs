@@ -9,7 +9,6 @@
 
 pub mod build_queue;
 pub mod context;
-pub mod deferrable_dirty_list;
 pub mod diagnostics;
 pub mod dirty_list;
 pub mod key;

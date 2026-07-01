@@ -10,7 +10,9 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element},
     pipeline::build_tree::{Build, Operation, run},
-    pipeline::render_pipeline::{RenderPipeline, SemanticsBoundaryId},
+    pipeline::render_pipeline::{
+        LayoutState, PaintState, RenderPipeline, SemanticsBoundaryId, SemanticsState,
+    },
     provide::ProvideScope,
     render_object::box_layout::AnyRenderBox,
     scheduling::TaskScheduler,
@@ -40,8 +42,13 @@ pub type BoundaryContent = Rc<RefCell<dyn AnyRenderBox>>;
 /// mount.
 pub struct LayoutBuildHost<'a> {
     tree: &'a mut Tree<RootElement, Build>,
+
     queue: &'a mut BuildQueue,
     provide: ProvideScope,
+
+    layout: &'a Rc<LayoutState>,
+    paint: &'a Rc<PaintState>,
+    semantics: &'a Rc<SemanticsState>,
 }
 
 impl LayoutBuildHost<'_> {
@@ -50,16 +57,21 @@ impl LayoutBuildHost<'_> {
     pub(crate) fn build<R>(
         &mut self,
         handle: NodeHandle,
-        pipeline: &RenderPipeline,
         scheduler: &mut dyn TaskScheduler,
         f: impl FnOnce(&mut UpdateCtx) -> R,
     ) -> Option<R> {
         let provide = self.provide;
         let queue = &mut *self.queue;
+        let layout = self.layout;
+        let paint = self.paint;
+        let semantics = self.semantics;
+
         // `with_cursor`, not a dispatch op: the element is not reborrowed as `&mut`, so a render object's
         // in-flight layout borrow on it stands.
         self.tree.with_cursor(handle, |cursor| {
-            let mut ctx = UpdateCtx::new(cursor, provide, queue, pipeline, scheduler);
+            let mut ctx =
+                UpdateCtx::new(cursor, provide, queue, layout, paint, semantics, scheduler);
+
             f(&mut ctx)
         })
     }
@@ -88,12 +100,24 @@ impl PipelineOwner {
         let mut queue = BuildQueue::new();
         let pipeline = RenderPipeline::default();
 
-        let element = widget.create(&mut CreateCtx::new(provide, pipeline.clone()));
+        let element = widget.create(&mut CreateCtx::new(
+            provide,
+            pipeline.layout(),
+            pipeline.paint(),
+            pipeline.semantics(),
+        ));
+
         let root: RootElement = Box::new(element);
 
         let tree = Tree::<RootElement, Build>::new(root, run::<RootElement>, |root, cursor| {
             root.mount(&mut UpdateCtx::new(
-                cursor, provide, &mut queue, &pipeline, scheduler,
+                cursor,
+                provide,
+                &mut queue,
+                pipeline.layout(),
+                pipeline.paint(),
+                pipeline.semantics(),
+                scheduler,
             ));
         });
 
@@ -116,6 +140,14 @@ impl PipelineOwner {
         self.pipeline.on_needs_semantics_update(f);
     }
 
+    pub fn flush(&mut self, scheduler: &mut dyn TaskScheduler) {
+        self.pipeline.reset_notified();
+
+        self.flush_build(scheduler);
+        self.flush_layout();
+        self.flush_paint();
+    }
+
     /// Rebuilds every element marked since the last flush, shallowest first. An element marked during the
     /// flush is honored in the same pass.
     pub fn flush_build(&mut self, scheduler: &mut dyn TaskScheduler) {
@@ -132,7 +164,16 @@ impl PipelineOwner {
 
         while let Some((handle, is_dependency_change)) = queue.take_shallowest(tree) {
             tree.dispatch_with_cursor(handle, |cursor| {
-                let ctx = UpdateCtx::new(cursor, *provide, queue, pipeline, scheduler);
+                let ctx = UpdateCtx::new(
+                    cursor,
+                    *provide,
+                    queue,
+                    pipeline.layout(),
+                    pipeline.paint(),
+                    pipeline.semantics(),
+                    scheduler,
+                );
+
                 if is_dependency_change {
                     Operation::DependencyChanged(ctx)
                 } else {
@@ -152,10 +193,15 @@ impl PipelineOwner {
         } = self;
         let pipeline = pipeline.clone();
 
+        let _phase = self.pipeline.enter_phase(FramePhase::Layout);
+
         let host = RefCell::new(LayoutBuildHost {
             tree,
             queue,
             provide: *provide,
+            layout: pipeline.layout(),
+            paint: pipeline.paint(),
+            semantics: pipeline.semantics(),
         });
         pipeline.flush_layout(&host);
     }

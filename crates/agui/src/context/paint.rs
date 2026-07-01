@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use peniko::kurbo::Affine;
 
 use crate::{
@@ -11,7 +13,7 @@ use crate::{
         scene::{Scene, SceneCapacity},
     },
     pipeline::render_pipeline::{
-        DeferredPaintScope, PaintBoundaryHandle, PaintContent, PaintScope, RenderPipeline,
+        DeferredPaintScope, PaintBoundaryHandle, PaintContent, PaintScope, PaintState,
     },
     render_object::{box_layout::RenderBox, node::MountedChild},
 };
@@ -39,21 +41,21 @@ pub struct PaintCtx<'a> {
     /// The capacity budget shared with any nested context of the same paint.
     budget: &'a mut PaintBudget,
     /// The boundary registry, to register a repaint boundary discovered during paint and to mark one.
-    pipeline: &'a RenderPipeline,
+    paint: &'a Rc<PaintState>,
     /// The repaint boundary this paint is drawing into. A node stores it to repaint that boundary when its
     /// painting goes stale, and forwards it to the children it paints.
     scope: PaintScope,
 }
 
 impl PaintCtx<'_> {
-    /// Paints `build` into `root` as the content of repaint boundary `scope`, against `pipeline`.
-    pub fn paint(
+    /// Paints `build` into `root` as the content of repaint boundary `scope`, against `paint`.
+    pub(crate) fn paint(
         root: &LayerHandle<impl ContainerLayer>,
-        pipeline: &RenderPipeline,
+        paint: &Rc<PaintState>,
         scope: PaintScope,
         build: impl FnOnce(&mut PaintCtx),
     ) {
-        Self::paint_with_capacity(root, SceneCapacity::default(), pipeline, scope, build);
+        Self::paint_with_capacity(root, SceneCapacity::default(), paint, scope, build);
     }
 
     /// Paints `build` into `root` as the content of repaint boundary `scope`, sizing the recording buffers
@@ -61,10 +63,10 @@ impl PaintCtx<'_> {
     ///
     /// A caller that repaints the same content passes the lengths returned by the previous paint,
     /// so a recording of similar size fills pre-sized buffers instead of growing them.
-    pub fn paint_with_capacity(
+    pub(crate) fn paint_with_capacity(
         root: &LayerHandle<impl ContainerLayer>,
         capacity: SceneCapacity,
-        pipeline: &RenderPipeline,
+        paint: &Rc<PaintState>,
         scope: PaintScope,
         build: impl FnOnce(&mut PaintCtx),
     ) -> SceneCapacity {
@@ -79,7 +81,7 @@ impl PaintCtx<'_> {
             container: &mut *root,
             picture: Scene::new(),
             budget: &mut budget,
-            pipeline,
+            paint,
             scope,
         };
 
@@ -120,7 +122,7 @@ impl PaintCtx<'_> {
                     container: &mut *guard,
                     picture: Scene::new(),
                     budget: &mut *self.budget,
-                    pipeline: self.pipeline,
+                    paint: self.paint,
                     scope: self.scope,
                 };
 
@@ -160,7 +162,7 @@ impl PaintCtx<'_> {
                 container: &mut *guard,
                 picture: Scene::new(),
                 budget: &mut *self.budget,
-                pipeline: self.pipeline,
+                paint: self.paint,
                 scope: self.scope,
             };
             paint_into(&mut ctx);
@@ -199,8 +201,8 @@ impl PaintCtx<'_> {
         content: MountedChild<dyn RenderBox>,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
-        self.pipeline
-            .register_paint_boundary(self.scope, PaintContent::Inline(content), layer)
+        self.paint
+            .register(self.scope, PaintContent::Inline(content), layer)
     }
 
     /// Paints `content` into `layer` as repaint boundary `scope`, then embeds the layer here at `offset`. A
@@ -213,30 +215,30 @@ impl PaintCtx<'_> {
         offset: Offset,
         content: impl FnOnce(&mut PaintCtx),
     ) {
-        PaintCtx::paint(&layer, self.pipeline, scope, content);
+        PaintCtx::paint(&layer, self.paint, scope, content);
         self.add_layer(layer, offset);
     }
 
     /// A deferred handle to the boundary in force, for marking it from a per-frame animation callback that
     /// holds no context.
     pub fn deferred_paint_scope(&self) -> DeferredPaintScope {
-        self.pipeline.deferred_paint_scope(self.scope)
+        self.paint.deferred_scope(self.scope)
     }
 
     /// Marks `scope`'s boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self, scope: PaintScope) {
-        self.pipeline.mark_needs_paint(scope);
+        self.paint.mark_needs_paint(scope);
     }
 
     /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
     /// repaint.
     pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        self.pipeline.mark_needs_compositing_bits_update(scope);
+        self.paint.mark_needs_compositing_bits_update(scope);
     }
 
     /// Schedules a recomposite of the subtree on the next frame, without repainting any boundary.
     pub fn mark_needs_composite(&self) {
-        self.pipeline.mark_needs_composite();
+        self.paint.mark_needs_composite();
     }
 
     /// Appends the flat drawing accumulated so far as a [`PictureLayer`], then starts a fresh picture.
@@ -267,6 +269,7 @@ mod tests {
             command::PaintCommand,
             compositing::{Compositor, Layer, OffsetLayer},
         },
+        pipeline::render_pipeline::RenderPipeline,
     };
 
     use super::*;
@@ -278,12 +281,9 @@ mod tests {
     // Paints `build` into `root` against a throwaway pipeline and a detached scope; these tests exercise
     // drawing and layering, not boundary registration.
     fn paint(root: &LayerHandle<OffsetLayer>, build: impl FnOnce(&mut PaintCtx)) {
-        PaintCtx::paint(
-            root,
-            &RenderPipeline::default(),
-            PaintScope::detached(),
-            build,
-        );
+        let pipeline = RenderPipeline::default();
+
+        PaintCtx::paint(root, pipeline.paint(), PaintScope::detached(), build);
     }
 
     fn paint_with_capacity(
@@ -291,10 +291,12 @@ mod tests {
         capacity: SceneCapacity,
         build: impl FnOnce(&mut PaintCtx),
     ) -> SceneCapacity {
+        let pipeline = RenderPipeline::default();
+
         PaintCtx::paint_with_capacity(
             root,
             capacity,
-            &RenderPipeline::default(),
+            pipeline.paint(),
             PaintScope::detached(),
             build,
         )

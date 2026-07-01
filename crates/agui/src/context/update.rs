@@ -11,7 +11,8 @@ use agui_core::build_queue::BuildQueue;
 
 use crate::pipeline::build_tree::{Build, run};
 use crate::pipeline::render_pipeline::{
-    DeferredSemanticsScope, LayoutScope, PaintScope, RenderPipeline, SemanticsScope,
+    DeferredSemanticsScope, LayoutScope, LayoutState, PaintScope, PaintState, SemanticsScope,
+    SemanticsState,
 };
 use crate::provide::ProvideScope;
 use crate::render_object::node::{MountedChild, RenderObjectPtr};
@@ -27,27 +28,37 @@ pub struct UpdateCtx<'a> {
     semantics_scope: SemanticsScope,
 
     queue: &'a mut BuildQueue,
-    pipeline: &'a RenderPipeline,
+    layout: &'a Rc<LayoutState>,
+    paint: &'a Rc<PaintState>,
+    semantics: &'a Rc<SemanticsState>,
+
     scheduler: &'a mut dyn TaskScheduler,
 }
 
 impl<'a> UpdateCtx<'a> {
     /// Wraps a cursor positioned at an element with the scope it builds under, the dirty set, the render
-    /// pipeline, and the task scheduler. The driver builds one to mount the root or to dispatch a rebuild to
+    /// channels, and the task scheduler. The driver builds one to mount the root or to dispatch a rebuild to
     /// an element by handle.
-    pub fn new(
+    pub(crate) fn new(
         cursor: Cursor<'a, Build>,
         provide_scope: ProvideScope,
         queue: &'a mut BuildQueue,
-        pipeline: &'a RenderPipeline,
+        layout: &'a Rc<LayoutState>,
+        paint: &'a Rc<PaintState>,
+        semantics: &'a Rc<SemanticsState>,
         scheduler: &'a mut dyn TaskScheduler,
     ) -> Self {
         Self {
             cursor,
+
             provide_scope,
             semantics_scope: SemanticsScope::detached(),
+
             queue,
-            pipeline,
+            layout,
+            paint,
+            semantics,
+
             scheduler,
         }
     }
@@ -117,7 +128,7 @@ impl<'a> UpdateCtx<'a> {
     /// pass, such as an animation.
     #[must_use]
     pub fn deferred_semantics_scope(&self) -> DeferredSemanticsScope {
-        self.pipeline.deferred_semantics_scope(self.semantics_scope)
+        self.semantics.deferred_scope(self.semantics_scope)
     }
 
     /// Runs `func` with `semantics` as the enclosing semantics boundary, restoring the previous one
@@ -137,8 +148,7 @@ impl<'a> UpdateCtx<'a> {
     /// Marks the enclosing semantics boundary changed, so the driver re-reads this view's semantics. A
     /// reconcile calls this when it changes a render object's semantics.
     pub fn mark_needs_semantics_update(&self) {
-        self.pipeline
-            .mark_needs_semantics_update(self.semantics_scope);
+        self.semantics.mark(self.semantics_scope.0);
     }
 
     /// Runs `f` with the restricted [`BuildCtx`] for a widget's `build`, which composes a child widget but
@@ -148,10 +158,11 @@ impl<'a> UpdateCtx<'a> {
     }
 
     /// Runs `f` with a [`CreateCtx`] for grafting a fresh child during this reconcile: it carries the scope
-    /// and the pipeline, so a boundary built here registers its render tree, but registers no element-tree
-    /// node (mount does that). The context lives only for the call.
+    /// and the render channels, so a boundary built here registers its render tree, but registers no
+    /// element-tree node (mount does that). The context lives only for the call.
     pub fn inflate<R>(&self, f: impl FnOnce(&mut CreateCtx) -> R) -> R {
-        let mut ctx = CreateCtx::new(self.provide_scope, self.pipeline.clone());
+        let mut ctx = CreateCtx::new(self.provide_scope, self.layout, self.paint, self.semantics);
+
         ctx.with_semantics_scope(self.semantics_scope, f)
     }
 
@@ -181,7 +192,9 @@ impl<'a> UpdateCtx<'a> {
             provide_scope: self.provide_scope,
             semantics_scope: self.semantics_scope,
             queue: &mut *self.queue,
-            pipeline: self.pipeline,
+            layout: self.layout,
+            paint: self.paint,
+            semantics: self.semantics,
             scheduler: &mut *self.scheduler,
         });
 
@@ -199,19 +212,24 @@ impl<'a> UpdateCtx<'a> {
         S::Node: Element,
     {
         let provide = self.provide_scope;
-        let semantics = self.semantics_scope;
+        let semantics_scope = self.semantics_scope;
         let queue = &mut *self.queue;
-        let pipeline = self.pipeline;
+        let layout = self.layout;
+        let paint = self.paint;
+        let semantics = self.semantics;
         let scheduler = &mut *self.scheduler;
+
         // SAFETY: the caller guarantees `child` is this element's, with_child's precondition.
         unsafe {
             self.cursor.with_child(child, move |node, cursor| {
                 node.unmount(&mut UpdateCtx {
                     cursor,
                     provide_scope: provide,
-                    semantics_scope: semantics,
+                    semantics_scope,
                     queue,
-                    pipeline,
+                    layout,
+                    paint,
+                    semantics,
                     scheduler,
                 });
             });
@@ -229,9 +247,11 @@ impl<'a> UpdateCtx<'a> {
         func: impl FnOnce(&mut S::Node, &mut UpdateCtx<'_>) -> R,
     ) -> R {
         let provide = self.provide_scope;
-        let semantics = self.semantics_scope;
+        let semantics_scope = self.semantics_scope;
         let queue = &mut *self.queue;
-        let pipeline = self.pipeline;
+        let layout = self.layout;
+        let paint = self.paint;
+        let semantics = self.semantics;
         let scheduler = &mut *self.scheduler;
 
         // SAFETY: the caller guarantees `child` is this element's, with_child's precondition.
@@ -242,9 +262,11 @@ impl<'a> UpdateCtx<'a> {
                     &mut UpdateCtx {
                         cursor,
                         provide_scope: provide,
-                        semantics_scope: semantics,
+                        semantics_scope,
                         queue,
-                        pipeline,
+                        layout,
+                        paint,
+                        semantics,
                         scheduler,
                     },
                 )
@@ -255,18 +277,18 @@ impl<'a> UpdateCtx<'a> {
     /// Marks `scope`'s relayout boundary for re-layout on the next frame, as a reconcile does when it changes
     /// a layout-affecting property of a render object.
     pub fn mark_needs_layout(&self, scope: LayoutScope) {
-        self.pipeline.mark_needs_layout(scope);
+        self.layout.mark(scope.0);
     }
 
     /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
     /// repaint, as a reconcile does when it changes a render object's compositing need.
     pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        self.pipeline.mark_needs_compositing_bits_update(scope);
+        self.paint.mark_needs_compositing_bits_update(scope);
     }
 
     /// Marks `scope`'s repaint boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self, scope: PaintScope) {
-        self.pipeline.mark_needs_paint(scope);
+        self.paint.mark_needs_paint(scope);
     }
 
     /// Queues the element at `dependent` to rebuild on the next flush, running its dependency-change hook
