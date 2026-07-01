@@ -139,10 +139,6 @@ pub struct RenderLayoutBuilder<F> {
 }
 
 impl<F: 'static> RenderObject for RenderLayoutBuilder<F> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child_node.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child_node.describe(d))
@@ -254,5 +250,9 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child_node.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child_node.build_semantics(s);
     }
 }

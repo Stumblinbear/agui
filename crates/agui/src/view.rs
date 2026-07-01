@@ -14,8 +14,8 @@ use crate::{
     pipeline::{
         BoundaryContent,
         render_pipeline::{
-            LayoutBoundary, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle,
-            SemanticsBoundaryHandle, SemanticsScope,
+            LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, RelayoutHook,
+            SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope,
         },
     },
     render_object::{
@@ -27,6 +27,10 @@ use crate::{
     text::TextBaseline,
     widget::{ElementSequence, RenderBoxElement, RenderBoxWrapper, Widget, WidgetSequence},
 };
+
+/// The destination a view delivers its freshly built [`SemanticsTree`] to on each semantics flush. Set through
+/// [`ViewHandle::on_semantics`]; the default drops the tree.
+pub type SemanticsSink = Box<dyn Fn(SemanticsTree)>;
 
 /// A handle to a mounted [`View`], owning the per-view operations a driver performs on the view's
 /// render subtree from outside the tree: constraining it, hit-testing it, and compositing it for
@@ -48,6 +52,9 @@ struct ViewInner {
     layer: LayerHandle<OffsetLayer>,
 
     semantics: SemanticsBoundaryHandle,
+    /// The sink the semantics flush delivers this view's tree to. Shared with the boundary's rebuild hook, so
+    /// setting it here redirects delivery without re-registering.
+    semantics_sink: Rc<RefCell<SemanticsSink>>,
 }
 
 impl ViewHandle {
@@ -57,6 +64,7 @@ impl ViewHandle {
         paint: PaintBoundaryHandle,
         layer: LayerHandle<OffsetLayer>,
         semantics: SemanticsBoundaryHandle,
+        semantics_sink: Rc<RefCell<SemanticsSink>>,
     ) -> Self {
         Self {
             inner: Rc::new(ViewInner {
@@ -65,8 +73,15 @@ impl ViewHandle {
                 paint,
                 layer,
                 semantics,
+                semantics_sink,
             }),
         }
+    }
+
+    /// Sets the sink the view delivers its semantics to on each flush, replacing any previous one. An
+    /// accessibility driver installs its adapter here to receive the view's tree.
+    pub fn on_semantics(&self, sink: impl Fn(SemanticsTree) + 'static) {
+        *self.inner.semantics_sink.borrow_mut() = Box::new(sink);
     }
 
     /// Lays the view out under `constraints` and repaints it. A driver calls this on the first frame and
@@ -163,16 +178,27 @@ where
 
         // The relayout boundary re-lays the view through the shared cell at flush, never through the element.
         // Re-borrowing the cell each flush (rather than caching a pointer into it) is what keeps it sound.
-        let mut layout = ctx.register_layout_boundary(Box::new(ViewBoundary {
-            content: Rc::clone(&content),
-        }));
+        let relayout_content = Rc::clone(&content);
+        let relayout: RelayoutHook =
+            Box::new(move |ctx| relayout_content.borrow_mut().relayout(ctx));
+        let mut layout = ctx.register_layout_boundary(relayout);
 
         // The view is its own repaint boundary, so it can record its paint scope now.
         layout.set_paint_scope(paint.scope());
 
-        #[allow(clippy::clone_on_ref_ptr)]
-        let semantics_content: BoundaryContent = content.clone();
-        let semantics = ctx.register_semantics_boundary(semantics_content);
+        let semantics_sink: Rc<RefCell<SemanticsSink>> = Rc::new(RefCell::new(Box::new(|_| {})));
+
+        let rebuild: SemanticsRebuild = {
+            let content = Rc::clone(&content);
+            let sink = Rc::clone(&semantics_sink);
+            Box::new(move |counter| {
+                let mut builder = SemanticsTreeBuilder::new(counter);
+                content.borrow_mut().build_semantics(&mut builder);
+                (sink.borrow())(SemanticsTree::new(builder.finish()));
+            })
+        };
+
+        let semantics = ctx.register_semantics_boundary(rebuild);
         let semantics_scope = semantics.scope();
 
         // The surface holds the handle for the view's life, keeping its boundaries registered until the view
@@ -183,6 +209,7 @@ where
             paint,
             layer,
             semantics,
+            semantics_sink,
         ));
 
         // The subtree is created under the view's semantics boundary, so its render objects capture it.
@@ -354,19 +381,6 @@ where
     }
 }
 
-/// The view's entry in the relayout registry, owned by it: at flush it re-borrows the shared cell and re-lays
-/// the [`RenderView`]. Holding an `Rc` clone (rather than a pointer into the cell) is what keeps it sound, and
-/// keeps the render object alive as long as the registration.
-struct ViewBoundary {
-    content: Rc<RefCell<RenderView>>,
-}
-
-impl LayoutBoundary for ViewBoundary {
-    fn relayout(&mut self, ctx: &mut LayoutCtx) {
-        self.content.borrow_mut().relayout(ctx);
-    }
-}
-
 /// The render object of a [`View`]: the relayout and repaint boundary at the root of the view's render tree.
 /// It holds an edge to the view's root render, which the [`View`]'s child element owns, and forwards layout,
 /// paint, and hit-testing through it. It is re-laid from the constraints the driver set, reached through the
@@ -395,7 +409,9 @@ impl RenderView {
     }
 }
 
-impl LayoutBoundary for RenderView {
+impl RenderView {
+    /// Re-lays the view's subtree from the constraints the driver last set. The relayout hook the view
+    /// registers calls this through the shared cell.
     fn relayout(&mut self, ctx: &mut LayoutCtx) {
         if let Some(constraints) = self.constraints {
             self.child.layout_and_get_size(ctx, constraints);
@@ -412,10 +428,6 @@ impl SingleChildRenderObject for RenderView {
 }
 
 impl RenderObject for RenderView {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -470,5 +482,9 @@ impl RenderBox for RenderView {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }

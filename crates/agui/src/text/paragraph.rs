@@ -225,95 +225,6 @@ impl<C: RenderObject + ?Sized> RenderObject for RenderParagraph<C> {
         ctx.mark_needs_semantics_update();
     }
 
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        let group_size = self.layout.as_ref().map_or(Size::ZERO, |layout| {
-            Size::new(layout.width(), layout.height())
-        });
-
-        let text = &self.content.text;
-
-        if self.content.placeholders.is_empty() {
-            if !text.is_empty() {
-                s.node(&mut self.group_id, text_label(text), group_size, |_| {});
-            }
-
-            return;
-        }
-
-        // The run rects read self.layout, so compute them before the closure mutably borrows run_ids.
-        let mut run_rects = Vec::new();
-        let mut start = 0;
-
-        for &offset in &self.content.placeholders {
-            if start < offset {
-                run_rects.push(self.run_segment_rect(start..offset).unwrap_or_default());
-            }
-
-            start = offset;
-        }
-
-        if start < text.len() {
-            run_rects.push(self.run_segment_rect(start..text.len()).unwrap_or_default());
-        }
-
-        // Interleave the text runs and the inline widgets in reading order, so a screen reader meets
-        // each widget where it sits in the text rather than after all of it.
-        s.node(
-            &mut self.group_id,
-            SemanticsConfig::new(Role::Paragraph),
-            group_size,
-            |s| {
-                let mut start = 0;
-                let mut run = 0;
-
-                for (index, &offset) in self.content.placeholders.iter().enumerate() {
-                    if start < offset {
-                        if run >= self.run_ids.len() {
-                            self.run_ids.push(None);
-                        }
-
-                        let rect = run_rects[run];
-
-                        s.with_offset(rect.origin(), |s| {
-                            s.node(
-                                &mut self.run_ids[run],
-                                text_label(&text[start..offset]),
-                                rect.size(),
-                                |_| {},
-                            );
-                        });
-
-                        run += 1;
-                    }
-
-                    if let Some(child) = self.children.get_mut(index) {
-                        let child_offset = self.child_data[index].offset;
-                        s.with_offset(child_offset, |s| child.build_semantics(s));
-                    }
-
-                    start = offset;
-                }
-
-                if start < text.len() {
-                    if run >= self.run_ids.len() {
-                        self.run_ids.push(None);
-                    }
-
-                    let rect = run_rects[run];
-
-                    s.with_offset(rect.origin(), |s| {
-                        s.node(
-                            &mut self.run_ids[run],
-                            text_label(&text[start..]),
-                            rect.size(),
-                            |_| {},
-                        );
-                    });
-                }
-            },
-        );
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("text", excerpt(&self.content.text))
@@ -532,6 +443,95 @@ impl<C: RenderBox + ?Sized> RenderBox for RenderParagraph<C> {
             child.paint(ctx, offset + data.offset);
         }
     }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let group_size = self.layout.as_ref().map_or(Size::ZERO, |layout| {
+            Size::new(layout.width(), layout.height())
+        });
+
+        let text = &self.content.text;
+
+        if self.content.placeholders.is_empty() {
+            if !text.is_empty() {
+                s.node(&mut self.group_id, text_label(text), group_size, |_| {});
+            }
+
+            return;
+        }
+
+        // The run rects read self.layout, so compute them before the closure mutably borrows run_ids.
+        let mut run_rects = Vec::new();
+        let mut start = 0;
+
+        for &offset in &self.content.placeholders {
+            if start < offset {
+                run_rects.push(self.run_segment_rect(start..offset).unwrap_or_default());
+            }
+
+            start = offset;
+        }
+
+        if start < text.len() {
+            run_rects.push(self.run_segment_rect(start..text.len()).unwrap_or_default());
+        }
+
+        // Interleave the text runs and the inline widgets in reading order, so a screen reader meets
+        // each widget where it sits in the text rather than after all of it.
+        s.node(
+            &mut self.group_id,
+            SemanticsConfig::new(Role::Paragraph),
+            group_size,
+            |s| {
+                let mut start = 0;
+                let mut run = 0;
+
+                for (index, &offset) in self.content.placeholders.iter().enumerate() {
+                    if start < offset {
+                        if run >= self.run_ids.len() {
+                            self.run_ids.push(None);
+                        }
+
+                        let rect = run_rects[run];
+
+                        s.with_offset(rect.origin(), |s| {
+                            s.node(
+                                &mut self.run_ids[run],
+                                text_label(&text[start..offset]),
+                                rect.size(),
+                                |_| {},
+                            );
+                        });
+
+                        run += 1;
+                    }
+
+                    if let Some(child) = self.children.get_mut(index) {
+                        let child_offset = self.child_data[index].offset;
+                        s.with_offset(child_offset, |s| child.build_semantics(s));
+                    }
+
+                    start = offset;
+                }
+
+                if start < text.len() {
+                    if run >= self.run_ids.len() {
+                        self.run_ids.push(None);
+                    }
+
+                    let rect = run_rects[run];
+
+                    s.with_offset(rect.origin(), |s| {
+                        s.node(
+                            &mut self.run_ids[run],
+                            text_label(&text[start..]),
+                            rect.size(),
+                            |_| {},
+                        );
+                    });
+                }
+            },
+        );
+    }
 }
 
 /// A box render object that shapes, sizes, and paints a single run of text with no inline children. It is the
@@ -631,23 +631,6 @@ impl RenderObject for RenderText {
 
     fn detach(&mut self, ctx: &mut UpdateCtx<'_>) {
         ctx.mark_needs_semantics_update();
-    }
-
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        if self.content.text.is_empty() {
-            return;
-        }
-
-        let size = self.layout.as_ref().map_or(Size::ZERO, |layout| {
-            Size::new(layout.width(), layout.height())
-        });
-
-        s.node(
-            &mut self.semantics_id,
-            text_label(&self.content.text),
-            size,
-            |_| {},
-        );
     }
 
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
@@ -778,6 +761,23 @@ impl RenderBox for RenderText {
                 }
             }
         });
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        if self.content.text.is_empty() {
+            return;
+        }
+
+        let size = self.layout.as_ref().map_or(Size::ZERO, |layout| {
+            Size::new(layout.width(), layout.height())
+        });
+
+        s.node(
+            &mut self.semantics_id,
+            text_label(&self.content.text),
+            size,
+            |_| {},
+        );
     }
 }
 

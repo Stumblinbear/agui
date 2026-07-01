@@ -10,6 +10,7 @@ use crate::{
         AnyRenderObject, LayoutCtx,
         box_layout::{BoxConstraints, RenderBox},
     },
+    semantics::SemanticsTreeBuilder,
     text::TextBaseline,
 };
 
@@ -39,6 +40,8 @@ pub trait AnyRenderBox: AnyRenderObject {
     fn dyn_update_compositing_bits(&mut self) -> bool;
 
     fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
+
+    fn dyn_build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>);
 }
 
 impl<T> AnyRenderBox for T
@@ -93,6 +96,10 @@ where
     fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.paint(ctx, offset);
     }
+
+    fn dyn_build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.build_semantics(s);
+    }
 }
 
 impl<T> RenderBox for Box<T>
@@ -146,6 +153,10 @@ where
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         (**self).dyn_paint(ctx, offset);
     }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        (**self).dyn_build_semantics(s);
+    }
 }
 
 impl<T> RenderBox for Rc<RefCell<T>>
@@ -198,5 +209,9 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.borrow_mut().dyn_paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.borrow_mut().dyn_build_semantics(s);
     }
 }

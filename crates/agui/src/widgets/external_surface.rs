@@ -124,8 +124,6 @@ impl RenderExternalSurface {
 }
 
 impl RenderObject for RenderExternalSurface {
-    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("surface", self.surface.0)
@@ -186,4 +184,6 @@ impl RenderBox for RenderExternalSurface {
         self.paint_scope = ctx.scope();
         ctx.add_layer(self.layer.clone(), offset);
     }
+
+    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
 }

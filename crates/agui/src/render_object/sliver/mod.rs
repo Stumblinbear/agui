@@ -196,6 +196,9 @@ pub trait RenderSliver: RenderObject {
     /// Paints this sliver and its descendants. `offset` is the sliver's paint origin in the enclosing
     /// boundary's layer coordinate space.
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
+
+    /// Adds this sliver's own semantic node, if any, to `s`, then recurses into each child.
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>);
 }
 
 /// A box render object that hosts a single sliver and lays it out along the vertical axis. Requires
@@ -222,10 +225,6 @@ impl<S: RenderSliver> RenderViewport<S> {
 }
 
 impl<S: RenderSliver> RenderObject for RenderViewport<S> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.sliver.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child_in(Some(ProtocolTag::SLIVER), |d| self.sliver.describe(d))
@@ -311,5 +310,9 @@ impl<S: RenderSliver> RenderBox for RenderViewport<S> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.sliver.borrow_mut().paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.sliver.borrow_mut().build_semantics(s);
     }
 }

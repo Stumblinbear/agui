@@ -10,13 +10,10 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::{AnyElement, Element},
     pipeline::build_tree::{Build, Operation, run},
-    pipeline::render_pipeline::{
-        LayoutState, PaintState, RenderPipeline, SemanticsBoundaryId, SemanticsState,
-    },
+    pipeline::render_pipeline::{LayoutState, PaintState, RenderPipeline, SemanticsState},
     provide::ProvideScope,
     render_object::box_layout::AnyRenderBox,
     scheduling::TaskScheduler,
-    semantics::SemanticsTree,
     widget::Widget,
 };
 
@@ -211,10 +208,10 @@ impl PipelineOwner {
         self.pipeline.flush_paint();
     }
 
-    /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
-    /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
-    pub fn flush_semantics(&self, update: impl FnMut(SemanticsBoundaryId, SemanticsTree)) {
-        self.pipeline.flush_semantics(update);
+    /// Re-walks each semantics boundary marked since the last frame, delivering each view's freshly built
+    /// semantics to that view's sink, then re-arms so the next change fires the callback again.
+    pub fn flush_semantics(&self) {
+        self.pipeline.flush_semantics();
     }
 
     /// Delivers `message` to the element at `handle`. If it requests a rebuild, it marks itself for the next

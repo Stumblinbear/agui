@@ -104,10 +104,6 @@ impl RenderObject for RenderRecordingBox {
         *self.semantics_boundary.borrow_mut() = Some(ctx.deferred_semantics_scope());
     }
 
-    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {
-        self.semantics_builds.set(self.semantics_builds.get() + 1);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
@@ -166,5 +162,9 @@ impl RenderBox for RenderRecordingBox {
         let mut canvas = ctx.canvas();
         let brush = canvas.brush(Color::BLACK);
         canvas.fill(Fill::NonZero, brush, &(offset & size));
+    }
+
+    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {
+        self.semantics_builds.set(self.semantics_builds.get() + 1);
     }
 }

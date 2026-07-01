@@ -153,10 +153,6 @@ impl<Child: RenderBox + ?Sized> RenderObject for RenderFlexible<Child> {
         &self.flex_parent_data
     }
 
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         self.child.describe(d)
     }
@@ -209,5 +205,9 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderFlexible<Child> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }

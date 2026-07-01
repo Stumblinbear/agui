@@ -103,10 +103,6 @@ impl<Child: ?Sized> RenderOpacity<Child> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderOpacity<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("opacity", self.opacity)
@@ -184,5 +180,9 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderOpacity<Child> {
         self.layer = Some(layer.clone());
 
         ctx.push_layer(layer, offset, |ctx| self.child.paint(ctx, Offset::ZERO));
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }

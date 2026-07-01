@@ -665,10 +665,6 @@ struct RenderSizingProbe<Child: ?Sized> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderSizingProbe<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -737,6 +733,10 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSizingProbe<Child> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }
 
@@ -975,8 +975,6 @@ mod tests {
     }
 
     impl RenderObject for RenderLiar {
-        fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
-
         fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
             d.node_for::<Self>().finish()
         }
@@ -1028,6 +1026,8 @@ mod tests {
         }
 
         fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+
+        fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
     }
 
     #[derive(Clone, Copy)]
@@ -1066,8 +1066,6 @@ mod tests {
     }
 
     impl RenderObject for RenderNaughty {
-        fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
-
         fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
             d.node_for::<Self>().finish()
         }
@@ -1149,5 +1147,7 @@ mod tests {
                 canvas.fill(Fill::NonZero, brush, &(offset & Size::new(50, 50)));
             }
         }
+
+        fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
     }
 }

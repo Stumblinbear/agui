@@ -122,7 +122,7 @@ fn marking_one_view_rewalks_only_its_semantics() {
     let mut ctx = TestCtx::new();
     let owner = PipelineOwner::new(ViewContainer::new((view_a, view_b)), &mut ctx.scheduler());
 
-    owner.flush_semantics(|_, _| {});
+    owner.flush_semantics();
     let (a_walked, b_walked) = (a.get(), b.get());
 
     // Mark only view a's boundary from outside a build pass, then re-walk. The flush applies the deferred
@@ -132,7 +132,7 @@ fn marking_one_view_rewalks_only_its_semantics() {
         .as_ref()
         .expect("the child captured its view's semantics boundary at attach")
         .mark_needs_semantics_update();
-    owner.flush_semantics(|_, _| {});
+    owner.flush_semantics();
 
     assert!(a.get() > a_walked, "the marked view re-walked");
     assert_eq!(b.get(), b_walked, "the other view was not re-walked");

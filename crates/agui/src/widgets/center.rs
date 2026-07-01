@@ -91,16 +91,6 @@ impl<Child: ?Sized> RenderCenter<Child> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderCenter<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        let offset = self
-            .child
-            .child_data
-            .as_ref()
-            .map_or(Offset::ZERO, |data| data.offset);
-
-        s.with_offset(offset, |s| self.child.build_semantics(s));
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -182,5 +172,15 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderCenter<Child> {
             .offset;
 
         self.child.paint(ctx, offset + child_offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let offset = self
+            .child
+            .child_data
+            .as_ref()
+            .map_or(Offset::ZERO, |data| data.offset);
+
+        s.with_offset(offset, |s| self.child.build_semantics(s));
     }
 }

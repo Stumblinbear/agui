@@ -5,12 +5,15 @@ use slotmap::{Key, SlotMap};
 
 use super::{FrameScheduler, PaintBoundaryId, PaintScope, RenderPipeline};
 
-use crate::context::PaintCtx;
-use crate::geometry::Offset;
-use crate::paint::compositing::{LayerHandle, OffsetLayer};
-use crate::paint::scene::SceneCapacity;
-use crate::pipeline::{BoundaryContent, FramePhase};
-use crate::render_object::{box_layout::RenderBox, node::MountedChild};
+use crate::pipeline::FramePhase;
+
+/// A repaint hook: clears one boundary's layer and repaints its render object into it, scoped to the boundary
+/// so nested boundaries registered during the repaint attribute correctly. It captures the layer, the paint
+/// capacity, and the render object; the pipeline knows none of them.
+pub type RepaintHook = Box<dyn Fn(PaintScope)>;
+
+/// A compositing-bits hook: recomputes one boundary's render object's compositing bits before its next repaint.
+pub type CompositingBitsHook = Box<dyn Fn()>;
 
 /// The repaint boundaries of one tree and their pending compositing-bit and repaint work, in two dirty lists
 /// since compositing bits settle before paint.
@@ -35,23 +38,22 @@ impl PaintState {
         }
     }
 
-    /// Registers `content` as a repaint boundary nested under `enclosing`, painting into `layer`, returning the
-    /// handle that owns and unregisters it. The new boundary is left unmarked: the caller either marks it (the
-    /// root view) or paints it in the same pass it registers in (an inline boundary).
+    /// Registers a repaint boundary nested under `enclosing`, driven by `repaint` and `update_bits`, returning
+    /// the handle that owns and unregisters it. The new boundary is left unmarked: the caller either marks it
+    /// (the root view) or paints it in the same pass it registers in (an inline boundary).
     pub(crate) fn register(
         self: &Rc<Self>,
         enclosing: PaintScope,
-        content: PaintContent,
-        layer: LayerHandle<OffsetLayer>,
+        repaint: RepaintHook,
+        update_bits: CompositingBitsHook,
     ) -> PaintBoundaryHandle {
         let mut registry = self.registry.borrow_mut();
 
         let depth = registry.get(enclosing.0).map_or(0, |b| b.depth + 1);
         let id = registry.insert(PaintBoundary {
             depth,
-            content,
-            layer,
-            paint_capacity: SceneCapacity::default(),
+            repaint: Some(repaint),
+            update_bits: Some(update_bits),
         });
 
         PaintBoundaryHandle {
@@ -116,39 +118,10 @@ impl PaintState {
 
 struct PaintBoundary {
     depth: usize,
-    content: PaintContent,
-    layer: LayerHandle<OffsetLayer>,
-    /// The buffer lengths the last repaint recorded, sizing the next repaint's buffers.
-    paint_capacity: SceneCapacity,
-}
-
-/// What a repaint boundary recomputes its compositing bits and repaints: the root view's render object, held
-/// in a shared cell, or an inline boundary's child, reached by deferred handle. Both resolve to a
-/// `&mut dyn RenderBox` the driver calls the two phase methods on, in their two separate passes.
-#[derive(Clone)]
-pub(crate) enum PaintContent {
-    Root(BoundaryContent),
-    Inline(MountedChild<dyn RenderBox>),
-}
-
-impl PaintContent {
-    fn update_compositing_bits(&self) {
-        match self {
-            Self::Root(content) => {
-                content.borrow_mut().dyn_update_compositing_bits();
-            }
-            Self::Inline(handle) => {
-                handle.borrow_mut().update_compositing_bits();
-            }
-        }
-    }
-
-    fn paint(&self, ctx: &mut PaintCtx, offset: Offset) {
-        match self {
-            Self::Root(content) => content.borrow_mut().dyn_paint(ctx, offset),
-            Self::Inline(handle) => handle.borrow_mut().paint(ctx, offset),
-        }
-    }
+    /// The repaint hook, taken out during its own repaint so it can re-enter the registry to register nested
+    /// boundaries, and put back after.
+    repaint: Option<RepaintHook>,
+    update_bits: Option<CompositingBitsHook>,
 }
 
 /// The work a repaint boundary owes, which are also the flush phases, in order: compositing bits settle
@@ -208,12 +181,18 @@ impl RenderPipeline {
         }
 
         for &id in bits.iter() {
-            let content = match self.paint.registry.borrow().get(id) {
-                Some(boundary) => boundary.content.clone(),
+            // Take the hook out so it can re-enter the registry, and put it back after.
+            let hook = match self.paint.registry.borrow_mut().get_mut(id) {
+                Some(boundary) => boundary.update_bits.take(),
                 None => continue,
             };
+            let Some(hook) = hook else { continue };
 
-            content.update_compositing_bits();
+            hook();
+
+            if let Some(boundary) = self.paint.registry.borrow_mut().get_mut(id) {
+                boundary.update_bits = Some(hook);
+            }
         }
 
         bits.clear();
@@ -231,29 +210,17 @@ impl RenderPipeline {
         }
 
         for &id in repaint.iter() {
-            let (content, layer, capacity) = match self.paint.registry.borrow().get(id) {
-                Some(boundary) => (
-                    boundary.content.clone(),
-                    boundary.layer.clone(),
-                    boundary.paint_capacity,
-                ),
+            // Take the hook out so it can re-enter the registry during its own repaint, and put it back after.
+            let hook = match self.paint.registry.borrow_mut().get_mut(id) {
+                Some(boundary) => boundary.repaint.take(),
                 None => continue,
             };
+            let Some(hook) = hook else { continue };
 
-            layer.borrow_mut().clear();
-
-            let recorded = PaintCtx::paint_with_capacity(
-                &layer,
-                capacity,
-                &self.paint,
-                PaintScope(id),
-                |ctx| {
-                    content.paint(ctx, Offset::ZERO);
-                },
-            );
+            hook(PaintScope(id));
 
             if let Some(boundary) = self.paint.registry.borrow_mut().get_mut(id) {
-                boundary.paint_capacity = recorded;
+                boundary.repaint = Some(hook);
             }
         }
 

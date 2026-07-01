@@ -188,10 +188,6 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderSizedBox<Child
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderSizedBox<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property_opt("width", self.width)
@@ -288,5 +284,9 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSizedBox<Child> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }

@@ -163,10 +163,6 @@ impl<Child: RenderBox + ?Sized> RenderObject for RenderPositioned<Child> {
         &self.stack_parent_data
     }
 
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         self.child.describe(d)
     }
@@ -219,6 +215,10 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPositioned<Child> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }
 
@@ -344,13 +344,6 @@ impl<Children: RenderChildren<ChildData = ()> + 'static> MultiChildRenderObject
 }
 
 impl<Children: RenderChildren<ChildData = ()> + 'static> RenderObject for RenderStack<Children> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        for index in 0..self.children.len() {
-            let offset = self.offsets[index];
-            s.with_offset(offset, |s| self.children.get_mut(index).build_semantics(s));
-        }
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
@@ -456,6 +449,13 @@ impl<Children: RenderChildren<ChildData = ()> + 'static> RenderBox for RenderSta
         for index in 0..self.children.len() {
             let child_offset = offset + self.offsets[index];
             self.children.get_mut(index).paint(ctx, child_offset);
+        }
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        for index in 0..self.children.len() {
+            let offset = self.offsets[index];
+            s.with_offset(offset, |s| self.children.get_mut(index).build_semantics(s));
         }
     }
 }

@@ -2,7 +2,6 @@ use std::any::Any;
 
 use crate::context::UpdateCtx;
 use crate::diagnostics::{Diagnostics, DiagnosticsNode};
-use crate::semantics::SemanticsTreeBuilder;
 
 // Render-object modules reach the layout context through this module.
 pub(crate) use crate::context::LayoutCtx;
@@ -46,16 +45,11 @@ pub trait RenderObject: 'static {
         &()
     }
 
-    /// Adds this render object's own semantic node, if any, to `s`, then recurses into each child.
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>);
-
     /// Captures this render object's subtree as a diagnostics snapshot, recursing into each child.
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode;
 }
 
 impl RenderObject for () {
-    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }

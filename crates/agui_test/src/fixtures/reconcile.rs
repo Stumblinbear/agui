@@ -42,12 +42,6 @@ impl MultiChildRenderObject for MultiChildRenderList {
 }
 
 impl RenderObject for MultiChildRenderList {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        for child in &mut self.children {
-            child.build_semantics(s);
-        }
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         self.children
             .iter()
@@ -112,6 +106,12 @@ impl RenderBox for MultiChildRenderList {
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         for child in &mut self.children {
             child.paint(ctx, offset);
+        }
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        for child in &mut self.children {
+            child.build_semantics(s);
         }
     }
 }

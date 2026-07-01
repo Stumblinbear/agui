@@ -191,8 +191,6 @@ pub struct RenderTestBox {
 }
 
 impl RenderObject for RenderTestBox {
-    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
@@ -253,6 +251,8 @@ impl RenderBox for RenderTestBox {
             canvas.fill(Fill::NonZero, brush, &(offset & self.size));
         }
     }
+
+    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
 }
 
 /// A leaf with independently chosen intrinsic sizes, for use as a child whose metrics a test controls.
@@ -319,8 +319,6 @@ pub struct RenderIntrinsicBox {
 }
 
 impl RenderObject for RenderIntrinsicBox {
-    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
@@ -368,4 +366,6 @@ impl RenderBox for RenderIntrinsicBox {
     }
 
     fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+
+    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
 }

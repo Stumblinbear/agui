@@ -90,13 +90,6 @@ impl<Children: RenderChildren<ChildData = ()> + 'static> MultiChildRenderObject
 }
 
 impl<Children: RenderChildren<ChildData = ()> + 'static> RenderObject for RenderFlex<Children> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        for index in 0..self.children.len() {
-            let offset = self.offsets[index];
-            s.with_offset(offset, |s| self.children.get_mut(index).build_semantics(s));
-        }
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
@@ -240,6 +233,13 @@ impl<Children: RenderChildren<ChildData = ()> + 'static> RenderBox for RenderFle
         for index in 0..self.children.len() {
             let child_offset = offset + self.offsets[index];
             self.children.get_mut(index).paint(ctx, child_offset);
+        }
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        for index in 0..self.children.len() {
+            let offset = self.offsets[index];
+            s.with_offset(offset, |s| self.children.get_mut(index).build_semantics(s));
         }
     }
 }

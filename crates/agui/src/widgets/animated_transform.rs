@@ -191,14 +191,6 @@ impl<Child: ?Sized> RenderAnimatedTransform<Child> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderAnimatedTransform<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        let size = self.child.child_data.unwrap_or(Size::ZERO);
-
-        s.with_transform(self.effective(size), |s| {
-            self.child.build_semantics(s);
-        });
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("origin", self.origin)
@@ -319,5 +311,13 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderAnimatedTransform<Child> {
         }
 
         ctx.push_layer(layer, offset, |ctx| self.child.paint(ctx, Offset::ZERO));
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let size = self.child.child_data.unwrap_or(Size::ZERO);
+
+        s.with_transform(self.effective(size), |s| {
+            self.child.build_semantics(s);
+        });
     }
 }

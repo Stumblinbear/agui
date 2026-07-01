@@ -80,10 +80,6 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderColoredBox<Chi
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderColoredBox<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("color", self.color)
@@ -168,5 +164,9 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderColoredBox<Child> {
         }
 
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }

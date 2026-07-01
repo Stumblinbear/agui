@@ -1,14 +1,17 @@
+use std::cell::Cell;
 use std::rc::Rc;
 
 use agui_core::tree::NodeHandle;
 
-use crate::context::BuildCtx;
+use crate::context::{BuildCtx, PaintCtx};
+use crate::geometry::Offset;
 use crate::paint::compositing::{LayerHandle, OffsetLayer};
+use crate::paint::scene::SceneCapacity;
 use crate::pipeline::BoundaryContent;
 use crate::pipeline::render_pipeline::{
-    DeferredSemanticsScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, LayoutState,
-    PaintBoundaryHandle, PaintContent, PaintScope, PaintState, SemanticsBoundaryHandle,
-    SemanticsScope, SemanticsState,
+    CompositingBitsHook, DeferredSemanticsScope, LayoutBoundaryHandle, LayoutScope, LayoutState,
+    PaintBoundaryHandle, PaintScope, PaintState, RelayoutHook, RepaintHook,
+    SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope, SemanticsState,
 };
 use crate::provide::ProvideScope;
 
@@ -61,8 +64,11 @@ impl<'a> CreateCtx<'a> {
 
     /// Registers the semantics boundary at the root of a view's render tree, returning the handle that owns
     /// it. A [`View`](crate::view::View) registers its root boundary this way at `create`.
-    pub fn register_semantics_boundary(&self, content: BoundaryContent) -> SemanticsBoundaryHandle {
-        self.semantics.register(content)
+    pub fn register_semantics_boundary(
+        &self,
+        rebuild: SemanticsRebuild,
+    ) -> SemanticsBoundaryHandle {
+        self.semantics.register(rebuild)
     }
 
     /// Runs `f` with `semantics` as the enclosing semantics boundary, restoring the previous one afterward. A
@@ -82,11 +88,8 @@ impl<'a> CreateCtx<'a> {
     /// handle that owns it. A [`View`](crate::view::View) plants its tree's relayout root this way at `create`;
     /// it is a forest root, so its enclosing layout scope is detached. Its enclosing repaint boundary is
     /// recorded through [`set_paint_scope`](crate::pipeline::render_pipeline::LayoutBoundaryHandle::set_paint_scope).
-    pub fn register_layout_boundary(
-        &self,
-        boundary: Box<dyn LayoutBoundary>,
-    ) -> LayoutBoundaryHandle {
-        self.layout.register(LayoutScope::detached(), boundary)
+    pub fn register_layout_boundary(&self, relayout: RelayoutHook) -> LayoutBoundaryHandle {
+        self.layout.register(LayoutScope::detached(), relayout)
     }
 
     /// Registers `content` as the repaint boundary at the root of a view's render tree, painting into
@@ -97,9 +100,33 @@ impl<'a> CreateCtx<'a> {
         content: BoundaryContent,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
-        let handle =
-            self.paint
-                .register(PaintScope::detached(), PaintContent::Root(content), layer);
+        let paint = Rc::downgrade(self.paint);
+        let capacity = Cell::new(SceneCapacity::default());
+
+        let repaint: RepaintHook = {
+            let content = Rc::clone(&content);
+
+            Box::new(move |scope| {
+                let Some(paint) = paint.upgrade() else {
+                    return;
+                };
+
+                layer.borrow_mut().clear();
+                let recorded =
+                    PaintCtx::paint_with_capacity(&layer, capacity.get(), &paint, scope, |ctx| {
+                        content.borrow_mut().dyn_paint(ctx, Offset::ZERO);
+                    });
+                capacity.set(recorded);
+            })
+        };
+
+        let update_bits: CompositingBitsHook = Box::new(move || {
+            content.borrow_mut().dyn_update_compositing_bits();
+        });
+
+        let handle = self
+            .paint
+            .register(PaintScope::detached(), repaint, update_bits);
 
         // The root paints through the flush, so mark it for an initial bits settle and paint.
         handle.mark_needs_compositing_bits_update();

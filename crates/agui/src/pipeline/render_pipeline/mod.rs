@@ -25,10 +25,9 @@ pub(crate) use layout::LayoutState;
 pub(crate) use paint::PaintState;
 pub(crate) use semantics::SemanticsState;
 
-pub use layout::{DeferredLayoutScope, LayoutBoundary, LayoutBoundaryHandle};
-pub(crate) use paint::PaintContent;
-pub use paint::{DeferredPaintScope, PaintBoundaryHandle};
-pub use semantics::{DeferredSemanticsScope, SemanticsBoundaryHandle};
+pub use layout::{DeferredLayoutScope, LayoutBoundaryHandle, RelayoutHook};
+pub use paint::{CompositingBitsHook, DeferredPaintScope, PaintBoundaryHandle, RepaintHook};
+pub use semantics::{DeferredSemanticsScope, SemanticsBoundaryHandle, SemanticsRebuild};
 
 /// The relayout and repaint boundaries of one widget tree, each domain its own shared channel so a flush can
 /// drain one domain while a relay re-enters another. A render object reaches a channel to register and mark a

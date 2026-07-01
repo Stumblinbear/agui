@@ -5,6 +5,7 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     render_object::{LayoutCtx, RenderObject},
+    semantics::SemanticsTreeBuilder,
     text::TextBaseline,
 };
 
@@ -151,6 +152,9 @@ pub trait RenderBox: RenderObject {
     /// the enclosing boundary's layer. A box draws its own geometry at `offset` and paints each child at
     /// `offset` plus that child's layout position.
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
+
+    /// Adds this box's own semantic node, if any, to `s`, then recurses into each child.
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>);
 }
 
 impl RenderBox for () {
@@ -195,4 +199,6 @@ impl RenderBox for () {
     }
 
     fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+
+    fn build_semantics(&mut self, _s: &mut SemanticsTreeBuilder<'_>) {}
 }

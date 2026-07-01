@@ -199,8 +199,6 @@ impl Widget for Tracked {
 pub struct TrackedRender;
 
 impl RenderObject for TrackedRender {
-    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>().finish()
     }
@@ -248,6 +246,8 @@ impl RenderBox for TrackedRender {
     }
 
     fn paint(&mut self, _: &mut PaintCtx, _: Offset) {}
+
+    fn build_semantics(&mut self, _: &mut SemanticsTreeBuilder<'_>) {}
 }
 
 /// Checks that a custom element honors the universal lifecycle and routing contracts.

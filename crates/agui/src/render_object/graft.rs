@@ -58,10 +58,6 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderGraft<Child> {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderGraft<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.child.build_semantics(s);
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         // Transparent in diagnostics: present the child's node directly rather than wrapping it in one of
         // our own, since the anchor carries nothing worth showing.
@@ -117,5 +113,9 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderGraft<Child> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.child.build_semantics(s);
     }
 }

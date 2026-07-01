@@ -6,8 +6,8 @@ use agui_core::tree::NodeHandle;
 use crate::context::UpdateCtx;
 use crate::pipeline::LayoutBuildHost;
 use crate::pipeline::render_pipeline::{
-    DeferredLayoutScope, LayoutBoundary, LayoutBoundaryHandle, LayoutScope, LayoutState,
-    PaintScope, PaintState,
+    DeferredLayoutScope, LayoutBoundaryHandle, LayoutScope, LayoutState, PaintScope, PaintState,
+    RelayoutHook,
 };
 use agui_core::scheduling::TaskScheduler;
 
@@ -80,11 +80,8 @@ impl<'a, 'h> LayoutCtx<'a, 'h> {
     /// Registers `boundary` as a relayout boundary nested under the boundary in force, and returns the handle
     /// that owns and marks it. A node that establishes a nested relayout boundary during layout registers it
     /// this way; its enclosing repaint boundary is recorded later during paint.
-    pub fn register_layout_boundary(
-        &self,
-        boundary: Box<dyn LayoutBoundary>,
-    ) -> LayoutBoundaryHandle {
-        self.layout.register(self.scope, boundary)
+    pub fn register_layout_boundary(&self, relayout: RelayoutHook) -> LayoutBoundaryHandle {
+        self.layout.register(self.scope, relayout)
     }
 
     /// A deferred handle to the boundary in force, for marking it from a reconcile that holds no context.

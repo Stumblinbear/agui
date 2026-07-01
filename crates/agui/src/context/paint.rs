@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::rc::Rc;
 
 use peniko::kurbo::Affine;
@@ -13,7 +14,8 @@ use crate::{
         scene::{Scene, SceneCapacity},
     },
     pipeline::render_pipeline::{
-        DeferredPaintScope, PaintBoundaryHandle, PaintContent, PaintScope, PaintState,
+        CompositingBitsHook, DeferredPaintScope, PaintBoundaryHandle, PaintScope, PaintState,
+        RepaintHook,
     },
     render_object::{box_layout::RenderBox, node::MountedChild},
 };
@@ -201,8 +203,29 @@ impl PaintCtx<'_> {
         content: MountedChild<dyn RenderBox>,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
-        self.paint
-            .register(self.scope, PaintContent::Inline(content), layer)
+        let paint = Rc::downgrade(self.paint);
+        let capacity = Cell::new(SceneCapacity::default());
+
+        let repaint: RepaintHook = Box::new(move |scope| {
+            let Some(paint) = paint.upgrade() else {
+                return;
+            };
+
+            layer.borrow_mut().clear();
+
+            let recorded =
+                PaintCtx::paint_with_capacity(&layer, capacity.get(), &paint, scope, |ctx| {
+                    content.borrow_mut().paint(ctx, Offset::ZERO);
+                });
+
+            capacity.set(recorded);
+        });
+
+        let update_bits: CompositingBitsHook = Box::new(move || {
+            content.borrow_mut().update_compositing_bits();
+        });
+
+        self.paint.register(self.scope, repaint, update_bits)
     }
 
     /// Paints `content` into `layer` as repaint boundary `scope`, then embeds the layer here at `offset`. A

@@ -5,8 +5,10 @@ use slotmap::{Key, SlotMap};
 
 use super::{RenderPipeline, SemanticsBoundaryId, SemanticsScope};
 
-use crate::pipeline::BoundaryContent;
-use crate::semantics::{SemanticsTree, SemanticsTreeBuilder};
+/// A semantics rebuild hook: rebuilds one boundary's semantics subtree, minting ids from the shared counter,
+/// and delivers the result to that view's sink. It captures the render object and the sink; the pipeline knows
+/// neither.
+pub type SemanticsRebuild = Box<dyn Fn(&mut u64)>;
 
 /// The semantics boundaries of one tree and their pending re-reads. Carries its own clean-to-dirty callback,
 /// and the monotonic id source so a node minted on any walk stays unique across boundaries and walks.
@@ -35,11 +37,10 @@ impl SemanticsState {
     /// Registers a semantics boundary, returning the handle that owns and unregisters it. A
     /// [`View`](crate::view::View) registers its root boundary this way; render objects under it mark it through
     /// a scope the handle hands out.
-    pub(crate) fn register(self: &Rc<Self>, content: BoundaryContent) -> SemanticsBoundaryHandle {
-        let id = self
-            .registry
-            .borrow_mut()
-            .insert(SemanticsBoundaryCell { content });
+    pub(crate) fn register(self: &Rc<Self>, rebuild: SemanticsRebuild) -> SemanticsBoundaryHandle {
+        let id = self.registry.borrow_mut().insert(SemanticsBoundaryCell {
+            rebuild: Some(rebuild),
+        });
 
         SemanticsBoundaryHandle {
             id,
@@ -74,7 +75,8 @@ impl SemanticsState {
 }
 
 struct SemanticsBoundaryCell {
-    content: BoundaryContent,
+    /// The rebuild hook, taken out during its own rebuild so it can re-enter the registry, and put back after.
+    rebuild: Option<SemanticsRebuild>,
 }
 
 impl RenderPipeline {
@@ -85,7 +87,7 @@ impl RenderPipeline {
 
     /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
     /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
-    pub fn flush_semantics(&self, mut update: impl FnMut(SemanticsBoundaryId, SemanticsTree)) {
+    pub fn flush_semantics(&self) {
         let mut dirty = self.semantics.dirty.borrow_mut();
         dirty.extend(self.semantics.deferred.borrow_mut().drain(..));
         dirty.sort_unstable();
@@ -94,16 +96,18 @@ impl RenderPipeline {
         let mut counter = self.semantics.counter.get();
 
         for &id in dirty.iter() {
-            let content = match self.semantics.registry.borrow().get(id) {
-                Some(boundary) => Rc::clone(&boundary.content),
+            // Take the hook out so it can re-enter the registry, and put it back after.
+            let rebuild = match self.semantics.registry.borrow_mut().get_mut(id) {
+                Some(boundary) => boundary.rebuild.take(),
                 None => continue,
             };
+            let Some(rebuild) = rebuild else { continue };
 
-            let mut builder = SemanticsTreeBuilder::new(&mut counter);
-            content.borrow_mut().dyn_build_semantics(&mut builder);
-            let tree = SemanticsTree::new(builder.finish());
+            rebuild(&mut counter);
 
-            update(id, tree);
+            if let Some(boundary) = self.semantics.registry.borrow_mut().get_mut(id) {
+                boundary.rebuild = Some(rebuild);
+            }
         }
 
         self.semantics.counter.set(counter);

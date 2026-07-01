@@ -141,14 +141,6 @@ fn is_paintable(transform: Affine) -> bool {
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderTransform<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        let size = self.child.child_data.unwrap_or(Size::ZERO);
-
-        s.with_transform(self.effective_transform(size), |s| {
-            self.child.build_semantics(s);
-        });
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("transform", self.transform.as_coeffs())
@@ -237,5 +229,13 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderTransform<Child> {
             Affine::translate(offset) * effective,
             |ctx| self.child.paint(ctx, Offset::ZERO),
         );
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let size = self.child.child_data.unwrap_or(Size::ZERO);
+
+        s.with_transform(self.effective_transform(size), |s| {
+            self.child.build_semantics(s);
+        });
     }
 }

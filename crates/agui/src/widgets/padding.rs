@@ -94,16 +94,6 @@ impl<Child: RenderBox + ?Sized> SingleChildRenderObject for RenderPadding<Child>
 }
 
 impl<Child: RenderBox + ?Sized> RenderObject for RenderPadding<Child> {
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        let offset = self
-            .child
-            .child_data
-            .as_ref()
-            .map_or(Offset::ZERO, |data| data.offset);
-
-        s.with_offset(offset, |s| self.child.build_semantics(s));
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .property("padding", self.padding)
@@ -241,5 +231,15 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderPadding<Child> {
             ctx,
             offset + Offset::new(self.padding.left, self.padding.top),
         );
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        let offset = self
+            .child
+            .child_data
+            .as_ref()
+            .map_or(Offset::ZERO, |data| data.offset);
+
+        s.with_offset(offset, |s| self.child.build_semantics(s));
     }
 }

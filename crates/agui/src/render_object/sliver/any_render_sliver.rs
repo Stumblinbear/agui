@@ -10,6 +10,7 @@ use crate::{
         AnyRenderObject,
         sliver::{RenderSliver, SliverConstraints, SliverGeometry},
     },
+    semantics::SemanticsTreeBuilder,
 };
 
 pub trait AnyRenderSliver: AnyRenderObject {
@@ -23,6 +24,8 @@ pub trait AnyRenderSliver: AnyRenderObject {
     ) -> HitTest;
 
     fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset);
+
+    fn dyn_build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>);
 }
 
 impl<T> AnyRenderSliver for T
@@ -46,6 +49,10 @@ where
     fn dyn_paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         RenderSliver::paint(self, ctx, offset);
     }
+
+    fn dyn_build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.build_semantics(s);
+    }
 }
 
 impl<T> RenderSliver for Box<T>
@@ -67,6 +74,10 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         (**self).dyn_paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        (**self).dyn_build_semantics(s);
     }
 }
 
@@ -90,5 +101,9 @@ where
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.borrow_mut().dyn_paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.borrow_mut().dyn_build_semantics(s);
     }
 }

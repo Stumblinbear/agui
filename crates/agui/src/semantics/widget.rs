@@ -120,17 +120,6 @@ impl<Child: RenderBox + ?Sized> RenderObject for RenderSemanticsAnnotations<Chil
         ctx.mark_needs_semantics_update();
     }
 
-    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        s.node(
-            &mut self.semantics_id,
-            self.config.clone(),
-            self.size,
-            |s| {
-                self.child.build_semantics(s);
-            },
-        );
-    }
-
     fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.node_for::<Self>()
             .child(|d| self.child.describe(d))
@@ -186,5 +175,16 @@ impl<Child: RenderBox + ?Sized> RenderBox for RenderSemanticsAnnotations<Child> 
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
         self.child.paint(ctx, offset);
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        s.node(
+            &mut self.semantics_id,
+            self.config.clone(),
+            self.size,
+            |s| {
+                self.child.build_semantics(s);
+            },
+        );
     }
 }

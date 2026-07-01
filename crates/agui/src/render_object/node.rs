@@ -11,7 +11,7 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
-    pipeline::render_pipeline::{LayoutBoundary, LayoutBoundaryHandle},
+    pipeline::render_pipeline::{LayoutBoundaryHandle, RelayoutHook},
     prelude::render_object::LayoutScope,
     render_object::{
         LayoutCtx, RenderObject,
@@ -20,19 +20,6 @@ use crate::{
     semantics::SemanticsTreeBuilder,
     text::TextBaseline,
 };
-
-/// A relayout boundary for an inline box render object: the deferred handle to it plus the box constraints it
-/// last took. At flush it resolves the handle and re-lays the render object under those constraints.
-struct InlineBoxBoundary<R: RenderBox + ?Sized> {
-    handle: MountedChild<R>,
-    constraints: BoxConstraints,
-}
-
-impl<R: RenderBox + ?Sized> LayoutBoundary for InlineBoxBoundary<R> {
-    fn relayout(&mut self, ctx: &mut LayoutCtx) {
-        self.handle.borrow_mut().layout(ctx, self.constraints);
-    }
-}
 
 /// A parent render object's pointer to one child render object, paired with the per-child layout state the
 /// parent keeps about it (its [`child_data`](Self::child_data) and pipeline flags).
@@ -166,11 +153,6 @@ impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
         }
     }
 
-    /// Records the child render object's subtree into `s`.
-    pub fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
-        self.borrow_mut().build_semantics(s);
-    }
-
     /// Captures the child render object's subtree, annotated with this holder's pipeline state.
     pub fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
         d.decorate()
@@ -243,18 +225,18 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
     fn register_boundary(&mut self, ctx: &LayoutCtx, constraints: BoxConstraints) -> LayoutScope {
         let handle = *self.child();
 
-        let boundary = Box::new(InlineBoxBoundary {
-            handle,
-            constraints,
+        // `handle` and `constraints` are both `Copy`, so this re-lay hook is `Fn`, not `FnMut`.
+        let relayout: RelayoutHook = Box::new(move |ctx| {
+            handle.borrow_mut().layout(ctx, constraints);
         });
 
         if let Some(registered) = self.boundary.as_mut() {
-            registered.replace(boundary);
+            registered.replace(relayout);
 
             return registered.scope();
         }
 
-        let boundary = ctx.register_layout_boundary(boundary);
+        let boundary = ctx.register_layout_boundary(relayout);
 
         let scope = boundary.scope();
 
@@ -293,5 +275,10 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
         }
 
         self.borrow_mut().paint(ctx, offset);
+    }
+
+    /// Records the child box render object's subtree into `s`.
+    pub fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        self.borrow_mut().build_semantics(s);
     }
 }

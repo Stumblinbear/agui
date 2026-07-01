@@ -152,7 +152,7 @@ where
     /// assistive technology after a change. A boundary left unmarked is not re-walked, so a render object's
     /// semantics-walk count reveals which boundaries a change actually touched.
     pub fn flush_semantics(&mut self) {
-        self.owner.flush_semantics(|_, _| {});
+        self.owner.flush_semantics();
     }
 
     /// The frame composited from the most recent paint, before rasterization.
