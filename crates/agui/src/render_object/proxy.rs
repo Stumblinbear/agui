@@ -18,9 +18,7 @@ use crate::{
 };
 
 /// A transparent single-child anchor for a swappable child. It contributes nothing of its own to layout,
-/// paint, hit-testing, or semantics, and surfaces its child's parent data as its own, so a parent placing it
-/// reads the child's parent data through the anchor. See [`RenderGraft`](crate::render_object::RenderGraft)
-/// for the variant that keeps the child's parent data hidden.
+/// paint, hit-testing, or semantics, and surfaces its child's parent data as its own.
 pub struct RenderProxy<Child: ?Sized> {
     layout_scope: LayoutScope,
     child: RenderNode<Child>,

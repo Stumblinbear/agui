@@ -17,6 +17,7 @@ use std::{
 use agui::{
     paint::compositing::CompositedFrame,
     prelude::{element::*, render_object::*},
+    render_object::RenderProxy,
 };
 
 use crate::WidgetTester;
@@ -68,7 +69,7 @@ pub fn run_golden<W>(
 ) where
     W: Widget + 'static,
     W::Element: 'static,
-    W::Render: RenderBox + Sized + 'static,
+    W::Render: RenderBox + 'static,
 {
     let frame = layout_to_frame(widget, width, height);
 
@@ -87,14 +88,39 @@ pub fn run_golden<W>(
     assert_renderers_agree(&rendered);
 }
 
+/// The root the harness mounts a test's widget under. It presents a sized render object of its
+/// own and forwards layout and paint to the child, accepting any box widget, including one whose
+/// render object type is opaque or unsized.
+struct GraftRoot<W> {
+    child: W,
+}
+
+impl<W> Widget for GraftRoot<W>
+where
+    W: Widget,
+    W::Render: RenderBox + 'static,
+{
+    type Element = SingleChildElement<W::Element, RenderProxy<W::Render>>;
+
+    type Render = RenderProxy<W::Render>;
+
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SingleChildElement::new(ctx, self.child, RenderProxy::new())
+    }
+
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        element.update(ctx, self.child);
+    }
+}
+
 /// Lays `widget` out under tight `width` by `height` constraints and composes its paint into a frame.
 fn layout_to_frame<W>(widget: W, width: u32, height: u32) -> CompositedFrame
 where
     W: Widget + 'static,
     W::Element: 'static,
-    W::Render: RenderBox + Sized + 'static,
+    W::Render: RenderBox + 'static,
 {
-    let mut tester = WidgetTester::mount(widget);
+    let mut tester = WidgetTester::mount(GraftRoot { child: widget });
     tester.resize_with(BoxConstraints::new(
         width as f32,
         width as f32,
