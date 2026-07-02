@@ -8,8 +8,9 @@
 //!
 //! A node owns its children's bodies: a [`Slot`] child inline in the node's own allocation, a [`BoxedSlot`]
 //! child in a separate heap allocation. The registry holds only the handle, pointer, depth, and dispatch
-//! fn; it never owns a body. A handle stays safe after its node is gone: [`Tree::dispatch`] returns `false`
-//! instead of touching freed memory.
+//! fn; it never owns a body. A registered body is pinned: it stays at its registered address until it is
+//! deregistered. A handle stays safe after its node is gone: [`Tree::dispatch`] returns `false` instead of
+//! touching freed memory.
 
 use std::mem::offset_of;
 use std::ptr::NonNull;
@@ -231,14 +232,26 @@ impl<N: NodeDispatch> Cursor<'_, N> {
     /// returns its cursor. The caller mounts the child through its `get_mut`.
     ///
     /// # Safety
-    /// - `child` must belong to the node at `self.this`.
+    /// - `child` must belong to the node at `self.this`: a [`Slot`] stored inline in that node's
+    ///   allocation, or a [`BoxedSlot`] that node owns. A `Slot` reached through a further heap
+    ///   indirection (a `Box<Slot<C>>` field) is not inline and must not be registered.
+    /// - `child` must not currently be registered.
     /// - `glue` must dispatch the child's node type.
+    /// - The registered body must stay at its registered address until deregistration: a registered
+    ///   [`Slot`] must not move. A [`BoxedSlot`] value may move freely; its body is pinned on the heap.
     /// - The holder must deregister `child` with [`deregister`](Self::deregister) before it drops.
     pub unsafe fn register<S: NodeContainer>(
         &mut self,
         child: &mut S,
         glue: DispatchGlue<N>,
     ) -> Cursor<'_, N> {
+        // A stale handle here means the previous registration was never removed; that entry would
+        // outlive the body and a dispatch through it would touch freed memory.
+        debug_assert!(
+            child.handle() == NodeHandle::default(),
+            "child is already registered; deregister it first"
+        );
+
         // SAFETY: `self.this` is this node's base, which `body` needs; the rest is the caller's contract.
         let node = unsafe { child.body(self.this) };
         let depth = self.depth + 1;
@@ -268,7 +281,8 @@ impl<N: NodeDispatch> Cursor<'_, N> {
     /// [`register`](Self::register) it adds nothing; the child keeps the handle it was given at registration.
     ///
     /// # Safety
-    /// `child` must belong to the node this cursor is positioned at.
+    /// `child` must belong to the node this cursor is positioned at, under the same placement rules as
+    /// [`register`](Self::register), and a registered `child` must still be at its registered address.
     pub unsafe fn with_child<S: NodeContainer, R>(
         &mut self,
         child: &mut S,
@@ -278,6 +292,17 @@ impl<N: NodeDispatch> Cursor<'_, N> {
         // SAFETY: the caller guarantees `child` belongs to `self.this`, which is `body`'s precondition. The
         // recomputed pointer is the one registered for `handle`.
         let this = unsafe { child.body(self.this) };
+        // A mismatch means the child moved since registration (or this is the wrong parent); the
+        // registered entry points at its old address and a dispatch through it would read a vacated
+        // field.
+        debug_assert!(
+            self.reg
+                .heads
+                .get(handle)
+                .is_none_or(|entry| entry.node == this),
+            "child is not at its registered address; a registered Slot must not move"
+        );
+
         let depth = self.depth + 1;
         let cursor = Cursor {
             reg: &mut *self.reg,
@@ -784,6 +809,52 @@ mod tests {
                 });
             }
         }
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "already registered")]
+    fn register_rejects_an_already_registered_child() {
+        Tree::<Root, App>::new(
+            Root {
+                a: Slot::new(leaf()),
+                b: Slot::new(leaf()),
+            },
+            run::<Root>,
+            |root, mut cursor| {
+                // SAFETY: `a` is the root's own inline child.
+                unsafe {
+                    cursor.register(&mut root.a, run::<Leaf>);
+                    cursor.register(&mut root.a, run::<Leaf>);
+                }
+            },
+        );
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "registered address")]
+    fn with_child_rejects_a_moved_slot() {
+        Tree::<Root, App>::new(
+            Root {
+                a: Slot::new(leaf()),
+                b: Slot::new(leaf()),
+            },
+            run::<Root>,
+            |root, mut cursor| {
+                // SAFETY: `a` is the root's own inline child.
+                unsafe {
+                    cursor.register(&mut root.a, run::<Leaf>);
+                }
+                std::mem::swap(&mut root.a, &mut root.b);
+                // The registered child now sits in `b`; its recomputed body no longer matches the
+                // registered entry, which the tripwire catches before any stale pointer escapes.
+                // SAFETY: `b` is the root's own inline child.
+                unsafe {
+                    cursor.with_child(&mut root.b, |_child, _cursor| {});
+                }
+            },
+        );
     }
 
     #[test]
