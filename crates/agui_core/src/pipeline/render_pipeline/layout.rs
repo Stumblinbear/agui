@@ -58,7 +58,7 @@ pub(crate) struct LayoutState {
     // walk's mark of its shared boundary is placed at the walk's floor (`mark_at`), ahead of the children's
     // deeper marks. So the flush drains in order with no sort, one entry per momentary borrow.
     dirty: RefCell<Vec<LayoutBoundaryId>>,
-    deferred: Rc<RefCell<Vec<LayoutBoundaryId>>>,
+    deferred: RefCell<Vec<LayoutBoundaryId>>,
 }
 
 impl LayoutState {
@@ -67,7 +67,7 @@ impl LayoutState {
             scheduler,
             registry: RefCell::new(SlotMap::with_key()),
             dirty: RefCell::new(Vec::new()),
-            deferred: Rc::new(RefCell::new(Vec::new())),
+            deferred: RefCell::new(Vec::new()),
         }
     }
 
@@ -90,10 +90,10 @@ impl LayoutState {
 
     /// A deferred handle to `scope`'s boundary, for marking it from a callback that holds no pipeline, such as
     /// a reconcile or a per-frame animation.
-    pub(crate) fn deferred_scope(&self, scope: LayoutScope) -> DeferredLayoutScope {
+    pub(crate) fn deferred_scope(self: &Rc<Self>, scope: LayoutScope) -> DeferredLayoutScope {
         DeferredLayoutScope {
             id: scope.0,
-            queue: Some(Rc::clone(&self.deferred)),
+            channel: Rc::downgrade(self),
         }
     }
 
@@ -328,7 +328,7 @@ impl Drop for LayoutBoundaryHandle {
 #[derive(Clone)]
 pub struct DeferredLayoutScope {
     id: LayoutBoundaryId,
-    queue: Option<Rc<RefCell<Vec<LayoutBoundaryId>>>>,
+    channel: Weak<LayoutState>,
 }
 
 impl DeferredLayoutScope {
@@ -336,14 +336,15 @@ impl DeferredLayoutScope {
     pub fn detached() -> Self {
         Self {
             id: LayoutBoundaryId::null(),
-            queue: None,
+            channel: Weak::new(),
         }
     }
 
-    /// Queues this boundary to be re-laid on the pipeline's next frame.
+    /// Queues this boundary to be re-laid on the pipeline's next frame, and requests that frame.
     pub fn mark_needs_layout(&self) {
-        if let Some(queue) = &self.queue {
-            queue.borrow_mut().push(self.id);
+        if let Some(channel) = self.channel.upgrade() {
+            channel.deferred.borrow_mut().push(self.id);
+            channel.scheduler.notify();
         }
     }
 }

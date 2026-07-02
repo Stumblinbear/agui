@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use agui::geometry::Size;
 use agui_test::{WidgetTester, fixtures::RecordingBox};
 
@@ -18,4 +20,29 @@ fn a_layout_only_resize_leaves_the_tree_dirty() {
     tester.resize(Size::new(80, 80));
 
     assert!(tester.is_dirty(), "a layout-only resize is still owed work");
+}
+
+#[test]
+fn a_deferred_composite_mark_schedules_a_frame() {
+    let render = RecordingBox::new();
+    let paint_boundary = Rc::clone(&render.paint_boundary);
+
+    let mut tester = WidgetTester::mount(render);
+    tester.resize(Size::new(40, 40));
+    tester.pump_and_settle(8);
+
+    assert!(
+        !tester.is_dirty(),
+        "the tree is settled after its first frame"
+    );
+
+    // A composite request has no boundary to enqueue, but it must still leave the tree owed work so a frame
+    // runs to recomposite. Dropping it, as an earlier version did, left no frame scheduled.
+    paint_boundary
+        .borrow()
+        .clone()
+        .expect("the child captured its enclosing paint boundary")
+        .mark_needs_composite();
+
+    assert!(tester.is_dirty(), "a composite mark is owed a frame");
 }

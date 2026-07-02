@@ -16,7 +16,7 @@ pub(crate) struct SemanticsState {
     registry: RefCell<SlotMap<SemanticsBoundaryId, SemanticsBoundaryCell>>,
 
     dirty: RefCell<Vec<SemanticsBoundaryId>>,
-    deferred: Rc<RefCell<Vec<SemanticsBoundaryId>>>,
+    deferred: RefCell<Vec<SemanticsBoundaryId>>,
 
     counter: Cell<u64>,
 
@@ -28,7 +28,7 @@ impl SemanticsState {
         Self {
             registry: RefCell::new(SlotMap::with_key()),
             dirty: RefCell::new(Vec::new()),
-            deferred: Rc::new(RefCell::new(Vec::new())),
+            deferred: RefCell::new(Vec::new()),
             counter: Cell::new(0),
             notify: RefCell::new(None),
         }
@@ -64,10 +64,10 @@ impl SemanticsState {
     }
 
     /// A deferred marker for `scope`'s boundary, for a render object to mark it from outside a pass.
-    pub(crate) fn deferred_scope(&self, scope: SemanticsScope) -> DeferredSemanticsScope {
+    pub(crate) fn deferred_scope(self: &Rc<Self>, scope: SemanticsScope) -> DeferredSemanticsScope {
         DeferredSemanticsScope {
             id: scope.0,
-            queue: Some(Rc::clone(&self.deferred)),
+            channel: Rc::downgrade(self),
         }
     }
 
@@ -213,12 +213,10 @@ impl SemanticsBoundaryHandle {
     /// when its semantics later change.
     #[must_use]
     pub fn deferred_scope(&self) -> DeferredSemanticsScope {
-        let queue = self
-            .channel
-            .upgrade()
-            .map(|channel| Rc::clone(&channel.deferred));
-
-        DeferredSemanticsScope { id: self.id, queue }
+        DeferredSemanticsScope {
+            id: self.id,
+            channel: Weak::clone(&self.channel),
+        }
     }
 }
 
@@ -243,7 +241,7 @@ impl Drop for SemanticsBoundaryHandle {
 #[derive(Clone)]
 pub struct DeferredSemanticsScope {
     id: SemanticsBoundaryId,
-    queue: Option<Rc<RefCell<Vec<SemanticsBoundaryId>>>>,
+    channel: Weak<SemanticsState>,
 }
 
 impl Default for DeferredSemanticsScope {
@@ -258,14 +256,28 @@ impl DeferredSemanticsScope {
     pub fn detached() -> Self {
         Self {
             id: SemanticsBoundaryId::null(),
-            queue: None,
+            channel: Weak::new(),
         }
     }
 
-    /// Queues this boundary's semantics to be re-read on the pipeline's next frame.
+    /// Queues this boundary's semantics to be re-read on the pipeline's next frame, and fires the semantics
+    /// hook so the driver schedules that frame.
     pub fn mark_needs_semantics_update(&self) {
-        if let Some(queue) = &self.queue {
-            queue.borrow_mut().push(self.id);
+        let Some(channel) = self.channel.upgrade() else {
+            return;
+        };
+
+        if channel.notify.borrow().is_none() {
+            return;
+        }
+
+        let mut deferred = channel.deferred.borrow_mut();
+        let was_clean = deferred.is_empty();
+        deferred.push(self.id);
+        drop(deferred);
+
+        if was_clean && let Some(notify) = channel.notify.borrow().as_ref() {
+            notify();
         }
     }
 }
