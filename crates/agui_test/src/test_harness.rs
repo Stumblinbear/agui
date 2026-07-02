@@ -233,7 +233,7 @@ impl TestCtx {
         let surface = Rc::new(RefCell::new(None));
 
         let owner = PipelineOwner::new(
-            View::new(Rc::clone(&surface)).child(widget),
+            |ctx| Box::new(View::new(Rc::clone(&surface)).child(widget).create(ctx)),
             &mut self.tasks.scheduler(),
         );
 

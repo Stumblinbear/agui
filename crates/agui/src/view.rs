@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use typed_floats::{Positive, PositiveFinite};
 
@@ -11,12 +14,10 @@ use crate::{
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
-    pipeline::{
-        BoundaryContent,
-        render_pipeline::{
-            LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, RelayoutHook,
-            SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope,
-        },
+    paint::scene::SceneCapacity,
+    pipeline::render_pipeline::{
+        CompositingBitsHook, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, RelayoutHook,
+        RepaintHook, SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope,
     },
     render_object::{
         LayoutCtx, RenderObject, SingleChildRenderObject,
@@ -116,13 +117,15 @@ impl ViewHandle {
 
     /// Captures the view's subtree as a semantics tree, for assistive technology and tests.
     pub fn semantics(&self) -> SemanticsTree {
-        let nodes = self.inner.semantics.with_counter(|counter| {
+        let nodes = self.inner.semantics.build_semantics(|counter| {
             let mut builder = SemanticsTreeBuilder::new(counter);
+
             self.inner
                 .content
                 .borrow_mut()
                 .child
                 .build_semantics(&mut builder);
+
             builder.finish()
         });
 
@@ -170,11 +173,39 @@ where
         let layer = LayerHandle::new(OffsetLayer::new());
 
         let content = Rc::new(RefCell::new(RenderView::new()));
-        // The repaint boundary holds the render object through the erased shared cell; `Rc::clone` would pin
-        // the source type and fail to unsize, so the method form clones and coerces.
-        #[allow(clippy::clone_on_ref_ptr)]
-        let paint_content: BoundaryContent = content.clone();
-        let paint = ctx.register_paint_boundary(paint_content, layer.clone());
+
+        // The repaint and compositing-bits hooks paint the view's render object into its own layer, keeping the
+        // layer and the paint capacity captured against the pipeline the create context lends.
+        let paint_state = Rc::downgrade(ctx.paint_state());
+        let capacity = Cell::new(SceneCapacity::default());
+
+        let repaint: RepaintHook = {
+            let content = Rc::clone(&content);
+            let layer = layer.clone();
+
+            Box::new(move |scope| {
+                let Some(paint) = paint_state.upgrade() else {
+                    return;
+                };
+
+                layer.borrow_mut().clear();
+                let recorded =
+                    PaintCtx::paint_with_capacity(&layer, capacity.get(), &paint, scope, |ctx| {
+                        content.borrow_mut().paint(ctx, Offset::ZERO);
+                    });
+                capacity.set(recorded);
+            })
+        };
+
+        let update_bits: CompositingBitsHook = {
+            let content = Rc::clone(&content);
+
+            Box::new(move || {
+                content.borrow_mut().update_compositing_bits();
+            })
+        };
+
+        let paint = ctx.register_paint_boundary(repaint, update_bits);
 
         // The relayout boundary re-lays the view through the shared cell at flush, never through the element.
         // Re-borrowing the cell each flush (rather than caching a pointer into it) is what keeps it sound.

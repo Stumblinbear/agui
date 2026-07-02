@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use crate::pipeline::FramePhase;
 
-pub use agui_core::scope::{
+pub use crate::scope::{
     LayoutBoundaryId, LayoutScope, PaintBoundaryId, PaintScope, SemanticsBoundaryId, SemanticsScope,
 };
 
@@ -22,7 +22,7 @@ mod paint;
 mod semantics;
 
 pub(crate) use layout::LayoutState;
-pub(crate) use paint::PaintState;
+pub use paint::PaintState;
 pub(crate) use semantics::SemanticsState;
 
 pub use layout::{DeferredLayoutScope, LayoutBoundaryHandle, RelayoutHook};

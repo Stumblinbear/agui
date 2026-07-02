@@ -42,10 +42,15 @@ where
         let child_handle = Rc::new(Cell::new(None));
 
         let owner = PipelineOwner::new(
-            ElementRoot {
-                initial: widget,
-                root_handle: Rc::clone(&root_handle),
-                child_handle: Rc::clone(&child_handle),
+            |ctx| {
+                Box::new(
+                    ElementRoot {
+                        initial: widget,
+                        root_handle: Rc::clone(&root_handle),
+                        child_handle: Rc::clone(&child_handle),
+                    }
+                    .create(ctx),
+                )
             },
             &mut ctx.scheduler(),
         );

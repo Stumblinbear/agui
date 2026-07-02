@@ -85,8 +85,8 @@ impl RenderPipeline {
         *self.semantics.notify.borrow_mut() = f;
     }
 
-    /// Re-walks each semantics boundary marked since the last frame and hands its freshly built
-    /// [`SemanticsTree`] to `update`, then re-arms so the next change fires the callback again.
+    /// Re-walks each semantics boundary marked since the last frame, delivering each view's freshly built
+    /// semantics to that view's own sink.
     pub fn flush_semantics(&self) {
         let mut dirty = self.semantics.dirty.borrow_mut();
         dirty.extend(self.semantics.deferred.borrow_mut().drain(..));
@@ -124,6 +124,24 @@ pub struct SemanticsBoundaryHandle {
 }
 
 impl SemanticsBoundaryHandle {
+    /// Runs `f` with the pipeline's semantics id counter, so a full walk through the view mints from the same
+    /// source as the per-boundary flush.
+    ///
+    /// # Panics
+    /// Panics if the pipeline has already been dropped.
+    pub fn build_semantics<R>(&self, f: impl FnOnce(&mut u64) -> R) -> R {
+        let channel = self
+            .channel
+            .upgrade()
+            .expect("the pipeline outlives the view");
+
+        let mut counter = channel.counter.get();
+        let result = f(&mut counter);
+        channel.counter.set(counter);
+
+        result
+    }
+
     /// Marks this boundary's semantics changed, firing the pipeline's semantics callback so the driver
     /// re-reads this view.
     pub fn mark_needs_semantics_update(&self) {
@@ -148,22 +166,6 @@ impl SemanticsBoundaryHandle {
             .map(|channel| Rc::clone(&channel.deferred));
 
         DeferredSemanticsScope { id: self.id, queue }
-    }
-
-    /// Runs `f` with the pipeline's semantics id counter, so a full walk through the view mints from the same
-    /// source as the per-boundary flush. The counter is copied out and written back, so the pipeline is not
-    /// borrowed while `f` runs.
-    pub(crate) fn with_counter<R>(&self, f: impl FnOnce(&mut u64) -> R) -> R {
-        let channel = self
-            .channel
-            .upgrade()
-            .expect("the pipeline outlives the view");
-
-        let mut counter = channel.counter.get();
-        let result = f(&mut counter);
-        channel.counter.set(counter);
-
-        result
     }
 }
 

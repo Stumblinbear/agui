@@ -3,11 +3,11 @@ use std::future::Future;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
-use agui_core::tree::{Cursor, NodeContainer, NodeHandle};
+use crate::tree::{Cursor, NodeContainer, NodeHandle};
 
+use crate::build_queue::BuildQueue;
 use crate::context::{BuildCtx, CreateCtx, TaskCtx};
 use crate::element::Element;
-use agui_core::build_queue::BuildQueue;
 
 use crate::pipeline::build_tree::{Build, run};
 use crate::pipeline::render_pipeline::{
@@ -15,8 +15,8 @@ use crate::pipeline::render_pipeline::{
     SemanticsState,
 };
 use crate::provide::ProvideScope;
-use crate::render_object::node::{MountedChild, RenderObjectPtr};
-use agui_core::scheduling::{TaskHandle, TaskScheduler};
+use crate::render_object::{MountedChild, RenderObjectPtr};
+use crate::scheduling::{TaskHandle, TaskScheduler};
 
 /// The context passed to an element during a cursor-bearing lifecycle hook: mount, unmount, rebuild, or a
 /// dependency change. It carries a cursor to edit the element's children, the values in scope, the dirty
@@ -295,7 +295,7 @@ impl<'a> UpdateCtx<'a> {
     /// first. A [`Provide`] calls this for each reader of a value it changed.
     ///
     /// [`Provide`]: crate::provide::Provide
-    pub(crate) fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
+    pub fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
         self.queue.mark_dependency_changed(dependent);
     }
 
@@ -304,7 +304,7 @@ impl<'a> UpdateCtx<'a> {
     /// forwarding a cursor-bearing hook.
     ///
     /// # Safety
-    /// As [`Cursor::rebase`](agui_core::tree::Cursor::rebase): `this` is the positioned element's address,
+    /// As [`Cursor::rebase`](crate::tree::Cursor::rebase): `this` is the positioned element's address,
     /// with whole-allocation provenance.
     pub(crate) unsafe fn rebase(&mut self, this: NonNull<()>) {
         // SAFETY: the caller upholds `Cursor::rebase`'s contract.

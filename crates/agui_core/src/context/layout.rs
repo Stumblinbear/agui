@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use agui_core::tree::NodeHandle;
+use crate::tree::NodeHandle;
 
 use crate::context::UpdateCtx;
 use crate::pipeline::LayoutBuildHost;
@@ -9,7 +9,7 @@ use crate::pipeline::render_pipeline::{
     DeferredLayoutScope, LayoutBoundaryHandle, LayoutScope, LayoutState, PaintScope, PaintState,
     RelayoutHook,
 };
-use agui_core::scheduling::TaskScheduler;
+use crate::scheduling::TaskScheduler;
 
 /// The context threaded through a layout pass: the layout and paint channels to register and mark boundaries
 /// against, the relayout boundary in force, and, in a real frame, the element-tree access a `LayoutBuilder`

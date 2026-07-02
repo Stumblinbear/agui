@@ -10,14 +10,14 @@ use crate::pipeline::FramePhase;
 /// A repaint hook: clears one boundary's layer and repaints its render object into it, scoped to the boundary
 /// so nested boundaries registered during the repaint attribute correctly. It captures the layer, the paint
 /// capacity, and the render object; the pipeline knows none of them.
-pub type RepaintHook = Box<dyn Fn(PaintScope)>;
+pub type RepaintHook = Box<dyn FnMut(PaintScope)>;
 
 /// A compositing-bits hook: recomputes one boundary's render object's compositing bits before its next repaint.
-pub type CompositingBitsHook = Box<dyn Fn()>;
+pub type CompositingBitsHook = Box<dyn FnMut()>;
 
 /// The repaint boundaries of one tree and their pending compositing-bit and repaint work, in two dirty lists
 /// since compositing bits settle before paint.
-pub(crate) struct PaintState {
+pub struct PaintState {
     scheduler: Rc<FrameScheduler>,
     registry: RefCell<SlotMap<PaintBoundaryId, PaintBoundary>>,
 
@@ -41,7 +41,7 @@ impl PaintState {
     /// Registers a repaint boundary nested under `enclosing`, driven by `repaint` and `update_bits`, returning
     /// the handle that owns and unregisters it. The new boundary is left unmarked: the caller either marks it
     /// (the root view) or paints it in the same pass it registers in (an inline boundary).
-    pub(crate) fn register(
+    pub fn register(
         self: &Rc<Self>,
         enclosing: PaintScope,
         repaint: RepaintHook,
@@ -63,7 +63,7 @@ impl PaintState {
     }
 
     /// A deferred handle to `scope`'s repaint boundary.
-    pub(crate) fn deferred_scope(&self, scope: PaintScope) -> DeferredPaintScope {
+    pub fn deferred_scope(&self, scope: PaintScope) -> DeferredPaintScope {
         DeferredPaintScope {
             id: scope.0,
             queue: Some(Rc::clone(&self.deferred)),
@@ -99,18 +99,18 @@ impl PaintState {
     }
 
     /// Schedules a recomposite of the subtree, with no boundary to repaint.
-    pub(crate) fn mark_needs_composite(&self) {
+    pub fn mark_needs_composite(&self) {
         self.scheduler.notify();
     }
 
     /// Marks `scope`'s boundary to be repainted on the next frame.
-    pub(crate) fn mark_needs_paint(&self, scope: PaintScope) {
+    pub fn mark_needs_paint(&self, scope: PaintScope) {
         self.mark(scope.0, PaintPhase::Paint);
     }
 
     /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
     /// repaint.
-    pub(crate) fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
         self.mark(scope.0, PaintPhase::CompositingBits);
         self.mark(scope.0, PaintPhase::Paint);
     }
@@ -186,7 +186,7 @@ impl RenderPipeline {
                 Some(boundary) => boundary.update_bits.take(),
                 None => continue,
             };
-            let Some(hook) = hook else { continue };
+            let Some(mut hook) = hook else { continue };
 
             hook();
 
@@ -215,7 +215,7 @@ impl RenderPipeline {
                 Some(boundary) => boundary.repaint.take(),
                 None => continue,
             };
-            let Some(hook) = hook else { continue };
+            let Some(mut hook) = hook else { continue };
 
             hook(PaintScope(id));
 

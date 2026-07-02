@@ -1,11 +1,9 @@
-/// Which phase of a frame the [`PipelineOwner`](super::PipelineOwner) is running, in order: build, then
-/// layout, then compositing bits, then paint, then composite. The [`RenderPipeline`] holds the current
-/// phase and rejects a mark whose phase is the one now running or one already past, since that phase has run
-/// this frame and cannot act on the mark.
-///
-/// [`RenderPipeline`]: super::render_pipeline::RenderPipeline
+/// Which phase of a frame the pipeline owner is running, in order: build, then layout, then compositing bits,
+/// then paint, then composite. The [`RenderPipeline`](super::RenderPipeline) holds the current phase and
+/// rejects a mark whose phase is the one now running or one already past, since that phase has run this frame
+/// and cannot act on the mark.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
-pub(crate) enum FramePhase {
+pub enum FramePhase {
     /// No frame is running, so any pipeline may be marked.
     #[default]
     Idle,
@@ -23,7 +21,7 @@ impl FramePhase {
     ///
     /// Panics if `own` is the running phase `self` or one before it, since that phase has run this frame and
     /// cannot act on the mark.
-    pub(crate) fn assert_can_mark(self, own: FramePhase) {
+    pub fn assert_can_mark(self, own: FramePhase) {
         assert!(
             self < own,
             "cannot mark {own:?} work during the {self:?} phase, which already ran this frame"

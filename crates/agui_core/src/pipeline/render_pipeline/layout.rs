@@ -12,7 +12,7 @@ use crate::pipeline::{FramePhase, LayoutBuildHost};
 /// with a [`LayoutCtx`] scoped to that boundary, knowing nothing of the layout protocol behind it. A box
 /// boundary re-lays its render object under the box constraints it captured; another protocol does the
 /// analogous thing for its own.
-pub type RelayoutHook = Box<dyn Fn(&mut LayoutCtx)>;
+pub type RelayoutHook = Box<dyn FnMut(&mut LayoutCtx)>;
 
 /// The layout boundaries of one tree and their pending re-lays. `registry` and `dirty` are separate cells so a
 /// flush holds the marks while the relay re-enters the registry to register nested boundaries.
@@ -122,7 +122,7 @@ impl RenderPipeline {
                 (cell.relayout.take(), cell.paint)
             };
 
-            let Some(relayout) = relayout else {
+            let Some(mut relayout) = relayout else {
                 continue;
             };
 

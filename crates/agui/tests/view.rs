@@ -7,6 +7,7 @@ use agui::{
     pipeline::PipelineOwner,
     semantics::{Role, Semantics},
     view::{View, ViewContainer},
+    widget::Widget,
 };
 use agui_test::{Probe, WidgetTester, fixtures::RecordingBox, test_harness::TestCtx};
 
@@ -120,7 +121,10 @@ fn marking_one_view_rewalks_only_its_semantics() {
     // Mount the container as the owner root so the two views are siblings, the way a multi-window app hosts
     // them, rather than nested under a third view.
     let mut ctx = TestCtx::new();
-    let owner = PipelineOwner::new(ViewContainer::new((view_a, view_b)), &mut ctx.scheduler());
+    let owner = PipelineOwner::new(
+        |ctx| Box::new(ViewContainer::new((view_a, view_b)).create(ctx)),
+        &mut ctx.scheduler(),
+    );
 
     owner.flush_semantics();
     let (a_walked, b_walked) = (a.get(), b.get());

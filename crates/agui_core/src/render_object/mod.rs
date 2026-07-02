@@ -2,6 +2,12 @@ use std::cell::{Cell, UnsafeCell};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
+mod any_render_object;
+mod object;
+
+pub use any_render_object::*;
+pub use object::*;
+
 /// Storage for an element's render object. The render object is interior-mutable, so a parent reaching it
 /// during layout and an isolated relayout can both borrow it as `&mut` across the `&mut element` retags of
 /// rebuilds without aliasing UB. Borrowed only during a layout or paint pass.

@@ -96,7 +96,13 @@ impl WindowDriver {
 
         let surface = Rc::new(RefCell::new(None));
         let owner = PipelineOwner::new(
-            agui::view::View::new(Rc::clone(&surface)).child(widget),
+            |ctx| {
+                Box::new(
+                    agui::view::View::new(Rc::clone(&surface))
+                        .child(widget)
+                        .create(ctx),
+                )
+            },
             &mut scheduler,
         );
         let view = surface

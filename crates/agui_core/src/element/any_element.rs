@@ -5,7 +5,7 @@ use crate::{
     context::{MessageCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
     element::Element,
-    render_object::node::RenderObjectPtr,
+    render_object::RenderObjectPtr,
 };
 
 /// The type-erased, object-safe form of [`Element`], used at heterogeneous-children boundaries. Each method
