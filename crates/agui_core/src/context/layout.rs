@@ -79,7 +79,7 @@ impl<'a, 'h> LayoutCtx<'a, 'h> {
     /// that owns and marks it. A node that establishes a nested relayout boundary during layout registers it
     /// this way; its enclosing repaint boundary is recorded later during paint.
     pub fn register_layout_boundary(&self, relayout: RelayoutHook) -> LayoutBoundaryHandle {
-        self.layout.register(self.scope, relayout)
+        self.layout.register(relayout)
     }
 
     /// A deferred handle to the boundary in force, for marking it from a reconcile that holds no context.

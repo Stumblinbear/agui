@@ -129,7 +129,9 @@ impl RenderBox for RenderRepaintBoundary {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
-        if self.handle.is_some() {
+        if let Some(handle) = &self.handle {
+            // The paint reveals the boundary now enclosing this one, so its drain depth stays current.
+            handle.set_enclosing(ctx.scope());
             ctx.add_layer(self.layer.clone(), offset);
             return;
         }

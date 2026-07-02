@@ -71,19 +71,11 @@ impl LayoutState {
         }
     }
 
-    /// Registers `boundary` as a relayout boundary nested under `enclosing`, returning the handle that owns and
-    /// unregisters it. The enclosing repaint boundary is recorded later, at paint, through
+    /// Registers a relayout boundary, returning the handle that owns and unregisters it. The enclosing
+    /// repaint boundary is recorded later, at paint, through
     /// [`set_paint_scope`](LayoutBoundaryHandle::set_paint_scope).
-    pub(crate) fn register(
-        self: &Rc<Self>,
-        enclosing: LayoutScope,
-        relayout: RelayoutHook,
-    ) -> LayoutBoundaryHandle {
-        let mut registry = self.registry.borrow_mut();
-
-        let depth = registry.get(enclosing.0).map_or(0, |b| b.depth + 1);
-        let id = registry.insert(LayoutBoundaryCell {
-            depth,
+    pub(crate) fn register(self: &Rc<Self>, relayout: RelayoutHook) -> LayoutBoundaryHandle {
+        let id = self.registry.borrow_mut().insert(LayoutBoundaryCell {
             queued: false,
             relayout: Some(relayout),
             paint: PaintScope::detached(),
@@ -166,8 +158,6 @@ impl LayoutState {
 }
 
 struct LayoutBoundaryCell {
-    /// Depth in the boundary nesting, so a drain re-enters rootmost-first.
-    depth: usize,
     /// Whether a re-lay is already queued, so repeated marks put one entry in the dirty list.
     queued: bool,
     /// The relayout hook, owned here. Taken out for the duration of its own re-lay, so the re-lay can re-enter

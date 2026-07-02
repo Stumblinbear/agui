@@ -262,6 +262,24 @@ impl PaintBoundaryHandle {
         }
     }
 
+    /// Records the repaint boundary now enclosing this one, refreshing the depth the flush drains
+    /// rootmost-first by. The render object that established this boundary calls it during paint, where the
+    /// enclosing boundary is known, so a boundary whose nesting changed drains at its current depth rather
+    /// than the one it was registered under.
+    pub fn set_enclosing(&self, enclosing: PaintScope) {
+        let Some(channel) = self.channel.upgrade() else {
+            return;
+        };
+
+        let mut registry = channel.registry.borrow_mut();
+
+        let depth = registry.get(enclosing.0).map_or(0, |b| b.depth + 1);
+
+        if let Some(cell) = registry.get_mut(self.id) {
+            cell.depth = depth;
+        }
+    }
+
     /// Marks this boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self) {
         if let Some(channel) = self.channel.upgrade() {

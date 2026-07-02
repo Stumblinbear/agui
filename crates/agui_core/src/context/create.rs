@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::context::BuildCtx;
 use crate::pipeline::render_pipeline::{
-    CompositingBitsHook, DeferredSemanticsScope, LayoutBoundaryHandle, LayoutScope, LayoutState,
+    CompositingBitsHook, DeferredSemanticsScope, LayoutBoundaryHandle, LayoutState,
     PaintBoundaryHandle, PaintScope, PaintState, RelayoutHook, RepaintHook,
     SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope, SemanticsState,
 };
@@ -84,11 +84,11 @@ impl<'a> CreateCtx<'a> {
     }
 
     /// Registers `relayout` as the relayout boundary at the root of a view's render tree, and returns the
-    /// handle that owns it. A view plants its tree's relayout root this way at `create`; it is a forest root,
-    /// so its enclosing layout scope is detached. Its enclosing repaint boundary is recorded through
+    /// handle that owns it. A view plants its tree's relayout root this way at `create`. Its enclosing repaint
+    /// boundary is recorded through
     /// [`set_paint_scope`](crate::pipeline::render_pipeline::LayoutBoundaryHandle::set_paint_scope).
     pub fn register_layout_boundary(&self, relayout: RelayoutHook) -> LayoutBoundaryHandle {
-        self.layout.register(LayoutScope::detached(), relayout)
+        self.layout.register(relayout)
     }
 
     /// Registers a repaint boundary at the root of a view's render tree, driven by `repaint` and `update_bits`,
