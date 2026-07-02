@@ -21,8 +21,10 @@ pub struct PaintState {
     scheduler: Rc<FrameScheduler>,
     registry: RefCell<SlotMap<PaintBoundaryId, PaintBoundary>>,
 
-    bits: RefCell<Vec<PaintBoundaryId>>,
-    repaint: RefCell<Vec<PaintBoundaryId>>,
+    // Entries carry the depth captured at mark, so the flush sorts rootmost-first on inline keys with no
+    // registry lookups; the cells' queued flags keep each boundary entered once.
+    bits: RefCell<Vec<(usize, PaintBoundaryId)>>,
+    repaint: RefCell<Vec<(usize, PaintBoundaryId)>>,
 
     deferred: Rc<RefCell<Vec<(PaintBoundaryId, PaintPhase)>>>,
 }
@@ -52,6 +54,8 @@ impl PaintState {
         let depth = registry.get(enclosing.0).map_or(0, |b| b.depth + 1);
         let id = registry.insert(PaintBoundary {
             depth,
+            bits_queued: false,
+            repaint_queued: false,
             repaint: Some(repaint),
             update_bits: Some(update_bits),
         });
@@ -79,23 +83,26 @@ impl PaintState {
             PaintPhase::Composite => FramePhase::Composite,
         });
 
-        if !self.registry.borrow().contains_key(id) {
-            return;
+        {
+            let mut registry = self.registry.borrow_mut();
+
+            let Some(cell) = registry.get_mut(id) else {
+                return;
+            };
+
+            let depth = cell.depth;
+            let (flag, list) = match phase {
+                PaintPhase::CompositingBits => (&mut cell.bits_queued, &self.bits),
+                PaintPhase::Paint => (&mut cell.repaint_queued, &self.repaint),
+                PaintPhase::Composite => return,
+            };
+
+            if !std::mem::replace(flag, true) {
+                list.borrow_mut().push((depth, id));
+            }
         }
 
-        match phase {
-            PaintPhase::CompositingBits => {
-                self.bits.borrow_mut().push(id);
-                self.scheduler.notify();
-            }
-
-            PaintPhase::Paint => {
-                self.repaint.borrow_mut().push(id);
-                self.scheduler.notify();
-            }
-
-            PaintPhase::Composite => {}
-        }
+        self.scheduler.notify();
     }
 
     /// Schedules a recomposite of the subtree, with no boundary to repaint.
@@ -118,10 +125,12 @@ impl PaintState {
 
 struct PaintBoundary {
     depth: usize,
-    /// The repaint hook, taken out during its own repaint so it can re-enter the registry to register nested
-    /// boundaries, and put back after.
-    repaint: Option<RepaintHook>,
+
+    bits_queued: bool,
     update_bits: Option<CompositingBitsHook>,
+
+    repaint_queued: bool,
+    repaint: Option<RepaintHook>,
 }
 
 /// The work a repaint boundary owes, which are also the flush phases, in order: compositing bits settle
@@ -173,19 +182,19 @@ impl RenderPipeline {
         let _phase = self.enter_phase(FramePhase::CompositingBits);
 
         let mut bits = self.paint.bits.borrow_mut();
-        bits.sort_unstable();
-        bits.dedup();
-        {
-            let registry = self.paint.registry.borrow();
-            bits.sort_by_key(|&id| registry.get(id).map_or(0, |b| b.depth));
-        }
+        bits.sort_unstable_by_key(|&(depth, _)| depth);
 
-        for &id in bits.iter() {
+        for &(_, id) in bits.iter() {
             // Take the hook out so it can re-enter the registry, and put it back after.
             let hook = match self.paint.registry.borrow_mut().get_mut(id) {
-                Some(boundary) => boundary.update_bits.take(),
+                Some(boundary) => {
+                    boundary.bits_queued = false;
+                    boundary.update_bits.take()
+                }
+
                 None => continue,
             };
+
             let Some(mut hook) = hook else { continue };
 
             hook();
@@ -202,19 +211,19 @@ impl RenderPipeline {
         let _phase = self.enter_phase(FramePhase::Paint);
 
         let mut repaint = self.paint.repaint.borrow_mut();
-        repaint.sort_unstable();
-        repaint.dedup();
-        {
-            let registry = self.paint.registry.borrow();
-            repaint.sort_by_key(|&id| registry.get(id).map_or(0, |b| b.depth));
-        }
+        repaint.sort_unstable_by_key(|&(depth, _)| depth);
 
-        for &id in repaint.iter() {
+        for &(_, id) in repaint.iter() {
             // Take the hook out so it can re-enter the registry during its own repaint, and put it back after.
             let hook = match self.paint.registry.borrow_mut().get_mut(id) {
-                Some(boundary) => boundary.repaint.take(),
+                Some(boundary) => {
+                    boundary.repaint_queued = false;
+                    boundary.repaint.take()
+                }
+
                 None => continue,
             };
+
             let Some(mut hook) = hook else { continue };
 
             hook(PaintScope(id));

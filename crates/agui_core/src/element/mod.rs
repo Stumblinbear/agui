@@ -10,6 +10,9 @@ use crate::{
 
 /// A persistent node in the element tree, holding a widget's state and its child slots across rebuilds.
 ///
+/// An element that reconciles more than one child wraps the walk in [`UpdateCtx::with_children`] so the
+/// children's layout marks drain ancestor-before-descendant; debug builds assert this.
+///
 /// # Safety
 /// An element co-maintains the tree and the addresses other components resolve from it as raw pointers, so a
 /// wrong implementation causes undefined behavior in other safe code, not only its own: the parent that lays

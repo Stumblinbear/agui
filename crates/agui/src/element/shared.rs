@@ -157,7 +157,9 @@ impl<C: Element<Render = dyn RenderBox>> MultiChildElement<C> {
             .into_iter()
             .zip(std::mem::take(render_children))
             .collect();
-        let (elements, renders) = reconcile::<C, CV>(ctx, old, new, layout_scope);
+        let (elements, renders) = ctx.with_children(layout_scope, |ctx| {
+            reconcile::<C, CV>(ctx, old, new, layout_scope)
+        });
         self.children = elements;
         *render_children = renders;
     }

@@ -25,12 +25,14 @@ use crate::{context::LayoutCtx, tree::Tree};
 /// analogous thing for its own.
 pub type RelayoutHook = Box<dyn FnMut(&mut LayoutCtx)>;
 
-/// The layout boundaries of one tree and their pending re-lays. `registry` and `dirty` are separate cells so a
-/// flush holds the marks while the relay re-enters the registry to register nested boundaries.
+/// The layout boundaries of one tree and their pending re-lays.
 pub(crate) struct LayoutState {
     scheduler: Rc<FrameScheduler>,
     registry: RefCell<SlotMap<LayoutBoundaryId, LayoutBoundaryCell>>,
 
+    // Ancestor-before-descendant by construction: build and layout both walk rootmost-first, and a children
+    // walk's mark of its shared boundary is placed at the walk's floor (`mark_at`), ahead of the children's
+    // deeper marks. So the flush drains in order with no sort, one entry per momentary borrow.
     dirty: RefCell<Vec<LayoutBoundaryId>>,
     deferred: Rc<RefCell<Vec<LayoutBoundaryId>>>,
 }
@@ -58,6 +60,7 @@ impl LayoutState {
         let depth = registry.get(enclosing.0).map_or(0, |b| b.depth + 1);
         let id = registry.insert(LayoutBoundaryCell {
             depth,
+            queued: false,
             relayout: Some(relayout),
             paint: PaintScope::detached(),
         });
@@ -86,18 +89,63 @@ impl LayoutState {
             .get()
             .assert_can_mark(FramePhase::Layout);
 
-        if !self.registry.borrow().contains_key(id) {
+        self.enqueue(id);
+        self.scheduler.notify();
+    }
+
+    /// Marks `id` for re-layout at `floor`, a children walk's start in the dirty list, placing it ahead of
+    /// the deeper marks the walk already made. Panics as [`mark`](Self::mark), and ignores a boundary already
+    /// queued or already gone.
+    pub(crate) fn mark_at(&self, id: LayoutBoundaryId, floor: usize) {
+        self.scheduler
+            .phase
+            .get()
+            .assert_can_mark(FramePhase::Layout);
+
+        // A walk's own mark always sits at its floor, so this read answers "already marked" without touching
+        // the registry.
+        if self.dirty.borrow().get(floor) == Some(&id) {
             return;
         }
 
-        self.dirty.borrow_mut().push(id);
+        if self.claim(id) {
+            self.dirty.borrow_mut().insert(floor, id);
+        }
+
         self.scheduler.notify();
+    }
+
+    /// Queues `id` for re-layout. A boundary already queued or already gone is left alone.
+    fn enqueue(&self, id: LayoutBoundaryId) {
+        if self.claim(id) {
+            self.dirty.borrow_mut().push(id);
+        }
+    }
+
+    /// Claims `id`'s single place in the dirty list: true when the caller should enter it, false when it is
+    /// already queued or the boundary is gone.
+    fn claim(&self, id: LayoutBoundaryId) -> bool {
+        let mut registry = self.registry.borrow_mut();
+
+        let Some(cell) = registry.get_mut(id) else {
+            return false;
+        };
+
+        !std::mem::replace(&mut cell.queued, true)
+    }
+
+    /// The number of marks made so far, the floor a children walk beginning now hands to
+    /// [`mark_at`](Self::mark_at).
+    pub(crate) fn checkpoint(&self) -> usize {
+        self.dirty.borrow().len()
     }
 }
 
 struct LayoutBoundaryCell {
     /// Depth in the boundary nesting, so a drain re-enters rootmost-first.
     depth: usize,
+    /// Whether a re-lay is already queued, so repeated marks put one entry in the dirty list.
+    queued: bool,
     /// The relayout hook, owned here. Taken out for the duration of its own re-lay, so the re-lay can re-enter
     /// the pipeline to register nested boundaries, and put back after.
     relayout: Option<RelayoutHook>,
@@ -110,18 +158,24 @@ impl RenderPipeline {
     /// Re-lays every marked relayout boundary from the constraints it last took, rootmost-first, leaving the
     /// rest untouched.
     pub(crate) fn flush_layout(&self, host: &mut LayoutBuildHost) {
-        // Hold the marks across the pass. Marking layout during the layout phase is rejected, so nothing else
-        // touches this list while a relay re-enters the registry (a separate cell) to register nested boundaries.
-        let mut dirty = self.layout.dirty.borrow_mut();
-        dirty.extend(self.layout.deferred.borrow_mut().drain(..));
-        dirty.sort_unstable();
-        dirty.dedup();
-        {
-            let registry = self.layout.registry.borrow();
-            dirty.sort_by_key(|&id| registry.get(id).map_or(0, |b| b.depth));
+        for id in self.layout.deferred.take() {
+            self.layout.enqueue(id);
         }
 
-        for &id in dirty.iter() {
+        // One momentary borrow per entry: a re-lay can re-enter build, and an element reconciled there marks
+        // this list. Marks arrive ancestor-before-descendant (see `dirty`), so entries appended mid-flush
+        // drain in order.
+        let mut index = 0;
+
+        loop {
+            let entry = self.layout.dirty.borrow().get(index).copied();
+
+            let Some(id) = entry else {
+                break;
+            };
+
+            index += 1;
+
             let (relayout, paint) = {
                 let mut registry = self.layout.registry.borrow_mut();
 
@@ -130,6 +184,7 @@ impl RenderPipeline {
                     continue;
                 };
 
+                cell.queued = false;
                 (cell.relayout.take(), cell.paint)
             };
 
@@ -149,7 +204,7 @@ impl RenderPipeline {
             self.mark_needs_paint(paint);
         }
 
-        dirty.clear();
+        self.layout.dirty.borrow_mut().clear();
     }
 }
 

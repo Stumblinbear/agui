@@ -39,6 +39,7 @@ impl SemanticsState {
     /// a scope the handle hands out.
     pub(crate) fn register(self: &Rc<Self>, rebuild: SemanticsRebuild) -> SemanticsBoundaryHandle {
         let id = self.registry.borrow_mut().insert(SemanticsBoundaryCell {
+            queued: false,
             rebuild: Some(rebuild),
         });
 
@@ -57,9 +58,9 @@ impl SemanticsState {
     }
 
     /// Marks `id`'s semantics changed, firing the channel's callback on the clean-to-dirty transition. Ignores
-    /// a mark for a boundary already gone.
+    /// a mark for a boundary already queued or already gone.
     pub(crate) fn mark(&self, id: SemanticsBoundaryId) {
-        if !self.registry.borrow().contains_key(id) {
+        if !self.claim(id) {
             return;
         }
 
@@ -72,10 +73,22 @@ impl SemanticsState {
             (self.notify.borrow())();
         }
     }
+
+    /// Claims `id`'s single place in the dirty list: true when the caller should enter it, false when it is
+    /// already queued or the boundary is gone.
+    fn claim(&self, id: SemanticsBoundaryId) -> bool {
+        let mut registry = self.registry.borrow_mut();
+
+        let Some(cell) = registry.get_mut(id) else {
+            return false;
+        };
+
+        !std::mem::replace(&mut cell.queued, true)
+    }
 }
 
 struct SemanticsBoundaryCell {
-    /// The rebuild hook, taken out during its own rebuild so it can re-enter the registry, and put back after.
+    queued: bool,
     rebuild: Option<SemanticsRebuild>,
 }
 
@@ -89,18 +102,26 @@ impl RenderPipeline {
     /// semantics to that view's own sink.
     pub fn flush_semantics(&self) {
         let mut dirty = self.semantics.dirty.borrow_mut();
-        dirty.extend(self.semantics.deferred.borrow_mut().drain(..));
-        dirty.sort_unstable();
-        dirty.dedup();
+
+        for id in self.semantics.deferred.take() {
+            if self.semantics.claim(id) {
+                dirty.push(id);
+            }
+        }
 
         let mut counter = self.semantics.counter.get();
 
         for &id in dirty.iter() {
             // Take the hook out so it can re-enter the registry, and put it back after.
             let rebuild = match self.semantics.registry.borrow_mut().get_mut(id) {
-                Some(boundary) => boundary.rebuild.take(),
+                Some(boundary) => {
+                    boundary.queued = false;
+                    boundary.rebuild.take()
+                }
+
                 None => continue,
             };
+
             let Some(rebuild) = rebuild else { continue };
 
             rebuild(&mut counter);

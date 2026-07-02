@@ -26,6 +26,17 @@ pub struct UpdateCtx<'a> {
 
     provide_scope: ProvideScope,
     semantics_scope: SemanticsScope,
+    /// The enclosing relayout boundary of the children now reconciling and the dirty-list position their
+    /// marks begin at, entered by [`with_children`](Self::with_children). `None` outside a children walk.
+    layout_region: Option<(LayoutScope, usize)>,
+
+    /// Whether this element has reconciled a child already, so a second child reconciled outside
+    /// [`with_children`](Self::with_children) is caught.
+    #[cfg(debug_assertions)]
+    reconciled_child: bool,
+    /// Whether this element entered [`with_children`](Self::with_children) itself.
+    #[cfg(debug_assertions)]
+    entered_children: bool,
 
     queue: &'a mut BuildQueue,
     layout: &'a Rc<LayoutState>,
@@ -53,6 +64,12 @@ impl<'a> UpdateCtx<'a> {
 
             provide_scope,
             semantics_scope: SemanticsScope::detached(),
+            layout_region: None,
+
+            #[cfg(debug_assertions)]
+            reconciled_child: false,
+            #[cfg(debug_assertions)]
+            entered_children: false,
 
             queue,
             layout,
@@ -191,6 +208,11 @@ impl<'a> UpdateCtx<'a> {
             cursor,
             provide_scope: self.provide_scope,
             semantics_scope: self.semantics_scope,
+            layout_region: self.layout_region,
+            #[cfg(debug_assertions)]
+            reconciled_child: false,
+            #[cfg(debug_assertions)]
+            entered_children: false,
             queue: &mut *self.queue,
             layout: self.layout,
             paint: self.paint,
@@ -214,6 +236,7 @@ impl<'a> UpdateCtx<'a> {
     {
         let provide = self.provide_scope;
         let semantics_scope = self.semantics_scope;
+        let layout_region = self.layout_region;
         let queue = &mut *self.queue;
         let layout = self.layout;
         let paint = self.paint;
@@ -227,6 +250,11 @@ impl<'a> UpdateCtx<'a> {
                     cursor,
                     provide_scope: provide,
                     semantics_scope,
+                    layout_region,
+                    #[cfg(debug_assertions)]
+                    reconciled_child: false,
+                    #[cfg(debug_assertions)]
+                    entered_children: false,
                     queue,
                     layout,
                     paint,
@@ -239,6 +267,8 @@ impl<'a> UpdateCtx<'a> {
     }
 
     /// Reconciles an existing `child` in place: hands `func` the child and an [`UpdateCtx`] positioned at it.
+    /// An element reconciling more than one child wraps the walk in [`with_children`](Self::with_children);
+    /// debug builds panic on a second child reconciled outside one.
     ///
     /// # Safety
     /// `child` must be one of this element's own slots.
@@ -247,8 +277,19 @@ impl<'a> UpdateCtx<'a> {
         child: &mut S,
         func: impl FnOnce(&mut S::Node, &mut UpdateCtx<'_>) -> R,
     ) -> R {
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                !self.reconciled_child || self.entered_children,
+                "reconciled a second child outside `with_children`: wrap the walk so the \
+                 children's layout marks stay ancestor-before-descendant"
+            );
+            self.reconciled_child = true;
+        }
+
         let provide = self.provide_scope;
         let semantics_scope = self.semantics_scope;
+        let layout_region = self.layout_region;
         let queue = &mut *self.queue;
         let layout = self.layout;
         let paint = self.paint;
@@ -264,6 +305,11 @@ impl<'a> UpdateCtx<'a> {
                         cursor,
                         provide_scope: provide,
                         semantics_scope,
+                        layout_region,
+                        #[cfg(debug_assertions)]
+                        reconciled_child: false,
+                        #[cfg(debug_assertions)]
+                        entered_children: false,
                         queue,
                         layout,
                         paint,
@@ -278,7 +324,41 @@ impl<'a> UpdateCtx<'a> {
     /// Marks `scope`'s relayout boundary for re-layout on the next frame, as a reconcile does when it changes
     /// a layout-affecting property of a render object.
     pub fn mark_needs_layout(&self, scope: LayoutScope) {
-        self.layout.mark(scope.0);
+        match self.layout_region {
+            Some((ambient, floor)) if ambient == scope => self.layout.mark_at(scope.0, floor),
+            _ => self.layout.mark(scope.0),
+        }
+    }
+
+    /// Reconciles this element's children by running `f`, keeping the layout marks made inside it
+    /// ancestor-before-descendant: a mark of `scope` is placed ahead of the marks made for boundaries nested
+    /// inside the children. An element with more than one child wraps its whole reconcile in this, its own
+    /// marks of `scope` included.
+    ///
+    /// `scope` is the children's shared enclosing relayout boundary. The context cannot supply it because the
+    /// enclosing boundary is decided during layout and lives on the caller's render object, so only the
+    /// caller can name it.
+    pub fn with_children<R>(
+        &mut self,
+        scope: LayoutScope,
+        f: impl FnOnce(&mut UpdateCtx<'_>) -> R,
+    ) -> R {
+        #[cfg(debug_assertions)]
+        {
+            self.entered_children = true;
+        }
+
+        let previous = self.layout_region;
+
+        // A nested walk sharing the outer walk's scope keeps the outer floor, so the scope's mark is placed
+        // once, at the outermost walk's start.
+        if previous.map(|(ambient, _)| ambient) != Some(scope) {
+            self.layout_region = Some((scope, self.layout.checkpoint()));
+        }
+
+        let ret = f(self);
+        self.layout_region = previous;
+        ret
     }
 
     /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for

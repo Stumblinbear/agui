@@ -102,15 +102,18 @@ where
     /// Reconciles the child elements and the render object's child edges against `children`, in lockstep.
     pub fn update(&mut self, ctx: &mut UpdateCtx<'_>, children: L) {
         let layout_scope = self.render.get_mut().layout_scope();
-        // SAFETY: `self.children` is our own sequence and the edges belong to our render object.
-        unsafe {
-            children.update(
-                ctx,
-                &mut self.children,
-                self.render.get_mut().children_mut(),
-                layout_scope,
-            );
-        };
+
+        ctx.with_children(layout_scope, |ctx| {
+            // SAFETY: `self.children` is our own sequence and the edges belong to our render object.
+            unsafe {
+                children.update(
+                    ctx,
+                    &mut self.children,
+                    self.render.get_mut().children_mut(),
+                    layout_scope,
+                );
+            };
+        });
     }
 
     /// This element's render object, by exclusive reference, for the widget's own writes during reconcile.
