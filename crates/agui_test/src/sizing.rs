@@ -372,8 +372,8 @@ impl Config {
             }
         }
 
-        self.check_layout_idempotent(child, ctx);
-
+        // Judge each first, uncached lay before the idempotency probe: a later lay under constraints already
+        // laid can reuse the boundary's layout, reporting the constraint-derived size rather than the box's.
         for &constraints in &self.constraints {
             let measured = child.measure(constraints);
             let laid_out = child.layout_and_get_size(ctx, constraints);
@@ -387,6 +387,8 @@ impl Config {
             satisfies(measured, constraints);
             satisfies(laid_out, constraints);
         }
+
+        self.check_layout_idempotent(child, ctx);
 
         self.check_baselines(child, ctx);
 
@@ -459,6 +461,16 @@ impl Config {
     ) {
         for &constraints in &self.constraints {
             let first = child.layout_and_get_size(ctx, constraints);
+
+            // Lay under different constraints between the probes, so the boundary's reusable layout is for
+            // those and the second probe genuinely re-runs the box instead of reusing the first.
+            let unlike = if constraints == BoxConstraints::tight(Size::new(3, 7)) {
+                BoxConstraints::tight(Size::new(7, 3))
+            } else {
+                BoxConstraints::tight(Size::new(3, 7))
+            };
+            child.layout_and_get_size(ctx, unlike);
+
             let second = child.layout_and_get_size(ctx, constraints);
 
             assert!(
@@ -893,7 +905,7 @@ fn same(a: f32, b: f32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     use agui::{
         paint::peniko::{Color, Fill},
@@ -1046,7 +1058,7 @@ mod tests {
     struct RenderNaughty {
         mode: Naughtiness,
         laid_out: Cell<bool>,
-        layouts: Cell<u32>,
+        seen: RefCell<Vec<BoxConstraints>>,
     }
 
     impl Widget for Naughty {
@@ -1058,7 +1070,7 @@ mod tests {
             LeafElement::new(RenderNaughty {
                 mode: self.mode,
                 laid_out: Cell::new(false),
-                layouts: Cell::new(0),
+                seen: RefCell::new(Vec::new()),
             })
         }
 
@@ -1101,13 +1113,20 @@ mod tests {
         fn layout(&mut self, _: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
             match self.mode {
                 Naughtiness::UnstableIntrinsic => self.laid_out.set(true),
-                Naughtiness::GrowingLayout => self.layouts.set(self.layouts.get() + 1),
-                Naughtiness::BadBaseline | Naughtiness::OverflowsAtMin => {}
+                Naughtiness::BadBaseline
+                | Naughtiness::GrowingLayout
+                | Naughtiness::OverflowsAtMin => {}
             }
 
             let grow = match self.mode {
-                // Alternates each layout, so re-laying under the same loose constraints is never idempotent.
-                Naughtiness::GrowingLayout if self.layouts.get() % 2 == 1 => 1.0,
+                // Grows on each repeat lay under constraints already seen, so re-laying under the same loose
+                // constraints is never idempotent, while the first lay under any still agrees with measure.
+                Naughtiness::GrowingLayout => {
+                    let mut seen = self.seen.borrow_mut();
+                    let repeats = seen.iter().filter(|&&c| c == constraints).count();
+                    seen.push(constraints);
+                    repeats as f32
+                }
                 _ => 0.0,
             };
 

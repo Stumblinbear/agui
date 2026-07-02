@@ -62,3 +62,61 @@ fn a_marked_boundary_repaints_through_its_resolved_handle() {
     );
     assert_eq!(fills(&second), 1);
 }
+
+#[test]
+fn a_boundary_whose_subtree_is_re_laid_repaints() {
+    let render = RecordingBox::new();
+    let paints = Rc::clone(&render.paints);
+    let laid_out = Rc::clone(&render.laid_out);
+
+    let mut tester = WidgetTester::mount(RepaintBoundary::new(render));
+    tester.resize(Size::new(40, 40));
+    tester.pump(Duration::ZERO);
+
+    assert_eq!(paints.get(), 1);
+    assert_eq!(laid_out.get(), Some(Size::new(40, 40)));
+
+    // The root re-lays under the new constraints and recomputes the boundary's subtree, so the boundary's
+    // retained layer no longer matches its content and must repaint. No layout boundary inside the repaint
+    // boundary is marked; the re-lay alone changes the geometry.
+    tester.resize(Size::new(80, 80));
+    tester.pump(Duration::ZERO);
+
+    assert_eq!(
+        laid_out.get(),
+        Some(Size::new(80, 80)),
+        "the subtree was re-laid to the new size"
+    );
+    assert_eq!(
+        paints.get(),
+        2,
+        "the re-laid boundary repainted its stale layer"
+    );
+}
+
+#[test]
+fn a_clean_subtree_under_unchanged_constraints_is_not_re_laid() {
+    let render = RecordingBox::new();
+    let layouts = Rc::clone(&render.layouts);
+    let paints = Rc::clone(&render.paints);
+
+    let mut tester = WidgetTester::mount(RepaintBoundary::new(render));
+    tester.resize(Size::new(40, 40));
+    tester.pump(Duration::ZERO);
+
+    assert_eq!(layouts.get(), 1);
+    assert_eq!(paints.get(), 1);
+
+    // A same-size resize re-lays the root, whose walk reaches the child's relayout boundary with the same
+    // tight constraints and nothing marked inside it: the subtree is skipped, not recomputed, and its
+    // untouched layer is not repainted.
+    tester.resize(Size::new(40, 40));
+    tester.pump(Duration::ZERO);
+
+    assert_eq!(
+        layouts.get(),
+        1,
+        "unchanged constraints skip the clean subtree"
+    );
+    assert_eq!(paints.get(), 1, "a skipped subtree does not repaint");
+}

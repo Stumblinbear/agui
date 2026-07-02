@@ -25,7 +25,9 @@ pub(crate) use layout::{LayoutBuildHost, LayoutState};
 pub use paint::PaintState;
 pub(crate) use semantics::SemanticsState;
 
-pub use layout::{DeferredLayoutScope, LayoutBoundaryHandle, RelayoutHook};
+pub use layout::{
+    DeferredLayoutScope, LayoutBoundaryHandle, RelayoutContent, RelayoutFn, RelayoutHook,
+};
 pub use paint::{CompositingBitsHook, DeferredPaintScope, PaintBoundaryHandle, RepaintHook};
 pub use semantics::{DeferredSemanticsScope, SemanticsBoundaryHandle, SemanticsRebuild};
 

@@ -267,8 +267,11 @@ impl<'a> UpdateCtx<'a> {
     }
 
     /// Reconciles an existing `child` in place: hands `func` the child and an [`UpdateCtx`] positioned at it.
-    /// An element reconciling more than one child wraps the walk in [`with_children`](Self::with_children);
-    /// debug builds panic on a second child reconciled outside one.
+    /// An element reconciling more than one child wraps the walk in [`with_children`](Self::with_children).
+    ///
+    /// # Panics
+    /// In debug builds, panics when a second child is reconciled outside
+    /// [`with_children`](Self::with_children).
     ///
     /// # Safety
     /// `child` must be one of this element's own slots.

@@ -98,6 +98,11 @@ impl RenderBox for RenderRepaintBoundary {
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        // The subtree is being recomputed, so the retained layer no longer matches it.
+        if let Some(handle) = &self.handle {
+            handle.mark_needs_paint();
+        }
+
         self.child.layout_and_get_size(ctx, constraints)
     }
 

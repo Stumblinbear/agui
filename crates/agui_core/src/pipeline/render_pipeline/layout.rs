@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
@@ -19,11 +20,34 @@ use crate::{
 };
 use crate::{context::LayoutCtx, tree::Tree};
 
-/// A relayout hook: re-lays one boundary's subtree from the constraints it captured. The pipeline calls it
-/// with a [`LayoutCtx`] scoped to that boundary, knowing nothing of the layout protocol behind it. A box
-/// boundary re-lays its render object under the box constraints it captured; another protocol does the
-/// analogous thing for its own.
-pub type RelayoutHook = Box<dyn FnMut(&mut LayoutCtx)>;
+/// The content of one relayout boundary. It re-lays the boundary's subtree from the constraints it captured,
+/// called with a [`LayoutCtx`] scoped to that boundary, and reports whether the layout it last produced can
+/// be reused. The pipeline knows nothing of the layout protocol behind it: a box boundary re-lays its render
+/// object under the box constraints it captured, and another protocol does the analogous thing for its own.
+pub trait RelayoutContent {
+    /// Re-lays the boundary's subtree from the constraints it captured.
+    fn relayout(&mut self, ctx: &mut LayoutCtx);
+
+    /// Whether the layout last produced stands for `constraints`, the layout protocol's constraint value,
+    /// opaque here. A parent laying the boundary's subtree reuses it on `true`.
+    fn reusable(&self, constraints: &dyn Any) -> bool;
+}
+
+/// A boxed [`RelayoutContent`], as a boundary registration takes it.
+pub type RelayoutHook = Box<dyn RelayoutContent>;
+
+/// The [`RelayoutContent`] of a bare re-lay closure, whose layout is never reusable.
+pub struct RelayoutFn<F>(pub F);
+
+impl<F: FnMut(&mut LayoutCtx)> RelayoutContent for RelayoutFn<F> {
+    fn relayout(&mut self, ctx: &mut LayoutCtx) {
+        (self.0)(ctx);
+    }
+
+    fn reusable(&self, _constraints: &dyn Any) -> bool {
+        false
+    }
+}
 
 /// The layout boundaries of one tree and their pending re-lays.
 pub(crate) struct LayoutState {
@@ -184,7 +208,12 @@ impl RenderPipeline {
                     continue;
                 };
 
-                cell.queued = false;
+                // A cleared mark means an ancestor's re-lay already laid this boundary's subtree this flush,
+                // so its entry has nothing left to do.
+                if !std::mem::replace(&mut cell.queued, false) {
+                    continue;
+                }
+
                 (cell.relayout.take(), cell.paint)
             };
 
@@ -193,7 +222,7 @@ impl RenderPipeline {
             };
 
             let mut ctx = LayoutCtx::new(&self.layout, &self.paint, LayoutScope(id), host);
-            relayout(&mut ctx);
+            relayout.relayout(&mut ctx);
 
             // Put the hook back, unless its own re-lay unregistered it.
             if let Some(cell) = self.layout.registry.borrow_mut().get_mut(id) {
@@ -256,6 +285,30 @@ impl LayoutBoundaryHandle {
         if let Some(channel) = self.channel.upgrade() {
             channel.mark(self.id);
         }
+    }
+
+    /// Whether the boundary's last layout stands for `constraints`, the layout protocol's constraint value;
+    /// the caller reuses it in place of laying the subtree. A `false` obliges the caller to lay the subtree,
+    /// and clears any pending re-lay mark, since that lay covers it and the flush then drops the boundary's
+    /// queued entry.
+    pub fn reuse_layout(&self, constraints: &dyn Any) -> bool {
+        let Some(channel) = self.channel.upgrade() else {
+            return false;
+        };
+
+        let mut registry = channel.registry.borrow_mut();
+
+        let Some(cell) = registry.get_mut(self.id) else {
+            return false;
+        };
+
+        if std::mem::replace(&mut cell.queued, false) {
+            return false;
+        }
+
+        cell.relayout
+            .as_deref()
+            .is_some_and(|content| content.reusable(constraints))
     }
 }
 

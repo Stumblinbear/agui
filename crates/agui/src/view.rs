@@ -16,8 +16,8 @@ use crate::{
     paint::compositing::{CompositedFrame, Compositor, LayerHandle, OffsetLayer},
     paint::scene::SceneCapacity,
     pipeline::render_pipeline::{
-        CompositingBitsHook, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, RelayoutHook,
-        RepaintHook, SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope,
+        CompositingBitsHook, LayoutBoundaryHandle, LayoutScope, PaintBoundaryHandle, RelayoutFn,
+        RelayoutHook, RepaintHook, SemanticsBoundaryHandle, SemanticsRebuild, SemanticsScope,
     },
     render_object::{
         LayoutCtx, RenderObject, SingleChildRenderObject,
@@ -210,8 +210,9 @@ where
         // The relayout boundary re-lays the view through the shared cell at flush, never through the element.
         // Re-borrowing the cell each flush (rather than caching a pointer into it) is what keeps it sound.
         let relayout_content = Rc::clone(&content);
-        let relayout: RelayoutHook =
-            Box::new(move |ctx| relayout_content.borrow_mut().relayout(ctx));
+        let relayout: RelayoutHook = Box::new(RelayoutFn(move |ctx: &mut LayoutCtx| {
+            relayout_content.borrow_mut().relayout(ctx);
+        }));
         let mut layout = ctx.register_layout_boundary(relayout);
 
         // The view is its own repaint boundary, so it can record its paint scope now.

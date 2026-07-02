@@ -11,7 +11,7 @@ use crate::{
     diagnostics::{Diagnostics, DiagnosticsNode},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
-    pipeline::render_pipeline::{LayoutBoundaryHandle, RelayoutHook},
+    pipeline::render_pipeline::{LayoutBoundaryHandle, RelayoutContent, RelayoutHook},
     prelude::render_object::LayoutScope,
     render_object::{
         LayoutCtx, RenderObject,
@@ -168,7 +168,7 @@ impl<R: RenderObject + ?Sized, P> RenderNode<R, P> {
     }
 }
 
-impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
+impl<R: RenderBox + ?Sized + 'static, P> RenderNode<R, P> {
     pub fn min_intrinsic_width(&self, height: Positive<f32>) -> Option<PositiveFinite<f32>> {
         self.borrow().min_intrinsic_width(height)
     }
@@ -215,6 +215,18 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
         // The child is a boundary when its size cannot affect the parent: under tight constraints, or when
         // the parent does not read its size.
         if constraints.is_tight() || !parent_uses_size {
+            // An unmarked boundary already laid under these same constraints has nothing to recompute: its
+            // subtree reports every layout-affecting change by marking it, so its layout stands. The size
+            // needs no cache, since tight constraints fix it and the other boundary case is a parent that
+            // does not read it. A miss also clears any pending mark, since the lay below covers it.
+            if self
+                .boundary
+                .as_ref()
+                .is_some_and(|boundary| boundary.reuse_layout(&constraints))
+            {
+                return constraints.smallest();
+            }
+
             // Lay the child out under its own boundary, so its descendants mark it for re-layout rather than
             // the boundary enclosing it.
             let scope = self.register_boundary(ctx, constraints);
@@ -233,11 +245,9 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
         // SAFETY: the duplicate lives in the boundary registration owned by `self.boundary`, which `set` and
         // `clear` drop before the child can go away, and the flush borrows it only while re-laying this
         // boundary in isolation.
-        let mut handle = unsafe { self.child().duplicate() };
+        let child = unsafe { self.child().duplicate() };
 
-        let relayout: RelayoutHook = Box::new(move |ctx| {
-            handle.borrow_mut().layout(ctx, constraints);
-        });
+        let relayout: RelayoutHook = Box::new(BoxBoundaryContent { child, constraints });
 
         if let Some(registered) = self.boundary.as_mut() {
             registered.replace(relayout);
@@ -289,5 +299,22 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
     /// Records the child box render object's subtree into `s`.
     pub fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
         self.borrow_mut().build_semantics(s);
+    }
+}
+
+/// A box relayout boundary's content: it re-lays the child under the box constraints captured at the
+/// boundary's most recent layout, and its layout is reusable for a lay under those same constraints.
+struct BoxBoundaryContent<R: ?Sized> {
+    child: MountedChild<R>,
+    constraints: BoxConstraints,
+}
+
+impl<R: RenderBox + ?Sized + 'static> RelayoutContent for BoxBoundaryContent<R> {
+    fn relayout(&mut self, ctx: &mut LayoutCtx) {
+        self.child.borrow_mut().layout(ctx, self.constraints);
+    }
+
+    fn reusable(&self, constraints: &dyn Any) -> bool {
+        constraints.downcast_ref::<BoxConstraints>() == Some(&self.constraints)
     }
 }
