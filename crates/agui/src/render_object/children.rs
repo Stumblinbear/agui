@@ -1,3 +1,5 @@
+use rustc_hash::FxHashMap;
+
 use crate::pipeline::render_pipeline::LayoutScope;
 use crate::render_object::{
     RenderObject,
@@ -36,6 +38,23 @@ pub trait MultiChildRenderObject: RenderObject {
 
     /// The relayout boundary this object was laid out under at its most recent layout, for the element to mark
     /// when the child list changes structurally, since a freshly grafted child has not been laid out.
+    fn layout_scope(&self) -> LayoutScope;
+}
+
+/// The per-slot child render edges a [`SlottedMultiChildRenderObject`] holds, keyed by its slot type.
+pub type SlotChildren<S> = FxHashMap<S, RenderNode<dyn RenderBox>>;
+
+/// The render object of a widget whose children occupy named slots, giving its element access to the
+/// per-slot child render storage so it can reconcile the slot assignment in place.
+pub trait SlottedMultiChildRenderObject: RenderObject {
+    /// The slot value addressing each child.
+    type Slot;
+
+    /// The per-slot child render storage, for the element to reconcile against a new slot assignment.
+    fn children_mut(&mut self) -> &mut SlotChildren<Self::Slot>;
+
+    /// The relayout boundary this object was laid out under at its most recent layout, for the element to mark
+    /// when a slot gains, loses, or replaces its child, since a freshly grafted child has not been laid out.
     fn layout_scope(&self) -> LayoutScope;
 }
 

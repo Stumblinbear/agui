@@ -3,6 +3,7 @@
 //! children in [`agui_core::tree`] slots and reconcile them in place, so a widget supplies only its recipe.
 
 use std::any::TypeId;
+use std::hash::Hash;
 use std::ops::Range;
 
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -16,11 +17,11 @@ use crate::{
     key::AnyKeyable,
     pipeline::render_pipeline::LayoutScope,
     render_object::{
-        SingleChildRenderObject,
+        SingleChildRenderObject, SlotChildren, SlottedMultiChildRenderObject,
         box_layout::RenderBox,
         node::{RenderNode, RenderObjectCell, RenderObjectPtr},
     },
-    widget::Widget,
+    widget::{RenderBoxElement, RenderBoxWrapper, Widget},
 };
 
 /// The [`Element`] of a widget with a single child, such as `Padding` or `SizedBox`, threading the widget's
@@ -191,6 +192,183 @@ impl<C: Element<Render = dyn RenderBox>> MultiChildElement<C> {
         self.children.iter().fold(node, |node, keyed| {
             node.child(|d| keyed.child.get().describe(d))
         })
+    }
+}
+
+/// The [`Element`] of a widget whose children occupy named slots, owning one child per filled slot and the
+/// widget's render object `R`. Each child is addressed by a slot value of type `S`, held in no particular
+/// order, and reconciled against whatever child the new build assigns to the same slot: in place when the
+/// widget's type and key match the old child, by replacement otherwise. A slot the new build no longer fills
+/// is unmounted. Slots holding widgets of differing types take a type-erased `W`, such as
+/// `Box<dyn AnyWidget<Render = dyn RenderBox>>`.
+pub struct SlottedMultiChildElement<S, W: Widget, R> {
+    children: FxHashMap<S, KeyedChild<RenderBoxElement<W::Element>>>,
+    render: RenderObjectCell<R>,
+}
+
+impl<S, W, R> SlottedMultiChildElement<S, W, R>
+where
+    S: Clone + Eq + Hash + 'static,
+    W: Widget + 'static,
+    W::Render: RenderBox + Sized + 'static,
+    W::Element: 'static,
+    R: SlottedMultiChildRenderObject<Slot = S>,
+{
+    /// Builds an element per assigned slot, then wraps the per-slot render edges (unwired until mount) into
+    /// the widget's render object with `build_render`.
+    ///
+    /// # Panics
+    /// Panics if `children` assigns the same slot twice.
+    pub fn new(
+        ctx: &mut CreateCtx,
+        children: impl IntoIterator<Item = (S, W)>,
+        build_render: impl FnOnce(SlotChildren<S>) -> R,
+    ) -> Self {
+        let mut elements = FxHashMap::default();
+        let mut renders = SlotChildren::default();
+
+        for (slot, child) in children {
+            assert!(
+                !elements.contains_key(&slot),
+                "two children were assigned the same slot"
+            );
+
+            let child = RenderBoxWrapper::new(child);
+            let type_id = child.widget_type_id();
+            let key = child.key().map(AnyKeyable::dyn_clone);
+
+            let element = child.create(ctx);
+            elements.insert(
+                slot.clone(),
+                KeyedChild {
+                    child: BoxedSlot::new(element),
+                    type_id,
+                    key,
+                },
+            );
+            renders.insert(slot, RenderNode::new(()));
+        }
+
+        Self {
+            children: elements,
+            render: RenderObjectCell::new(build_render(renders)),
+        }
+    }
+
+    /// Reconciles each slot's child and render edge against `children`, in lockstep. A slot that gains,
+    /// loses, or replaces its child re-lays the enclosing boundary; one reconciled in place leaves it
+    /// untouched.
+    ///
+    /// # Panics
+    /// Panics if `children` assigns the same slot twice.
+    pub fn update(&mut self, ctx: &mut UpdateCtx<'_>, children: impl IntoIterator<Item = (S, W)>) {
+        let layout_scope = self.render.get_mut().layout_scope();
+
+        ctx.with_children(layout_scope, |ctx| {
+            let mut old = std::mem::take(&mut self.children);
+            let renders = self.render.get_mut().children_mut();
+
+            for (slot, child) in children {
+                assert!(
+                    !self.children.contains_key(&slot),
+                    "two children were assigned the same slot"
+                );
+
+                let child = RenderBoxWrapper::new(child);
+
+                let kept = match old.remove(&slot) {
+                    Some(mut keyed) if node_can_update(&keyed, &child) => {
+                        // The child keeps its slot address and its render object, so its edge stays valid;
+                        // only the element reconciles.
+                        // SAFETY: `keyed.child` is this element's own slot.
+                        unsafe {
+                            ctx.with_child(&mut keyed.child, |element, ctx| {
+                                child.update(ctx, element);
+                            });
+                        }
+                        keyed
+                    }
+                    replaced => {
+                        ctx.mark_needs_layout(layout_scope);
+
+                        if let Some(mut gone) = replaced {
+                            // SAFETY: `gone.child` is this element's own slot.
+                            unsafe { ctx.unmount(&mut gone.child) };
+                        }
+
+                        let (keyed, render) = create(ctx, child);
+                        renders.insert(slot.clone(), render);
+                        keyed
+                    }
+                };
+
+                self.children.insert(slot, kept);
+            }
+
+            for (slot, mut gone) in old {
+                ctx.mark_needs_layout(layout_scope);
+                renders.remove(&slot);
+                // SAFETY: `gone.child` is this element's own slot.
+                unsafe { ctx.unmount(&mut gone.child) };
+            }
+        });
+    }
+
+    /// This element's render object, by exclusive reference, for the widget's own writes during reconcile.
+    pub fn render_object_mut(&mut self) -> &mut R {
+        self.render.get_mut()
+    }
+}
+
+// SAFETY: manages each slot's child only through the cursor child operations (a child is registered at mount
+// or on replacement, and deregistered when its slot is unfilled, its widget cannot update it, or the element
+// unmounts), and resolves its render object from its own `RenderObjectCell`.
+unsafe impl<S, W, R> Element for SlottedMultiChildElement<S, W, R>
+where
+    S: Clone + Eq + Hash + 'static,
+    W: Widget + 'static,
+    W::Render: RenderBox + Sized + 'static,
+    W::Element: 'static,
+    R: SlottedMultiChildRenderObject<Slot = S>,
+{
+    type Render = R;
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<R> {
+        self.render.render_object_ptr()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        let renders = self.render.get_mut().children_mut();
+
+        for (slot, keyed) in &mut self.children {
+            // SAFETY: each child is a `BoxedSlot`, whose body ignores the cursor's base, so it registers
+            // soundly under `ctx`; every child is deregistered before it drops.
+            let mounted = unsafe { ctx.mount(&mut keyed.child) };
+            renders
+                .get_mut(slot)
+                .expect("every filled slot has a render edge")
+                .set(mounted);
+        }
+
+        self.render.get_mut().attach(ctx);
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.render.get_mut().detach(ctx);
+
+        for keyed in self.children.values_mut() {
+            // SAFETY: as `mount`.
+            unsafe { ctx.unmount(&mut keyed.child) };
+        }
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.children
+            .values()
+            .fold(d.node_for::<Self>(), |node, keyed| {
+                node.child(|d| keyed.child.get().describe(d))
+            })
+            .finish()
     }
 }
 

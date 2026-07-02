@@ -7,13 +7,13 @@ use agui_core::tree::NodeHandle;
 use agui::{
     context::{CreateCtx, LayoutCtx, MessageCtx, PaintCtx, UpdateCtx},
     diagnostics::{Diagnostics, DiagnosticsNode},
-    element::Element,
+    element::{Element, SlottedMultiChildElement},
     geometry::{Offset, Size},
     input::hit_test::{HitTest, HitTestResult},
     key::AnyKeyable,
     pipeline::render_pipeline::LayoutScope,
     render_object::{
-        MultiChildRenderObject, RenderObject,
+        MultiChildRenderObject, RenderObject, SlotChildren, SlottedMultiChildRenderObject,
         box_layout::{BoxConstraints, RenderBox},
         node::{RenderNode, RenderObjectPtr},
     },
@@ -203,6 +203,132 @@ impl Widget for BoxedChildren {
 
     fn create(self, ctx: &mut CreateCtx) -> Self::Element {
         ChildrenElement::new(ctx, self.children, |children| MultiChildRenderList {
+            children,
+        })
+    }
+
+    fn update(self, ctx: &mut UpdateCtx<'_>, element: &mut Self::Element) {
+        element.update(ctx, self.children);
+    }
+}
+
+/// Identifies the slots of a [`SlottedChildren`] fixture.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum TileSlot {
+    Leading,
+    Title,
+    Trailing,
+}
+
+/// A minimal slotted render object, holding one child render edge per filled [`TileSlot`].
+pub struct SlottedRenderList {
+    pub children: SlotChildren<TileSlot>,
+}
+
+impl SlottedMultiChildRenderObject for SlottedRenderList {
+    type Slot = TileSlot;
+
+    fn children_mut(&mut self) -> &mut SlotChildren<TileSlot> {
+        &mut self.children
+    }
+
+    // Detached: this fixture backs reconcile tests, which do not assert on a slot-change re-layout.
+    fn layout_scope(&self) -> LayoutScope {
+        LayoutScope::detached()
+    }
+}
+
+impl RenderObject for SlottedRenderList {
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        self.children
+            .values()
+            .fold(d.node_for::<Self>(), |node, child| {
+                node.child(|d| child.describe(d))
+            })
+            .finish()
+    }
+}
+
+impl RenderBox for SlottedRenderList {
+    fn min_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn max_intrinsic_width(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn min_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn max_intrinsic_height(&self, _: Positive<f32>) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn measure(&self, constraints: BoxConstraints) -> Size {
+        constraints.smallest()
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, constraints: BoxConstraints) -> Size {
+        for child in self.children.values_mut() {
+            child.layout(ctx, constraints);
+        }
+
+        constraints.smallest()
+    }
+
+    fn measure_baseline(&self, _: BoxConstraints, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn distance_to_baseline(&mut self, _: TextBaseline) -> Option<PositiveFinite<f32>> {
+        None
+    }
+
+    fn hit_test(&self, _: &mut HitTestResult, _: Offset) -> HitTest {
+        HitTest::Pass
+    }
+
+    fn update_compositing_bits(&mut self) -> bool {
+        let mut needs = false;
+
+        for child in self.children.values_mut() {
+            needs |= child.update_compositing_bits();
+        }
+
+        needs
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, offset: Offset) {
+        for child in self.children.values_mut() {
+            child.paint(ctx, offset);
+        }
+    }
+
+    fn build_semantics(&mut self, s: &mut SemanticsTreeBuilder<'_>) {
+        for child in self.children.values_mut() {
+            child.build_semantics(s);
+        }
+    }
+}
+
+/// A slotted widget whose children are type-erased boxed widgets, one per filled [`TileSlot`].
+pub struct SlottedChildren {
+    pub children: Vec<(TileSlot, Box<dyn AnyWidget<Render = dyn RenderBox>>)>,
+}
+
+impl Widget for SlottedChildren {
+    type Element = SlottedMultiChildElement<
+        TileSlot,
+        Box<dyn AnyWidget<Render = dyn RenderBox>>,
+        SlottedRenderList,
+    >;
+
+    type Render = SlottedRenderList;
+
+    fn create(self, ctx: &mut CreateCtx) -> Self::Element {
+        SlottedMultiChildElement::new(ctx, self.children, |children| SlottedRenderList {
             children,
         })
     }
