@@ -1,10 +1,8 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::tree::NodeHandle;
+use crate::{pipeline::render_pipeline::LayoutBuildHost, tree::NodeHandle};
 
 use crate::context::UpdateCtx;
-use crate::pipeline::LayoutBuildHost;
 use crate::pipeline::render_pipeline::{
     DeferredLayoutScope, LayoutBoundaryHandle, LayoutScope, LayoutState, PaintScope, PaintState,
     RelayoutHook,
@@ -18,7 +16,7 @@ pub struct LayoutCtx<'a, 'h> {
     layout: &'a Rc<LayoutState>,
     paint: &'a Rc<PaintState>,
     scope: LayoutScope,
-    host: &'a RefCell<LayoutBuildHost<'h>>,
+    host: &'a mut LayoutBuildHost<'h>,
 }
 
 impl<'a, 'h> LayoutCtx<'a, 'h> {
@@ -29,7 +27,7 @@ impl<'a, 'h> LayoutCtx<'a, 'h> {
         layout: &'a Rc<LayoutState>,
         paint: &'a Rc<PaintState>,
         scope: LayoutScope,
-        host: &'a RefCell<LayoutBuildHost<'h>>,
+        host: &'a mut LayoutBuildHost<'h>,
     ) -> Self {
         Self {
             layout,
@@ -69,12 +67,12 @@ impl<'a, 'h> LayoutCtx<'a, 'h> {
     /// If this context carries no build host. A real frame always provides one; only a bare unit-test context
     /// from [`new`](Self::new) lacks one.
     pub fn build_child<R>(
-        &self,
+        &mut self,
         handle: NodeHandle,
         scheduler: &mut dyn TaskScheduler,
         f: impl FnOnce(&mut UpdateCtx) -> R,
     ) -> Option<R> {
-        self.host.borrow_mut().build(handle, scheduler, f)
+        self.host.build(handle, scheduler, f)
     }
 
     /// Registers `boundary` as a relayout boundary nested under the boundary in force, and returns the handle

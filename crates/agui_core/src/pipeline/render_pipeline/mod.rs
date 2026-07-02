@@ -21,7 +21,7 @@ mod layout;
 mod paint;
 mod semantics;
 
-pub(crate) use layout::LayoutState;
+pub(crate) use layout::{LayoutBuildHost, LayoutState};
 pub use paint::PaintState;
 pub(crate) use semantics::SemanticsState;
 

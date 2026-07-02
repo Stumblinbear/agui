@@ -1,16 +1,14 @@
 use std::any::Any;
-use std::cell::RefCell;
-use std::rc::Rc;
 
-use crate::build_queue::BuildQueue;
 use crate::context::{CreateCtx, MessageCtx, UpdateCtx};
 use crate::diagnostics::{Diagnostics, DiagnosticsNode};
 use crate::element::{AnyElement, Element};
 use crate::pipeline::build_tree::{Build, Operation, run};
-use crate::pipeline::render_pipeline::{LayoutState, PaintState, RenderPipeline, SemanticsState};
+use crate::pipeline::render_pipeline::RenderPipeline;
 use crate::provide::ProvideScope;
 use crate::scheduling::TaskScheduler;
 use crate::tree::{NodeHandle, Tree};
+use crate::{build_queue::BuildQueue, pipeline::render_pipeline::LayoutBuildHost};
 
 pub mod build_tree;
 pub mod render_pipeline;
@@ -22,47 +20,6 @@ pub(crate) use phase::FramePhase;
 /// The root element's boxed form. The root renders nothing of its own; a tree's render subtrees are planted by
 /// the views it holds.
 pub type RootElement = Box<dyn AnyElement<Render = ()>>;
-
-/// The element-tree access a layout-time build needs, lent to the layout pass by the owner: the tree to
-/// re-enter at a node, the dirty set, and the scope in force. A layout-time builder reaches it through
-/// [`LayoutCtx::build_child`](crate::context::LayoutCtx::build_child) to build its child for the constraints it
-/// was just handed. The scheduler comes separately, from the builder, which captured a deferred one at mount.
-pub struct LayoutBuildHost<'a> {
-    tree: &'a mut Tree<RootElement, Build>,
-
-    queue: &'a mut BuildQueue,
-    provide: ProvideScope,
-
-    layout: &'a Rc<LayoutState>,
-    paint: &'a Rc<PaintState>,
-    semantics: &'a Rc<SemanticsState>,
-}
-
-impl LayoutBuildHost<'_> {
-    /// Hands `f` an [`UpdateCtx`] positioned at the element `handle` names, returning `f`'s result, or `None`
-    /// if the element is gone.
-    pub(crate) fn build<R>(
-        &mut self,
-        handle: NodeHandle,
-        scheduler: &mut dyn TaskScheduler,
-        f: impl FnOnce(&mut UpdateCtx) -> R,
-    ) -> Option<R> {
-        let provide = self.provide;
-        let queue = &mut *self.queue;
-        let layout = self.layout;
-        let paint = self.paint;
-        let semantics = self.semantics;
-
-        // `with_cursor`, not a dispatch op: the element is not reborrowed as `&mut`, so a render object's
-        // in-flight layout borrow on it stands.
-        self.tree.with_cursor(handle, |cursor| {
-            let mut ctx =
-                UpdateCtx::new(cursor, provide, queue, layout, paint, semantics, scheduler);
-
-            f(&mut ctx)
-        })
-    }
-}
 
 /// Drives one widget tree: it builds and rebuilds the element tree, and lays out and paints the render
 /// boundaries the tree's views plant in its [`RenderPipeline`]. The root renders nothing; each view retains
@@ -178,15 +135,9 @@ impl PipelineOwner {
 
         let _phase = self.pipeline.enter_phase(FramePhase::Layout);
 
-        let host = RefCell::new(LayoutBuildHost {
-            tree,
-            queue,
-            provide: *provide,
-            layout: pipeline.layout(),
-            paint: pipeline.paint(),
-            semantics: pipeline.semantics(),
-        });
-        pipeline.flush_layout(&host);
+        let mut host = LayoutBuildHost::new(tree, queue, *provide, &pipeline);
+
+        pipeline.flush_layout(&mut host);
     }
 
     /// Repaints every repaint boundary marked since the last frame.

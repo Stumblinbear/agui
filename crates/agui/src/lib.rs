@@ -61,7 +61,7 @@ pub mod prelude {
 
         pub use crate::{
             context::{BuildCtx, CreateCtx, MessageCtx, UpdateCtx},
-            element::{AnyElement, Element, LeafElement, SingleChildElement, node::ElementNode},
+            element::{AnyElement, Element, LeafElement, SingleChildElement},
             scheduling::TaskHandle,
             widget::Widget,
         };

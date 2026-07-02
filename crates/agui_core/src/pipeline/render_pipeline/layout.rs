@@ -5,8 +5,19 @@ use slotmap::{Key, SlotMap};
 
 use super::{FrameScheduler, LayoutBoundaryId, LayoutScope, PaintScope, RenderPipeline};
 
-use crate::context::LayoutCtx;
-use crate::pipeline::{FramePhase, LayoutBuildHost};
+use crate::{
+    build_queue::BuildQueue,
+    context::UpdateCtx,
+    pipeline::{
+        FramePhase, RootElement,
+        build_tree::Build,
+        render_pipeline::{PaintState, SemanticsState},
+    },
+    provide::ProvideScope,
+    scheduling::TaskScheduler,
+    tree::NodeHandle,
+};
+use crate::{context::LayoutCtx, tree::Tree};
 
 /// A relayout hook: re-lays one boundary's subtree from the constraints it captured. The pipeline calls it
 /// with a [`LayoutCtx`] scoped to that boundary, knowing nothing of the layout protocol behind it. A box
@@ -98,7 +109,7 @@ struct LayoutBoundaryCell {
 impl RenderPipeline {
     /// Re-lays every marked relayout boundary from the constraints it last took, rootmost-first, leaving the
     /// rest untouched.
-    pub(crate) fn flush_layout(&self, host: &RefCell<LayoutBuildHost>) {
+    pub(crate) fn flush_layout(&self, host: &mut LayoutBuildHost) {
         // Hold the marks across the pass. Marking layout during the layout phase is rejected, so nothing else
         // touches this list while a relay re-enters the registry (a separate cell) to register nested boundaries.
         let mut dirty = self.layout.dirty.borrow_mut();
@@ -231,5 +242,80 @@ impl DeferredLayoutScope {
         if let Some(queue) = &self.queue {
             queue.borrow_mut().push(self.id);
         }
+    }
+}
+
+/// The element-tree access a layout-time build needs, lent to the layout pass by the owner: the tree to
+/// re-enter at a node, the dirty set, and the scope in force. A layout-time builder reaches it through
+/// [`LayoutCtx::build_child`](crate::context::LayoutCtx::build_child) to build its child for the constraints it
+/// was just handed. The scheduler comes separately, from the builder, which captured a deferred one at mount.
+pub(crate) struct LayoutBuildHost<'a> {
+    tree: &'a mut Tree<RootElement, Build>,
+
+    queue: &'a mut BuildQueue,
+    provide: ProvideScope,
+
+    scheduler: &'a FrameScheduler,
+
+    layout: &'a Rc<LayoutState>,
+    paint: &'a Rc<PaintState>,
+    semantics: &'a Rc<SemanticsState>,
+}
+
+impl<'a> LayoutBuildHost<'a> {
+    pub(crate) fn new(
+        tree: &'a mut Tree<RootElement, Build>,
+        queue: &'a mut BuildQueue,
+        provide: ProvideScope,
+        pipeline: &'a RenderPipeline,
+    ) -> Self {
+        Self {
+            tree,
+
+            queue,
+            provide,
+
+            scheduler: &pipeline.scheduler,
+
+            layout: pipeline.layout(),
+            paint: pipeline.paint(),
+            semantics: pipeline.semantics(),
+        }
+    }
+
+    /// Hands `f` an [`UpdateCtx`] positioned at the element `handle` names, returning `f`'s result, or `None`
+    /// if the element is gone.
+    pub(crate) fn build<R>(
+        &mut self,
+        handle: NodeHandle,
+        scheduler: &mut dyn TaskScheduler,
+        f: impl FnOnce(&mut UpdateCtx) -> R,
+    ) -> Option<R> {
+        let provide = self.provide;
+        let queue = &mut *self.queue;
+        let layout = self.layout;
+        let paint = self.paint;
+        let semantics = self.semantics;
+
+        let current_phase = self.scheduler.phase.get();
+
+        // This method can only be called during the layout phase.
+        debug_assert_eq!(current_phase, FramePhase::Layout);
+
+        // We must re-enter build so elements can mark_needs_layout during this operation.
+        self.scheduler.phase.set(FramePhase::Build);
+
+        // `with_cursor`, not a dispatch op: the element is not reborrowed as `&mut`, so a render object's
+        // in-flight layout borrow on it stands.
+        let ret = self.tree.with_cursor(handle, |cursor| {
+            let mut ctx =
+                UpdateCtx::new(cursor, provide, queue, layout, paint, semantics, scheduler);
+
+            f(&mut ctx)
+        });
+
+        self.scheduler.phase.set(current_phase);
+
+        ret
     }
 }
