@@ -70,13 +70,14 @@ impl PipelineOwner {
         }
     }
 
-    /// Whether any element is waiting to rebuild.
+    /// Whether a frame flush would do work: an element to rebuild, or a boundary to re-lay, repaint, or
+    /// re-read semantics.
     pub fn is_dirty(&self) -> bool {
-        !self.queue.is_empty()
+        !self.queue.is_empty() || self.pipeline.has_pending()
     }
 
-    /// Registers `f` to fire when a view's semantics change, so the driver re-reads them.
-    pub fn on_needs_semantics_update(&self, f: Box<dyn Fn()>) {
+    /// Sets the hook fired when a view's semantics change, so the driver re-reads them.
+    pub fn on_needs_semantics_update(&self, f: Option<Box<dyn Fn()>>) {
         self.pipeline.on_needs_semantics_update(f);
     }
 
@@ -86,6 +87,7 @@ impl PipelineOwner {
         self.flush_build(scheduler);
         self.flush_layout();
         self.flush_paint();
+        self.flush_semantics();
     }
 
     /// Rebuilds every element marked since the last flush, shallowest first. An element marked during the

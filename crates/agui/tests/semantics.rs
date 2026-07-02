@@ -72,3 +72,27 @@ fn a_rebuild_marks_the_boundary_and_the_flush_clears_it() {
     tester.flush_semantics();
     assert_eq!(builds.get(), rewalked, "the flush cleared the dirty set");
 }
+
+#[test]
+fn a_flush_builds_nothing_while_semantics_is_off() {
+    let render = RecordingBox::new();
+    let builds = Rc::clone(&render.semantics_builds);
+
+    let mut tester =
+        WidgetTester::mount(Semantics::new().role(Role::Button).label("A").child(render));
+    tester.set_semantics_enabled(false);
+    tester.resize_with(BoxConstraints::new(0, 100, 0, 100));
+    tester.pump(Duration::ZERO);
+
+    tester.flush_semantics();
+    assert_eq!(
+        builds.get(),
+        0,
+        "no boundary is walked while semantics is off"
+    );
+
+    // Turning it back on rebuilds the whole tree, since the marks made while off were dropped.
+    tester.set_semantics_enabled(true);
+    tester.flush_semantics();
+    assert!(builds.get() >= 1, "enabling rebuilds the tree");
+}

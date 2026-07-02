@@ -155,6 +155,11 @@ impl LayoutState {
     pub(crate) fn checkpoint(&self) -> usize {
         self.dirty.borrow().len()
     }
+
+    /// Whether a re-lay is pending: a boundary marked, or a deferred mark not yet folded in.
+    pub(crate) fn has_pending(&self) -> bool {
+        !self.dirty.borrow().is_empty() || !self.deferred.borrow().is_empty()
+    }
 }
 
 struct LayoutBoundaryCell {

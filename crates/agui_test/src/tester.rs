@@ -55,6 +55,10 @@ where
         let root = Rc::new(Cell::new(None));
         let (owner, view) = ctx.mount_view(HarnessRoot::new(widget, Rc::clone(&root)));
 
+        // A test is the consumer of the semantics it asserts on, so register a hook (it drives flushes
+        // itself, so the hook need do nothing) to turn them on by default.
+        owner.on_needs_semantics_update(Some(Box::new(|| {})));
+
         Self {
             owner,
             view,
@@ -115,6 +119,7 @@ where
 
         self.owner.flush_layout();
         self.owner.flush_paint();
+        self.owner.flush_semantics();
     }
 
     /// Pumps a 16ms frame repeatedly until no frame callback is registered and nothing is left to
@@ -134,6 +139,20 @@ where
         }
 
         panic!("the tree did not settle within {max_frames} frames");
+    }
+
+    /// Whether a frame flush would do work: an element to rebuild, or a boundary to re-lay or repaint. A
+    /// driver schedules a frame off this, so a test can confirm a change that only marks layout or paint,
+    /// such as a resize, still registers as owed work.
+    pub fn is_dirty(&self) -> bool {
+        self.owner.is_dirty()
+    }
+
+    /// Turns semantics on or off, so a test can drive the off state a driver holds until an assistive
+    /// technology attaches. On by default for a tester, since a test consumes the semantics it asserts on.
+    pub fn set_semantics_enabled(&self, enabled: bool) {
+        self.owner
+            .on_needs_semantics_update(enabled.then(|| Box::new(|| {}) as Box<dyn Fn()>));
     }
 
     /// Polls every spawned task once without producing a frame. A message a task posts is delivered on

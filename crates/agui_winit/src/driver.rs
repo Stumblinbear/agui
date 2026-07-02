@@ -178,6 +178,7 @@ impl WindowDriver {
 
         self.owner.flush_layout();
         self.owner.flush_paint();
+        self.owner.flush_semantics();
         self.view.composite_frame()
     }
 

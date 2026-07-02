@@ -126,7 +126,11 @@ fn marking_one_view_rewalks_only_its_semantics() {
         &mut ctx.scheduler(),
     );
 
+    // The test consumes the semantics it asserts on, so register a hook to turn them on.
+    owner.on_needs_semantics_update(Some(Box::new(|| {})));
+
     owner.flush_semantics();
+
     let (a_walked, b_walked) = (a.get(), b.get());
 
     // Mark only view a's boundary from outside a build pass, then re-walk. The flush applies the deferred

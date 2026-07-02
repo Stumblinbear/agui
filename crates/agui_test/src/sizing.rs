@@ -1125,7 +1125,7 @@ mod tests {
                     let mut seen = self.seen.borrow_mut();
                     let repeats = seen.iter().filter(|&&c| c == constraints).count();
                     seen.push(constraints);
-                    repeats as f32
+                    f32::from(u8::try_from(repeats).unwrap_or(u8::MAX))
                 }
                 _ => 0.0,
             };

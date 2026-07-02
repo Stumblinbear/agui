@@ -20,7 +20,7 @@ pub(crate) struct SemanticsState {
 
     counter: Cell<u64>,
 
-    notify: RefCell<Box<dyn Fn()>>,
+    notify: RefCell<Option<Box<dyn Fn()>>>,
 }
 
 impl SemanticsState {
@@ -30,7 +30,21 @@ impl SemanticsState {
             dirty: RefCell::new(Vec::new()),
             deferred: Rc::new(RefCell::new(Vec::new())),
             counter: Cell::new(0),
-            notify: RefCell::new(Box::new(|| {})),
+            notify: RefCell::new(None),
+        }
+    }
+
+    pub(crate) fn set_notify(&self, notify: Option<Box<dyn Fn()>>) {
+        let was_enabled = self.notify.borrow().is_some();
+
+        *self.notify.borrow_mut() = notify;
+
+        if self.notify.borrow().is_some() && !was_enabled {
+            let ids: Vec<_> = self.registry.borrow().keys().collect();
+
+            for id in ids {
+                self.mark(id);
+            }
         }
     }
 
@@ -60,6 +74,10 @@ impl SemanticsState {
     /// Marks `id`'s semantics changed, firing the channel's callback on the clean-to-dirty transition. Ignores
     /// a mark for a boundary already queued or already gone.
     pub(crate) fn mark(&self, id: SemanticsBoundaryId) {
+        if self.notify.borrow().is_none() {
+            return;
+        }
+
         if !self.claim(id) {
             return;
         }
@@ -69,9 +87,16 @@ impl SemanticsState {
         dirty.push(id);
         drop(dirty);
 
-        if was_clean {
-            (self.notify.borrow())();
+        if was_clean && let Some(notify) = self.notify.borrow().as_ref() {
+            notify();
         }
+    }
+
+    /// Whether a re-read is pending: a boundary marked, or a deferred mark not yet folded in. Always false
+    /// while semantics is off, so a deferred mark that arrived then never schedules a frame.
+    pub(crate) fn has_pending(&self) -> bool {
+        self.notify.borrow().is_some()
+            && (!self.dirty.borrow().is_empty() || !self.deferred.borrow().is_empty())
     }
 
     /// Claims `id`'s single place in the dirty list: true when the caller should enter it, false when it is
@@ -93,14 +118,21 @@ struct SemanticsBoundaryCell {
 }
 
 impl RenderPipeline {
-    /// Registers `f` to fire when a view's semantics change, so the driver re-reads them.
-    pub fn on_needs_semantics_update(&self, f: Box<dyn Fn()>) {
-        *self.semantics.notify.borrow_mut() = f;
+    /// Sets the hook fired when a view's semantics change, so the driver re-reads them.
+    pub fn on_needs_semantics_update(&self, f: Option<Box<dyn Fn()>>) {
+        self.semantics.set_notify(f);
     }
 
     /// Re-walks each semantics boundary marked since the last frame, delivering each view's freshly built
     /// semantics to that view's own sink.
     pub fn flush_semantics(&self) {
+        if self.semantics.notify.borrow().is_none() {
+            // Nothing consumes semantics, so drop any deferred marks that piled up and build nothing.
+            self.semantics.deferred.take();
+
+            return;
+        }
+
         let mut dirty = self.semantics.dirty.borrow_mut();
 
         for id in self.semantics.deferred.take() {

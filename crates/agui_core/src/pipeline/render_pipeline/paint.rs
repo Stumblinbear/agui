@@ -75,8 +75,8 @@ impl PaintState {
         }
     }
 
-    /// Marks `id` for the work `phase` owes. Panics on a mark whose phase has run this frame, and ignores one
-    /// for a boundary already gone. The composite phase owns no boundary, so a composite mark is dropped here.
+    /// Marks `id` for the work `phase` owes, and requests a frame. Panics on a mark whose phase has run this
+    /// frame, and ignores one for a boundary already gone.
     fn mark(&self, id: PaintBoundaryId, phase: PaintPhase) {
         self.scheduler.phase.get().assert_can_mark(match phase {
             PaintPhase::CompositingBits => FramePhase::CompositingBits,
@@ -84,26 +84,38 @@ impl PaintState {
             PaintPhase::Composite => FramePhase::Composite,
         });
 
-        {
-            let mut registry = self.registry.borrow_mut();
-
-            let Some(cell) = registry.get_mut(id) else {
-                return;
-            };
-
-            let depth = cell.depth;
-            let (flag, list) = match phase {
-                PaintPhase::CompositingBits => (&mut cell.bits_queued, &self.bits),
-                PaintPhase::Paint => (&mut cell.repaint_queued, &self.repaint),
-                PaintPhase::Composite => return,
-            };
-
-            if !std::mem::replace(flag, true) {
-                list.borrow_mut().push((depth, id));
-            }
-        }
-
+        self.enqueue(id, phase);
         self.scheduler.notify();
+    }
+
+    /// Queues `id` for the work `phase` owes without requesting a frame. A composite owns no boundary, so it
+    /// queues nothing.
+    fn enqueue(&self, id: PaintBoundaryId, phase: PaintPhase) {
+        let mut registry = self.registry.borrow_mut();
+
+        let Some(cell) = registry.get_mut(id) else {
+            return;
+        };
+
+        let depth = cell.depth;
+
+        let (flag, list) = match phase {
+            PaintPhase::CompositingBits => (&mut cell.bits_queued, &self.bits),
+            PaintPhase::Paint => (&mut cell.repaint_queued, &self.repaint),
+            PaintPhase::Composite => return,
+        };
+
+        if !std::mem::replace(flag, true) {
+            list.borrow_mut().push((depth, id));
+        }
+    }
+
+    /// Whether repaint work is pending: a boundary's bits or repaint marked, or a deferred mark not yet
+    /// folded in.
+    pub(crate) fn has_pending(&self) -> bool {
+        !self.bits.borrow().is_empty()
+            || !self.repaint.borrow().is_empty()
+            || !self.deferred.borrow().is_empty()
     }
 
     /// Schedules a recomposite of the subtree, with no boundary to repaint.
@@ -161,17 +173,8 @@ impl RenderPipeline {
 
     /// Recomputes compositing bits, repaints, and recomposites the marked repaint boundaries.
     pub fn flush_paint(&self) {
-        let deferred: Vec<(PaintBoundaryId, PaintPhase)> =
-            self.paint.deferred.borrow_mut().drain(..).collect();
-
-        for (id, phase) in deferred {
-            match phase {
-                PaintPhase::Paint => self.mark_needs_paint(PaintScope(id)),
-                PaintPhase::CompositingBits => {
-                    self.mark_needs_compositing_bits_update(PaintScope(id));
-                }
-                PaintPhase::Composite => self.mark_needs_composite(),
-            }
+        for (id, phase) in self.paint.deferred.take() {
+            self.paint.enqueue(id, phase);
         }
 
         self.flush_compositing_bits();

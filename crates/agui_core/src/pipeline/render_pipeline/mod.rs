@@ -110,6 +110,11 @@ impl RenderPipeline {
         self.scheduler.notified.set(false);
     }
 
+    /// Whether a frame flush would re-lay, repaint, or re-read semantics anywhere.
+    pub(super) fn has_pending(&self) -> bool {
+        self.layout.has_pending() || self.paint.has_pending() || self.semantics.has_pending()
+    }
+
     /// Sets `phase` as the frame phase now running until the returned guard drops, which restores the
     /// previous phase.
     pub(crate) fn enter_phase(&self, phase: FramePhase) -> PhaseGuard {
