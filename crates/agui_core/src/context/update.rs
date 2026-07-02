@@ -364,8 +364,9 @@ impl<'a> UpdateCtx<'a> {
         ret
     }
 
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
-    /// repaint, as a reconcile does when it changes a render object's compositing need.
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, as a reconcile does when
+    /// it changes a render object's compositing need. The boundary repaints when the recomputation finds its
+    /// compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
         self.paint.mark_needs_compositing_bits_update(scope);
     }

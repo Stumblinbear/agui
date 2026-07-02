@@ -226,8 +226,11 @@ impl PaintCtx<'_> {
             capacity.set(recorded);
         });
 
+        // No prior value exists before the first recomputation, so it counts as changed.
+        let mut previous = None;
         let update_bits: CompositingBitsHook = Box::new(move || {
-            bits_content.borrow_mut().update_compositing_bits();
+            let needs = bits_content.borrow_mut().update_compositing_bits();
+            previous.replace(needs) != Some(needs)
         });
 
         self.paint.register(self.scope, repaint, update_bits)

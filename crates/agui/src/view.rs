@@ -199,9 +199,12 @@ where
 
         let update_bits: CompositingBitsHook = {
             let content = Rc::clone(&content);
+            // No prior value exists before the first recomputation, so it counts as changed.
+            let mut previous = None;
 
             Box::new(move || {
-                content.borrow_mut().update_compositing_bits();
+                let needs = content.borrow_mut().update_compositing_bits();
+                previous.replace(needs) != Some(needs)
             })
         };
 

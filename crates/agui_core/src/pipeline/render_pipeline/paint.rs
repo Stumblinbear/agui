@@ -12,8 +12,9 @@ use crate::pipeline::FramePhase;
 /// capacity, and the render object; the pipeline knows none of them.
 pub type RepaintHook = Box<dyn FnMut(PaintScope)>;
 
-/// A compositing-bits hook: recomputes one boundary's render object's compositing bits before its next repaint.
-pub type CompositingBitsHook = Box<dyn FnMut()>;
+/// A compositing-bits hook: recomputes one boundary's render object's compositing bits before its next
+/// repaint, returning whether the compositing need changed, in which case the flush repaints the boundary.
+pub type CompositingBitsHook = Box<dyn FnMut() -> bool>;
 
 /// The repaint boundaries of one tree and their pending compositing-bit and repaint work, in two dirty lists
 /// since compositing bits settle before paint.
@@ -115,11 +116,10 @@ impl PaintState {
         self.mark(scope.0, PaintPhase::Paint);
     }
 
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
-    /// repaint.
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint. The boundary repaints when
+    /// the recomputation finds its compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
         self.mark(scope.0, PaintPhase::CompositingBits);
-        self.mark(scope.0, PaintPhase::Paint);
     }
 }
 
@@ -143,8 +143,8 @@ enum PaintPhase {
 }
 
 impl RenderPipeline {
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and the boundary for
-    /// repaint.
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint. The boundary repaints when
+    /// the recomputation finds its compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
         self.paint.mark_needs_compositing_bits_update(scope);
     }
@@ -197,10 +197,14 @@ impl RenderPipeline {
 
             let Some(mut hook) = hook else { continue };
 
-            hook();
+            let changed = hook();
 
             if let Some(boundary) = self.paint.registry.borrow_mut().get_mut(id) {
                 boundary.update_bits = Some(hook);
+            }
+
+            if changed {
+                self.paint.mark_needs_paint(PaintScope(id));
             }
         }
 
@@ -250,12 +254,11 @@ impl PaintBoundaryHandle {
         PaintScope(self.id)
     }
 
-    /// Marks this boundary's compositing bits for recomputation before its next repaint, and the boundary
-    /// for repaint.
+    /// Marks this boundary's compositing bits for recomputation before its next repaint. The boundary
+    /// repaints when the recomputation finds its compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self) {
         if let Some(channel) = self.channel.upgrade() {
             channel.mark(self.id, PaintPhase::CompositingBits);
-            channel.mark(self.id, PaintPhase::Paint);
         }
     }
 
@@ -317,7 +320,8 @@ impl DeferredPaintScope {
         self.push(PaintPhase::Paint);
     }
 
-    /// Queues this boundary's compositing bits to be recomputed, and the boundary repainted.
+    /// Queues this boundary's compositing bits to be recomputed on the pipeline's next frame; the boundary
+    /// repaints when the recomputation finds its compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self) {
         self.push(PaintPhase::CompositingBits);
     }
