@@ -152,7 +152,7 @@ unsafe impl Element for KeyedLeafElement {
     type Render = ();
 
     fn render_object_ptr(&self) -> RenderObjectPtr<()> {
-        RenderObjectPtr::dangling()
+        RenderObjectPtr::unit()
     }
 
     fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {

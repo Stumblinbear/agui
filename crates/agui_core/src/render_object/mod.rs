@@ -65,10 +65,23 @@ impl<R: ?Sized> RenderObjectCell<R> {
 /// pass from the child's address.
 pub struct RenderObjectPtr<R: ?Sized>(NonNull<RenderObjectInner<R>>);
 
-impl<R> RenderObjectPtr<R> {
-    /// A placeholder for a render-less element (`Render = ()`), never dereferenced.
-    pub fn dangling() -> Self {
-        RenderObjectPtr(NonNull::dangling())
+impl RenderObjectPtr<()> {
+    /// The placeholder for a render-less element (`Render = ()`): a shared per-thread empty cell, live for
+    /// the thread's life. It may be borrowed like any other render object.
+    pub fn unit() -> Self {
+        thread_local! {
+            static UNIT: UnsafeCell<RenderObjectInner<()>> = const {
+                UnsafeCell::new(RenderObjectInner {
+                    #[cfg(debug_assertions)]
+                    borrows: Cell::new(0),
+                    value: (),
+                })
+            };
+        }
+
+        // SAFETY: the pointer addresses this thread's placeholder cell, and render objects are only ever
+        // reached from the thread that owns their tree.
+        UNIT.with(|cell| RenderObjectPtr(unsafe { NonNull::new_unchecked(cell.get()) }))
     }
 }
 
@@ -185,6 +198,9 @@ impl<R: ?Sized> Drop for RenderObjectMut<'_, R> {
 /// A parent's deferred handle to a child render object: the child node's address plus how to resolve its
 /// render object pointer from it. Resolved fresh each pass, never dereferenced at mount, where the protected
 /// `&mut` mount chain would forbid reaching the child through this separate address.
+///
+/// Each mounted child has exactly one handle, moved into the one place that owns it. A boundary hook that
+/// needs another takes it through [`duplicate`](Self::duplicate).
 pub struct MountedChild<R: ?Sized> {
     node: NonNull<()>,
     resolve: unsafe fn(NonNull<()>) -> RenderObjectPtr<R>,
@@ -197,8 +213,10 @@ impl<R: ?Sized> MountedChild<R> {
     /// # Safety
     /// - `address` must be the mounted child node's address, valid for as long as the child is mounted.
     /// - `resolve` must project that address to the child's render object pointer.
-    /// - Resolving the handle reads the child node, so no later resolution may coexist with an exclusive
-    ///   borrow of that node, such as one held during the node's own update walk.
+    /// - This must be the child's only handle; further ones come only from [`duplicate`](Self::duplicate),
+    ///   which carries the aliasing obligation.
+    /// - Resolving the handle reads the child node, so no resolution may coexist with an exclusive borrow of
+    ///   that node, such as one held during the node's own update walk.
     pub unsafe fn new(
         address: NonNull<()>,
         resolve: unsafe fn(NonNull<()>) -> RenderObjectPtr<R>,
@@ -209,41 +227,48 @@ impl<R: ?Sized> MountedChild<R> {
         }
     }
 
-    /// Resolves and shared-borrows the child render object, for a forwarding read during a pass. Call only
-    /// during a pass, with no exclusive borrow of the child node live.
+    /// A second handle to the same child, for a boundary hook that re-lays or repaints the child from
+    /// outside the render-object walk.
+    ///
+    /// # Safety
+    /// - No borrow through the duplicate may overlap a borrow of the same render object through any other
+    ///   handle.
+    /// - The duplicate must not resolve after the child unmounts. Keep it where it drops before the child
+    ///   can go away, such as a boundary registration its render object clears on a child swap.
+    pub unsafe fn duplicate(&self) -> Self {
+        Self {
+            node: self.node,
+            resolve: self.resolve,
+        }
+    }
+
+    /// Resolves and shared-borrows the child render object, for a forwarding read during a pass.
     pub fn borrow(&self) -> RenderObjectRef<'_, R> {
-        // SAFETY: no exclusive borrow of the child node is live, so this shared borrow cannot alias one; the
-        // guard is bound to `&self`, held only during the pass.
+        // SAFETY: shared borrows may overlap each other, and an exclusive borrow of the same render object
+        // requires `&mut` on this sole handle (or a duplicate, whose holder rules the overlap out).
         unsafe { (self.resolve)(self.node).borrow() }
     }
 
-    /// Resolves and exclusively borrows the child render object, for a boundary holding this handle to re-lay
-    /// or repaint it. Call only during a pass, with no borrow of the child node live.
-    pub fn borrow_mut(&self) -> RenderObjectMut<'_, R> {
-        // SAFETY: no exclusive borrow of the child node is live, so resolving and borrowing its render object
-        // cannot alias one; the guard is bound to `&self`, held only during the pass.
+    /// Resolves and exclusively borrows the child render object, for laying out, painting, or otherwise
+    /// mutating it during a pass.
+    pub fn borrow_mut(&mut self) -> RenderObjectMut<'_, R> {
+        // SAFETY: `&mut self` on the child's sole handle is an exclusive path to its render object; a
+        // duplicate's holder rules the overlap out.
         unsafe { (self.resolve)(self.node).borrow_mut() }
     }
 
     /// Resolves and shared-borrows the child render object as a bare reference bound to `&self`, for reading a
-    /// protocol-specific field such as parent data. Call only during a pass.
+    /// protocol-specific field such as parent data.
     ///
     /// # Safety
-    /// No exclusive borrow of the child node may coexist with the returned reference. The result borrows
-    /// `&self`, so the borrow checker forbids a [`borrow_mut`](Self::borrow_mut) of this handle while it is held.
+    /// No exclusive borrow of the child render object may coexist with the returned reference. The result
+    /// borrows `&self`, so the borrow checker forbids a [`borrow_mut`](Self::borrow_mut) of this handle while
+    /// it is held.
     pub unsafe fn value_ref(&self) -> &R {
         // SAFETY: the caller upholds the no-exclusive-borrow contract; the read is bound to `&self`.
         unsafe { (self.resolve)(self.node).value_ref() }
     }
 }
-
-// The node address and resolver are plain data; copying the handle just copies them.
-impl<R: ?Sized> Clone for MountedChild<R> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<R: ?Sized> Copy for MountedChild<R> {}
 
 /// In debug, registers a shared borrow of the render object behind `inner`, panicking if it is currently
 /// borrowed exclusively. The matching [`RenderObjectRef`] releases it on drop. A no-op in release.

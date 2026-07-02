@@ -198,13 +198,18 @@ impl PaintCtx<'_> {
     /// boundary registers itself this way during paint, fills `layer` in the same pass with
     /// [`push_boundary_layer`](Self::push_boundary_layer), and on later frames embeds it with
     /// [`add_layer`](Self::add_layer); the driver repaints its content into `layer` on its own pass.
-    pub fn register_paint_boundary(
+    pub(crate) fn register_paint_boundary(
         &self,
-        content: MountedChild<dyn RenderBox>,
+        mut content: MountedChild<dyn RenderBox>,
         layer: LayerHandle<OffsetLayer>,
     ) -> PaintBoundaryHandle {
         let paint = Rc::downgrade(self.paint);
         let capacity = Cell::new(SceneCapacity::default());
+
+        // SAFETY: this second handle lives beside `content` in the same boundary registration, whose two
+        // hooks run in different flush phases and each borrow the child only for the call. The registration
+        // lives only as long as the returned handle, which the caller drops before the child unmounts.
+        let mut bits_content = unsafe { content.duplicate() };
 
         let repaint: RepaintHook = Box::new(move |scope| {
             let Some(paint) = paint.upgrade() else {
@@ -222,7 +227,7 @@ impl PaintCtx<'_> {
         });
 
         let update_bits: CompositingBitsHook = Box::new(move || {
-            content.borrow_mut().update_compositing_bits();
+            bits_content.borrow_mut().update_compositing_bits();
         });
 
         self.paint.register(self.scope, repaint, update_bits)

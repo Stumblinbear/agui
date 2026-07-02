@@ -130,7 +130,8 @@ impl RenderBox for RenderRepaintBoundary {
         }
 
         // SAFETY: the registration is dropped in `adopt_child` on a child swap and when this render object
-        // unmounts, so the handle never resolves the child after it is gone.
+        // unmounts, so the duplicate never resolves the child after it is gone, and its hooks borrow the
+        // child only during the boundary's isolated flush phases.
         let child = unsafe { self.child.child_handle() };
         let handle = ctx.register_paint_boundary(child, self.layer.clone());
 

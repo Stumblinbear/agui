@@ -199,7 +199,8 @@ impl<'a> UpdateCtx<'a> {
         });
 
         // SAFETY: `address` is the now-mounted, pinned child node, and `resolve_render_object::<S::Node>`
-        // projects it to that child's render object pointer when a pass dereferences it.
+        // projects it to that child's render object pointer when a pass dereferences it. The child was
+        // registered fresh just above, so this is its only handle.
         unsafe { MountedChild::new(address, resolve_render_object::<S::Node>) }
     }
 

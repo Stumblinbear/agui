@@ -89,25 +89,32 @@ impl<R: ?Sized, P> RenderNode<R, P> {
         self.boundary = None;
     }
 
-    /// The deferred handle to the wired child, copied out, so a render object can register the child as a
-    /// repaint boundary. Reached only after mount.
+    /// A duplicate handle to the wired child.
     ///
     /// # Safety
-    /// The handle resolves a raw pointer to the child render object. Resolving it must not coexist with a
-    /// borrow of the child element, per [`Element`](crate::element::Element)'s contract, and the handle, or a
-    /// boundary registered with it, must not be kept past the child's unmount or replacement. `RenderNode`
-    /// drops its own boundary in [`set`](Self::set) and [`clear`](Self::clear) for this reason.
+    /// As [`MountedChild::duplicate`]: no borrow through the duplicate may overlap a borrow of the child
+    /// render object through any other handle, and the duplicate, or a boundary registered with it, must not
+    /// be kept past the child's unmount or replacement. `RenderNode` drops its own boundary in
+    /// [`set`](Self::set) and [`clear`](Self::clear) for this reason.
     ///
     /// # Panics
     /// If the child is unwired (reached before mount).
     pub unsafe fn child_handle(&self) -> MountedChild<R> {
-        *self.child()
+        // SAFETY: the caller takes on the duplicate's obligations, per this method's contract.
+        unsafe { self.child().duplicate() }
     }
 
     /// The wired child handle, or a panic if reached before mount.
     fn child(&self) -> &MountedChild<R> {
         self.child
             .as_ref()
+            .expect("child render node used before it was wired at mount")
+    }
+
+    /// The wired child handle for an exclusive borrow, or a panic if reached before mount.
+    fn child_mut(&mut self) -> &mut MountedChild<R> {
+        self.child
+            .as_mut()
             .expect("child render node used before it was wired at mount")
     }
 
@@ -132,7 +139,7 @@ impl<R: ?Sized, P> RenderNode<R, P> {
     /// If the child is unwired (reached before mount). In debug, also if the render object is already
     /// borrowed, mutably or shared.
     pub fn borrow_mut(&mut self) -> RenderObjectMut<'_, R> {
-        self.child().borrow_mut()
+        self.child_mut().borrow_mut()
     }
 }
 
@@ -223,9 +230,11 @@ impl<R: RenderBox + ?Sized, P> RenderNode<R, P> {
     /// later isolated re-lay uses the latest. An existing boundary is updated in place: re-registering would
     /// hand out a new scope, stranding the one descendants captured.
     fn register_boundary(&mut self, ctx: &LayoutCtx, constraints: BoxConstraints) -> LayoutScope {
-        let handle = *self.child();
+        // SAFETY: the duplicate lives in the boundary registration owned by `self.boundary`, which `set` and
+        // `clear` drop before the child can go away, and the flush borrows it only while re-laying this
+        // boundary in isolation.
+        let mut handle = unsafe { self.child().duplicate() };
 
-        // `handle` and `constraints` are both `Copy`, so this re-lay hook is `Fn`, not `FnMut`.
         let relayout: RelayoutHook = Box::new(move |ctx| {
             handle.borrow_mut().layout(ctx, constraints);
         });
