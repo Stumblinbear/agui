@@ -27,7 +27,16 @@ pub struct PaintState {
     bits: RefCell<Vec<(usize, PaintBoundaryId)>>,
     repaint: RefCell<Vec<(usize, PaintBoundaryId)>>,
 
-    deferred: Rc<RefCell<Vec<(PaintBoundaryId, PaintPhase)>>>,
+    deferred: Rc<PaintDeferred>,
+}
+
+/// Marks made out of a pipeline pass, applied at the start of the sub-flush that owns each: a compositing-bit
+/// recompute before the bits settle, a repaint before the repaints run. A composite needs no boundary and is
+/// covered by the frame's unconditional recomposite, so it is queued nowhere.
+#[derive(Default)]
+struct PaintDeferred {
+    bits: RefCell<Vec<PaintBoundaryId>>,
+    repaint: RefCell<Vec<PaintBoundaryId>>,
 }
 
 impl PaintState {
@@ -37,7 +46,7 @@ impl PaintState {
             registry: RefCell::new(SlotMap::with_key()),
             bits: RefCell::new(Vec::new()),
             repaint: RefCell::new(Vec::new()),
-            deferred: Rc::new(RefCell::new(Vec::new())),
+            deferred: Rc::new(PaintDeferred::default()),
         }
     }
 
@@ -75,63 +84,83 @@ impl PaintState {
         }
     }
 
-    /// Marks `id` for the work `phase` owes, and requests a frame. Panics on a mark whose phase has run this
-    /// frame, and ignores one for a boundary already gone.
-    fn mark(&self, id: PaintBoundaryId, phase: PaintPhase) {
-        self.scheduler.phase.get().assert_can_mark(match phase {
-            PaintPhase::CompositingBits => FramePhase::CompositingBits,
-            PaintPhase::Paint => FramePhase::Paint,
-            PaintPhase::Composite => FramePhase::Composite,
-        });
-
-        self.enqueue(id, phase);
-        self.scheduler.notify();
-    }
-
-    /// Queues `id` for the work `phase` owes without requesting a frame. A composite owns no boundary, so it
-    /// queues nothing.
-    fn enqueue(&self, id: PaintBoundaryId, phase: PaintPhase) {
+    /// Queues `id` for a compositing-bit recompute at its depth, without requesting a frame. A boundary
+    /// already queued or already gone is left alone.
+    fn enqueue_bits(&self, id: PaintBoundaryId) {
         let mut registry = self.registry.borrow_mut();
 
         let Some(cell) = registry.get_mut(id) else {
             return;
         };
 
-        let depth = cell.depth;
-
-        let (flag, list) = match phase {
-            PaintPhase::CompositingBits => (&mut cell.bits_queued, &self.bits),
-            PaintPhase::Paint => (&mut cell.repaint_queued, &self.repaint),
-            PaintPhase::Composite => return,
-        };
-
-        if !std::mem::replace(flag, true) {
-            list.borrow_mut().push((depth, id));
+        if !std::mem::replace(&mut cell.bits_queued, true) {
+            self.bits.borrow_mut().push((cell.depth, id));
         }
     }
 
-    /// Whether repaint work is pending: a boundary's bits or repaint marked, or a deferred mark not yet
-    /// folded in.
+    /// Queues `id` for a repaint at its depth, without requesting a frame. A boundary already queued or
+    /// already gone is left alone.
+    fn enqueue_repaint(&self, id: PaintBoundaryId) {
+        let mut registry = self.registry.borrow_mut();
+
+        let Some(cell) = registry.get_mut(id) else {
+            return;
+        };
+
+        if !std::mem::replace(&mut cell.repaint_queued, true) {
+            self.repaint.borrow_mut().push((cell.depth, id));
+        }
+    }
+
+    /// Whether repaint work is pending: a boundary's bits or repaint marked, in a list or still deferred.
     pub(crate) fn has_pending(&self) -> bool {
         !self.bits.borrow().is_empty()
             || !self.repaint.borrow().is_empty()
-            || !self.deferred.borrow().is_empty()
+            || !self.deferred.bits.borrow().is_empty()
+            || !self.deferred.repaint.borrow().is_empty()
     }
 
-    /// Schedules a recomposite of the subtree, with no boundary to repaint.
-    pub fn mark_needs_composite(&self) {
+    /// Marks `scope`'s compositing bits for recomputation before its next repaint, and requests a frame.
+    ///
+    /// # Panics
+    /// Panics if the compositing-bits phase has already run this frame.
+    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
+        self.scheduler
+            .phase
+            .get()
+            .assert_can_mark(FramePhase::CompositingBits);
+
+        self.enqueue_bits(scope.0);
         self.scheduler.notify();
     }
 
-    /// Marks `scope`'s boundary to be repainted on the next frame.
+    /// Marks `scope`'s boundary to be repainted on the next frame, and requests one. Permitted during the
+    /// compositing-bits phase, so a bits recompute that changes the need can mark the repaint it now owes.
+    ///
+    /// # Panics
+    /// Panics if the paint phase has already run this frame.
     pub fn mark_needs_paint(&self, scope: PaintScope) {
-        self.mark(scope.0, PaintPhase::Paint);
+        self.scheduler
+            .phase
+            .get()
+            .assert_can_mark(FramePhase::Paint);
+
+        self.enqueue_repaint(scope.0);
+        self.scheduler.notify();
     }
 
-    /// Marks `scope`'s compositing bits for recomputation before its next repaint. The boundary repaints when
-    /// the recomputation finds its compositing need changed.
-    pub fn mark_needs_compositing_bits_update(&self, scope: PaintScope) {
-        self.mark(scope.0, PaintPhase::CompositingBits);
+    /// Requests a frame to recomposite the subtree. Compositing owns no boundary and a frame recomposites
+    /// unconditionally, so this only ensures a frame runs.
+    ///
+    /// # Panics
+    /// Panics if the composite phase has already run this frame.
+    pub fn mark_needs_composite(&self) {
+        self.scheduler
+            .phase
+            .get()
+            .assert_can_mark(FramePhase::Composite);
+
+        self.scheduler.notify();
     }
 }
 
@@ -143,15 +172,6 @@ struct PaintBoundary {
 
     repaint_queued: bool,
     repaint: Option<RepaintHook>,
-}
-
-/// The work a repaint boundary owes, which are also the flush phases, in order: compositing bits settle
-/// before paint.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PaintPhase {
-    CompositingBits,
-    Paint,
-    Composite,
 }
 
 impl RenderPipeline {
@@ -173,16 +193,17 @@ impl RenderPipeline {
 
     /// Recomputes compositing bits, repaints, and recomposites the marked repaint boundaries.
     pub fn flush_paint(&self) {
-        for (id, phase) in self.paint.deferred.take() {
-            self.paint.enqueue(id, phase);
-        }
-
         self.flush_compositing_bits();
         self.flush_repaint();
     }
 
     fn flush_compositing_bits(&self) {
         let _phase = self.enter_phase(FramePhase::CompositingBits);
+
+        // Fold in the compositing-bit marks made out of pass this frame, right before the bits settle.
+        for id in std::mem::take(&mut *self.paint.deferred.bits.borrow_mut()) {
+            self.paint.enqueue_bits(id);
+        }
 
         let mut bits = self.paint.bits.borrow_mut();
         bits.sort_unstable_by_key(|&(depth, _)| depth);
@@ -216,6 +237,11 @@ impl RenderPipeline {
 
     fn flush_repaint(&self) {
         let _phase = self.enter_phase(FramePhase::Paint);
+
+        // Fold in the repaint marks made out of pass this frame, and any the bits flush just added.
+        for id in std::mem::take(&mut *self.paint.deferred.repaint.borrow_mut()) {
+            self.paint.enqueue_repaint(id);
+        }
 
         let mut repaint = self.paint.repaint.borrow_mut();
         repaint.sort_unstable_by_key(|&(depth, _)| depth);
@@ -261,7 +287,7 @@ impl PaintBoundaryHandle {
     /// repaints when the recomputation finds its compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self) {
         if let Some(channel) = self.channel.upgrade() {
-            channel.mark(self.id, PaintPhase::CompositingBits);
+            channel.mark_needs_compositing_bits_update(PaintScope(self.id));
         }
     }
 
@@ -286,7 +312,7 @@ impl PaintBoundaryHandle {
     /// Marks this boundary to be repainted on the next frame.
     pub fn mark_needs_paint(&self) {
         if let Some(channel) = self.channel.upgrade() {
-            channel.mark(self.id, PaintPhase::Paint);
+            channel.mark_needs_paint(PaintScope(self.id));
         }
     }
 
@@ -306,13 +332,8 @@ impl Drop for PaintBoundaryHandle {
 
         // As for a layout boundary: the removed content's own drop can re-enter these borrows, so release
         // them before the content drops.
-        let removed = {
-            channel
-                .deferred
-                .borrow_mut()
-                .retain(|(queued, _)| *queued != self.id);
-            channel.registry.borrow_mut().remove(self.id)
-        };
+        let removed = { channel.registry.borrow_mut().remove(self.id) };
+
         drop(removed);
     }
 }
@@ -323,8 +344,7 @@ impl Drop for PaintBoundaryHandle {
 #[derive(Clone)]
 pub struct DeferredPaintScope {
     id: PaintBoundaryId,
-    #[allow(clippy::type_complexity)]
-    queue: Option<Rc<RefCell<Vec<(PaintBoundaryId, PaintPhase)>>>>,
+    queue: Option<Rc<PaintDeferred>>,
 }
 
 impl DeferredPaintScope {
@@ -338,23 +358,18 @@ impl DeferredPaintScope {
 
     /// Queues this boundary to be repainted on the pipeline's next frame.
     pub fn mark_needs_paint(&self) {
-        self.push(PaintPhase::Paint);
+        if let Some(queue) = &self.queue {
+            queue.repaint.borrow_mut().push(self.id);
+        }
     }
 
     /// Queues this boundary's compositing bits to be recomputed on the pipeline's next frame; the boundary
     /// repaints when the recomputation finds its compositing need changed.
     pub fn mark_needs_compositing_bits_update(&self) {
-        self.push(PaintPhase::CompositingBits);
-    }
-
-    /// Queues a recomposite of the subtree, without repainting this boundary.
-    pub fn mark_needs_composite(&self) {
-        self.push(PaintPhase::Composite);
-    }
-
-    fn push(&self, phase: PaintPhase) {
         if let Some(queue) = &self.queue {
-            queue.borrow_mut().push((self.id, phase));
+            queue.bits.borrow_mut().push(self.id);
         }
     }
+
+    pub fn mark_needs_composite(&self) {}
 }
