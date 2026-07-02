@@ -30,7 +30,7 @@ impl BuildQueue {
     }
 
     /// Queues `handle` to rebuild on the next flush, running its dependency-change hook first.
-    pub fn mark_dependency_changed(&mut self, handle: NodeHandle) {
+    pub(crate) fn mark_dependency_changed(&mut self, handle: NodeHandle) {
         self.dirty.mark(handle);
         self.dependency_changed.insert(handle);
     }

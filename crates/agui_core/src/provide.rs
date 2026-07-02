@@ -1,13 +1,20 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
+    marker::PhantomData,
     ptr::NonNull,
     rc::Rc,
 };
 
 use rustc_hash::FxHashSet;
 
-use crate::tree::NodeHandle;
+use crate::{
+    context::UpdateCtx,
+    diagnostics::{Diagnostics, DiagnosticsNode},
+    element::Element,
+    render_object::RenderObjectPtr,
+    tree::{NodeHandle, Slot},
+};
 
 /// The values in scope for a node: the chain of provided values above it.
 ///
@@ -131,5 +138,99 @@ impl ProvideNode {
     /// Replaces the held value with `value`, returning the readers to mark for a dependency-change rebuild.
     pub fn replace<V: Any>(&self, value: V) -> Vec<NodeHandle> {
         self.cell.replace(Rc::new(value))
+    }
+}
+
+/// The persistent node of a widget that provides one value of type `V` to its subtree, wrapping a single child
+/// element `C`. It holds the value inline and exposes it by extending the scope when it mounts.
+pub struct ProvideElement<V, C> {
+    /// Boxed into its own allocation so a descendant's scope pointer into it survives this element being
+    /// reconciled through `&mut`, which retags only the element's own allocation, not the node's.
+    node: Box<ProvideNode>,
+    child: Slot<C>,
+    _value: PhantomData<fn() -> V>,
+}
+
+impl<V, C> ProvideElement<V, C> {
+    /// Creates a node holding `value`, wrapping `child`, not yet linked into any scope.
+    pub fn new(value: V, child: C) -> Self
+    where
+        V: Any,
+    {
+        Self {
+            node: Box::new(ProvideNode::new(value)),
+            child: Slot::new(child),
+            _value: PhantomData,
+        }
+    }
+
+    /// Reconciles the child in place under this node's extended scope, marking each reader for a
+    /// dependency-change rebuild if the provided value changed to `value`.
+    ///
+    /// # Safety
+    /// `reconcile` must reconcile only `child`, the element's own slot, in place.
+    pub unsafe fn update(
+        &mut self,
+        ctx: &mut UpdateCtx<'_>,
+        value: V,
+        reconcile: impl FnOnce(&mut C, &mut UpdateCtx<'_>),
+    ) where
+        V: PartialEq + Any,
+    {
+        // The value changes through the node's interior mutability, never a `&mut` to the node itself, so a
+        // descendant's scope pointer into it stays valid across this reconcile.
+        let changed = self
+            .node
+            .current::<V>()
+            .is_none_or(|current| *current != value);
+
+        if changed {
+            for dependent in self.node.replace(value) {
+                ctx.mark_dependency_changed(dependent);
+            }
+        }
+
+        let scope = self.node.scope();
+
+        // SAFETY: `self.child` is the element's own slot, and the caller's `reconcile` touches only it. Provide
+        // is transparent: it only extends the scope, reconciling the child in place.
+        ctx.with_provide_scope(scope, |ctx| unsafe {
+            ctx.with_child(&mut self.child, reconcile);
+        });
+    }
+}
+
+// SAFETY: reconciles its single child only through the cursor child operations and forwards render resolution
+// to it.
+unsafe impl<V, C> Element for ProvideElement<V, C>
+where
+    V: Any,
+    C: Element,
+{
+    type Render = C::Render;
+
+    fn render_object_ptr(&self) -> RenderObjectPtr<Self::Render> {
+        self.child.get().render_object_ptr()
+    }
+
+    fn mount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        self.node.set_parent(ctx.provide_scope());
+
+        let scope = self.node.scope();
+
+        // SAFETY: `self.child` is our own slot, and `self.node` is pinned now that this element is mounted,
+        // so the scope it hands down stays valid for the whole subtree's life.
+        ctx.with_provide_scope(scope, |ctx| unsafe { ctx.mount(&mut self.child) });
+    }
+
+    fn unmount(&mut self, ctx: &mut UpdateCtx<'_>) {
+        // SAFETY: `self.child` is our own slot.
+        unsafe { ctx.unmount(&mut self.child) };
+    }
+
+    fn describe(&self, d: &mut Diagnostics) -> DiagnosticsNode {
+        d.node(format!("Provide<{}>", Diagnostics::short_type_name::<V>()))
+            .child(|d| self.child.get().describe(d))
+            .finish()
     }
 }

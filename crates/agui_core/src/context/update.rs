@@ -292,10 +292,9 @@ impl<'a> UpdateCtx<'a> {
     }
 
     /// Queues the element at `dependent` to rebuild on the next flush, running its dependency-change hook
-    /// first. A [`Provide`] calls this for each reader of a value it changed.
-    ///
-    /// [`Provide`]: crate::provide::Provide
-    pub fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
+    /// first. A [`ProvideElement`](crate::provide::ProvideElement) calls this for each reader of a value it
+    /// changed.
+    pub(crate) fn mark_dependency_changed(&mut self, dependent: NodeHandle) {
         self.queue.mark_dependency_changed(dependent);
     }
 
